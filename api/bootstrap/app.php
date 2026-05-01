@@ -15,7 +15,6 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
-use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -28,12 +27,12 @@ return Application::configure(basePath: dirname(__DIR__))
         ModuleServiceProvider::class,
     ])
     ->withMiddleware(function (Middleware $middleware) {
-        // Stateful SPA cookie auth (NEVER bearer tokens)
+        // Stateful SPA cookie auth (NEVER bearer tokens). This injects
+        // EnsureFrontendRequestsAreStateful into the API middleware group.
         $middleware->statefulApi();
 
-        // Global API middleware — every request gets these
+        // Global API middleware additions — every API request gets these.
         $middleware->api(prepend: [
-            EnsureFrontendRequestsAreStateful::class,
             ForceJsonResponse::class,
             SanitizeInput::class,
         ]);

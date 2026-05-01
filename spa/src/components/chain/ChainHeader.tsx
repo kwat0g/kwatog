@@ -13,7 +13,7 @@ const dotClass = (state: ChainStep['state']) =>
       ? 'bg-accent border-accent'
       : 'bg-canvas border-strong';
 
-const lineClass = (left: ChainStep, right: ChainStep) =>
+const lineClass = (left: ChainStep) =>
   left.state === 'done' ? 'bg-success' : 'bg-strong';
 
 export function ChainHeader({ steps, className }: ChainHeaderProps) {
@@ -48,7 +48,7 @@ export function ChainHeader({ steps, className }: ChainHeaderProps) {
             </div>
             {i < steps.length - 1 && (
               <div
-                className={cn('h-[1px] mt-1 self-start mt-[4px] w-10', lineClass(step, steps[i + 1]))}
+                className={cn('h-[1px] mt-1 self-start mt-[4px] w-10', lineClass(step))}
                 aria-hidden
               />
             )}

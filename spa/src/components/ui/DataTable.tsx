@@ -135,7 +135,7 @@ export function DataTable<T>({
     <div className={cn('flex flex-col', className)}>
       {/* Bulk action bar */}
       {selectable && selectedRows.length > 0 && (
-        <div className="flex items-center justify-between px-3 py-2 bg-info-bg/40 border border-default rounded-md mb-2">
+        <div className="flex items-center justify-between px-3 py-2 bg-info-bg border border-default rounded-md mb-2">
           <div className="text-xs text-primary">
             <span className="font-mono tabular-nums">{selectedRows.length}</span> selected
           </div>
@@ -217,7 +217,7 @@ export function DataTable<T>({
                   className={cn(
                     'border-b border-subtle transition-colors duration-fast',
                     onRowClick && 'cursor-pointer hover:bg-subtle',
-                    isSelected && 'bg-info-bg/30',
+                    isSelected && 'bg-info-bg',
                     rowHeight[density],
                   )}
                   onClick={(e) => {

@@ -35,15 +35,25 @@ class SettingsService
             return;
         }
 
-        \DB::table('settings')->updateOrInsert(
-            ['key' => $key],
-            [
-                'value'      => json_encode($value),
+        $existing = \DB::table('settings')->where('key', $key)->first();
+        $payload = [
+            'value'      => json_encode($value),
+            'updated_at' => now(),
+        ];
+        if ($group !== null) {
+            $payload['group'] = $group;
+        }
+
+        if ($existing) {
+            \DB::table('settings')->where('key', $key)->update($payload);
+        } else {
+            \DB::table('settings')->insert([
+                ...$payload,
+                'key'        => $key,
                 'group'      => $group ?? 'general',
-                'updated_at' => now(),
                 'created_at' => now(),
-            ],
-        );
+            ]);
+        }
 
         Cache::forget("settings:{$key}");
     }

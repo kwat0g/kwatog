@@ -27,6 +27,11 @@ const config: Config = {
         'border-default': 'var(--border-default)',
         'border-strong': 'var(--border-strong)',
 
+        // Convenience: same gray ramp exposed as bg/text utilities
+        // (e.g. bg-strong, text-strong) so neutral fills don't need
+        // module-specific tokens.
+        strong: 'var(--border-strong)',
+
         // Accent
         accent: {
           DEFAULT: 'var(--accent)',
