@@ -3,6 +3,16 @@ export { Badge } from './Badge';
 export { Button } from './Button';
 export { Checkbox } from './Checkbox';
 export { Chip, chipVariantForStatus, type ChipVariant } from './Chip';
+export {
+  DataTable,
+  NumCell,
+  StackedCell,
+  type Column,
+  type DataTableProps,
+  type Density,
+  type BulkAction,
+  type ColumnAlign,
+} from './DataTable';
 export { EmptyState } from './EmptyState';
 export { FilterBar, type FilterConfig, type FilterOption } from './FilterBar';
 export { Input, type InputProps } from './Input';
