@@ -1,0 +1,4 @@
+/* Tailwind v3 layer directives — token bindings land in Task 4. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
