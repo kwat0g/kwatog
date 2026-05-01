@@ -1,0 +1,36 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/*
+!.vscode/settings.example.json
+
+# Env
+.env
+.env.*.local
+!.env.example
+
+# Composer / npm
+api/vendor/
+spa/node_modules/
+api/storage/logs/*
+!api/storage/logs/.gitkeep
+api/storage/framework/cache/*
+api/storage/framework/sessions/*
+api/storage/framework/views/*
+api/storage/framework/testing/*
+api/bootstrap/cache/*
+!api/bootstrap/cache/.gitkeep
+api/storage/app/admin-credentials.txt
+
+# Build artifacts
+spa/dist/
+spa/.vite/
+spa/coverage/
+api/coverage/
+api/.phpunit.cache/
+api/.phpunit.result.cache
+
+# Local docker overrides
+docker-compose.override.yml
