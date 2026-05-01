@@ -22,3 +22,9 @@ Route::prefix('admin')
         });
 
     });
+
+Route::prefix('admin')
+    ->middleware(['auth:sanctum', 'session.timeout', 'password.expired', 'permission:admin.audit_logs.view'])
+    ->group(function (): void {
+        Route::get('audit-logs', [\App\Modules\Admin\Controllers\AuditLogController::class, 'index']);
+    });
