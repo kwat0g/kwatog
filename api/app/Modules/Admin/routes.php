@@ -28,3 +28,10 @@ Route::prefix('admin')
     ->group(function (): void {
         Route::get('audit-logs', [\App\Modules\Admin\Controllers\AuditLogController::class, 'index']);
     });
+
+Route::prefix('admin')
+    ->middleware(['auth:sanctum', 'session.timeout', 'password.expired', 'permission:admin.settings.manage'])
+    ->group(function (): void {
+        Route::get('settings',        [\App\Modules\Admin\Controllers\SettingsController::class, 'index']);
+        Route::put('settings/{key}',  [\App\Modules\Admin\Controllers\SettingsController::class, 'update']);
+    });
