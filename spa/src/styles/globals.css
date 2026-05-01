@@ -1,0 +1,71 @@
+@import './tokens.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    font-feature-settings: 'cv11', 'ss01';
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background-color: var(--bg-canvas);
+    color: var(--text-primary);
+    font-size: 13px;
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  [role='button']:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  /* Disable bouncy scroll feedback / improve dense table feel. */
+  html,
+  body {
+    overscroll-behavior: none;
+  }
+
+  /* Tabular numbers — opt-in via .tabular-nums utility. */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /* Hairline border helper — true 0.5px on retina, 1px elsewhere. */
+  .border-hairline {
+    border-width: 1px;
+  }
+  @media (min-resolution: 2dppx) {
+    .border-hairline {
+      border-width: 0.5px;
+    }
+  }
+}

@@ -1,0 +1,135 @@
+/*
+ * OGAMI ERP — Design tokens.
+ * Source of truth: docs/DESIGN-SYSTEM.md.
+ *
+ * The canvas is grayscale. Color is for meaning.
+ * Backgrounds, text, borders, sidebars — all pure white/gray/black.
+ * Color appears ONLY on:
+ *   • status chips
+ *   • primary buttons
+ *   • KPI deltas
+ *   • alert dots
+ *   • links + active nav indicator
+ */
+
+:root {
+  /* ─── Canvas ─── */
+  --bg-canvas: #ffffff;
+  --bg-surface: #fafafa;
+  --bg-elevated: #f4f4f5;
+  --bg-subtle: #f4f4f5;
+
+  /* ─── Borders ─── */
+  --border-subtle: #f4f4f5;
+  --border-default: #e4e4e7;
+  --border-strong: #d4d4d8;
+
+  /* ─── Text ─── */
+  --text-primary: #09090b;
+  --text-secondary: #52525b;
+  --text-muted: #71717a;
+  --text-subtle: #a1a1aa;
+
+  /* ─── Accent (indigo) ─── */
+  --accent: #4f46e5;
+  --accent-hover: #4338ca;
+  --accent-fg: #ffffff;
+
+  /* ─── Semantic — success / warning / danger / info ─── */
+  --success: #059669;
+  --success-bg: #d1fae5;
+  --success-fg: #065f46;
+
+  --warning: #d97706;
+  --warning-bg: #fef3c7;
+  --warning-fg: #92400e;
+
+  --danger: #dc2626;
+  --danger-bg: #fee2e2;
+  --danger-fg: #991b1b;
+
+  --info: #2563eb;
+  --info-bg: #dbeafe;
+  --info-fg: #1e40af;
+
+  --purple: #7c3aed;
+  --purple-bg: #ede9fe;
+  --purple-fg: #5b21b6;
+
+  /* ─── Focus ring ─── */
+  --ring: #4f46e5;
+  --ring-offset: #ffffff;
+
+  /* ─── Shadows (almost none — flat surfaces) ─── */
+  --shadow-focus: 0 0 0 3px rgba(79, 70, 229, 0.15);
+  --shadow-menu: 0 4px 12px rgba(0, 0, 0, 0.08);
+
+  /* ─── Type ─── */
+  --font-sans: 'Geist', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-mono: 'Geist Mono', 'SF Mono', Menlo, Monaco, Consolas, monospace;
+
+  /* ─── Radius ─── */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-full: 9999px;
+
+  /* ─── Motion ─── */
+  --duration-fast: 100ms;
+  --duration-normal: 150ms;
+  --duration-slow: 200ms;
+  --ease-default: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+[data-theme='dark'] {
+  --bg-canvas: #0a0a0a;
+  --bg-surface: #111111;
+  --bg-elevated: #1a1a1a;
+  --bg-subtle: #1a1a1a;
+
+  --border-subtle: #1a1a1a;
+  --border-default: #27272a;
+  --border-strong: #3f3f46;
+
+  --text-primary: #fafafa;
+  --text-secondary: #d4d4d8;
+  --text-muted: #a1a1aa;
+  --text-subtle: #71717a;
+
+  --accent: #6366f1;
+  --accent-hover: #818cf8;
+  --accent-fg: #ffffff;
+
+  --success: #10b981;
+  --success-bg: #064e3b;
+  --success-fg: #6ee7b7;
+
+  --warning: #f59e0b;
+  --warning-bg: #78350f;
+  --warning-fg: #fcd34d;
+
+  --danger: #ef4444;
+  --danger-bg: #7f1d1d;
+  --danger-fg: #fca5a5;
+
+  --info: #3b82f6;
+  --info-bg: #1e3a8a;
+  --info-fg: #93c5fd;
+
+  --purple: #a78bfa;
+  --purple-bg: #4c1d95;
+  --purple-fg: #ddd6fe;
+
+  --ring: #6366f1;
+  --ring-offset: #0a0a0a;
+
+  --shadow-focus: 0 0 0 3px rgba(99, 102, 241, 0.25);
+  --shadow-menu: 0 4px 12px rgba(0, 0, 0, 0.45);
+}
+
+/* Hairline border helper — true 0.5px on retina, 1px elsewhere. */
+@media (min-resolution: 2dppx) {
+  .border-hairline {
+    border-width: 0.5px !important;
+  }
+}
