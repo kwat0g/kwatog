@@ -7,6 +7,7 @@ namespace App\Modules\HR\Services;
 use App\Common\Services\DocumentSequenceService;
 use App\Modules\HR\Enums\EmployeeStatus;
 use App\Modules\HR\Enums\EmploymentChangeType;
+use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\EmploymentHistory;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -19,9 +20,26 @@ class EmployeeService
         private readonly DocumentSequenceService $sequences,
     ) {}
 
-    public function list(array $filters): LengthAwarePaginator
+    public function list(array $filters, ?User $user = null): LengthAwarePaginator
     {
         $query = Employee::query()->with(['department', 'position']);
+
+        // Row-level filtering. Admin/HR see all. Department Head sees only their dept.
+        // Plain employees see only themselves.
+        if ($user) {
+            $roleSlug = $user->role?->slug;
+            $isAdmin = $roleSlug === 'system_admin';
+            $isHr = $user->hasPermission('hr.employees.view_sensitive') || $user->hasPermission('hr.employees.create');
+            if (! $isAdmin && ! $isHr) {
+                $employeeId = $user->employee_id;
+                if ($roleSlug === 'department_head') {
+                    $deptId = Employee::query()->whereKey($employeeId)->value('department_id');
+                    if ($deptId) $query->where('department_id', $deptId);
+                } else {
+                    $query->whereKey($employeeId);
+                }
+            }
+        }
 
         if (!empty($filters['search'])) {
             $term = $filters['search'];

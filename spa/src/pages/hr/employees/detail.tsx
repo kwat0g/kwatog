@@ -23,7 +23,7 @@ import { formatDate, formatDateTime } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import type { ApiValidationError } from '@/types';
 
-const TABS = ['Overview', 'Employment history', 'Documents', 'Property'] as const;
+const TABS = ['Overview', 'Employment history', 'Attendance', 'Leaves', 'Loans', 'Documents', 'Property', 'Payroll', 'Activity'] as const;
 type Tab = typeof TABS[number];
 
 export default function EmployeeDetailPage() {
@@ -102,8 +102,19 @@ export default function EmployeeDetailPage() {
         <div>
           {tab === 'Overview' && <OverviewTab employee={employee} />}
           {tab === 'Employment history' && <EmploymentHistoryTab employee={employee} />}
+          {tab === 'Attendance' && <AttendanceTab employeeId={id} />}
+          {tab === 'Leaves' && <LeavesTab employeeId={id} />}
+          {tab === 'Loans' && <LoansTab employeeId={id} />}
           {tab === 'Documents' && <DocumentsTab employee={employee} />}
           {tab === 'Property' && <PropertyTab employee={employee} />}
+          {tab === 'Payroll' && (
+            <Panel title="Payroll history">
+              <p className="text-sm text-muted">
+                Payroll lands in Sprint 3 — periods and payslips will appear here once the engine is online.
+              </p>
+            </Panel>
+          )}
+          {tab === 'Activity' && <ActivityTab employee={employee} />}
         </div>
 
         <div className="space-y-4">
@@ -244,6 +255,155 @@ function DocumentsTab({ employee }: { employee: any }) {
           ))}
         </tbody>
       </table>
+    </Panel>
+  );
+}
+
+function AttendanceTab({ employeeId }: { employeeId: string }) {
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['attendance', 'attendances', { employee_id: employeeId, per_page: 14 }],
+    queryFn: async () => {
+      const { attendancesApi } = await import('@/api/attendance/attendances');
+      return attendancesApi.list({ employee_id: employeeId, per_page: 14 });
+    },
+  });
+  if (isLoading) return <SkeletonDetail />;
+  if (isError) return <EmptyState icon="alert-circle" title="Failed to load attendance" />;
+  const rows = data?.data ?? [];
+  if (rows.length === 0) return <EmptyState icon="inbox" title="No attendance records yet" />;
+  return (
+    <Panel title={`Attendance (last ${rows.length} days)`} noPadding>
+      <table className="w-full text-sm">
+        <thead className="bg-subtle text-2xs uppercase tracking-wider text-muted">
+          <tr>
+            <th className="h-8 px-4 text-left">Date</th>
+            <th className="h-8 px-4 text-left">In</th>
+            <th className="h-8 px-4 text-left">Out</th>
+            <th className="h-8 px-4 text-right">Reg</th>
+            <th className="h-8 px-4 text-right">OT</th>
+            <th className="h-8 px-4 text-right">ND</th>
+            <th className="h-8 px-4 text-left">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r: any) => (
+            <tr key={r.id} className="h-8 border-b border-subtle hover:bg-subtle">
+              <td className="px-4 font-mono">{formatDate(r.date)}</td>
+              <td className="px-4 font-mono">{r.time_in ? new Date(r.time_in).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', hour12: false }) : '—'}</td>
+              <td className="px-4 font-mono">{r.time_out ? new Date(r.time_out).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', hour12: false }) : '—'}</td>
+              <td className="px-4 text-right font-mono tabular-nums">{r.regular_hours}</td>
+              <td className="px-4 text-right font-mono tabular-nums">{r.overtime_hours}</td>
+              <td className="px-4 text-right font-mono tabular-nums">{r.night_diff_hours}</td>
+              <td className="px-4"><Chip variant={chipVariantForStatus(r.status)}>{r.status.replace('_', ' ')}</Chip></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </Panel>
+  );
+}
+
+function LeavesTab({ employeeId }: { employeeId: string }) {
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['leaves', 'requests', { employee_id: employeeId, per_page: 25 }],
+    queryFn: async () => {
+      const { leaveRequestsApi } = await import('@/api/leave');
+      return leaveRequestsApi.list({ employee_id: employeeId, per_page: 25 });
+    },
+  });
+  if (isLoading) return <SkeletonDetail />;
+  if (isError) return <EmptyState icon="alert-circle" title="Failed to load leaves" />;
+  const rows = data?.data ?? [];
+  if (rows.length === 0) return <EmptyState icon="inbox" title="No leave requests yet" />;
+  return (
+    <Panel title={`Leave requests (${rows.length})`} noPadding>
+      <table className="w-full text-sm">
+        <thead className="bg-subtle text-2xs uppercase tracking-wider text-muted">
+          <tr>
+            <th className="h-8 px-4 text-left">No</th>
+            <th className="h-8 px-4 text-left">Type</th>
+            <th className="h-8 px-4 text-left">Dates</th>
+            <th className="h-8 px-4 text-right">Days</th>
+            <th className="h-8 px-4 text-left">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r: any) => (
+            <tr key={r.id} className="h-8 border-b border-subtle hover:bg-subtle">
+              <td className="px-4">
+                <Link to={`/leaves/${r.id}`} className="font-mono text-accent hover:underline">{r.leave_request_no}</Link>
+              </td>
+              <td className="px-4">{r.leave_type?.code}</td>
+              <td className="px-4 font-mono">{formatDate(r.start_date)} → {formatDate(r.end_date)}</td>
+              <td className="px-4 text-right font-mono tabular-nums">{r.days}</td>
+              <td className="px-4"><Chip variant={chipVariantForStatus(r.status)}>{r.status.replace('_', ' ')}</Chip></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </Panel>
+  );
+}
+
+function LoansTab({ employeeId }: { employeeId: string }) {
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['loans', { employee_id: employeeId }],
+    queryFn: async () => {
+      const { loansApi } = await import('@/api/loans');
+      return loansApi.list({ employee_id: employeeId, per_page: 25 });
+    },
+  });
+  if (isLoading) return <SkeletonDetail />;
+  if (isError) return <EmptyState icon="alert-circle" title="Failed to load loans" />;
+  const rows = data?.data ?? [];
+  if (rows.length === 0) return <EmptyState icon="inbox" title="No loans yet" />;
+  return (
+    <Panel title={`Loans (${rows.length})`} noPadding>
+      <table className="w-full text-sm">
+        <thead className="bg-subtle text-2xs uppercase tracking-wider text-muted">
+          <tr>
+            <th className="h-8 px-4 text-left">Loan no</th>
+            <th className="h-8 px-4 text-left">Type</th>
+            <th className="h-8 px-4 text-right">Principal</th>
+            <th className="h-8 px-4 text-right">Balance</th>
+            <th className="h-8 px-4 text-left">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r: any) => (
+            <tr key={r.id} className="h-8 border-b border-subtle hover:bg-subtle">
+              <td className="px-4">
+                <Link to={`/loans/${r.id}`} className="font-mono text-accent hover:underline">{r.loan_no}</Link>
+              </td>
+              <td className="px-4">{r.loan_type === 'company_loan' ? 'Company' : 'Cash advance'}</td>
+              <td className="px-4 text-right font-mono tabular-nums">₱ {r.principal}</td>
+              <td className="px-4 text-right font-mono tabular-nums">₱ {r.balance}</td>
+              <td className="px-4"><Chip variant={chipVariantForStatus(r.status)}>{r.status}</Chip></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </Panel>
+  );
+}
+
+function ActivityTab({ employee }: { employee: any }) {
+  const items = (employee.employment_history ?? []) as any[];
+  if (items.length === 0) return <EmptyState icon="inbox" title="No activity yet" />;
+  return (
+    <Panel title="Recent activity" noPadding>
+      <ul className="divide-y divide-subtle">
+        {items.slice(0, 20).map((h: any) => (
+          <li key={h.id} className="px-4 py-3 flex items-start gap-3">
+            <span className="mt-1 w-1.5 h-1.5 rounded-full bg-accent shrink-0" />
+            <div className="min-w-0 flex-1">
+              <div className="text-sm">{cap(h.change_type.replace('_', ' '))}</div>
+              {h.remarks && <div className="text-xs text-muted">{h.remarks}</div>}
+            </div>
+            <span className="text-xs text-muted font-mono tabular-nums shrink-0">{formatDate(h.effective_date)}</span>
+          </li>
+        ))}
+      </ul>
     </Panel>
   );
 }

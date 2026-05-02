@@ -20,7 +20,7 @@ class OvertimeController
 
     public function index(Request $request): AnonymousResourceCollection
     {
-        return OvertimeRequestResource::collection($this->service->list($request->query()));
+        return OvertimeRequestResource::collection($this->service->list($request->query(), $request->user()));
     }
 
     public function store(StoreOvertimeRequestRequest $request): JsonResponse

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Attendance\Services;
 
 use App\Modules\Attendance\Models\Attendance;
+use App\Modules\Auth\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
@@ -14,7 +15,7 @@ class AttendanceService
         private readonly DTRComputationService $dtr,
     ) {}
 
-    public function list(array $filters): LengthAwarePaginator
+    public function list(array $filters, ?User $user = null): LengthAwarePaginator
     {
         $q = Attendance::query()->with(['employee:id,employee_no,first_name,middle_name,last_name,suffix,department_id', 'employee.department', 'shift']);
 
@@ -36,6 +37,26 @@ class AttendanceService
                   ->orWhere('first_name', 'ilike', "%{$term}%")
                   ->orWhere('last_name', 'ilike', "%{$term}%");
             });
+        }
+
+        // Row-level filtering. Admin and HR Officer see everything.
+        // Department Head sees their dept's records. Everyone else sees only their own.
+        if ($user) {
+            $roleSlug = $user->role?->slug;
+            $isAdmin = $roleSlug === 'system_admin';
+            $isHrFull = $user->hasPermission('attendance.import') || $user->hasPermission('attendance.edit');
+            if (! $isAdmin && ! $isHrFull) {
+                $employeeId = $user->employee_id;
+                if ($user->hasPermission('attendance.ot.approve')) {
+                    $deptId = \App\Modules\HR\Models\Employee::query()->whereKey($employeeId)->value('department_id');
+                    $q->where(function ($qq) use ($employeeId, $deptId) {
+                        $qq->where('employee_id', $employeeId);
+                        if ($deptId) $qq->orWhereHas('employee', fn ($e) => $e->where('department_id', $deptId));
+                    });
+                } else {
+                    $q->where('employee_id', $employeeId);
+                }
+            }
         }
 
         $sort = $filters['sort'] ?? 'date';

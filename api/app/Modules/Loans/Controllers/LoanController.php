@@ -26,7 +26,7 @@ class LoanController
 
     public function index(Request $request): AnonymousResourceCollection
     {
-        return EmployeeLoanResource::collection($this->service->list($request->query()));
+        return EmployeeLoanResource::collection($this->service->list($request->query(), $request->user()));
     }
 
     public function store(StoreLoanRequest $request): JsonResponse

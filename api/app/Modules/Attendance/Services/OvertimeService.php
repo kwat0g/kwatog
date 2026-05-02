@@ -17,13 +17,30 @@ class OvertimeService
         private readonly AttendanceService $attendance,
     ) {}
 
-    public function list(array $filters): LengthAwarePaginator
+    public function list(array $filters, ?User $user = null): LengthAwarePaginator
     {
-        $q = OvertimeRequest::query()->with(['employee:id,employee_no,first_name,middle_name,last_name,suffix', 'approver:id,name']);
+        $q = OvertimeRequest::query()->with(['employee:id,employee_no,first_name,middle_name,last_name,suffix,department_id', 'approver:id,name']);
         if (!empty($filters['employee_id'])) $q->where('employee_id', $filters['employee_id']);
         if (!empty($filters['status'])) $q->where('status', $filters['status']);
         if (!empty($filters['from'])) $q->where('date', '>=', $filters['from']);
         if (!empty($filters['to'])) $q->where('date', '<=', $filters['to']);
+
+        // Row-level filtering. Admin/approvers see all; otherwise own only.
+        if ($user) {
+            $roleSlug = $user->role?->slug;
+            $isAdmin = $roleSlug === 'system_admin';
+            $isApprover = $user->hasPermission('attendance.ot.approve');
+            if (! $isAdmin && ! $isApprover) {
+                $q->where('employee_id', $user->employee_id);
+            } elseif (! $isAdmin && $isApprover) {
+                $deptId = \App\Modules\HR\Models\Employee::query()->whereKey($user->employee_id)->value('department_id');
+                $q->where(function ($qq) use ($user, $deptId) {
+                    $qq->where('employee_id', $user->employee_id);
+                    if ($deptId) $qq->orWhereHas('employee', fn ($e) => $e->where('department_id', $deptId));
+                });
+            }
+        }
+
         return $q->orderByDesc('date')->paginate(min((int) ($filters['per_page'] ?? 25), 100));
     }
 

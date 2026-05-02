@@ -35,9 +35,28 @@ class LeaveRequestService
         if (!empty($filters['from'])) $q->where('start_date', '>=', $filters['from']);
         if (!empty($filters['to'])) $q->where('end_date', '<=', $filters['to']);
 
-        // Row-level filtering: non-HR users see only their own + (if dept head) their dept's pending_dept rows.
-        if ($user && ! $user->hasPermission('leave.view') === false) {
-            // (intentionally permissive — controller-level guard blocks access otherwise)
+        // Row-level filtering. Admin and HR Officer see everything.
+        // Department Head sees own + their department's requests.
+        // Everyone else sees only their own.
+        if ($user) {
+            $roleSlug = $user->role?->slug;
+            $isAdmin = $roleSlug === 'system_admin';
+            $isHr    = $user->hasPermission('leave.approve_hr');
+            if (! $isAdmin && ! $isHr) {
+                $isDeptHead = $user->hasPermission('leave.approve_dept');
+                $employeeId = $user->employee_id;
+                if ($isDeptHead) {
+                    $deptId = \App\Modules\HR\Models\Employee::query()->whereKey($employeeId)->value('department_id');
+                    $q->where(function ($qq) use ($employeeId, $deptId) {
+                        $qq->where('employee_id', $employeeId);
+                        if ($deptId) {
+                            $qq->orWhereHas('employee', fn ($e) => $e->where('department_id', $deptId));
+                        }
+                    });
+                } else {
+                    $q->where('employee_id', $employeeId);
+                }
+            }
         }
 
         return $q->orderByDesc('created_at')->paginate(min((int) ($filters['per_page'] ?? 25), 100));

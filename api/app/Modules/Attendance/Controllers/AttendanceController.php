@@ -24,7 +24,7 @@ class AttendanceController
 
     public function index(Request $request): AnonymousResourceCollection
     {
-        return AttendanceResource::collection($this->service->list($request->query()));
+        return AttendanceResource::collection($this->service->list($request->query(), $request->user()));
     }
 
     public function store(StoreAttendanceRequest $request): JsonResponse

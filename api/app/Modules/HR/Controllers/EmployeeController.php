@@ -20,7 +20,7 @@ class EmployeeController
 
     public function index(Request $request): AnonymousResourceCollection
     {
-        return EmployeeResource::collection($this->service->list($request->query()));
+        return EmployeeResource::collection($this->service->list($request->query(), $request->user()));
     }
 
     public function store(StoreEmployeeRequest $request): JsonResponse

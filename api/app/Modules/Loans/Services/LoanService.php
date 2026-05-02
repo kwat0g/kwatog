@@ -25,9 +25,9 @@ class LoanService
         private readonly ApprovalService $approvals,
     ) {}
 
-    public function list(array $filters): LengthAwarePaginator
+    public function list(array $filters, ?User $user = null): LengthAwarePaginator
     {
-        $q = EmployeeLoan::query()->with('employee:id,employee_no,first_name,middle_name,last_name,suffix');
+        $q = EmployeeLoan::query()->with('employee:id,employee_no,first_name,middle_name,last_name,suffix,department_id');
         if (!empty($filters['employee_id'])) $q->where('employee_id', $filters['employee_id']);
         if (!empty($filters['loan_type'])) $q->where('loan_type', $filters['loan_type']);
         if (!empty($filters['status'])) $q->where('status', $filters['status']);
@@ -40,6 +40,28 @@ class LoanService
                        ->orWhere('employee_no', 'ilike', "%{$term}%"));
             });
         }
+
+        // Row-level filtering. Admin and Finance/approvers see everything.
+        // Department Head sees own + their dept. Everyone else sees only their own.
+        if ($user) {
+            $roleSlug = $user->role?->slug;
+            $isAdmin = $roleSlug === 'system_admin';
+            $isFinance = $user->hasPermission('loans.approve');
+            if (! $isAdmin && ! $isFinance) {
+                $employeeId = $user->employee_id;
+                if ($user->hasPermission('attendance.ot.approve') /* loose proxy for dept_head */
+                    || $roleSlug === 'department_head') {
+                    $deptId = \App\Modules\HR\Models\Employee::query()->whereKey($employeeId)->value('department_id');
+                    $q->where(function ($qq) use ($employeeId, $deptId) {
+                        $qq->where('employee_id', $employeeId);
+                        if ($deptId) $qq->orWhereHas('employee', fn ($e) => $e->where('department_id', $deptId));
+                    });
+                } else {
+                    $q->where('employee_id', $employeeId);
+                }
+            }
+        }
+
         return $q->orderByDesc('created_at')->paginate(min((int) ($filters['per_page'] ?? 25), 100));
     }
 
