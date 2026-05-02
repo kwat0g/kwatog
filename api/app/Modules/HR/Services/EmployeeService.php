@@ -51,10 +51,16 @@ class EmployeeService
             });
         }
         if (!empty($filters['department_id'])) {
-            $query->where('department_id', $filters['department_id']);
+            $deptId = \App\Common\Support\HashIdFilter::decode(
+                $filters['department_id'], \App\Modules\HR\Models\Department::class,
+            );
+            if ($deptId) $query->where('department_id', $deptId);
         }
         if (!empty($filters['position_id'])) {
-            $query->where('position_id', $filters['position_id']);
+            $posId = \App\Common\Support\HashIdFilter::decode(
+                $filters['position_id'], \App\Modules\HR\Models\Position::class,
+            );
+            if ($posId) $query->where('position_id', $posId);
         }
         if (!empty($filters['status'])) {
             $query->where('status', $filters['status']);

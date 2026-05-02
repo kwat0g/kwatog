@@ -20,10 +20,18 @@ class AttendanceService
         $q = Attendance::query()->with(['employee:id,employee_no,first_name,middle_name,last_name,suffix,department_id', 'employee.department', 'shift']);
 
         if (!empty($filters['employee_id'])) {
-            $q->where('employee_id', $filters['employee_id']);
+            $empId = \App\Common\Support\HashIdFilter::decode(
+                $filters['employee_id'], \App\Modules\HR\Models\Employee::class,
+            );
+            if ($empId) $q->where('employee_id', $empId);
         }
         if (!empty($filters['department_id'])) {
-            $q->whereHas('employee', fn ($e) => $e->where('department_id', $filters['department_id']));
+            $deptId = \App\Common\Support\HashIdFilter::decode(
+                $filters['department_id'], \App\Modules\HR\Models\Department::class,
+            );
+            if ($deptId) {
+                $q->whereHas('employee', fn ($e) => $e->where('department_id', $deptId));
+            }
         }
         if (!empty($filters['status'])) {
             $q->where('status', $filters['status']);

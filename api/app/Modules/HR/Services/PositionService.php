@@ -22,7 +22,11 @@ class PositionService
             $query->where('title', 'ilike', "%{$term}%");
         }
         if (!empty($filters['department_id'])) {
-            $query->where('department_id', $filters['department_id']);
+            $deptId = \App\Common\Support\HashIdFilter::decode(
+                $filters['department_id'],
+                \App\Modules\HR\Models\Department::class,
+            );
+            if ($deptId) $query->where('department_id', $deptId);
         }
 
         $sort = $filters['sort'] ?? 'title';
