@@ -24,9 +24,10 @@ import type { ApiValidationError, ListParams } from '@/types';
 import type { Position } from '@/types/hr';
 
 const schema = z.object({
-  title: z.string().min(1).max(100),
+  title: z.string().trim().min(1, 'Title is required').max(100)
+    .regex(/^[\p{L}0-9\s.&\-,()/]+$/u, 'Letters, digits, spaces, and . & - , ( ) /'),
   department_id: z.string().min(1, 'Department is required'),
-  salary_grade: z.string().max(20).optional().or(z.literal('')),
+  salary_grade: z.string().max(20).regex(/^[A-Za-z0-9\-]*$/, 'Letters, digits, hyphens only').optional().or(z.literal('')),
 });
 type FormValues = z.infer<typeof schema>;
 

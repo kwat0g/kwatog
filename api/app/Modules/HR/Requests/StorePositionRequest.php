@@ -14,12 +14,34 @@ class StorePositionRequest extends FormRequest
         return $this->user()?->hasPermission('hr.positions.manage') ?? false;
     }
 
+    protected function prepareForValidation(): void
+    {
+        $merge = [];
+        if (is_string($this->input('title'))) {
+            $merge['title'] = trim((string) $this->input('title'));
+        }
+        if (is_string($this->input('salary_grade'))) {
+            $merge['salary_grade'] = trim((string) $this->input('salary_grade'));
+        }
+        if (!empty($merge)) {
+            $this->merge($merge);
+        }
+    }
+
     public function rules(): array
     {
         return [
-            'title'         => ['required', 'string', 'max:100'],
+            'title'         => ['required', 'string', 'max:100', "regex:/^[\\p{L}0-9\\s.&\\-,()\\/]+$/u"],
             'department_id' => ['required', 'string'],
-            'salary_grade'  => ['nullable', 'string', 'max:20'],
+            'salary_grade'  => ['nullable', 'string', 'max:20', 'regex:/^[A-Za-z0-9\-]+$/'],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'title.regex'        => 'Title may only contain letters, digits, spaces, and . & - , ( ) /',
+            'salary_grade.regex' => 'Salary grade may only contain letters, digits, and hyphens.',
         ];
     }
 

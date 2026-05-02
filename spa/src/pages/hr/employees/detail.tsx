@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -21,6 +21,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
+import { formatMobile, formatSss, formatPhilHealth, formatPagIbig, formatTin } from '@/lib/phFormat';
 import type { ApiValidationError } from '@/types';
 
 const TABS = ['Overview', 'Employment history', 'Attendance', 'Leaves', 'Loans', 'Documents', 'Property', 'Payroll', 'Activity'] as const;
@@ -181,7 +182,7 @@ function OverviewTab({ employee }: { employee: any }) {
       </Panel>
       <Panel title="Contact">
         <dl className="grid grid-cols-2 gap-4 text-sm">
-          <Item label="Mobile" value={employee.contact.mobile_number} mono />
+          <Item label="Mobile" value={formatMobile(employee.contact.mobile_number)} mono />
           <Item label="Email" value={employee.contact.email} />
           <Item label="Address" value={[employee.address.street, employee.address.barangay, employee.address.city, employee.address.province, employee.address.zip_code].filter(Boolean).join(', ')} />
           <Item label="Emergency contact" value={
@@ -193,10 +194,10 @@ function OverviewTab({ employee }: { employee: any }) {
       </Panel>
       <Panel title="Government IDs" meta="May be masked based on permissions.">
         <dl className="grid grid-cols-2 gap-4 text-sm">
-          <Item label="SSS" value={employee.sss_no} mono />
-          <Item label="PhilHealth" value={employee.philhealth_no} mono />
-          <Item label="Pag-IBIG" value={employee.pagibig_no} mono />
-          <Item label="TIN" value={employee.tin} mono />
+          <Item label="SSS" value={formatSss(employee.sss_no)} mono />
+          <Item label="PhilHealth" value={formatPhilHealth(employee.philhealth_no)} mono />
+          <Item label="Pag-IBIG" value={formatPagIbig(employee.pagibig_no)} mono />
+          <Item label="TIN" value={formatTin(employee.tin)} mono />
         </dl>
       </Panel>
       <Panel title="Banking">
@@ -209,6 +210,38 @@ function OverviewTab({ employee }: { employee: any }) {
   );
 }
 
+// Field labels and value renderers for employment history diffs.
+const HISTORY_FIELD_LABEL: Record<string, string> = {
+  department_id: 'Department',
+  position_id: 'Position',
+  employment_type: 'Employment type',
+  pay_type: 'Pay type',
+  basic_monthly_salary: 'Monthly salary',
+  daily_rate: 'Daily rate',
+  salary: 'Salary',
+  date_regularized: 'Regularized on',
+  separation_reason: 'Reason',
+  separation_date: 'Effective',
+  remarks: 'Remarks',
+};
+
+function renderHistoryValue(key: string, value: any): ReactNode {
+  if (value === null || value === undefined || value === '') return <span className="text-text-subtle">—</span>;
+  if (key === 'basic_monthly_salary' || key === 'daily_rate' || key === 'salary') {
+    return <span className="font-mono tabular-nums">{formatPeso(value)}</span>;
+  }
+  if (key === 'date_regularized' || key === 'separation_date') {
+    return <span className="font-mono">{formatDate(value)}</span>;
+  }
+  if (key === 'employment_type' || key === 'pay_type' || key === 'separation_reason') {
+    return <span>{cap(String(value).replace('_', ' '))}</span>;
+  }
+  if (typeof value === 'object') {
+    return <span className="font-mono text-xs">{JSON.stringify(value)}</span>;
+  }
+  return <span className="font-mono">{String(value)}</span>;
+}
+
 function EmploymentHistoryTab({ employee }: { employee: any }) {
   const items = (employee.employment_history ?? []) as any[];
   if (items.length === 0) {
@@ -217,16 +250,38 @@ function EmploymentHistoryTab({ employee }: { employee: any }) {
   return (
     <Panel title={`Employment history (${items.length})`} noPadding>
       <ul className="divide-y divide-subtle">
-        {items.map((h) => (
-          <li key={h.id} className="px-4 py-3 text-sm">
-            <div className="flex items-center justify-between">
-              <span className="font-medium">{cap(h.change_type.replace('_', ' '))}</span>
-              <span className="font-mono text-xs text-muted">{formatDate(h.effective_date)}</span>
-            </div>
-            {h.remarks && <p className="text-xs text-muted mt-1">{h.remarks}</p>}
-            <pre className="text-xs text-muted mt-1 overflow-x-auto">{JSON.stringify(h.to_value, null, 2)}</pre>
-          </li>
-        ))}
+        {items.map((h) => {
+          const to = (h.to_value && typeof h.to_value === 'object') ? h.to_value : {};
+          const from = (h.from_value && typeof h.from_value === 'object') ? h.from_value : {};
+          const keys = Array.from(new Set([...Object.keys(from), ...Object.keys(to)]));
+          return (
+            <li key={h.id} className="px-4 py-3 text-sm">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="font-medium">{cap(h.change_type.replace('_', ' '))}</span>
+                <span className="font-mono text-xs text-muted">{formatDate(h.effective_date)}</span>
+              </div>
+              {h.remarks && <p className="text-xs text-muted mb-2">{h.remarks}</p>}
+              {keys.length > 0 && (
+                <dl className="grid grid-cols-[160px_1fr] gap-y-1 text-xs">
+                  {keys.map((k) => (
+                    <div key={k} className="contents">
+                      <dt className="text-muted">{HISTORY_FIELD_LABEL[k] ?? cap(k.replace('_', ' '))}</dt>
+                      <dd className="flex items-center gap-2 min-w-0">
+                        {Object.prototype.hasOwnProperty.call(from, k) && (
+                          <>
+                            <span className="line-through text-text-subtle truncate">{renderHistoryValue(k, from[k])}</span>
+                            <span className="text-text-subtle">→</span>
+                          </>
+                        )}
+                        <span className="truncate">{renderHistoryValue(k, to[k])}</span>
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </Panel>
   );

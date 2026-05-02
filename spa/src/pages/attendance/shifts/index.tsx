@@ -24,15 +24,16 @@ import type { ApiValidationError, ListParams } from '@/types';
 import type { Shift } from '@/types/attendance';
 
 const schema = z.object({
-  name: z.string().min(1).max(50),
-  start_time: z.string().regex(/^\d{2}:\d{2}$/, 'HH:MM'),
-  end_time: z.string().regex(/^\d{2}:\d{2}$/, 'HH:MM'),
-  break_minutes: z.coerce.number().int().min(0).max(240),
+  name: z.string().trim().min(1, 'Name is required').max(50)
+    .regex(/^[A-Za-z0-9\s\-_().]+$/, 'Letters, digits, spaces, and -_().'),
+  start_time: z.string().regex(/^\d{2}:\d{2}$/, 'Use HH:MM (24-hour)'),
+  end_time: z.string().regex(/^\d{2}:\d{2}$/, 'Use HH:MM (24-hour)'),
+  break_minutes: z.coerce.number().int('Whole minutes only').min(0).max(240, 'Max 240 minutes'),
   is_night_shift: z.boolean(),
   is_extended: z.boolean(),
   auto_ot_hours: z.string().optional().or(z.literal('')),
   is_active: z.boolean(),
-});
+}).refine((d) => d.start_time !== d.end_time, { message: 'End time cannot equal start time', path: ['end_time'] });
 type FormValues = z.infer<typeof schema>;
 
 export default function ShiftsPage() {

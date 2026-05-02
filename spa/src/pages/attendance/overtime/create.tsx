@@ -16,10 +16,11 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import type { ApiValidationError } from '@/types';
 
 const schema = z.object({
-  employee_id: z.string().min(1),
-  date: z.string().min(1),
-  hours_requested: z.coerce.number().min(0.5).max(8),
-  reason: z.string().min(1).max(2000),
+  employee_id: z.string().min(1, 'Employee is required'),
+  date: z.string().min(1, 'Date is required'),
+  hours_requested: z.coerce.number({ invalid_type_error: 'Enter a number' })
+    .min(0.5, 'Minimum 0.5 hours').max(8, 'Maximum 8 hours'),
+  reason: z.string().trim().min(5, 'Provide at least 5 characters').max(2000),
 });
 type FormValues = z.infer<typeof schema>;
 
