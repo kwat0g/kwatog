@@ -63,14 +63,31 @@ class Item extends Model
         return $q->where('is_active', true);
     }
 
+    /**
+     * Lazy-load-safe: callers MUST eager-load via withSum on stockLevels (see ItemService).
+     * If neither subquery aggregates nor relation is loaded, returns 0 to avoid an
+     * accidental N+1 query under Model::shouldBeStrict().
+     */
     public function getOnHandAttribute(): string
     {
-        return (string) $this->stockLevels()->sum('quantity');
+        if (array_key_exists('on_hand_quantity', $this->attributes)) {
+            return (string) ($this->attributes['on_hand_quantity'] ?? '0');
+        }
+        if ($this->relationLoaded('stockLevels')) {
+            return (string) $this->stockLevels->sum('quantity');
+        }
+        return '0';
     }
 
     public function getReservedAttribute(): string
     {
-        return (string) $this->stockLevels()->sum('reserved_quantity');
+        if (array_key_exists('reserved_quantity', $this->attributes)) {
+            return (string) ($this->attributes['reserved_quantity'] ?? '0');
+        }
+        if ($this->relationLoaded('stockLevels')) {
+            return (string) $this->stockLevels->sum('reserved_quantity');
+        }
+        return '0';
     }
 
     public function getAvailableAttribute(): string
