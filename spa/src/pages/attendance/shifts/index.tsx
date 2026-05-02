@@ -91,7 +91,7 @@ export default function ShiftsPage() {
           <>
             {can('attendance.shifts.manage') && (
               <>
-                <Button variant="secondary" size="sm" icon={<Users size={14} />} onClick={() => navigate('/attendance/shifts/assign')}>
+                <Button variant="secondary" size="sm" icon={<Users size={14} />} onClick={() => navigate('/hr/attendance/shifts/assign')}>
                   Bulk assign
                 </Button>
                 <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => { setEditing(null); setModalOpen(true); }}>

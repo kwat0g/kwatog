@@ -69,7 +69,7 @@ export default function LeaveDetailPage() {
           </span>
         }
         subtitle={`${req.employee?.full_name} · ${req.leave_type?.code}`}
-        backTo="/leaves"
+        backTo="/hr/leaves"
         backLabel="Leaves"
         actions={
           <>

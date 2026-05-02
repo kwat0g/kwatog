@@ -82,7 +82,7 @@ export default function CreateLoanPage() {
     onSuccess: (loan) => {
       qc.invalidateQueries({ queryKey: ['loans'] });
       toast.success(`Loan request ${loan.loan_no} submitted.`);
-      navigate(`/loans/${loan.id}`);
+      navigate(`/hr/loans/${loan.id}`);
     },
     onError: (e: AxiosError<ApiValidationError>) => {
       if (e.response?.status === 422) {
@@ -100,7 +100,7 @@ export default function CreateLoanPage() {
 
   return (
     <div>
-      <PageHeader title="New loan request" backTo="/loans" backLabel="Loans" />
+      <PageHeader title="New loan request" backTo="/hr/loans" backLabel="Loans" />
       <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-3xl mx-auto px-5 py-6 space-y-4">
         <Panel title="Type & employee">
           <div className="space-y-3">
@@ -169,7 +169,7 @@ export default function CreateLoanPage() {
         </Panel>
 
         <div className="flex justify-end gap-2 pt-2">
-          <Button type="button" variant="secondary" onClick={() => navigate('/loans')}>Cancel</Button>
+          <Button type="button" variant="secondary" onClick={() => navigate('/hr/loans')}>Cancel</Button>
           <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending} loading={mutation.isPending}>
             {mutation.isPending ? 'Submitting…' : 'Submit request'}
           </Button>

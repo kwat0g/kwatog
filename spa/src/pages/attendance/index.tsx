@@ -98,11 +98,11 @@ export default function AttendancePage() {
         subtitle={data ? `${data.meta.total.toLocaleString()} records` : undefined}
         actions={
           <>
-            <Button variant="secondary" size="sm" icon={<Calendar size={14} />} onClick={() => navigate('/attendance/overtime')}>
+            <Button variant="secondary" size="sm" icon={<Calendar size={14} />} onClick={() => navigate('/hr/attendance/overtime')}>
               Overtime
             </Button>
             {can('attendance.import') && (
-              <Button variant="primary" size="sm" icon={<Upload size={14} />} onClick={() => navigate('/attendance/import')}>
+              <Button variant="primary" size="sm" icon={<Upload size={14} />} onClick={() => navigate('/hr/attendance/import')}>
                 Import DTR
               </Button>
             )}
@@ -148,7 +148,7 @@ export default function AttendancePage() {
           icon="inbox"
           title="No attendance found"
           description={filters.search ? 'Try a different search.' : 'Import a biometric CSV to get started.'}
-          action={can('attendance.import') ? <Button variant="primary" onClick={() => navigate('/attendance/import')}>Import DTR</Button> : undefined}
+          action={can('attendance.import') ? <Button variant="primary" onClick={() => navigate('/hr/attendance/import')}>Import DTR</Button> : undefined}
         />
       )}
       {data && data.data.length > 0 && (

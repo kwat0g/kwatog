@@ -50,7 +50,7 @@ export default function OvertimeCreatePage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['attendance', 'overtime'] });
       toast.success('Overtime request submitted.');
-      navigate('/attendance/overtime');
+      navigate('/hr/attendance/overtime');
     },
     onError: (e: AxiosError<ApiValidationError>) => {
       if (e.response?.status === 422 && e.response.data.errors) {
@@ -64,7 +64,7 @@ export default function OvertimeCreatePage() {
 
   return (
     <div>
-      <PageHeader title="New overtime request" backTo="/attendance/overtime" backLabel="Overtime" />
+      <PageHeader title="New overtime request" backTo="/hr/attendance/overtime" backLabel="Overtime" />
       <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-2xl mx-auto px-5 py-6">
         <Panel title="Request details">
           <div className="grid grid-cols-2 gap-3">
@@ -80,7 +80,7 @@ export default function OvertimeCreatePage() {
           </div>
         </Panel>
         <div className="flex justify-end gap-2 pt-4">
-          <Button type="button" variant="secondary" onClick={() => navigate('/attendance/overtime')}>Cancel</Button>
+          <Button type="button" variant="secondary" onClick={() => navigate('/hr/attendance/overtime')}>Cancel</Button>
           <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending} loading={mutation.isPending}>
             {mutation.isPending ? 'Submitting…' : 'Submit request'}
           </Button>

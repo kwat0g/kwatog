@@ -89,7 +89,7 @@ export default function OvertimeListPage() {
             <Button variant="secondary" size="sm" onClick={() => setView(view === 'list' ? 'kanban' : 'list')}>
               {view === 'list' ? 'Kanban view' : 'List view'}
             </Button>
-            <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/attendance/overtime/create')}>
+            <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/hr/attendance/overtime/create')}>
               New OT request
             </Button>
           </>

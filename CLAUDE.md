@@ -258,6 +258,55 @@ ogami-erp/
     └── tailwind.config.ts
 ```
 
+## URL ROUTING CONVENTION (Modular Monolith)
+
+The SPA mirrors the modular-monolith backend structure. Every employee-facing
+business module lives under a top-level path that names its umbrella module:
+
+```
+/hr/employees           Sprint 2 — HR / People
+/hr/departments
+/hr/positions
+/hr/attendance          Sprint 2 — HR / Attendance subdomain
+/hr/attendance/import
+/hr/attendance/shifts
+/hr/attendance/holidays
+/hr/attendance/overtime
+/hr/leaves              Sprint 2 — HR / Leaves
+/hr/loans               Sprint 2 — HR / Loans
+
+/payroll/periods        Sprint 3 — HR / Payroll (kept under /payroll for clarity)
+
+/inventory/...          Operations modules — own top-level prefix
+/purchasing/...
+/supply-chain/...
+/production/...
+/mrp/...
+/crm/...
+/quality/...
+/maintenance/...
+/accounting/...
+
+/admin/settings         Cross-cutting admin
+/admin/roles
+/admin/audit-logs
+```
+
+**Rules**
+
+1. Every URL must start with the umbrella module slug (`/hr`, `/inventory`, …).
+   No bare resource paths like `/leaves` or `/loans` — they collide as the
+   product grows and obscure ownership in audit logs.
+2. Sub-resources nest under the parent module, e.g. `/hr/attendance/overtime`,
+   not `/overtime`. The sidebar's longest-prefix match in
+   [`Sidebar`](spa/src/components/layout/Sidebar.tsx:1) relies on this so only
+   the most specific item lights up.
+3. The filesystem layout under `spa/src/pages/` does NOT have to mirror the
+   URL exactly — it follows the React component tree (e.g. `pages/attendance/`
+   is fine even though the URL is `/hr/attendance`). Keep imports stable.
+4. Backend API paths (`/api/v1/leaves/requests`, etc.) are independent of the
+   SPA route prefix — do not rename them when restructuring SPA URLs.
+
 ## CODE CONVENTIONS
 
 ### PHP / Laravel

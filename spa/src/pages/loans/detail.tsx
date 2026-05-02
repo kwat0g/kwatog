@@ -65,7 +65,7 @@ export default function LoanDetailPage() {
           </span>
         }
         subtitle={`${loan.employee?.full_name} · ${loan.loan_type === 'company_loan' ? 'Company loan' : 'Cash advance'}`}
-        backTo="/loans"
+        backTo="/hr/loans"
         backLabel="Loans"
         actions={
           <>

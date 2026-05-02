@@ -406,7 +406,7 @@ function LeavesTab({ employeeId }: { employeeId: string }) {
           {rows.map((r: any) => (
             <tr key={r.id} className="h-8 border-b border-subtle hover:bg-subtle">
               <td className="px-4">
-                <Link to={`/leaves/${r.id}`} className="font-mono text-accent hover:underline">{r.leave_request_no}</Link>
+                <Link to={`/hr/leaves/${r.id}`} className="font-mono text-accent hover:underline">{r.leave_request_no}</Link>
               </td>
               <td className="px-4">{r.leave_type?.code}</td>
               <td className="px-4 font-mono">{formatDate(r.start_date)} → {formatDate(r.end_date)}</td>
@@ -448,7 +448,7 @@ function LoansTab({ employeeId }: { employeeId: string }) {
           {rows.map((r: any) => (
             <tr key={r.id} className="h-8 border-b border-subtle hover:bg-subtle">
               <td className="px-4">
-                <Link to={`/loans/${r.id}`} className="font-mono text-accent hover:underline">{r.loan_no}</Link>
+                <Link to={`/hr/loans/${r.id}`} className="font-mono text-accent hover:underline">{r.loan_no}</Link>
               </td>
               <td className="px-4">{r.loan_type === 'company_loan' ? 'Company' : 'Cash advance'}</td>
               <td className="px-4 text-right font-mono tabular-nums">₱ {r.principal}</td>

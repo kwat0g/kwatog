@@ -63,7 +63,7 @@ export default function LeavesPage() {
   };
 
   const columns: Column<LeaveRequest>[] = [
-    { key: 'leave_request_no', header: 'No', cell: (r) => <Link to={`/leaves/${r.id}`} className="font-mono text-accent hover:underline">{r.leave_request_no}</Link> },
+    { key: 'leave_request_no', header: 'No', cell: (r) => <Link to={`/hr/leaves/${r.id}`} className="font-mono text-accent hover:underline">{r.leave_request_no}</Link> },
     { key: 'employee', header: 'Employee', cell: (r) => <StackedCell primary={r.employee?.full_name ?? '—'} secondary={<span className="font-mono">{r.employee?.employee_no}</span>} /> },
     { key: 'type', header: 'Type', cell: (r) => r.leave_type?.code ?? '—' },
     { key: 'dates', header: 'Dates', cell: (r) => <NumCell>{formatDate(r.start_date)} → {formatDate(r.end_date)}</NumCell> },
@@ -117,7 +117,7 @@ export default function LeavesPage() {
               {view === 'list' ? 'Kanban view' : 'List view'}
             </Button>
             {can('leave.create') && (
-              <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/leaves/create')}>
+              <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/hr/leaves/create')}>
                 Request leave
               </Button>
             )}
@@ -140,7 +140,7 @@ export default function LeavesPage() {
           icon="inbox"
           title="No leave requests"
           description={can('leave.create') ? 'Submit one to get started.' : 'Nothing to show yet.'}
-          action={can('leave.create') ? <Button variant="primary" onClick={() => navigate('/leaves/create')}>Request leave</Button> : undefined}
+          action={can('leave.create') ? <Button variant="primary" onClick={() => navigate('/hr/leaves/create')}>Request leave</Button> : undefined}
         />
       )}
 
@@ -195,7 +195,7 @@ function KanbanCol({
         <ul className="divide-y divide-subtle">
           {items.map((l) => (
             <li key={l.id} className="px-4 py-3">
-              <Link to={`/leaves/${l.id}`} className="block">
+              <Link to={`/hr/leaves/${l.id}`} className="block">
                 <div className="text-sm font-medium truncate">{l.employee?.full_name ?? '—'}</div>
                 <div className="text-xs text-muted font-mono">{l.leave_request_no} · {l.leave_type?.code}</div>
                 <div className="text-xs mt-0.5 font-mono tabular-nums">{formatDate(l.start_date)} → {formatDate(l.end_date)} · {l.days}d</div>

@@ -55,7 +55,7 @@ export default function BulkAssignShiftPage() {
     onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ['attendance'] });
       toast.success(`Assigned shift to ${result.count} employees.`);
-      navigate('/attendance/shifts');
+      navigate('/hr/attendance/shifts');
     },
     onError: (e: AxiosError<ApiValidationError>) => {
       if (e.response?.status === 422 && e.response.data.errors) {
@@ -74,7 +74,7 @@ export default function BulkAssignShiftPage() {
       <PageHeader
         title="Bulk assign shift"
         subtitle="Assigns the selected shift to all employees in a department, closing previous open assignments."
-        backTo="/attendance/shifts"
+        backTo="/hr/attendance/shifts"
         backLabel="Shifts"
       />
       <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-2xl mx-auto px-5 py-6">
@@ -93,7 +93,7 @@ export default function BulkAssignShiftPage() {
           </div>
         </Panel>
         <div className="flex justify-end gap-2 pt-4">
-          <Button type="button" variant="secondary" onClick={() => navigate('/attendance/shifts')}>Cancel</Button>
+          <Button type="button" variant="secondary" onClick={() => navigate('/hr/attendance/shifts')}>Cancel</Button>
           <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending} loading={mutation.isPending}>
             {mutation.isPending ? 'Assigning…' : 'Assign shift'}
           </Button>
