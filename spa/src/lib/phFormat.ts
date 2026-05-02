@@ -120,6 +120,32 @@ export function placeholderFor(kind: PhIdKind): string {
   }
 }
 
+/**
+ * Mask all but the last `visibleTrailing` digits while preserving the
+ * separator pattern of the formatted ID. Used for PII display.
+ *
+ *   maskFormatted("12-3456789-0", 2) => "**-*******8-0"
+ */
+export function maskFormatted(formatted: string, visibleTrailing = 2): string {
+  if (!formatted) return formatted;
+  const digitIdx: number[] = [];
+  for (let i = 0; i < formatted.length; i++) {
+    if (/\d/.test(formatted[i])) digitIdx.push(i);
+  }
+  const cutoff = digitIdx.length - visibleTrailing;
+  const out = formatted.split('');
+  digitIdx.forEach((pos, i) => {
+    if (i < cutoff) out[pos] = '•';
+  });
+  return out.join('');
+}
+
+export function maskByKind(kind: PhIdKind, value: string | null | undefined, visible = false): string {
+  const formatted = formatByKind(kind, value);
+  if (!formatted) return '';
+  return visible ? formatted : maskFormatted(formatted, kind === 'mobile' ? 4 : 2);
+}
+
 export function helperFor(kind: PhIdKind): string {
   switch (kind) {
     case 'sss':        return '10 digits';

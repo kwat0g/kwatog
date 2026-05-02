@@ -143,6 +143,9 @@ function ListView({
   onEdit: (h: Holiday) => void;
   onDelete: (h: Holiday) => void;
 }) {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selected = useMemo(() => holidays.find((h) => h.id === selectedId) ?? null, [holidays, selectedId]);
+
   const columns: Column<Holiday>[] = [
     { key: 'date', header: 'Date', cell: (r) => <NumCell>{formatDate(r.date)}</NumCell> },
     { key: 'name', header: 'Name', cell: (r) => <span className="font-medium">{r.name}</span> },
@@ -156,20 +159,49 @@ function ListView({
       ),
     },
     { key: 'is_recurring', header: 'Recurring', cell: (r) => r.is_recurring ? <Chip variant="neutral">Yes</Chip> : <span className="text-text-subtle">—</span> },
-    ...(canManage ? [{
-      key: 'actions',
-      header: '',
-      align: 'right' as const,
-      cell: (r: Holiday) => (
-        <div className="flex items-center justify-end gap-1">
-          <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onEdit(r); }} icon={<Pencil size={12} />} aria-label="Edit" />
-          <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onDelete(r); }} icon={<Trash2 size={12} />} aria-label="Delete" />
-        </div>
-      ),
-    }] : []),
   ];
 
-  return <DataTable columns={columns} data={holidays} />;
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 px-5 py-4">
+      <DataTable
+        columns={columns}
+        data={holidays}
+        onRowClick={(row) => setSelectedId(row.id)}
+        highlightedRowId={selectedId}
+      />
+      <Panel title="Details">
+        {!selected && <p className="text-sm text-muted">Select a holiday to view its details.</p>}
+        {selected && (
+          <div className="space-y-3 text-sm">
+            <div>
+              <div className="text-xs uppercase tracking-wider text-muted font-medium mb-1">Name</div>
+              <div className="font-medium">{selected.name}</div>
+            </div>
+            <div>
+              <div className="text-xs uppercase tracking-wider text-muted font-medium mb-1">Date</div>
+              <div className="font-mono">{formatDate(selected.date)}</div>
+            </div>
+            <div>
+              <div className="text-xs uppercase tracking-wider text-muted font-medium mb-1">Type</div>
+              <Chip variant={selected.type === 'regular' ? 'warning' : 'info'}>
+                {selected.type === 'regular' ? 'Regular' : 'Special non-working'}
+              </Chip>
+            </div>
+            <div>
+              <div className="text-xs uppercase tracking-wider text-muted font-medium mb-1">Recurring</div>
+              <div>{selected.is_recurring ? 'Annually' : 'One-off'}</div>
+            </div>
+            {canManage && (
+              <div className="flex gap-2 pt-3 border-t border-default">
+                <Button variant="secondary" size="sm" onClick={() => onEdit(selected)} icon={<Pencil size={12} />}>Edit</Button>
+                <Button variant="danger" size="sm" onClick={() => onDelete(selected)} icon={<Trash2 size={12} />}>Delete</Button>
+              </div>
+            )}
+          </div>
+        )}
+      </Panel>
+    </div>
+  );
 }
 
 function CalendarView({ holidays, year }: { holidays: Holiday[]; year: number }) {

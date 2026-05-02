@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
-import { Pencil, UserMinus } from 'lucide-react';
+import { Pencil, UserMinus, Eye, EyeOff } from 'lucide-react';
 import { employeesApi, type SeparateData } from '@/api/hr/employees';
 import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
@@ -21,7 +21,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
-import { formatMobile, formatSss, formatPhilHealth, formatPagIbig, formatTin } from '@/lib/phFormat';
+import { formatMobile, maskByKind } from '@/lib/phFormat';
 import type { ApiValidationError } from '@/types';
 
 const TABS = ['Overview', 'Employment history', 'Attendance', 'Leaves', 'Loans', 'Documents', 'Property', 'Payroll', 'Activity'] as const;
@@ -192,14 +192,7 @@ function OverviewTab({ employee }: { employee: any }) {
           } />
         </dl>
       </Panel>
-      <Panel title="Government IDs" meta="May be masked based on permissions.">
-        <dl className="grid grid-cols-2 gap-4 text-sm">
-          <Item label="SSS" value={formatSss(employee.sss_no)} mono />
-          <Item label="PhilHealth" value={formatPhilHealth(employee.philhealth_no)} mono />
-          <Item label="Pag-IBIG" value={formatPagIbig(employee.pagibig_no)} mono />
-          <Item label="TIN" value={formatTin(employee.tin)} mono />
-        </dl>
-      </Panel>
+      <GovIdsPanel employee={employee} />
       <Panel title="Banking">
         <dl className="grid grid-cols-2 gap-4 text-sm">
           <Item label="Bank" value={employee.bank_name} />
@@ -240,6 +233,32 @@ function renderHistoryValue(key: string, value: any): ReactNode {
     return <span className="font-mono text-xs">{JSON.stringify(value)}</span>;
   }
   return <span className="font-mono">{String(value)}</span>;
+}
+
+function GovIdsPanel({ employee }: { employee: any }) {
+  const { can } = usePermission();
+  const canView = can('hr.employees.view_sensitive');
+  const [revealed, setRevealed] = useState(false);
+  const action = canView ? (
+    <Button
+      variant="ghost"
+      size="sm"
+      icon={revealed ? <EyeOff size={12} /> : <Eye size={12} />}
+      onClick={() => setRevealed((v) => !v)}
+    >
+      {revealed ? 'Hide' : 'Reveal'}
+    </Button>
+  ) : null;
+  return (
+    <Panel title="Government IDs" meta={canView ? 'Masked. Click reveal to view.' : 'Hidden — insufficient permissions.'} actions={action}>
+      <dl className="grid grid-cols-2 gap-4 text-sm">
+        <Item label="SSS" value={maskByKind('sss', employee.sss_no, canView && revealed)} mono />
+        <Item label="PhilHealth" value={maskByKind('philhealth', employee.philhealth_no, canView && revealed)} mono />
+        <Item label="Pag-IBIG" value={maskByKind('pagibig', employee.pagibig_no, canView && revealed)} mono />
+        <Item label="TIN" value={maskByKind('tin', employee.tin, canView && revealed)} mono />
+      </dl>
+    </Panel>
+  );
 }
 
 function EmploymentHistoryTab({ employee }: { employee: any }) {
