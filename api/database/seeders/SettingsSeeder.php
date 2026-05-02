@@ -35,7 +35,8 @@ class SettingsSeeder extends Seeder
         $settings->set('purchasing.three_way_tolerance_price_pct', 5.0, 'purchasing');
         $settings->set('inventory.allow_negative', false, 'inventory');
 
-        // Module feature toggles — Sprint 5 enables Inventory + Purchasing.
+        // Module feature toggles — Sprint 6 enables CRM + MRP + Production
+        // (Order-to-Cash chain: sales orders → MRP plans → work orders → output → OEE).
         $modules = [
             'hr' => true,
             'attendance' => true,
@@ -45,12 +46,12 @@ class SettingsSeeder extends Seeder
             'accounting' => true,
             'inventory' => true,
             'purchasing' => true,
-            'supply_chain' => false,
-            'production' => false,
-            'mrp' => false,
-            'crm' => false,
-            'quality' => false,
-            'maintenance' => false,
+            'crm' => true,
+            'mrp' => true,
+            'production' => true,
+            'supply_chain' => false, // Sprint 7
+            'quality' => false,      // Sprint 7
+            'maintenance' => false,  // Sprint 8
         ];
 
         foreach ($modules as $slug => $enabled) {
