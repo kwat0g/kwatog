@@ -59,7 +59,7 @@ export default function CreateBillPage() {
   const vendors = vendorsResp?.data ?? [];
   const accounts = accountsResp?.data ?? [];
 
-  const { register, control, handleSubmit, watch, setError, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const { register, control, handleSubmit, watch, setError, setValue, getValues, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       bill_number: '', vendor_id: presetVendor, date: new Date().toISOString().slice(0, 10),
@@ -71,19 +71,22 @@ export default function CreateBillPage() {
   const items = watch('items');
   const isVatable = watch('is_vatable');
 
-  // Auto-fill due_date when vendor changes (use payment_terms_days).
+  // Auto-fill due_date when vendor changes (use payment_terms_days). Use
+  // setValue (RHF API) so the field is properly tracked; the previous
+  // document.querySelector + setAttribute hack only mutated the DOM
+  // attribute and did not update form state.
   const vendorId = watch('vendor_id');
   const date = watch('date');
   useEffect(() => {
+    if (!vendorId || !date) return;
     const v = vendors.find((x) => x.id === vendorId);
-    if (v && date) {
-      const d = new Date(date); d.setDate(d.getDate() + v.payment_terms_days);
-      const iso = d.toISOString().slice(0, 10);
-      // Don't overwrite a manually edited due_date.
-      const cur = (watch('due_date') ?? '');
-      if (!cur) (document.querySelector('input[name="due_date"]') as HTMLInputElement | null)?.setAttribute('value', iso);
-    }
-  }, [vendorId, date, vendors, watch]);
+    if (!v) return;
+    // Don't overwrite a manually edited due_date.
+    if (getValues('due_date')) return;
+    const d = new Date(date);
+    d.setDate(d.getDate() + v.payment_terms_days);
+    setValue('due_date', d.toISOString().slice(0, 10), { shouldValidate: false, shouldDirty: true });
+  }, [vendorId, date, vendors, getValues, setValue]);
 
   const totals = useMemo(() => {
     let subtotal = 0;

@@ -15,9 +15,13 @@ class CustomerResource extends JsonResource
         $user = $request->user();
         $canSeeTin = $user?->hasPermission('accounting.customers.manage') ?? false;
 
-        $creditLimit = (string) ($this->credit_limit ?? '0');
-        $creditUsed  = (string) ($this->credit_used  ?? '0');
-        $creditAvail = $creditLimit !== '0' ? Money::sub($creditLimit, $creditUsed) : null;
+        // Strict-mode safe: read from raw attributes since `credit_used`
+        // is only added by CustomerService::list() / ::show() (withSum).
+        $attrs        = $this->resource->getAttributes();
+        $creditUsedRaw = $attrs['credit_used'] ?? null;
+        $creditLimit  = (string) ($this->credit_limit ?? '0');
+        $creditUsed   = (string) ($creditUsedRaw ?? '0');
+        $creditAvail  = $creditLimit !== '0' ? Money::sub($creditLimit, $creditUsed) : null;
 
         return [
             'id'                 => $this->hash_id,
@@ -28,7 +32,7 @@ class CustomerResource extends JsonResource
             'address'            => $this->address,
             'tin'                => $canSeeTin ? $this->tin : $this->maskTin($this->tin),
             'credit_limit'       => $this->credit_limit ? (string) $this->credit_limit : null,
-            'credit_used'        => $this->resource->getAttribute('credit_used') !== null ? Money::round2($creditUsed) : null,
+            'credit_used'        => $creditUsedRaw !== null ? Money::round2($creditUsed) : null,
             'credit_available'   => $creditAvail,
             'payment_terms_days' => (int) $this->payment_terms_days,
             'is_active'          => (bool) $this->is_active,

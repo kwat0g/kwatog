@@ -14,7 +14,9 @@ class VendorResource extends JsonResource
         $user = $request->user();
         $canSeeTin = $user?->hasPermission('accounting.vendors.manage') ?? false;
 
-        $openBalance = $this->resource->getAttribute('open_balance');
+        // Strict-mode safe: not every endpoint pre-computes `open_balance`
+        // (only VendorService::list() and ::show() add it via withSum).
+        $openBalance = $this->resource->getAttributes()['open_balance'] ?? null;
 
         return [
             'id'                 => $this->hash_id,
