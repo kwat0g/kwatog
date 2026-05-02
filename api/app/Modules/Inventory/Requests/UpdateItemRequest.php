@@ -4,16 +4,25 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Requests;
 
+use App\Common\Concerns\ResolvesHashIds;
 use App\Modules\Inventory\Enums\ItemType;
 use App\Modules\Inventory\Enums\ReorderMethod;
+use App\Modules\Inventory\Models\ItemCategory;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class UpdateItemRequest extends FormRequest
 {
+    use ResolvesHashIds;
+
     public function authorize(): bool
     {
         return $this->user()?->hasPermission('inventory.items.manage') ?? false;
+    }
+
+    protected function hashIdFields(): array
+    {
+        return ['category_id' => ItemCategory::class];
     }
 
     public function rules(): array

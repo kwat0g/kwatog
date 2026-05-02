@@ -22,7 +22,7 @@ const schema = z.object({
   code:                   z.string().min(2).max(30).regex(/^[A-Z0-9-]+$/, 'Use uppercase letters, digits, hyphens.'),
   name:                   z.string().min(1).max(200),
   description:            z.string().max(1000).optional().or(z.literal('')),
-  category_id:            z.coerce.number().int().min(1, 'Category is required'),
+  category_id:            z.string().min(1, 'Category is required'),
   item_type:              z.enum(['raw_material', 'finished_good', 'packaging', 'spare_part']),
   unit_of_measure:        z.string().min(1).max(20),
   standard_cost:          z.string().regex(/^\d+(\.\d{1,4})?$/, 'Up to 4 decimals'),
@@ -54,7 +54,7 @@ export default function ItemFormPage({ mode }: { mode: 'create' | 'edit' }) {
 
   const defaults: FormValues = existing ? {
     code: existing.code, name: existing.name, description: existing.description ?? '',
-    category_id: Number(existing.category?.id ?? 0),
+    category_id: existing.category?.id ?? '',
     item_type: existing.item_type, unit_of_measure: existing.unit_of_measure,
     standard_cost: existing.standard_cost, reorder_method: existing.reorder_method,
     reorder_point: existing.reorder_point, safety_stock: existing.safety_stock,
@@ -62,7 +62,7 @@ export default function ItemFormPage({ mode }: { mode: 'create' | 'edit' }) {
     lead_time_days: existing.lead_time_days,
     is_critical: existing.is_critical, is_active: existing.is_active,
   } : {
-    code: '', name: '', description: '', category_id: 0,
+    code: '', name: '', description: '', category_id: '',
     item_type: 'raw_material', unit_of_measure: 'kg',
     standard_cost: '0.0000', reorder_method: 'fixed_quantity',
     reorder_point: '0.000', safety_stock: '0.000', minimum_order_quantity: '1.000',
@@ -116,7 +116,7 @@ export default function ItemFormPage({ mode }: { mode: 'create' | 'edit' }) {
             <Select label="Category" required {...register('category_id')} error={errors.category_id?.message}>
               <option value="">Select category</option>
               {categories?.map((c) => (
-                <option key={c.id} value={Number(c.id) || c.id}>
+                <option key={c.id} value={c.id}>
                   {c.parent_name ? `${c.parent_name} > ${c.name}` : c.name}
                 </option>
               ))}

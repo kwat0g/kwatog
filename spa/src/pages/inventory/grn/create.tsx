@@ -18,7 +18,7 @@ export default function CreateGrnPage() {
   const [poId, setPoId] = useState<string>(search.get('po_id') ?? '');
   const [poList, setPoList] = useState<{ id: string; po_number: string }[]>([]);
   const [items, setItems] = useState<Array<{
-    purchase_order_item_id: number; item_id: string; item_code: string; item_name: string;
+    purchase_order_item_id: string; item_id: string; item_code: string; item_name: string;
     location_id: string; quantity_received: string; unit_cost: string; remarks?: string;
   }>>([]);
   const [meta, setMeta] = useState({ received_date: new Date().toISOString().slice(0, 10), remarks: '' });
@@ -41,7 +41,7 @@ export default function CreateGrnPage() {
   useEffect(() => {
     if (po && po.items) {
       setItems(po.items.map((l) => ({
-        purchase_order_item_id: l.id,
+        purchase_order_item_id: String(l.id),
         item_id: l.item.id, item_code: l.item.code, item_name: l.item.name,
         location_id: '',
         quantity_received: l.quantity_remaining,

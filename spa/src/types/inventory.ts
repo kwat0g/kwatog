@@ -49,7 +49,7 @@ export interface CreateItemData {
   code: string;
   name: string;
   description?: string;
-  category_id: number;
+  category_id: string;
   item_type: ItemType;
   unit_of_measure: string;
   standard_cost: string;
@@ -155,9 +155,9 @@ export interface CreateGrnData {
   received_date?: string;
   remarks?: string;
   items: Array<{
-    purchase_order_item_id: number | string;
-    item_id: number | string;
-    location_id: number | string;
+    purchase_order_item_id: string;
+    item_id: string;
+    location_id: string;
     quantity_received: string;
     unit_cost?: string;
     remarks?: string;
