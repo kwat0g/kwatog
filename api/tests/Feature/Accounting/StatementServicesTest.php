@@ -8,9 +8,11 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Services\JournalEntryService;
 use App\Modules\Accounting\Services\Statements\IncomeStatementService;
 use App\Modules\Accounting\Services\Statements\TrialBalanceService;
+use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use Carbon\Carbon;
 use Database\Seeders\ChartOfAccountsSeeder;
+use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -21,12 +23,17 @@ class StatementServicesTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->seed(RolePermissionSeeder::class);
         $this->seed(ChartOfAccountsSeeder::class);
     }
 
     public function test_trial_balance_reconciles_after_two_posted_entries(): void
     {
-        $u = User::create(['name'=>'T','email'=>'t_'.uniqid().'@x.test','password'=>bcrypt('Password1!')]);
+        $roleId = Role::query()->where('slug', 'system_admin')->value('id');
+        $u = User::create([
+            'name' => 'T', 'email' => 't_'.uniqid().'@x.test', 'password' => bcrypt('Password1!'),
+            'role_id' => $roleId,
+        ]);
         $svc = app(JournalEntryService::class);
 
         $cashId    = (int) Account::query()->where('code','1020')->value('id');

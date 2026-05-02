@@ -8,8 +8,10 @@ use App\Modules\Accounting\Enums\JournalEntryStatus;
 use App\Modules\Accounting\Exceptions\UnbalancedJournalEntryException;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Services\JournalEntryService;
+use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use Database\Seeders\ChartOfAccountsSeeder;
+use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -20,13 +22,16 @@ class JournalEntryServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->seed(RolePermissionSeeder::class);
         $this->seed(ChartOfAccountsSeeder::class);
     }
 
     private function user(): User
     {
+        $roleId = Role::query()->where('slug', 'system_admin')->value('id');
         return User::create([
             'name' => 'Test', 'email' => 't_'.uniqid().'@x.test', 'password' => bcrypt('Password1!'),
+            'role_id' => $roleId,
         ]);
     }
 

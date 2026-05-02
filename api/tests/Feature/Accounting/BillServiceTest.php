@@ -9,8 +9,10 @@ use App\Modules\Accounting\Enums\PaymentMethod;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Accounting\Services\BillService;
+use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use Database\Seeders\ChartOfAccountsSeeder;
+use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -21,14 +23,22 @@ class BillServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->seed(RolePermissionSeeder::class);
         $this->seed(ChartOfAccountsSeeder::class);
+    }
+
+    private function newUser(): User
+    {
+        $roleId = Role::query()->where('slug', 'system_admin')->value('id');
+        return User::create([
+            'name' => 'Finance', 'email' => 'fin_'.uniqid().'@x.test', 'password' => bcrypt('Password1!'),
+            'role_id' => $roleId,
+        ]);
     }
 
     public function test_bill_creates_balanced_je_and_recording_payment_settles_balance(): void
     {
-        $user = User::create([
-            'name' => 'Finance', 'email' => 'fin_'.uniqid().'@x.test', 'password' => bcrypt('Password1!'),
-        ]);
+        $user = $this->newUser();
         $vendor = Vendor::create(['name' => 'Acme Resin Co.', 'payment_terms_days' => 30]);
         $expenseId = Account::query()->where('code', '5010')->firstOrFail()->hash_id; // Direct Materials
         $cashId    = Account::query()->where('code', '1020')->firstOrFail()->hash_id; // Cash in Bank
@@ -89,9 +99,7 @@ class BillServiceTest extends TestCase
 
     public function test_overpayment_is_rejected(): void
     {
-        $user = User::create([
-            'name' => 'F', 'email' => 'f_'.uniqid().'@x.test', 'password' => bcrypt('Password1!'),
-        ]);
+        $user = $this->newUser();
         $vendor = Vendor::create(['name' => 'X']);
         $expenseId = Account::query()->where('code', '5010')->firstOrFail()->hash_id;
         $cashId    = Account::query()->where('code', '1020')->firstOrFail()->hash_id;
