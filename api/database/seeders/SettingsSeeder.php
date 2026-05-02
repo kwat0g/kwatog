@@ -50,7 +50,7 @@ class SettingsSeeder extends Seeder
             'mrp' => true,
             'production' => true,
             'supply_chain' => false, // Sprint 7
-            'quality' => false,      // Sprint 7
+            'quality' => true,       // Sprint 7 Task 59 enables inspection specs
             'maintenance' => false,  // Sprint 8
         ];
 

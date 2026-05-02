@@ -130,6 +130,10 @@ const MoldDetailPage            = lazy(() => import('@/pages/mrp/molds/detail'))
 const MrpPlansListPage          = lazy(() => import('@/pages/mrp/plans'));
 const MrpPlanDetailPage         = lazy(() => import('@/pages/mrp/plans/detail'));
 
+// Quality (Sprint 7 — Task 59)
+const InspectionSpecsListPage   = lazy(() => import('@/pages/quality/inspection-specs'));
+const InspectionSpecEditorPage  = lazy(() => import('@/pages/quality/inspection-specs/editor'));
+
 // Production (Sprint 6 — Tasks 51, 53–58; WO create added in audit §3.1)
 const WorkOrdersListPage        = lazy(() => import('@/pages/production/work-orders'));
 const CreateWorkOrderPage       = lazy(() => import('@/pages/production/work-orders/create'));
@@ -503,6 +507,15 @@ export default function App() {
               element={<PermissionGuard permission="mrp.plans.view"><MrpPlansListPage /></PermissionGuard>} />
             <Route path="/mrp/plans/:id"
               element={<PermissionGuard permission="mrp.plans.view"><MrpPlanDetailPage /></PermissionGuard>} />
+          </Route>
+
+          {/* Quality module (Sprint 7 — Task 59 inspection specs) */}
+          <Route element={<ModuleGuard module="quality" />}>
+            <Route path="/quality" element={<Navigate to="/quality/inspection-specs" replace />} />
+            <Route path="/quality/inspection-specs"
+              element={<PermissionGuard permission="quality.specs.view"><InspectionSpecsListPage /></PermissionGuard>} />
+            <Route path="/quality/inspection-specs/:productId"
+              element={<PermissionGuard permission="quality.specs.view"><InspectionSpecEditorPage /></PermissionGuard>} />
           </Route>
 
           {/* Production module (Sprint 6 — Tasks 51, 54, 55, 58; WO create added in audit §3.1) */}

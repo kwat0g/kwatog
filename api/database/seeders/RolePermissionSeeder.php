@@ -195,6 +195,10 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'quality.view',                 'name' => 'View Quality'],
                 ['slug' => 'quality.inspections.create',   'name' => 'Create Inspections'],
                 ['slug' => 'quality.inspections.edit',     'name' => 'Edit Inspections'],
+                // Sprint 7 Task 59: read access to inspection specs (separate
+                // from quality.specs.manage so production roles can browse
+                // tolerances without authoring them).
+                ['slug' => 'quality.specs.view',           'name' => 'View Inspection Specs'],
                 ['slug' => 'quality.specs.manage',         'name' => 'Manage Inspection Specs'],
                 ['slug' => 'quality.ncr.manage',           'name' => 'Manage NCRs'],
             ],
