@@ -18,10 +18,17 @@ class StoreWarehouseRequest extends FormRequest
     {
         $id = $this->route('warehouse')?->id;
         return [
-            'name'      => ['required', 'string', 'max:100'],
-            'code'      => ['required', 'string', 'max:20', Rule::unique('warehouses', 'code')->ignore($id)],
+            'name'      => ['required', 'string', 'min:2', 'max:100'],
+            'code'      => ['required', 'string', 'min:1', 'max:20', 'regex:/^[A-Z0-9-]+$/', Rule::unique('warehouses', 'code')->ignore($id)],
             'address'   => ['nullable', 'string', 'max:500'],
             'is_active' => ['nullable', 'boolean'],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'code.regex' => 'Warehouse code must use uppercase letters, digits, or hyphens only.',
         ];
     }
 }

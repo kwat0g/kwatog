@@ -1,16 +1,17 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
+import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { CheckCircle2, XCircle } from 'lucide-react';
 import { grnApi } from '@/api/inventory/grn';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Modal } from '@/components/ui/Modal';
 import { Panel } from '@/components/ui/Panel';
+import { ReasonDialog } from '@/components/ui/ReasonDialog';
 import { SkeletonTable } from '@/components/ui/Skeleton';
-import { Textarea } from '@/components/ui/Textarea';
 import { ChainHeader } from '@/components/chain';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
@@ -21,8 +22,8 @@ export default function GrnDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
   const qc = useQueryClient();
   const { can } = usePermission();
+  const [confirmAccept, setConfirmAccept] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
-  const [reason, setReason] = useState('');
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['inventory', 'grn', id],
@@ -32,13 +33,23 @@ export default function GrnDetailPage() {
 
   const accept = useMutation({
     mutationFn: () => grnApi.accept(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['inventory', 'grn', id] }); toast.success('GRN accepted, stock updated.'); },
-    onError: (e: any) => toast.error(e?.response?.data?.message ?? 'Failed.'),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['inventory', 'grn', id] });
+      toast.success('GRN accepted, stock updated.');
+      setConfirmAccept(false);
+    },
+    onError: (e: AxiosError<{ message?: string }>) =>
+      toast.error(e.response?.data?.message ?? 'Failed to accept GRN.'),
   });
   const reject = useMutation({
-    mutationFn: () => grnApi.reject(id, reason),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['inventory', 'grn', id] }); toast.success('GRN rejected.'); setRejectOpen(false); },
-    onError: (e: any) => toast.error(e?.response?.data?.message ?? 'Failed.'),
+    mutationFn: (reason: string) => grnApi.reject(id, reason),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['inventory', 'grn', id] });
+      toast.success('GRN rejected.');
+      setRejectOpen(false);
+    },
+    onError: (e: AxiosError<{ message?: string }>) =>
+      toast.error(e.response?.data?.message ?? 'Failed to reject GRN.'),
   });
 
   if (isLoading) return <SkeletonTable rows={6} columns={5} />;
@@ -59,7 +70,7 @@ export default function GrnDetailPage() {
             {data.status === 'pending_qc' && can('inventory.grn.create') && (
               <>
                 <Button variant="secondary" size="sm" icon={<XCircle size={14} />} onClick={() => setRejectOpen(true)}>Reject</Button>
-                <Button variant="primary" size="sm" icon={<CheckCircle2 size={14} />} onClick={() => accept.mutate()}
+                <Button variant="primary" size="sm" icon={<CheckCircle2 size={14} />} onClick={() => setConfirmAccept(true)}
                         loading={accept.isPending} disabled={accept.isPending}>Accept</Button>
               </>
             )}
@@ -119,17 +130,30 @@ export default function GrnDetailPage() {
         </Panel>
       </div>
 
-      <Modal isOpen={rejectOpen} onClose={() => setRejectOpen(false)} title="Reject GRN" size="sm">
-        <div className="space-y-3">
-          <Textarea label="Reason" rows={3} value={reason} onChange={(e) => setReason(e.target.value)} required />
-        </div>
-        <div className="flex justify-end gap-2 pt-3 border-t border-default mt-4">
-          <Button variant="secondary" onClick={() => setRejectOpen(false)}>Cancel</Button>
-          <Button variant="danger" onClick={() => reject.mutate()} disabled={reason.length < 5 || reject.isPending} loading={reject.isPending}>
-            Reject
-          </Button>
-        </div>
-      </Modal>
+      <ConfirmDialog
+        isOpen={confirmAccept}
+        onClose={() => setConfirmAccept(false)}
+        onConfirm={() => accept.mutate()}
+        title="Accept this GRN?"
+        description="Accepting will post stock movements to update inventory levels and weighted-average cost. This cannot be undone."
+        confirmLabel="Accept GRN"
+        variant="primary"
+        pending={accept.isPending}
+      />
+
+      <ReasonDialog
+        isOpen={rejectOpen}
+        onClose={() => setRejectOpen(false)}
+        onConfirm={(reason) => reject.mutate(reason)}
+        title="Reject this GRN?"
+        description="The vendor delivery will be flagged as rejected. Reason is recorded for audit."
+        reasonLabel="Rejection reason"
+        reasonPlaceholder="e.g. Material failed incoming inspection (mould flash on pin 3)"
+        minLength={10}
+        confirmLabel="Reject"
+        variant="danger"
+        pending={reject.isPending}
+      />
     </div>
   );
 }

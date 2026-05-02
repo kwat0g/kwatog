@@ -1,12 +1,16 @@
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { Send, ThumbsUp, ThumbsDown, X, ShoppingCart } from 'lucide-react';
 import { purchaseRequestsApi } from '@/api/purchasing/purchase-requests';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
+import { ReasonDialog } from '@/components/ui/ReasonDialog';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { ChainHeader } from '@/components/chain';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -15,6 +19,9 @@ import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import type { ApprovalRecord, PurchaseRequest, PurchaseRequestStatus } from '@/types/purchasing';
 import type { ChainStep } from '@/types/chain';
+
+const errMsg = (e: unknown, fallback: string) =>
+  (e instanceof AxiosError ? e.response?.data?.message : undefined) ?? fallback;
 
 const statusVariant: Record<PurchaseRequestStatus, 'neutral' | 'warning' | 'info' | 'success' | 'danger'> = {
   draft: 'neutral', pending: 'info', approved: 'success', rejected: 'danger',
@@ -27,30 +34,36 @@ export default function PurchaseRequestDetailPage() {
   const qc = useQueryClient();
   const { can } = usePermission();
 
+  const [confirm, setConfirm] = useState<'submit' | 'approve' | 'cancel' | null>(null);
+  const [rejectOpen, setRejectOpen] = useState(false);
+
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['purchasing', 'purchase-requests', id],
     queryFn: () => purchaseRequestsApi.show(id),
     enabled: !!id,
   });
 
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['purchasing', 'purchase-requests', id] });
+
   const submit = useMutation({
     mutationFn: () => purchaseRequestsApi.submit(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['purchasing', 'purchase-requests', id] }); toast.success('Submitted for approval.'); },
-    onError: (e: any) => toast.error(e?.response?.data?.message ?? 'Failed.'),
+    onSuccess: () => { invalidate(); toast.success('Submitted for approval.'); setConfirm(null); },
+    onError: (e) => toast.error(errMsg(e, 'Failed to submit.')),
   });
   const approve = useMutation({
     mutationFn: () => purchaseRequestsApi.approve(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['purchasing', 'purchase-requests', id] }); toast.success('Approved.'); },
-    onError: (e: any) => toast.error(e?.response?.data?.message ?? 'Failed.'),
+    onSuccess: () => { invalidate(); toast.success('Purchase request approved.'); setConfirm(null); },
+    onError: (e) => toast.error(errMsg(e, 'Failed to approve.')),
   });
   const reject = useMutation({
-    mutationFn: () => purchaseRequestsApi.reject(id, prompt('Reason for rejection?') ?? ''),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['purchasing', 'purchase-requests', id] }); toast.success('Rejected.'); },
-    onError: (e: any) => toast.error(e?.response?.data?.message ?? 'Failed.'),
+    mutationFn: (reason: string) => purchaseRequestsApi.reject(id, reason),
+    onSuccess: () => { invalidate(); toast.success('Purchase request rejected.'); setRejectOpen(false); },
+    onError: (e) => toast.error(errMsg(e, 'Failed to reject.')),
   });
   const cancel = useMutation({
     mutationFn: () => purchaseRequestsApi.cancel(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['purchasing', 'purchase-requests', id] }); toast.success('Cancelled.'); },
+    onSuccess: () => { invalidate(); toast.success('Purchase request cancelled.'); setConfirm(null); },
+    onError: (e) => toast.error(errMsg(e, 'Failed to cancel.')),
   });
 
   if (isLoading) return <SkeletonTable rows={6} columns={5} />;
@@ -68,19 +81,19 @@ export default function PurchaseRequestDetailPage() {
             <Chip variant={statusVariant[data.status]}>{data.status}</Chip>
             {data.is_auto_generated && <Chip variant="warning">AUTO</Chip>}
             {data.status === 'draft' && can('purchasing.pr.create') && (
-              <Button size="sm" variant="primary" icon={<Send size={14} />} onClick={() => submit.mutate()} loading={submit.isPending}>Submit</Button>
+              <Button size="sm" variant="primary" icon={<Send size={14} />} onClick={() => setConfirm('submit')} loading={submit.isPending}>Submit</Button>
             )}
             {data.status === 'pending' && can('purchasing.pr.approve') && (
               <>
-                <Button size="sm" variant="secondary" icon={<ThumbsDown size={14} />} onClick={() => reject.mutate()} loading={reject.isPending}>Reject</Button>
-                <Button size="sm" variant="primary" icon={<ThumbsUp size={14} />} onClick={() => approve.mutate()} loading={approve.isPending}>Approve</Button>
+                <Button size="sm" variant="secondary" icon={<ThumbsDown size={14} />} onClick={() => setRejectOpen(true)} loading={reject.isPending}>Reject</Button>
+                <Button size="sm" variant="primary" icon={<ThumbsUp size={14} />} onClick={() => setConfirm('approve')} loading={approve.isPending}>Approve</Button>
               </>
             )}
             {data.status === 'approved' && can('purchasing.po.create') && (
               <Button size="sm" variant="primary" icon={<ShoppingCart size={14} />} onClick={() => nav(`/purchasing/purchase-orders/create?pr_id=${data.id}`)}>Convert to PO</Button>
             )}
             {(data.status === 'draft' || data.status === 'pending') && (
-              <Button size="sm" variant="secondary" icon={<X size={14} />} onClick={() => cancel.mutate()}>Cancel</Button>
+              <Button size="sm" variant="secondary" icon={<X size={14} />} onClick={() => setConfirm('cancel')} loading={cancel.isPending}>Cancel</Button>
             )}
           </div>
         }
@@ -146,6 +159,51 @@ export default function PurchaseRequestDetailPage() {
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={confirm === 'submit'}
+        onClose={() => setConfirm(null)}
+        onConfirm={() => submit.mutate()}
+        title="Submit for approval?"
+        description={<>Once submitted, the PR enters the approval workflow and edits are no longer allowed.</>}
+        confirmLabel="Submit"
+        variant="primary"
+        pending={submit.isPending}
+      />
+      <ConfirmDialog
+        isOpen={confirm === 'approve'}
+        onClose={() => setConfirm(null)}
+        onConfirm={() => approve.mutate()}
+        title="Approve this PR?"
+        description={<>Approving advances the workflow. The action is recorded against your account in the audit log.</>}
+        confirmLabel="Approve"
+        variant="primary"
+        pending={approve.isPending}
+      />
+      <ConfirmDialog
+        isOpen={confirm === 'cancel'}
+        onClose={() => setConfirm(null)}
+        onConfirm={() => cancel.mutate()}
+        title="Cancel this PR?"
+        description={<>Cancellation is permanent. A cancelled PR cannot be re-submitted.</>}
+        confirmLabel="Yes, cancel PR"
+        cancelLabel="Keep PR"
+        variant="danger"
+        pending={cancel.isPending}
+      />
+      <ReasonDialog
+        isOpen={rejectOpen}
+        onClose={() => setRejectOpen(false)}
+        onConfirm={(reason) => reject.mutate(reason)}
+        title="Reject this PR?"
+        description="Rejection is recorded in the approval workflow. Provide a clear reason for the requester."
+        reasonLabel="Rejection reason"
+        reasonPlaceholder="e.g. Budget exceeded, please re-scope and re-submit"
+        minLength={10}
+        confirmLabel="Reject"
+        variant="danger"
+        pending={reject.isPending}
+      />
     </div>
   );
 }

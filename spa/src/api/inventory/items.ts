@@ -28,9 +28,9 @@ export const itemCategoriesApi = {
     client.get<{ data: ItemCategory[] }>('/inventory/item-categories').then((r) => r.data.data),
   tree: () =>
     client.get<{ data: ItemCategory[] }>('/inventory/item-categories/tree').then((r) => r.data.data),
-  create: (data: { name: string; parent_id?: number | null }) =>
+  create: (data: { name: string; parent_id?: string | null }) =>
     client.post<ApiSuccess<ItemCategory>>('/inventory/item-categories', data).then((r) => r.data.data),
-  update: (id: string, data: { name?: string; parent_id?: number | null }) =>
+  update: (id: string, data: { name?: string; parent_id?: string | null }) =>
     client.put<ApiSuccess<ItemCategory>>(`/inventory/item-categories/${id}`, data).then((r) => r.data.data),
   delete: (id: string) =>
     client.delete(`/inventory/item-categories/${id}`),
