@@ -42,6 +42,9 @@ class DatabaseSeeder extends Seeder
             ProductSeeder::class,              // Task 47
             PriceAgreementSeeder::class,       // Task 47
             BomSeeder::class,                  // Task 49 (depends on products + items)
+            MachineSeeder::class,              // Task 50
+            MoldSeeder::class,                 // Task 50 (depends on products)
+            MoldCompatibilitySeeder::class,    // Task 50 (depends on machines + molds)
         ]);
     }
 }

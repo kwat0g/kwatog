@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use App\Modules\MRP\Controllers\BomController;
+use App\Modules\MRP\Controllers\MachineController;
+use App\Modules\MRP\Controllers\MoldController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -20,4 +22,24 @@ Route::middleware(['auth:sanctum', 'feature:mrp'])->prefix('mrp')->group(functio
     Route::delete('/boms/{bom}',          [BomController::class, 'destroy'])->middleware('permission:mrp.boms.manage');
 
     Route::get('/products/{product}/bom', [BomController::class, 'forProduct'])->middleware('permission:mrp.boms.view');
+
+    /* ─── Machines (Task 50) ─── */
+    Route::get('/machines',           [MachineController::class, 'index']) ->middleware('permission:mrp.machines.view');
+    Route::get('/machines/{machine}', [MachineController::class, 'show'])  ->middleware('permission:mrp.machines.view');
+    Route::post('/machines',          [MachineController::class, 'store']) ->middleware('permission:production.machines.manage');
+    Route::put('/machines/{machine}', [MachineController::class, 'update'])->middleware('permission:production.machines.manage');
+    Route::delete('/machines/{machine}', [MachineController::class, 'destroy'])->middleware('permission:production.machines.manage');
+    Route::patch('/machines/{machine}/transition-status', [MachineController::class, 'transitionStatus'])
+        ->middleware('permission:production.machines.transition');
+
+    /* ─── Molds (Task 50) ─── */
+    Route::get('/molds',           [MoldController::class, 'index']) ->middleware('permission:mrp.molds.view');
+    Route::get('/molds/{mold}',    [MoldController::class, 'show'])  ->middleware('permission:mrp.molds.view');
+    Route::get('/molds/{mold}/history',          [MoldController::class, 'history']) ->middleware('permission:mrp.molds.view');
+    Route::get('/products/{product}/molds',      [MoldController::class, 'byProduct'])->middleware('permission:mrp.molds.view');
+    Route::post('/molds',          [MoldController::class, 'store']) ->middleware('permission:production.molds.manage');
+    Route::put('/molds/{mold}',    [MoldController::class, 'update'])->middleware('permission:production.molds.manage');
+    Route::delete('/molds/{mold}', [MoldController::class, 'destroy'])->middleware('permission:production.molds.manage');
+    Route::post('/molds/{mold}/compatibility', [MoldController::class, 'syncCompatibility'])
+        ->middleware('permission:production.molds.manage');
 });
