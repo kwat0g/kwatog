@@ -123,7 +123,7 @@ const SECTIONS: NavSection[] = [
       { to: '/mrp/plans', label: 'MRP', icon: Layers, feature: 'mrp', permission: 'mrp.view' },
       { to: '/crm/products',          label: 'Products',         icon: Package,     feature: 'crm', permission: 'crm.products.view' },
       { to: '/crm/price-agreements',  label: 'Price agreements', icon: DollarSign,  feature: 'crm', permission: 'crm.price_agreements.view' },
-      { to: '/crm/sales-orders',      label: 'CRM',              icon: Briefcase,   feature: 'crm', permission: 'crm.view' },
+      { to: '/crm/sales-orders',      label: 'Sales orders',     icon: Briefcase,   feature: 'crm', permission: 'crm.sales_orders.view' },
       { to: '/quality/inspections', label: 'Quality', icon: ShieldCheck, feature: 'quality', permission: 'quality.view' },
       { to: '/maintenance', label: 'Maintenance', icon: Wrench, feature: 'maintenance', permission: 'maintenance.view' },
     ],

@@ -114,6 +114,9 @@ const CreateProductPage         = lazy(() => import('@/pages/crm/products/create
 const EditProductPage           = lazy(() => import('@/pages/crm/products/edit'));
 const ProductDetailPage         = lazy(() => import('@/pages/crm/products/detail'));
 const PriceAgreementsListPage   = lazy(() => import('@/pages/crm/price-agreements'));
+const SalesOrdersListPage       = lazy(() => import('@/pages/crm/sales-orders'));
+const CreateSalesOrderPage      = lazy(() => import('@/pages/crm/sales-orders/create'));
+const SalesOrderDetailPage      = lazy(() => import('@/pages/crm/sales-orders/detail'));
 
 // Errors
 const NotFoundPage = lazy(() => import('@/pages/error/NotFound'));
@@ -444,6 +447,13 @@ export default function App() {
 
             <Route path="/crm/price-agreements"
               element={<PermissionGuard permission="crm.price_agreements.view"><PriceAgreementsListPage /></PermissionGuard>} />
+
+            <Route path="/crm/sales-orders"
+              element={<PermissionGuard permission="crm.sales_orders.view"><SalesOrdersListPage /></PermissionGuard>} />
+            <Route path="/crm/sales-orders/create"
+              element={<PermissionGuard permission="crm.sales_orders.create"><CreateSalesOrderPage /></PermissionGuard>} />
+            <Route path="/crm/sales-orders/:id"
+              element={<PermissionGuard permission="crm.sales_orders.view"><SalesOrderDetailPage /></PermissionGuard>} />
           </Route>
         </Route>
 
