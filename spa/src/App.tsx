@@ -108,6 +108,13 @@ const TrialBalancePage           = lazy(() => import('@/pages/accounting/trial-b
 const IncomeStatementPage        = lazy(() => import('@/pages/accounting/income-statement'));
 const BalanceSheetPage           = lazy(() => import('@/pages/accounting/balance-sheet'));
 
+// CRM (Sprint 6 — Tasks 47, 48)
+const ProductsListPage          = lazy(() => import('@/pages/crm/products'));
+const CreateProductPage         = lazy(() => import('@/pages/crm/products/create'));
+const EditProductPage           = lazy(() => import('@/pages/crm/products/edit'));
+const ProductDetailPage         = lazy(() => import('@/pages/crm/products/detail'));
+const PriceAgreementsListPage   = lazy(() => import('@/pages/crm/price-agreements'));
+
 // Errors
 const NotFoundPage = lazy(() => import('@/pages/error/NotFound'));
 
@@ -420,6 +427,23 @@ export default function App() {
 
             <Route path="/purchasing/approved-suppliers"
               element={<PermissionGuard permission="purchasing.view"><ApprovedSuppliersPage /></PermissionGuard>} />
+          </Route>
+
+          {/* CRM module (Sprint 6 — Tasks 47, 48) */}
+          <Route element={<ModuleGuard module="crm" />}>
+            <Route path="/crm" element={<Navigate to="/crm/products" replace />} />
+
+            <Route path="/crm/products"
+              element={<PermissionGuard permission="crm.products.view"><ProductsListPage /></PermissionGuard>} />
+            <Route path="/crm/products/create"
+              element={<PermissionGuard permission="crm.products.manage"><CreateProductPage /></PermissionGuard>} />
+            <Route path="/crm/products/:id"
+              element={<PermissionGuard permission="crm.products.view"><ProductDetailPage /></PermissionGuard>} />
+            <Route path="/crm/products/:id/edit"
+              element={<PermissionGuard permission="crm.products.manage"><EditProductPage /></PermissionGuard>} />
+
+            <Route path="/crm/price-agreements"
+              element={<PermissionGuard permission="crm.price_agreements.view"><PriceAgreementsListPage /></PermissionGuard>} />
           </Route>
         </Route>
 

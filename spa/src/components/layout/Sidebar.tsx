@@ -30,6 +30,8 @@ import {
   Banknote,
   Scale,
   TrendingUp,
+  Package,
+  DollarSign,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
@@ -119,7 +121,9 @@ const SECTIONS: NavSection[] = [
       { to: '/supply-chain/deliveries', label: 'Supply Chain', icon: Truck, feature: 'supply_chain', permission: 'supply_chain.view' },
       { to: '/production/work-orders', label: 'Production', icon: Factory, feature: 'production', permission: 'production.view' },
       { to: '/mrp/plans', label: 'MRP', icon: Layers, feature: 'mrp', permission: 'mrp.view' },
-      { to: '/crm/sales-orders', label: 'CRM', icon: Briefcase, feature: 'crm', permission: 'crm.view' },
+      { to: '/crm/products',          label: 'Products',         icon: Package,     feature: 'crm', permission: 'crm.products.view' },
+      { to: '/crm/price-agreements',  label: 'Price agreements', icon: DollarSign,  feature: 'crm', permission: 'crm.price_agreements.view' },
+      { to: '/crm/sales-orders',      label: 'CRM',              icon: Briefcase,   feature: 'crm', permission: 'crm.view' },
       { to: '/quality/inspections', label: 'Quality', icon: ShieldCheck, feature: 'quality', permission: 'quality.view' },
       { to: '/maintenance', label: 'Maintenance', icon: Wrench, feature: 'maintenance', permission: 'maintenance.view' },
     ],

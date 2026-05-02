@@ -36,6 +36,11 @@ class DatabaseSeeder extends Seeder
             // Sprint 5 — Procure to Pay (Part 1).
             InventoryItemSeeder::class,        // Task 39
             WarehouseSeeder::class,            // Task 40
+
+            // Sprint 6 — Order to Cash (Part 1: CRM + MRP + Production).
+            CustomerSeeder::class,             // Task 47 (upstream of CRM)
+            ProductSeeder::class,              // Task 47
+            PriceAgreementSeeder::class,       // Task 47
         ]);
     }
 }
