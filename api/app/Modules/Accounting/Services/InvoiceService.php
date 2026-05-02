@@ -66,7 +66,7 @@ class InvoiceService
             'customer',
             'items.revenueAccount:id,code,name',
             'collections.cashAccount:id,code,name',
-            'journalEntry:id,entry_number,date,status',
+            'journalEntry:id,entry_number,date,status,total_debit,total_credit',
             // role_id required so User's $with=['role'] eager-load can resolve.
             'creator:id,name,role_id',
         ]);
