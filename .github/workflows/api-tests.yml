@@ -1,0 +1,66 @@
+name: API tests
+
+# Sprint 3 introduction (planned ownership: Sprint 8 / Task 81 will expand this).
+# Scope: just the Laravel PHPUnit suite for now. The SPA side is deliberately
+# excluded until Sprint 8 cleans up the pre-existing Sprint 1/2 type errors.
+
+on:
+  pull_request:
+    paths:
+      - 'api/**'
+      - '.github/workflows/api-tests.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'api/**'
+
+permissions:
+  contents: read
+
+jobs:
+  phpunit:
+    name: PHPUnit (Laravel 11 / PHP 8.3 / SQLite)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    defaults:
+      run:
+        working-directory: api
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP 8.3
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_sqlite, sqlite3, bcmath, mbstring, intl, gd, zip, redis
+          coverage: none
+          tools: composer:v2
+
+      - name: Cache composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: api/vendor
+          key: composer-${{ hashFiles('api/composer.lock') }}
+          restore-keys: composer-
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-progress --no-interaction --optimize-autoloader
+
+      - name: Lint PHP files (parallel syntax check)
+        run: |
+          find app database tests -name '*.php' -print0 \
+            | xargs -0 -n1 -P4 php -l > /dev/null
+
+      - name: Run PHPUnit
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+          QUEUE_CONNECTION: sync
+          MAIL_MAILER: array
+        run: vendor/bin/phpunit --colors=always
