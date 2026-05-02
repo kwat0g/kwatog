@@ -15,9 +15,11 @@ class DepartmentResource extends JsonResource
             'id'                => $this->hash_id,
             'name'              => $this->name,
             'code'              => $this->code,
-            'parent_id'         => $this->parent_id ? optional($this->parent)->hash_id : null,
+            // Avoid lazy-loading violations: only emit hashed IDs when the
+            // owning relation is explicitly eager-loaded.
+            'parent_id'         => $this->whenLoaded('parent', fn () => $this->parent?->hash_id),
             'parent'            => new self($this->whenLoaded('parent')),
-            'head_employee_id'  => $this->head_employee_id ? optional($this->headEmployee)->hash_id : null,
+            'head_employee_id'  => $this->whenLoaded('headEmployee', fn () => $this->headEmployee?->hash_id),
             'head_employee'     => $this->whenLoaded('headEmployee', fn () => $this->headEmployee ? [
                 'id'        => $this->headEmployee->hash_id,
                 'full_name' => $this->headEmployee->full_name,
