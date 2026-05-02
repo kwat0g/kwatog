@@ -48,22 +48,22 @@ export const employeeSchema = z.object({
   civil_status: z.enum(['single', 'married', 'widowed', 'separated', 'divorced']),
   nationality: optString(50),
 
-  street_address: optString(200),
+  street_address: z.string().trim().min(1, 'Street address is required').max(200),
   barangay: optString(100),
-  city: optString(100),
-  province: optString(100),
+  city: z.string().trim().min(1, 'City is required').max(100),
+  province: z.string().trim().min(1, 'Province is required').max(100),
   zip_code: z.string().max(10).regex(/^[0-9]{0,10}$/, 'Digits only').optional().or(z.literal('')),
 
   // Stored digits-only on the backend; the form holds the digits-only value too.
-  mobile_number: z.string().optional().refine(
-    (v) => !v || (digitsOnly(v).length === 11 && digitsOnly(v).startsWith('09')),
+  mobile_number: z.string().min(1, 'Mobile is required').refine(
+    (v) => digitsOnly(v).length === 11 && digitsOnly(v).startsWith('09'),
     { message: 'Must be 11 digits starting with 09' },
   ),
-  email: z.string().email('Invalid email').max(255).optional().or(z.literal('')),
-  emergency_contact_name: optString(100),
+  email: z.string().min(1, 'Email is required').email('Invalid email').max(255),
+  emergency_contact_name: z.string().trim().min(1, 'Emergency contact name is required').max(100),
   emergency_contact_relation: optString(50),
-  emergency_contact_phone: z.string().optional().refine(
-    (v) => !v || (digitsOnly(v).length >= 7 && digitsOnly(v).length <= 15),
+  emergency_contact_phone: z.string().min(1, 'Emergency phone is required').refine(
+    (v) => digitsOnly(v).length >= 7 && digitsOnly(v).length <= 15,
     { message: 'Phone must be 7-15 digits' },
   ),
 
@@ -104,6 +104,42 @@ export const employeeSchema = z.object({
 );
 
 export type EmployeeFormValues = z.infer<typeof employeeSchema>;
+
+// Field labels surfaced in the validation toast.
+const FIELD_LABELS: Partial<Record<keyof EmployeeFormValues, string>> = {
+  first_name: 'First name',
+  middle_name: 'Middle name',
+  last_name: 'Last name',
+  suffix: 'Suffix',
+  birth_date: 'Birth date',
+  gender: 'Gender',
+  civil_status: 'Civil status',
+  nationality: 'Nationality',
+  street_address: 'Street address',
+  barangay: 'Barangay',
+  city: 'City',
+  province: 'Province',
+  zip_code: 'ZIP code',
+  mobile_number: 'Mobile number',
+  email: 'Email',
+  emergency_contact_name: 'Emergency contact',
+  emergency_contact_relation: 'Emergency relation',
+  emergency_contact_phone: 'Emergency phone',
+  sss_no: 'SSS',
+  philhealth_no: 'PhilHealth',
+  pagibig_no: 'Pag-IBIG',
+  tin: 'TIN',
+  department_id: 'Department',
+  position_id: 'Position',
+  employment_type: 'Employment type',
+  pay_type: 'Pay type',
+  date_hired: 'Date hired',
+  date_regularized: 'Date regularized',
+  basic_monthly_salary: 'Monthly salary',
+  daily_rate: 'Daily rate',
+  bank_name: 'Bank name',
+  bank_account_no: 'Account number',
+};
 
 function defaults(employee?: Employee | null): EmployeeFormValues {
   return {
@@ -188,7 +224,7 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isPending, register
   const minBirthStr = new Date(Date.now() - 1000 * 60 * 60 * 24 * 365.25 * 15).toISOString().slice(0, 10);
 
   return (
-    <form onSubmit={handleSubmit(onSubmit, onFormInvalid<EmployeeFormValues>())} className="max-w-4xl mx-auto px-5 py-6 space-y-8">
+    <form onSubmit={handleSubmit(onSubmit, onFormInvalid<EmployeeFormValues>(FIELD_LABELS))} className="max-w-4xl mx-auto px-5 py-6 space-y-8">
       <Section title="Personal information">
         <div className="grid grid-cols-2 gap-3">
           <Input label="First name" required maxLength={100} autoComplete="given-name" {...register('first_name')} error={errors.first_name?.message} />
@@ -213,10 +249,10 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isPending, register
 
       <Section title="Address">
         <div className="grid grid-cols-2 gap-3">
-          <Input label="Street address" maxLength={200} autoComplete="street-address" {...register('street_address')} error={errors.street_address?.message} />
+          <Input label="Street address" required maxLength={200} autoComplete="street-address" {...register('street_address')} error={errors.street_address?.message} />
           <Input label="Barangay" maxLength={100} {...register('barangay')} error={errors.barangay?.message} />
-          <Input label="City" maxLength={100} autoComplete="address-level2" {...register('city')} error={errors.city?.message} />
-          <Input label="Province" maxLength={100} autoComplete="address-level1" {...register('province')} error={errors.province?.message} />
+          <Input label="City" required maxLength={100} autoComplete="address-level2" {...register('city')} error={errors.city?.message} />
+          <Input label="Province" required maxLength={100} autoComplete="address-level1" {...register('province')} error={errors.province?.message} />
           <Input label="ZIP code" className="font-mono" inputMode="numeric" maxLength={10} placeholder="1234" autoComplete="postal-code" {...register('zip_code')} error={errors.zip_code?.message} />
         </div>
       </Section>
@@ -227,19 +263,19 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isPending, register
             name="mobile_number"
             control={control}
             render={({ field }) => (
-              <MaskedInput label="Mobile number" kind="mobile" autoComplete="tel"
+              <MaskedInput label="Mobile number" required kind="mobile" autoComplete="tel"
                 value={field.value} onChange={(raw) => field.onChange(raw)}
                 error={errors.mobile_number?.message} />
             )}
           />
-          <Input label="Email" type="email" autoComplete="email" maxLength={255} {...register('email')} error={errors.email?.message} />
-          <Input label="Emergency contact name" maxLength={100} {...register('emergency_contact_name')} error={errors.emergency_contact_name?.message} />
+          <Input label="Email" type="email" required autoComplete="email" maxLength={255} {...register('email')} error={errors.email?.message} />
+          <Input label="Emergency contact name" required maxLength={100} {...register('emergency_contact_name')} error={errors.emergency_contact_name?.message} />
           <Input label="Relation" maxLength={50} {...register('emergency_contact_relation')} error={errors.emergency_contact_relation?.message} />
           <Controller
             name="emergency_contact_phone"
             control={control}
             render={({ field }) => (
-              <MaskedInput label="Emergency phone" kind="mobile" autoComplete="tel"
+              <MaskedInput label="Emergency phone" required kind="mobile" autoComplete="tel"
                 value={field.value} onChange={(raw) => field.onChange(raw)}
                 helper="7-15 digits"
                 error={errors.emergency_contact_phone?.message} />
