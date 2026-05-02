@@ -1,5 +1,16 @@
 import axios, { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
+import { useErrorLogStore } from '@/stores/errorLogStore';
+
+interface LaravelDebugError {
+  message?: string;
+  exception?: string;
+  file?: string;
+  line?: number;
+  trace?: Array<{ file?: string; line?: number; function?: string; class?: string }>;
+  code?: string;
+  module?: string;
+}
 
 /**
  * Axios client for the SPA.
@@ -22,9 +33,25 @@ export const client = axios.create({
 // ─── Response interceptor ──────────────────────────────────────
 client.interceptors.response.use(
   (response) => response,
-  (error: AxiosError<{ message?: string; code?: string; module?: string }>) => {
+  (error: AxiosError<LaravelDebugError>) => {
     const status = error.response?.status;
     const data = error.response?.data;
+
+    // Push every 4xx/5xx into the in-memory dev log so the floating
+    // DevErrorPanel can show Laravel's exception details inline.
+    if (status && status >= 400) {
+      useErrorLogStore.getState().push({
+        method: (error.config?.method ?? 'get').toUpperCase(),
+        url: error.config?.url ?? '(unknown)',
+        status,
+        message: data?.message ?? error.message ?? 'Unknown error',
+        exception: data?.exception,
+        file: data?.file,
+        line: data?.line,
+        trace: data?.trace,
+        raw: data,
+      });
+    }
 
     const requestUrl = error.config?.url ?? '';
     const isBootstrap = requestUrl.endsWith('/auth/user');
@@ -84,7 +111,18 @@ client.interceptors.response.use(
       case 502:
       case 503:
       case 504:
-        if (!skipToast) toast.error('Something went wrong. Please try again.');
+        if (!skipToast) {
+          // In dev, surface the actual Laravel exception class + message in
+          // the toast so the user doesn't need to open the dev panel for
+          // every error. Production stays generic.
+          const dev = import.meta.env.DEV;
+          const detail = dev && data?.exception
+            ? `${data.exception}: ${data.message ?? ''}`.trim()
+            : null;
+          toast.error(detail ?? data?.message ?? 'Something went wrong. Please try again.', {
+            duration: dev ? 8000 : 4000,
+          });
+        }
         break;
 
       default:

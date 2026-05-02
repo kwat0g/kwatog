@@ -2,6 +2,7 @@ import { Outlet, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Topbar } from '@/components/layout/Topbar';
 import { Sidebar } from '@/components/layout/Sidebar';
+import { DevErrorPanel } from '@/components/dev/DevErrorPanel';
 import { useAuthStore } from '@/stores/authStore';
 
 export function AppLayout() {
@@ -26,6 +27,7 @@ export function AppLayout() {
           <Outlet />
         </main>
       </div>
+      <DevErrorPanel />
     </div>
   );
 }
