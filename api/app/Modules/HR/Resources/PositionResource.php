@@ -14,7 +14,9 @@ class PositionResource extends JsonResource
         return [
             'id'              => $this->hash_id,
             'title'           => $this->title,
-            'department_id'   => optional($this->department)->hash_id,
+            // Avoid lazy-loading violation under strict mode by only emitting
+            // the department hash when the relation is explicitly eager-loaded.
+            'department_id'   => $this->whenLoaded('department', fn () => $this->department?->hash_id),
             'department'      => new DepartmentResource($this->whenLoaded('department')),
             'salary_grade'    => $this->salary_grade,
             'employees_count' => $this->whenCounted('employees'),
