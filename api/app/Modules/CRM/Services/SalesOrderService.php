@@ -234,9 +234,50 @@ class SalesOrderService
                 'status' => SalesOrderStatus::Cancelled->value,
                 'notes'  => trim(($so->notes ?? '') . "\n\n[Cancelled" . ($reason ? ': ' . $reason : '') . ']'),
             ]);
-            // TODO Sprint 6 Task 52: cancel linked WOs + release reservations.
+
+            // Sprint 6 audit §1.2: cascade through the chain.
+            //  1. Supersede the active MRP plan (status='cancelled').
+            //  2. Cancel any planned/confirmed/paused WO linked to this SO via
+            //     the MRP plan; in_progress/completed/closed WOs are left
+            //     alone — the operator must finish or cancel them manually.
+            //     WorkOrderService::cancel() releases each WO's reservations.
+            $plan = \App\Modules\MRP\Models\MrpPlan::where('sales_order_id', $so->id)
+                ->where('status', \App\Modules\MRP\Enums\MrpPlanStatus::Active->value)
+                ->lockForUpdate()
+                ->first();
+            if ($plan) {
+                $plan->update(['status' => \App\Modules\MRP\Enums\MrpPlanStatus::Cancelled->value]);
+            }
+
+            $woService = $this->workOrderService();
+            if ($woService) {
+                $cancellableStatuses = [
+                    \App\Modules\Production\Enums\WorkOrderStatus::Planned->value,
+                    \App\Modules\Production\Enums\WorkOrderStatus::Confirmed->value,
+                    \App\Modules\Production\Enums\WorkOrderStatus::Paused->value,
+                ];
+                $linkedWos = \App\Modules\Production\Models\WorkOrder::query()
+                    ->where('sales_order_id', $so->id)
+                    ->whereIn('status', $cancellableStatuses)
+                    ->lockForUpdate()
+                    ->get();
+                foreach ($linkedWos as $wo) {
+                    $woService->cancel($wo, $reason ?? "Sales order {$so->so_number} cancelled");
+                }
+            }
+
             return $this->show($so->fresh());
         });
+    }
+
+    /**
+     * Resolve the production WorkOrderService through the container so that
+     * the CRM module's tests can run without booting the Production module.
+     */
+    private function workOrderService(): ?\App\Modules\Production\Services\WorkOrderService
+    {
+        $cls = '\\App\\Modules\\Production\\Services\\WorkOrderService';
+        return class_exists($cls) ? app($cls) : null;
     }
 
     public function delete(SalesOrder $so): void

@@ -121,10 +121,17 @@ class MrpEngineService
                 $item = Item::find($itemId);
                 if (! $item) continue;
 
-                $onHand    = (float) StockLevel::where('item_id', $itemId)->sum('quantity');
+                // Sprint 6 audit §1.4: lock the per-item stock_levels rows so
+                // concurrent SO confirmations cannot race the same on-hand /
+                // reserved quantities. Order by id for deterministic locking.
+                $levels = StockLevel::where('item_id', $itemId)
+                    ->orderBy('location_id')
+                    ->lockForUpdate()
+                    ->get();
+                $onHand    = (float) $levels->sum('quantity');
                 // "reserved by OTHER active WOs" — for this run, treat all current
                 // reservations as already-consumed availability.
-                $reserved  = (float) StockLevel::where('item_id', $itemId)->sum('reserved_quantity');
+                $reserved  = (float) $levels->sum('reserved_quantity');
                 $inTransit = $this->inTransit($itemId);
 
                 $net = max(0.0, $gross - $onHand + $reserved - $inTransit);
@@ -272,7 +279,10 @@ class MrpEngineService
 
     /**
      * Largest of (preferred approved supplier lead time, item.lead_time_days).
-     * Falls back to 14 days if neither is configured.
+     * Falls back to 14 days only when neither is configured.
+     *
+     * Sprint 6 audit §1.5: previous max(14, ...) clamp inflated urgency
+     * flagging for items with rush suppliers; respect configured values.
      */
     private function effectiveLeadTime(int $itemId, Item $item): int
     {
@@ -280,8 +290,9 @@ class MrpEngineService
             ->orderByDesc('is_preferred')
             ->orderBy('lead_time_days')
             ->first();
-        $supplierLT = $approved?->lead_time_days ?? 0;
+        $supplierLT = (int) ($approved?->lead_time_days ?? 0);
         $itemLT     = (int) $item->lead_time_days;
-        return max(14, max($supplierLT, $itemLT));
+        $configured = max($supplierLT, $itemLT);
+        return $configured > 0 ? $configured : 14;
     }
 }

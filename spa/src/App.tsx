@@ -108,7 +108,7 @@ const TrialBalancePage           = lazy(() => import('@/pages/accounting/trial-b
 const IncomeStatementPage        = lazy(() => import('@/pages/accounting/income-statement'));
 const BalanceSheetPage           = lazy(() => import('@/pages/accounting/balance-sheet'));
 
-// CRM (Sprint 6 — Tasks 47, 48)
+// CRM (Sprint 6 — Tasks 47, 48; SO edit added in audit §3.1)
 const ProductsListPage          = lazy(() => import('@/pages/crm/products'));
 const CreateProductPage         = lazy(() => import('@/pages/crm/products/create'));
 const EditProductPage           = lazy(() => import('@/pages/crm/products/edit'));
@@ -116,18 +116,22 @@ const ProductDetailPage         = lazy(() => import('@/pages/crm/products/detail
 const PriceAgreementsListPage   = lazy(() => import('@/pages/crm/price-agreements'));
 const SalesOrdersListPage       = lazy(() => import('@/pages/crm/sales-orders'));
 const CreateSalesOrderPage      = lazy(() => import('@/pages/crm/sales-orders/create'));
+const EditSalesOrderPage        = lazy(() => import('@/pages/crm/sales-orders/edit'));
 const SalesOrderDetailPage      = lazy(() => import('@/pages/crm/sales-orders/detail'));
 
-// MRP (Sprint 6 — Tasks 49, 50, 52, 53)
+// MRP (Sprint 6 — Tasks 49, 50, 52, 53; machine/mold detail added in audit §3.1)
 const BomsListPage              = lazy(() => import('@/pages/mrp/boms'));
 const BomDetailPage             = lazy(() => import('@/pages/mrp/boms/detail'));
 const MachinesListPage          = lazy(() => import('@/pages/mrp/machines'));
+const MachineDetailPage         = lazy(() => import('@/pages/mrp/machines/detail'));
 const MoldsListPage             = lazy(() => import('@/pages/mrp/molds'));
+const MoldDetailPage            = lazy(() => import('@/pages/mrp/molds/detail'));
 const MrpPlansListPage          = lazy(() => import('@/pages/mrp/plans'));
 const MrpPlanDetailPage         = lazy(() => import('@/pages/mrp/plans/detail'));
 
-// Production (Sprint 6 — Tasks 51, 53–58)
+// Production (Sprint 6 — Tasks 51, 53–58; WO create added in audit §3.1)
 const WorkOrdersListPage        = lazy(() => import('@/pages/production/work-orders'));
+const CreateWorkOrderPage       = lazy(() => import('@/pages/production/work-orders/create'));
 const WorkOrderDetailPage       = lazy(() => import('@/pages/production/work-orders/detail'));
 const RecordOutputPage          = lazy(() => import('@/pages/production/work-orders/record-output'));
 const ProductionSchedulePage    = lazy(() => import('@/pages/production/schedule'));
@@ -469,6 +473,8 @@ export default function App() {
               element={<PermissionGuard permission="crm.sales_orders.create"><CreateSalesOrderPage /></PermissionGuard>} />
             <Route path="/crm/sales-orders/:id"
               element={<PermissionGuard permission="crm.sales_orders.view"><SalesOrderDetailPage /></PermissionGuard>} />
+            <Route path="/crm/sales-orders/:id/edit"
+              element={<PermissionGuard permission="crm.sales_orders.update"><EditSalesOrderPage /></PermissionGuard>} />
           </Route>
 
           {/* MRP module (Sprint 6 — Tasks 49, 50, 52, 53) */}
@@ -482,9 +488,13 @@ export default function App() {
 
             <Route path="/mrp/machines"
               element={<PermissionGuard permission="mrp.machines.view"><MachinesListPage /></PermissionGuard>} />
+            <Route path="/mrp/machines/:id"
+              element={<PermissionGuard permission="mrp.machines.view"><MachineDetailPage /></PermissionGuard>} />
 
             <Route path="/mrp/molds"
               element={<PermissionGuard permission="mrp.molds.view"><MoldsListPage /></PermissionGuard>} />
+            <Route path="/mrp/molds/:id"
+              element={<PermissionGuard permission="mrp.molds.view"><MoldDetailPage /></PermissionGuard>} />
 
             <Route path="/mrp/plans"
               element={<PermissionGuard permission="mrp.plans.view"><MrpPlansListPage /></PermissionGuard>} />
@@ -492,9 +502,12 @@ export default function App() {
               element={<PermissionGuard permission="mrp.plans.view"><MrpPlanDetailPage /></PermissionGuard>} />
           </Route>
 
-          {/* Production module (Sprint 6 — Tasks 51, 54, 55, 58) */}
+          {/* Production module (Sprint 6 — Tasks 51, 54, 55, 58; WO create added in audit §3.1) */}
           <Route element={<ModuleGuard module="production" />}>
-            <Route path="/production" element={<Navigate to="/production/dashboard" replace />} />
+            {/* Sprint 6 audit §3.5: redirect /production to work orders so users
+                without the dashboard permission don't hit a 403 immediately.
+                The dashboard remains the natural home for those who have it. */}
+            <Route path="/production" element={<Navigate to="/production/work-orders" replace />} />
 
             <Route path="/production/dashboard"
               element={<PermissionGuard permission="production.dashboard.view"><ProductionDashboardPage /></PermissionGuard>} />
@@ -504,6 +517,8 @@ export default function App() {
 
             <Route path="/production/work-orders"
               element={<PermissionGuard permission="production.work_orders.view"><WorkOrdersListPage /></PermissionGuard>} />
+            <Route path="/production/work-orders/create"
+              element={<PermissionGuard permission="production.wo.create"><CreateWorkOrderPage /></PermissionGuard>} />
             <Route path="/production/work-orders/:id"
               element={<PermissionGuard permission="production.work_orders.view"><WorkOrderDetailPage /></PermissionGuard>} />
             <Route path="/production/work-orders/:id/record-output"
