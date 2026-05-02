@@ -12,6 +12,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { ChainHeader } from '@/components/chain';
 import { usePermission } from '@/hooks/usePermission';
 import type { SalesOrderStatus } from '@/types/crm';
 
@@ -131,32 +132,7 @@ export default function SalesOrderDetailPage() {
             )}
           </div>
         }
-        bottom={
-          chain.data ? (
-            <div className="mt-2 flex items-center gap-1 overflow-x-auto">
-              {chain.data.map((step, i) => (
-                <div key={step.key} className="flex items-center gap-1 min-w-fit">
-                  <span className={[
-                    'inline-block h-2 w-2 rounded-full',
-                    step.state === 'done' ? 'bg-success' :
-                      step.state === 'active' ? 'bg-accent' : 'bg-elevated',
-                  ].join(' ')} aria-hidden />
-                  <span className={[
-                    'text-xs',
-                    step.state === 'done' || step.state === 'active' ? 'text-primary font-medium' : 'text-subtle',
-                  ].join(' ')}>{step.label}</span>
-                  {step.date && <span className="text-2xs font-mono text-muted">{step.date}</span>}
-                  {i < chain.data!.length - 1 && (
-                    <span className={[
-                      'inline-block h-px w-8',
-                      step.state === 'done' ? 'bg-success/40' : 'bg-elevated',
-                    ].join(' ')} aria-hidden />
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : null
-        }
+        bottom={chain.data ? <ChainHeader steps={chain.data} className="mt-2" /> : null}
       />
 
       <div className="px-5 py-4 grid gap-4 lg:grid-cols-3">
