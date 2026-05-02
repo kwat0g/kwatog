@@ -19,7 +19,7 @@ class OvertimeService
 
     public function list(array $filters, ?User $user = null): LengthAwarePaginator
     {
-        $q = OvertimeRequest::query()->with(['employee:id,employee_no,first_name,middle_name,last_name,suffix,department_id', 'approver:id,name']);
+        $q = OvertimeRequest::query()->with(['employee:id,employee_no,first_name,middle_name,last_name,suffix,department_id', 'approver:id,name,role_id']);
         if (!empty($filters['employee_id'])) {
             $empId = \App\Common\Support\HashIdFilter::decode(
                 $filters['employee_id'], \App\Modules\HR\Models\Employee::class,
