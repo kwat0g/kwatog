@@ -72,10 +72,17 @@ class SalesOrderService
 
     public function show(SalesOrder $so): SalesOrder
     {
+        // Sprint 6 audit §3.2: eager-load MRP plan + linked work orders so
+        // the SO detail page can render the right-panel LinkedRecords block
+        // without N+1 round-trips. mrpPlan + workOrders relations are
+        // defined on the SalesOrder model (Sprint 6 Task 52).
         return $so->load([
             'customer',
             'creator:id,name',
             'items.product:id,part_number,name,unit_of_measure',
+            'mrpPlan:id,mrp_plan_no,version,status,shortages_found,auto_pr_count,draft_wo_count,sales_order_id',
+            'workOrders:id,wo_number,product_id,status,quantity_target,quantity_produced,sales_order_id,planned_start',
+            'workOrders.product:id,part_number,name',
         ]);
     }
 

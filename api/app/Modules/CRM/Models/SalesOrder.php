@@ -50,6 +50,20 @@ class SalesOrder extends Model
         return $this->hasMany(SalesOrderItem::class);
     }
 
+    /**
+     * Sprint 6 audit §3.2: relations consumed by the right-panel
+     * LinkedRecords on the detail page.
+     */
+    public function mrpPlan(): BelongsTo
+    {
+        return $this->belongsTo(\App\Modules\MRP\Models\MrpPlan::class);
+    }
+
+    public function workOrders(): HasMany
+    {
+        return $this->hasMany(\App\Modules\Production\Models\WorkOrder::class);
+    }
+
     /** Scope used by list filters. */
     public function scopeStatus(Builder $q, SalesOrderStatus|string $status): Builder
     {

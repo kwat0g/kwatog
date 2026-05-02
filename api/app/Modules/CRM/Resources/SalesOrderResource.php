@@ -37,6 +37,33 @@ class SalesOrderResource extends JsonResource
             'items'              => $this->whenLoaded('items', fn () =>
                 SalesOrderItemResource::collection($this->items)
             ),
+            // Sprint 6 audit §3.2: surface the chain context for the right-
+            // panel LinkedRecords block on the detail page. hash_id only —
+            // never raw integer FKs (see plans/sprint-6-audit §1.3).
+            'mrp_plan'           => $this->whenLoaded('mrpPlan', fn () => $this->mrpPlan ? [
+                'id'              => $this->mrpPlan->hash_id,
+                'mrp_plan_no'     => $this->mrpPlan->mrp_plan_no,
+                'version'         => (int) $this->mrpPlan->version,
+                'status'          => (string) ($this->mrpPlan->status?->value ?? $this->mrpPlan->status),
+                'shortages_found' => (int) $this->mrpPlan->shortages_found,
+                'auto_pr_count'   => (int) $this->mrpPlan->auto_pr_count,
+                'draft_wo_count'  => (int) $this->mrpPlan->draft_wo_count,
+            ] : null),
+            'work_orders'        => $this->whenLoaded('workOrders', fn () =>
+                $this->workOrders->map(fn ($wo) => [
+                    'id'                => $wo->hash_id,
+                    'wo_number'         => $wo->wo_number,
+                    'status'            => (string) ($wo->status?->value ?? $wo->status),
+                    'quantity_target'   => (int) $wo->quantity_target,
+                    'quantity_produced' => (int) $wo->quantity_produced,
+                    'planned_start'     => optional($wo->planned_start)->toIso8601String(),
+                    'product'           => $wo->relationLoaded('product') && $wo->product ? [
+                        'id'          => $wo->product->hash_id,
+                        'part_number' => $wo->product->part_number,
+                        'name'        => $wo->product->name,
+                    ] : null,
+                ])->values()
+            ),
             'created_at'         => optional($this->created_at)->toIso8601String(),
             'updated_at'         => optional($this->updated_at)->toIso8601String(),
         ];

@@ -160,7 +160,9 @@ class RolePermissionSeeder extends Seeder
             // MRP — Sprint 6 Tasks 49, 50, 52, 53
             'mrp' => [
                 ['slug' => 'mrp.view',           'name' => 'View MRP'],
-                ['slug' => 'mrp.run',            'name' => 'Run MRP'],
+                // Sprint 6 audit: 'mrp.run' was a stale duplicate of
+                // mrp.plans.run (which is what the routes actually use).
+                // Removed from the catalogue; mrp.plans.run remains.
                 ['slug' => 'mrp.schedule',       'name' => 'Schedule Production'],
                 ['slug' => 'mrp.boms.view',      'name' => 'View Bills of Materials'],
                 ['slug' => 'mrp.boms.manage',    'name' => 'Manage Bills of Materials'],
