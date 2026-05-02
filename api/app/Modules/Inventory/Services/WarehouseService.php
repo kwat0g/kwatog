@@ -16,8 +16,14 @@ class WarehouseService
 {
     public function tree(): Collection
     {
+        // zones.locations.zone.warehouse is required so WarehouseLocationResource and
+        // its `full_code` accessor can render without a lazy load (strict-mode enabled).
         return Warehouse::query()
-            ->with(['zones.locations'])
+            ->with([
+                'zones' => fn ($q) => $q->orderBy('code'),
+                'zones.locations' => fn ($q) => $q->orderBy('code'),
+                'zones.locations.zone.warehouse',
+            ])
             ->orderBy('name')
             ->get();
     }

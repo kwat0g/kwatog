@@ -32,13 +32,18 @@ class ItemCategory extends Model
         return $this->hasMany(Item::class, 'category_id');
     }
 
+    /**
+     * Lazy-load-safe: walks the chain only as long as `parent` is already
+     * eager-loaded; otherwise stops. Callers wanting the full path must
+     * `->with('parent.parent.parent')` or load explicitly.
+     */
     public function getPathAttribute(): string
     {
         $parts = [$this->name];
-        $current = $this->parent;
-        while ($current) {
-            array_unshift($parts, $current->name);
+        $current = $this;
+        while ($current->relationLoaded('parent') && $current->parent) {
             $current = $current->parent;
+            array_unshift($parts, $current->name);
         }
         return implode(' > ', $parts);
     }

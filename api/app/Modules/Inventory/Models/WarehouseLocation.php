@@ -35,11 +35,16 @@ class WarehouseLocation extends Model
         return $q->where('is_active', true);
     }
 
+    /**
+     * Lazy-load-safe accessor: returns `{wh.code}-{zone.code}-{location.code}` only if the
+     * required relations are already eager-loaded; otherwise falls back to the bare code.
+     * Callers that need the full code MUST eager-load `zone.warehouse`.
+     */
     public function getFullCodeAttribute(): string
     {
-        $zone = $this->relationLoaded('zone') ? $this->zone : $this->zone()->with('warehouse')->first();
-        if (! $zone) return $this->code;
-        $wh = $zone->relationLoaded('warehouse') ? $zone->warehouse : $zone->warehouse()->first();
+        if (! $this->relationLoaded('zone') || ! $this->zone) return $this->code;
+        $zone = $this->zone;
+        $wh = $zone->relationLoaded('warehouse') ? $zone->warehouse : null;
         return implode('-', array_filter([$wh?->code, $zone->code, $this->code]));
     }
 }

@@ -11,8 +11,14 @@ class ItemResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        $onHand   = (float) ($this->on_hand_quantity   ?? $this->stockLevels()->sum('quantity'));
-        $reserved = (float) ($this->reserved_quantity  ?? $this->stockLevels()->sum('reserved_quantity'));
+        // Callers MUST eager-load aggregates via withSum (see ItemService::list/show)
+        // to satisfy Model::shouldBeStrict(). Fall back to a loaded relation only.
+        $onHand = $this->on_hand_quantity
+            ?? ($this->relationLoaded('stockLevels') ? $this->stockLevels->sum('quantity') : 0);
+        $reserved = $this->reserved_quantity
+            ?? ($this->relationLoaded('stockLevels') ? $this->stockLevels->sum('reserved_quantity') : 0);
+        $onHand = (float) $onHand;
+        $reserved = (float) $reserved;
         $available = max(0.0, $onHand - $reserved);
 
         $reorder = (float) $this->reorder_point;

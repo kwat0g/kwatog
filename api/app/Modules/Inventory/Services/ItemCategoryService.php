@@ -14,7 +14,15 @@ class ItemCategoryService
     public function tree(): Collection
     {
         return ItemCategory::query()
-            ->with(['children.children.children'])
+            ->with([
+                'parent',
+                'children' => fn ($q) => $q->orderBy('name'),
+                'children.parent',
+                'children.children' => fn ($q) => $q->orderBy('name'),
+                'children.children.parent',
+                'children.children.children' => fn ($q) => $q->orderBy('name'),
+                'children.children.children.parent',
+            ])
             ->whereNull('parent_id')
             ->orderBy('name')
             ->get();
@@ -22,7 +30,7 @@ class ItemCategoryService
 
     public function list(): Collection
     {
-        return ItemCategory::query()->orderBy('name')->get();
+        return ItemCategory::query()->with('parent')->orderBy('name')->get();
     }
 
     public function create(array $data): ItemCategory
