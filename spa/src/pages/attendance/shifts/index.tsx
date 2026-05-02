@@ -6,7 +6,7 @@ import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
 import { Plus, Pencil, Trash2, Users } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { shiftsApi } from '@/api/attendance/shifts';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -37,6 +37,7 @@ type FormValues = z.infer<typeof schema>;
 
 export default function ShiftsPage() {
   const { can } = usePermission();
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const [filters, setFilters] = useState<ListParams>({ page: 1, per_page: 25 });
   const [editing, setEditing] = useState<Shift | null>(null);
@@ -91,8 +92,8 @@ export default function ShiftsPage() {
           <>
             {can('attendance.shifts.manage') && (
               <>
-                <Button variant="secondary" size="sm" icon={<Users size={14} />}>
-                  <Link to="/attendance/shifts/assign">Bulk assign</Link>
+                <Button variant="secondary" size="sm" icon={<Users size={14} />} onClick={() => navigate('/attendance/shifts/assign')}>
+                  Bulk assign
                 </Button>
                 <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => { setEditing(null); setModalOpen(true); }}>
                   Add shift

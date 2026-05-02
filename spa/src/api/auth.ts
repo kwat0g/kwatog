@@ -7,6 +7,13 @@ export interface AuthRole {
   slug: string;
 }
 
+export interface AuthEmployee {
+  id: string;
+  employee_no: string;
+  full_name: string;
+  department_id: string | null;
+}
+
 export interface AuthUser {
   id: string;
   name: string;
@@ -16,6 +23,8 @@ export interface AuthUser {
   theme_mode: 'light' | 'dark' | 'system';
   sidebar_collapsed: boolean;
   role: AuthRole;
+  /** Linked HR employee, when this user account is wired to one. */
+  employee: AuthEmployee | null;
   permissions: string[];
   features: string[];
 }

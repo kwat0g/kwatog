@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import { loansApi, type LoanListParams } from '@/api/loans';
 import { Button } from '@/components/ui/Button';
@@ -16,6 +16,7 @@ import { formatDate } from '@/lib/formatDate';
 import type { EmployeeLoan } from '@/types/loans';
 
 export default function LoansPage() {
+  const navigate = useNavigate();
   const { can } = usePermission();
   const [filters, setFilters] = useState<LoanListParams>({ page: 1, per_page: 25, sort: 'created_at', direction: 'desc' });
 
@@ -64,8 +65,8 @@ export default function LoansPage() {
         title="Loans & Cash Advance"
         subtitle={data ? `${data.meta.total} records` : undefined}
         actions={can('loans.create') ? (
-          <Button variant="primary" size="sm" icon={<Plus size={14} />}>
-            <Link to="/loans/create">New request</Link>
+          <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/loans/create')}>
+            New request
           </Button>
         ) : null}
       />
@@ -85,7 +86,7 @@ export default function LoansPage() {
           icon="inbox"
           title="No loan records"
           description={can('loans.create') ? 'Submit a request to get started.' : 'Nothing here yet.'}
-          action={can('loans.create') ? <Button variant="primary"><Link to="/loans/create">New request</Link></Button> : undefined}
+          action={can('loans.create') ? <Button variant="primary" onClick={() => navigate('/loans/create')}>New request</Button> : undefined}
         />
       )}
       {data && data.data.length > 0 && (
