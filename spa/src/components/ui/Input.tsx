@@ -10,9 +10,14 @@ export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   containerClassName?: string;
 }
 
+// Non-text input types that open a native picker — render with the same
+// bg-elevated treatment as <Select> so users can tell them apart from plain text inputs.
+const PICKER_TYPES = new Set(['date', 'time', 'datetime-local', 'month', 'week', 'color']);
+
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ label, helper, error, prefix, suffix, required, id, className, containerClassName, ...rest }, ref) => {
+  ({ label, helper, error, prefix, suffix, required, id, className, containerClassName, type, ...rest }, ref) => {
     const inputId = id ?? `input-${rest.name ?? Math.random().toString(36).slice(2, 8)}`;
+    const isPicker = type && PICKER_TYPES.has(type);
     return (
       <div className={cn('flex flex-col gap-1', containerClassName)}>
         {label && (
@@ -23,8 +28,9 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         )}
         <div
           className={cn(
-            'flex items-stretch h-8 rounded-md border bg-canvas overflow-hidden',
-            'focus-within:ring-2 focus-within:ring-accent focus-within:border-accent',
+            'flex items-stretch h-8 rounded-md border overflow-hidden transition-colors duration-fast',
+            'focus-within:ring-2 focus-within:ring-accent focus-within:border-accent focus-within:bg-canvas',
+            isPicker ? 'bg-elevated hover:bg-canvas cursor-pointer' : 'bg-canvas',
             error ? 'border-danger' : 'border-default',
           )}
         >
