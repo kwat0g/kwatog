@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Modules\Quality\Controllers\InspectionController;
 use App\Modules\Quality\Controllers\InspectionSpecController;
 use Illuminate\Support\Facades\Route;
 
@@ -24,4 +25,20 @@ Route::middleware(['auth:sanctum', 'feature:quality'])->prefix('quality')->group
 
     Route::get('/products/{product}/inspection-spec',     [InspectionSpecController::class, 'forProduct'])
         ->middleware('permission:quality.specs.view');
+
+    /* ─── Inspections (Task 60) ─── */
+    Route::get('/inspections',                                  [InspectionController::class, 'index'])
+        ->middleware('permission:quality.inspections.view');
+    Route::get('/inspections/aql-preview',                      [InspectionController::class, 'aqlPreview'])
+        ->middleware('permission:quality.inspections.view');
+    Route::get('/inspections/{inspection}',                     [InspectionController::class, 'show'])
+        ->middleware('permission:quality.inspections.view');
+    Route::post('/inspections',                                 [InspectionController::class, 'store'])
+        ->middleware('permission:quality.inspections.manage');
+    Route::patch('/inspections/{inspection}/measurements',      [InspectionController::class, 'recordMeasurements'])
+        ->middleware('permission:quality.inspections.manage');
+    Route::post('/inspections/{inspection}/complete',           [InspectionController::class, 'complete'])
+        ->middleware('permission:quality.inspections.manage');
+    Route::post('/inspections/{inspection}/cancel',             [InspectionController::class, 'cancel'])
+        ->middleware('permission:quality.inspections.manage');
 });

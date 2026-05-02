@@ -136,6 +136,7 @@ class GrnService
         if ($grn->status !== GrnStatus::PendingQc) {
             throw new RuntimeException('Only pending_qc GRNs can be accepted.');
         }
+        $this->assertQcGate($grn);
         return DB::transaction(function () use ($grn, $by) {
             foreach ($grn->items as $row) {
                 $row->quantity_accepted = $row->quantity_received;
@@ -168,6 +169,7 @@ class GrnService
         if ($grn->status !== GrnStatus::PendingQc) {
             throw new RuntimeException('Only pending_qc GRNs can be partially accepted.');
         }
+        $this->assertQcGate($grn);
         return DB::transaction(function () use ($grn, $itemAcceptedMap, $by) {
             $allFull = true;
             foreach ($grn->items as $row) {
@@ -218,6 +220,27 @@ class GrnService
             ]);
             return $grn->fresh();
         });
+    }
+
+    /**
+     * Sprint 7 Task 60 — incoming-QC gate.
+     *
+     * If the GRN has been linked to an inspection (qc_inspection_id),
+     * accepting the GRN requires that inspection to be in `passed` status.
+     * GRNs without a linked inspection bypass this gate (back-compat with
+     * Sprint 5 flows where QC was not yet enforced).
+     */
+    private function assertQcGate(GoodsReceiptNote $grn): void
+    {
+        if (! $grn->qc_inspection_id) return;
+        $status = DB::table('inspections')
+            ->where('id', $grn->qc_inspection_id)
+            ->value('status');
+        if ($status !== 'passed') {
+            throw new RuntimeException(
+                "GRN {$grn->grn_number} cannot be accepted until its incoming inspection passes (current: {$status})."
+            );
+        }
     }
 
     private function refreshPoStatus(PurchaseOrder $po): void

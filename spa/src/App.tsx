@@ -133,6 +133,9 @@ const MrpPlanDetailPage         = lazy(() => import('@/pages/mrp/plans/detail'))
 // Quality (Sprint 7 — Task 59)
 const InspectionSpecsListPage   = lazy(() => import('@/pages/quality/inspection-specs'));
 const InspectionSpecEditorPage  = lazy(() => import('@/pages/quality/inspection-specs/editor'));
+const InspectionsListPage       = lazy(() => import('@/pages/quality/inspections'));
+const InspectionDetailPage      = lazy(() => import('@/pages/quality/inspections/detail'));
+const InspectionCreatePage      = lazy(() => import('@/pages/quality/inspections/create'));
 
 // Production (Sprint 6 — Tasks 51, 53–58; WO create added in audit §3.1)
 const WorkOrdersListPage        = lazy(() => import('@/pages/production/work-orders'));
@@ -509,13 +512,19 @@ export default function App() {
               element={<PermissionGuard permission="mrp.plans.view"><MrpPlanDetailPage /></PermissionGuard>} />
           </Route>
 
-          {/* Quality module (Sprint 7 — Task 59 inspection specs) */}
+          {/* Quality module (Sprint 7 — Tasks 59 + 60) */}
           <Route element={<ModuleGuard module="quality" />}>
-            <Route path="/quality" element={<Navigate to="/quality/inspection-specs" replace />} />
+            <Route path="/quality" element={<Navigate to="/quality/inspections" replace />} />
             <Route path="/quality/inspection-specs"
               element={<PermissionGuard permission="quality.specs.view"><InspectionSpecsListPage /></PermissionGuard>} />
             <Route path="/quality/inspection-specs/:productId"
               element={<PermissionGuard permission="quality.specs.view"><InspectionSpecEditorPage /></PermissionGuard>} />
+            <Route path="/quality/inspections"
+              element={<PermissionGuard permission="quality.inspections.view"><InspectionsListPage /></PermissionGuard>} />
+            <Route path="/quality/inspections/new"
+              element={<PermissionGuard permission="quality.inspections.manage"><InspectionCreatePage /></PermissionGuard>} />
+            <Route path="/quality/inspections/:id"
+              element={<PermissionGuard permission="quality.inspections.view"><InspectionDetailPage /></PermissionGuard>} />
           </Route>
 
           {/* Production module (Sprint 6 — Tasks 51, 54, 55, 58; WO create added in audit §3.1) */}
