@@ -79,7 +79,8 @@ export default function ChartOfAccountsPage() {
       {data && data.length > 0 && (
         <div className="px-5 py-4">
           <div className="border border-default rounded-md overflow-hidden">
-            <div className="grid grid-cols-12 h-8 px-2.5 bg-subtle text-2xs uppercase tracking-wider text-muted font-medium border-b border-default">
+            {/* Header matches DataTable (bg-canvas + border-b) for consistency. */}
+            <div className="grid grid-cols-12 h-8 px-2.5 items-center bg-canvas text-2xs uppercase tracking-wider text-muted font-medium border-b border-default">
               <div className="col-span-1">Code</div>
               <div className="col-span-5">Account</div>
               <div className="col-span-2">Type</div>
@@ -137,7 +138,7 @@ function TreeRow({
           <span className={cn(hasChildren && 'font-medium')}>{node.name}</span>
           {!node.is_active && <Chip variant="neutral">inactive</Chip>}
         </div>
-        <div className="col-span-2 text-xs text-muted uppercase tracking-wider">{node.type} · {node.normal_balance}</div>
+        <div className="col-span-2 text-sm text-muted capitalize">{node.type} · {node.normal_balance}</div>
         <div className="col-span-2 text-right font-mono tabular-nums">{formatPeso(node.total_debit, '—')}</div>
         <div className="col-span-2 text-right font-mono tabular-nums font-medium">{formatPeso(node.current_balance, '—')}</div>
       </div>
