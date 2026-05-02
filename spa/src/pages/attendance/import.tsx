@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent } from 'react';
+import { useRef, useState, type ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import { Upload, AlertCircle, CheckCircle2 } from 'lucide-react';
@@ -13,6 +13,7 @@ export default function AttendanceImportPage() {
   const [file, setFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const mutation = useMutation({
     mutationFn: (f: File) => attendancesApi.import(f),
@@ -50,31 +51,36 @@ export default function AttendanceImportPage() {
             onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
             onDragLeave={() => setDragOver(false)}
             onDrop={onDrop}
+            onClick={() => inputRef.current?.click()}
             className={
-              'border-2 border-dashed rounded-md flex flex-col items-center justify-center py-12 transition-colors ' +
-              (dragOver ? 'border-accent bg-elevated' : 'border-default')
+              'border-2 border-dashed rounded-md flex flex-col items-center justify-center py-12 transition-colors cursor-pointer ' +
+              (dragOver ? 'border-accent bg-elevated' : 'border-default hover:bg-elevated')
             }
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') inputRef.current?.click(); }}
           >
             <Upload size={28} className="text-muted mb-3" />
             <p className="text-sm font-medium">
               {file ? file.name : 'Drop CSV here, or click to browse'}
             </p>
             {file && <p className="text-xs text-muted mt-1">{(file.size / 1024).toFixed(1)} KB</p>}
-            <input
-              type="file"
-              accept=".csv,text/csv"
-              onChange={onPick}
-              className="absolute opacity-0 cursor-pointer w-full h-full"
-            />
-            <Button variant="secondary" size="sm" className="mt-3" onClick={() => document.getElementById('csv-input')?.click()}>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="mt-3"
+              type="button"
+              onClick={(e) => { e.stopPropagation(); inputRef.current?.click(); }}
+            >
               Browse files
             </Button>
             <input
-              id="csv-input"
+              ref={inputRef}
               type="file"
               accept=".csv,text/csv"
               className="hidden"
               onChange={onPick}
+              onClick={(e) => e.stopPropagation()}
             />
           </div>
           <div className="flex justify-end gap-2 pt-3 mt-3 border-t border-default">

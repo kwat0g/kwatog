@@ -2,17 +2,22 @@ import { client } from '../client';
 import type { ApiSuccess, PaginatedResponse, ListParams } from '@/types';
 import type { LeaveType, LeaveRequest, EmployeeLeaveBalance, CreateLeaveRequestData } from '@/types/leave';
 
+// Opt-out so transient backend hiccups on these reference queries don't spam
+// the global "Something went wrong" toast — the page handles empty state.
+const QUIET = { skipErrorToast: true } as const;
+
 export const leaveTypesApi = {
   list: () =>
-    client.get<PaginatedResponse<LeaveType>>('/leaves/types', { params: { per_page: 100 } }).then((r) => r.data),
+    client.get<PaginatedResponse<LeaveType>>('/leaves/types', { params: { per_page: 100 }, ...QUIET })
+      .then((r) => r.data),
 };
 
 export const leaveBalancesApi = {
   me: (year?: number) =>
-    client.get<{ data: EmployeeLeaveBalance[] }>('/leaves/balances/me', { params: { year } })
+    client.get<{ data: EmployeeLeaveBalance[] }>('/leaves/balances/me', { params: { year }, ...QUIET })
       .then((r) => r.data.data),
   forEmployee: (employeeId: string, year?: number) =>
-    client.get<{ data: EmployeeLeaveBalance[] }>(`/leaves/balances/${employeeId}`, { params: { year } })
+    client.get<{ data: EmployeeLeaveBalance[] }>(`/leaves/balances/${employeeId}`, { params: { year }, ...QUIET })
       .then((r) => r.data.data),
 };
 

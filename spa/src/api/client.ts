@@ -30,6 +30,11 @@ client.interceptors.response.use(
     const isBootstrap = requestUrl.endsWith('/auth/user');
     const isLoginAttempt = requestUrl.endsWith('/auth/login');
 
+    // Per-request opt-out — queries can pass `{ skipErrorToast: true }` in their
+    // axios config to suppress the global 5xx / 403 toast (errors still flow
+    // through react-query / axios for inline handling).
+    const skipToast = (error.config as { skipErrorToast?: boolean } | undefined)?.skipErrorToast === true;
+
     switch (status) {
       case 401:
         // Don't auto-redirect for:
@@ -49,7 +54,7 @@ client.interceptors.response.use(
           }
         } else if (data?.code === 'feature_disabled') {
           // ModuleGuard handles UI; suppress toast here.
-        } else {
+        } else if (!skipToast) {
           toast.error(data?.message ?? 'You do not have permission to perform this action.');
         }
         break;
@@ -79,11 +84,11 @@ client.interceptors.response.use(
       case 502:
       case 503:
       case 504:
-        toast.error('Something went wrong. Please try again.');
+        if (!skipToast) toast.error('Something went wrong. Please try again.');
         break;
 
       default:
-        if (!error.response) {
+        if (!error.response && !skipToast) {
           toast.error('Network error. Please check your connection.');
         }
     }
