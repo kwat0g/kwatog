@@ -12,12 +12,10 @@
  * design-system tokens (no inline color).
  */
 import { useEffect, useRef } from 'react';
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+import Gantt from 'frappe-gantt';
 import 'frappe-gantt/dist/frappe-gantt.css';
 import type { GanttRow } from '@/types/mrp';
-
-// frappe-gantt has no published TypeScript types. Declare the bits we use.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-declare const window: any;
 
 type ViewMode = 'Day' | 'Week' | 'Month';
 
@@ -71,42 +69,27 @@ export function GanttChart({ rows, viewMode = 'Week', onBarClick }: Props) {
   );
 
   useEffect(() => {
-    if (!ref.current) return;
-    // Lazy require to avoid SSR import cost; frappe-gantt is browser-only.
-    let Gantt: unknown = null;
+    const host = ref.current;
+    if (!host) return;
+    host.innerHTML = '';
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
-      Gantt = (window.Gantt) ?? null;
-      if (!Gantt) {
-        // dynamic import — safe in modern Vite builds
-        import('frappe-gantt').then((mod) => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const G = (mod as any).default ?? mod;
-          if (!ref.current) return;
-          ref.current.innerHTML = '';
-          ganttRef.current = new G(ref.current, tasks, {
-            view_mode: viewMode,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            on_click: (task: any) => {
-              const t = tasks.find((x) => x.id === task.id);
-              if (t?.woId && onBarClick) onBarClick(t.woId);
-            },
-          });
-        }).catch(() => {
-          if (ref.current) {
-            ref.current.innerHTML = '<div class="text-sm text-muted p-4">Gantt library failed to load. Run <code>npm install frappe-gantt</code>.</div>';
-          }
-        });
-        return;
-      }
-    } catch {
-      // Library not installed locally — render a placeholder.
-      if (ref.current) {
-        ref.current.innerHTML = '<div class="text-sm text-muted p-4">Gantt library not yet installed.</div>';
-      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ganttRef.current = new (Gantt as any)(host, tasks, {
+        view_mode: viewMode,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        on_click: (task: any) => {
+          const t = tasks.find((x) => x.id === task.id);
+          if (t?.woId && onBarClick) onBarClick(t.woId);
+        },
+      });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[GanttChart] failed to instantiate frappe-gantt', err);
+      host.innerHTML =
+        '<div class="text-sm text-muted p-4">Gantt failed to render. Check browser console for details.</div>';
     }
     return () => {
-      if (ref.current) ref.current.innerHTML = '';
+      if (host) host.innerHTML = '';
       ganttRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
