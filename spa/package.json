@@ -18,7 +18,6 @@
     "axios": "^1.7.7",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
-    "frappe-gantt": "^0.6.1",
     "laravel-echo": "^1.16.1",
     "lucide-react": "^0.451.0",
     "pusher-js": "^8.4.0",
