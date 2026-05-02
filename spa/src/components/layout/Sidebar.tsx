@@ -24,6 +24,12 @@ import {
   FileEdit,
   Landmark,
   Receipt,
+  BookText,
+  Users2,
+  FileText,
+  Banknote,
+  Scale,
+  TrendingUp,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
@@ -75,7 +81,15 @@ const SECTIONS: NavSection[] = [
   {
     label: 'Finance',
     items: [
-      { to: '/accounting', label: 'Accounting', icon: BookOpen, feature: 'accounting', permission: 'accounting.view' },
+      { to: '/accounting/coa',              label: 'Chart of Accounts', icon: BookText,   feature: 'accounting', permission: 'accounting.coa.view' },
+      { to: '/accounting/journal-entries',  label: 'Journal Entries',   icon: BookOpen,   feature: 'accounting', permission: 'accounting.journal.view' },
+      { to: '/accounting/vendors',          label: 'Vendors',           icon: Users2,     feature: 'accounting', permission: 'accounting.vendors.view' },
+      { to: '/accounting/bills',            label: 'Bills (AP)',        icon: FileText,   feature: 'accounting', permission: 'accounting.bills.view' },
+      { to: '/accounting/customers',        label: 'Customers',         icon: Users2,     feature: 'accounting', permission: 'accounting.customers.view' },
+      { to: '/accounting/invoices',         label: 'Invoices (AR)',     icon: FileText,   feature: 'accounting', permission: 'accounting.invoices.view' },
+      { to: '/accounting/trial-balance',    label: 'Trial Balance',     icon: Scale,      feature: 'accounting', permission: 'accounting.statements.view' },
+      { to: '/accounting/income-statement', label: 'Income Statement',  icon: TrendingUp, feature: 'accounting', permission: 'accounting.statements.view' },
+      { to: '/accounting/balance-sheet',    label: 'Balance Sheet',     icon: Banknote,   feature: 'accounting', permission: 'accounting.statements.view' },
     ],
   },
   {

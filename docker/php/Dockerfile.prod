@@ -1,0 +1,90 @@
+# ─── Ogami ERP — Production PHP image ─────────────────────────────────────
+# Multi-stage:
+#   1. composer-deps → installs vendor/ with --no-dev
+#   2. runtime       → PHP 8.3-FPM, opcache enabled, copies vendor/ + source
+#                       (read-only; no host volume mount in prod)
+# ──────────────────────────────────────────────────────────────────────────
+
+# Stage 1: Composer dependencies
+FROM composer:2 AS deps
+WORKDIR /app
+COPY api/composer.json api/composer.lock ./
+RUN composer install \
+        --no-dev \
+        --no-scripts \
+        --prefer-dist \
+        --no-progress \
+        --no-interaction \
+        --optimize-autoloader
+
+# Stage 2: Runtime
+FROM php:8.3-fpm-alpine
+
+# System deps (subset of dev — no autoconf/g++ needed at runtime)
+RUN apk add --no-cache \
+        bash \
+        git \
+        curl \
+        zip \
+        unzip \
+        icu \
+        libzip \
+        libpng \
+        libjpeg-turbo \
+        freetype \
+        oniguruma \
+        postgresql-libs \
+        # Build deps for ext install (removed after)
+        autoconf g++ make linux-headers icu-dev libzip-dev libpng-dev libjpeg-turbo-dev freetype-dev oniguruma-dev postgresql-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install -j$(nproc) \
+        pdo \
+        pdo_pgsql \
+        pgsql \
+        gd \
+        zip \
+        bcmath \
+        intl \
+        exif \
+        opcache \
+        pcntl \
+    && pecl install redis \
+    && docker-php-ext-enable redis \
+    # Strip build deps to keep image small.
+    && apk del autoconf g++ make linux-headers icu-dev libzip-dev libpng-dev libjpeg-turbo-dev freetype-dev oniguruma-dev postgresql-dev
+
+# OPcache config — tuned for prod.
+RUN { \
+        echo 'opcache.enable=1'; \
+        echo 'opcache.enable_cli=0'; \
+        echo 'opcache.memory_consumption=192'; \
+        echo 'opcache.interned_strings_buffer=16'; \
+        echo 'opcache.max_accelerated_files=20000'; \
+        echo 'opcache.validate_timestamps=0'; \
+        echo 'opcache.fast_shutdown=1'; \
+    } > /usr/local/etc/php/conf.d/opcache.ini \
+ && { \
+        echo 'memory_limit=256M'; \
+        echo 'expose_php=Off'; \
+        echo 'display_errors=Off'; \
+        echo 'log_errors=On'; \
+        echo 'error_log=/var/log/php_errors.log'; \
+    } > /usr/local/etc/php/conf.d/zz-prod.ini
+
+# Copy app source (api/) and pre-built vendor dir.
+WORKDIR /var/www
+COPY api/ /var/www/
+COPY --from=deps /app/vendor/ /var/www/vendor/
+
+# Cache framework artifacts at build time so cold starts are fast.
+RUN php artisan config:cache    || true \
+ && php artisan route:cache     || true \
+ && php artisan view:cache      || true
+
+# Run as non-root.
+RUN addgroup -S www && adduser -S www -G www \
+ && chown -R www:www /var/www
+USER www
+
+EXPOSE 9000
+CMD ["php-fpm", "-F"]
