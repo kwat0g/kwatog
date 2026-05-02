@@ -22,6 +22,7 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import type { ApiValidationError, ListParams } from '@/types';
+import { onFormInvalid } from '@/lib/formErrors';
 import type { Position } from '@/types/hr';
 
 const schema = z.object({
@@ -291,7 +292,7 @@ function PositionFormModal({
 
   return (
     <Modal isOpen onClose={onClose} title={isEdit ? 'Edit position' : 'Add position'}>
-      <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="space-y-3 py-2">
+      <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="space-y-3 py-2">
         <Input label="Title" {...register('title')} error={errors.title?.message} required />
         <Select
           label="Department"

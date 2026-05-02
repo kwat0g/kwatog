@@ -22,6 +22,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
 import type { ApiValidationError } from '@/types';
+import { onFormInvalid } from '@/lib/formErrors';
 import type { Holiday } from '@/types/attendance';
 import { cn } from '@/lib/cn';
 
@@ -301,7 +302,7 @@ function HolidayFormModal({
 
   return (
     <Modal isOpen onClose={onClose} title={isEdit ? 'Edit holiday' : 'Add holiday'}>
-      <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="space-y-3 py-2">
+      <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="space-y-3 py-2">
         <Input label="Name" required {...register('name')} error={errors.name?.message} />
         <Input label="Date" type="date" required {...register('date')} error={errors.date?.message} />
         <Select label="Type" required {...register('type')} error={errors.type?.message}>

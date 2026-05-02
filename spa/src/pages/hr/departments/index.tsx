@@ -19,6 +19,7 @@ import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import type { ApiValidationError } from '@/types';
+import { onFormInvalid } from '@/lib/formErrors';
 import type { Department } from '@/types/hr';
 import { cn } from '@/lib/cn';
 
@@ -344,7 +345,7 @@ function DepartmentFormModal({
 
   return (
     <Modal isOpen onClose={onClose} title={isEdit ? 'Edit department' : 'Add department'} size="md">
-      <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="space-y-3 py-2">
+      <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="space-y-3 py-2">
         <Input label="Name" {...register('name')} error={errors.name?.message} required />
         <Input label="Code" {...register('code')} error={errors.code?.message} placeholder="EXEC" required />
         <Select

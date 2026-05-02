@@ -17,6 +17,7 @@ import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatPeso } from '@/lib/formatNumber';
 import type { ApiValidationError } from '@/types';
+import { onFormInvalid } from '@/lib/formErrors';
 import type { LoanType } from '@/types/loans';
 
 const schema = z.object({
@@ -100,7 +101,7 @@ export default function CreateLoanPage() {
   return (
     <div>
       <PageHeader title="New loan request" backTo="/loans" backLabel="Loans" />
-      <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="max-w-3xl mx-auto px-5 py-6 space-y-4">
+      <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-3xl mx-auto px-5 py-6 space-y-4">
         <Panel title="Type & employee">
           <div className="space-y-3">
             <fieldset>
