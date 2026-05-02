@@ -17,6 +17,13 @@ class User extends Authenticatable
 {
     use HasFactory, Notifiable, SoftDeletes, HasHashId;
 
+    /**
+     * Always eager-load `role` so resources / authorization checks that call
+     * `$user->role` (e.g. EmployeeResource::maskField, hasPermission) don't
+     * trip Model::shouldBeStrict()'s lazy-loading guard outside production.
+     */
+    protected $with = ['role'];
+
     protected $fillable = [
         'name',
         'email',
