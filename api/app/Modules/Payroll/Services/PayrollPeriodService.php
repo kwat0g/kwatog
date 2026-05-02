@@ -80,8 +80,22 @@ class PayrollPeriodService
 
     public function show(PayrollPeriod $period): PayrollPeriod
     {
-        $period = $period->loadCount('payrolls')->load(['creator', 'payrolls.employee']);
+        $period = $period
+            ->loadCount('payrolls')
+            ->load(['creator', 'payrolls.employee', 'bankFileRecords.generator', 'adjustments']);
         $period->summary = $this->summary($period);
+
+        // Pull the journal entry number (if posted) without a full JE relation,
+        // since the JE module ships in Sprint 4. This keeps the linked-records
+        // panel working today.
+        $entryNo = null;
+        if ($period->journal_entry_id && \Illuminate\Support\Facades\Schema::hasTable('journal_entries')) {
+            $entryNo = DB::table('journal_entries')
+                ->where('id', $period->journal_entry_id)
+                ->value('entry_number');
+        }
+        $period->gl_entry_number = $entryNo;
+
         return $period;
     }
 

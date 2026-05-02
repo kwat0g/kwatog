@@ -29,6 +29,14 @@ export interface PayrollPeriodSummary {
   total_net: string;
 }
 
+export interface BankFileRef {
+  id: string;
+  record_count: number;
+  total_amount: string;
+  generated_at: string | null;
+  generator: { id: string; name: string } | null;
+}
+
 export interface PayrollPeriod {
   id: string;
   period_start: string;
@@ -43,6 +51,14 @@ export interface PayrollPeriod {
   employee_count: number;
   creator?: { id: string; name: string };
   summary?: PayrollPeriodSummary | null;
+  gl_entry_number?: string | null;
+  bank_files?: BankFileRef[];
+  adjustment_counts?: {
+    pending: number;
+    approved: number;
+    applied: number;
+    rejected: number;
+  };
   created_at: string;
   updated_at: string;
 }

@@ -15,9 +15,11 @@ import { StatCard } from '@/components/ui/StatCard';
 import { Spinner } from '@/components/ui/Spinner';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { ChainHeader } from '@/components/chain/ChainHeader';
+import { LinkedRecords } from '@/components/chain/LinkedRecords';
+import type { LinkedGroup } from '@/types/chain';
 import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
-import { formatDate } from '@/lib/formatDate';
+import { formatDate, formatRelative } from '@/lib/formatDate';
 import type { Payroll, PayrollPeriod } from '@/types/payroll';
 
 const periodStatusVariant = (status: string | null | undefined): ChipVariant => {
@@ -196,69 +198,158 @@ export default function PayrollPeriodDetailPage() {
         bottom={<ChainHeader steps={chainSteps} />}
       />
 
-      <div className="px-5 py-4">
-        <div className="grid grid-cols-4 gap-3 mb-5">
-          <StatCard label="Employees" value={summary?.employee_count ?? 0} />
-          <StatCard label="Total Gross"      value={formatPeso(summary?.total_gross ?? 0)} />
-          <StatCard label="Total Deductions" value={formatPeso(summary?.total_deductions ?? 0)} />
-          <StatCard label="Total Net"        value={formatPeso(summary?.total_net ?? 0)} />
-        </div>
-
-        {summary && summary.failed_count > 0 && (
-          <div className="flex items-center gap-2 px-3 py-2 mb-4 bg-danger-bg text-danger-fg rounded-md text-xs">
-            <AlertCircle size={14} />
-            <span>{summary.failed_count} employee(s) failed during computation. Review the Failures tab.</span>
+      <div className="px-5 py-4 grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-5">
+        {/* Main content */}
+        <div>
+          <div className="grid grid-cols-4 gap-3 mb-5">
+            <StatCard label="Employees" value={summary?.employee_count ?? 0} />
+            <StatCard label="Total Gross"      value={formatPeso(summary?.total_gross ?? 0)} />
+            <StatCard label="Total Deductions" value={formatPeso(summary?.total_deductions ?? 0)} />
+            <StatCard label="Total Net"        value={formatPeso(summary?.total_net ?? 0)} />
           </div>
-        )}
 
-        {/* Tabs */}
-        <div className="flex items-center gap-1 mb-3 border-b border-default">
-          {([
-            { key: 'employees', label: `Employees (${summary?.employee_count ?? 0})` },
-            { key: 'failures',  label: `Failures (${summary?.failed_count ?? 0})` },
-            { key: 'summary',   label: 'Deduction summary' },
-          ] as const).map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setActiveTab(t.key)}
-              className={
-                'px-3 py-2 text-xs border-b-2 -mb-[1px] ' +
-                (activeTab === t.key
-                  ? 'text-primary border-accent'
-                  : 'text-muted border-transparent hover:text-primary')
-              }
-            >{t.label}</button>
-          ))}
+          {summary && summary.failed_count > 0 && (
+            <div className="flex items-center gap-2 px-3 py-2 mb-4 bg-danger-bg text-danger-fg rounded-md text-xs">
+              <AlertCircle size={14} />
+              <span>{summary.failed_count} employee(s) failed during computation. Review the Failures tab.</span>
+            </div>
+          )}
+
+          {/* Tabs */}
+          <div className="flex items-center gap-1 mb-3 border-b border-default">
+            {([
+              { key: 'employees', label: `Employees (${summary?.employee_count ?? 0})` },
+              { key: 'failures',  label: `Failures (${summary?.failed_count ?? 0})` },
+              { key: 'summary',   label: 'Deduction summary' },
+            ] as const).map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setActiveTab(t.key)}
+                className={
+                  'px-3 py-2 text-xs border-b-2 -mb-[1px] ' +
+                  (activeTab === t.key
+                    ? 'text-primary border-accent'
+                    : 'text-muted border-transparent hover:text-primary')
+                }
+              >{t.label}</button>
+            ))}
+          </div>
+
+          {(activeTab === 'employees' || activeTab === 'failures') && (
+            <>
+              {payrollsLoading && !payrolls && <SkeletonTable columns={8} rows={8} />}
+              {payrolls && payrolls.data.length === 0 && (
+                <EmptyState icon="users"
+                  title={activeTab === 'failures' ? 'No failures' : 'No payroll rows yet'}
+                  description={activeTab === 'failures'
+                    ? 'Computation completed cleanly for every employee.'
+                    : 'Run Compute to generate payroll rows.'} />
+              )}
+              {payrolls && payrolls.data.length > 0 && (
+                <DataTable
+                  columns={columns}
+                  data={payrolls.data}
+                  meta={payrolls.meta}
+                />
+              )}
+            </>
+          )}
+
+          {activeTab === 'summary' && (
+            <Panel title="Deduction summary">
+              <div className="text-xs text-muted">
+                Aggregated deduction breakdown is available per-employee in their detail view. Future enhancement: show period totals by deduction type here.
+              </div>
+            </Panel>
+          )}
         </div>
 
-        {(activeTab === 'employees' || activeTab === 'failures') && (
-          <>
-            {payrollsLoading && !payrolls && <SkeletonTable columns={8} rows={8} />}
-            {payrolls && payrolls.data.length === 0 && (
-              <EmptyState icon="users"
-                title={activeTab === 'failures' ? 'No failures' : 'No payroll rows yet'}
-                description={activeTab === 'failures'
-                  ? 'Computation completed cleanly for every employee.'
-                  : 'Run Compute to generate payroll rows.'} />
-            )}
-            {payrolls && payrolls.data.length > 0 && (
-              <DataTable
-                columns={columns}
-                data={payrolls.data}
-                meta={payrolls.meta}
-              />
-            )}
-          </>
-        )}
-
-        {activeTab === 'summary' && (
-          <Panel title="Deduction summary">
-            <div className="text-xs text-muted">
-              Aggregated deduction breakdown is available per-employee in their detail view. Future enhancement: show period totals by deduction type here.
-            </div>
-          </Panel>
-        )}
+        {/* LinkedRecords sidebar */}
+        <LinkedRecordsSidebar period={period} />
       </div>
     </div>
+  );
+}
+
+function LinkedRecordsSidebar({ period }: { period: PayrollPeriod }) {
+  const groups: LinkedGroup[] = [];
+
+  // GL Journal Entry — only present once posted.
+  if (period.gl_entry_number) {
+    groups.push({
+      label: 'General Ledger',
+      items: [{
+        id: period.gl_entry_number,
+        meta: 'Posted to GL',
+        chip: { variant: 'success', text: 'Posted' },
+      }],
+    });
+  } else if (period.status === 'finalized') {
+    groups.push({
+      label: 'General Ledger',
+      items: [{
+        id: 'Pending',
+        meta: 'Posting queued — waiting for accounting feature flag or worker',
+        chip: { variant: 'warning', text: 'Pending' },
+      }],
+    });
+  }
+
+  // Bank file disbursements.
+  if (period.bank_files && period.bank_files.length > 0) {
+    groups.push({
+      label: 'Bank files',
+      items: period.bank_files.map((f) => ({
+        id: `${f.record_count} records`,
+        meta: `${formatPeso(f.total_amount)} · by ${f.generator?.name ?? 'system'} ${f.generated_at ? formatRelative(f.generated_at) : ''}`,
+        chip: { variant: 'success', text: 'Generated' },
+      })),
+    });
+  }
+
+  // Adjustments rolling into / out of this period.
+  if (period.adjustment_counts) {
+    const ac = period.adjustment_counts;
+    const total = ac.pending + ac.approved + ac.applied + ac.rejected;
+    if (total > 0) {
+      groups.push({
+        label: 'Adjustments',
+        items: [
+          ...(ac.pending  ? [{ id: `${ac.pending} pending`,  meta: 'Awaiting approval', chip: { variant: 'warning' as const, text: 'Pending' } }] : []),
+          ...(ac.approved ? [{ id: `${ac.approved} approved`, meta: 'Will apply next period', chip: { variant: 'info' as const, text: 'Approved' } }] : []),
+          ...(ac.applied  ? [{ id: `${ac.applied} applied`,  meta: 'Already netted', chip: { variant: 'success' as const, text: 'Applied' } }] : []),
+        ],
+      });
+    }
+  }
+
+  // 13th-month accruals — only on the special period.
+  if (period.is_thirteenth_month) {
+    groups.push({
+      label: '13th Month',
+      items: [{
+        id: `Year ${period.period_start.slice(0, 4)}`,
+        meta: 'Special disbursement period — accruals locked.',
+        chip: { variant: 'info', text: '13th' },
+      }],
+    });
+  }
+
+  if (groups.length === 0) {
+    return (
+      <aside className="hidden lg:block">
+        <Panel title="Linked records">
+          <div className="text-xs text-muted">
+            Linked GL entries, bank files, and adjustments will appear here after the period is computed and finalized.
+          </div>
+        </Panel>
+      </aside>
+    );
+  }
+
+  return (
+    <aside className="bg-surface border border-default rounded-md p-4">
+      <LinkedRecords groups={groups} />
+    </aside>
   );
 }

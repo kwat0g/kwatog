@@ -37,6 +37,33 @@ class PayrollPeriodResource extends JsonResource
             // without a second round trip and the index can show net pay too.
             'summary'             => $this->resource->summary ?? null,
 
+            // GL link (set by service.show() when the period has been posted).
+            // We expose only the human-readable entry_number, never the integer id.
+            'gl_entry_number'     => $this->resource->gl_entry_number ?? null,
+
+            // Bank file disbursement audit trail. Only the count, total, and
+            // generator metadata — file paths stay server-side (private disk).
+            'bank_files'          => $this->whenLoaded('bankFileRecords', fn () =>
+                $this->bankFileRecords->map(fn ($r) => [
+                    'id'           => $r->hash_id,
+                    'record_count' => (int) $r->record_count,
+                    'total_amount' => $r->total_amount,
+                    'generated_at' => optional($r->generated_at)->toIso8601String(),
+                    'generator'    => $r->relationLoaded('generator') && $r->generator
+                        ? ['id' => $r->generator->hash_id, 'name' => $r->generator->name]
+                        : null,
+                ])->all(),
+            ),
+
+            // Adjustment summary for this period (counts only — full list lives
+            // on /payroll/adjustments).
+            'adjustment_counts'   => $this->whenLoaded('adjustments', fn () => [
+                'pending'  => $this->adjustments->where('status', \App\Modules\Payroll\Enums\PayrollAdjustmentStatus::Pending)->count(),
+                'approved' => $this->adjustments->where('status', \App\Modules\Payroll\Enums\PayrollAdjustmentStatus::Approved)->count(),
+                'applied'  => $this->adjustments->where('status', \App\Modules\Payroll\Enums\PayrollAdjustmentStatus::Applied)->count(),
+                'rejected' => $this->adjustments->where('status', \App\Modules\Payroll\Enums\PayrollAdjustmentStatus::Rejected)->count(),
+            ]),
+
             'created_at'          => optional($this->created_at)->toIso8601String(),
             'updated_at'          => optional($this->updated_at)->toIso8601String(),
         ];
