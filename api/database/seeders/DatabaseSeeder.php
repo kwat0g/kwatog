@@ -45,6 +45,7 @@ class DatabaseSeeder extends Seeder
             MachineSeeder::class,              // Task 50
             MoldSeeder::class,                 // Task 50 (depends on products)
             MoldCompatibilitySeeder::class,    // Task 50 (depends on machines + molds)
+            DefectTypeSeeder::class,           // Task 51
         ]);
     }
 }
