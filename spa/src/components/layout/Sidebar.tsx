@@ -58,13 +58,13 @@ const SECTIONS: NavSection[] = [
       { to: '/hr/employees', label: 'Employees', icon: Users, feature: 'hr', permission: 'hr.employees.view' },
       { to: '/hr/departments', label: 'Departments', icon: Building2, feature: 'hr', permission: 'hr.departments.view' },
       { to: '/hr/positions', label: 'Positions', icon: Briefcase, feature: 'hr', permission: 'hr.positions.view' },
-      { to: '/attendance', label: 'Attendance', icon: Clock4, feature: 'attendance', permission: 'attendance.view' },
-      { to: '/attendance/overtime', label: 'Overtime', icon: TimerReset, feature: 'attendance', permission: 'attendance.view' },
-      { to: '/attendance/shifts', label: 'Shifts', icon: CalendarClock, feature: 'attendance', permission: 'attendance.view' },
-      { to: '/attendance/holidays', label: 'Holidays', icon: PartyPopper, feature: 'attendance', permission: 'attendance.view' },
-      { to: '/leaves', label: 'Leaves', icon: CalendarDays, feature: 'leave', permission: 'leave.view' },
+      { to: '/hr/attendance', label: 'Attendance', icon: Clock4, feature: 'attendance', permission: 'attendance.view' },
+      { to: '/hr/attendance/overtime', label: 'Overtime', icon: TimerReset, feature: 'attendance', permission: 'attendance.view' },
+      { to: '/hr/attendance/shifts', label: 'Shifts', icon: CalendarClock, feature: 'attendance', permission: 'attendance.view' },
+      { to: '/hr/attendance/holidays', label: 'Holidays', icon: PartyPopper, feature: 'attendance', permission: 'attendance.view' },
+      { to: '/hr/leaves', label: 'Leaves', icon: CalendarDays, feature: 'leave', permission: 'leave.view' },
       { to: '/payroll/periods', label: 'Payroll', icon: Wallet, feature: 'payroll', permission: 'payroll.view' },
-      { to: '/loans', label: 'Loans', icon: HandCoins, feature: 'loans', permission: 'loans.view' },
+      { to: '/hr/loans', label: 'Loans', icon: HandCoins, feature: 'loans', permission: 'loans.view' },
     ],
   },
   {
@@ -110,7 +110,15 @@ export function Sidebar({ permissions, features }: SidebarProps) {
     return true;
   };
 
-  const isActive = (to: string) => pathname === to || pathname.startsWith(to + '/');
+  // Determine the single most-specific item that matches the current path so a
+  // parent like `/hr/attendance` doesn't stay lit when `/hr/attendance/overtime`
+  // is active. We pick the visible item with the longest `to` that is either
+  // an exact match or a path-segment prefix of `pathname`.
+  const visibleItems = SECTIONS.flatMap((s) => s.items).filter(isVisible);
+  const matched = visibleItems
+    .filter((item) => pathname === item.to || pathname.startsWith(item.to + '/'))
+    .sort((a, b) => b.to.length - a.to.length)[0];
+  const isActive = (to: string) => matched?.to === to;
 
   return (
     <aside

@@ -112,31 +112,31 @@ export default function App() {
           {/* Attendance module */}
           <Route element={<ModuleGuard module="attendance" />}>
             <Route
-              path="/attendance"
+              path="/hr/attendance"
               element={<PermissionGuard permission="attendance.view"><AttendancePage /></PermissionGuard>}
             />
             <Route
-              path="/attendance/import"
+              path="/hr/attendance/import"
               element={<PermissionGuard permission="attendance.import"><AttendanceImportPage /></PermissionGuard>}
             />
             <Route
-              path="/attendance/shifts"
+              path="/hr/attendance/shifts"
               element={<PermissionGuard permission="attendance.view"><ShiftsPage /></PermissionGuard>}
             />
             <Route
-              path="/attendance/shifts/assign"
+              path="/hr/attendance/shifts/assign"
               element={<PermissionGuard permission="attendance.shifts.manage"><BulkAssignShiftPage /></PermissionGuard>}
             />
             <Route
-              path="/attendance/holidays"
+              path="/hr/attendance/holidays"
               element={<PermissionGuard permission="attendance.view"><HolidaysPage /></PermissionGuard>}
             />
             <Route
-              path="/attendance/overtime"
+              path="/hr/attendance/overtime"
               element={<PermissionGuard permission="attendance.view"><OvertimeListPage /></PermissionGuard>}
             />
             <Route
-              path="/attendance/overtime/create"
+              path="/hr/attendance/overtime/create"
               element={<OvertimeCreatePage />}
             />
           </Route>
@@ -144,15 +144,15 @@ export default function App() {
           {/* Leave module */}
           <Route element={<ModuleGuard module="leave" />}>
             <Route
-              path="/leaves"
+              path="/hr/leaves"
               element={<PermissionGuard permission="leave.view"><LeavesPage /></PermissionGuard>}
             />
             <Route
-              path="/leaves/create"
+              path="/hr/leaves/create"
               element={<PermissionGuard permission="leave.create"><CreateLeavePage /></PermissionGuard>}
             />
             <Route
-              path="/leaves/:id"
+              path="/hr/leaves/:id"
               element={<PermissionGuard permission="leave.view"><LeaveDetailPage /></PermissionGuard>}
             />
           </Route>
@@ -160,15 +160,15 @@ export default function App() {
           {/* Loans module */}
           <Route element={<ModuleGuard module="loans" />}>
             <Route
-              path="/loans"
+              path="/hr/loans"
               element={<PermissionGuard permission="loans.view"><LoansPage /></PermissionGuard>}
             />
             <Route
-              path="/loans/create"
+              path="/hr/loans/create"
               element={<PermissionGuard permission="loans.create"><CreateLoanPage /></PermissionGuard>}
             />
             <Route
-              path="/loans/:id"
+              path="/hr/loans/:id"
               element={<PermissionGuard permission="loans.view"><LoanDetailPage /></PermissionGuard>}
             />
           </Route>

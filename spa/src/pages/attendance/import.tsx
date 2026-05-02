@@ -41,7 +41,7 @@ export default function AttendanceImportPage() {
       <PageHeader
         title="Import biometric DTR"
         subtitle="CSV columns required: employee_no, date, time_in, time_out"
-        backTo="/attendance"
+        backTo="/hr/attendance"
         backLabel="Attendance"
       />
       <div className="max-w-3xl mx-auto px-5 py-6 space-y-4">
@@ -78,7 +78,7 @@ export default function AttendanceImportPage() {
             />
           </div>
           <div className="flex justify-end gap-2 pt-3 mt-3 border-t border-default">
-            <Button variant="secondary" onClick={() => navigate('/attendance')}>Cancel</Button>
+            <Button variant="secondary" onClick={() => navigate('/hr/attendance')}>Cancel</Button>
             <Button
               variant="primary"
               disabled={!file || mutation.isPending}

@@ -27,7 +27,7 @@ export default function LoansPage() {
   });
 
   const columns: Column<EmployeeLoan>[] = [
-    { key: 'loan_no', header: 'Loan no', cell: (r) => <Link to={`/loans/${r.id}`} className="font-mono text-accent hover:underline">{r.loan_no}</Link> },
+    { key: 'loan_no', header: 'Loan no', cell: (r) => <Link to={`/hr/loans/${r.id}`} className="font-mono text-accent hover:underline">{r.loan_no}</Link> },
     { key: 'employee', header: 'Employee', cell: (r) => <StackedCell primary={r.employee?.full_name ?? '—'} secondary={<span className="font-mono">{r.employee?.employee_no}</span>} /> },
     { key: 'loan_type', header: 'Type', cell: (r) => <Chip variant="neutral">{r.loan_type === 'company_loan' ? 'Company' : 'Cash Advance'}</Chip> },
     { key: 'principal', header: 'Principal', align: 'right', cell: (r) => <NumCell>{formatPeso(r.principal)}</NumCell> },
@@ -65,7 +65,7 @@ export default function LoansPage() {
         title="Loans & Cash Advance"
         subtitle={data ? `${data.meta.total} records` : undefined}
         actions={can('loans.create') ? (
-          <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/loans/create')}>
+          <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/hr/loans/create')}>
             New request
           </Button>
         ) : null}
@@ -86,7 +86,7 @@ export default function LoansPage() {
           icon="inbox"
           title="No loan records"
           description={can('loans.create') ? 'Submit a request to get started.' : 'Nothing here yet.'}
-          action={can('loans.create') ? <Button variant="primary" onClick={() => navigate('/loans/create')}>New request</Button> : undefined}
+          action={can('loans.create') ? <Button variant="primary" onClick={() => navigate('/hr/loans/create')}>New request</Button> : undefined}
         />
       )}
       {data && data.data.length > 0 && (
