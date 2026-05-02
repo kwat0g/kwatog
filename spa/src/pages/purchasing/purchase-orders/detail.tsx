@@ -1,12 +1,16 @@
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
+import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { Send, ThumbsUp, ThumbsDown, Truck, X, FileText, CheckSquare } from 'lucide-react';
 import { purchaseOrdersApi } from '@/api/purchasing/purchase-orders';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
+import { ReasonDialog } from '@/components/ui/ReasonDialog';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { StatCard } from '@/components/ui/StatCard';
 import { ChainHeader } from '@/components/chain';
@@ -33,18 +37,32 @@ export default function PurchaseOrderDetailPage() {
     enabled: !!id,
   });
 
+  const [confirm, setConfirm] = useState<'submit' | 'approve' | 'send' | 'close' | null>(null);
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['purchasing', 'purchase-orders', id] });
+  const errMsg = (e: unknown, fallback: string) =>
+    (e instanceof AxiosError ? e.response?.data?.message : undefined) ?? fallback;
+
   const submit = useMutation({ mutationFn: () => purchaseOrdersApi.submit(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['purchasing', 'purchase-orders', id] }); toast.success('Submitted.'); } });
+    onSuccess: () => { invalidate(); toast.success('PO submitted for approval.'); setConfirm(null); },
+    onError: (e) => toast.error(errMsg(e, 'Failed to submit PO.')) });
   const approve = useMutation({ mutationFn: () => purchaseOrdersApi.approve(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['purchasing', 'purchase-orders', id] }); toast.success('Approved.'); } });
-  const reject = useMutation({ mutationFn: () => purchaseOrdersApi.reject(id, prompt('Reason?') ?? ''),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['purchasing', 'purchase-orders', id] }); toast.success('Rejected.'); } });
+    onSuccess: () => { invalidate(); toast.success('PO approved.'); setConfirm(null); },
+    onError: (e) => toast.error(errMsg(e, 'Failed to approve PO.')) });
+  const reject = useMutation({ mutationFn: (reason: string) => purchaseOrdersApi.reject(id, reason),
+    onSuccess: () => { invalidate(); toast.success('PO rejected.'); setRejectOpen(false); },
+    onError: (e) => toast.error(errMsg(e, 'Failed to reject PO.')) });
   const send = useMutation({ mutationFn: () => purchaseOrdersApi.send(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['purchasing', 'purchase-orders', id] }); toast.success('Marked as sent.'); } });
-  const cancel = useMutation({ mutationFn: () => purchaseOrdersApi.cancel(id, prompt('Reason for cancellation?') ?? ''),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['purchasing', 'purchase-orders', id] }); toast.success('Cancelled.'); } });
+    onSuccess: () => { invalidate(); toast.success('PO marked as sent.'); setConfirm(null); },
+    onError: (e) => toast.error(errMsg(e, 'Failed to mark as sent.')) });
+  const cancel = useMutation({ mutationFn: (reason: string) => purchaseOrdersApi.cancel(id, reason),
+    onSuccess: () => { invalidate(); toast.success('PO cancelled.'); setCancelOpen(false); },
+    onError: (e) => toast.error(errMsg(e, 'Failed to cancel PO.')) });
   const close = useMutation({ mutationFn: () => purchaseOrdersApi.close(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['purchasing', 'purchase-orders', id] }); toast.success('Closed.'); } });
+    onSuccess: () => { invalidate(); toast.success('PO closed.'); setConfirm(null); },
+    onError: (e) => toast.error(errMsg(e, 'Failed to close PO.')) });
 
   if (isLoading) return <SkeletonTable rows={6} columns={5} />;
   if (isError || !data) return (
@@ -61,25 +79,25 @@ export default function PurchaseOrderDetailPage() {
             <Chip variant={variant[data.status]}>{data.status.replace(/_/g, ' ')}</Chip>
             {data.requires_vp_approval && <Chip variant="warning">VP req.</Chip>}
             {data.status === 'draft' && can('purchasing.po.create') && (
-              <Button size="sm" variant="primary" icon={<Send size={14} />} onClick={() => submit.mutate()} loading={submit.isPending}>Submit</Button>
+              <Button size="sm" variant="primary" icon={<Send size={14} />} onClick={() => setConfirm('submit')} loading={submit.isPending}>Submit</Button>
             )}
             {(data.status === 'draft' || data.status === 'pending_approval') && can('purchasing.po.approve') && (
               <>
-                <Button size="sm" variant="secondary" icon={<ThumbsDown size={14} />} onClick={() => reject.mutate()} loading={reject.isPending}>Reject</Button>
-                <Button size="sm" variant="primary" icon={<ThumbsUp size={14} />} onClick={() => approve.mutate()} loading={approve.isPending}>Approve</Button>
+                <Button size="sm" variant="secondary" icon={<ThumbsDown size={14} />} onClick={() => setRejectOpen(true)} loading={reject.isPending}>Reject</Button>
+                <Button size="sm" variant="primary" icon={<ThumbsUp size={14} />} onClick={() => setConfirm('approve')} loading={approve.isPending}>Approve</Button>
               </>
             )}
             {data.status === 'approved' && can('purchasing.po.send') && (
-              <Button size="sm" variant="primary" icon={<Truck size={14} />} onClick={() => send.mutate()} loading={send.isPending}>Mark as sent</Button>
+              <Button size="sm" variant="primary" icon={<Truck size={14} />} onClick={() => setConfirm('send')} loading={send.isPending}>Mark as sent</Button>
             )}
             {data.status === 'received' && can('purchasing.po.create') && (
-              <Button size="sm" variant="secondary" icon={<CheckSquare size={14} />} onClick={() => close.mutate()} loading={close.isPending}>Close</Button>
+              <Button size="sm" variant="secondary" icon={<CheckSquare size={14} />} onClick={() => setConfirm('close')} loading={close.isPending}>Close</Button>
             )}
             <a href={purchaseOrdersApi.pdfUrl(id)} target="_blank" rel="noreferrer">
               <Button size="sm" variant="secondary" icon={<FileText size={14} />}>PDF</Button>
             </a>
             {!['received', 'closed', 'cancelled'].includes(data.status) && (
-              <Button size="sm" variant="secondary" icon={<X size={14} />} onClick={() => cancel.mutate()}>Cancel</Button>
+              <Button size="sm" variant="secondary" icon={<X size={14} />} onClick={() => setCancelOpen(true)} loading={cancel.isPending}>Cancel</Button>
             )}
           </div>
         }
@@ -172,6 +190,74 @@ export default function PurchaseOrderDetailPage() {
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={confirm === 'submit'}
+        onClose={() => setConfirm(null)}
+        onConfirm={() => submit.mutate()}
+        title="Submit PO for approval?"
+        description="The PO enters the approval chain and edits are no longer allowed until it is approved or rejected."
+        confirmLabel="Submit"
+        variant="primary"
+        pending={submit.isPending}
+      />
+      <ConfirmDialog
+        isOpen={confirm === 'approve'}
+        onClose={() => setConfirm(null)}
+        onConfirm={() => approve.mutate()}
+        title="Approve this PO?"
+        description="Approval is recorded against your account in the audit log."
+        confirmLabel="Approve"
+        variant="primary"
+        pending={approve.isPending}
+      />
+      <ConfirmDialog
+        isOpen={confirm === 'send'}
+        onClose={() => setConfirm(null)}
+        onConfirm={() => send.mutate()}
+        title="Mark PO as sent to vendor?"
+        description="Confirm only after the PDF has actually been emailed or transmitted to the vendor."
+        confirmLabel="Mark as sent"
+        variant="primary"
+        pending={send.isPending}
+      />
+      <ConfirmDialog
+        isOpen={confirm === 'close'}
+        onClose={() => setConfirm(null)}
+        onConfirm={() => close.mutate()}
+        title="Close this PO?"
+        description="Closes the PO so no further GRNs or bills can reference it."
+        confirmLabel="Close PO"
+        variant="primary"
+        pending={close.isPending}
+      />
+      <ReasonDialog
+        isOpen={rejectOpen}
+        onClose={() => setRejectOpen(false)}
+        onConfirm={(reason) => reject.mutate(reason)}
+        title="Reject this PO?"
+        description="The PO returns to the requester with your reason. Please be specific."
+        reasonLabel="Rejection reason"
+        reasonPlaceholder="e.g. Vendor not on approved-supplier list for this material"
+        minLength={10}
+        confirmLabel="Reject"
+        variant="danger"
+        pending={reject.isPending}
+      />
+      <ReasonDialog
+        isOpen={cancelOpen}
+        onClose={() => setCancelOpen(false)}
+        onConfirm={(reason) => cancel.mutate(reason)}
+        title="Cancel this PO?"
+        description="Cancellation is permanent and breaks the procure-to-pay chain. Reason is recorded."
+        reasonLabel="Cancellation reason"
+        reasonPlaceholder="e.g. Project deferred, no longer needed"
+        minLength={10}
+        confirmLabel="Yes, cancel PO"
+        cancelLabel="Keep PO"
+        variant="danger"
+        pending={cancel.isPending}
+      />
     </div>
   );
 }
