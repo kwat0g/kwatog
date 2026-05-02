@@ -26,10 +26,16 @@ client.interceptors.response.use(
     const status = error.response?.status;
     const data = error.response?.data;
 
+    const requestUrl = error.config?.url ?? '';
+    const isBootstrap = requestUrl.endsWith('/auth/user');
+    const isLoginAttempt = requestUrl.endsWith('/auth/login');
+
     switch (status) {
       case 401:
-        // Don't redirect during the login attempt itself.
-        if (!error.config?.url?.includes('/auth/login')) {
+        // Don't auto-redirect for:
+        //   • the login attempt itself (form handles its own error UI)
+        //   • the bootstrap call from AuthGuard (AuthGuard handles routing)
+        if (!isLoginAttempt && !isBootstrap) {
           if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
             window.location.href = '/login';
           }
