@@ -17,6 +17,7 @@ import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatPeso } from '@/lib/formatNumber';
 import { onFormInvalid } from '@/lib/formErrors';
+import { numberInputProps } from '@/lib/numberInput';
 import type { ApiValidationError } from '@/types';
 
 const lineSchema = z.object({
@@ -132,11 +133,13 @@ export default function CreateJournalEntryPage() {
                 <div className="col-span-2">
                   <Input type="number" step="0.01" min="0" placeholder="0.00"
                     className="font-mono tabular-nums text-right"
+                    {...numberInputProps()}
                     {...register(`lines.${idx}.debit` as const)} error={errors.lines?.[idx]?.debit?.message} />
                 </div>
                 <div className="col-span-2">
                   <Input type="number" step="0.01" min="0" placeholder="0.00"
                     className="font-mono tabular-nums text-right"
+                    {...numberInputProps()}
                     {...register(`lines.${idx}.credit` as const)} error={errors.lines?.[idx]?.credit?.message} />
                 </div>
                 <div className="col-span-1 flex justify-end pt-1">

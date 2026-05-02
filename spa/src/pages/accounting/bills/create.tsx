@@ -19,6 +19,8 @@ import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatPeso } from '@/lib/formatNumber';
 import { onFormInvalid } from '@/lib/formErrors';
+import { numberInputProps } from '@/lib/numberInput';
+import { UNIT_OPTIONS } from '@/lib/units';
 import type { ApiValidationError } from '@/types';
 
 const itemSchema = z.object({
@@ -161,9 +163,14 @@ export default function CreateBillPage() {
                       {accounts.map((a) => <option key={a.id} value={a.id}>{a.code} — {a.name}</option>)}
                     </Select>
                   </div>
-                  <div className="col-span-1"><Input type="number" step="0.01" min="0.01" className="font-mono tabular-nums text-right" {...register(`items.${idx}.quantity` as const)} /></div>
-                  <div className="col-span-1"><Input {...register(`items.${idx}.unit` as const)} placeholder="kg" /></div>
-                  <div className="col-span-2"><Input type="number" step="0.01" min="0" className="font-mono tabular-nums text-right" {...register(`items.${idx}.unit_price` as const)} /></div>
+                  <div className="col-span-1"><Input type="number" step="0.01" min="0.01" className="font-mono tabular-nums text-right" {...numberInputProps()} {...register(`items.${idx}.quantity` as const)} /></div>
+                  <div className="col-span-1">
+                    <Select {...register(`items.${idx}.unit` as const)}>
+                      <option value="">—</option>
+                      {UNIT_OPTIONS.map((u) => <option key={u.value} value={u.value}>{u.value}</option>)}
+                    </Select>
+                  </div>
+                  <div className="col-span-2"><Input type="number" step="0.01" min="0" className="font-mono tabular-nums text-right" {...numberInputProps()} {...register(`items.${idx}.unit_price` as const)} /></div>
                   <div className="col-span-1 pt-1.5 text-right font-mono tabular-nums text-sm">{formatPeso(lineTotal)}</div>
                   <div className="col-span-1 flex justify-end pt-1.5">
                     {fields.length > 1 && (
