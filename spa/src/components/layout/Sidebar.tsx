@@ -17,6 +17,10 @@ import {
   Wrench,
   Settings as SettingsIcon,
   Lock,
+  Building2,
+  TimerReset,
+  CalendarClock,
+  PartyPopper,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
@@ -52,7 +56,12 @@ const SECTIONS: NavSection[] = [
     label: 'People',
     items: [
       { to: '/hr/employees', label: 'Employees', icon: Users, feature: 'hr', permission: 'hr.employees.view' },
+      { to: '/hr/departments', label: 'Departments', icon: Building2, feature: 'hr', permission: 'hr.departments.view' },
+      { to: '/hr/positions', label: 'Positions', icon: Briefcase, feature: 'hr', permission: 'hr.positions.view' },
       { to: '/attendance', label: 'Attendance', icon: Clock4, feature: 'attendance', permission: 'attendance.view' },
+      { to: '/attendance/overtime', label: 'Overtime', icon: TimerReset, feature: 'attendance', permission: 'attendance.view' },
+      { to: '/attendance/shifts', label: 'Shifts', icon: CalendarClock, feature: 'attendance', permission: 'attendance.view' },
+      { to: '/attendance/holidays', label: 'Holidays', icon: PartyPopper, feature: 'attendance', permission: 'attendance.view' },
       { to: '/leaves', label: 'Leaves', icon: CalendarDays, feature: 'leave', permission: 'leave.view' },
       { to: '/payroll/periods', label: 'Payroll', icon: Wallet, feature: 'payroll', permission: 'payroll.view' },
       { to: '/loans', label: 'Loans', icon: HandCoins, feature: 'loans', permission: 'loans.view' },
