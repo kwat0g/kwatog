@@ -124,4 +124,31 @@ class WorkOrderController
     {
         return response()->json(['data' => $this->service->chain($workOrder)]);
     }
+
+    /** Sprint 6 Task 55 — record production output (idempotent). */
+    public function recordOutput(
+        \App\Modules\Production\Requests\RecordOutputRequest $request,
+        WorkOrder $workOrder,
+        \App\Modules\Production\Services\WorkOrderOutputService $outputs,
+    ): \App\Modules\Production\Resources\WorkOrderOutputResource|JsonResponse {
+        $idempotency = $request->header('X-Idempotency-Key');
+        try {
+            $output = $outputs->record(
+                $workOrder,
+                $request->validated(),
+                $request->user()->id,
+                $idempotency,
+            );
+        } catch (RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+        return new \App\Modules\Production\Resources\WorkOrderOutputResource($output);
+    }
+
+    public function listOutputs(WorkOrder $workOrder): \Illuminate\Http\Resources\Json\AnonymousResourceCollection
+    {
+        return \App\Modules\Production\Resources\WorkOrderOutputResource::collection(
+            $workOrder->outputs()->with(['recorder:id,name', 'defects.defectType'])->get()
+        );
+    }
 }

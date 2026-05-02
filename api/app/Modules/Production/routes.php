@@ -25,4 +25,8 @@ Route::middleware(['auth:sanctum', 'feature:production'])->prefix('production')-
     Route::post('/work-orders/{workOrder}/complete', [WorkOrderController::class, 'complete'])->middleware('permission:production.work_orders.lifecycle');
     Route::post('/work-orders/{workOrder}/close',    [WorkOrderController::class, 'close'])  ->middleware('permission:production.work_orders.lifecycle');
     Route::post('/work-orders/{workOrder}/cancel',   [WorkOrderController::class, 'cancel']) ->middleware('permission:production.work_orders.lifecycle');
+
+    /* ─── Output recording (Task 55) ─── */
+    Route::get('/work-orders/{workOrder}/outputs',   [WorkOrderController::class, 'listOutputs'])->middleware('permission:production.work_orders.view');
+    Route::post('/work-orders/{workOrder}/outputs',  [WorkOrderController::class, 'recordOutput'])->middleware('permission:production.wo.record');
 });
