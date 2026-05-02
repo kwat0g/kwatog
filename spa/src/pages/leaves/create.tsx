@@ -17,6 +17,7 @@ import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import type { ApiValidationError } from '@/types';
+import { onFormInvalid } from '@/lib/formErrors';
 
 const schema = z.object({
   employee_id: z.string().min(1, 'Employee is required'),
@@ -111,7 +112,7 @@ export default function CreateLeavePage() {
   return (
     <div>
       <PageHeader title="Request leave" backTo="/leaves" backLabel="Leaves" />
-      <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="max-w-2xl mx-auto px-5 py-6 space-y-4">
+      <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-2xl mx-auto px-5 py-6 space-y-4">
         <Panel title="Leave details">
           <div className="grid grid-cols-2 gap-3">
             {isAdmin && (

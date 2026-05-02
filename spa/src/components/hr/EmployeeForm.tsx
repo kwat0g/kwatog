@@ -10,6 +10,7 @@ import { useQuery } from '@tanstack/react-query';
 import { departmentsApi } from '@/api/hr/departments';
 import { positionsApi } from '@/api/hr/positions';
 import { digitsOnly } from '@/lib/phFormat';
+import { onFormInvalid } from '@/lib/formErrors';
 import type { Employee } from '@/types/hr';
 
 // Names: letters, spaces, periods, apostrophes, hyphens. Up to 100 chars.
@@ -17,6 +18,25 @@ const namePattern = /^[\p{L}\s.'\-]+$/u;
 
 const optString = (max: number) =>
   z.string().max(max, `Must be ${max} characters or fewer`).optional().or(z.literal(''));
+
+// Helper: optional digits-only field. `len` is exact length OR [min, max] range.
+const phDigits = (label: string, len: number | [number, number]) =>
+  z.string().optional().refine(
+    (v) => {
+      if (!v) return true; // empty / undefined OK
+      const d = digitsOnly(v).length;
+      return typeof len === 'number'
+        ? d === len
+        : d >= len[0] && d <= len[1];
+    },
+    {
+      message: typeof len === 'number'
+        ? `${label} must be ${len} digits`
+        : `${label} must be ${len[0]}-${len[1]} digits`,
+    },
+  );
+
+const moneyPattern = /^\d+(\.\d{1,2})?$/;
 
 export const employeeSchema = z.object({
   first_name: z.string().min(1, 'Required').max(100).regex(namePattern, 'Letters, spaces, ., \', - only'),
@@ -35,24 +55,22 @@ export const employeeSchema = z.object({
   zip_code: z.string().max(10).regex(/^[0-9]{0,10}$/, 'Digits only').optional().or(z.literal('')),
 
   // Stored digits-only on the backend; the form holds the digits-only value too.
-  mobile_number: z.string()
-    .refine((v) => v === '' || (digitsOnly(v).length === 11 && digitsOnly(v).startsWith('09')),
-      { message: '11 digits starting with 09' }).optional().or(z.literal('')),
+  mobile_number: z.string().optional().refine(
+    (v) => !v || (digitsOnly(v).length === 11 && digitsOnly(v).startsWith('09')),
+    { message: 'Must be 11 digits starting with 09' },
+  ),
   email: z.string().email('Invalid email').max(255).optional().or(z.literal('')),
   emergency_contact_name: optString(100),
   emergency_contact_relation: optString(50),
-  emergency_contact_phone: z.string()
-    .refine((v) => v === '' || (digitsOnly(v).length >= 7 && digitsOnly(v).length <= 15),
-      { message: '7-15 digits' }).optional().or(z.literal('')),
+  emergency_contact_phone: z.string().optional().refine(
+    (v) => !v || (digitsOnly(v).length >= 7 && digitsOnly(v).length <= 15),
+    { message: 'Phone must be 7-15 digits' },
+  ),
 
-  sss_no: z.string().refine((v) => v === '' || digitsOnly(v).length === 10,
-    { message: 'SSS must be 10 digits' }).optional().or(z.literal('')),
-  philhealth_no: z.string().refine((v) => v === '' || digitsOnly(v).length === 12,
-    { message: 'PhilHealth must be 12 digits' }).optional().or(z.literal('')),
-  pagibig_no: z.string().refine((v) => v === '' || digitsOnly(v).length === 12,
-    { message: 'Pag-IBIG must be 12 digits' }).optional().or(z.literal('')),
-  tin: z.string().refine((v) => v === '' || (digitsOnly(v).length >= 9 && digitsOnly(v).length <= 12),
-    { message: 'TIN must be 9-12 digits' }).optional().or(z.literal('')),
+  sss_no: phDigits('SSS', 10),
+  philhealth_no: phDigits('PhilHealth', 12),
+  pagibig_no: phDigits('Pag-IBIG', 12),
+  tin: phDigits('TIN', [9, 12]),
 
   department_id: z.string().min(1, 'Required'),
   position_id: z.string().min(1, 'Required'),
@@ -60,17 +78,23 @@ export const employeeSchema = z.object({
   pay_type: z.enum(['monthly', 'daily']),
   date_hired: z.string().min(1, 'Required'),
   date_regularized: z.string().optional().or(z.literal('')),
-  basic_monthly_salary: z.string().optional().or(z.literal('')),
-  daily_rate: z.string().optional().or(z.literal('')),
+  basic_monthly_salary: z.string().optional().refine(
+    (v) => !v || moneyPattern.test(v),
+    { message: 'Numbers only, up to 2 decimals' },
+  ),
+  daily_rate: z.string().optional().refine(
+    (v) => !v || moneyPattern.test(v),
+    { message: 'Numbers only, up to 2 decimals' },
+  ),
 
   bank_name: optString(100),
   bank_account_no: z.string().max(50).regex(/^[A-Za-z0-9\-\s]*$/, 'Letters, digits, spaces, hyphens only').optional().or(z.literal('')),
 }).refine(
-  (d) => d.pay_type !== 'monthly' || (d.basic_monthly_salary && Number(d.basic_monthly_salary) > 0),
-  { message: 'Required for monthly pay type', path: ['basic_monthly_salary'] },
+  (d) => d.pay_type !== 'monthly' || (!!d.basic_monthly_salary && moneyPattern.test(d.basic_monthly_salary) && Number(d.basic_monthly_salary) > 0),
+  { message: 'Enter a valid monthly salary greater than 0', path: ['basic_monthly_salary'] },
 ).refine(
-  (d) => d.pay_type !== 'daily' || (d.daily_rate && Number(d.daily_rate) > 0),
-  { message: 'Required for daily pay type', path: ['daily_rate'] },
+  (d) => d.pay_type !== 'daily' || (!!d.daily_rate && moneyPattern.test(d.daily_rate) && Number(d.daily_rate) > 0),
+  { message: 'Enter a valid daily rate greater than 0', path: ['daily_rate'] },
 ).refine(
   (d) => !d.basic_monthly_salary || Number(d.basic_monthly_salary) <= 9_999_999.99,
   { message: 'Maximum 9,999,999.99', path: ['basic_monthly_salary'] },
@@ -164,7 +188,7 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isPending, register
   const minBirthStr = new Date(Date.now() - 1000 * 60 * 60 * 24 * 365.25 * 15).toISOString().slice(0, 10);
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="max-w-4xl mx-auto px-5 py-6 space-y-8">
+    <form onSubmit={handleSubmit(onSubmit, onFormInvalid<EmployeeFormValues>())} className="max-w-4xl mx-auto px-5 py-6 space-y-8">
       <Section title="Personal information">
         <div className="grid grid-cols-2 gap-3">
           <Input label="First name" required maxLength={100} autoComplete="given-name" {...register('first_name')} error={errors.first_name?.message} />

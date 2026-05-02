@@ -23,6 +23,7 @@ import { formatDate, formatDateTime } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import { formatMobile, maskByKind } from '@/lib/phFormat';
 import type { ApiValidationError } from '@/types';
+import { onFormInvalid } from '@/lib/formErrors';
 
 const TABS = ['Overview', 'Employment history', 'Attendance', 'Leaves', 'Loans', 'Documents', 'Property', 'Payroll', 'Activity'] as const;
 type Tab = typeof TABS[number];
@@ -562,7 +563,7 @@ function SeparateModal({
 
   return (
     <Modal isOpen onClose={onClose} title="Separate employee">
-      <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="space-y-3 py-2">
+      <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<SeparateFormValues>())} className="space-y-3 py-2">
         <p className="text-sm text-muted">
           Marking <span className="font-medium text-primary">{fullName}</span> as separated. This is recorded in their employment history.
         </p>

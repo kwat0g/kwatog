@@ -14,6 +14,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
 import type { ApiValidationError } from '@/types';
+import { onFormInvalid } from '@/lib/formErrors';
 
 const schema = z.object({
   employee_id: z.string().min(1, 'Employee is required'),
@@ -64,7 +65,7 @@ export default function OvertimeCreatePage() {
   return (
     <div>
       <PageHeader title="New overtime request" backTo="/attendance/overtime" backLabel="Overtime" />
-      <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="max-w-2xl mx-auto px-5 py-6">
+      <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-2xl mx-auto px-5 py-6">
         <Panel title="Request details">
           <div className="grid grid-cols-2 gap-3">
             <Select label="Employee" required {...register('employee_id')} error={errors.employee_id?.message}>

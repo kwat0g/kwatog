@@ -22,6 +22,7 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import type { ApiValidationError, ListParams } from '@/types';
+import { onFormInvalid } from '@/lib/formErrors';
 import type { Shift } from '@/types/attendance';
 
 const schema = z.object({
@@ -244,7 +245,7 @@ function ShiftFormModal({ editing, onClose, onSaved }: { editing: Shift | null; 
 
   return (
     <Modal isOpen onClose={onClose} title={isEdit ? 'Edit shift' : 'Add shift'}>
-      <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="space-y-3 py-2">
+      <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="space-y-3 py-2">
         <Input label="Name" required {...register('name')} error={errors.name?.message} />
         <div className="grid grid-cols-3 gap-3">
           <Input label="Start" type="time" {...register('start_time')} error={errors.start_time?.message} className="font-mono" />

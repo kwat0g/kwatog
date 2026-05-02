@@ -109,6 +109,18 @@ export function formatByKind(kind: PhIdKind, value: string | null | undefined): 
   }
 }
 
+/** Hard cap on stored digits per kind. Used by MaskedInput. */
+export function maxDigitsForKind(kind: PhIdKind): number {
+  switch (kind) {
+    case 'sss':        return PH_ID_LENGTHS.sss;          // 10
+    case 'philhealth': return PH_ID_LENGTHS.philhealth;   // 12
+    case 'pagibig':    return PH_ID_LENGTHS.pagibig;      // 12
+    case 'tin':        return PH_ID_LENGTHS.tinMax;       // 12
+    case 'mobile':     return PH_ID_LENGTHS.mobile;       // 11
+    case 'landline':   return 12;
+  }
+}
+
 export function placeholderFor(kind: PhIdKind): string {
   switch (kind) {
     case 'sss':        return '34-5678901-2';

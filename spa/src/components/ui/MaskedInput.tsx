@@ -1,6 +1,6 @@
 import { forwardRef, useCallback, type ChangeEvent } from 'react';
 import { Input, type InputProps } from './Input';
-import { digitsOnly, formatByKind, helperFor, placeholderFor, type PhIdKind } from '@/lib/phFormat';
+import { digitsOnly, formatByKind, helperFor, maxDigitsForKind, placeholderFor, type PhIdKind } from '@/lib/phFormat';
 
 export interface MaskedInputProps extends Omit<InputProps, 'onChange' | 'value' | 'defaultValue' | 'type'> {
   /** Format kind. Determines mask + max length. */
@@ -24,12 +24,16 @@ export interface MaskedInputProps extends Omit<InputProps, 'onChange' | 'value' 
 export const MaskedInput = forwardRef<HTMLInputElement, MaskedInputProps>(
   ({ kind, value, onChange, helper, placeholder, ...rest }, ref) => {
     const display = formatByKind(kind, value);
+    const max = maxDigitsForKind(kind);
     const handleChange = useCallback(
       (e: ChangeEvent<HTMLInputElement>) => {
-        const raw = digitsOnly(e.target.value);
+        // Cap stored digits to the kind's max so the form state can never
+        // exceed the validation limit (which would silently invalidate the
+        // form even though the formatted display looks correct).
+        const raw = digitsOnly(e.target.value).slice(0, max);
         onChange?.(raw, formatByKind(kind, raw));
       },
-      [kind, onChange],
+      [kind, max, onChange],
     );
     return (
       <Input
