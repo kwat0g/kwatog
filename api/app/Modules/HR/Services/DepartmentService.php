@@ -29,7 +29,10 @@ class DepartmentService
             $query->where('is_active', filter_var($filters['is_active'], FILTER_VALIDATE_BOOLEAN));
         }
         if (!empty($filters['parent_id'])) {
-            $query->where('parent_id', $filters['parent_id']);
+            $parentId = \App\Common\Support\HashIdFilter::decode(
+                $filters['parent_id'], Department::class,
+            );
+            if ($parentId) $query->where('parent_id', $parentId);
         }
 
         $sort = $filters['sort'] ?? 'name';
