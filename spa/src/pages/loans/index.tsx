@@ -90,7 +90,7 @@ export default function LoansPage() {
         />
       )}
       {data && data.data.length > 0 && (
-        <DataTable columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters((f) => ({ ...f, page }))} />
+        <div className="px-5 py-4"><DataTable columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters((f) => ({ ...f, page }))} /></div>
       )}
     </div>
   );

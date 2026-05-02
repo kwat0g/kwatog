@@ -99,19 +99,6 @@ export default function PositionsPage() {
       align: 'right',
       cell: (row) => <NumCell>{row.employees_count ?? 0}</NumCell>,
     },
-    ...(can('hr.positions.manage')
-      ? [{
-          key: 'actions',
-          header: '',
-          align: 'right' as const,
-          cell: (row: Position) => (
-            <div className="flex items-center justify-end gap-1">
-              <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setEditing(row); setModalOpen(true); }} icon={<Pencil size={12} />} aria-label="Edit" />
-              <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setPendingDelete(row); }} icon={<Trash2 size={12} />} aria-label="Delete" />
-            </div>
-          ),
-        }]
-      : []),
   ];
 
   const filterConfig: FilterConfig[] = [
@@ -169,7 +156,7 @@ export default function PositionsPage() {
       )}
 
       {data && data.data.length > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 px-5 py-4">
           <DataTable
             columns={columns}
             data={data.data}

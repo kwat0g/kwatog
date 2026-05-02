@@ -145,7 +145,7 @@ export default function LeavesPage() {
       )}
 
       {data && all.length > 0 && view === 'list' && (
-        <DataTable columns={columns} data={all} meta={data.meta} onPageChange={(page) => setFilters((f) => ({ ...f, page }))} />
+        <div className="px-5 py-4"><DataTable columns={columns} data={all} meta={data.meta} onPageChange={(page) => setFilters((f) => ({ ...f, page }))} /></div>
       )}
 
       {data && all.length > 0 && view === 'kanban' && (
