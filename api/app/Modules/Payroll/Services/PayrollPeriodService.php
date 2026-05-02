@@ -42,12 +42,47 @@ class PayrollPeriodService
         }
 
         $perPage = min((int) ($filters['per_page'] ?? 25), 100);
-        return $query->paginate($perPage);
+        $paginator = $query->paginate($perPage);
+
+        // Attach summary as a dynamic attribute on each item so the resource
+        // can render totals without per-row round trips. Single bulk query
+        // grouped by period — N+1 free.
+        $ids = $paginator->getCollection()->pluck('id')->all();
+        if (! empty($ids)) {
+            $rows = DB::table('payrolls')
+                ->whereIn('payroll_period_id', $ids)
+                ->groupBy('payroll_period_id')
+                ->selectRaw('
+                    payroll_period_id,
+                    COUNT(*) as employee_count,
+                    COUNT(CASE WHEN error_message IS NOT NULL THEN 1 END) as failed_count,
+                    COALESCE(SUM(gross_pay), 0) as total_gross,
+                    COALESCE(SUM(total_deductions), 0) as total_deductions,
+                    COALESCE(SUM(net_pay), 0) as total_net
+                ')
+                ->get()
+                ->keyBy('payroll_period_id');
+
+            $paginator->getCollection()->each(function (PayrollPeriod $p) use ($rows) {
+                $r = $rows->get($p->id);
+                $p->summary = $r ? [
+                    'employee_count'   => (int) $r->employee_count,
+                    'failed_count'     => (int) $r->failed_count,
+                    'total_gross'      => number_format((float) $r->total_gross, 2, '.', ''),
+                    'total_deductions' => number_format((float) $r->total_deductions, 2, '.', ''),
+                    'total_net'        => number_format((float) $r->total_net, 2, '.', ''),
+                ] : null;
+            });
+        }
+
+        return $paginator;
     }
 
     public function show(PayrollPeriod $period): PayrollPeriod
     {
-        return $period->loadCount('payrolls')->load(['creator', 'payrolls.employee']);
+        $period = $period->loadCount('payrolls')->load(['creator', 'payrolls.employee']);
+        $period->summary = $this->summary($period);
+        return $period;
     }
 
     public function summary(PayrollPeriod $period): array

@@ -270,6 +270,9 @@ class RolePermissionSeeder extends Seeder
                 'description' => 'Self-service portal access only.',
                 'permissions' => [
                     'leave.view', 'leave.create',
+                    // Self-service: payroll.view is server-scoped to own payrolls
+                    // by PayrollController::index() — employees never see others.
+                    'payroll.view',
                 ],
             ],
         ];

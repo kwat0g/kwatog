@@ -190,6 +190,7 @@ export default function PayrollPeriodsPage() {
 function ThirteenthMonthModal({
   open, onClose, onSuccess,
 }: { open: boolean; onClose: () => void; onSuccess: () => void }) {
+  const navigate = useNavigate();
   const [year, setYear] = useState(String(new Date().getFullYear()));
   const [payrollDate, setPayrollDate] = useState('');
 
@@ -199,8 +200,7 @@ function ThirteenthMonthModal({
       toast.success(`13th-month period for ${year} created.`);
       onSuccess();
       onClose();
-      // navigate to detail
-      window.location.href = `/payroll/periods/${period.id}`;
+      navigate(`/payroll/periods/${period.id}`);
     },
     onError: () => toast.error('Failed to create 13th-month period.'),
   });

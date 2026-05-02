@@ -5,6 +5,7 @@ import { ModuleGuard } from '@/components/guards/ModuleGuard';
 import { PermissionGuard } from '@/components/guards/PermissionGuard';
 import { AppLayout } from '@/layouts/AppLayout';
 import { AuthLayout } from '@/layouts/AuthLayout';
+import { SelfServiceLayout } from '@/layouts/SelfServiceLayout';
 import { FullPageLoader } from '@/components/ui/Spinner';
 
 // Auth flow
@@ -211,12 +212,6 @@ export default function App() {
             />
           </Route>
 
-          {/* Self-service */}
-          <Route
-            path="/self-service/payslips"
-            element={<PermissionGuard permission="payroll.view"><SelfServicePayslipsPage /></PermissionGuard>}
-          />
-
           {/* Admin */}
           <Route
             path="/admin/roles"
@@ -257,6 +252,20 @@ export default function App() {
                 <AdminGovTablesPage />
               </PermissionGuard>
             }
+          />
+        </Route>
+
+        {/* Self-service portal — separate mobile-friendly layout (SelfServiceLayout) */}
+        <Route
+          element={
+            <AuthGuard>
+              <SelfServiceLayout />
+            </AuthGuard>
+          }
+        >
+          <Route
+            path="/self-service/payslips"
+            element={<PermissionGuard permission="payroll.view"><SelfServicePayslipsPage /></PermissionGuard>}
           />
         </Route>
 

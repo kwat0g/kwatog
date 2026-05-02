@@ -32,10 +32,10 @@ class PayrollPeriodResource extends JsonResource
                 'name' => $this->creator?->name,
             ]),
 
-            'summary'             => $this->when(
-                isset($this->additional['summary']) || $request->routeIs('*.show'),
-                fn () => $this->additional['summary'] ?? null,
-            ),
+            // Optional summary block — attached as a dynamic attribute by
+            // PayrollPeriodService::show()/list() so detail pages get totals
+            // without a second round trip and the index can show net pay too.
+            'summary'             => $this->resource->summary ?? null,
 
             'created_at'          => optional($this->created_at)->toIso8601String(),
             'updated_at'          => optional($this->updated_at)->toIso8601String(),

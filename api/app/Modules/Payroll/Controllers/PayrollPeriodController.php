@@ -35,9 +35,8 @@ class PayrollPeriodController
 
     public function show(PayrollPeriod $period): PayrollPeriodResource
     {
-        $period = $this->service->show($period);
-        $resource = new PayrollPeriodResource($period);
-        return $resource->additional(['summary' => $this->service->summary($period)]);
+        // Service attaches `summary` as a dynamic attribute on the period.
+        return new PayrollPeriodResource($this->service->show($period));
     }
 
     public function compute(PayrollPeriod $period, Request $request): JsonResponse
