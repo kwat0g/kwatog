@@ -2,7 +2,7 @@
 
 > Companion to [`plans/ogami-erp-sprint-6-order-to-cash-part-1-crm-mrp-production-tasks-47-58.md`](ogami-erp-sprint-6-order-to-cash-part-1-crm-mrp-production-tasks-47-58.md:1).
 
-This branch (`feat/sprint-6-crm-mrp-foundation`) ships **all 12 tasks** of Sprint 6 from the backend. Frontend work for Tasks 49–58 (BOM editor, machine/mold management, Gantt UI, Echo subscriptions, OEE gauges, dashboard widgets) is the only remaining work and is documented as follow-up.
+This branch (`feat/sprint-6-crm-mrp-foundation`) ships **all 12 tasks** of Sprint 6 — backend AND frontend. Tasks 47, 48 frontend was already in the original PR; Tasks 49–58 frontend is added in commits after the original 12 backend commits.
 
 ---
 
@@ -14,16 +14,16 @@ This branch (`feat/sprint-6-crm-mrp-foundation`) ships **all 12 tasks** of Sprin
 |---|---|---|
 | **47** CRM Products + Price Agreements | Backend + frontend (list, detail, create, edit) | `d5058bc` |
 | **48** Sales Orders + delivery schedules | Backend + frontend (list, detail, create) | `b58e91e` |
-| **49** Bill of Materials | Backend + seeders (frontend deferred) | `f1dad93` |
-| **50** Machines, Molds, Compatibility, History | Backend + seeders (frontend deferred) | `b3cfc1b` |
-| **51** Work Orders | Backend with full lifecycle service + defect_types seed | `a658ca6` |
-| **52** MRP Engine | Backend with mrp_plans table + SO confirm hook | `0ffab6e` |
-| **53** MRP II Capacity Planning | Backend service + scheduler controller + 5 endpoints | `4708568` |
-| **54** Gantt UI | **Deferred** to follow-up (frappe-gantt + Echo client) | — |
-| **55** Output recording (WebSocket) | Backend with idempotency + broadcast event + channel auth | `891df6d` |
-| **56** Breakdown handling | MachineStatusChanged event + HandleMachineBreakdown listener | `3b1a7ac` |
-| **57** OEE | OeeService + endpoint | `bc178fe` |
-| **58** Production dashboard | ProductionDashboardService + endpoint | `54c2e26` |
+| **49** Bill of Materials | Backend + frontend (list, detail) | `f1dad93` + frontend follow-up |
+| **50** Machines, Molds, Compatibility, History | Backend + frontend (machines list w/ inline status transitions, molds list w/ shot bars) | `b3cfc1b` + frontend follow-up |
+| **51** Work Orders | Backend lifecycle + frontend (list, detail with lifecycle action buttons + ChainHeader, record-output form with live WebSocket) | `a658ca6` + frontend follow-up |
+| **52** MRP Engine | Backend + frontend (plans list, plan detail with diagnostics table + linked records, re-run action) | `0ffab6e` + frontend follow-up |
+| **53** MRP II Capacity Planning | Backend service + scheduler endpoints | `4708568` |
+| **54** Gantt UI | frappe-gantt React wrapper + production schedule page (run/confirm/conflict resolution) | frontend follow-up |
+| **55** Output recording (WebSocket) | Backend + Echo client + record-output form + dashboard subscriptions | `891df6d` + frontend follow-up |
+| **56** Breakdown handling | MachineStatusChanged event + listener + BreakdownAlertCard | `3b1a7ac` + frontend follow-up |
+| **57** OEE | OeeService + endpoint + OeeGauge component + per-machine row in dashboard | `bc178fe` + frontend follow-up |
+| **58** Production dashboard | ProductionDashboardService + endpoint + full dashboard page (KPIs, stage breakdown, machine util, defect Pareto) | `54c2e26` + frontend follow-up |
 
 ### Migrations introduced (0069 → 0086)
 
@@ -116,28 +116,34 @@ The `WorkOrderOutputRecorded` and `MachineStatusChanged` events both implement `
 
 ---
 
-## ⏭️ Frontend deferred to follow-up PRs
+## Frontend pages shipped
 
-The backend is complete. Frontend pages for Tasks 49–58 are scoped for a follow-up PR:
-
-| Task | SPA pages |
+| Task | SPA pages / components |
 |---|---|
-| **49** BOMs | `pages/mrp/boms/{index,detail,create}.tsx` |
-| **50** Machines + Molds | `pages/mrp/machines/{index,detail}.tsx`, `pages/mrp/molds/{index,detail}.tsx` |
-| **51** Work Orders | `pages/production/work-orders/{index,detail,create,edit,record-output}.tsx`, lifecycle action buttons |
-| **52** MRP Plans | `pages/mrp/plans/{index,detail}.tsx` |
-| **53/54** Gantt | `pages/production/schedule.tsx`, `components/production/GanttChart.tsx` (frappe-gantt wrapper) |
-| **55** Echo client | `lib/echo.ts`, `hooks/useEcho.ts`, `record-output.tsx` form, npm install of `laravel-echo` + `pusher-js` |
-| **56** Breakdown alerts | `components/production/BreakdownAlertCard.tsx`, `RescheduleModal.tsx` |
-| **57** OEE gauge | `components/production/OeeGauge.tsx` |
-| **58** Dashboard | `pages/production/dashboard.tsx` |
+| **49** BOMs | [`pages/mrp/boms/index.tsx`](spa/src/pages/mrp/boms/index.tsx), [`detail.tsx`](spa/src/pages/mrp/boms/detail.tsx) |
+| **50** Machines + Molds | [`pages/mrp/machines/index.tsx`](spa/src/pages/mrp/machines/index.tsx) (with inline status transition select), [`pages/mrp/molds/index.tsx`](spa/src/pages/mrp/molds/index.tsx) (with shot-progress bar) |
+| **51** Work Orders | [`pages/production/work-orders/index.tsx`](spa/src/pages/production/work-orders/index.tsx), [`detail.tsx`](spa/src/pages/production/work-orders/detail.tsx) (full lifecycle action buttons + ChainHeader + materials/outputs tabs), [`record-output.tsx`](spa/src/pages/production/work-orders/record-output.tsx) |
+| **52** MRP Plans | [`pages/mrp/plans/index.tsx`](spa/src/pages/mrp/plans/index.tsx), [`detail.tsx`](spa/src/pages/mrp/plans/detail.tsx) (diagnostics table + linked records + Re-run action) |
+| **53/54** Gantt | [`pages/production/schedule.tsx`](spa/src/pages/production/schedule.tsx) + [`components/production/GanttChart.tsx`](spa/src/components/production/GanttChart.tsx) — frappe-gantt React wrapper with dynamic import (graceful fallback if `npm install` skipped) |
+| **55** Echo client | [`lib/echo.ts`](spa/src/lib/echo.ts), [`hooks/useEcho.ts`](spa/src/hooks/useEcho.ts), [`record-output.tsx`](spa/src/pages/production/work-orders/record-output.tsx) form (idempotency keys + live cumulative panel) |
+| **56** Breakdown alerts | [`components/production/BreakdownAlertCard.tsx`](spa/src/components/production/BreakdownAlertCard.tsx) — rendered inside the dashboard alerts panel |
+| **57** OEE gauge | [`components/production/OeeGauge.tsx`](spa/src/components/production/OeeGauge.tsx) — flat 4-bar (availability / performance / quality / OEE) |
+| **58** Dashboard | [`pages/production/dashboard.tsx`](spa/src/pages/production/dashboard.tsx) — KPIs, chain stage breakdown, machine utilization with OEE gauges, defect Pareto, alerts; subscribes to `production.dashboard` channel |
 
-The Sprint 6 plan §5 inventories every page; nothing about the backend contract is expected to change.
+`spa/package.json` now declares `frappe-gantt`, `laravel-echo`, `pusher-js`. CI runs `npm install` so the modules resolve. Locally the deps can be missing without breaking the rest of the app — the Gantt component dynamically imports `frappe-gantt` and renders a placeholder if not present.
 
-### Why Gantt and Echo are split out
+`spa/src/App.tsx` and `Sidebar.tsx` are wired with all new routes under `/mrp/*` and `/production/*`, each gated by `AuthGuard` + `ModuleGuard` + `PermissionGuard`.
 
-- **Gantt** requires `npm install frappe-gantt` plus a thin React wrapper, plus token.css CSS overrides for the bar colors. Best done as its own PR with visual review.
-- **Echo client** requires `npm install laravel-echo pusher-js` plus `VITE_REVERB_*` env wiring on the SPA side and Reverb-compatible auth verification. Both are non-trivial config bumps.
+### Reverb env
+
+Add to `.env` (SPA side) for production:
+```
+VITE_REVERB_APP_KEY=<your reverb app key>
+VITE_REVERB_HOST=<reverb hostname>
+VITE_REVERB_PORT=8080
+VITE_REVERB_SCHEME=https
+```
+The Echo client falls back to `window.location.hostname` + port 8080 when env vars are absent — fine for local dev.
 
 ---
 

@@ -118,6 +118,21 @@ const SalesOrdersListPage       = lazy(() => import('@/pages/crm/sales-orders'))
 const CreateSalesOrderPage      = lazy(() => import('@/pages/crm/sales-orders/create'));
 const SalesOrderDetailPage      = lazy(() => import('@/pages/crm/sales-orders/detail'));
 
+// MRP (Sprint 6 — Tasks 49, 50, 52, 53)
+const BomsListPage              = lazy(() => import('@/pages/mrp/boms'));
+const BomDetailPage             = lazy(() => import('@/pages/mrp/boms/detail'));
+const MachinesListPage          = lazy(() => import('@/pages/mrp/machines'));
+const MoldsListPage             = lazy(() => import('@/pages/mrp/molds'));
+const MrpPlansListPage          = lazy(() => import('@/pages/mrp/plans'));
+const MrpPlanDetailPage         = lazy(() => import('@/pages/mrp/plans/detail'));
+
+// Production (Sprint 6 — Tasks 51, 53–58)
+const WorkOrdersListPage        = lazy(() => import('@/pages/production/work-orders'));
+const WorkOrderDetailPage       = lazy(() => import('@/pages/production/work-orders/detail'));
+const RecordOutputPage          = lazy(() => import('@/pages/production/work-orders/record-output'));
+const ProductionSchedulePage    = lazy(() => import('@/pages/production/schedule'));
+const ProductionDashboardPage   = lazy(() => import('@/pages/production/dashboard'));
+
 // Errors
 const NotFoundPage = lazy(() => import('@/pages/error/NotFound'));
 
@@ -454,6 +469,45 @@ export default function App() {
               element={<PermissionGuard permission="crm.sales_orders.create"><CreateSalesOrderPage /></PermissionGuard>} />
             <Route path="/crm/sales-orders/:id"
               element={<PermissionGuard permission="crm.sales_orders.view"><SalesOrderDetailPage /></PermissionGuard>} />
+          </Route>
+
+          {/* MRP module (Sprint 6 — Tasks 49, 50, 52, 53) */}
+          <Route element={<ModuleGuard module="mrp" />}>
+            <Route path="/mrp" element={<Navigate to="/mrp/plans" replace />} />
+
+            <Route path="/mrp/boms"
+              element={<PermissionGuard permission="mrp.boms.view"><BomsListPage /></PermissionGuard>} />
+            <Route path="/mrp/boms/:id"
+              element={<PermissionGuard permission="mrp.boms.view"><BomDetailPage /></PermissionGuard>} />
+
+            <Route path="/mrp/machines"
+              element={<PermissionGuard permission="mrp.machines.view"><MachinesListPage /></PermissionGuard>} />
+
+            <Route path="/mrp/molds"
+              element={<PermissionGuard permission="mrp.molds.view"><MoldsListPage /></PermissionGuard>} />
+
+            <Route path="/mrp/plans"
+              element={<PermissionGuard permission="mrp.plans.view"><MrpPlansListPage /></PermissionGuard>} />
+            <Route path="/mrp/plans/:id"
+              element={<PermissionGuard permission="mrp.plans.view"><MrpPlanDetailPage /></PermissionGuard>} />
+          </Route>
+
+          {/* Production module (Sprint 6 — Tasks 51, 54, 55, 58) */}
+          <Route element={<ModuleGuard module="production" />}>
+            <Route path="/production" element={<Navigate to="/production/dashboard" replace />} />
+
+            <Route path="/production/dashboard"
+              element={<PermissionGuard permission="production.dashboard.view"><ProductionDashboardPage /></PermissionGuard>} />
+
+            <Route path="/production/schedule"
+              element={<PermissionGuard permission="production.schedule.view"><ProductionSchedulePage /></PermissionGuard>} />
+
+            <Route path="/production/work-orders"
+              element={<PermissionGuard permission="production.work_orders.view"><WorkOrdersListPage /></PermissionGuard>} />
+            <Route path="/production/work-orders/:id"
+              element={<PermissionGuard permission="production.work_orders.view"><WorkOrderDetailPage /></PermissionGuard>} />
+            <Route path="/production/work-orders/:id/record-output"
+              element={<PermissionGuard permission="production.wo.record"><RecordOutputPage /></PermissionGuard>} />
           </Route>
         </Route>
 
