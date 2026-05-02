@@ -20,11 +20,13 @@ import type { ApiValidationError } from '@/types';
 import type { LoanType } from '@/types/loans';
 
 const schema = z.object({
-  employee_id: z.string().min(1),
+  employee_id: z.string().min(1, 'Employee is required'),
   loan_type: z.enum(['company_loan', 'cash_advance']),
-  principal: z.coerce.number().positive(),
-  pay_periods: z.coerce.number().int().min(1).max(60),
-  purpose: z.string().max(1000).optional().or(z.literal('')),
+  principal: z.coerce.number({ invalid_type_error: 'Enter a number' })
+    .positive('Must be positive').max(9_999_999.99, 'Maximum ₱9,999,999.99'),
+  pay_periods: z.coerce.number({ invalid_type_error: 'Enter a number' })
+    .int('Whole number').min(1, 'At least 1 period').max(60, 'Maximum 60 periods'),
+  purpose: z.string().max(1000, 'Max 1000 characters').optional().or(z.literal('')),
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -129,9 +131,9 @@ export default function CreateLoanPage() {
 
         <Panel title="Amount & schedule">
           <div className="grid grid-cols-2 gap-3">
-            <Input label="Principal (₱)" type="number" step="0.01" required {...register('principal')} error={errors.principal?.message} className="font-mono" />
-            <Input label="Pay periods" type="number" min={1} max={60} required {...register('pay_periods')} error={errors.pay_periods?.message} className="font-mono" />
-            <Textarea label="Purpose" {...register('purpose')} error={errors.purpose?.message} rows={2} className="col-span-2" />
+            <Input label="Principal" type="number" step="0.01" min="1" max="9999999.99" prefix="₱" required {...register('principal')} error={errors.principal?.message} className="font-mono tabular-nums text-right" placeholder="0.00" />
+            <Input label="Pay periods" type="number" min={1} max={60} required {...register('pay_periods')} error={errors.pay_periods?.message} className="font-mono tabular-nums text-right" />
+            <Textarea label="Purpose" {...register('purpose')} error={errors.purpose?.message} rows={2} className="col-span-2" maxLength={1000} />
           </div>
           {schedule.length > 0 && (
             <div className="mt-4 border border-default rounded-md overflow-hidden">

@@ -1,41 +1,58 @@
 import { useEffect, useMemo } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
+import { MaskedInput } from '@/components/ui/MaskedInput';
 import { useQuery } from '@tanstack/react-query';
 import { departmentsApi } from '@/api/hr/departments';
 import { positionsApi } from '@/api/hr/positions';
+import { digitsOnly } from '@/lib/phFormat';
 import type { Employee } from '@/types/hr';
 
+// Names: letters, spaces, periods, apostrophes, hyphens. Up to 100 chars.
+const namePattern = /^[\p{L}\s.'\-]+$/u;
+
+const optString = (max: number) =>
+  z.string().max(max, `Must be ${max} characters or fewer`).optional().or(z.literal(''));
+
 export const employeeSchema = z.object({
-  first_name: z.string().min(1, 'Required').max(100),
-  middle_name: z.string().max(100).optional().or(z.literal('')),
-  last_name: z.string().min(1, 'Required').max(100),
-  suffix: z.string().max(20).optional().or(z.literal('')),
+  first_name: z.string().min(1, 'Required').max(100).regex(namePattern, 'Letters, spaces, ., \', - only'),
+  middle_name: z.string().max(100).regex(namePattern, 'Letters, spaces, ., \', - only').optional().or(z.literal('')),
+  last_name: z.string().min(1, 'Required').max(100).regex(namePattern, 'Letters, spaces, ., \', - only'),
+  suffix: optString(20),
   birth_date: z.string().min(1, 'Required'),
   gender: z.enum(['male', 'female']),
   civil_status: z.enum(['single', 'married', 'widowed', 'separated', 'divorced']),
-  nationality: z.string().max(50).optional().or(z.literal('')),
+  nationality: optString(50),
 
-  street_address: z.string().max(200).optional().or(z.literal('')),
-  barangay: z.string().max(100).optional().or(z.literal('')),
-  city: z.string().max(100).optional().or(z.literal('')),
-  province: z.string().max(100).optional().or(z.literal('')),
-  zip_code: z.string().max(10).optional().or(z.literal('')),
+  street_address: optString(200),
+  barangay: optString(100),
+  city: optString(100),
+  province: optString(100),
+  zip_code: z.string().max(10).regex(/^[0-9]{0,10}$/, 'Digits only').optional().or(z.literal('')),
 
-  mobile_number: z.string().max(20).optional().or(z.literal('')),
-  email: z.string().email('Invalid email').optional().or(z.literal('')),
-  emergency_contact_name: z.string().max(100).optional().or(z.literal('')),
-  emergency_contact_relation: z.string().max(50).optional().or(z.literal('')),
-  emergency_contact_phone: z.string().max(20).optional().or(z.literal('')),
+  // Stored digits-only on the backend; the form holds the digits-only value too.
+  mobile_number: z.string()
+    .refine((v) => v === '' || (digitsOnly(v).length === 11 && digitsOnly(v).startsWith('09')),
+      { message: '11 digits starting with 09' }).optional().or(z.literal('')),
+  email: z.string().email('Invalid email').max(255).optional().or(z.literal('')),
+  emergency_contact_name: optString(100),
+  emergency_contact_relation: optString(50),
+  emergency_contact_phone: z.string()
+    .refine((v) => v === '' || (digitsOnly(v).length >= 7 && digitsOnly(v).length <= 15),
+      { message: '7-15 digits' }).optional().or(z.literal('')),
 
-  sss_no: z.string().max(30).optional().or(z.literal('')),
-  philhealth_no: z.string().max(30).optional().or(z.literal('')),
-  pagibig_no: z.string().max(30).optional().or(z.literal('')),
-  tin: z.string().max(30).optional().or(z.literal('')),
+  sss_no: z.string().refine((v) => v === '' || digitsOnly(v).length === 10,
+    { message: 'SSS must be 10 digits' }).optional().or(z.literal('')),
+  philhealth_no: z.string().refine((v) => v === '' || digitsOnly(v).length === 12,
+    { message: 'PhilHealth must be 12 digits' }).optional().or(z.literal('')),
+  pagibig_no: z.string().refine((v) => v === '' || digitsOnly(v).length === 12,
+    { message: 'Pag-IBIG must be 12 digits' }).optional().or(z.literal('')),
+  tin: z.string().refine((v) => v === '' || (digitsOnly(v).length >= 9 && digitsOnly(v).length <= 12),
+    { message: 'TIN must be 9-12 digits' }).optional().or(z.literal('')),
 
   department_id: z.string().min(1, 'Required'),
   position_id: z.string().min(1, 'Required'),
@@ -46,14 +63,20 @@ export const employeeSchema = z.object({
   basic_monthly_salary: z.string().optional().or(z.literal('')),
   daily_rate: z.string().optional().or(z.literal('')),
 
-  bank_name: z.string().max(100).optional().or(z.literal('')),
-  bank_account_no: z.string().max(50).optional().or(z.literal('')),
+  bank_name: optString(100),
+  bank_account_no: z.string().max(50).regex(/^[A-Za-z0-9\-\s]*$/, 'Letters, digits, spaces, hyphens only').optional().or(z.literal('')),
 }).refine(
   (d) => d.pay_type !== 'monthly' || (d.basic_monthly_salary && Number(d.basic_monthly_salary) > 0),
   { message: 'Required for monthly pay type', path: ['basic_monthly_salary'] },
 ).refine(
   (d) => d.pay_type !== 'daily' || (d.daily_rate && Number(d.daily_rate) > 0),
   { message: 'Required for daily pay type', path: ['daily_rate'] },
+).refine(
+  (d) => !d.basic_monthly_salary || Number(d.basic_monthly_salary) <= 9_999_999.99,
+  { message: 'Maximum 9,999,999.99', path: ['basic_monthly_salary'] },
+).refine(
+  (d) => !d.daily_rate || Number(d.daily_rate) <= 99_999.99,
+  { message: 'Maximum 99,999.99', path: ['daily_rate'] },
 );
 
 export type EmployeeFormValues = z.infer<typeof employeeSchema>;
@@ -75,16 +98,16 @@ function defaults(employee?: Employee | null): EmployeeFormValues {
     province: employee?.address.province ?? '',
     zip_code: employee?.address.zip_code ?? '',
 
-    mobile_number: employee?.contact.mobile_number ?? '',
+    mobile_number: digitsOnly(employee?.contact.mobile_number ?? ''),
     email: employee?.contact.email ?? '',
     emergency_contact_name: employee?.contact.emergency_contact_name ?? '',
     emergency_contact_relation: employee?.contact.emergency_contact_relation ?? '',
-    emergency_contact_phone: employee?.contact.emergency_contact_phone ?? '',
+    emergency_contact_phone: digitsOnly(employee?.contact.emergency_contact_phone ?? ''),
 
-    sss_no: employee?.sss_no ?? '',
-    philhealth_no: employee?.philhealth_no ?? '',
-    pagibig_no: employee?.pagibig_no ?? '',
-    tin: employee?.tin ?? '',
+    sss_no: digitsOnly(employee?.sss_no ?? ''),
+    philhealth_no: digitsOnly(employee?.philhealth_no ?? ''),
+    pagibig_no: digitsOnly(employee?.pagibig_no ?? ''),
+    tin: digitsOnly(employee?.tin ?? ''),
 
     department_id: employee?.department?.id ?? '',
     position_id: employee?.position?.id ?? '',
@@ -112,7 +135,7 @@ interface Props {
 
 export function EmployeeForm({ employee, onSubmit, onCancel, isPending, registerSetError, submitLabel }: Props) {
   const {
-    register, handleSubmit, watch, setError,
+    register, handleSubmit, watch, setError, control,
     formState: { errors, isSubmitting },
   } = useForm<EmployeeFormValues>({
     resolver: zodResolver(employeeSchema),
@@ -137,15 +160,18 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isPending, register
   });
   const positions = useMemo(() => positionsResp?.data ?? [], [positionsResp]);
 
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const minBirthStr = new Date(Date.now() - 1000 * 60 * 60 * 24 * 365.25 * 15).toISOString().slice(0, 10);
+
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="max-w-4xl mx-auto px-5 py-6 space-y-8">
       <Section title="Personal information">
         <div className="grid grid-cols-2 gap-3">
-          <Input label="First name" required {...register('first_name')} error={errors.first_name?.message} />
-          <Input label="Middle name" {...register('middle_name')} error={errors.middle_name?.message} />
-          <Input label="Last name" required {...register('last_name')} error={errors.last_name?.message} />
-          <Input label="Suffix" placeholder="Jr., Sr., III" {...register('suffix')} error={errors.suffix?.message} />
-          <Input label="Birth date" type="date" required {...register('birth_date')} error={errors.birth_date?.message} />
+          <Input label="First name" required maxLength={100} autoComplete="given-name" {...register('first_name')} error={errors.first_name?.message} />
+          <Input label="Middle name" maxLength={100} {...register('middle_name')} error={errors.middle_name?.message} />
+          <Input label="Last name" required maxLength={100} autoComplete="family-name" {...register('last_name')} error={errors.last_name?.message} />
+          <Input label="Suffix" placeholder="Jr., Sr., III" maxLength={20} {...register('suffix')} error={errors.suffix?.message} />
+          <Input label="Birth date" type="date" required max={minBirthStr} min="1900-01-01" {...register('birth_date')} error={errors.birth_date?.message} />
           <Select label="Gender" required {...register('gender')} error={errors.gender?.message}>
             <option value="male">Male</option>
             <option value="female">Female</option>
@@ -157,27 +183,44 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isPending, register
             <option value="separated">Separated</option>
             <option value="divorced">Divorced</option>
           </Select>
-          <Input label="Nationality" {...register('nationality')} error={errors.nationality?.message} />
+          <Input label="Nationality" maxLength={50} {...register('nationality')} error={errors.nationality?.message} />
         </div>
       </Section>
 
       <Section title="Address">
         <div className="grid grid-cols-2 gap-3">
-          <Input label="Street address" {...register('street_address')} error={errors.street_address?.message} />
-          <Input label="Barangay" {...register('barangay')} error={errors.barangay?.message} />
-          <Input label="City" {...register('city')} error={errors.city?.message} />
-          <Input label="Province" {...register('province')} error={errors.province?.message} />
-          <Input label="ZIP code" className="font-mono" {...register('zip_code')} error={errors.zip_code?.message} />
+          <Input label="Street address" maxLength={200} autoComplete="street-address" {...register('street_address')} error={errors.street_address?.message} />
+          <Input label="Barangay" maxLength={100} {...register('barangay')} error={errors.barangay?.message} />
+          <Input label="City" maxLength={100} autoComplete="address-level2" {...register('city')} error={errors.city?.message} />
+          <Input label="Province" maxLength={100} autoComplete="address-level1" {...register('province')} error={errors.province?.message} />
+          <Input label="ZIP code" className="font-mono" inputMode="numeric" maxLength={10} placeholder="1234" autoComplete="postal-code" {...register('zip_code')} error={errors.zip_code?.message} />
         </div>
       </Section>
 
       <Section title="Contact">
         <div className="grid grid-cols-2 gap-3">
-          <Input label="Mobile number" className="font-mono" {...register('mobile_number')} error={errors.mobile_number?.message} />
-          <Input label="Email" type="email" {...register('email')} error={errors.email?.message} />
-          <Input label="Emergency contact name" {...register('emergency_contact_name')} error={errors.emergency_contact_name?.message} />
-          <Input label="Relation" {...register('emergency_contact_relation')} error={errors.emergency_contact_relation?.message} />
-          <Input label="Emergency phone" className="font-mono" {...register('emergency_contact_phone')} error={errors.emergency_contact_phone?.message} />
+          <Controller
+            name="mobile_number"
+            control={control}
+            render={({ field }) => (
+              <MaskedInput label="Mobile number" kind="mobile" autoComplete="tel"
+                value={field.value} onChange={(raw) => field.onChange(raw)}
+                error={errors.mobile_number?.message} />
+            )}
+          />
+          <Input label="Email" type="email" autoComplete="email" maxLength={255} {...register('email')} error={errors.email?.message} />
+          <Input label="Emergency contact name" maxLength={100} {...register('emergency_contact_name')} error={errors.emergency_contact_name?.message} />
+          <Input label="Relation" maxLength={50} {...register('emergency_contact_relation')} error={errors.emergency_contact_relation?.message} />
+          <Controller
+            name="emergency_contact_phone"
+            control={control}
+            render={({ field }) => (
+              <MaskedInput label="Emergency phone" kind="mobile" autoComplete="tel"
+                value={field.value} onChange={(raw) => field.onChange(raw)}
+                helper="7-15 digits"
+                error={errors.emergency_contact_phone?.message} />
+            )}
+          />
         </div>
       </Section>
 
@@ -201,14 +244,18 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isPending, register
             <option value="monthly">Monthly</option>
             <option value="daily">Daily</option>
           </Select>
-          <Input label="Date hired" type="date" required {...register('date_hired')} error={errors.date_hired?.message} />
-          <Input label="Date regularized" type="date" {...register('date_regularized')} error={errors.date_regularized?.message} />
+          <Input label="Date hired" type="date" required max={todayStr} min="1980-01-01" {...register('date_hired')} error={errors.date_hired?.message} />
+          <Input label="Date regularized" type="date" max={todayStr} {...register('date_regularized')} error={errors.date_regularized?.message} />
           {payType === 'monthly' && (
             <Input
-              label="Monthly salary (₱)"
+              label="Monthly salary"
               type="number"
               step="0.01"
-              className="font-mono"
+              min="0"
+              max="9999999.99"
+              prefix="₱"
+              className="font-mono tabular-nums text-right"
+              placeholder="0.00"
               required
               {...register('basic_monthly_salary')}
               error={errors.basic_monthly_salary?.message}
@@ -216,10 +263,14 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isPending, register
           )}
           {payType === 'daily' && (
             <Input
-              label="Daily rate (₱)"
+              label="Daily rate"
               type="number"
               step="0.01"
-              className="font-mono"
+              min="0"
+              max="99999.99"
+              prefix="₱"
+              className="font-mono tabular-nums text-right"
+              placeholder="0.00"
               required
               {...register('daily_rate')}
               error={errors.daily_rate?.message}
@@ -228,19 +279,40 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isPending, register
         </div>
       </Section>
 
-      <Section title="Government IDs" hint="Stored encrypted at rest.">
+      <Section title="Government IDs" hint="Stored encrypted at rest. Digits-only — formatting is automatic.">
         <div className="grid grid-cols-2 gap-3">
-          <Input label="SSS number" className="font-mono" {...register('sss_no')} error={errors.sss_no?.message} />
-          <Input label="PhilHealth" className="font-mono" {...register('philhealth_no')} error={errors.philhealth_no?.message} />
-          <Input label="Pag-IBIG" className="font-mono" {...register('pagibig_no')} error={errors.pagibig_no?.message} />
-          <Input label="TIN" className="font-mono" {...register('tin')} error={errors.tin?.message} />
+          <Controller name="sss_no" control={control}
+            render={({ field }) => (
+              <MaskedInput label="SSS number" kind="sss"
+                value={field.value} onChange={(raw) => field.onChange(raw)}
+                error={errors.sss_no?.message} />
+            )} />
+          <Controller name="philhealth_no" control={control}
+            render={({ field }) => (
+              <MaskedInput label="PhilHealth" kind="philhealth"
+                value={field.value} onChange={(raw) => field.onChange(raw)}
+                error={errors.philhealth_no?.message} />
+            )} />
+          <Controller name="pagibig_no" control={control}
+            render={({ field }) => (
+              <MaskedInput label="Pag-IBIG" kind="pagibig"
+                value={field.value} onChange={(raw) => field.onChange(raw)}
+                error={errors.pagibig_no?.message} />
+            )} />
+          <Controller name="tin" control={control}
+            render={({ field }) => (
+              <MaskedInput label="TIN" kind="tin"
+                value={field.value} onChange={(raw) => field.onChange(raw)}
+                error={errors.tin?.message} />
+            )} />
         </div>
       </Section>
 
       <Section title="Banking">
         <div className="grid grid-cols-2 gap-3">
-          <Input label="Bank name" {...register('bank_name')} error={errors.bank_name?.message} />
-          <Input label="Account number" className="font-mono" {...register('bank_account_no')} error={errors.bank_account_no?.message} />
+          <Input label="Bank name" maxLength={100} {...register('bank_name')} error={errors.bank_name?.message} />
+          <Input label="Account number" className="font-mono" maxLength={50} placeholder="1234-5678-9012"
+            {...register('bank_account_no')} error={errors.bank_account_no?.message} />
         </div>
       </Section>
 

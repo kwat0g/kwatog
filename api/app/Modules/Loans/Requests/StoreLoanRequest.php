@@ -16,14 +16,30 @@ class StoreLoanRequest extends FormRequest
         return $this->user()?->hasPermission('loans.create') ?? false;
     }
 
+    protected function prepareForValidation(): void
+    {
+        if (is_string($this->input('purpose'))) {
+            $this->merge(['purpose' => trim((string) $this->input('purpose'))]);
+        }
+    }
+
     public function rules(): array
     {
         return [
             'employee_id' => ['required', 'string'],
             'loan_type'   => ['required', Rule::in(LoanType::values())],
-            'principal'   => ['required', 'decimal:0,2', 'min:1'],
+            'principal'   => ['required', 'numeric', 'min:1', 'max:9999999.99'],
             'pay_periods' => ['required', 'integer', 'min:1', 'max:60'],
             'purpose'     => ['nullable', 'string', 'max:1000'],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'principal.min'  => 'Principal must be at least ₱1.',
+            'principal.max'  => 'Principal cannot exceed ₱9,999,999.99.',
+            'pay_periods.max' => 'Maximum is 60 pay periods.',
         ];
     }
 

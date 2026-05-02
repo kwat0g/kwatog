@@ -19,12 +19,13 @@ import { usePermission } from '@/hooks/usePermission';
 import type { ApiValidationError } from '@/types';
 
 const schema = z.object({
-  employee_id: z.string().min(1),
-  leave_type_id: z.string().min(1),
-  start_date: z.string().min(1),
-  end_date: z.string().min(1),
-  reason: z.string().max(2000).optional().or(z.literal('')),
-});
+  employee_id: z.string().min(1, 'Employee is required'),
+  leave_type_id: z.string().min(1, 'Leave type is required'),
+  start_date: z.string().min(1, 'Start date is required'),
+  end_date: z.string().min(1, 'End date is required'),
+  reason: z.string().max(2000, 'Max 2000 characters').optional().or(z.literal('')),
+}).refine((d) => !d.start_date || !d.end_date || new Date(d.end_date) >= new Date(d.start_date),
+  { message: 'End date must be on or after start date', path: ['end_date'] });
 type FormValues = z.infer<typeof schema>;
 
 export default function CreateLeavePage() {

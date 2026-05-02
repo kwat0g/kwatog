@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -15,6 +15,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar } from '@/components/ui/FilterBar';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
+import { Panel } from '@/components/ui/Panel';
 import { Select } from '@/components/ui/Select';
 import { Switch } from '@/components/ui/Switch';
 import { SkeletonTable } from '@/components/ui/Skeleton';
@@ -24,15 +25,16 @@ import type { ApiValidationError, ListParams } from '@/types';
 import type { Shift } from '@/types/attendance';
 
 const schema = z.object({
-  name: z.string().min(1).max(50),
-  start_time: z.string().regex(/^\d{2}:\d{2}$/, 'HH:MM'),
-  end_time: z.string().regex(/^\d{2}:\d{2}$/, 'HH:MM'),
-  break_minutes: z.coerce.number().int().min(0).max(240),
+  name: z.string().trim().min(1, 'Name is required').max(50)
+    .regex(/^[A-Za-z0-9\s\-_().]+$/, 'Letters, digits, spaces, and -_().'),
+  start_time: z.string().regex(/^\d{2}:\d{2}$/, 'Use HH:MM (24-hour)'),
+  end_time: z.string().regex(/^\d{2}:\d{2}$/, 'Use HH:MM (24-hour)'),
+  break_minutes: z.coerce.number().int('Whole minutes only').min(0).max(240, 'Max 240 minutes'),
   is_night_shift: z.boolean(),
   is_extended: z.boolean(),
   auto_ot_hours: z.string().optional().or(z.literal('')),
   is_active: z.boolean(),
-});
+}).refine((d) => d.start_time !== d.end_time, { message: 'End time cannot equal start time', path: ['end_time'] });
 type FormValues = z.infer<typeof schema>;
 
 export default function ShiftsPage() {
@@ -43,6 +45,7 @@ export default function ShiftsPage() {
   const [editing, setEditing] = useState<Shift | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<Shift | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['attendance', 'shifts', filters],
@@ -50,12 +53,18 @@ export default function ShiftsPage() {
     placeholderData: (prev) => prev,
   });
 
+  const selected = useMemo(
+    () => data?.data.find((s) => s.id === selectedId) ?? null,
+    [data, selectedId],
+  );
+
   const deleteMutation = useMutation({
     mutationFn: (id: string) => shiftsApi.delete(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['attendance', 'shifts'] });
       toast.success('Shift deleted.');
       setPendingDelete(null);
+      setSelectedId(null);
     },
     onError: (e: AxiosError<{ message?: string }>) => {
       toast.error(e.response?.data?.message ?? 'Failed to delete shift.');
@@ -70,17 +79,6 @@ export default function ShiftsPage() {
     { key: 'is_night_shift', header: 'Night', cell: (r) => r.is_night_shift ? <Chip variant="info">Night</Chip> : <span className="text-text-subtle">—</span> },
     { key: 'is_extended', header: 'Extended', cell: (r) => r.is_extended ? <Chip variant="warning">Auto-OT {r.auto_ot_hours}h</Chip> : <span className="text-text-subtle">—</span> },
     { key: 'is_active', header: 'Status', cell: (r) => <Chip variant={r.is_active ? 'success' : 'neutral'}>{r.is_active ? 'Active' : 'Inactive'}</Chip> },
-    ...(can('attendance.shifts.manage') ? [{
-      key: 'actions',
-      header: '',
-      align: 'right' as const,
-      cell: (r: Shift) => (
-        <div className="flex items-center justify-end gap-1">
-          <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setEditing(r); setModalOpen(true); }} icon={<Pencil size={12} />} aria-label="Edit" />
-          <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setPendingDelete(r); }} icon={<Trash2 size={12} />} aria-label="Delete" />
-        </div>
-      ),
-    }] : []),
   ];
 
   return (
@@ -124,12 +122,54 @@ export default function ShiftsPage() {
         />
       )}
       {data && data.data.length > 0 && (
-        <DataTable
-          columns={columns}
-          data={data.data}
-          meta={data.meta}
-          onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
-        />
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 px-5 py-4">
+          <DataTable
+            columns={columns}
+            data={data.data}
+            meta={data.meta}
+            onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+            onRowClick={(row) => setSelectedId(row.id)}
+            highlightedRowId={selectedId}
+          />
+          <Panel title="Details">
+            {!selected && <p className="text-sm text-muted">Select a shift to view its details.</p>}
+            {selected && (
+              <div className="space-y-3 text-sm">
+                <div>
+                  <div className="text-xs uppercase tracking-wider text-muted font-medium mb-1">Name</div>
+                  <div className="font-medium">{selected.name}</div>
+                </div>
+                <div className="flex gap-4">
+                  <div>
+                    <div className="text-xs uppercase tracking-wider text-muted font-medium mb-1">Start</div>
+                    <div className="font-mono tabular-nums">{selected.start_time}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs uppercase tracking-wider text-muted font-medium mb-1">End</div>
+                    <div className="font-mono tabular-nums">{selected.end_time}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs uppercase tracking-wider text-muted font-medium mb-1">Break</div>
+                    <div className="font-mono tabular-nums">{selected.break_minutes} min</div>
+                  </div>
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  {selected.is_night_shift && <Chip variant="info">Night shift</Chip>}
+                  {selected.is_extended && <Chip variant="warning">Auto-OT {selected.auto_ot_hours}h</Chip>}
+                  <Chip variant={selected.is_active ? 'success' : 'neutral'}>
+                    {selected.is_active ? 'Active' : 'Inactive'}
+                  </Chip>
+                </div>
+                {can('attendance.shifts.manage') && (
+                  <div className="flex gap-2 pt-3 border-t border-default">
+                    <Button variant="secondary" size="sm" onClick={() => { setEditing(selected); setModalOpen(true); }} icon={<Pencil size={12} />}>Edit</Button>
+                    <Button variant="danger" size="sm" onClick={() => setPendingDelete(selected)} icon={<Trash2 size={12} />}>Delete</Button>
+                  </div>
+                )}
+              </div>
+            )}
+          </Panel>
+        </div>
       )}
 
       {modalOpen && (

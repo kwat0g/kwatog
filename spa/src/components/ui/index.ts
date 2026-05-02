@@ -16,6 +16,7 @@ export {
 export { EmptyState } from './EmptyState';
 export { FilterBar, type FilterConfig, type FilterOption } from './FilterBar';
 export { Input, type InputProps } from './Input';
+export { MaskedInput, type MaskedInputProps } from './MaskedInput';
 export { Modal } from './Modal';
 export { Panel } from './Panel';
 export { Radio } from './Radio';

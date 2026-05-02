@@ -47,6 +47,8 @@ export interface DataTableProps<T> {
   onDensityChange?: (density: Density) => void;
   /** Stable identifier per row for selection state. Defaults to `(row as any).id`. */
   getRowId?: (row: T) => string;
+  /** Persistently highlight a single row (used for list + detail-panel layouts). */
+  highlightedRowId?: string | null;
   className?: string;
 }
 
@@ -80,6 +82,7 @@ export function DataTable<T>({
   density = 'default',
   onDensityChange,
   getRowId,
+  highlightedRowId,
   className,
 }: DataTableProps<T>) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -218,6 +221,7 @@ export function DataTable<T>({
                     'border-b border-subtle transition-colors duration-fast',
                     onRowClick && 'cursor-pointer hover:bg-subtle',
                     isSelected && 'bg-info-bg',
+                    highlightedRowId && rid === highlightedRowId && 'bg-elevated',
                     rowHeight[density],
                   )}
                   onClick={(e) => {

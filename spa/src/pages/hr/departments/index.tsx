@@ -23,8 +23,10 @@ import type { Department } from '@/types/hr';
 import { cn } from '@/lib/cn';
 
 const schema = z.object({
-  name: z.string().min(1, 'Name is required').max(100),
-  code: z.string().min(2).max(20).regex(/^[A-Z0-9_-]+$/, 'Use uppercase letters, digits, _ or -'),
+  name: z.string().trim().min(1, 'Name is required').max(100)
+    .regex(/^[\p{L}0-9\s.&\-,()]+$/u, 'Letters, digits, spaces, and . & - , ( )'),
+  code: z.string().trim().min(2, 'At least 2 characters').max(20)
+    .regex(/^[A-Z0-9_-]+$/, 'Uppercase letters, digits, _ or -').transform((s) => s.toUpperCase()),
   parent_id: z.string().optional(),
   is_active: z.boolean(),
 });

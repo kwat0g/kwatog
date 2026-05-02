@@ -15,11 +15,18 @@ class StoreHolidayRequest extends FormRequest
         return $this->user()?->hasPermission('attendance.holidays.manage') ?? false;
     }
 
+    protected function prepareForValidation(): void
+    {
+        if (is_string($this->input('name'))) {
+            $this->merge(['name' => trim((string) $this->input('name'))]);
+        }
+    }
+
     public function rules(): array
     {
         return [
             'name'         => ['required', 'string', 'max:100'],
-            'date'         => ['required', 'date'],
+            'date'         => ['required', 'date', 'after:1900-01-01', 'before:2100-12-31'],
             'type'         => ['required', Rule::in(HolidayType::values())],
             'is_recurring' => ['boolean'],
         ];

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -16,6 +16,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
+import { Panel } from '@/components/ui/Panel';
 import { Select } from '@/components/ui/Select';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -24,9 +25,10 @@ import type { ApiValidationError, ListParams } from '@/types';
 import type { Position } from '@/types/hr';
 
 const schema = z.object({
-  title: z.string().min(1).max(100),
+  title: z.string().trim().min(1, 'Title is required').max(100)
+    .regex(/^[\p{L}0-9\s.&\-,()/]+$/u, 'Letters, digits, spaces, and . & - , ( ) /'),
   department_id: z.string().min(1, 'Department is required'),
-  salary_grade: z.string().max(20).optional().or(z.literal('')),
+  salary_grade: z.string().max(20).regex(/^[A-Za-z0-9\-]*$/, 'Letters, digits, hyphens only').optional().or(z.literal('')),
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -42,6 +44,7 @@ export default function PositionsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Position | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Position | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const { data: depts = [] } = useQuery({
     queryKey: ['hr', 'departments', 'tree'],
@@ -54,12 +57,18 @@ export default function PositionsPage() {
     placeholderData: (prev) => prev,
   });
 
+  const selected = useMemo(
+    () => data?.data.find((p) => p.id === selectedId) ?? null,
+    [data, selectedId],
+  );
+
   const deleteMutation = useMutation({
     mutationFn: (id: string) => positionsApi.delete(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['hr', 'positions'] });
       toast.success('Position deleted.');
       setPendingDelete(null);
+      setSelectedId(null);
     },
     onError: (e: AxiosError<{ message?: string }>) => {
       toast.error(e.response?.data?.message ?? 'Failed to delete position.');
@@ -159,15 +168,40 @@ export default function PositionsPage() {
       )}
 
       {data && data.data.length > 0 && (
-        <DataTable
-          columns={columns}
-          data={data.data}
-          meta={data.meta}
-          onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
-          onSort={(sort, direction) => setFilters((f) => ({ ...f, sort, direction, page: 1 }))}
-          currentSort={filters.sort}
-          currentDirection={filters.direction}
-        />
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
+          <DataTable
+            columns={columns}
+            data={data.data}
+            meta={data.meta}
+            onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+            onSort={(sort, direction) => setFilters((f) => ({ ...f, sort, direction, page: 1 }))}
+            currentSort={filters.sort}
+            currentDirection={filters.direction}
+            onRowClick={(row) => setSelectedId(row.id)}
+            highlightedRowId={selectedId}
+          />
+          <Panel title="Details">
+            {!selected && <p className="text-sm text-muted">Select a position to view its details.</p>}
+            {selected && (
+              <div className="space-y-3 text-sm">
+                <DetailRow label="Title" value={selected.title} />
+                <DetailRow label="Department" value={selected.department?.name ?? '—'} />
+                <DetailRow label="Salary grade" value={selected.salary_grade || '—'} mono />
+                <DetailRow label="Employees" value={String(selected.employees_count ?? 0)} mono />
+                {can('hr.positions.manage') && (
+                  <div className="flex gap-2 pt-3 border-t border-default">
+                    <Button variant="secondary" size="sm" onClick={() => { setEditing(selected); setModalOpen(true); }} icon={<Pencil size={12} />}>
+                      Edit
+                    </Button>
+                    <Button variant="danger" size="sm" onClick={() => setPendingDelete(selected)} icon={<Trash2 size={12} />}>
+                      Delete
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+          </Panel>
+        </div>
       )}
 
       {modalOpen && (
@@ -201,6 +235,15 @@ export default function PositionsPage() {
           </div>
         </Modal>
       )}
+    </div>
+  );
+}
+
+function DetailRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div>
+      <div className="text-xs uppercase tracking-wider text-muted font-medium mb-1">{label}</div>
+      <div className={mono ? 'font-mono tabular-nums' : ''}>{value}</div>
     </div>
   );
 }
