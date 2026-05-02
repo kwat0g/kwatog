@@ -5,18 +5,43 @@ import type { ApiValidationError } from '@/types';
 
 /**
  * Build a `react-hook-form` `handleSubmit` error callback that fires a single
- * toast summarising the number of validation errors. Use as the second argument
- * to `handleSubmit(onValid, onInvalid)` so the user sees feedback even when
+ * toast naming the failing fields. Use as the second argument to
+ * `handleSubmit(onValid, onInvalid)` so the user sees feedback even when
  * errors are below the fold.
+ *
+ * Pass a `labels` map for human-friendly names (`{ first_name: 'First name' }`).
+ * If the map is omitted, only the count is reported.
+ *
+ * The toast lists up to MAX_LISTED field names; anything beyond that is
+ * collapsed into "…and N more".
  */
-export function onFormInvalid<T extends FieldValues>(): (errors: FieldErrors<T>) => void {
+const MAX_LISTED = 5;
+
+export function onFormInvalid<T extends FieldValues>(
+  labels?: Partial<Record<keyof T & string, string>>,
+): (errors: FieldErrors<T>) => void {
   return (errors) => {
-    const count = Object.keys(errors).length;
-    if (count === 0) return;
+    const keys = Object.keys(errors) as Array<keyof T & string>;
+    if (keys.length === 0) return;
+
+    if (labels) {
+      const names = keys.map((k) => labels[k] ?? String(k));
+      const head = names.slice(0, MAX_LISTED).join(', ');
+      const more = names.length > MAX_LISTED ? ` and ${names.length - MAX_LISTED} more` : '';
+      toast.error(
+        names.length === 1
+          ? `Please fix: ${head}.`
+          : `Please fix ${names.length} fields — ${head}${more}.`,
+        { duration: 5000 },
+      );
+      return;
+    }
+
     toast.error(
-      count === 1
+      keys.length === 1
         ? 'Please fix the highlighted field before submitting.'
-        : `Please fix ${count} fields before submitting.`,
+        : `Please fix ${keys.length} fields before submitting.`,
+      { duration: 5000 },
     );
   };
 }
