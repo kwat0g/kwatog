@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { leaveRequestsApi, type LeaveListParams } from '@/api/leave';
@@ -20,6 +20,7 @@ import type { LeaveRequest } from '@/types/leave';
 
 export default function LeavesPage() {
   const { can } = usePermission();
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const [view, setView] = useState<'list' | 'kanban'>('list');
   const [filters, setFilters] = useState<LeaveListParams>({ page: 1, per_page: 100, sort: 'created_at', direction: 'desc' });
@@ -116,8 +117,8 @@ export default function LeavesPage() {
               {view === 'list' ? 'Kanban view' : 'List view'}
             </Button>
             {can('leave.create') && (
-              <Button variant="primary" size="sm" icon={<Plus size={14} />}>
-                <Link to="/leaves/create">Request leave</Link>
+              <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/leaves/create')}>
+                Request leave
               </Button>
             )}
           </>
@@ -139,7 +140,7 @@ export default function LeavesPage() {
           icon="inbox"
           title="No leave requests"
           description={can('leave.create') ? 'Submit one to get started.' : 'Nothing to show yet.'}
-          action={can('leave.create') ? <Button variant="primary"><Link to="/leaves/create">Request leave</Link></Button> : undefined}
+          action={can('leave.create') ? <Button variant="primary" onClick={() => navigate('/leaves/create')}>Request leave</Button> : undefined}
         />
       )}
 

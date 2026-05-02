@@ -78,7 +78,8 @@ class LoanService
     /** @return array{principal_max:string, has_active:bool} */
     public function limitsFor(Employee $employee, LoanType $type): array
     {
-        $multiplier = (float) (config('settings.loans.cash_advance.max_multiplier') ?? 1.0);
+        $multiplier = (float) (app(\App\Common\Services\SettingsService::class)
+            ->get('loans.cash_advance.max_multiplier', 1.0));
         $base = $employee->basic_monthly_salary
             ? (float) $employee->basic_monthly_salary
             : (float) ($employee->daily_rate ?? 0) * 22;

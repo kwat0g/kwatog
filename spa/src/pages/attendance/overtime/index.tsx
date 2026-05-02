@@ -1,12 +1,8 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { AxiosError } from 'axios';
 import { overtimeApi } from '@/api/attendance/overtime';
 import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
@@ -24,6 +20,7 @@ import type { OvertimeRequest } from '@/types/attendance';
 
 export default function OvertimeListPage() {
   const { can } = usePermission();
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const [view, setView] = useState<'list' | 'kanban'>('kanban');
   const [filters, setFilters] = useState<ListParams>({ page: 1, per_page: 100, sort: 'date', direction: 'desc' });
@@ -92,8 +89,8 @@ export default function OvertimeListPage() {
             <Button variant="secondary" size="sm" onClick={() => setView(view === 'list' ? 'kanban' : 'list')}>
               {view === 'list' ? 'Kanban view' : 'List view'}
             </Button>
-            <Button variant="primary" size="sm" icon={<Plus size={14} />}>
-              <Link to="/attendance/overtime/create">New OT request</Link>
+            <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/attendance/overtime/create')}>
+              New OT request
             </Button>
           </>
         }

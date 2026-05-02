@@ -1,6 +1,6 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
 import { Upload, Calendar } from 'lucide-react';
 import { attendancesApi, type AttendanceListParams } from '@/api/attendance/attendances';
 import { departmentsApi } from '@/api/hr/departments';
@@ -17,6 +17,7 @@ import type { Attendance } from '@/types/attendance';
 
 export default function AttendancePage() {
   const { can } = usePermission();
+  const navigate = useNavigate();
   const [filters, setFilters] = useState<AttendanceListParams>({
     page: 1, per_page: 25, sort: 'date', direction: 'desc',
   });
@@ -97,12 +98,12 @@ export default function AttendancePage() {
         subtitle={data ? `${data.meta.total.toLocaleString()} records` : undefined}
         actions={
           <>
-            <Button asChild={false} variant="secondary" size="sm" icon={<Calendar size={14} />}>
-              <Link to="/attendance/overtime">Overtime</Link>
+            <Button variant="secondary" size="sm" icon={<Calendar size={14} />} onClick={() => navigate('/attendance/overtime')}>
+              Overtime
             </Button>
             {can('attendance.import') && (
-              <Button variant="primary" size="sm" icon={<Upload size={14} />}>
-                <Link to="/attendance/import">Import DTR</Link>
+              <Button variant="primary" size="sm" icon={<Upload size={14} />} onClick={() => navigate('/attendance/import')}>
+                Import DTR
               </Button>
             )}
           </>
@@ -147,7 +148,7 @@ export default function AttendancePage() {
           icon="inbox"
           title="No attendance found"
           description={filters.search ? 'Try a different search.' : 'Import a biometric CSV to get started.'}
-          action={can('attendance.import') ? <Button variant="primary"><Link to="/attendance/import">Import DTR</Link></Button> : undefined}
+          action={can('attendance.import') ? <Button variant="primary" onClick={() => navigate('/attendance/import')}>Import DTR</Button> : undefined}
         />
       )}
       {data && data.data.length > 0 && (

@@ -26,6 +26,17 @@ class UserResource extends JsonResource
                 'name' => $this->role->name,
                 'slug' => $this->role->slug,
             ]),
+            'employee' => $this->employee_id
+                ? (function () {
+                    $e = \App\Modules\HR\Models\Employee::query()->whereKey($this->employee_id)->first();
+                    return $e ? [
+                        'id'          => $e->hash_id,
+                        'employee_no' => $e->employee_no,
+                        'full_name'   => $e->full_name,
+                        'department_id' => optional($e->department_id) ? \App\Modules\HR\Models\Department::query()->whereKey($e->department_id)->first()?->hash_id : null,
+                    ] : null;
+                })()
+                : null,
             'permissions' => $this->permission_slugs,
             'features'    => $features,
         ];
