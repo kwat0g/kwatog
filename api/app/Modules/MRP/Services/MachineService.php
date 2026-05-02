@@ -69,17 +69,17 @@ class MachineService
         $m->delete();
     }
 
-    public function transitionStatus(Machine $m, MachineStatus $to): Machine
+    public function transitionStatus(Machine $m, MachineStatus $to, ?string $reason = null): Machine
     {
         $from = $m->status?->value ?? 'idle';
         $allowed = self::ALLOWED[$from] ?? [];
         if (! in_array($to->value, $allowed, true)) {
             throw new IllegalStatusTransitionException($from, $to->value);
         }
-        return DB::transaction(function () use ($m, $to) {
+        return DB::transaction(function () use ($m, $from, $to, $reason) {
             $m->update(['status' => $to->value]);
-            // TODO Sprint 6 Task 56: dispatch MachineStatusChanged event so the
-            // breakdown listener can pause the active WO and open a downtime row.
+            // Sprint 6 Task 56: HandleMachineBreakdown listens here.
+            \App\Modules\MRP\Events\MachineStatusChanged::dispatch($m->fresh(), $from, $to->value, $reason);
             return $m->fresh();
         });
     }

@@ -49,7 +49,7 @@ class MachineController
     public function transitionStatus(TransitionMachineStatusRequest $request, Machine $machine): MachineResource
     {
         $to = MachineStatus::from($request->input('to'));
-        $m = $this->service->transitionStatus($machine, $to);
+        $m = $this->service->transitionStatus($machine, $to, $request->input('reason'));
         return new MachineResource($m);
     }
 }
