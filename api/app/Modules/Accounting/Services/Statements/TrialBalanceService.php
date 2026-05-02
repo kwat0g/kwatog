@@ -42,8 +42,9 @@ class TrialBalanceService
 
             $accounts = []; $td = '0.00'; $tc = '0.00';
             foreach ($rows as $r) {
-                $debit  = (string) $r->debit_total;
-                $credit = (string) $r->credit_total;
+                // SQLite returns numeric SUMs without decimals; force scale-2 strings.
+                $debit  = Money::round2((string) $r->debit_total);
+                $credit = Money::round2((string) $r->credit_total);
                 $td = Money::add($td, $debit);
                 $tc = Money::add($tc, $credit);
 

@@ -68,7 +68,8 @@ class BillService
             'items.expenseAccount:id,code,name',
             'payments.cashAccount:id,code,name',
             'journalEntry:id,entry_number,date,status',
-            'creator:id,name',
+            // role_id required so User's $with=['role'] eager-load can resolve.
+            'creator:id,name,role_id',
         ]);
     }
 

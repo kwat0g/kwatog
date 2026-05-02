@@ -29,7 +29,8 @@ class JournalEntryService
      */
     public function list(array $filters): LengthAwarePaginator
     {
-        $q = JournalEntry::query()->with(['creator:id,name,email', 'poster:id,name,email']);
+        // role_id required so User's $with=['role'] eager-load can resolve.
+        $q = JournalEntry::query()->with(['creator:id,name,email,role_id', 'poster:id,name,email,role_id']);
 
         if (! empty($filters['status'])) {
             $q->where('status', $filters['status']);
@@ -63,7 +64,11 @@ class JournalEntryService
 
     public function show(JournalEntry $je): JournalEntry
     {
-        return $je->load(['lines.account:id,code,name,type,normal_balance', 'creator:id,name', 'poster:id,name', 'reversedBy:id,entry_number']);
+        return $je->load([
+            'lines.account:id,code,name,type,normal_balance',
+            'creator:id,name,role_id', 'poster:id,name,role_id',
+            'reversedBy:id,entry_number',
+        ]);
     }
 
     /**
