@@ -152,7 +152,7 @@ export default function AttendancePage() {
         />
       )}
       {data && data.data.length > 0 && (
-        <DataTable
+        <div className="px-5 py-4"><DataTable
           columns={columns}
           data={data.data}
           meta={data.meta}
@@ -160,7 +160,7 @@ export default function AttendancePage() {
           onSort={(sort, direction) => setFilters((f) => ({ ...f, sort, direction, page: 1 }))}
           currentSort={filters.sort}
           currentDirection={filters.direction}
-        />
+        /></div>
       )}
     </div>
   );

@@ -166,7 +166,7 @@ export default function EmployeesListPage() {
       )}
 
       {data && data.data.length > 0 && (
-        <DataTable
+        <div className="px-5 py-4"><DataTable
           columns={columns}
           data={data.data}
           meta={data.meta}
@@ -175,7 +175,7 @@ export default function EmployeesListPage() {
           currentSort={filters.sort}
           currentDirection={filters.direction}
           onRowClick={(row) => navigate(`/hr/employees/${row.id}`)}
-        />
+        /></div>
       )}
     </div>
   );
