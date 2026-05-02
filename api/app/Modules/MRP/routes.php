@@ -6,6 +6,7 @@ use App\Modules\MRP\Controllers\BomController;
 use App\Modules\MRP\Controllers\MachineController;
 use App\Modules\MRP\Controllers\MoldController;
 use App\Modules\MRP\Controllers\MrpPlanController;
+use App\Modules\MRP\Controllers\SchedulerController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -50,4 +51,11 @@ Route::middleware(['auth:sanctum', 'feature:mrp'])->prefix('mrp')->group(functio
     Route::post('/plans/{mrpPlan}/rerun',   [MrpPlanController::class, 'rerun'])->middleware('permission:mrp.plans.run');
     Route::get('/sales-orders/{salesOrder}/mrp-plan', [MrpPlanController::class, 'forSalesOrder'])
         ->middleware('permission:mrp.plans.view');
+
+    /* ─── Capacity scheduler (Task 53) ─── */
+    Route::post('/scheduler/run',                    [SchedulerController::class, 'run']) ->middleware('permission:mrp.schedule');
+    Route::post('/scheduler/confirm',                [SchedulerController::class, 'confirm'])->middleware('permission:production.schedule.confirm');
+    Route::patch('/scheduler/{schedule}/reorder',    [SchedulerController::class, 'reorder'])->middleware('permission:mrp.schedule');
+    Route::patch('/scheduler/{schedule}/reassign',   [SchedulerController::class, 'reassign'])->middleware('permission:mrp.schedule');
+    Route::get('/scheduler/snapshot',                [SchedulerController::class, 'snapshot'])->middleware('permission:production.schedule.view');
 });
