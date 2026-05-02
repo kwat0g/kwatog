@@ -1,0 +1,30 @@
+<?php
+
+declare(strict_types=1);
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('warehouse_locations', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('zone_id')->constrained('warehouse_zones')->cascadeOnDelete();
+            $table->string('code', 20)->unique();
+            $table->string('rack', 10)->nullable();
+            $table->string('bin', 10)->nullable();
+            $table->boolean('is_active')->default(true);
+            $table->timestamps();
+
+            $table->index('zone_id');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('warehouse_locations');
+    }
+};

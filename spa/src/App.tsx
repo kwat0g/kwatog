@@ -58,6 +58,33 @@ const CreatePayrollAdjustmentPage = lazy(() => import('@/pages/payroll/adjustmen
 const SelfServicePayslipsPage    = lazy(() => import('@/pages/self-service/payslips'));
 const AdminGovTablesPage         = lazy(() => import('@/pages/admin/gov-tables'));
 
+// Inventory (Sprint 5 — Tasks 39-41, 46)
+const InventoryDashboardPage = lazy(() => import('@/pages/inventory/dashboard'));
+const ItemsListPage          = lazy(() => import('@/pages/inventory/items'));
+const CreateItemPage         = lazy(() => import('@/pages/inventory/items/create'));
+const EditItemPage           = lazy(() => import('@/pages/inventory/items/edit'));
+const ItemDetailPage         = lazy(() => import('@/pages/inventory/items/detail'));
+const ItemCategoriesPage     = lazy(() => import('@/pages/inventory/categories'));
+const WarehousePage          = lazy(() => import('@/pages/inventory/warehouse'));
+const StockLevelsPage        = lazy(() => import('@/pages/inventory/stock-levels'));
+const StockMovementsPage     = lazy(() => import('@/pages/inventory/movements'));
+const CreateStockAdjustmentPage = lazy(() => import('@/pages/inventory/stock-adjustments/create'));
+const CreateStockTransferPage   = lazy(() => import('@/pages/inventory/stock-transfers/create'));
+const GrnListPage            = lazy(() => import('@/pages/inventory/grn'));
+const CreateGrnPage          = lazy(() => import('@/pages/inventory/grn/create'));
+const GrnDetailPage          = lazy(() => import('@/pages/inventory/grn/detail'));
+const MaterialIssuesListPage = lazy(() => import('@/pages/inventory/material-issues'));
+const CreateMaterialIssuePage = lazy(() => import('@/pages/inventory/material-issues/create'));
+
+// Purchasing (Sprint 5 — Tasks 42-44)
+const PurchaseRequestsListPage  = lazy(() => import('@/pages/purchasing/purchase-requests'));
+const CreatePurchaseRequestPage = lazy(() => import('@/pages/purchasing/purchase-requests/create'));
+const PurchaseRequestDetailPage = lazy(() => import('@/pages/purchasing/purchase-requests/detail'));
+const PurchaseOrdersListPage    = lazy(() => import('@/pages/purchasing/purchase-orders'));
+const CreatePurchaseOrderPage   = lazy(() => import('@/pages/purchasing/purchase-orders/create'));
+const PurchaseOrderDetailPage   = lazy(() => import('@/pages/purchasing/purchase-orders/detail'));
+const ApprovedSuppliersPage     = lazy(() => import('@/pages/purchasing/approved-suppliers'));
+
 // Accounting (Sprint 4 — Tasks 31-37)
 const ChartOfAccountsPage        = lazy(() => import('@/pages/accounting/coa'));
 const JournalEntriesPage         = lazy(() => import('@/pages/accounting/journal-entries'));
@@ -329,6 +356,70 @@ export default function App() {
               element={<PermissionGuard permission="accounting.statements.view"><IncomeStatementPage /></PermissionGuard>} />
             <Route path="/accounting/balance-sheet"
               element={<PermissionGuard permission="accounting.statements.view"><BalanceSheetPage /></PermissionGuard>} />
+          </Route>
+
+          {/* Inventory module (Sprint 5) */}
+          <Route element={<ModuleGuard module="inventory" />}>
+            <Route path="/inventory" element={<Navigate to="/inventory/dashboard" replace />} />
+            <Route path="/inventory/dashboard"
+              element={<PermissionGuard permission="inventory.view"><InventoryDashboardPage /></PermissionGuard>} />
+
+            <Route path="/inventory/items"
+              element={<PermissionGuard permission="inventory.view"><ItemsListPage /></PermissionGuard>} />
+            <Route path="/inventory/items/create"
+              element={<PermissionGuard permission="inventory.items.manage"><CreateItemPage /></PermissionGuard>} />
+            <Route path="/inventory/items/:id"
+              element={<PermissionGuard permission="inventory.view"><ItemDetailPage /></PermissionGuard>} />
+            <Route path="/inventory/items/:id/edit"
+              element={<PermissionGuard permission="inventory.items.manage"><EditItemPage /></PermissionGuard>} />
+
+            <Route path="/inventory/categories"
+              element={<PermissionGuard permission="inventory.view"><ItemCategoriesPage /></PermissionGuard>} />
+            <Route path="/inventory/warehouse"
+              element={<PermissionGuard permission="inventory.view"><WarehousePage /></PermissionGuard>} />
+
+            <Route path="/inventory/stock-levels"
+              element={<PermissionGuard permission="inventory.view"><StockLevelsPage /></PermissionGuard>} />
+            <Route path="/inventory/movements"
+              element={<PermissionGuard permission="inventory.view"><StockMovementsPage /></PermissionGuard>} />
+            <Route path="/inventory/stock-adjustments/create"
+              element={<PermissionGuard permission="inventory.adjust"><CreateStockAdjustmentPage /></PermissionGuard>} />
+            <Route path="/inventory/stock-transfers/create"
+              element={<PermissionGuard permission="inventory.adjust"><CreateStockTransferPage /></PermissionGuard>} />
+
+            <Route path="/inventory/grn"
+              element={<PermissionGuard permission="inventory.view"><GrnListPage /></PermissionGuard>} />
+            <Route path="/inventory/grn/create"
+              element={<PermissionGuard permission="inventory.grn.create"><CreateGrnPage /></PermissionGuard>} />
+            <Route path="/inventory/grn/:id"
+              element={<PermissionGuard permission="inventory.view"><GrnDetailPage /></PermissionGuard>} />
+
+            <Route path="/inventory/material-issues"
+              element={<PermissionGuard permission="inventory.view"><MaterialIssuesListPage /></PermissionGuard>} />
+            <Route path="/inventory/material-issues/create"
+              element={<PermissionGuard permission="inventory.issue.create"><CreateMaterialIssuePage /></PermissionGuard>} />
+          </Route>
+
+          {/* Purchasing module (Sprint 5) */}
+          <Route element={<ModuleGuard module="purchasing" />}>
+            <Route path="/purchasing" element={<Navigate to="/purchasing/purchase-orders" replace />} />
+
+            <Route path="/purchasing/purchase-requests"
+              element={<PermissionGuard permission="purchasing.view"><PurchaseRequestsListPage /></PermissionGuard>} />
+            <Route path="/purchasing/purchase-requests/create"
+              element={<PermissionGuard permission="purchasing.pr.create"><CreatePurchaseRequestPage /></PermissionGuard>} />
+            <Route path="/purchasing/purchase-requests/:id"
+              element={<PermissionGuard permission="purchasing.view"><PurchaseRequestDetailPage /></PermissionGuard>} />
+
+            <Route path="/purchasing/purchase-orders"
+              element={<PermissionGuard permission="purchasing.view"><PurchaseOrdersListPage /></PermissionGuard>} />
+            <Route path="/purchasing/purchase-orders/create"
+              element={<PermissionGuard permission="purchasing.po.create"><CreatePurchaseOrderPage /></PermissionGuard>} />
+            <Route path="/purchasing/purchase-orders/:id"
+              element={<PermissionGuard permission="purchasing.view"><PurchaseOrderDetailPage /></PermissionGuard>} />
+
+            <Route path="/purchasing/approved-suppliers"
+              element={<PermissionGuard permission="purchasing.view"><ApprovedSuppliersPage /></PermissionGuard>} />
           </Route>
         </Route>
 

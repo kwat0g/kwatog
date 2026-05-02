@@ -115,11 +115,12 @@ class RolePermissionSeeder extends Seeder
 
             // Inventory
             'inventory' => [
-                ['slug' => 'inventory.view',         'name' => 'View Inventory'],
-                ['slug' => 'inventory.items.manage', 'name' => 'Manage Items'],
-                ['slug' => 'inventory.grn.create',   'name' => 'Create GRN'],
-                ['slug' => 'inventory.issue.create', 'name' => 'Issue Materials'],
-                ['slug' => 'inventory.adjust',       'name' => 'Adjust Stock'],
+                ['slug' => 'inventory.view',              'name' => 'View Inventory'],
+                ['slug' => 'inventory.items.manage',      'name' => 'Manage Items'],
+                ['slug' => 'inventory.warehouse.manage',  'name' => 'Manage Warehouse Structure'],
+                ['slug' => 'inventory.grn.create',        'name' => 'Create / Accept GRN'],
+                ['slug' => 'inventory.issue.create',      'name' => 'Issue Materials'],
+                ['slug' => 'inventory.adjust',            'name' => 'Adjust / Transfer Stock'],
             ],
 
             // Purchasing
@@ -259,8 +260,12 @@ class RolePermissionSeeder extends Seeder
                 'name' => 'Warehouse Staff',
                 'description' => 'Receives goods, issues materials, counts stock.',
                 'permissions' => [
-                    'inventory.view', 'inventory.items.manage',
-                    'inventory.grn.create', 'inventory.issue.create', 'inventory.adjust',
+                    'inventory.view',
+                    'inventory.items.manage',
+                    'inventory.warehouse.manage',
+                    'inventory.grn.create',
+                    'inventory.issue.create',
+                    'inventory.adjust',
                 ],
             ],
             'qc_inspector' => [

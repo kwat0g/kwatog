@@ -30,7 +30,12 @@ class SettingsSeeder extends Seeder
         // Approval thresholds
         $settings->set('approval.po.vp_threshold', 50000, 'approval');
 
-        // Module feature toggles — Semester 1: HR/Attendance/Leave/Payroll/Loans/Accounting on, ops off.
+        // Sprint 5 — Purchasing tolerances + auto-replenishment.
+        $settings->set('purchasing.three_way_tolerance_qty_pct',   5.0, 'purchasing');
+        $settings->set('purchasing.three_way_tolerance_price_pct', 5.0, 'purchasing');
+        $settings->set('inventory.allow_negative', false, 'inventory');
+
+        // Module feature toggles — Sprint 5 enables Inventory + Purchasing.
         $modules = [
             'hr' => true,
             'attendance' => true,
@@ -38,8 +43,8 @@ class SettingsSeeder extends Seeder
             'payroll' => true,
             'loans' => true,
             'accounting' => true,
-            'inventory' => false,
-            'purchasing' => false,
+            'inventory' => true,
+            'purchasing' => true,
             'supply_chain' => false,
             'production' => false,
             'mrp' => false,

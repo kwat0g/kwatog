@@ -23,19 +23,31 @@ class Bill extends Model
         'date', 'due_date', 'is_vatable',
         'subtotal', 'vat_amount', 'total_amount', 'amount_paid', 'balance',
         'status', 'journal_entry_id', 'created_by', 'remarks',
+        'has_variances', 'three_way_match_snapshot',
+        'three_way_overridden', 'three_way_overridden_by',
+        'three_way_overridden_at', 'three_way_override_reason',
     ];
 
     protected $casts = [
-        'date'         => 'date',
-        'due_date'     => 'date',
-        'is_vatable'   => 'boolean',
-        'subtotal'     => 'decimal:2',
-        'vat_amount'   => 'decimal:2',
-        'total_amount' => 'decimal:2',
-        'amount_paid'  => 'decimal:2',
-        'balance'      => 'decimal:2',
-        'status'       => BillStatus::class,
+        'date'                     => 'date',
+        'due_date'                 => 'date',
+        'is_vatable'               => 'boolean',
+        'subtotal'                 => 'decimal:2',
+        'vat_amount'               => 'decimal:2',
+        'total_amount'             => 'decimal:2',
+        'amount_paid'              => 'decimal:2',
+        'balance'                  => 'decimal:2',
+        'status'                   => BillStatus::class,
+        'has_variances'            => 'boolean',
+        'three_way_match_snapshot' => 'array',
+        'three_way_overridden'     => 'boolean',
+        'three_way_overridden_at'  => 'datetime',
     ];
+
+    public function purchaseOrder(): BelongsTo
+    {
+        return $this->belongsTo(\App\Modules\Purchasing\Models\PurchaseOrder::class);
+    }
 
     public function vendor(): BelongsTo
     {

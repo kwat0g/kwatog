@@ -32,6 +32,10 @@ class DatabaseSeeder extends Seeder
             // is effectively a no-op (rows already exist), then payroll seeders.
             ChartOfAccountsSeeder::class,      // Task 31 (full ~45-account COA)
             PayrollChartAccountsSeeder::class, // Task 29 — idempotent upsert; preserved for back-compat.
+
+            // Sprint 5 — Procure to Pay (Part 1).
+            InventoryItemSeeder::class,        // Task 39
+            WarehouseSeeder::class,            // Task 40
         ]);
     }
 }

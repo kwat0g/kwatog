@@ -32,6 +32,12 @@ class BillController
     {
         try {
             $bill = $this->service->create($request->validated(), $request->user());
+        } catch (\App\Modules\Purchasing\Exceptions\ThreeWayMatchException $e) {
+            return response()->json([
+                'message'           => $e->getMessage(),
+                'code'              => 'three_way_match_blocked',
+                'three_way_match'   => $e->details,
+            ], 422);
         } catch (\RuntimeException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }

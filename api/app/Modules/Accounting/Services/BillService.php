@@ -16,6 +16,9 @@ use App\Modules\Accounting\Models\BillItem;
 use App\Modules\Accounting\Models\BillPayment;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\User;
+use App\Modules\Purchasing\Exceptions\ThreeWayMatchException;
+use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Purchasing\Services\ThreeWayMatchService;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -32,6 +35,7 @@ class BillService
 
     public function __construct(
         private readonly JournalEntryService $journals,
+        private readonly ?ThreeWayMatchService $threeWayMatch = null,
     ) {}
 
     public function list(array $filters): LengthAwarePaginator
@@ -100,18 +104,53 @@ class BillService
                 throw new RuntimeException("Bill number '{$data['bill_number']}' already exists for this vendor.");
             }
 
+            // Optional PO link + three-way match.
+            $poId = null;
+            $hasVariances = false;
+            $matchSnapshot = null;
+            if (! empty($data['purchase_order_id'])) {
+                $poId = HashIdFilter::decode($data['purchase_order_id'], PurchaseOrder::class)
+                    ?? (int) $data['purchase_order_id'];
+                if ($this->threeWayMatch && $poId) {
+                    $po = PurchaseOrder::query()->with(['items.item'])->findOrFail($poId);
+                    [$itemsForMatch] = $this->normalizeItems($data['items'] ?? []);
+                    // Reshape lines for three-way matcher.
+                    $billLines = [];
+                    foreach ($po->items as $idx => $poi) {
+                        $li = $itemsForMatch[$idx] ?? null;
+                        if (! $li) continue;
+                        $billLines[(string) $poi->item_id] = [
+                            'item_id'     => null,
+                            'description' => $li['description'],
+                            'quantity'    => $li['quantity'] ?? '0',
+                            'unit_price'  => $li['unit_price'] ?? '0',
+                        ];
+                    }
+                    $result = $this->threeWayMatch->matchForPo($po, array_values($billLines));
+                    $allowOverride = (bool) ($data['allow_override'] ?? false);
+                    if ($result->overallStatus === 'blocked' && ! $allowOverride) {
+                        throw new ThreeWayMatchException('3-way match blocked by variance.', $result->toArray());
+                    }
+                    $hasVariances = $result->overallStatus !== 'matched';
+                    $matchSnapshot = $result->toArray();
+                }
+            }
+
             $bill = Bill::create([
-                'bill_number'   => $data['bill_number'],
-                'vendor_id'     => $vendor->id,
-                'date'          => $data['date'],
-                'due_date'      => $data['due_date']
+                'bill_number'      => $data['bill_number'],
+                'vendor_id'        => $vendor->id,
+                'purchase_order_id'=> $poId,
+                'date'             => $data['date'],
+                'due_date'         => $data['due_date']
                     ?? Carbon::parse($data['date'])->addDays($vendor->payment_terms_days)->toDateString(),
-                'is_vatable'    => $isVatable,
-                'subtotal'      => $subtotal,
-                'vat_amount'    => $vat,
-                'total_amount'  => $total,
-                'amount_paid'   => Money::zero(),
-                'balance'       => $total,
+                'is_vatable'       => $isVatable,
+                'subtotal'         => $subtotal,
+                'vat_amount'       => $vat,
+                'total_amount'     => $total,
+                'amount_paid'      => Money::zero(),
+                'balance'          => $total,
+                'has_variances'    => $hasVariances,
+                'three_way_match_snapshot' => $matchSnapshot,
                 'status'        => BillStatus::Unpaid,
                 'created_by'    => $by->id,
                 'remarks'       => $data['remarks'] ?? null,
