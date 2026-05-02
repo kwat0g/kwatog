@@ -1,10 +1,37 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'node:path';
 
+/**
+ * frappe-gantt 0.6.x ships its dist file with a bare `import './gantt.scss'`
+ * statement still in place. Vite then tries to compile that SCSS — which
+ * forces a Sass implementation as a dependency just to display a Gantt
+ * chart. We don't actually need Sass anywhere else in the SPA.
+ *
+ * This plugin intercepts that one specific import and replaces it with an
+ * empty module. The Gantt's own visual styles are pulled in once via
+ * styles/globals.css (which imports the precompiled frappe-gantt dist CSS).
+ */
+function suppressFrappeGanttScss(): Plugin {
+  return {
+    name: 'suppress-frappe-gantt-scss',
+    enforce: 'pre',
+    resolveId(source) {
+      if (source.endsWith('frappe-gantt/src/gantt.scss') || source.endsWith('gantt.scss')) {
+        return '\0frappe-gantt-scss-shim';
+      }
+      return null;
+    },
+    load(id) {
+      if (id === '\0frappe-gantt-scss-shim') return 'export default {};';
+      return null;
+    },
+  };
+}
+
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [suppressFrappeGanttScss(), react()],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

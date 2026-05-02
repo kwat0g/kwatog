@@ -12,6 +12,7 @@
  * design-system tokens (no inline color).
  */
 import { useEffect, useRef } from 'react';
+import 'frappe-gantt/dist/frappe-gantt.css';
 import type { GanttRow } from '@/types/mrp';
 
 // frappe-gantt has no published TypeScript types. Declare the bits we use.
