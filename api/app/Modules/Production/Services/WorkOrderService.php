@@ -182,8 +182,9 @@ class WorkOrderService
     public function confirm(WorkOrder $wo, ?int $machineId = null, ?int $moldId = null): WorkOrder
     {
         $this->assertTransition($wo, WorkOrderStatus::Confirmed);
+        $from = $wo->status?->value ?? 'planned';
 
-        return DB::transaction(function () use ($wo, $machineId, $moldId) {
+        $result = DB::transaction(function () use ($wo, $machineId, $moldId) {
             $update = ['status' => WorkOrderStatus::Confirmed->value];
             if ($machineId !== null) $update['machine_id'] = $machineId;
             if ($moldId    !== null) $update['mold_id']    = $moldId;
@@ -198,6 +199,8 @@ class WorkOrderService
 
             return $this->show($wo->fresh());
         });
+        $this->broadcastStatusChange($result, $from, WorkOrderStatus::Confirmed->value);
+        return $result;
     }
 
     /**
@@ -211,8 +214,9 @@ class WorkOrderService
     public function start(WorkOrder $wo): WorkOrder
     {
         $this->assertTransition($wo, WorkOrderStatus::InProgress);
+        $from = $wo->status?->value ?? 'confirmed';
 
-        return DB::transaction(function () use ($wo) {
+        $result = DB::transaction(function () use ($wo) {
             $machine = $wo->machine_id ? Machine::lockForUpdate()->find($wo->machine_id) : null;
             $mold    = $wo->mold_id    ? Mold::lockForUpdate()->find($wo->mold_id)       : null;
             if (! $machine || ! $mold) {
@@ -243,13 +247,16 @@ class WorkOrderService
 
             return $this->show($wo->fresh());
         });
+        $this->broadcastStatusChange($result, $from, WorkOrderStatus::InProgress->value);
+        return $result;
     }
 
     public function pause(WorkOrder $wo, string $reason, MachineDowntimeCategory $category): WorkOrder
     {
         $this->assertTransition($wo, WorkOrderStatus::Paused);
+        $from = $wo->status?->value ?? 'in_progress';
 
-        return DB::transaction(function () use ($wo, $reason, $category) {
+        $result = DB::transaction(function () use ($wo, $reason, $category) {
             // Open downtime record.
             if ($wo->machine_id) {
                 MachineDowntime::create([
@@ -270,13 +277,16 @@ class WorkOrderService
             ]);
             return $this->show($wo->fresh());
         });
+        $this->broadcastStatusChange($result, $from, WorkOrderStatus::Paused->value, $reason);
+        return $result;
     }
 
     public function resume(WorkOrder $wo): WorkOrder
     {
         $this->assertTransition($wo, WorkOrderStatus::InProgress);
+        $from = $wo->status?->value ?? 'paused';
 
-        return DB::transaction(function () use ($wo) {
+        $result = DB::transaction(function () use ($wo) {
             // Close any open downtime row for this WO.
             $open = MachineDowntime::where('work_order_id', $wo->id)
                 ->whereNull('end_time')->latest()->first();
@@ -299,13 +309,16 @@ class WorkOrderService
             ]);
             return $this->show($wo->fresh());
         });
+        $this->broadcastStatusChange($result, $from, WorkOrderStatus::InProgress->value);
+        return $result;
     }
 
     public function complete(WorkOrder $wo): WorkOrder
     {
         $this->assertTransition($wo, WorkOrderStatus::Completed);
+        $from = $wo->status?->value ?? 'in_progress';
 
-        return DB::transaction(function () use ($wo) {
+        $result = DB::transaction(function () use ($wo) {
             $produced = (int) $wo->quantity_produced;
             $rejected = (int) $wo->quantity_rejected;
             $scrap = $produced > 0 ? round(($rejected / $produced) * 100, 2) : 0.0;
@@ -328,20 +341,26 @@ class WorkOrderService
             }
             return $this->show($wo->fresh());
         });
+        $this->broadcastStatusChange($result, $from, WorkOrderStatus::Completed->value);
+        return $result;
     }
 
     public function close(WorkOrder $wo): WorkOrder
     {
         $this->assertTransition($wo, WorkOrderStatus::Closed);
+        $from = $wo->status?->value ?? 'completed';
         $wo->update(['status' => WorkOrderStatus::Closed->value]);
-        return $this->show($wo->fresh());
+        $result = $this->show($wo->fresh());
+        $this->broadcastStatusChange($result, $from, WorkOrderStatus::Closed->value);
+        return $result;
     }
 
     public function cancel(WorkOrder $wo, ?string $reason = null): WorkOrder
     {
         $this->assertTransition($wo, WorkOrderStatus::Cancelled);
+        $from = $wo->status?->value ?? 'planned';
 
-        return DB::transaction(function () use ($wo, $reason) {
+        $result = DB::transaction(function () use ($wo, $reason) {
             $wo->update([
                 'status'       => WorkOrderStatus::Cancelled->value,
                 'pause_reason' => $reason,
@@ -365,6 +384,8 @@ class WorkOrderService
             }
             return $this->show($wo->fresh());
         });
+        $this->broadcastStatusChange($result, $from, WorkOrderStatus::Cancelled->value, $reason);
+        return $result;
     }
 
     public function delete(WorkOrder $wo): void
@@ -406,6 +427,18 @@ class WorkOrderService
         if (! in_array($to->value, self::ALLOWED[$from] ?? [], true)) {
             throw new IllegalLifecycleTransitionException($from, $to->value);
         }
+    }
+
+    /**
+     * Sprint 6 audit §1.7: dispatch the WorkOrderStatusChanged broadcast
+     * event after a successful lifecycle transition. Always invoked from
+     * outside the DB::transaction so listeners and Reverb consumers see
+     * the persisted row.
+     */
+    private function broadcastStatusChange(WorkOrder $wo, string $from, string $to, ?string $reason = null): void
+    {
+        if ($from === $to) return;
+        event(new \App\Modules\Production\Events\WorkOrderStatusChanged($wo, $from, $to, $reason));
     }
 
     /**

@@ -220,6 +220,10 @@ class SalesOrderService
                 $engine->runForSalesOrder($so);
             }
 
+            // Sprint 6 audit §1.7: broadcast on production.dashboard so the
+            // chain stage breakdown updates without a manual refetch.
+            DB::afterCommit(fn () => event(new \App\Modules\CRM\Events\SalesOrderConfirmed($so->fresh())));
+
             return $this->show($so->fresh());
         });
     }

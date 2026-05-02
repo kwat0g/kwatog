@@ -226,7 +226,14 @@ class MrpEngineService
             // Link the SO to this plan.
             $so->update(['mrp_plan_id' => $plan->id]);
 
-            return $this->show($plan->fresh());
+            // Sprint 6 audit §1.7: broadcast plan-generated event so the
+            // dashboard's StageBreakdown and Alerts panels refresh in real
+            // time. Dispatched after-commit so subscribers see the
+            // persisted row.
+            $finalPlan = $plan->fresh();
+            DB::afterCommit(fn () => event(new \App\Modules\MRP\Events\MrpPlanGenerated($finalPlan)));
+
+            return $this->show($finalPlan);
         });
     }
 
