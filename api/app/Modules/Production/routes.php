@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Modules\Production\Controllers\OeeController;
 use App\Modules\Production\Controllers\WorkOrderController;
 use Illuminate\Support\Facades\Route;
 
@@ -29,4 +30,8 @@ Route::middleware(['auth:sanctum', 'feature:production'])->prefix('production')-
     /* ─── Output recording (Task 55) ─── */
     Route::get('/work-orders/{workOrder}/outputs',   [WorkOrderController::class, 'listOutputs'])->middleware('permission:production.work_orders.view');
     Route::post('/work-orders/{workOrder}/outputs',  [WorkOrderController::class, 'recordOutput'])->middleware('permission:production.wo.record');
+
+    /* ─── OEE (Task 57) ─── */
+    Route::get('/oee/machine/{machine}', [OeeController::class, 'forMachine'])->middleware('permission:production.dashboard.view');
+    Route::get('/oee/today',             [OeeController::class, 'todayAll']) ->middleware('permission:production.dashboard.view');
 });
