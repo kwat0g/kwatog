@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Services;
 
+use App\Common\Support\SearchOperator;
+
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\Money;
 use App\Modules\Accounting\Enums\BillStatus;
@@ -52,8 +54,8 @@ class BillService
         if (! empty($filters['search'])) {
             $term = $filters['search'];
             $q->where(function ($qq) use ($term) {
-                $qq->where('bill_number', 'ilike', "%{$term}%")
-                   ->orWhereHas('vendor', fn ($vv) => $vv->where('name', 'ilike', "%{$term}%"));
+                $qq->where('bill_number', SearchOperator::like(), "%{$term}%")
+                   ->orWhereHas('vendor', fn ($vv) => $vv->where('name', SearchOperator::like(), "%{$term}%"));
             });
         }
 

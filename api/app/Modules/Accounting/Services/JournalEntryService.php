@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Services;
 
+use App\Common\Support\SearchOperator;
+
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\Money;
@@ -53,8 +55,8 @@ class JournalEntryService
         if (! empty($filters['search'])) {
             $term = $filters['search'];
             $q->where(function ($qq) use ($term) {
-                $qq->where('entry_number', 'ilike', "%{$term}%")
-                   ->orWhere('description', 'ilike', "%{$term}%");
+                $qq->where('entry_number', SearchOperator::like(), "%{$term}%")
+                   ->orWhere('description', SearchOperator::like(), "%{$term}%");
             });
         }
 

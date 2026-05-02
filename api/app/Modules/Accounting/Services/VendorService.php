@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Services;
 
+use App\Common\Support\SearchOperator;
+
 use App\Modules\Accounting\Models\Vendor;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -21,8 +23,8 @@ class VendorService
         if (! empty($filters['search'])) {
             $term = $filters['search'];
             $q->where(function ($qq) use ($term) {
-                $qq->where('name', 'ilike', "%{$term}%")
-                   ->orWhere('contact_person', 'ilike', "%{$term}%");
+                $qq->where('name', SearchOperator::like(), "%{$term}%")
+                   ->orWhere('contact_person', SearchOperator::like(), "%{$term}%");
             });
         }
 

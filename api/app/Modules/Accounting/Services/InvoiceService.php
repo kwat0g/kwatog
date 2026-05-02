@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Services;
 
+use App\Common\Support\SearchOperator;
+
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\Money;
@@ -51,8 +53,8 @@ class InvoiceService
         if (! empty($filters['search'])) {
             $term = $filters['search'];
             $q->where(function ($qq) use ($term) {
-                $qq->where('invoice_number', 'ilike', "%{$term}%")
-                   ->orWhereHas('customer', fn ($cc) => $cc->where('name', 'ilike', "%{$term}%"));
+                $qq->where('invoice_number', SearchOperator::like(), "%{$term}%")
+                   ->orWhereHas('customer', fn ($cc) => $cc->where('name', SearchOperator::like(), "%{$term}%"));
             });
         }
 

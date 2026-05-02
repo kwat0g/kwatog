@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Services;
 
+use App\Common\Support\SearchOperator;
+
 use App\Common\Support\HashIdFilter;
 use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Models\Account;
@@ -29,8 +31,8 @@ class AccountService
         if (! empty($filters['search'])) {
             $term = $filters['search'];
             $q->where(function ($qq) use ($term) {
-                $qq->where('code', 'ilike', "%{$term}%")
-                   ->orWhere('name', 'ilike', "%{$term}%");
+                $qq->where('code', SearchOperator::like(), "%{$term}%")
+                   ->orWhere('name', SearchOperator::like(), "%{$term}%");
             });
         }
 
