@@ -141,30 +141,51 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'supply_chain.deliveries.confirm',   'name' => 'Confirm Customer Delivery'],
             ],
 
-            // Production
+            // Production — Sprint 6 Tasks 51, 55–58
             'production' => [
-                ['slug' => 'production.view',           'name' => 'View Production'],
-                ['slug' => 'production.wo.create',      'name' => 'Create Work Order'],
-                ['slug' => 'production.wo.confirm',     'name' => 'Confirm Work Order'],
-                ['slug' => 'production.wo.record',      'name' => 'Record Production Output'],
-                ['slug' => 'production.machines.manage','name' => 'Manage Machines'],
-                ['slug' => 'production.molds.manage',   'name' => 'Manage Molds'],
+                ['slug' => 'production.view',                  'name' => 'View Production'],
+                ['slug' => 'production.wo.create',             'name' => 'Create Work Order'],
+                ['slug' => 'production.wo.confirm',            'name' => 'Confirm Work Order'],
+                ['slug' => 'production.wo.record',             'name' => 'Record Production Output'],
+                ['slug' => 'production.work_orders.view',      'name' => 'View Work Orders'],
+                ['slug' => 'production.work_orders.lifecycle', 'name' => 'Transition Work Order Status'],
+                ['slug' => 'production.machines.manage',       'name' => 'Manage Machines'],
+                ['slug' => 'production.machines.transition',   'name' => 'Transition Machine Status'],
+                ['slug' => 'production.molds.manage',          'name' => 'Manage Molds'],
+                ['slug' => 'production.schedule.view',         'name' => 'View Production Schedule'],
+                ['slug' => 'production.schedule.confirm',      'name' => 'Confirm Production Schedule'],
+                ['slug' => 'production.dashboard.view',        'name' => 'View Production Dashboard'],
             ],
 
-            // MRP
+            // MRP — Sprint 6 Tasks 49, 50, 52, 53
             'mrp' => [
                 ['slug' => 'mrp.view',           'name' => 'View MRP'],
                 ['slug' => 'mrp.run',            'name' => 'Run MRP'],
                 ['slug' => 'mrp.schedule',       'name' => 'Schedule Production'],
+                ['slug' => 'mrp.boms.view',      'name' => 'View Bills of Materials'],
                 ['slug' => 'mrp.boms.manage',    'name' => 'Manage Bills of Materials'],
+                ['slug' => 'mrp.machines.view',  'name' => 'View Machines'],
+                ['slug' => 'mrp.molds.view',     'name' => 'View Molds'],
+                ['slug' => 'mrp.plans.view',     'name' => 'View MRP Plans'],
+                ['slug' => 'mrp.plans.run',      'name' => 'Re-run MRP Plan'],
             ],
 
-            // CRM
+            // CRM — Sprint 6 Tasks 47, 48
             'crm' => [
-                ['slug' => 'crm.view',                 'name' => 'View CRM'],
-                ['slug' => 'crm.customers.manage',     'name' => 'Manage Customers'],
-                ['slug' => 'crm.so.create',            'name' => 'Create Sales Orders'],
-                ['slug' => 'crm.complaints.manage',    'name' => 'Manage Complaints'],
+                ['slug' => 'crm.view',                       'name' => 'View CRM'],
+                ['slug' => 'crm.customers.manage',           'name' => 'Manage Customers'],
+                ['slug' => 'crm.products.view',              'name' => 'View Products'],
+                ['slug' => 'crm.products.manage',            'name' => 'Manage Products'],
+                ['slug' => 'crm.price_agreements.view',      'name' => 'View Price Agreements'],
+                ['slug' => 'crm.price_agreements.manage',    'name' => 'Manage Price Agreements'],
+                ['slug' => 'crm.sales_orders.view',          'name' => 'View Sales Orders'],
+                ['slug' => 'crm.sales_orders.create',        'name' => 'Create Sales Orders'],
+                ['slug' => 'crm.sales_orders.update',        'name' => 'Update Draft Sales Orders'],
+                ['slug' => 'crm.sales_orders.delete',        'name' => 'Delete Draft Sales Orders'],
+                ['slug' => 'crm.sales_orders.confirm',       'name' => 'Confirm Sales Orders'],
+                ['slug' => 'crm.sales_orders.cancel',        'name' => 'Cancel Sales Orders'],
+                ['slug' => 'crm.so.create',                  'name' => 'Create Sales Orders (legacy)'],
+                ['slug' => 'crm.complaints.manage',          'name' => 'Manage Complaints'],
             ],
 
             // Quality

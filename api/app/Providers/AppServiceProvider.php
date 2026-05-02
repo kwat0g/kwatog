@@ -9,6 +9,8 @@ use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Observers\JournalEntryObserver;
 use App\Modules\Inventory\Events\StockMovementCompleted;
 use App\Modules\Inventory\Listeners\CheckReorderPoint;
+use App\Modules\MRP\Events\MachineStatusChanged;
+use App\Modules\Production\Listeners\HandleMachineBreakdown;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\URL;
@@ -34,5 +36,8 @@ class AppServiceProvider extends ServiceProvider
 
         // Sprint 5: low-stock auto-replenishment listener.
         Event::listen(StockMovementCompleted::class, [CheckReorderPoint::class, 'handle']);
+
+        // Sprint 6 Task 56: machine breakdown / restoration handling.
+        Event::listen(MachineStatusChanged::class, [HandleMachineBreakdown::class, 'handle']);
     }
 }

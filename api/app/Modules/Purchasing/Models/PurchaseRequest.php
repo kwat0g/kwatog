@@ -22,7 +22,7 @@ class PurchaseRequest extends Model
     use HasFactory, HasHashId, HasAuditLog, HasApprovalWorkflow;
 
     protected $fillable = [
-        'pr_number', 'requested_by', 'department_id',
+        'pr_number', 'requested_by', 'department_id', 'mrp_plan_id',
         'date', 'reason', 'priority', 'status',
         'is_auto_generated', 'current_approval_step',
         'submitted_at', 'approved_at',
