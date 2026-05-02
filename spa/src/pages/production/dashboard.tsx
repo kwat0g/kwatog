@@ -35,6 +35,27 @@ export default function ProductionDashboardPage() {
   useEcho('production.dashboard', '.machine.status_changed', () => {
     qc.invalidateQueries({ queryKey: ['production', 'dashboard'] });
   });
+  // Sprint 6 audit §1.7: also react to chain pulses, plan generation,
+  // breakdown alerts, and mold shot-limit alerts so the dashboard stays
+  // current without manual refresh.
+  useEcho('production.dashboard', '.sales_order.confirmed', () => {
+    qc.invalidateQueries({ queryKey: ['production', 'dashboard'] });
+  });
+  useEcho('production.dashboard', '.mrp.plan_generated', () => {
+    qc.invalidateQueries({ queryKey: ['production', 'dashboard'] });
+  });
+  useEcho('production.dashboard', '.machine.breakdown_detected', () => {
+    qc.invalidateQueries({ queryKey: ['production', 'dashboard'] });
+  });
+  useEcho('production.dashboard', '.mold.shot_limit_nearing', () => {
+    qc.invalidateQueries({ queryKey: ['production', 'dashboard'] });
+  });
+  useEcho('production.dashboard', '.mold.shot_limit_reached', () => {
+    qc.invalidateQueries({ queryKey: ['production', 'dashboard'] });
+  });
+  useEcho('production.dashboard', '.work_order.status_changed', () => {
+    qc.invalidateQueries({ queryKey: ['production', 'dashboard'] });
+  });
 
   if (isLoading && !data) {
     return (

@@ -73,6 +73,26 @@ export interface SalesOrder {
   status: SalesOrderStatus;
   status_label: string;
   payment_terms_days: number;
+  // Sprint 6 audit §3.2: linked chain context populated on the detail
+  // payload only (whenLoaded on the resource).
+  mrp_plan?: {
+    id: string;
+    mrp_plan_no: string;
+    version: number;
+    status: string;
+    shortages_found: number;
+    auto_pr_count: number;
+    draft_wo_count: number;
+  } | null;
+  work_orders?: Array<{
+    id: string;
+    wo_number: string;
+    status: string;
+    quantity_target: number;
+    quantity_produced: number;
+    planned_start: string | null;
+    product: { id: string; part_number: string; name: string } | null;
+  }>;
   delivery_terms: string | null;
   notes: string | null;
   is_editable: boolean;

@@ -95,30 +95,51 @@ class MoldService
 
     /**
      * Atomic shot increment with row lock. Crossing 80% fires
-     * MoldShotLimitNearingEvent (deferred to Sprint 6 Task 55 dispatcher);
-     * crossing 100% flips status to Maintenance.
+     * MoldShotLimitNearing; crossing 100% flips status to Maintenance and
+     * fires MoldShotLimitReached. Both events broadcast on
+     * production.dashboard for live alerts (Sprint 6 audit §1.7).
      */
     public function incrementShots(Mold $m, int $count): Mold
     {
-        return DB::transaction(function () use ($m, $count) {
-            $fresh = Mold::lockForUpdate()->find($m->id);
-            $beforePct = $fresh->shot_percentage;
-            $fresh->current_shot_count = $fresh->current_shot_count + $count;
-            $fresh->lifetime_total_shots = $fresh->lifetime_total_shots + $count;
+        $fresh = DB::transaction(function () use ($m, $count) {
+            $row = Mold::lockForUpdate()->find($m->id);
+            $beforePct = $row->shot_percentage;
+            $row->current_shot_count = $row->current_shot_count + $count;
+            $row->lifetime_total_shots = $row->lifetime_total_shots + $count;
 
-            if ($fresh->current_shot_count >= $fresh->max_shots_before_maintenance) {
-                $fresh->status = MoldStatus::Maintenance->value;
+            if ($row->current_shot_count >= $row->max_shots_before_maintenance) {
+                $row->status = MoldStatus::Maintenance->value;
                 MoldHistory::create([
-                    'mold_id'             => $fresh->id,
+                    'mold_id'             => $row->id,
                     'event_type'          => MoldEventType::ShotLimitReached->value,
                     'description'         => 'Shot limit reached — automatically flagged for maintenance.',
                     'event_date'          => now()->toDateString(),
-                    'shot_count_at_event' => $fresh->current_shot_count,
+                    'shot_count_at_event' => $row->current_shot_count,
                 ]);
             }
-            $fresh->save();
-            return $fresh->fresh();
+            $row->save();
+            $row->refresh();
+
+            // Pass back the row + the previous percentage so the caller can
+            // decide which broadcast events to dispatch *after* commit.
+            return [$row, $beforePct];
         });
+
+        [$row, $beforePct] = $fresh;
+        $afterPct = $row->shot_percentage;
+
+        // Crossing 80% threshold (forward-only). Use after-commit hook so
+        // listeners and broadcasters see the persisted row.
+        DB::afterCommit(function () use ($row, $beforePct, $afterPct) {
+            if ($beforePct < 80.0 && $afterPct >= 80.0) {
+                event(new \App\Modules\MRP\Events\MoldShotLimitNearing($row));
+            }
+            if ($row->current_shot_count >= $row->max_shots_before_maintenance) {
+                event(new \App\Modules\MRP\Events\MoldShotLimitReached($row));
+            }
+        });
+
+        return $row;
     }
 
     /** Reset shot count after maintenance. Archives the prior count to history. */

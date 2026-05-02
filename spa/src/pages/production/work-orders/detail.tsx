@@ -12,7 +12,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { ChainHeader } from '@/components/chain';
+import { ChainHeader, LinkedRecords, ActivityStream } from '@/components/chain';
 import { useEcho } from '@/hooks/useEcho';
 import { usePermission } from '@/hooks/usePermission';
 import type { WorkOrderStatus } from '@/types/production';
@@ -215,14 +215,68 @@ export default function WorkOrderDetailPage() {
 
         <div className="space-y-4">
           <Panel title="Linked records">
-            <div className="text-xs space-y-2">
-              <div>Sales order: {data.sales_order
-                ? <Link to={`/crm/sales-orders/${data.sales_order.id}`} className="font-mono text-accent hover:underline">{data.sales_order.so_number}</Link>
-                : <span className="text-muted">—</span>}</div>
-              <div>Machine: {data.machine ? <Link to={`/mrp/machines/${data.machine.id}`} className="font-mono text-accent hover:underline">{data.machine.machine_code}</Link> : <span className="text-muted">—</span>}</div>
-              <div>Mold: {data.mold ? <Link to={`/mrp/molds/${data.mold.id}`} className="font-mono text-accent hover:underline">{data.mold.mold_code}</Link> : <span className="text-muted">—</span>}</div>
-              <div className="text-muted">QC inspections: Sprint 7</div>
-            </div>
+            {/* Sprint 6 audit §3.2: replace the inline list with the proper
+                LinkedRecords component so the WO detail right panel matches
+                the SO detail panel and the documented design system. */}
+            <LinkedRecords
+              groups={[
+                ...(data.sales_order ? [{
+                  label: 'Sales Order',
+                  items: [{
+                    id: data.sales_order.so_number,
+                    href: `/crm/sales-orders/${data.sales_order.id}`,
+                  }],
+                }] : []),
+                ...(data.machine || data.mold ? [{
+                  label: 'Resources',
+                  items: [
+                    ...(data.machine ? [{
+                      id: data.machine.machine_code,
+                      href: `/mrp/machines/${data.machine.id}`,
+                      meta: data.machine.name,
+                    }] : []),
+                    ...(data.mold ? [{
+                      id: data.mold.mold_code,
+                      href: `/mrp/molds/${data.mold.id}`,
+                      meta: data.mold.name,
+                    }] : []),
+                  ],
+                }] : []),
+                ...(data.materials && data.materials.length > 0 ? [{
+                  label: 'Materials',
+                  items: data.materials.map((m) => ({
+                    id: m.item?.code ?? '—',
+                    meta: `${Number(m.actual_quantity_issued).toFixed(3)} / ${Number(m.bom_quantity).toFixed(3)} ${m.item?.unit_of_measure ?? ''}`,
+                  })),
+                }] : []),
+                {
+                  label: 'Quality',
+                  items: [{ id: 'Inspections', meta: 'Sprint 7 — in-process + outgoing AQL' }],
+                },
+              ]}
+            />
+          </Panel>
+          <Panel title="Activity">
+            <ActivityStream
+              items={[
+                { dot: 'success' as const, text: <>Work order <span className="font-mono">{data.wo_number}</span> created.</>, time: data.created_at?.slice(0, 10) ?? '' },
+                ...(data.actual_start ? [{
+                  dot: 'info' as const,
+                  text: <>Production started.</>,
+                  time: data.actual_start.slice(0, 10),
+                }] : []),
+                ...(data.actual_end ? [{
+                  dot: 'success' as const,
+                  text: <>Production completed.</>,
+                  time: data.actual_end.slice(0, 10),
+                }] : []),
+                ...(data.pause_reason ? [{
+                  dot: 'warning' as const,
+                  text: <>Paused: {data.pause_reason}</>,
+                  time: data.updated_at?.slice(0, 10) ?? '',
+                }] : []),
+              ]}
+            />
           </Panel>
         </div>
       </div>

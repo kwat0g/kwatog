@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Payroll;
 
+use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Payroll\Enums\PayrollPeriodStatus;
 use App\Modules\Payroll\Models\PayrollPeriod;
@@ -26,10 +27,16 @@ class PayrollPeriodLifecycleTest extends TestCase
 
     private function makeUser(): User
     {
+        // Sprint 6 audit: users.role_id is NOT NULL — pick the System Admin
+        // role that RolePermissionSeeder seeded in setUp(). This unblocks the
+        // 16 pre-existing PHPUnit failures on this test file documented in
+        // plans/SPRINT-6-STATUS.md §Known gaps.
+        $roleId = Role::query()->orderBy('id')->value('id');
         return User::create([
-            'name' => 'Tester '.uniqid(),
-            'email' => 't_'.uniqid().'@x.test',
+            'name'     => 'Tester '.uniqid(),
+            'email'    => 't_'.uniqid().'@x.test',
             'password' => bcrypt('Password1!'),
+            'role_id'  => $roleId,
         ]);
     }
 

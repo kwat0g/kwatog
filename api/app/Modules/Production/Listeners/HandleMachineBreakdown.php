@@ -57,7 +57,9 @@ class HandleMachineBreakdown implements ShouldQueue
         $machine = Machine::find($event->machine->id);
         if (! $machine) return;
 
-        DB::transaction(function () use ($machine, $event) {
+        $pausedWo = null;
+
+        DB::transaction(function () use ($machine, $event, &$pausedWo) {
             $woId = $machine->current_work_order_id;
             if ($woId) {
                 $wo = WorkOrder::find($woId);
@@ -67,14 +69,35 @@ class HandleMachineBreakdown implements ShouldQueue
                         $event->reason ?? 'Machine breakdown',
                         MachineDowntimeCategory::Breakdown,
                     );
+                    $pausedWo = $wo->fresh();
                 }
             }
-            // TODO: enqueue NotificationService notification to maintenance head
-            // and PPC head with the alternative-machine suggestion list. The
-            // candidates query is:
-            //   Machine::where('status', 'idle')
-            //     ->whereHas('compatibleMolds', fn ($q) => $q->where('id', $wo->mold_id))
-            //     ->get()
+        });
+
+        // Sprint 6 audit §1.8: surface candidate machines and broadcast the
+        // breakdown event so the dashboard's BreakdownAlertCard updates and
+        // PPC heads can drag a paused WO to a different machine.
+        $candidates = [];
+        if ($pausedWo && $pausedWo->mold_id) {
+            $candidates = Machine::where('status', 'idle')
+                ->whereHas('compatibleMolds', fn ($q) => $q->where('id', $pausedWo->mold_id))
+                ->get(['id', 'machine_code', 'name'])
+                ->map(fn ($m) => [
+                    'id'           => $m->hash_id,
+                    'machine_code' => $m->machine_code,
+                    'name'         => $m->name,
+                ])
+                ->values()
+                ->all();
+        }
+
+        DB::afterCommit(function () use ($machine, $pausedWo, $candidates, $event) {
+            event(new \App\Modules\Production\Events\MachineBreakdownDetected(
+                $machine->fresh(),
+                $pausedWo,
+                $candidates,
+                $event->reason,
+            ));
         });
     }
 

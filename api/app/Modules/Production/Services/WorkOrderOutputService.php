@@ -114,8 +114,11 @@ class WorkOrderOutputService
             ]);
 
             // Bump mold shot count (may auto-flip mold→Maintenance at threshold).
+            // Sprint 6 audit §1.6: lock the mold row inside this transaction
+            // so concurrent output recordings on the same mold cannot lose a
+            // shot (lockForUpdate matches the WO row lock taken above).
             if ($fresh->mold_id) {
-                $mold = Mold::find($fresh->mold_id);
+                $mold = Mold::lockForUpdate()->find($fresh->mold_id);
                 if ($mold) {
                     $this->molds->incrementShots($mold, $total);
                 }

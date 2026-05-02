@@ -13,7 +13,13 @@ class WorkOrderOutputResource extends JsonResource
     {
         return [
             'id'           => $this->hash_id,
-            'work_order_id'=> $this->work_order_id,
+            // Sprint 6 audit §1.3: never expose raw integer FKs. Surface the
+            // parent WO via its hash_id when eager-loaded; callers that need
+            // the WO link already have it from the route context.
+            'work_order'   => $this->whenLoaded('workOrder', fn () => $this->workOrder ? [
+                'id'        => $this->workOrder->hash_id,
+                'wo_number' => $this->workOrder->wo_number,
+            ] : null),
             'recorded_at'  => optional($this->recorded_at)->toIso8601String(),
             'good_count'   => (int) $this->good_count,
             'reject_count' => (int) $this->reject_count,
