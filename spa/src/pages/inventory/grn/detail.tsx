@@ -11,9 +11,11 @@ import { Modal } from '@/components/ui/Modal';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { Textarea } from '@/components/ui/Textarea';
+import { ChainHeader } from '@/components/chain';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
+import type { ChainStep } from '@/types/chain';
 
 export default function GrnDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
@@ -65,6 +67,19 @@ export default function GrnDetailPage() {
         }
       />
       <div className="px-5 py-4 space-y-4">
+        <Panel title="Procure-to-pay chain">
+          <ChainHeader steps={[
+            { key: 'po',  label: data.purchase_order ? `PO ${data.purchase_order.po_number}` : 'PO',
+              state: data.purchase_order ? 'done' : 'pending' },
+            { key: 'grn', label: 'GRN Created', date: formatDate(data.received_date), state: 'done' },
+            { key: 'qc',  label: 'QC',
+              state: data.status === 'pending_qc' ? 'active' : data.status === 'rejected' ? 'pending' : 'done' },
+            { key: 'stock', label: 'Stock Updated',
+              state: data.status === 'accepted' || data.status === 'partial_accepted' ? 'done' : 'pending' },
+            { key: 'bill', label: 'Bill', state: 'pending' },
+            { key: 'paid', label: 'Paid',  state: 'pending' },
+          ] satisfies ChainStep[]} />
+        </Panel>
         <Panel title="Header">
           <dl className="grid grid-cols-4 gap-y-3 gap-x-6 text-sm">
             <div><dt className="text-2xs uppercase tracking-wider text-muted">PO</dt><dd className="font-mono">{data.purchase_order?.po_number ?? '—'}</dd></div>

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Purchasing\Models;
 
+use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Inventory\Models\Item;
@@ -13,7 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ApprovedSupplier extends Model
 {
-    use HasFactory, HasHashId;
+    use HasFactory, HasHashId, HasAuditLog;
 
     protected $fillable = [
         'item_id', 'vendor_id', 'is_preferred',

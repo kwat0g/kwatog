@@ -12,7 +12,7 @@ class PurchaseOrderItemResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'id'                       => $this->id,
+            'id' => (int) $this->id,
             'purchase_request_item_id' => $this->purchase_request_item_id,
             'item'                     => $this->whenLoaded('item', fn () => [
                 'id'              => $this->item->hash_id,

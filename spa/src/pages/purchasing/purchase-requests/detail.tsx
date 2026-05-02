@@ -8,11 +8,13 @@ import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonTable } from '@/components/ui/Skeleton';
+import { ChainHeader } from '@/components/chain';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
-import type { ApprovalRecord, PurchaseRequestStatus } from '@/types/purchasing';
+import type { ApprovalRecord, PurchaseRequest, PurchaseRequestStatus } from '@/types/purchasing';
+import type { ChainStep } from '@/types/chain';
 
 const statusVariant: Record<PurchaseRequestStatus, 'neutral' | 'warning' | 'info' | 'success' | 'danger'> = {
   draft: 'neutral', pending: 'info', approved: 'success', rejected: 'danger',
@@ -83,7 +85,12 @@ export default function PurchaseRequestDetailPage() {
           </div>
         }
       />
-      <div className="px-5 py-4 grid grid-cols-3 gap-4">
+      <div className="px-5 py-4 space-y-4">
+        <Panel title="Approval chain">
+          <ChainHeader steps={buildPrChainSteps(data)} />
+        </Panel>
+      </div>
+      <div className="px-5 grid grid-cols-3 gap-4 pb-6">
         <div className="col-span-2 space-y-4">
           <Panel title="Header">
             <dl className="grid grid-cols-3 gap-y-3 gap-x-6 text-sm">
@@ -141,6 +148,34 @@ export default function PurchaseRequestDetailPage() {
       </div>
     </div>
   );
+}
+
+/** PR chain: Draft → Submitted → each approval step → Approved → Converted. */
+function buildPrChainSteps(pr: PurchaseRequest): ChainStep[] {
+  const steps: ChainStep[] = [
+    { key: 'draft', label: 'Draft', date: formatDate(pr.date),
+      state: pr.status === 'draft' ? 'active' : 'done' },
+    { key: 'submit', label: 'Submitted', date: pr.submitted_at ? formatDate(pr.submitted_at) : undefined,
+      state: pr.submitted_at ? 'done' : pr.status === 'draft' ? 'pending' : 'pending' },
+  ];
+  for (const r of (pr.approval_records ?? [])) {
+    steps.push({
+      key: `step-${r.step_order}`,
+      label: r.role_slug.replace(/_/g, ' '),
+      date: r.acted_at ? new Date(r.acted_at).toLocaleDateString() : undefined,
+      state: r.action === 'approved' ? 'done' : r.action === 'pending' ? 'active' : 'pending',
+    });
+  }
+  steps.push({
+    key: 'approved', label: 'Approved',
+    date: pr.approved_at ? formatDate(pr.approved_at) : undefined,
+    state: pr.status === 'approved' ? 'active' : pr.status === 'converted' ? 'done' : 'pending',
+  });
+  steps.push({
+    key: 'converted', label: 'Converted to PO',
+    state: pr.status === 'converted' ? 'done' : 'pending',
+  });
+  return steps;
 }
 
 function ApprovalChain({ records }: { records: ApprovalRecord[] }) {
