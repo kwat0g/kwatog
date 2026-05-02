@@ -12,9 +12,14 @@ class AccountResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        $current = $this->resource->getAttribute('current_balance');
-        $td      = $this->resource->getAttribute('total_debit');
-        $tc      = $this->resource->getAttribute('total_credit');
+        // Use the raw attributes array, NOT getAttribute(): strict mode
+        // (Model::shouldBeStrict()) throws when an unknown attribute key is
+        // accessed via the magic getter. The flat list endpoint doesn't
+        // pre-compute these; only AccountService::tree() does.
+        $attrs   = $this->resource->getAttributes();
+        $current = $attrs['current_balance'] ?? null;
+        $td      = $attrs['total_debit']     ?? null;
+        $tc      = $attrs['total_credit']    ?? null;
 
         return [
             'id'             => $this->hash_id,

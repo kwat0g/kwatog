@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { accountsApi } from '@/api/accounting/accounts';
@@ -26,7 +26,17 @@ export default function ChartOfAccountsPage() {
   });
 
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const allTopLevel = useMemo(() => new Set((data ?? []).map((a) => a.id)), [data]);
+  const [didInit, setDidInit] = useState(false);
+
+  // Default: expand top-level groups once on first load. Users can then
+  // collapse them freely (previously a `forceExpanded` flag made them
+  // permanently open and the toggle did nothing on roots).
+  useEffect(() => {
+    if (!didInit && data && data.length > 0) {
+      setExpanded(new Set(data.map((a) => a.id)));
+      setDidInit(true);
+    }
+  }, [data, didInit]);
 
   const toggle = (id: string) => {
     setExpanded((prev) => {
@@ -38,7 +48,6 @@ export default function ChartOfAccountsPage() {
 
   const expandAll = () => setExpanded(new Set([...collectIds(data ?? [])]));
   const collapseAll = () => setExpanded(new Set());
-  const isExpanded = (id: string) => expanded.has(id) || allTopLevel.has(id);
 
   return (
     <div>
@@ -79,7 +88,7 @@ export default function ChartOfAccountsPage() {
             </div>
             <div>
               {data.map((root) => (
-                <TreeRow key={root.id} node={root} depth={0} expanded={expanded} onToggle={toggle} forceExpanded />
+                <TreeRow key={root.id} node={root} depth={0} expanded={expanded} onToggle={toggle} />
               ))}
             </div>
           </div>
@@ -108,10 +117,10 @@ function collectIds(nodes: Account[]): string[] {
 }
 
 function TreeRow({
-  node, depth, expanded, onToggle, forceExpanded,
-}: { node: Account; depth: number; expanded: Set<string>; onToggle: (id: string) => void; forceExpanded?: boolean }) {
+  node, depth, expanded, onToggle,
+}: { node: Account; depth: number; expanded: Set<string>; onToggle: (id: string) => void }) {
   const hasChildren = (node.children?.length ?? 0) > 0;
-  const isOpen = forceExpanded || expanded.has(node.id);
+  const isOpen = expanded.has(node.id);
 
   return (
     <>

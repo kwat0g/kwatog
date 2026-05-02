@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { onFormInvalid } from '@/lib/formErrors';
+import { numberInputProps } from '@/lib/numberInput';
 import type { ApiValidationError } from '@/types';
 
 const schema = z.object({
@@ -81,6 +82,7 @@ export default function VendorFormPage({ mode }: { mode: 'create' | 'edit' }) {
             <Textarea label="Address" rows={2} className="col-span-2" {...register('address')} error={errors.address?.message} />
             <Input label="TIN" {...register('tin')} error={errors.tin?.message} />
             <Input label="Payment terms (days)" type="number" min={0} max={365} className="font-mono tabular-nums text-right"
+              {...numberInputProps({ decimal: false })}
               {...register('payment_terms_days')} error={errors.payment_terms_days?.message} />
           </div>
           <div className="mt-3">

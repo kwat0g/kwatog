@@ -21,6 +21,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
+import { numberInputProps } from '@/lib/numberInput';
 
 const paymentSchema = z.object({
   cash_account_id:  z.string().min(1, 'Required'),
@@ -199,7 +200,7 @@ export default function BillDetailPage() {
           </Select>
           <Input label="Payment date" type="date" required {...register('payment_date')} error={errors.payment_date?.message} />
           <Input label={`Amount (max ${formatPeso(bill.balance)})`} type="number" step="0.01" min="0.01" max={bill.balance}
-            className="font-mono tabular-nums text-right" required prefix="₱"
+            className="font-mono tabular-nums text-right" required prefix="₱" {...numberInputProps()}
             {...register('amount')} error={errors.amount?.message} />
           <Select label="Method" required {...register('payment_method')} error={errors.payment_method?.message}>
             <option value="cash">Cash</option>
