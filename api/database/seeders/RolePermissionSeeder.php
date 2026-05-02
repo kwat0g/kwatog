@@ -81,17 +81,36 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'loans.write_off',     'name' => 'Write Off Loan'],
             ],
 
-            // Accounting
+            // Accounting (Sprint 4 — Lean Accounting)
             'accounting' => [
                 ['slug' => 'accounting.view',                 'name' => 'View Accounting'],
+                ['slug' => 'accounting.dashboard.view',       'name' => 'View Finance Dashboard'],
+                // Chart of Accounts
+                ['slug' => 'accounting.coa.view',             'name' => 'View Chart of Accounts'],
                 ['slug' => 'accounting.coa.manage',           'name' => 'Manage Chart of Accounts'],
+                ['slug' => 'accounting.coa.deactivate',       'name' => 'Deactivate Accounts'],
+                // Journal Entries
+                ['slug' => 'accounting.journal.view',         'name' => 'View Journal Entries'],
                 ['slug' => 'accounting.journal.create',       'name' => 'Create Journal Entries'],
                 ['slug' => 'accounting.journal.post',         'name' => 'Post Journal Entries'],
+                ['slug' => 'accounting.journal.reverse',      'name' => 'Reverse Posted Journal Entries'],
+                // Vendors & Bills (AP)
+                ['slug' => 'accounting.vendors.view',         'name' => 'View Vendors'],
+                ['slug' => 'accounting.vendors.manage',       'name' => 'Manage Vendors'],
+                ['slug' => 'accounting.bills.view',           'name' => 'View Bills'],
                 ['slug' => 'accounting.bills.create',         'name' => 'Create Bills'],
+                ['slug' => 'accounting.bills.update',         'name' => 'Update / Cancel Bills'],
                 ['slug' => 'accounting.bills.pay',            'name' => 'Pay Bills'],
+                // Customers & Invoices (AR)
+                ['slug' => 'accounting.customers.view',       'name' => 'View Customers'],
+                ['slug' => 'accounting.customers.manage',     'name' => 'Manage Customers'],
+                ['slug' => 'accounting.invoices.view',        'name' => 'View Invoices'],
                 ['slug' => 'accounting.invoices.create',      'name' => 'Create Invoices'],
+                ['slug' => 'accounting.invoices.update',      'name' => 'Update / Cancel Invoices'],
                 ['slug' => 'accounting.invoices.collect',     'name' => 'Record Collections'],
+                // Statements
                 ['slug' => 'accounting.statements.view',      'name' => 'View Financial Statements'],
+                ['slug' => 'accounting.statements.export',    'name' => 'Export Statements (CSV/PDF)'],
             ],
 
             // Inventory
@@ -229,7 +248,11 @@ class RolePermissionSeeder extends Seeder
                 'description' => 'Manages PRs, POs, vendor relationships.',
                 'permissions' => array_merge(
                     $this->module('purchasing'),
-                    ['inventory.view', 'inventory.grn.create', 'supply_chain.shipments.manage'],
+                    [
+                        'inventory.view', 'inventory.grn.create', 'supply_chain.shipments.manage',
+                        // Read-only ledger insight for 3-way matching (Sprint 5).
+                        'accounting.vendors.view', 'accounting.bills.view',
+                    ],
                 ),
             ],
             'warehouse_staff' => [
