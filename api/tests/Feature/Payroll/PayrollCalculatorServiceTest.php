@@ -66,10 +66,12 @@ class PayrollCalculatorServiceTest extends TestCase
 
     private function makePeriod(bool $firstHalf = true, ?string $start = null, ?string $end = null): PayrollPeriod
     {
+        $roleId = \App\Modules\Auth\Models\Role::query()->orderBy('id')->value('id');
         $userId = \App\Modules\Auth\Models\User::create([
-            'name' => 'Tester',
-            'email' => 't_'.uniqid().'@x.test',
+            'name'     => 'Tester',
+            'email'    => 't_'.uniqid().'@x.test',
             'password' => bcrypt('Password1!'),
+            'role_id'  => $roleId,
         ])->id;
 
         $start = $start ?? '2026-04-01';

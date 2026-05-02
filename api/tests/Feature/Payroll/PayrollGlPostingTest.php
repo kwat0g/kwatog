@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Payroll;
 
 use App\Common\Services\SettingsService;
+use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
@@ -34,10 +35,12 @@ class PayrollGlPostingTest extends TestCase
 
     private function fullySetup(): array
     {
+        $roleId = Role::query()->orderBy('id')->value('id');
         $user = User::create([
-            'name' => 'Tester '.uniqid(),
-            'email' => 't_'.uniqid().'@x.test',
+            'name'     => 'Tester '.uniqid(),
+            'email'    => 't_'.uniqid().'@x.test',
             'password' => bcrypt('Password1!'),
+            'role_id'  => $roleId,
         ]);
 
         $dept = Department::create(['name' => 'Production', 'code' => 'PRD']);
@@ -134,7 +137,8 @@ class PayrollGlPostingTest extends TestCase
         $settings = app(SettingsService::class);
         $settings->set('modules.accounting', true, 'modules');
 
-        $user = User::create(['name' => 'X', 'email' => 'x_'.uniqid().'@x.test', 'password' => bcrypt('p')]);
+        $roleId = Role::query()->orderBy('id')->value('id');
+        $user = User::create(['name' => 'X', 'email' => 'x_'.uniqid().'@x.test', 'password' => bcrypt('p'), 'role_id' => $roleId]);
         $period = PayrollPeriod::create([
             'period_start' => '2026-04-01', 'period_end' => '2026-04-15',
             'payroll_date' => '2026-04-15', 'is_first_half' => true,
