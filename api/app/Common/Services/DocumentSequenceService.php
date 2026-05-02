@@ -31,6 +31,7 @@ class DocumentSequenceService
         'ncr'           => ['prefix' => 'NCR',  'reset' => 'monthly', 'pad' => 4],
         'grn'           => ['prefix' => 'GRN',  'reset' => 'monthly', 'pad' => 4],
         'sales_order'   => ['prefix' => 'SO',   'reset' => 'monthly', 'pad' => 4],
+        'mrp_plan'      => ['prefix' => 'MRP',  'reset' => 'monthly', 'pad' => 4],
         'leave_request' => ['prefix' => 'LR',   'reset' => 'monthly', 'pad' => 4],
         'inspection'    => ['prefix' => 'QC',   'reset' => 'monthly', 'pad' => 4],
         'pr'            => ['prefix' => 'PR',   'reset' => 'monthly', 'pad' => 4],

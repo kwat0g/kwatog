@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Modules\MRP\Controllers\BomController;
 use App\Modules\MRP\Controllers\MachineController;
 use App\Modules\MRP\Controllers\MoldController;
+use App\Modules\MRP\Controllers\MrpPlanController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -42,4 +43,11 @@ Route::middleware(['auth:sanctum', 'feature:mrp'])->prefix('mrp')->group(functio
     Route::delete('/molds/{mold}', [MoldController::class, 'destroy'])->middleware('permission:production.molds.manage');
     Route::post('/molds/{mold}/compatibility', [MoldController::class, 'syncCompatibility'])
         ->middleware('permission:production.molds.manage');
+
+    /* ─── MRP plans (Task 52) ─── */
+    Route::get('/plans',                    [MrpPlanController::class, 'index']) ->middleware('permission:mrp.plans.view');
+    Route::get('/plans/{mrpPlan}',          [MrpPlanController::class, 'show']) ->middleware('permission:mrp.plans.view');
+    Route::post('/plans/{mrpPlan}/rerun',   [MrpPlanController::class, 'rerun'])->middleware('permission:mrp.plans.run');
+    Route::get('/sales-orders/{salesOrder}/mrp-plan', [MrpPlanController::class, 'forSalesOrder'])
+        ->middleware('permission:mrp.plans.view');
 });

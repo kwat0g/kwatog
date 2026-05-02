@@ -27,6 +27,17 @@ class SalesOrderService
         private readonly PriceAgreementService $prices,
     ) {}
 
+    /**
+     * Resolve the MRP engine via the container so this module's tests can run
+     * without the MRP module being booted (and so unit tests can mock it).
+     * The actual class lives in App\Modules\MRP\Services\MrpEngineService.
+     */
+    private function mrpEngine(): ?\App\Modules\MRP\Services\MrpEngineService
+    {
+        $cls = '\\App\\Modules\\MRP\\Services\\MrpEngineService';
+        return class_exists($cls) ? app($cls) : null;
+    }
+
     public function list(array $filters): LengthAwarePaginator
     {
         $q = SalesOrder::query()
@@ -199,7 +210,16 @@ class SalesOrderService
         }
         return DB::transaction(function () use ($so) {
             $so->update(['status' => SalesOrderStatus::Confirmed->value]);
-            // TODO Sprint 6 Task 52: dispatch MrpEngineService::runForSalesOrder($so).
+
+            // Sprint 6 Task 52: trigger MRP run synchronously inside the
+            // confirmation transaction. Wrapped in try/catch so a broken BOM or
+            // missing supplier mapping fails the whole confirm with a 422 — the
+            // CRM officer has to fix the data before the SO can advance.
+            $engine = $this->mrpEngine();
+            if ($engine) {
+                $engine->runForSalesOrder($so);
+            }
+
             return $this->show($so->fresh());
         });
     }
