@@ -20,8 +20,12 @@ export default defineConfig({
       '/sanctum': { target: 'http://localhost', changeOrigin: false, secure: false },
     },
     hmr: {
-      // When accessed through Nginx proxy, HMR connects to the same host.
-      clientPort: Number(process.env.VITE_HMR_PORT) || 5173,
+      // When accessed through the Nginx proxy on port 80, the browser
+      // must connect its HMR WebSocket to the same origin — not Vite's
+      // internal port 5173. Override clientPort so it matches NGINX_PORT.
+      protocol: 'ws',
+      host: process.env.VITE_HMR_HOST || 'localhost',
+      clientPort: Number(process.env.VITE_HMR_PORT) || Number(process.env.NGINX_PORT) || 80,
     },
   },
   test: {
