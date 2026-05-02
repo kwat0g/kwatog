@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { Plus } from 'lucide-react';
 import { bomsApi, type BomListParams } from '@/api/mrp/boms';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
+import { usePermission } from '@/hooks/usePermission';
 import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
@@ -12,6 +14,8 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import type { Bom } from '@/types/mrp';
 
 export default function BomsListPage() {
+  const navigate = useNavigate();
+  const { can } = usePermission();
   const [filters, setFilters] = useState<BomListParams>({ page: 1, per_page: 25 });
 
   const { data, isLoading, isError, refetch } = useQuery({
@@ -50,6 +54,11 @@ export default function BomsListPage() {
       <PageHeader
         title="Bills of materials"
         subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'BOM' : 'BOMs'}` : undefined}
+        actions={can('mrp.boms.manage') ? (
+          <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/mrp/boms/create')}>
+            Add BOM
+          </Button>
+        ) : undefined}
       />
       <FilterBar
         filters={filterConfig}

@@ -119,8 +119,9 @@ const CreateSalesOrderPage      = lazy(() => import('@/pages/crm/sales-orders/cr
 const EditSalesOrderPage        = lazy(() => import('@/pages/crm/sales-orders/edit'));
 const SalesOrderDetailPage      = lazy(() => import('@/pages/crm/sales-orders/detail'));
 
-// MRP (Sprint 6 — Tasks 49, 50, 52, 53; machine/mold detail added in audit §3.1)
+// MRP (Sprint 6 — Tasks 49, 50, 52, 53; machine/mold detail + BOM create added in audit §3.1, §3.4)
 const BomsListPage              = lazy(() => import('@/pages/mrp/boms'));
+const CreateBomPage             = lazy(() => import('@/pages/mrp/boms/create'));
 const BomDetailPage             = lazy(() => import('@/pages/mrp/boms/detail'));
 const MachinesListPage          = lazy(() => import('@/pages/mrp/machines'));
 const MachineDetailPage         = lazy(() => import('@/pages/mrp/machines/detail'));
@@ -483,6 +484,8 @@ export default function App() {
 
             <Route path="/mrp/boms"
               element={<PermissionGuard permission="mrp.boms.view"><BomsListPage /></PermissionGuard>} />
+            <Route path="/mrp/boms/create"
+              element={<PermissionGuard permission="mrp.boms.manage"><CreateBomPage /></PermissionGuard>} />
             <Route path="/mrp/boms/:id"
               element={<PermissionGuard permission="mrp.boms.view"><BomDetailPage /></PermissionGuard>} />
 
