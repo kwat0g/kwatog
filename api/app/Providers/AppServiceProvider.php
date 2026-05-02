@@ -7,7 +7,10 @@ namespace App\Providers;
 use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Observers\JournalEntryObserver;
+use App\Modules\Inventory\Events\StockMovementCompleted;
+use App\Modules\Inventory\Listeners\CheckReorderPoint;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 
@@ -28,5 +31,8 @@ class AppServiceProvider extends ServiceProvider
 
         // Sprint 4: invalidate financial-statement caches on JE mutation.
         JournalEntry::observe(JournalEntryObserver::class);
+
+        // Sprint 5: low-stock auto-replenishment listener.
+        Event::listen(StockMovementCompleted::class, [CheckReorderPoint::class, 'handle']);
     }
 }

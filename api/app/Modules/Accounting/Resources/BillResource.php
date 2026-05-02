@@ -27,6 +27,14 @@ class BillResource extends JsonResource
             'is_overdue'     => $this->isOverdue(),
             'aging_bucket'   => $this->agingBucket(),
             'remarks'        => $this->remarks,
+            'has_variances'  => (bool) $this->has_variances,
+            'three_way_overridden' => (bool) $this->three_way_overridden,
+            'three_way_override_reason' => $this->three_way_override_reason,
+            'three_way_match_url' => $this->purchase_order_id ? '/api/v1/purchasing/three-way-match/'.$this->hash_id : null,
+            'purchase_order' => $this->whenLoaded('purchaseOrder', fn () => $this->purchaseOrder ? [
+                'id'        => $this->purchaseOrder->hash_id,
+                'po_number' => $this->purchaseOrder->po_number,
+            ] : null),
             'vendor'         => $this->whenLoaded('vendor', fn () => $this->vendor ? [
                 'id' => $this->vendor->hash_id, 'name' => $this->vendor->name,
             ] : null),

@@ -93,10 +93,29 @@ const SECTIONS: NavSection[] = [
     ],
   },
   {
+    label: 'Inventory',
+    items: [
+      { to: '/inventory/dashboard',          label: 'Dashboard',          icon: LayoutDashboard, feature: 'inventory', permission: 'inventory.view' },
+      { to: '/inventory/items',              label: 'Items',              icon: Boxes,           feature: 'inventory', permission: 'inventory.view' },
+      { to: '/inventory/categories',         label: 'Categories',         icon: Layers,          feature: 'inventory', permission: 'inventory.view' },
+      { to: '/inventory/warehouse',          label: 'Warehouse',          icon: Building2,       feature: 'inventory', permission: 'inventory.view' },
+      { to: '/inventory/stock-levels',       label: 'Stock levels',       icon: Boxes,           feature: 'inventory', permission: 'inventory.view' },
+      { to: '/inventory/movements',          label: 'Movements',          icon: TimerReset,      feature: 'inventory', permission: 'inventory.view' },
+      { to: '/inventory/grn',                label: 'GRN',                icon: FileText,        feature: 'inventory', permission: 'inventory.view' },
+      { to: '/inventory/material-issues',    label: 'Material issues',    icon: FileEdit,        feature: 'inventory', permission: 'inventory.view' },
+    ],
+  },
+  {
+    label: 'Purchasing',
+    items: [
+      { to: '/purchasing/purchase-requests', label: 'Purchase requests', icon: FileText,     feature: 'purchasing', permission: 'purchasing.view' },
+      { to: '/purchasing/purchase-orders',   label: 'Purchase orders',   icon: ShoppingCart, feature: 'purchasing', permission: 'purchasing.view' },
+      { to: '/purchasing/approved-suppliers',label: 'Approved suppliers', icon: Users2,      feature: 'purchasing', permission: 'purchasing.view' },
+    ],
+  },
+  {
     label: 'Operations',
     items: [
-      { to: '/inventory', label: 'Inventory', icon: Boxes, feature: 'inventory', permission: 'inventory.view' },
-      { to: '/purchasing/purchase-orders', label: 'Purchasing', icon: ShoppingCart, feature: 'purchasing', permission: 'purchasing.view' },
       { to: '/supply-chain/deliveries', label: 'Supply Chain', icon: Truck, feature: 'supply_chain', permission: 'supply_chain.view' },
       { to: '/production/work-orders', label: 'Production', icon: Factory, feature: 'production', permission: 'production.view' },
       { to: '/mrp/plans', label: 'MRP', icon: Layers, feature: 'mrp', permission: 'mrp.view' },
