@@ -21,6 +21,9 @@ import {
   TimerReset,
   CalendarClock,
   PartyPopper,
+  FileEdit,
+  Landmark,
+  Receipt,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
@@ -64,7 +67,9 @@ const SECTIONS: NavSection[] = [
       { to: '/hr/attendance/holidays', label: 'Holidays', icon: PartyPopper, feature: 'attendance', permission: 'attendance.view' },
       { to: '/hr/leaves', label: 'Leaves', icon: CalendarDays, feature: 'leave', permission: 'leave.view' },
       { to: '/payroll/periods', label: 'Payroll', icon: Wallet, feature: 'payroll', permission: 'payroll.view' },
+      { to: '/payroll/adjustments', label: 'Adjustments', icon: FileEdit, feature: 'payroll', permission: 'payroll.view' },
       { to: '/hr/loans', label: 'Loans', icon: HandCoins, feature: 'loans', permission: 'loans.view' },
+      { to: '/self-service/payslips', label: 'My Payslips', icon: Receipt, permission: 'payroll.view' },
     ],
   },
   {
@@ -91,6 +96,7 @@ const SECTIONS: NavSection[] = [
     items: [
       { to: '/admin/settings', label: 'Settings', icon: SettingsIcon, permission: 'admin.settings.manage' },
       { to: '/admin/roles', label: 'Roles', icon: Lock, permission: 'admin.roles.manage' },
+      { to: '/admin/gov-tables', label: 'Gov Tables', icon: Landmark, permission: 'admin.gov_tables.manage' },
     ],
   },
 ];

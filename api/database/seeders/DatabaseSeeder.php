@@ -23,6 +23,10 @@ class DatabaseSeeder extends Seeder
             ShiftSeeder::class,            // Task 16
             HolidaySeeder::class,          // Task 17
             LeaveTypeSeeder::class,        // Task 20
+
+            // Sprint 3 — Hire to Retire (Part 2: Payroll).
+            GovernmentTableSeeder::class,      // Task 23
+            PayrollChartAccountsSeeder::class, // Task 29 — front-loads minimum COA so GL posting works before Sprint 4 ships.
         ]);
     }
 }

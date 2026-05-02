@@ -5,6 +5,7 @@ import { ModuleGuard } from '@/components/guards/ModuleGuard';
 import { PermissionGuard } from '@/components/guards/PermissionGuard';
 import { AppLayout } from '@/layouts/AppLayout';
 import { AuthLayout } from '@/layouts/AuthLayout';
+import { SelfServiceLayout } from '@/layouts/SelfServiceLayout';
 import { FullPageLoader } from '@/components/ui/Spinner';
 
 // Auth flow
@@ -46,6 +47,16 @@ const LeaveDetailPage = lazy(() => import('@/pages/leaves/detail'));
 const LoansPage = lazy(() => import('@/pages/loans'));
 const CreateLoanPage = lazy(() => import('@/pages/loans/create'));
 const LoanDetailPage = lazy(() => import('@/pages/loans/detail'));
+
+// Payroll (Sprint 3 — Tasks 23-30)
+const PayrollPeriodsPage         = lazy(() => import('@/pages/payroll/periods'));
+const CreatePayrollPeriodPage    = lazy(() => import('@/pages/payroll/periods/create'));
+const PayrollPeriodDetailPage    = lazy(() => import('@/pages/payroll/periods/detail'));
+const PayrollEmployeeDetailPage  = lazy(() => import('@/pages/payroll/periods/employee-detail'));
+const PayrollAdjustmentsPage     = lazy(() => import('@/pages/payroll/adjustments'));
+const CreatePayrollAdjustmentPage = lazy(() => import('@/pages/payroll/adjustments/create'));
+const SelfServicePayslipsPage    = lazy(() => import('@/pages/self-service/payslips'));
+const AdminGovTablesPage         = lazy(() => import('@/pages/admin/gov-tables'));
 
 // Errors
 const NotFoundPage = lazy(() => import('@/pages/error/NotFound'));
@@ -173,6 +184,34 @@ export default function App() {
             />
           </Route>
 
+          {/* Payroll module */}
+          <Route element={<ModuleGuard module="payroll" />}>
+            <Route
+              path="/payroll/periods"
+              element={<PermissionGuard permission="payroll.view"><PayrollPeriodsPage /></PermissionGuard>}
+            />
+            <Route
+              path="/payroll/periods/create"
+              element={<PermissionGuard permission="payroll.periods.create"><CreatePayrollPeriodPage /></PermissionGuard>}
+            />
+            <Route
+              path="/payroll/periods/:id"
+              element={<PermissionGuard permission="payroll.view"><PayrollPeriodDetailPage /></PermissionGuard>}
+            />
+            <Route
+              path="/payroll/periods/:id/employee/:eid"
+              element={<PermissionGuard permission="payroll.view"><PayrollEmployeeDetailPage /></PermissionGuard>}
+            />
+            <Route
+              path="/payroll/adjustments"
+              element={<PermissionGuard permission="payroll.view"><PayrollAdjustmentsPage /></PermissionGuard>}
+            />
+            <Route
+              path="/payroll/adjustments/create"
+              element={<PermissionGuard permission="payroll.adjustments.create"><CreatePayrollAdjustmentPage /></PermissionGuard>}
+            />
+          </Route>
+
           {/* Admin */}
           <Route
             path="/admin/roles"
@@ -205,6 +244,28 @@ export default function App() {
                 <AuditLogsPage />
               </PermissionGuard>
             }
+          />
+          <Route
+            path="/admin/gov-tables"
+            element={
+              <PermissionGuard permission="admin.gov_tables.manage">
+                <AdminGovTablesPage />
+              </PermissionGuard>
+            }
+          />
+        </Route>
+
+        {/* Self-service portal — separate mobile-friendly layout (SelfServiceLayout) */}
+        <Route
+          element={
+            <AuthGuard>
+              <SelfServiceLayout />
+            </AuthGuard>
+          }
+        >
+          <Route
+            path="/self-service/payslips"
+            element={<PermissionGuard permission="payroll.view"><SelfServicePayslipsPage /></PermissionGuard>}
           />
         </Route>
 

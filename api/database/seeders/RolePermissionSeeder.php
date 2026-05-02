@@ -70,6 +70,7 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'payroll.periods.finalize',    'name' => 'Finalize Payroll'],
                 ['slug' => 'payroll.adjustments.create',  'name' => 'Create Payroll Adjustment'],
                 ['slug' => 'payroll.payslip.view_all',    'name' => 'View Any Payslip'],
+                ['slug' => 'payroll.thirteenth_month.run', 'name' => 'Run 13th Month Pay'],
             ],
 
             // Loans
@@ -186,7 +187,15 @@ class RolePermissionSeeder extends Seeder
                     $this->module('hr'),
                     $this->module('attendance'),
                     $this->module('leave'),
-                    ['payroll.view', 'payroll.payslip.view_all'],
+                    [
+                        'payroll.view',
+                        'payroll.payslip.view_all',
+                        'payroll.periods.create',
+                        'payroll.periods.compute',
+                        'payroll.periods.approve',
+                        'payroll.adjustments.create',
+                        'payroll.thirteenth_month.run',
+                    ],
                 ),
             ],
             'finance_officer' => [
@@ -196,6 +205,7 @@ class RolePermissionSeeder extends Seeder
                     $this->module('payroll'),
                     $this->module('accounting'),
                     $this->module('loans'),
+                    ['admin.gov_tables.manage'],
                 ),
             ],
             'production_manager' => [
@@ -260,6 +270,9 @@ class RolePermissionSeeder extends Seeder
                 'description' => 'Self-service portal access only.',
                 'permissions' => [
                     'leave.view', 'leave.create',
+                    // Self-service: payroll.view is server-scoped to own payrolls
+                    // by PayrollController::index() — employees never see others.
+                    'payroll.view',
                 ],
             ],
         ];
