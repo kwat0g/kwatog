@@ -17,7 +17,7 @@ class InspectionResource extends JsonResource
             'stage'              => $this->stage instanceof \BackedEnum ? $this->stage->value : $this->stage,
             'status'             => $this->status instanceof \BackedEnum ? $this->status->value : $this->status,
             'entity_type'        => $this->entity_type instanceof \BackedEnum ? $this->entity_type->value : $this->entity_type,
-            'entity_id'          => $this->entity_id, // raw int kept for FE polymorphic link assembly
+            'entity_hash_id'     => $this->entity_id ? app('hashids')->encode($this->entity_id) : null,
             'batch_quantity'     => (int) $this->batch_quantity,
             'sample_size'        => (int) $this->sample_size,
             'aql_code'           => $this->aql_code,

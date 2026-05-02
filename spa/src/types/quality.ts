@@ -55,7 +55,7 @@ export interface Inspection {
   stage: InspectionStage;
   status: InspectionStatus;
   entity_type: InspectionEntityType | null;
-  entity_id: number | null;
+  entity_hash_id: string | null;
   batch_quantity: number;
   sample_size: number;
   aql_code: string | null;
