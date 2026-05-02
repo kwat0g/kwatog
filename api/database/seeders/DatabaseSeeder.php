@@ -41,6 +41,7 @@ class DatabaseSeeder extends Seeder
             CustomerSeeder::class,             // Task 47 (upstream of CRM)
             ProductSeeder::class,              // Task 47
             PriceAgreementSeeder::class,       // Task 47
+            BomSeeder::class,                  // Task 49 (depends on products + items)
         ]);
     }
 }
