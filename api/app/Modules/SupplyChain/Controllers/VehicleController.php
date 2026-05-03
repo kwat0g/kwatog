@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\SupplyChain\Controllers;
 
+use App\Common\Support\SearchOperator;
 use App\Modules\SupplyChain\Models\Vehicle;
 use App\Modules\SupplyChain\Resources\VehicleResource;
 use Illuminate\Http\JsonResponse;
@@ -19,7 +20,7 @@ class VehicleController
         if ($request->filled('status')) $q->where('status', $request->query('status'));
         if ($request->filled('search')) {
             $term = '%'.trim((string) $request->query('search')).'%';
-            $q->where(fn ($b) => $b->where('plate_number', 'like', $term)->orWhere('name', 'like', $term));
+            $q->where(fn ($b) => $b->where('plate_number', SearchOperator::like(), $term)->orWhere('name', SearchOperator::like(), $term));
         }
         return VehicleResource::collection(
             $q->orderBy('name')->paginate(min((int) $request->query('per_page', 50), 100))

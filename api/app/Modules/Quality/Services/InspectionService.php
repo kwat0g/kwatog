@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Quality\Services;
 
+use App\Common\Support\SearchOperator;
 use App\Common\Services\DocumentSequenceService;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
@@ -57,10 +58,10 @@ class InspectionService
         if (! empty($filters['search'])) {
             $term = '%'.trim((string) $filters['search']).'%';
             $q->where(fn (Builder $b) => $b
-                ->where('inspection_number', 'like', $term)
+                ->where('inspection_number', SearchOperator::like(), $term)
                 ->orWhereHas('product', fn (Builder $p) => $p
-                    ->where('part_number', 'like', $term)
-                    ->orWhere('name', 'like', $term)));
+                    ->where('part_number', SearchOperator::like(), $term)
+                    ->orWhere('name', SearchOperator::like(), $term)));
         }
 
         return $q->orderByDesc('id')

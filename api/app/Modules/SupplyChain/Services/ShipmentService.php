@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\SupplyChain\Services;
 
+use App\Common\Support\SearchOperator;
 use App\Common\Services\DocumentSequenceService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Purchasing\Models\PurchaseOrder;
@@ -45,9 +46,9 @@ class ShipmentService
         if (! empty($filters['search'])) {
             $term = '%'.trim((string) $filters['search']).'%';
             $q->where(fn (Builder $b) => $b
-                ->where('shipment_number', 'like', $term)
-                ->orWhere('container_number', 'like', $term)
-                ->orWhere('bl_number', 'like', $term));
+                ->where('shipment_number', SearchOperator::like(), $term)
+                ->orWhere('container_number', SearchOperator::like(), $term)
+                ->orWhere('bl_number', SearchOperator::like(), $term));
         }
         return $q->orderByDesc('id')->paginate(min((int) ($filters['per_page'] ?? 20), 100));
     }
