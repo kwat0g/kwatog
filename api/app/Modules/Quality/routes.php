@@ -42,6 +42,8 @@ Route::middleware(['auth:sanctum', 'feature:quality'])->prefix('quality')->group
         ->middleware('permission:quality.inspections.manage');
     Route::post('/inspections/{inspection}/cancel',             [InspectionController::class, 'cancel'])
         ->middleware('permission:quality.inspections.manage');
+    Route::get('/inspections/{inspection}/coc',                 [InspectionController::class, 'coc'])
+        ->middleware('permission:quality.inspections.view');
 
     /* ─── NCRs (Task 61) ─── */
     Route::get('/ncrs',                                         [NcrController::class, 'index'])
