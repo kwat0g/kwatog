@@ -6,9 +6,14 @@ namespace Database\Seeders;
 
 use App\Common\Services\DocumentSequenceService;
 use App\Modules\Accounting\Models\Customer;
+use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\User;
+use App\Modules\Attendance\Enums\AttendanceStatus;
+use App\Modules\Attendance\Models\Attendance;
 use App\Modules\CRM\Enums\ComplaintStatus;
+use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Models\CustomerComplaint;
+use App\Modules\CRM\Models\PriceAgreement;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Services\SalesOrderService;
@@ -28,20 +33,25 @@ use Throwable;
 
 /**
  * Demo transactional data — populates the system end-to-end so the UI has
- * something to render across HR, Inventory, CRM, MRP, Production, and CRM
- * complaints. Idempotent: re-running is a no-op once seeded.
+ * something to render across HR, Attendance, Inventory, CRM, MRP, Production,
+ * Supply Chain, and CRM complaints. Idempotent: each section guards itself
+ * with a count check so re-runs only add what's missing.
  *
  *   php artisan db:seed --class=DemoDataSeeder
- *
- * Or include it in DatabaseSeeder for a fully populated environment.
  */
 class DemoDataSeeder extends Seeder
 {
+    private const TARGET_EMPLOYEES = 5;
+    private const TARGET_VENDORS   = 4;
+    private const TARGET_SOS       = 5;
+
     public function run(): void
     {
         $this->seedEmployees();
+        $this->seedVendors();
         $this->seedStockLevels();
-        $this->seedSalesOrder();
+        $this->seedAttendance();
+        $this->seedSalesOrders();
         $this->seedCustomerComplaint();
     }
 
@@ -51,12 +61,11 @@ class DemoDataSeeder extends Seeder
      */
     private function seedEmployees(): void
     {
-        if (Employee::count() > 0) {
-            $this->command?->info('Employees already exist, skipping.');
+        if (Employee::count() >= self::TARGET_EMPLOYEES) {
+            $this->command?->info('Employees already seeded.');
             return;
         }
 
-        // Pick the first position inside each requested department by code.
         $resolve = function (string $deptCode): ?array {
             $dept = Department::where('code', $deptCode)->first();
             if (! $dept) return null;
@@ -75,6 +84,7 @@ class DemoDataSeeder extends Seeder
 
         $created = 0;
         foreach ($samples as $i => $s) {
+            if (Employee::where('employee_no', $s['no'])->exists()) continue;
             $ids = $resolve($s['dept']);
             if (! $ids) continue;
 
@@ -108,14 +118,50 @@ class DemoDataSeeder extends Seeder
         $this->command?->info("Seeded {$created} demo employees.");
     }
 
+    /** Demo vendors used by the Procure-to-Pay chain. */
+    private function seedVendors(): void
+    {
+        if (Vendor::count() >= self::TARGET_VENDORS) {
+            $this->command?->info('Vendors already seeded.');
+            return;
+        }
+
+        $samples = [
+            ['name' => 'Megaplast Industries Corp.',     'tin' => '111-222-333-000', 'email' => 'sales@megaplast.ph',     'phone' => '+632-8123-4567', 'terms' => 30],
+            ['name' => 'Asia Pacific Polymers, Inc.',    'tin' => '111-222-444-000', 'email' => 'orders@apolymers.ph',    'phone' => '+632-8222-3344', 'terms' => 45],
+            ['name' => 'Tooling Pro Manufacturing',      'tin' => '111-222-555-000', 'email' => 'hello@toolingpro.ph',    'phone' => '+632-8345-1122', 'terms' => 30],
+            ['name' => 'Pacific Logistics Solutions',    'tin' => '111-222-666-000', 'email' => 'support@paclogistics.ph','phone' => '+632-8456-2244', 'terms' => 60],
+        ];
+
+        $created = 0;
+        foreach ($samples as $v) {
+            $existing = Vendor::where('name', $v['name'])->first();
+            if ($existing) continue;
+            Vendor::create([
+                'name'               => $v['name'],
+                'contact_person'     => 'Account Manager',
+                'email'              => $v['email'],
+                'phone'              => $v['phone'],
+                'address'            => 'Metro Manila, Philippines',
+                'tin'                => $v['tin'],
+                'payment_terms_days' => $v['terms'],
+                'is_active'          => true,
+            ]);
+            $created++;
+        }
+
+        $this->command?->info("Seeded {$created} demo vendors.");
+    }
+
     /**
      * Stock-level seed: every item gets between 100 and 2000 units in the
-     * first available raw-materials location, valued at standard_cost.
+     * first available raw-materials location (or finished-goods zone for FG
+     * items), valued at standard_cost.
      */
     private function seedStockLevels(): void
     {
         if (StockLevel::count() > 0) {
-            $this->command?->info('Stock levels already exist, skipping.');
+            $this->command?->info('Stock levels already seeded.');
             return;
         }
 
@@ -158,65 +204,143 @@ class DemoDataSeeder extends Seeder
     }
 
     /**
-     * One confirmed sales order. Going through SalesOrderService::create +
-     * confirm gives us a price-agreement-resolved order plus auto-generated
-     * MRP plan + draft work orders (Sprint 6 chain).
+     * Five working days of attendance per active employee — populates the
+     * attendance dashboard and gives the payroll calculator a real input.
      */
-    private function seedSalesOrder(): void
+    private function seedAttendance(): void
     {
-        if (SalesOrder::count() > 0) {
-            $this->command?->info('Sales orders already exist, skipping.');
+        if (Attendance::count() > 0) {
+            $this->command?->info('Attendance already seeded.');
             return;
         }
 
-        $admin    = User::first();
-        $customer = Customer::where('is_active', true)->first();
-        $product  = Product::where('is_active', true)->orderBy('id')->first();
-
-        if (! $admin || ! $customer || ! $product) {
-            $this->command?->warn('Admin user / customer / product missing; skipping demo SO.');
+        $employees = Employee::where('status', EmployeeStatus::Active->value)->get();
+        if ($employees->isEmpty()) {
+            $this->command?->warn('No active employees; skipping attendance.');
             return;
         }
 
-        try {
-            /** @var SalesOrderService $svc */
-            $svc = app(SalesOrderService::class);
-            $so = $svc->create([
-                'customer_id' => $customer->id,
-                'date'        => now()->toDateString(),
-                'items'       => [[
-                    'product_id'    => $product->id,
-                    'quantity'      => 500,
-                    'delivery_date' => now()->addDays(14)->toDateString(),
-                ]],
-                'payment_terms_days' => $customer->payment_terms_days ?? 30,
-                'delivery_terms'     => 'Ex-Works (Cavite)',
-                'notes'              => 'Demo seed — confirmed order showcasing the Order to Cash chain.',
-            ], $admin->id);
+        $created = 0;
+        $cursor = Carbon::today()->subDays(7);
+        for ($d = 0; $d < 5; $d++) {
+            // Skip weekends to mimic a normal work week.
+            while ($cursor->isWeekend()) $cursor->addDay();
+            $date = $cursor->copy();
 
-            $svc->confirm($so);
-            $this->command?->info("Seeded demo sales order {$so->so_number} (confirmed).");
-        } catch (Throwable $e) {
-            $this->command?->warn('Demo SO seeding skipped: ' . $e->getMessage());
-            $this->command?->warn('  at ' . $e->getFile() . ':' . $e->getLine());
-            // First few frames are usually enough to locate the bug.
-            $this->command?->warn(implode("\n", array_slice(explode("\n", $e->getTraceAsString()), 0, 10)));
+            foreach ($employees as $emp) {
+                Attendance::create([
+                    'employee_id'       => $emp->id,
+                    'date'              => $date->toDateString(),
+                    'shift_id'          => null,
+                    'time_in'           => $date->copy()->setTime(8, 0)->toDateTimeString(),
+                    'time_out'          => $date->copy()->setTime(17, 0)->toDateTimeString(),
+                    'regular_hours'     => 8.0,
+                    'overtime_hours'    => 0,
+                    'night_diff_hours'  => 0,
+                    'tardiness_minutes' => 0,
+                    'undertime_minutes' => 0,
+                    'is_rest_day'       => false,
+                    'status'            => AttendanceStatus::Present->value,
+                    'is_manual_entry'   => true,
+                ]);
+                $created++;
+            }
+            $cursor->addDay();
         }
+
+        $this->command?->info("Seeded {$created} attendance records (5 days × " . $employees->count() . ' employees).');
     }
 
     /**
-     * One open customer complaint. Inserted directly to skip the auto-NCR
-     * side-effect of ComplaintService — the demo just needs a row visible
-     * in the complaints list to showcase the 8D workflow.
+     * Up to TARGET_SOS sales orders. Confirms the first three so they
+     * trigger the MRP run and produce visible draft work orders. The rest
+     * stay draft so the UI has both states represented.
+     */
+    private function seedSalesOrders(): void
+    {
+        if (SalesOrder::count() >= self::TARGET_SOS) {
+            $this->command?->info('Sales orders already seeded.');
+            return;
+        }
+
+        $admin = User::where('email', 'admin@ogami.test')->first() ?? User::first();
+        if (! $admin) {
+            $this->command?->warn('No admin user; skipping sales orders.');
+            return;
+        }
+
+        // Pull the customer × product price-agreement matrix so we never hit
+        // NoPriceAgreementException. Each tuple is a guaranteed valid line.
+        $tuples = PriceAgreement::query()
+            ->where('is_active', true)
+            ->with(['customer:id,name,is_active,payment_terms_days', 'product:id,name,is_active'])
+            ->get()
+            ->filter(fn ($pa) => $pa->customer && $pa->product
+                && $pa->customer->is_active && $pa->product->is_active)
+            ->values();
+
+        if ($tuples->isEmpty()) {
+            $this->command?->warn('No active price agreements; skipping sales orders.');
+            return;
+        }
+
+        /** @var SalesOrderService $svc */
+        $svc = app(SalesOrderService::class);
+        $existing = SalesOrder::count();
+        $needed   = self::TARGET_SOS - $existing;
+        $confirmed = 0;
+        $createdCount = 0;
+
+        for ($i = 0; $i < $needed; $i++) {
+            $pa  = $tuples[($existing + $i) % $tuples->count()];
+            $qty = 100 + 50 * (($existing + $i) % 8); // 100, 150, 200, ...
+
+            try {
+                $so = $svc->create([
+                    'customer_id' => $pa->customer_id,
+                    'date'        => Carbon::today()->subDays(($existing + $i) * 2)->toDateString(),
+                    'items'       => [[
+                        'product_id'    => $pa->product_id,
+                        'quantity'      => $qty,
+                        'delivery_date' => Carbon::today()->addDays(7 + $i * 3)->toDateString(),
+                    ]],
+                    'payment_terms_days' => $pa->customer->payment_terms_days ?? 30,
+                    'delivery_terms'     => 'Ex-Works (Cavite)',
+                    'notes'              => 'Demo seed — order #' . ($existing + $i + 1),
+                ], $admin->id);
+                $createdCount++;
+
+                // Confirm the first three so MRP runs and we get visible WOs.
+                if ($confirmed < 3) {
+                    try {
+                        $svc->confirm($so);
+                        $confirmed++;
+                    } catch (Throwable $e) {
+                        $this->command?->warn("  Confirm failed on {$so->so_number}: " . $e->getMessage());
+                    }
+                }
+            } catch (Throwable $e) {
+                $this->command?->warn('  SO create failed: ' . $e->getMessage());
+            }
+        }
+
+        $this->command?->info("Seeded {$createdCount} sales orders ({$confirmed} confirmed → MRP).");
+    }
+
+    /**
+     * One open customer complaint linked to the first available SO.
+     * Inserted directly to skip the auto-NCR side-effect of ComplaintService —
+     * the demo just needs a row visible in the complaints list to showcase
+     * the 8D workflow.
      */
     private function seedCustomerComplaint(): void
     {
         if (CustomerComplaint::count() > 0) {
-            $this->command?->info('Customer complaints already exist, skipping.');
+            $this->command?->info('Customer complaints already seeded.');
             return;
         }
 
-        $admin    = User::first();
+        $admin    = User::where('email', 'admin@ogami.test')->first() ?? User::first();
         $customer = Customer::where('is_active', true)->first();
         $product  = Product::where('is_active', true)->orderBy('id')->first();
 
