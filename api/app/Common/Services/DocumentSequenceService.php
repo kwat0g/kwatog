@@ -42,6 +42,9 @@ class DocumentSequenceService
         'cash_advance'  => ['prefix' => 'CA',   'reset' => 'monthly', 'pad' => 4],
         'complaint'     => ['prefix' => 'CMP',  'reset' => 'monthly', 'pad' => 4],
         'shipment'      => ['prefix' => 'SHP',  'reset' => 'monthly', 'pad' => 4],
+        'maintenance_wo'=> ['prefix' => 'MWO',  'reset' => 'monthly', 'pad' => 4],
+        'asset'         => ['prefix' => 'AST',  'reset' => 'yearly',  'pad' => 4],
+        'clearance'     => ['prefix' => 'CLR',  'reset' => 'monthly', 'pad' => 4],
     ];
 
     /**
