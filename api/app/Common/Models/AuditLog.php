@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace App\Common\Models;
 
+use App\Common\Traits\HasHashId;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AuditLog extends Model
 {
+    use HasHashId;
+
     public $timestamps = false;
     protected $table = 'audit_logs';
     protected $fillable = [

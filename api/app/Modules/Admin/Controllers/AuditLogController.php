@@ -47,16 +47,18 @@ class AuditLogController
     /**
      * Sprint 8 — Task 79. Show a single audit row with field-level diff.
      */
-    public function show(int $id): JsonResponse
+    public function show(string $id): JsonResponse
     {
-        $log = AuditLog::query()->with('user:id,name,email,role_id')->findOrFail($id);
+        $decoded = AuditLog::tryDecodeHash($id) ?? (ctype_digit($id) ? (int) $id : null);
+        abort_if($decoded === null, 404);
+        $log = AuditLog::query()->with('user:id,name,email,role_id')->findOrFail($decoded);
         $diff = $this->buildDiff(
             (array) ($log->old_values ?? []),
             (array) ($log->new_values ?? []),
         );
         return response()->json([
             'data' => [
-                'id'         => $log->id,
+                'id'         => $log->hash_id,
                 'action'     => $log->action,
                 'model_type' => $log->model_type,
                 'model_id'   => $log->model_id,
