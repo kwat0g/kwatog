@@ -12,6 +12,7 @@ use App\Modules\Maintenance\Enums\MaintainableType;
 use App\Modules\Maintenance\Enums\MaintenancePriority;
 use App\Modules\Maintenance\Enums\MaintenanceWorkOrderStatus;
 use App\Modules\Maintenance\Enums\MaintenanceWorkOrderType;
+use App\Modules\Maintenance\Events\MaintenanceWorkOrderCreated;
 use App\Modules\Maintenance\Models\MaintenanceLog;
 use App\Modules\Maintenance\Models\MaintenanceSchedule;
 use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
@@ -96,7 +97,13 @@ class MaintenanceWorkOrderService
                 'created_by'        => $by->id,
             ]);
 
-            return $this->show($wo);
+            $fresh = $this->show($wo);
+
+            // Sprint 8 — Task 78: broadcast on the maintenance.dashboard channel
+            // so subscribed dashboards refresh without a page reload.
+            event(new MaintenanceWorkOrderCreated($fresh));
+
+            return $fresh;
         });
     }
 

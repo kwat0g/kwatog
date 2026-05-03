@@ -77,6 +77,7 @@ const SECTIONS: NavSection[] = [
       { to: '/payroll/periods', label: 'Payroll', icon: Wallet, feature: 'payroll', permission: 'payroll.view' },
       { to: '/payroll/adjustments', label: 'Adjustments', icon: FileEdit, feature: 'payroll', permission: 'payroll.view' },
       { to: '/hr/loans', label: 'Loans', icon: HandCoins, feature: 'loans', permission: 'loans.view' },
+      { to: '/hr/separations', label: 'Separations', icon: Users, feature: 'hr', permission: 'hr.separation.view' },
       { to: '/self-service/payslips', label: 'My Payslips', icon: Receipt, permission: 'payroll.view' },
     ],
   },
@@ -140,7 +141,9 @@ const SECTIONS: NavSection[] = [
       { to: '/quality/dashboard',       label: 'Quality dashboard',  icon: ShieldCheck, feature: 'quality', permission: 'quality.view' },
       { to: '/quality/inspections',     label: 'Inspections',        icon: ShieldCheck, feature: 'quality', permission: 'quality.inspections.view' },
       { to: '/quality/ncrs',            label: 'NCRs',               icon: ShieldCheck, feature: 'quality', permission: 'quality.ncr.view' },
-      { to: '/maintenance',             label: 'Maintenance',        icon: Wrench,      feature: 'maintenance', permission: 'maintenance.view' },
+      { to: '/maintenance/work-orders', label: 'Maintenance WOs',    icon: Wrench,      feature: 'maintenance', permission: 'maintenance.view' },
+      { to: '/maintenance/schedules',   label: 'Maint. schedules',   icon: CalendarClock, feature: 'maintenance', permission: 'maintenance.view' },
+      { to: '/assets',                  label: 'Assets',             icon: Package,     feature: 'assets', permission: 'assets.view' },
     ],
   },
   {
@@ -149,6 +152,8 @@ const SECTIONS: NavSection[] = [
       { to: '/admin/settings', label: 'Settings', icon: SettingsIcon, permission: 'admin.settings.manage' },
       { to: '/admin/roles', label: 'Roles', icon: Lock, permission: 'admin.roles.manage' },
       { to: '/admin/gov-tables', label: 'Gov Tables', icon: Landmark, permission: 'admin.gov_tables.manage' },
+      { to: '/admin/audit-logs', label: 'Audit logs', icon: BookOpen, permission: 'admin.audit_logs.view' },
+      { to: '/admin/depreciation', label: 'Depreciation', icon: TrendingUp, permission: 'assets.depreciation.view' },
     ],
   },
 ];
