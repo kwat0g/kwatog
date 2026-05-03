@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Quality\Services;
 
+use App\Common\Support\SearchOperator;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\NotificationService;
 use App\Modules\Auth\Models\Role;
@@ -60,8 +61,8 @@ class NcrService
         if (! empty($filters['search'])) {
             $term = '%'.trim((string) $filters['search']).'%';
             $q->where(fn (Builder $b) => $b
-                ->where('ncr_number', 'like', $term)
-                ->orWhere('defect_description', 'like', $term));
+                ->where('ncr_number', SearchOperator::like(), $term)
+                ->orWhere('defect_description', SearchOperator::like(), $term));
         }
 
         return $q->orderByDesc('id')
