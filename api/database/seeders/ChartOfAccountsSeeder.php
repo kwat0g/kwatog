@@ -96,6 +96,8 @@ class ChartOfAccountsSeeder extends Seeder
             ['6090', 'Office Supplies Expense',      'expense', 'debit', '6000'],
             ['6100', 'Repairs & Maintenance Expense','expense', 'debit', '6000'],
             ['6110', 'Transportation Expense',       'expense', 'debit', '6000'],
+            ['6120', 'Loss on Disposal of Asset',    'expense', 'debit', '6000'],
+            ['4030', 'Gain on Disposal of Asset',    'revenue', 'credit','4000'],
         ];
 
         // Pass 1: insert/upsert without parent_id.

@@ -37,6 +37,7 @@ class ModuleServiceProvider extends ServiceProvider
         'CRM',
         'Quality',
         'Maintenance',
+        'Assets',
         'Dashboard',
     ];
 
