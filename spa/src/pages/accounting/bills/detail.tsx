@@ -17,6 +17,8 @@ import { Select } from '@/components/ui/Select';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { StatCard } from '@/components/ui/StatCard';
+import { ChainHeader } from '@/components/chain';
+import type { ChainStep } from '@/types/chain';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
@@ -31,6 +33,21 @@ const paymentSchema = z.object({
   reference_number: z.string().max(50).optional().or(z.literal('')),
 });
 type PaymentFormValues = z.infer<typeof paymentSchema>;
+
+function buildBillChain(bill: { status: string; amount_paid: string; balance: string; date: string; payments?: Array<{ payment_date: string }> }): ChainStep[] {
+  const isCancelled = bill.status === 'cancelled';
+  const billCreated = !isCancelled;
+  const hasPayment = (bill.payments?.length ?? 0) > 0;
+  const fullyPaid = parseFloat(bill.balance) <= 0 && parseFloat(bill.amount_paid) > 0;
+  return [
+    { key: 'pr',      label: 'PR Created',     state: 'done', date: bill.date.slice(0, 10) },
+    { key: 'po',      label: 'PO Approved',    state: 'done' },
+    { key: 'grn',     label: 'GRN Received',   state: 'done' },
+    { key: 'bill',    label: 'Bill Created',   state: billCreated ? 'done' : isCancelled ? 'pending' : 'active', date: bill.date.slice(0, 10) },
+    { key: 'pay',     label: 'Payment Made',   state: fullyPaid ? 'done' : hasPayment ? 'active' : 'pending', date: bill.payments?.[0]?.payment_date.slice(0, 10) },
+    { key: 'closed',  label: 'Settled',        state: fullyPaid ? 'done' : 'pending' },
+  ];
+}
 
 export default function BillDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
@@ -116,6 +133,12 @@ export default function BillDetailPage() {
           </div>
         }
       />
+
+      <div className="px-5 pt-4">
+        <Panel title="Procure-to-Pay">
+          <ChainHeader steps={buildBillChain(bill)} />
+        </Panel>
+      </div>
 
       <div className="px-5 py-4 grid grid-cols-4 gap-4">
         <StatCard label="Total" value={formatPeso(bill.total_amount)} />

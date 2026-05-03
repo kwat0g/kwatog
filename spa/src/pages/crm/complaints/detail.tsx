@@ -21,6 +21,8 @@ import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { Textarea } from '@/components/ui/Textarea';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { LinkedRecords } from '@/components/chain/LinkedRecords';
+import { ChainHeader } from '@/components/chain';
+import type { ChainStep } from '@/types/chain';
 import { usePermission } from '@/hooks/usePermission';
 import { cn } from '@/lib/cn';
 import type { ComplaintSeverity, ComplaintStatus, EightDReport } from '@/types/crm';
@@ -128,6 +130,13 @@ export default function ComplaintDetailPage() {
   const report = data.eight_d_report;
   const isFinalized = Boolean(report?.finalized_at);
   const isTerminal = data.status === 'closed' || data.status === 'cancelled';
+
+  const complaintChain: ChainStep[] = [
+    { key: 'logged',        label: 'Logged',        state: 'done', date: data.created_at?.slice(0, 10) },
+    { key: 'investigating', label: 'Investigating', state: ['investigating', 'resolved', 'closed'].includes(data.status) ? 'done' : data.status === 'cancelled' ? 'pending' : 'active' },
+    { key: 'resolved',      label: 'Resolved',      state: ['resolved', 'closed'].includes(data.status) ? 'done' : data.status === 'investigating' ? 'active' : 'pending' },
+    { key: 'closed',        label: 'Closed',        state: data.status === 'closed' ? 'done' : 'pending', date: data.closed_at?.slice(0, 10) },
+  ];
   const canManage = can('crm.complaints.manage');
 
   // Build LinkedRecords groups
@@ -191,6 +200,12 @@ export default function ComplaintDetailPage() {
           </div>
         }
       />
+
+      <div className="px-5 pt-4">
+        <Panel title="Complaint flow">
+          <ChainHeader steps={complaintChain} />
+        </Panel>
+      </div>
 
       {/* Tabs */}
       <div className="px-5 border-b border-default flex gap-4">
