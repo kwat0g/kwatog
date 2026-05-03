@@ -28,7 +28,7 @@ class AccountResource extends JsonResource
             'type'           => $this->type?->value,
             'type_label'     => $this->type?->label(),
             'normal_balance' => $this->normal_balance?->value,
-            'parent_id'      => $this->parent_id ? Account::find($this->parent_id)?->hash_id : null,
+            'parent_id'      => $this->whenLoaded('parent', fn () => $this->parent?->hash_id),
             'parent_code'    => $this->whenLoaded('parent', fn () => $this->parent?->code),
             'is_active'      => (bool) $this->is_active,
             'is_leaf'        => $this->resource->relationLoaded('children')

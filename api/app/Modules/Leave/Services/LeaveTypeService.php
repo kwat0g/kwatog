@@ -6,6 +6,7 @@ namespace App\Modules\Leave\Services;
 
 use App\Modules\Leave\Models\LeaveType;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
 
 class LeaveTypeService
 {
@@ -19,7 +20,21 @@ class LeaveTypeService
         return $q->orderBy('code')->paginate(min((int) ($filters['per_page'] ?? 50), 200));
     }
 
-    public function create(array $data): LeaveType { return LeaveType::create($data); }
-    public function update(LeaveType $lt, array $data): LeaveType { $lt->update($data); return $lt->fresh(); }
-    public function delete(LeaveType $lt): void { $lt->delete(); }
+    public function create(array $data): LeaveType
+    {
+        return DB::transaction(fn () => LeaveType::create($data));
+    }
+
+    public function update(LeaveType $lt, array $data): LeaveType
+    {
+        return DB::transaction(function () use ($lt, $data) {
+            $lt->update($data);
+            return $lt->fresh();
+        });
+    }
+
+    public function delete(LeaveType $lt): void
+    {
+        DB::transaction(fn () => $lt->delete());
+    }
 }

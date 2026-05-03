@@ -35,7 +35,8 @@ class PositionService
             $query->orderBy($sort, $dir);
         }
 
-        return $query->paginate(min((int) ($filters['per_page'] ?? 20), 100));
+        return $query->with(['department:id,code,name'])
+            ->paginate(min((int) ($filters['per_page'] ?? 20), 100));
     }
 
     public function create(array $data): Position

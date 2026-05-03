@@ -64,4 +64,19 @@
   <p style="margin-top:24px;font-size:9px;color:#555;">
     Please remit payment within {{ $invoice->customer->payment_terms_days }} days of invoice date.
   </p>
+
+  <table style="width:100%; margin-top:32px; border-collapse:collapse; font-size:9pt;">
+    <tr>
+      <td style="width:50%; vertical-align:bottom; padding:0 8px;">
+        <div style="height:32px; border-bottom:1px solid #444;">&nbsp;</div>
+        <div style="margin-top:4px; text-align:center; font-weight:500;">{{ $preparedBy ?? '—' }}</div>
+        <div style="text-align:center; color:#777; font-size:8pt;">Prepared by · Accounting</div>
+      </td>
+      <td style="width:50%; vertical-align:bottom; padding:0 8px;">
+        <div style="height:32px; border-bottom:1px solid #444;">&nbsp;</div>
+        <div style="margin-top:4px; text-align:center; font-weight:500;">{{ $approvedBy ?? '—' }}</div>
+        <div style="text-align:center; color:#777; font-size:8pt;">Approved by · Finance</div>
+      </td>
+    </tr>
+  </table>
 @endsection

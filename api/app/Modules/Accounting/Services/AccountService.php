@@ -36,7 +36,8 @@ class AccountService
             });
         }
 
-        return $q->orderBy('code')
+        return $q->with(['parent:id,code,name'])
+            ->orderBy('code')
             ->paginate(min((int) ($filters['per_page'] ?? 100), 200));
     }
 

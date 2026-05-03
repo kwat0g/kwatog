@@ -8,6 +8,7 @@ use App\Modules\Payroll\Enums\ContributionAgency;
 use App\Modules\Payroll\Models\GovernmentContributionTable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class GovernmentContributionTableService
 {
@@ -52,25 +53,31 @@ class GovernmentContributionTableService
 
     public function update(GovernmentContributionTable $row, array $data): GovernmentContributionTable
     {
-        $row->fill($data)->save();
-        $this->bust($row->agency);
-        return $row->fresh();
+        return DB::transaction(function () use ($row, $data) {
+            $row->fill($data)->save();
+            $this->bust($row->agency);
+            return $row->fresh();
+        });
     }
 
     public function deactivate(GovernmentContributionTable $row): GovernmentContributionTable
     {
-        $row->is_active = false;
-        $row->save();
-        $this->bust($row->agency);
-        return $row->fresh();
+        return DB::transaction(function () use ($row) {
+            $row->is_active = false;
+            $row->save();
+            $this->bust($row->agency);
+            return $row->fresh();
+        });
     }
 
     public function activate(GovernmentContributionTable $row): GovernmentContributionTable
     {
-        $row->is_active = true;
-        $row->save();
-        $this->bust($row->agency);
-        return $row->fresh();
+        return DB::transaction(function () use ($row) {
+            $row->is_active = true;
+            $row->save();
+            $this->bust($row->agency);
+            return $row->fresh();
+        });
     }
 
     private function bust(ContributionAgency|string|null $agency): void
