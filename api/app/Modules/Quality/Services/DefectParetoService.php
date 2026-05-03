@@ -57,8 +57,15 @@ class DefectParetoService
             $q->where('i.stage', (string) $filters['stage']);
         }
 
+        // bool_or() is the portable boolean aggregate; PostgreSQL rejects
+        // MAX(bool). MySQL / SQLite happily evaluate it via implicit cast.
+        $driver = DB::getDriverName();
+        $criticalAgg = $driver === 'pgsql'
+            ? 'BOOL_OR(m.is_critical)::int'
+            : 'MAX(m.is_critical)';
+
         $rows = (clone $q)
-            ->selectRaw('m.parameter_name, MAX(m.is_critical) as is_critical, COUNT(*) as defect_count')
+            ->selectRaw("m.parameter_name, {$criticalAgg} as is_critical, COUNT(*) as defect_count")
             ->groupBy('m.parameter_name')
             ->orderByDesc('defect_count')
             ->limit(max(1, $limit))
