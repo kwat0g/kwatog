@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import { Plus, Printer } from 'lucide-react';
 import { invoicesApi, type InvoiceListParams } from '@/api/accounting/invoices';
+import { bulkPrint } from '@/api/print';
 import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
-import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
+import { DataTable, NumCell, type BulkAction, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
@@ -74,7 +75,20 @@ export default function InvoicesPage() {
           action={can('accounting.invoices.create') ? <Button variant="primary" onClick={() => navigate('/accounting/invoices/create')}>New invoice</Button> : undefined} />
       )}
       {data && data.data.length > 0 && (
-        <div className="px-5 py-4"><DataTable columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters((f) => ({ ...f, page }))} /></div>
+        <div className="px-5 py-4">
+          <DataTable
+            columns={columns}
+            data={data.data}
+            meta={data.meta}
+            onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+            selectable
+            bulkActions={[{
+              label: 'Print PDFs',
+              icon: <Printer size={14} />,
+              onClick: (rows) => bulkPrint('invoice', rows.map((r: any) => r.id)),
+            } as BulkAction<any>]}
+          />
+        </div>
       )}
     </div>
   );
