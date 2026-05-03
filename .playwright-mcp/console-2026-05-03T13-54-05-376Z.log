@@ -1,0 +1,4 @@
+[     670ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=2c6e9969:21550
+[   12083ms] [ERROR] Failed to load resource: the server responded with a status of 422 (Unprocessable Content) @ http://localhost/api/v1/auth/login:0
+[   24169ms] [ERROR] Failed to load resource: the server responded with a status of 422 (Unprocessable Content) @ http://localhost/api/v1/auth/login:0
+[   54911ms] [ERROR] Failed to load resource: the server responded with a status of 422 (Unprocessable Content) @ http://localhost/api/v1/auth/login:0

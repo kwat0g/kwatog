@@ -60,6 +60,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       permissions: new Set(user.permissions),
       features: new Set(user.features),
       isAuthenticated: true,
+      isLoading: false,
     });
     // Apply server-side preferences without triggering a reverse PATCH back to the API.
     useThemeStore.getState().init(user.theme_mode);
