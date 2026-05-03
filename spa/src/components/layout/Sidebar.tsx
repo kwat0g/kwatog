@@ -118,7 +118,9 @@ const SECTIONS: NavSection[] = [
   {
     label: 'Operations',
     items: [
-      { to: '/supply-chain/deliveries', label: 'Supply Chain', icon: Truck, feature: 'supply_chain', permission: 'supply_chain.view' },
+      { to: '/supply-chain/deliveries', label: 'Deliveries',     icon: Truck, feature: 'supply_chain', permission: 'supply_chain.view' },
+      { to: '/supply-chain/shipments',  label: 'Shipments',      icon: Truck, feature: 'supply_chain', permission: 'supply_chain.view' },
+      { to: '/supply-chain/fleet',      label: 'Fleet',          icon: Truck, feature: 'supply_chain', permission: 'supply_chain.view' },
 
       { to: '/production/dashboard',    label: 'Production',         icon: Factory,     feature: 'production', permission: 'production.dashboard.view' },
       { to: '/production/schedule',     label: 'Schedule (Gantt)',   icon: CalendarClock, feature: 'production', permission: 'production.schedule.view' },

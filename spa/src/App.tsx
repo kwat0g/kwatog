@@ -140,6 +140,10 @@ const QualityDashboardPage      = lazy(() => import('@/pages/quality/dashboard')
 const NcrsListPage              = lazy(() => import('@/pages/quality/ncrs'));
 const NcrDetailPage             = lazy(() => import('@/pages/quality/ncrs/detail'));
 const NcrCreatePage             = lazy(() => import('@/pages/quality/ncrs/create'));
+const ShipmentsListPage         = lazy(() => import('@/pages/supply-chain/shipments'));
+const DeliveriesListPage        = lazy(() => import('@/pages/supply-chain/deliveries'));
+const DeliveryDetailPage        = lazy(() => import('@/pages/supply-chain/deliveries/detail'));
+const FleetPage                 = lazy(() => import('@/pages/supply-chain/fleet'));
 
 // Production (Sprint 6 — Tasks 51, 53–58; WO create added in audit §3.1)
 const WorkOrdersListPage        = lazy(() => import('@/pages/production/work-orders'));
@@ -537,6 +541,19 @@ export default function App() {
               element={<PermissionGuard permission="quality.ncr.manage"><NcrCreatePage /></PermissionGuard>} />
             <Route path="/quality/ncrs/:id"
               element={<PermissionGuard permission="quality.ncr.view"><NcrDetailPage /></PermissionGuard>} />
+          </Route>
+
+          {/* Supply Chain module (Sprint 7 — Tasks 65, 66, 67) */}
+          <Route element={<ModuleGuard module="supply_chain" />}>
+            <Route path="/supply-chain" element={<Navigate to="/supply-chain/deliveries" replace />} />
+            <Route path="/supply-chain/shipments"
+              element={<PermissionGuard permission="supply_chain.view"><ShipmentsListPage /></PermissionGuard>} />
+            <Route path="/supply-chain/deliveries"
+              element={<PermissionGuard permission="supply_chain.view"><DeliveriesListPage /></PermissionGuard>} />
+            <Route path="/supply-chain/deliveries/:id"
+              element={<PermissionGuard permission="supply_chain.view"><DeliveryDetailPage /></PermissionGuard>} />
+            <Route path="/supply-chain/fleet"
+              element={<PermissionGuard permission="supply_chain.view"><FleetPage /></PermissionGuard>} />
           </Route>
 
           {/* Production module (Sprint 6 — Tasks 51, 54, 55, 58; WO create added in audit §3.1) */}
