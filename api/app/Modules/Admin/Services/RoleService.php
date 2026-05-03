@@ -30,7 +30,8 @@ class RoleService
             $query->orderBy($sort, $direction);
         }
 
-        return $query->paginate(min((int) ($filters['per_page'] ?? 25), 100));
+        return $query->withCount(['permissions', 'users'])
+            ->paginate(min((int) ($filters['per_page'] ?? 25), 100));
     }
 
     public function show(Role $role): Role
