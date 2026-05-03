@@ -134,7 +134,9 @@ const SECTIONS: NavSection[] = [
       { to: '/crm/price-agreements',    label: 'Price agreements',   icon: DollarSign,  feature: 'crm', permission: 'crm.price_agreements.view' },
       { to: '/crm/sales-orders',        label: 'Sales orders',       icon: Briefcase,   feature: 'crm', permission: 'crm.sales_orders.view' },
 
+      { to: '/quality/dashboard',       label: 'Quality dashboard',  icon: ShieldCheck, feature: 'quality', permission: 'quality.view' },
       { to: '/quality/inspections',     label: 'Inspections',        icon: ShieldCheck, feature: 'quality', permission: 'quality.inspections.view' },
+      { to: '/quality/ncrs',            label: 'NCRs',               icon: ShieldCheck, feature: 'quality', permission: 'quality.ncr.view' },
       { to: '/maintenance',             label: 'Maintenance',        icon: Wrench,      feature: 'maintenance', permission: 'maintenance.view' },
     ],
   },
