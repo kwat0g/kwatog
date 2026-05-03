@@ -1,0 +1,2 @@
+import { RoleDashboard } from '@/components/dashboard/RoleDashboard';
+export default function HrDashboard() { return <RoleDashboard role="hr" />; }

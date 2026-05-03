@@ -156,6 +156,43 @@ const RecordOutputPage          = lazy(() => import('@/pages/production/work-ord
 const ProductionSchedulePage    = lazy(() => import('@/pages/production/schedule'));
 const ProductionDashboardPage   = lazy(() => import('@/pages/production/dashboard'));
 
+// Maintenance (Sprint 8 — Task 69)
+const MaintenanceHomePage          = lazy(() => import('@/pages/maintenance'));
+const MaintenanceWorkOrdersListPage = lazy(() => import('@/pages/maintenance/work-orders'));
+const CreateMaintenanceWorkOrderPage = lazy(() => import('@/pages/maintenance/work-orders/create'));
+const MaintenanceWorkOrderDetailPage = lazy(() => import('@/pages/maintenance/work-orders/detail'));
+const MaintenanceSchedulesListPage  = lazy(() => import('@/pages/maintenance/schedules'));
+const CreateMaintenanceSchedulePage = lazy(() => import('@/pages/maintenance/schedules/create'));
+
+// Assets (Sprint 8 — Task 70)
+const AssetsListPage      = lazy(() => import('@/pages/assets'));
+const CreateAssetPage     = lazy(() => import('@/pages/assets/create'));
+const AssetDetailPage     = lazy(() => import('@/pages/assets/detail'));
+const DepreciationRunsPage = lazy(() => import('@/pages/admin/depreciation'));
+
+// Separation (Sprint 8 — Task 71)
+const SeparationsListPage   = lazy(() => import('@/pages/hr/separations'));
+const SeparationDetailPage  = lazy(() => import('@/pages/hr/separations/detail'));
+
+// Sprint 8 dashboards (Tasks 72 + 73)
+const PlantManagerDashboardPage = lazy(() => import('@/pages/dashboard/plant-manager'));
+const HrDashboardPage           = lazy(() => import('@/pages/dashboard/hr'));
+const PpcDashboardPage          = lazy(() => import('@/pages/dashboard/ppc'));
+const AccountingDashboardPage   = lazy(() => import('@/pages/dashboard/accounting'));
+
+// Self-service (Sprint 8 — Task 74)
+const SelfServiceHomePage             = lazy(() => import('@/pages/self-service'));
+const SelfServiceDtrPage              = lazy(() => import('@/pages/self-service/dtr'));
+const SelfServiceLeavePage            = lazy(() => import('@/pages/self-service/leave'));
+const SelfServiceMePage               = lazy(() => import('@/pages/self-service/me'));
+const SelfServiceNotifPrefsPage       = lazy(() => import('@/pages/self-service/notification-preferences'));
+
+// Notifications (Sprint 8 — Task 77)
+const NotificationsListPage = lazy(() => import('@/pages/notifications'));
+
+// Audit log diff (Sprint 8 — Task 79; list page already exists)
+const AuditLogDetailPage = lazy(() => import('@/pages/admin/audit-logs/detail'));
+
 // Errors
 const NotFoundPage = lazy(() => import('@/pages/error/NotFound'));
 
@@ -567,6 +604,59 @@ export default function App() {
               element={<PermissionGuard permission="supply_chain.view"><FleetPage /></PermissionGuard>} />
           </Route>
 
+          {/* Maintenance module (Sprint 8 — Task 69) */}
+          <Route element={<ModuleGuard module="maintenance" />}>
+            <Route path="/maintenance"
+              element={<PermissionGuard permission="maintenance.view"><MaintenanceHomePage /></PermissionGuard>} />
+            <Route path="/maintenance/work-orders"
+              element={<PermissionGuard permission="maintenance.view"><MaintenanceWorkOrdersListPage /></PermissionGuard>} />
+            <Route path="/maintenance/work-orders/create"
+              element={<PermissionGuard permission="maintenance.wo.create"><CreateMaintenanceWorkOrderPage /></PermissionGuard>} />
+            <Route path="/maintenance/work-orders/:id"
+              element={<PermissionGuard permission="maintenance.view"><MaintenanceWorkOrderDetailPage /></PermissionGuard>} />
+            <Route path="/maintenance/schedules"
+              element={<PermissionGuard permission="maintenance.view"><MaintenanceSchedulesListPage /></PermissionGuard>} />
+            <Route path="/maintenance/schedules/create"
+              element={<PermissionGuard permission="maintenance.schedules.manage"><CreateMaintenanceSchedulePage /></PermissionGuard>} />
+          </Route>
+
+          {/* Assets module (Sprint 8 — Task 70) */}
+          <Route element={<ModuleGuard module="assets" />}>
+            <Route path="/assets"
+              element={<PermissionGuard permission="assets.view"><AssetsListPage /></PermissionGuard>} />
+            <Route path="/assets/create"
+              element={<PermissionGuard permission="assets.create"><CreateAssetPage /></PermissionGuard>} />
+            <Route path="/assets/:id"
+              element={<PermissionGuard permission="assets.view"><AssetDetailPage /></PermissionGuard>} />
+            <Route path="/admin/depreciation"
+              element={<PermissionGuard permission="assets.depreciation.view"><DepreciationRunsPage /></PermissionGuard>} />
+          </Route>
+
+          {/* HR Separations (Sprint 8 — Task 71) */}
+          <Route element={<ModuleGuard module="hr" />}>
+            <Route path="/hr/separations"
+              element={<PermissionGuard permission="hr.separation.view"><SeparationsListPage /></PermissionGuard>} />
+            <Route path="/hr/separations/:id"
+              element={<PermissionGuard permission="hr.separation.view"><SeparationDetailPage /></PermissionGuard>} />
+          </Route>
+
+          {/* Sprint 8 dashboards */}
+          <Route path="/dashboard/plant-manager"
+            element={<PermissionGuard permission="dashboard.plant_manager.view"><PlantManagerDashboardPage /></PermissionGuard>} />
+          <Route path="/dashboard/hr"
+            element={<PermissionGuard permission="dashboard.hr.view"><HrDashboardPage /></PermissionGuard>} />
+          <Route path="/dashboard/ppc"
+            element={<PermissionGuard permission="dashboard.ppc.view"><PpcDashboardPage /></PermissionGuard>} />
+          <Route path="/dashboard/accounting"
+            element={<PermissionGuard permission="dashboard.accounting.view"><AccountingDashboardPage /></PermissionGuard>} />
+
+          {/* Notifications page (Sprint 8 — Task 77) */}
+          <Route path="/notifications" element={<NotificationsListPage />} />
+
+          {/* Audit log diff detail (Sprint 8 — Task 79) */}
+          <Route path="/admin/audit-logs/:id"
+            element={<PermissionGuard permission="admin.audit_logs.view"><AuditLogDetailPage /></PermissionGuard>} />
+
           {/* Production module (Sprint 6 — Tasks 51, 54, 55, 58; WO create added in audit §3.1) */}
           <Route element={<ModuleGuard module="production" />}>
             {/* Sprint 6 audit §3.5: redirect /production to work orders so users
@@ -599,6 +689,11 @@ export default function App() {
             </AuthGuard>
           }
         >
+          <Route path="/self-service" element={<SelfServiceHomePage />} />
+          <Route path="/self-service/dtr" element={<SelfServiceDtrPage />} />
+          <Route path="/self-service/leave" element={<SelfServiceLeavePage />} />
+          <Route path="/self-service/me" element={<SelfServiceMePage />} />
+          <Route path="/self-service/notification-preferences" element={<SelfServiceNotifPrefsPage />} />
           <Route
             path="/self-service/payslips"
             element={<PermissionGuard permission="payroll.view"><SelfServicePayslipsPage /></PermissionGuard>}

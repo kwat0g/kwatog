@@ -1,7 +1,9 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Menu, Moon, Sun, Search, LogOut } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
 import { Tooltip } from '@/components/ui/Tooltip';
+import { CommandPalette } from '@/components/ui/CommandPalette';
 import { Breadcrumbs } from './Breadcrumbs';
 import { NotificationBell } from './NotificationBell';
 import { useSidebarStore } from '@/stores/sidebarStore';
@@ -15,6 +17,19 @@ interface TopbarProps {
 export function Topbar({ user, onLogout }: TopbarProps) {
   const toggleSidebar = useSidebarStore((s) => s.toggle);
   const { resolvedTheme, toggle } = useTheme();
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  // Sprint 8 — Task 75: ⌘K / Ctrl+K opens the command palette globally.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setPaletteOpen((v) => !v);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
 
   return (
     <header className="sticky top-0 z-40 h-12 bg-canvas border-b border-default flex items-center px-3 gap-3">
@@ -40,9 +55,10 @@ export function Topbar({ user, onLogout }: TopbarProps) {
 
       <div className="flex-1" />
 
-      {/* Search trigger — full command palette in Task 75. */}
+      {/* Search trigger — opens the global command palette (Sprint 8 — Task 75). */}
       <button
         type="button"
+        onClick={() => setPaletteOpen(true)}
         className="hidden sm:flex items-center gap-2 h-7 w-44 px-2 rounded-md border border-default text-xs text-muted hover:bg-elevated"
       >
         <Search size={12} />
@@ -78,6 +94,10 @@ export function Topbar({ user, onLogout }: TopbarProps) {
           </Tooltip>
         </div>
       )}
+
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </header>
   );
 }
+
+export default Topbar;

@@ -35,5 +35,23 @@ Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function 
         Route::put('/{employee}', [EmployeeController::class, 'update'])->middleware('permission:hr.employees.edit');
         Route::delete('/{employee}', [EmployeeController::class, 'destroy'])->middleware('permission:hr.employees.delete');
         Route::patch('/{employee}/separate', [EmployeeController::class, 'separate'])->middleware('permission:hr.employees.separate');
+
+        // Sprint 8 — Task 71: separation + clearance flow
+        Route::post('/{employee}/separation', [\App\Modules\HR\Controllers\SeparationController::class, 'initiate'])
+            ->middleware('permission:hr.separation.initiate');
+    });
+
+    // Sprint 8 — Task 71: clearance lifecycle
+    Route::prefix('clearances')->group(function () {
+        Route::get('/',                          [\App\Modules\HR\Controllers\SeparationController::class, 'index'])
+            ->middleware('permission:hr.separation.view');
+        Route::get('/{clearance}',               [\App\Modules\HR\Controllers\SeparationController::class, 'show'])
+            ->middleware('permission:hr.separation.view');
+        Route::patch('/{clearance}/items',       [\App\Modules\HR\Controllers\SeparationController::class, 'signItem'])
+            ->middleware('permission:hr.clearance.sign');
+        Route::post('/{clearance}/final-pay/compute', [\App\Modules\HR\Controllers\SeparationController::class, 'computeFinalPay'])
+            ->middleware('permission:hr.separation.finalize');
+        Route::patch('/{clearance}/finalize',    [\App\Modules\HR\Controllers\SeparationController::class, 'finalize'])
+            ->middleware('permission:hr.separation.finalize');
     });
 });

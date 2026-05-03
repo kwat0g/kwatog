@@ -51,7 +51,10 @@ class SettingsSeeder extends Seeder
             'production' => true,
             'supply_chain' => true,  // Sprint 7 Task 65
             'quality' => true,       // Sprint 7 Task 59 enables inspection specs
-            'maintenance' => false,  // Sprint 8
+            'maintenance' => true,   // Sprint 8 Task 69
+            'assets'      => true,   // Sprint 8 Task 70
+            'search'      => true,   // Sprint 8 Task 75
+            'notifications' => true, // Sprint 8 Task 77
         ];
 
         foreach ($modules as $slug => $enabled) {

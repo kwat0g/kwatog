@@ -218,6 +218,32 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'maintenance.wo.complete',    'name' => 'Complete Maintenance Work Order'],
                 ['slug' => 'maintenance.schedules.manage','name' => 'Manage Maintenance Schedules'],
             ],
+            // Sprint 8 — new permission groups
+            'assets' => [
+                ['slug' => 'assets.view',                'name' => 'View Assets'],
+                ['slug' => 'assets.create',              'name' => 'Create Asset'],
+                ['slug' => 'assets.update',              'name' => 'Update Asset'],
+                ['slug' => 'assets.delete',              'name' => 'Delete Asset'],
+                ['slug' => 'assets.dispose',             'name' => 'Dispose Asset'],
+                ['slug' => 'assets.depreciation.view',   'name' => 'View Asset Depreciation'],
+                ['slug' => 'assets.depreciation.run',    'name' => 'Run Asset Depreciation'],
+            ],
+            'hr_separation' => [
+                ['slug' => 'hr.separation.view',         'name' => 'View Employee Separations'],
+                ['slug' => 'hr.separation.initiate',     'name' => 'Initiate Employee Separation'],
+                ['slug' => 'hr.clearance.sign',          'name' => 'Sign Clearance Item'],
+                ['slug' => 'hr.separation.finalize',     'name' => 'Finalize Separation & Final Pay'],
+            ],
+            'dashboards' => [
+                ['slug' => 'dashboard.plant_manager.view','name' => 'View Plant Manager Dashboard'],
+                ['slug' => 'dashboard.hr.view',           'name' => 'View HR Dashboard'],
+                ['slug' => 'dashboard.ppc.view',          'name' => 'View PPC Dashboard'],
+                ['slug' => 'dashboard.accounting.view',   'name' => 'View Accounting Dashboard'],
+            ],
+            'platform' => [
+                ['slug' => 'search.global',                       'name' => 'Use Global Search'],
+                ['slug' => 'notifications.preferences.manage',    'name' => 'Manage Own Notification Preferences'],
+            ],
         ];
     }
 
@@ -241,6 +267,7 @@ class RolePermissionSeeder extends Seeder
                     $this->module('hr'),
                     $this->module('attendance'),
                     $this->module('leave'),
+                    $this->module('hr_separation'),
                     [
                         'payroll.view',
                         'payroll.payslip.view_all',
@@ -249,6 +276,9 @@ class RolePermissionSeeder extends Seeder
                         'payroll.periods.approve',
                         'payroll.adjustments.create',
                         'payroll.thirteenth_month.run',
+                        'dashboard.hr.view',
+                        'search.global',
+                        'notifications.preferences.manage',
                     ],
                 ),
             ],
@@ -259,7 +289,8 @@ class RolePermissionSeeder extends Seeder
                     $this->module('payroll'),
                     $this->module('accounting'),
                     $this->module('loans'),
-                    ['admin.gov_tables.manage'],
+                    $this->module('assets'),
+                    ['admin.gov_tables.manage', 'dashboard.accounting.view', 'search.global', 'notifications.preferences.manage'],
                 ),
             ],
             'production_manager' => [
@@ -267,7 +298,10 @@ class RolePermissionSeeder extends Seeder
                 'description' => 'Oversees work orders, output, OEE.',
                 'permissions' => array_merge(
                     $this->module('production'),
-                    ['mrp.view', 'mrp.schedule', 'inventory.view', 'quality.view'],
+                    ['mrp.view', 'mrp.schedule', 'inventory.view', 'quality.view',
+                     'dashboard.plant_manager.view', 'dashboard.ppc.view',
+                     'maintenance.view', 'assets.view',
+                     'search.global', 'notifications.preferences.manage'],
                 ),
             ],
             'ppc_head' => [
@@ -275,7 +309,9 @@ class RolePermissionSeeder extends Seeder
                 'description' => 'Production Planning & Control — owns the schedule and BOMs.',
                 'permissions' => array_merge(
                     $this->module('mrp'),
-                    ['production.view', 'production.wo.create', 'production.wo.confirm'],
+                    ['production.view', 'production.wo.create', 'production.wo.confirm',
+                     'dashboard.ppc.view', 'maintenance.view', 'assets.view',
+                     'search.global', 'notifications.preferences.manage'],
                 ),
             ],
             'purchasing_officer' => [
@@ -310,7 +346,11 @@ class RolePermissionSeeder extends Seeder
             'maintenance_tech' => [
                 'name' => 'Maintenance Technician',
                 'description' => 'Executes maintenance work orders.',
-                'permissions' => ['maintenance.view', 'maintenance.wo.complete'],
+                'permissions' => [
+                    'maintenance.view', 'maintenance.wo.create', 'maintenance.wo.complete',
+                    'assets.view',
+                    'search.global', 'notifications.preferences.manage',
+                ],
             ],
             'impex_officer' => [
                 'name' => 'ImpEx Officer',
@@ -325,6 +365,8 @@ class RolePermissionSeeder extends Seeder
                     'attendance.view', 'attendance.ot.approve',
                     'leave.view', 'leave.approve_dept',
                     'purchasing.view', 'purchasing.pr.approve',
+                    'hr.clearance.sign',
+                    'search.global', 'notifications.preferences.manage',
                 ],
             ],
             'employee' => [
@@ -335,6 +377,7 @@ class RolePermissionSeeder extends Seeder
                     // Self-service: payroll.view is server-scoped to own payrolls
                     // by PayrollController::index() — employees never see others.
                     'payroll.view',
+                    'notifications.preferences.manage',
                 ],
             ],
         ];
