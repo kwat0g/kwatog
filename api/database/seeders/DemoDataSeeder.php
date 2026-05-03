@@ -271,8 +271,12 @@ class DemoDataSeeder extends Seeder
 
         // Pull the customer × product price-agreement matrix so we never hit
         // NoPriceAgreementException. Each tuple is a guaranteed valid line.
+        // PriceAgreement is gated by effective_from/effective_to (no is_active
+        // column). Pull all rows whose window covers today.
+        $today = Carbon::today()->toDateString();
         $tuples = PriceAgreement::query()
-            ->where('is_active', true)
+            ->whereDate('effective_from', '<=', $today)
+            ->where(fn ($q) => $q->whereNull('effective_to')->orWhereDate('effective_to', '>=', $today))
             ->with(['customer:id,name,is_active,payment_terms_days', 'product:id,name,is_active'])
             ->get()
             ->filter(fn ($pa) => $pa->customer && $pa->product
