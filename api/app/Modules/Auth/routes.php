@@ -6,6 +6,7 @@ use App\Modules\Auth\Controllers\AuthUserController;
 use App\Modules\Auth\Controllers\ChangePasswordController;
 use App\Modules\Auth\Controllers\LoginController;
 use App\Modules\Auth\Controllers\LogoutController;
+use App\Modules\Auth\Controllers\NotificationController;
 use App\Modules\Auth\Controllers\PreferencesController;
 use Illuminate\Support\Facades\Route;
 
@@ -31,3 +32,17 @@ Route::prefix('auth')->group(function (): void {
             ->middleware('password.expired');
     });
 });
+
+/* Sprint 8 — Task 77. Notifications + per-user channel preferences. */
+Route::middleware(['auth:sanctum', 'session.timeout', 'password.expired'])->prefix('notifications')->group(function () {
+    Route::get('/',                  [NotificationController::class, 'index']);
+    Route::patch('/{id}/read',       [NotificationController::class, 'markRead']);
+    Route::patch('/read-all',        [NotificationController::class, 'markAllRead']);
+});
+
+Route::middleware(['auth:sanctum', 'session.timeout', 'password.expired',
+                   'permission:notifications.preferences.manage'])
+    ->prefix('notification-preferences')->group(function () {
+        Route::get('/',  [NotificationController::class, 'preferencesIndex']);
+        Route::put('/',  [NotificationController::class, 'preferencesUpdate']);
+    });

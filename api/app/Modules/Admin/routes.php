@@ -26,7 +26,9 @@ Route::prefix('admin')
 Route::prefix('admin')
     ->middleware(['auth:sanctum', 'session.timeout', 'password.expired', 'permission:admin.audit_logs.view'])
     ->group(function (): void {
-        Route::get('audit-logs', [\App\Modules\Admin\Controllers\AuditLogController::class, 'index']);
+        Route::get('audit-logs',         [\App\Modules\Admin\Controllers\AuditLogController::class, 'index']);
+        Route::get('audit-logs/{id}',    [\App\Modules\Admin\Controllers\AuditLogController::class, 'show'])
+            ->whereNumber('id');
     });
 
 Route::prefix('admin')
@@ -35,3 +37,11 @@ Route::prefix('admin')
         Route::get('settings',        [\App\Modules\Admin\Controllers\SettingsController::class, 'index']);
         Route::put('settings/{key}',  [\App\Modules\Admin\Controllers\SettingsController::class, 'update']);
     });
+
+/* Sprint 8 — Task 75. Global search. */
+Route::middleware(['auth:sanctum', 'permission:search.global', 'throttle:30,1'])
+    ->get('/search', [\App\Modules\Admin\Controllers\SearchController::class, 'search']);
+
+/* Sprint 8 — Task 76. Bulk approval PDF print. */
+Route::middleware(['auth:sanctum'])
+    ->post('/print/bulk', [\App\Modules\Admin\Controllers\BulkPrintController::class, 'print']);
