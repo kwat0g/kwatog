@@ -148,7 +148,7 @@ class WorkOrderController
     public function listOutputs(WorkOrder $workOrder): \Illuminate\Http\Resources\Json\AnonymousResourceCollection
     {
         return \App\Modules\Production\Resources\WorkOrderOutputResource::collection(
-            $workOrder->outputs()->with(['recorder:id,name', 'defects.defectType'])->get()
+            $workOrder->outputs()->with(['recorder:id,name,role_id', 'defects.defectType'])->get()
         );
     }
 }

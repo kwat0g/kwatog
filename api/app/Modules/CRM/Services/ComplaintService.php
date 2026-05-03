@@ -40,7 +40,7 @@ class ComplaintService
             'product:id,part_number,name',
             'salesOrder:id,so_number',
             'ncr:id,ncr_number,status',
-            'creator:id,name',
+            'creator:id,name,role_id',
             'assignee:id,name',
         ]);
 
@@ -63,7 +63,7 @@ class ComplaintService
             'salesOrder:id,so_number',
             'ncr:id,ncr_number,status,severity,disposition',
             'replacementWorkOrder:id,wo_number,status,quantity_target',
-            'creator:id,name',
+            'creator:id,name,role_id',
             'assignee:id,name',
             'eightDReport',
         ]);

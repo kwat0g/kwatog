@@ -245,7 +245,7 @@ class MrpEngineService
     public function list(array $filters): \Illuminate\Contracts\Pagination\LengthAwarePaginator
     {
         $q = MrpPlan::query()
-            ->with(['salesOrder:id,so_number,customer_id', 'salesOrder.customer:id,name', 'generator:id,name']);
+            ->with(['salesOrder:id,so_number,customer_id', 'salesOrder.customer:id,name', 'generator:id,name,role_id']);
 
         if (! empty($filters['status'])) {
             $q->where('status', $filters['status']);
@@ -263,7 +263,7 @@ class MrpEngineService
     {
         return $plan->load([
             'salesOrder.customer:id,name',
-            'generator:id,name',
+            'generator:id,name,role_id',
             'workOrders:id,wo_number,product_id,quantity_target,status,planned_start',
             'purchaseRequests:id,pr_number,priority,status,is_auto_generated,date',
         ]);

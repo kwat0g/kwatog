@@ -111,9 +111,9 @@ class WorkOrderService
         return $wo->load([
             'product', 'salesOrder', 'salesOrderItem',
             'machine', 'mold', 'parent:id,wo_number',
-            'creator:id,name',
+            'creator:id,name,role_id',
             'materials.item:id,code,name,unit_of_measure',
-            'outputs.recorder:id,name', 'outputs.defects.defectType',
+            'outputs.recorder:id,name,role_id', 'outputs.defects.defectType',
             'downtimes', 'schedules.machine:id,machine_code,name',
         ]);
     }

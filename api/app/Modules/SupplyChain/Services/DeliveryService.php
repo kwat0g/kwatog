@@ -43,7 +43,7 @@ class DeliveryService
         $q = Delivery::query()->with([
             'salesOrder:id,so_number,customer_id',
             'vehicle:id,plate_number,name',
-            'driver:id,name',
+            'driver:id,name,role_id',
         ]);
 
         foreach (['status'] as $f) if (! empty($filters[$f])) $q->where($f, $filters[$f]);
@@ -60,9 +60,9 @@ class DeliveryService
         return $d->load([
             'salesOrder:id,so_number,customer_id',
             'vehicle:id,plate_number,name,vehicle_type',
-            'driver:id,name',
-            'confirmer:id,name',
-            'creator:id,name',
+            'driver:id,name,role_id',
+            'confirmer:id,name,role_id',
+            'creator:id,name,role_id',
             'invoice:id,invoice_number,total_amount,status',
             'items.salesOrderItem:id,sales_order_id,product_id,quantity,unit_price',
             'items.inspection:id,inspection_number,stage,status',
