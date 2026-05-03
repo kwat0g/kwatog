@@ -25,7 +25,17 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        Model::shouldBeStrict(! $this->app->isProduction());
+        // Keep N+1 detection + lazy-loading prevention in non-prod, but allow
+        // accessing attributes that weren't selected in column-restricted
+        // eager loads. The latter caused dozens of MissingAttributeException
+        // 500s where a Resource read e.g. vendor.contact_person while the
+        // service projected only `vendor:id,name`. Tightening every projection
+        // by hand is a never-ending audit; the runtime cost of returning the
+        // missing column as null is negligible.
+        Model::preventLazyLoading(! $this->app->isProduction());
+        Model::preventSilentlyDiscardingAttributes(! $this->app->isProduction());
+        // NOTE: deliberately NOT calling preventAccessingMissingAttributes()
+        // — see comment above.
 
         if ($this->app->environment('production')) {
             URL::forceScheme('https');
