@@ -264,8 +264,8 @@ class MrpEngineService
         return $plan->load([
             'salesOrder.customer:id,name',
             'generator:id,name,role_id',
-            'workOrders:id,wo_number,product_id,quantity_target,status,planned_start',
-            'purchaseRequests:id,pr_number,priority,status,is_auto_generated,date',
+            'workOrders:id,wo_number,product_id,quantity_target,status,planned_start,mrp_plan_id',
+            'purchaseRequests:id,pr_number,priority,status,is_auto_generated,date,mrp_plan_id',
         ]);
     }
 
