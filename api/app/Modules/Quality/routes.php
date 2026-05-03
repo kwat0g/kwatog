@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Modules\Quality\Controllers\InspectionController;
 use App\Modules\Quality\Controllers\InspectionSpecController;
+use App\Modules\Quality\Controllers\NcrController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -41,4 +42,20 @@ Route::middleware(['auth:sanctum', 'feature:quality'])->prefix('quality')->group
         ->middleware('permission:quality.inspections.manage');
     Route::post('/inspections/{inspection}/cancel',             [InspectionController::class, 'cancel'])
         ->middleware('permission:quality.inspections.manage');
+
+    /* ─── NCRs (Task 61) ─── */
+    Route::get('/ncrs',                                         [NcrController::class, 'index'])
+        ->middleware('permission:quality.ncr.view');
+    Route::get('/ncrs/{ncr}',                                   [NcrController::class, 'show'])
+        ->middleware('permission:quality.ncr.view');
+    Route::post('/ncrs',                                        [NcrController::class, 'store'])
+        ->middleware('permission:quality.ncr.manage');
+    Route::post('/ncrs/{ncr}/actions',                          [NcrController::class, 'addAction'])
+        ->middleware('permission:quality.ncr.manage');
+    Route::patch('/ncrs/{ncr}/disposition',                     [NcrController::class, 'setDisposition'])
+        ->middleware('permission:quality.ncr.manage');
+    Route::post('/ncrs/{ncr}/close',                            [NcrController::class, 'close'])
+        ->middleware('permission:quality.ncr.manage');
+    Route::post('/ncrs/{ncr}/cancel',                           [NcrController::class, 'cancel'])
+        ->middleware('permission:quality.ncr.manage');
 });

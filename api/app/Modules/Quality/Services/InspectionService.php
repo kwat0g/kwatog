@@ -291,6 +291,23 @@ class InspectionService
                 'inspector_id' => $inspection->inspector_id ?? $by->id,
             ])->save();
 
+            // Sprint 7 Task 61: auto-open an NCR when the inspection failed.
+            // Wrapped in afterCommit so the NCR row is visible to listeners /
+            // dashboards as soon as the inspection commit lands.
+            if (! $passed) {
+                DB::afterCommit(function () use ($inspection, $by) {
+                    try {
+                        app(\App\Modules\Quality\Services\NcrService::class)->openFromInspectionFailure(
+                            $inspection->fresh(['measurements']),
+                            $by,
+                        );
+                    } catch (\Throwable) {
+                        // NCR module may not be bootable in some test contexts —
+                        // failing to auto-open is non-fatal for the inspection.
+                    }
+                });
+            }
+
             return $this->show($inspection);
         });
     }

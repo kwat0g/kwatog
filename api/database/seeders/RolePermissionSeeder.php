@@ -205,6 +205,7 @@ class RolePermissionSeeder extends Seeder
                 // tolerances without authoring them).
                 ['slug' => 'quality.specs.view',           'name' => 'View Inspection Specs'],
                 ['slug' => 'quality.specs.manage',         'name' => 'Manage Inspection Specs'],
+                ['slug' => 'quality.ncr.view',             'name' => 'View NCRs'],
                 ['slug' => 'quality.ncr.manage',           'name' => 'Manage NCRs'],
             ],
 
