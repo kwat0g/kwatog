@@ -16,9 +16,12 @@ class BulkPrintController
     public function print(Request $request)
     {
         $data = $request->validate([
+            // Only types that already have a Blade template under
+            // resources/views/pdf/ — adding more requires shipping the template
+            // alongside or this controller will 500. employee-loan, cash-advance,
+            // purchase-request, and clearance templates land in a follow-up.
             'type'  => ['required', Rule::in([
                 'purchase_order', 'bill', 'invoice',
-                'employee_loan', 'cash_advance', 'purchase_request', 'clearance',
             ])],
             'ids'   => ['required', 'array', 'min:1', 'max:50'],
             'ids.*' => ['required', 'string', 'max:64'],

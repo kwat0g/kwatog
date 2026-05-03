@@ -39,7 +39,7 @@ Route::prefix('admin')
     });
 
 /* Sprint 8 — Task 75. Global search. */
-Route::middleware(['auth:sanctum', 'permission:search.global', 'throttle:30,1'])
+Route::middleware(['auth:sanctum', 'feature:search', 'permission:search.global', 'throttle:30,1'])
     ->get('/search', [\App\Modules\Admin\Controllers\SearchController::class, 'search']);
 
 /* Sprint 8 — Task 76. Bulk approval PDF print. */

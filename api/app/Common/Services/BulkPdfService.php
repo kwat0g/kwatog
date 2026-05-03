@@ -27,14 +27,15 @@ use RuntimeException;
  */
 class BulkPdfService
 {
+    /**
+     * Document type → Blade view. Only types whose Blade exists are exposed
+     * here; the controller's Rule::in() whitelist must match this map exactly.
+     * Adding more is a one-line change once the per-type template is shipped.
+     */
     private const RENDERERS = [
         'purchase_order'   => 'pdf.purchase-order',
         'bill'             => 'pdf.bill',
         'invoice'          => 'pdf.invoice',
-        'employee_loan'    => 'pdf.employee-loan',
-        'cash_advance'     => 'pdf.cash-advance',
-        'purchase_request' => 'pdf.purchase-request',
-        'clearance'        => 'pdf.clearance',
     ];
 
     /**
