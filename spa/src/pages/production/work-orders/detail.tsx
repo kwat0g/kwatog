@@ -5,11 +5,15 @@ import { Check, Pause, Play, StopCircle, Ban, Lock, Activity } from 'lucide-reac
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { workOrdersApi } from '@/api/production/workOrders';
+import { machinesApi } from '@/api/mrp/machines';
+import { moldsApi } from '@/api/mrp/molds';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Modal } from '@/components/ui/Modal';
 import { Panel } from '@/components/ui/Panel';
+import { Select } from '@/components/ui/Select';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { ChainHeader, LinkedRecords, ActivityStream } from '@/components/chain';
@@ -34,6 +38,20 @@ export default function WorkOrderDetailPage() {
   const canRecord    = can('production.wo.record');
 
   const [confirmAction, setConfirmAction] = useState<LifecycleAction | null>(null);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [selectedMachineId, setSelectedMachineId] = useState<string>('');
+  const [selectedMoldId, setSelectedMoldId] = useState<string>('');
+
+  const machineList = useQuery({
+    queryKey: ['mrp', 'machines', 'all'],
+    queryFn: () => machinesApi.list({ per_page: 100 }),
+    enabled: showConfirmDialog,
+  });
+  const moldList = useQuery({
+    queryKey: ['mrp', 'molds', 'all'],
+    queryFn: () => moldsApi.list({ per_page: 100 }),
+    enabled: showConfirmDialog,
+  });
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['production', 'work-orders', 'detail', id],
@@ -54,7 +72,7 @@ export default function WorkOrderDetailPage() {
   const mut = useMutation({
     mutationFn: async (action: LifecycleAction) => {
       switch (action) {
-        case 'confirm':  return workOrdersApi.confirm(id!);
+        case 'confirm':  return workOrdersApi.confirm(id!, selectedMachineId || undefined, selectedMoldId || undefined);
         case 'start':    return workOrdersApi.start(id!);
         case 'pause':    return workOrdersApi.pause(id!, 'Manual pause', 'breakdown');
         case 'resume':   return workOrdersApi.resume(id!);
@@ -69,6 +87,9 @@ export default function WorkOrderDetailPage() {
       qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'chain', id] });
       toast.success(`Work order ${wo?.wo_number} updated.`);
       setConfirmAction(null);
+      setShowConfirmDialog(false);
+      setSelectedMachineId('');
+      setSelectedMoldId('');
     },
     onError: (e: AxiosError<{ message?: string }>) => {
       toast.error(e.response?.data?.message ?? 'Action failed.');
@@ -107,7 +128,11 @@ export default function WorkOrderDetailPage() {
         backLabel="Work orders"
         actions={
           <div className="flex gap-1.5">
-            {showConfirm  && <Button size="sm" variant="primary"   icon={<Check size={14} />}      onClick={() => setConfirmAction('confirm')}>Confirm</Button>}
+            {showConfirm  && <Button size="sm" variant="primary"   icon={<Check size={14} />}      onClick={() => {
+              setSelectedMachineId(data.machine?.id ?? '');
+              setSelectedMoldId(data.mold?.id ?? '');
+              setShowConfirmDialog(true);
+            }}>Confirm</Button>}
             {showStart    && <Button size="sm" variant="primary"   icon={<Play size={14} />}        onClick={() => setConfirmAction('start')}>Start</Button>}
             {showPause    && <Button size="sm" variant="secondary" icon={<Pause size={14} />}      onClick={() => setConfirmAction('pause')}>Pause</Button>}
             {showResume   && <Button size="sm" variant="primary"   icon={<Play size={14} />}        onClick={() => setConfirmAction('resume')}>Resume</Button>}
@@ -280,6 +305,58 @@ export default function WorkOrderDetailPage() {
           </Panel>
         </div>
       </div>
+
+      <Modal
+        isOpen={showConfirmDialog}
+        onClose={() => setShowConfirmDialog(false)}
+        title={<>Confirm work order <span className="font-mono">{data.wo_number}</span></>}
+        size="md"
+      >
+        <div className="px-5 py-4 space-y-4">
+          <p className="text-sm text-muted">
+            Confirming a work order requires both a machine and a mold. The system will reserve materials based on the BOM once you confirm.
+          </p>
+          <Select
+            label="Machine"
+            required
+            value={selectedMachineId}
+            onChange={(e) => setSelectedMachineId(e.target.value)}
+          >
+            <option value="">Select a machine…</option>
+            {machineList.data?.data.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.machine_code} — {m.name} ({m.tonnage}t)
+              </option>
+            ))}
+          </Select>
+          <Select
+            label="Mold"
+            required
+            value={selectedMoldId}
+            onChange={(e) => setSelectedMoldId(e.target.value)}
+          >
+            <option value="">Select a mold…</option>
+            {moldList.data?.data
+              .filter((m) => !data.product || !m.product || m.product.id === data.product.id)
+              .map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.mold_code} — {m.name} (cavity {m.cavity_count})
+                </option>
+              ))}
+          </Select>
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-default">
+            <Button variant="secondary" onClick={() => setShowConfirmDialog(false)}>Cancel</Button>
+            <Button
+              variant="primary"
+              icon={<Check size={14} />}
+              disabled={!selectedMachineId || !selectedMoldId || mut.isPending}
+              onClick={() => mut.mutate('confirm')}
+            >
+              {mut.isPending ? 'Confirming…' : 'Confirm work order'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       <ConfirmDialog
         isOpen={!!confirmAction}
