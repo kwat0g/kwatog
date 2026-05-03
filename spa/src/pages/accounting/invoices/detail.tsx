@@ -17,6 +17,8 @@ import { Select } from '@/components/ui/Select';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { StatCard } from '@/components/ui/StatCard';
+import { ChainHeader } from '@/components/chain';
+import type { ChainStep } from '@/types/chain';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
@@ -31,6 +33,22 @@ const collectionSchema = z.object({
   reference_number: z.string().max(50).optional().or(z.literal('')),
 });
 type CollectionFormValues = z.infer<typeof collectionSchema>;
+
+function buildInvoiceChain(inv: { status: string; amount_paid: string; balance: string; date: string; payments?: Array<{ collection_date?: string; payment_date?: string }> }): ChainStep[] {
+  const isCancelled = inv.status === 'cancelled';
+  const issued = !isCancelled;
+  const hasPayment = (inv.payments?.length ?? 0) > 0;
+  const fullyPaid = parseFloat(inv.balance) <= 0 && parseFloat(inv.amount_paid) > 0;
+  const firstPayDate = inv.payments?.[0]?.collection_date ?? inv.payments?.[0]?.payment_date;
+  return [
+    { key: 'so',       label: 'Order Confirmed',  state: 'done', date: inv.date.slice(0, 10) },
+    { key: 'prod',     label: 'In Production',    state: 'done' },
+    { key: 'qc',       label: 'QC Outgoing',      state: 'done' },
+    { key: 'delivery', label: 'Delivered',        state: 'done' },
+    { key: 'invoice',  label: 'Invoiced',         state: issued ? 'done' : 'pending', date: inv.date.slice(0, 10) },
+    { key: 'collect',  label: 'Collected',        state: fullyPaid ? 'done' : hasPayment ? 'active' : 'pending', date: firstPayDate?.slice(0, 10) },
+  ];
+}
 
 export default function InvoiceDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
@@ -126,6 +144,12 @@ export default function InvoiceDetailPage() {
           </div>
         }
       />
+
+      <div className="px-5 pt-4">
+        <Panel title="Order-to-Cash">
+          <ChainHeader steps={buildInvoiceChain(invoice)} />
+        </Panel>
+      </div>
 
       <div className="px-5 py-4 grid grid-cols-4 gap-4">
         <StatCard label="Total" value={formatPeso(invoice.total_amount)} />

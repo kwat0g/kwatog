@@ -11,7 +11,7 @@ class AuditLogResource extends JsonResource
     public function toArray($request): array
     {
         return [
-            'id'          => $this->id,
+            'id'          => $this->hash_id,
             'action'      => $this->action,
             'model_type'  => class_basename($this->model_type),
             'model_id'    => $this->model_id,

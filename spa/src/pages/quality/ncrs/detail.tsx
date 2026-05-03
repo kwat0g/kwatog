@@ -24,6 +24,8 @@ import { Textarea } from '@/components/ui/Textarea';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { LinkedRecords } from '@/components/chain/LinkedRecords';
 import { ActivityStream } from '@/components/chain/ActivityStream';
+import { ChainHeader } from '@/components/chain';
+import type { ChainStep } from '@/types/chain';
 import { usePermission } from '@/hooks/usePermission';
 import type {
   NcrActionType,
@@ -128,6 +130,13 @@ export default function NcrDetailPage() {
 
   const isTerminal = ['closed', 'cancelled'].includes(data.status);
 
+  const ncrChain: ChainStep[] = [
+    { key: 'opened',      label: 'NCR Opened',  state: 'done', date: data.created_at?.slice(0, 10) },
+    { key: 'disposition', label: 'Disposition', state: data.disposition ? 'done' : data.status === 'cancelled' ? 'pending' : 'active' },
+    { key: 'actions',     label: 'Action Taken',state: (data.actions?.length ?? 0) > 0 ? 'done' : 'pending' },
+    { key: 'closed',      label: 'Closed',      state: data.status === 'closed' ? 'done' : 'pending', date: data.closed_at?.slice(0, 10) },
+  ];
+
   // Build LinkedRecords groups
   const linkedGroups: import('@/types/chain').LinkedGroup[] = [];
   if (data.product) {
@@ -203,6 +212,12 @@ export default function NcrDetailPage() {
           </div>
         }
       />
+
+      <div className="px-5 pt-4">
+        <Panel title="Quality flow">
+          <ChainHeader steps={ncrChain} />
+        </Panel>
+      </div>
 
       <div className="px-5 grid grid-cols-3 gap-4">
         <div className="col-span-2 space-y-4">
