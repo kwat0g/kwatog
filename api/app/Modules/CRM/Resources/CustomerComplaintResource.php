@@ -14,8 +14,8 @@ class CustomerComplaintResource extends JsonResource
         return [
             'id'                => $this->hash_id,
             'complaint_number'  => $this->complaint_number,
-            'severity'          => $this->severity,
-            'status'            => $this->status,
+            'severity'          => $this->severity instanceof \BackedEnum ? $this->severity->value : $this->severity,
+            'status'            => $this->status   instanceof \BackedEnum ? $this->status->value   : $this->status,
             'description'       => $this->description,
             'affected_quantity' => (int) $this->affected_quantity,
             'received_date'     => optional($this->received_date)?->toDateString(),

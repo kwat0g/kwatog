@@ -7,7 +7,9 @@ namespace App\Modules\CRM\Models;
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\Auth\Models\User;
+use App\Modules\CRM\Enums\ComplaintStatus;
 use App\Modules\Production\Models\WorkOrder;
+use App\Modules\Quality\Enums\NcrSeverity;
 use App\Modules\Quality\Models\NonConformanceReport;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -29,6 +31,8 @@ class CustomerComplaint extends Model
     ];
 
     protected $casts = [
+        'severity'          => NcrSeverity::class,    // shared scale with NCR
+        'status'            => ComplaintStatus::class,
         'received_date'     => 'date',
         'affected_quantity' => 'integer',
         'resolved_at'       => 'datetime',
