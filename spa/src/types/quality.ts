@@ -98,6 +98,72 @@ export interface AqlPlan {
   reject: number;
 }
 
+// ─── Sprint 7 Task 61 — NCR ────────────────────────────────────────────
+
+export type NcrSource = 'inspection_fail' | 'customer_complaint';
+export type NcrSeverity = 'low' | 'medium' | 'high' | 'critical';
+export type NcrStatus = 'open' | 'in_progress' | 'closed' | 'cancelled';
+export type NcrDisposition = 'scrap' | 'rework' | 'use_as_is' | 'return_to_supplier';
+export type NcrActionType = 'containment' | 'corrective' | 'preventive';
+
+export interface NcrAction {
+  id: string;
+  action_type: NcrActionType;
+  description: string;
+  performed_at: string | null;
+  performer?: { id: string; name: string } | null;
+}
+
+export interface Ncr {
+  id: string;
+  ncr_number: string;
+  source: NcrSource;
+  severity: NcrSeverity;
+  status: NcrStatus;
+  disposition: NcrDisposition | null;
+  defect_description: string;
+  affected_quantity: number;
+  root_cause: string | null;
+  corrective_action: string | null;
+  closed_at: string | null;
+  product?: { id: string; part_number: string; name: string } | null;
+  inspection?: { id: string; inspection_number: string; stage: string; status: string } | null;
+  creator?: { id: string; name: string } | null;
+  assignee?: { id: string; name: string } | null;
+  closer?: { id: string; name: string } | null;
+  replacement_work_order?: { id: string; wo_number: string; status: string; quantity_target: number } | null;
+  actions?: NcrAction[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateNcrData {
+  source: NcrSource;
+  severity: NcrSeverity;
+  product_id?: string | null;
+  inspection_id?: string | null;
+  defect_description: string;
+  affected_quantity?: number;
+  assigned_to?: string | null;
+}
+
+// ─── Sprint 7 Task 63 — Defect Pareto ──────────────────────────────────
+
+export interface ParetoRow {
+  parameter_name: string;
+  defect_count: number;
+  percentage: number;
+  cumulative_percentage: number;
+  is_critical: boolean;
+}
+
+export interface ParetoResult {
+  from: string;
+  to: string;
+  total_defects: number;
+  rows: ParetoRow[];
+}
+
 export interface UpsertInspectionSpecData {
   product_id: string;
   notes?: string;

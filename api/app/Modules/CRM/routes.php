@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Modules\CRM\Controllers\ComplaintController;
 use App\Modules\CRM\Controllers\PriceAgreementController;
 use App\Modules\CRM\Controllers\ProductController;
 use App\Modules\CRM\Controllers\SalesOrderController;
@@ -40,4 +41,22 @@ Route::middleware(['auth:sanctum', 'feature:crm'])->prefix('crm')->group(functio
     Route::delete('/sales-orders/{salesOrder}',    [SalesOrderController::class, 'destroy'])->middleware('permission:crm.sales_orders.delete');
     Route::post('/sales-orders/{salesOrder}/confirm', [SalesOrderController::class, 'confirm'])->middleware('permission:crm.sales_orders.confirm');
     Route::post('/sales-orders/{salesOrder}/cancel',  [SalesOrderController::class, 'cancel']) ->middleware('permission:crm.sales_orders.cancel');
+
+    /* ─── Customer complaints + 8D (Task 68) ─── */
+    Route::get('/complaints',                              [ComplaintController::class, 'index'])
+        ->middleware('permission:crm.complaints.manage');
+    Route::get('/complaints/{complaint}',                  [ComplaintController::class, 'show'])
+        ->middleware('permission:crm.complaints.manage');
+    Route::post('/complaints',                             [ComplaintController::class, 'store'])
+        ->middleware('permission:crm.complaints.manage');
+    Route::patch('/complaints/{complaint}/8d',             [ComplaintController::class, 'update8D'])
+        ->middleware('permission:crm.complaints.manage');
+    Route::post('/complaints/{complaint}/8d/finalize',     [ComplaintController::class, 'finalize8D'])
+        ->middleware('permission:crm.complaints.manage');
+    Route::post('/complaints/{complaint}/resolve',         [ComplaintController::class, 'resolve'])
+        ->middleware('permission:crm.complaints.manage');
+    Route::post('/complaints/{complaint}/close',           [ComplaintController::class, 'close'])
+        ->middleware('permission:crm.complaints.manage');
+    Route::get('/complaints/{complaint}/8d/pdf',           [ComplaintController::class, 'pdf'])
+        ->middleware('permission:crm.complaints.manage');
 });

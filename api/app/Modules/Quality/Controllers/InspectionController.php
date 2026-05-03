@@ -8,10 +8,12 @@ use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Requests\CreateInspectionRequest;
 use App\Modules\Quality\Requests\RecordMeasurementsRequest;
 use App\Modules\Quality\Resources\InspectionResource;
+use App\Modules\Quality\Services\CoCService;
 use App\Modules\Quality\Services\InspectionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Http\Response;
 
 class InspectionController
 {
@@ -52,6 +54,18 @@ class InspectionController
     {
         $insp = $this->service->cancel($inspection, (string) $request->input('reason'), $request->user());
         return new InspectionResource($insp);
+    }
+
+    /**
+     * Sprint 7 Task 62 — Certificate of Conformance.
+     *
+     * Streams a PDF for a passed outgoing inspection. Task 66 will also
+     * call CoCService directly when a delivery is created from a passed
+     * batch and persist the rendered PDF to the delivery record.
+     */
+    public function coc(Request $request, Inspection $inspection, CoCService $coc): Response
+    {
+        return $coc->generateForInspection($inspection);
     }
 
     public function aqlPreview(Request $request): JsonResponse

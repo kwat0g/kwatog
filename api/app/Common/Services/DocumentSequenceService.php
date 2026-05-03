@@ -41,6 +41,7 @@ class DocumentSequenceService
         'loan'          => ['prefix' => 'LN',   'reset' => 'monthly', 'pad' => 4],
         'cash_advance'  => ['prefix' => 'CA',   'reset' => 'monthly', 'pad' => 4],
         'complaint'     => ['prefix' => 'CMP',  'reset' => 'monthly', 'pad' => 4],
+        'shipment'      => ['prefix' => 'SHP',  'reset' => 'monthly', 'pad' => 4],
     ];
 
     /**

@@ -137,6 +137,7 @@ class RolePermissionSeeder extends Seeder
             'supply_chain' => [
                 ['slug' => 'supply_chain.view',                 'name' => 'View Supply Chain'],
                 ['slug' => 'supply_chain.shipments.manage',     'name' => 'Manage Shipments'],
+                ['slug' => 'supply_chain.fleet.manage',         'name' => 'Manage Vehicles'],
                 ['slug' => 'supply_chain.deliveries.create',    'name' => 'Create Deliveries'],
                 ['slug' => 'supply_chain.deliveries.confirm',   'name' => 'Confirm Customer Delivery'],
             ],
@@ -205,6 +206,7 @@ class RolePermissionSeeder extends Seeder
                 // tolerances without authoring them).
                 ['slug' => 'quality.specs.view',           'name' => 'View Inspection Specs'],
                 ['slug' => 'quality.specs.manage',         'name' => 'Manage Inspection Specs'],
+                ['slug' => 'quality.ncr.view',             'name' => 'View NCRs'],
                 ['slug' => 'quality.ncr.manage',           'name' => 'Manage NCRs'],
             ],
 

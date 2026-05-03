@@ -46,6 +46,9 @@ class DatabaseSeeder extends Seeder
             MoldSeeder::class,                 // Task 50 (depends on products)
             MoldCompatibilitySeeder::class,    // Task 50 (depends on machines + molds)
             DefectTypeSeeder::class,           // Task 51
+
+            // Sprint 7 — Supply Chain
+            VehicleSeeder::class,              // Task 66
         ]);
     }
 }
