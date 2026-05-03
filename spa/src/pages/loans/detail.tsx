@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { Check, X } from 'lucide-react';
@@ -20,7 +20,6 @@ import { formatDate } from '@/lib/formatDate';
 
 export default function LoanDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
-  const navigate = useNavigate();
   const qc = useQueryClient();
   const { can } = usePermission();
   const [reject, setReject] = useState(false);
@@ -58,10 +57,10 @@ export default function LoanDetailPage() {
   const balance = parseFloat(loan.balance ?? '0');
   const loanChain: ChainStep[] = [
     { key: 'submitted', label: 'Submitted', state: 'done', date: loan.created_at?.slice(0, 10) },
-    { key: 'approved',  label: 'Approved',  state: ['active', 'completed'].includes(loan.status) ? 'done' : loan.status === 'pending' ? 'active' : 'pending', date: loan.approved_at?.slice(0, 10) },
-    { key: 'disbursed', label: 'Disbursed', state: ['active', 'completed'].includes(loan.status) ? 'done' : 'pending', date: loan.start_date ?? undefined },
-    { key: 'repaying',  label: 'Repaying',  state: loan.status === 'completed' ? 'done' : loan.status === 'active' && totalPaid > 0 ? 'active' : 'pending' },
-    { key: 'settled',   label: 'Settled',   state: loan.status === 'completed' || balance <= 0 ? 'done' : 'pending', date: loan.end_date ?? undefined },
+    { key: 'approved',  label: 'Approved',  state: ['active', 'paid'].includes(loan.status) ? 'done' : loan.status === 'pending' ? 'active' : 'pending', date: loan.approved_at?.slice(0, 10) },
+    { key: 'disbursed', label: 'Disbursed', state: ['active', 'paid'].includes(loan.status) ? 'done' : 'pending', date: loan.start_date ?? undefined },
+    { key: 'repaying',  label: 'Repaying',  state: loan.status === 'paid' ? 'done' : loan.status === 'active' && totalPaid > 0 ? 'active' : 'pending' },
+    { key: 'settled',   label: 'Settled',   state: loan.status === 'paid' || balance <= 0 ? 'done' : 'pending', date: loan.end_date ?? undefined },
   ];
   const remainingPercent = parseFloat(loan.principal) > 0
     ? Math.min(100, (parseFloat(loan.total_paid) / parseFloat(loan.principal)) * 100)

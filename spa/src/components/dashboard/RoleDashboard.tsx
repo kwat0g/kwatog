@@ -54,7 +54,7 @@ export function RoleDashboard({ role }: { role: Role }) {
               key={k.label}
               label={k.label}
               value={k.unit === 'PHP' ? `₱ ${k.value}` : k.value}
-              unit={k.unit !== 'PHP' && k.unit !== 'count' ? k.unit : undefined}
+              helper={k.unit !== 'PHP' && k.unit !== 'count' ? k.unit : undefined}
             />
           ))}
         </section>
@@ -79,7 +79,7 @@ function RolePanels({ envelope }: { envelope: DashboardEnvelope }) {
                   <span className="font-mono tabular-nums">{s.count}</span>
                 </div>
                 <div className="h-1 bg-subtle rounded-full overflow-hidden">
-                  <div className={`h-full bg-${s.color === 'danger' ? 'danger' : s.color === 'warning' ? 'warning' : s.color === 'info' ? 'info' : 'success'}-fg`}
+                  <div className={stageFillClass(s.color)}
                     style={{ width: `${s.percent}%` }} />
                 </div>
               </li>
@@ -94,7 +94,7 @@ function RolePanels({ envelope }: { envelope: DashboardEnvelope }) {
             {p.alerts.map((a: any) => (
               <li key={a.kind} className="flex items-center justify-between py-2 text-sm">
                 <span className="flex items-center gap-2">
-                  <span className={`inline-block w-1.5 h-1.5 rounded-full bg-${a.severity}-fg`} />
+                  <span className={alertDotClass(a.severity)} />
                   {a.label}
                 </span>
                 <span className="font-mono tabular-nums">{a.count}</span>
@@ -180,4 +180,19 @@ function RolePanels({ envelope }: { envelope: DashboardEnvelope }) {
       )}
     </div>
   );
+}
+
+function stageFillClass(color?: string): string {
+  if (color === 'danger') return 'h-full bg-danger';
+  if (color === 'warning') return 'h-full bg-warning';
+  if (color === 'info') return 'h-full bg-info';
+  return 'h-full bg-success';
+}
+
+function alertDotClass(severity?: string): string {
+  const base = 'inline-block w-1.5 h-1.5 rounded-full';
+  if (severity === 'danger') return `${base} bg-danger`;
+  if (severity === 'warning') return `${base} bg-warning`;
+  if (severity === 'info') return `${base} bg-info`;
+  return `${base} bg-success`;
 }

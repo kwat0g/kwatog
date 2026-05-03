@@ -65,7 +65,7 @@ export default function CreateComplaintPage() {
     },
     onError: (e: AxiosError<{ message?: string; errors?: Record<string, string[]> }>) => {
       if (e.response?.data?.errors) {
-        applyServerValidationErrors(setError as never, e.response.data.errors);
+        applyServerValidationErrors(e.response.data.errors, setError);
         toast.error('Please fix the errors below.');
       } else {
         toast.error(e.response?.data?.message ?? 'Failed to open complaint');

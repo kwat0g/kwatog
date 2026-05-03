@@ -5,10 +5,9 @@ declare(strict_types=1);
 namespace App\Modules\Auth\Controllers;
 
 use App\Modules\Auth\Models\NotificationPreference;
-use App\Modules\Auth\Models\User;
+use App\Modules\Auth\Services\UserNotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 /**
  * Sprint 8 — Task 77. Notifications + per-user channel preferences.
@@ -18,22 +17,16 @@ use Illuminate\Support\Facades\DB;
  */
 class NotificationController
 {
+    public function __construct(private readonly UserNotificationService $service) {}
+
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
-        $q = DB::table('notifications')
-            ->where('notifiable_type', User::class)
-            ->where('notifiable_id', $user->id);
-
-        if ($request->boolean('unread_only')) {
-            $q->whereNull('read_at');
-        }
-        if ($request->filled('type')) {
-            $q->where('type', $request->string('type'));
-        }
-
-        $perPage = min((int) ($request->integer('per_page') ?: 25), 100);
-        $rows = $q->orderByDesc('created_at')->paginate($perPage);
+        $rows = $this->service->list($user, [
+            'unread_only' => $request->boolean('unread_only'),
+            'type'        => $request->filled('type') ? (string) $request->string('type') : null,
+            'per_page'    => $request->integer('per_page') ?: 25,
+        ]);
 
         return response()->json([
             'data' => collect($rows->items())->map(fn ($n) => [
@@ -48,41 +41,27 @@ class NotificationController
                 'last_page'    => $rows->lastPage(),
                 'per_page'     => $rows->perPage(),
                 'total'        => $rows->total(),
-                'unread_count' => DB::table('notifications')
-                    ->where('notifiable_type', User::class)
-                    ->where('notifiable_id', $user->id)
-                    ->whereNull('read_at')->count(),
+                'unread_count' => $this->service->unreadCount($user),
             ],
         ]);
     }
 
     public function markRead(Request $request, string $id): JsonResponse
     {
-        $user = $request->user();
-        $updated = DB::table('notifications')
-            ->where('id', $id)
-            ->where('notifiable_type', User::class)
-            ->where('notifiable_id', $user->id)
-            ->update(['read_at' => now()]);
-        if (! $updated) abort(404);
-        return response()->json(['data' => ['id' => $id, 'read_at' => now()->toISOString()]]);
+        return response()->json([
+            'data' => ['id' => $id, 'read_at' => $this->service->markRead($request->user(), $id)],
+        ]);
     }
 
     public function markAllRead(Request $request): JsonResponse
     {
-        $user = $request->user();
-        $count = DB::table('notifications')
-            ->where('notifiable_type', User::class)
-            ->where('notifiable_id', $user->id)
-            ->whereNull('read_at')
-            ->update(['read_at' => now()]);
+        $count = $this->service->markAllRead($request->user());
         return response()->json(['data' => ['marked_read' => $count]]);
     }
 
     public function preferencesIndex(Request $request): JsonResponse
     {
-        $user = $request->user();
-        $rows = NotificationPreference::query()->where('user_id', $user->id)->get();
+        $rows = $this->service->preferences($request->user());
         return response()->json([
             'data' => $rows->map(fn (NotificationPreference $p) => [
                 'id'                => $p->hash_id,
@@ -101,17 +80,7 @@ class NotificationController
             'preferences.*.channel'             => ['required', 'in:in_app,email'],
             'preferences.*.enabled'             => ['required', 'boolean'],
         ]);
-        $user = $request->user();
-        foreach ($data['preferences'] as $row) {
-            NotificationPreference::updateOrCreate(
-                [
-                    'user_id'           => $user->id,
-                    'notification_type' => $row['notification_type'],
-                    'channel'           => $row['channel'],
-                ],
-                ['enabled' => (bool) $row['enabled']],
-            );
-        }
+        $this->service->updatePreferences($request->user(), $data['preferences']);
         return $this->preferencesIndex($request);
     }
 }

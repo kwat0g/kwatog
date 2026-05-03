@@ -8,7 +8,7 @@
  */
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { Check, Ban, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { AxiosError } from 'axios';
@@ -24,7 +24,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { ChainHeader } from '@/components/chain/ChainHeader';
 import { LinkedRecords } from '@/components/chain/LinkedRecords';
 import { usePermission } from '@/hooks/usePermission';
-import type { Inspection, InspectionMeasurement, InspectionStatus } from '@/types/quality';
+import type { InspectionMeasurement, InspectionStatus } from '@/types/quality';
 
 const STATUS_CHIP: Record<InspectionStatus, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
   draft: 'neutral',
@@ -44,7 +44,6 @@ interface RowDraft {
 
 export default function InspectionDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
-  const navigate = useNavigate();
   const qc = useQueryClient();
   const { can } = usePermission();
   const [drafts, setDrafts] = useState<Record<string, RowDraft>>({});

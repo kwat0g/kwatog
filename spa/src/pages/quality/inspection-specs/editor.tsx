@@ -70,7 +70,7 @@ export default function InspectionSpecEditorPage() {
   });
 
   const {
-    register, control, handleSubmit, reset, setError, watch,
+    register, control, handleSubmit, reset, setError,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),

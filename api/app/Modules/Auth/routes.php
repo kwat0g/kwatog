@@ -35,14 +35,19 @@ Route::prefix('auth')->group(function (): void {
 
 /* Sprint 8 — Task 77. Notifications + per-user channel preferences. */
 Route::middleware(['auth:sanctum', 'session.timeout', 'password.expired'])->prefix('notifications')->group(function () {
-    Route::get('/',                  [NotificationController::class, 'index']);
-    Route::patch('/{id}/read',       [NotificationController::class, 'markRead']);
-    Route::patch('/read-all',        [NotificationController::class, 'markAllRead']);
+    Route::get('/',                  [NotificationController::class, 'index'])
+        ->middleware('permission:notifications.view');
+    Route::patch('/{id}/read',       [NotificationController::class, 'markRead'])
+        ->middleware('permission:notifications.view');
+    Route::patch('/read-all',        [NotificationController::class, 'markAllRead'])
+        ->middleware('permission:notifications.view');
 });
 
 Route::middleware(['auth:sanctum', 'session.timeout', 'password.expired',
                    'permission:notifications.preferences.manage'])
     ->prefix('notification-preferences')->group(function () {
-        Route::get('/',  [NotificationController::class, 'preferencesIndex']);
-        Route::put('/',  [NotificationController::class, 'preferencesUpdate']);
+        Route::get('/',  [NotificationController::class, 'preferencesIndex'])
+            ->middleware('permission:notifications.preferences.manage');
+        Route::put('/',  [NotificationController::class, 'preferencesUpdate'])
+            ->middleware('permission:notifications.preferences.manage');
     });

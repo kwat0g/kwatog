@@ -103,6 +103,7 @@ export interface Employee {
   bank_account_no: string | null;
   department: Department | null;
   position: Position | null;
+  user?: { id: string; name: string; email: string } | null;
   created_at: string;
   updated_at: string;
 }

@@ -11,14 +11,6 @@ import { formatPeso } from '@/lib/formatNumber';
 import { cn } from '@/lib/cn';
 import type { Account } from '@/types/accounting';
 
-const TYPE_CHIP: Record<string, 'neutral' | 'info' | 'warning' | 'success' | 'danger'> = {
-  asset: 'neutral',
-  liability: 'neutral',
-  equity: 'neutral',
-  revenue: 'neutral',
-  expense: 'neutral',
-};
-
 export default function ChartOfAccountsPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['accounting', 'accounts', 'tree'],

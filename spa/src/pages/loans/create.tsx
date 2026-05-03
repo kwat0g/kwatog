@@ -10,7 +10,6 @@ import { loansApi } from '@/api/loans';
 import { employeesApi } from '@/api/hr/employees';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Radio } from '@/components/ui/Radio';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { Panel } from '@/components/ui/Panel';

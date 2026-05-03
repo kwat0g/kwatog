@@ -16,7 +16,7 @@ Route::middleware(['auth:sanctum', 'feature:leave'])->prefix('leaves')->group(fu
     Route::delete('/types/{leaveType}',  [LeaveTypeController::class, 'destroy'])->middleware('permission:leave.types.manage');
 
     // Balances
-    Route::get('/balances/me',                [LeaveBalanceController::class, 'me']);
+    Route::get('/balances/me',                [LeaveBalanceController::class, 'me'])->middleware('permission:leave.view');
     Route::get('/balances/{employee}',        [LeaveBalanceController::class, 'forEmployee'])->middleware('permission:leave.view');
 
     // Requests
@@ -25,6 +25,6 @@ Route::middleware(['auth:sanctum', 'feature:leave'])->prefix('leaves')->group(fu
     Route::get('/requests/{leaveRequest}',                       [LeaveRequestController::class, 'show'])->middleware('permission:leave.view');
     Route::patch('/requests/{leaveRequest}/approve-dept',        [LeaveRequestController::class, 'approveDept'])->middleware('permission:leave.approve_dept');
     Route::patch('/requests/{leaveRequest}/approve-hr',          [LeaveRequestController::class, 'approveHR'])->middleware('permission:leave.approve_hr');
-    Route::patch('/requests/{leaveRequest}/reject',              [LeaveRequestController::class, 'reject']);
-    Route::patch('/requests/{leaveRequest}/cancel',              [LeaveRequestController::class, 'cancel']);
+    Route::patch('/requests/{leaveRequest}/reject',              [LeaveRequestController::class, 'reject'])->middleware('permission:leave.approve_dept');
+    Route::patch('/requests/{leaveRequest}/cancel',              [LeaveRequestController::class, 'cancel'])->middleware('permission:leave.create');
 });

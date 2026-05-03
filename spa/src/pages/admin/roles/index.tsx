@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Lock, ShieldCheck } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 import { rolesApi, type Role } from '@/api/admin/roles';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';

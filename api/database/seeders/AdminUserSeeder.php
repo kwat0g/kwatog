@@ -17,7 +17,7 @@ class AdminUserSeeder extends Seeder
      * either change the constant or rotate via the admin profile page on first
      * login.
      */
-    private const DEFAULT_PASSWORD = 'Latras09@';
+    private const DEFAULT_PASSWORD = 'password';
     private const EMAIL            = 'admin@ogami.test';
 
     public function run(): void

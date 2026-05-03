@@ -3,7 +3,7 @@ export type ChainStepState = 'done' | 'active' | 'pending';
 export interface ChainStep {
   key: string;
   label: string;
-  date?: string;
+  date?: string | null;
   state: ChainStepState;
 }
 

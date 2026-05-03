@@ -6,7 +6,7 @@ import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
 import { ChevronLeft, ChevronRight, Plus, Pencil, Trash2 } from 'lucide-react';
-import { addMonths, format, getDaysInMonth, startOfMonth, parseISO, isSameMonth, isSameDay, getDay } from 'date-fns';
+import { format, getDaysInMonth, startOfMonth, parseISO, isSameMonth, getDay } from 'date-fns';
 import { holidaysApi } from '@/api/attendance/holidays';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';

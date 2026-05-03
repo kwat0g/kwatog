@@ -361,7 +361,9 @@ export default function WorkOrderDetailPage() {
       <ConfirmDialog
         isOpen={!!confirmAction}
         onClose={() => setConfirmAction(null)}
-        onConfirm={() => confirmAction && mut.mutate(confirmAction)}
+        onConfirm={() => {
+          if (confirmAction) mut.mutate(confirmAction);
+        }}
         title={confirmAction ? `${confirmAction[0].toUpperCase()}${confirmAction.slice(1)} this work order?` : ''}
         description={confirmAction
           ? <>This will run the <span className="font-mono">{confirmAction}</span> lifecycle action on <span className="font-mono">{data.wo_number}</span>.</>

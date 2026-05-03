@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { Check, X, RotateCcw } from 'lucide-react';
@@ -18,7 +18,6 @@ import { formatDate, formatDateTime } from '@/lib/formatDate';
 
 export default function LeaveDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
-  const navigate = useNavigate();
   const qc = useQueryClient();
   const { can } = usePermission();
   const user = useAuthStore((s) => s.user);

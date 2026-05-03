@@ -25,6 +25,7 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'admin.audit_logs.view',    'name' => 'View Audit Logs'],
                 ['slug' => 'admin.users.manage',       'name' => 'Manage Users'],
                 ['slug' => 'admin.gov_tables.manage',  'name' => 'Manage Government Contribution Tables'],
+                ['slug' => 'admin.print.bulk',         'name' => 'Bulk Print Approved Forms'],
             ],
 
             // HR
@@ -49,6 +50,7 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'attendance.edit',          'name' => 'Edit Attendance'],
                 ['slug' => 'attendance.shifts.manage', 'name' => 'Manage Shifts'],
                 ['slug' => 'attendance.holidays.manage', 'name' => 'Manage Holidays'],
+                ['slug' => 'attendance.ot.create',     'name' => 'Create Overtime Request'],
                 ['slug' => 'attendance.ot.approve',    'name' => 'Approve Overtime'],
             ],
 
@@ -242,6 +244,7 @@ class RolePermissionSeeder extends Seeder
             ],
             'platform' => [
                 ['slug' => 'search.global',                       'name' => 'Use Global Search'],
+                ['slug' => 'notifications.view',                  'name' => 'View Own Notifications'],
                 ['slug' => 'notifications.preferences.manage',    'name' => 'Manage Own Notification Preferences'],
             ],
         ];
@@ -362,7 +365,7 @@ class RolePermissionSeeder extends Seeder
                 'description' => 'Approves leaves, OT, PRs for their department.',
                 'permissions' => [
                     'hr.employees.view',
-                    'attendance.view', 'attendance.ot.approve',
+                    'attendance.view', 'attendance.ot.create', 'attendance.ot.approve',
                     'leave.view', 'leave.approve_dept',
                     'purchasing.view', 'purchasing.pr.approve',
                     'hr.clearance.sign',
@@ -374,6 +377,7 @@ class RolePermissionSeeder extends Seeder
                 'description' => 'Self-service portal access only.',
                 'permissions' => [
                     'leave.view', 'leave.create',
+                    'attendance.ot.create',
                     // Self-service: payroll.view is server-scoped to own payrolls
                     // by PayrollController::index() — employees never see others.
                     'payroll.view',
@@ -422,11 +426,15 @@ class RolePermissionSeeder extends Seeder
                 ],
             );
 
-            $ids = $def['permissions'] === '*'
+            $permissions = $def['permissions'] === '*'
+                ? '*'
+                : array_values(array_unique(array_merge((array) $def['permissions'], ['notifications.view'])));
+
+            $ids = $permissions === '*'
                 ? $allSlugs->values()->all()
                 : array_values(array_filter(array_map(
                     fn (string $s) => $allSlugs[$s] ?? null,
-                    (array) $def['permissions'],
+                    (array) $permissions,
                 )));
 
             $role->permissions()->sync($ids);

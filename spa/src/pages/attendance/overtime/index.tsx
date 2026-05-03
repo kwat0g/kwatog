@@ -15,7 +15,7 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
-import type { ApiValidationError, ListParams } from '@/types';
+import type { ListParams } from '@/types';
 import type { OvertimeRequest } from '@/types/attendance';
 
 export default function OvertimeListPage() {

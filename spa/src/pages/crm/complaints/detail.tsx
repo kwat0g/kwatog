@@ -7,7 +7,7 @@
  */
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { Check, Ban, FileDown, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { AxiosError } from 'axios';
@@ -49,7 +49,6 @@ type Tab = 'overview' | '8d' | 'linked';
 
 export default function ComplaintDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
-  const navigate = useNavigate();
   const qc = useQueryClient();
   const { can } = usePermission();
   const [tab, setTab] = useState<Tab>('overview');

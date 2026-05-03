@@ -1,11 +1,13 @@
+import { type CSSProperties } from 'react';
 import { cn } from '@/lib/cn';
 
 interface BlockProps {
   className?: string;
+  style?: CSSProperties;
 }
 
-export function SkeletonBlock({ className }: BlockProps) {
-  return <div className={cn('rounded bg-elevated animate-pulse', className)} />;
+export function SkeletonBlock({ className, style }: BlockProps) {
+  return <div className={cn('rounded bg-elevated animate-pulse', className)} style={style} />;
 }
 
 interface SkeletonTableProps {

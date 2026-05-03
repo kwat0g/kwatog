@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -47,7 +46,7 @@ export default function CreateLeavePage() {
   const employees = employeesResp?.data ?? [];
 
   const {
-    register, handleSubmit, watch, setValue, setError,
+    register, handleSubmit, watch, setError,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),

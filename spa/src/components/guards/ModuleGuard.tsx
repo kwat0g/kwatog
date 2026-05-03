@@ -1,6 +1,5 @@
 import { type ReactNode } from 'react';
 import { Outlet } from 'react-router-dom';
-import { Lock } from 'lucide-react';
 import { useFeature } from '@/hooks/useFeature';
 import { EmptyState } from '@/components/ui/EmptyState';
 

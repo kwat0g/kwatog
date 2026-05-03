@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Payroll\Models;
 
+use App\Common\Traits\HasHashId;
 use App\Modules\Payroll\Enums\DeductionType;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -11,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class PayrollDeductionDetail extends Model
 {
-    use HasFactory;
+    use HasFactory, HasHashId;
 
     protected $fillable = [
         'payroll_id',

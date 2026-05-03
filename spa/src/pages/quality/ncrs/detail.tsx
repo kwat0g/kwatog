@@ -7,7 +7,7 @@
  */
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { Check, Ban, Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { AxiosError } from 'axios';
@@ -50,7 +50,6 @@ const SEVERITY_CHIP: Record<NcrSeverity, 'success' | 'danger' | 'warning' | 'neu
 
 export default function NcrDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
-  const navigate = useNavigate();
   const qc = useQueryClient();
   const { can } = usePermission();
   const [actionType, setActionType] = useState<NcrActionType>('containment');

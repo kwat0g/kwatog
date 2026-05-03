@@ -26,6 +26,7 @@ export interface EmployeeLoan {
   approval_chain_size: number;
   purpose: string | null;
   status: LoanStatus;
+  approved_at?: string | null;
   is_final_pay_deduction: boolean;
   payments?: LoanPayment[];
   created_at: string;

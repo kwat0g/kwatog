@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
 import { priceAgreementsApi, type PriceAgreementListParams } from '@/api/crm/priceAgreements';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -16,7 +15,6 @@ import type { PriceAgreement } from '@/types/crm';
  * pages in a follow-up; this index is the global lookup view.
  */
 export default function PriceAgreementsListPage() {
-  const navigate = useNavigate();
   const [filters, setFilters] = useState<PriceAgreementListParams>({ page: 1, per_page: 25 });
 
   const { data, isLoading, isError, refetch } = useQuery({

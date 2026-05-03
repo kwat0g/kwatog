@@ -4,13 +4,14 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Models;
 
+use App\Common\Traits\HasHashId;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class MaterialIssueSlipItem extends Model
 {
-    use HasFactory;
+    use HasFactory, HasHashId;
 
     protected $fillable = [
         'material_issue_slip_id', 'item_id', 'location_id',

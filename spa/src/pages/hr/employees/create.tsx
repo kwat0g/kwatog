@@ -13,7 +13,7 @@ const cleanup = (d: EmployeeFormValues): CreateEmployeeData => {
   Object.keys(out).forEach((k) => {
     if (out[k] === '') out[k] = undefined;
   });
-  return out as CreateEmployeeData;
+  return out as unknown as CreateEmployeeData;
 };
 
 export default function CreateEmployeePage() {

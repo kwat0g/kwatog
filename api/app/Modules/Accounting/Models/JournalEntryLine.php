@@ -4,17 +4,14 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Models;
 
+use App\Common\Traits\HasHashId;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-/**
- * Note: lines are NOT individually addressable via URL — no HasHashId on them.
- * They flow through the parent JournalEntry endpoint.
- */
 class JournalEntryLine extends Model
 {
-    use HasFactory;
+    use HasFactory, HasHashId;
 
     public $timestamps = false;
 

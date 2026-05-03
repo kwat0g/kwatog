@@ -54,6 +54,7 @@ class DatabaseSeeder extends Seeder
             // sales order (Order to Cash chain), and an open customer
             // complaint. Idempotent: skips on re-run if rows already exist.
             DemoDataSeeder::class,
+            DemoAccountSeeder::class,
 
             // Sprint 8 — supplements demo data with maintenance schedules,
             // sample maintenance work orders, and the asset register.

@@ -16,7 +16,6 @@ import { FilterBar } from '@/components/ui/FilterBar';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Panel } from '@/components/ui/Panel';
-import { Select } from '@/components/ui/Select';
 import { Switch } from '@/components/ui/Switch';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
