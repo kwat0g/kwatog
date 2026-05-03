@@ -49,6 +49,11 @@ class DatabaseSeeder extends Seeder
 
             // Sprint 7 — Supply Chain
             VehicleSeeder::class,              // Task 66
+
+            // Demo transactional data — employees, stock levels, a confirmed
+            // sales order (Order to Cash chain), and an open customer
+            // complaint. Idempotent: skips on re-run if rows already exist.
+            DemoDataSeeder::class,
         ]);
     }
 }
