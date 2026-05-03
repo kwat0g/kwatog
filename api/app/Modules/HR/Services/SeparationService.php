@@ -53,8 +53,9 @@ class SeparationService
     public function list(array $filters): LengthAwarePaginator
     {
         $q = Clearance::query()->with([
-            'employee:id,employee_no,first_name,last_name,department_id',
+            'employee:id,employee_no,first_name,last_name,department_id,position_id',
             'employee.department:id,name,code',
+            'employee.position:id,title',
         ]);
         foreach (['status', 'separation_reason', 'employee_id'] as $f) {
             if (! empty($filters[$f])) $q->where($f, $filters[$f]);

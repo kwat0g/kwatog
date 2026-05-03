@@ -62,8 +62,7 @@ class ItemService
             $q->select('items.*');
         }
 
-        return $q->with(['category:id,name,code'])
-            ->orderBy('code')
+        return $q->orderBy('code')
             ->paginate(min((int) ($filters['per_page'] ?? 25), 100));
     }
 

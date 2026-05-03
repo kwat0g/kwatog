@@ -6,6 +6,7 @@ namespace App\Modules\CRM\Models;
 
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
+use App\Modules\Accounting\Models\Customer;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Enums\ComplaintStatus;
 use App\Modules\Production\Models\WorkOrder;

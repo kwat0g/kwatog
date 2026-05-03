@@ -42,8 +42,7 @@ class MaintenanceScheduleService
             $q->where('description', SearchOperator::like(), $term);
         }
 
-        return $q->with(['maintainable'])
-            ->orderBy('next_due_at')
+        return $q->orderBy('next_due_at')
             ->paginate(min((int) ($filters['per_page'] ?? 20), 100));
     }
 
