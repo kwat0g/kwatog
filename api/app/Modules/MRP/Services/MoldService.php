@@ -20,7 +20,7 @@ class MoldService
     public function list(array $filters): LengthAwarePaginator
     {
         $q = Mold::query()
-            ->with('product:id,part_number,name')
+            ->with('product:id,part_number,name,unit_of_measure')
             ->withCount('compatibleMachines');
 
         if (! empty($filters['product_id'])) {
