@@ -21,6 +21,8 @@ import { Panel } from '@/components/ui/Panel';
 import { ReasonDialog } from '@/components/ui/ReasonDialog';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { ChainHeader } from '@/components/chain/ChainHeader';
+import { LinkedRecords } from '@/components/chain/LinkedRecords';
 import { usePermission } from '@/hooks/usePermission';
 import type { Inspection, InspectionMeasurement, InspectionStatus } from '@/types/quality';
 
@@ -204,6 +206,37 @@ export default function InspectionDetailPage() {
         }
       />
 
+      {/* Sprint 7 audit fix: chain visualization for inspection (O2C step "QC Outgoing", P2P step "QC Incoming"). */}
+      {data.stage === 'outgoing' && (
+        <div className="px-5 py-3 border-b border-default">
+          <ChainHeader
+            steps={[
+              { key: 'order',   label: 'Order',          state: 'done' },
+              { key: 'mrp',     label: 'MRP planned',    state: 'done' },
+              { key: 'wo',      label: 'In production',  state: 'done' },
+              { key: 'qc',      label: 'QC outgoing',    state: data.status === 'passed' ? 'done' : data.status === 'failed' ? 'done' : 'active' },
+              { key: 'deliver', label: 'Delivered',      state: 'pending' },
+              { key: 'invoice', label: 'Invoiced',       state: 'pending' },
+              { key: 'collect', label: 'Collected',      state: 'pending' },
+            ]}
+          />
+        </div>
+      )}
+      {data.stage === 'incoming' && (
+        <div className="px-5 py-3 border-b border-default">
+          <ChainHeader
+            steps={[
+              { key: 'pr',     label: 'PR created',     state: 'done' },
+              { key: 'po',     label: 'PO approved',    state: 'done' },
+              { key: 'grn',    label: 'GRN received',   state: 'done' },
+              { key: 'qc',     label: 'QC incoming',    state: data.status === 'passed' ? 'done' : 'active' },
+              { key: 'bill',   label: 'Bill created',   state: 'pending' },
+              { key: 'pay',    label: 'Payment',        state: 'pending' },
+            ]}
+          />
+        </div>
+      )}
+
       <div className="px-5 grid grid-cols-3 gap-4">
         <div className="col-span-2 space-y-4">
           <Panel title="Sample plan">
@@ -386,6 +419,30 @@ export default function InspectionDetailPage() {
             </Panel>
           )}
 
+          {/* Sprint 7 audit fix: LinkedRecords (Order-to-Cash chain) */}
+          {data.product && (
+            <Panel title="Linked records">
+              <LinkedRecords
+                groups={[
+                  {
+                    label: 'Product',
+                    items: [{
+                      id: `${data.product.part_number} — ${data.product.name}`,
+                      href: `/crm/products/${data.product.id}`,
+                    }],
+                  },
+                  ...(data.spec ? [{
+                    label: 'Inspection spec',
+                    items: [{
+                      id: `v${data.spec.version}`,
+                      href: `/quality/inspection-specs/${data.product.id}`,
+                      meta: data.spec.is_active ? 'active' : 'archived',
+                    }],
+                  }] : []),
+                ]}
+              />
+            </Panel>
+          )}
           <Panel title="Actions">
             <Link to="/quality/inspections" className="text-xs text-accent hover:underline">
               ← Back to inspections

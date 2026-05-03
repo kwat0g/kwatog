@@ -140,6 +140,9 @@ const QualityDashboardPage      = lazy(() => import('@/pages/quality/dashboard')
 const NcrsListPage              = lazy(() => import('@/pages/quality/ncrs'));
 const NcrDetailPage             = lazy(() => import('@/pages/quality/ncrs/detail'));
 const NcrCreatePage             = lazy(() => import('@/pages/quality/ncrs/create'));
+const ComplaintsListPage        = lazy(() => import('@/pages/crm/complaints'));
+const ComplaintDetailPage       = lazy(() => import('@/pages/crm/complaints/detail'));
+const ComplaintCreatePage       = lazy(() => import('@/pages/crm/complaints/create'));
 const ShipmentsListPage         = lazy(() => import('@/pages/supply-chain/shipments'));
 const DeliveriesListPage        = lazy(() => import('@/pages/supply-chain/deliveries'));
 const DeliveryDetailPage        = lazy(() => import('@/pages/supply-chain/deliveries/detail'));
@@ -491,6 +494,14 @@ export default function App() {
               element={<PermissionGuard permission="crm.sales_orders.view"><SalesOrderDetailPage /></PermissionGuard>} />
             <Route path="/crm/sales-orders/:id/edit"
               element={<PermissionGuard permission="crm.sales_orders.update"><EditSalesOrderPage /></PermissionGuard>} />
+
+            {/* Sprint 7 Task 68 — customer complaints + 8D */}
+            <Route path="/crm/complaints"
+              element={<PermissionGuard permission="crm.complaints.manage"><ComplaintsListPage /></PermissionGuard>} />
+            <Route path="/crm/complaints/new"
+              element={<PermissionGuard permission="crm.complaints.manage"><ComplaintCreatePage /></PermissionGuard>} />
+            <Route path="/crm/complaints/:id"
+              element={<PermissionGuard permission="crm.complaints.manage"><ComplaintDetailPage /></PermissionGuard>} />
           </Route>
 
           {/* MRP module (Sprint 6 — Tasks 49, 50, 52, 53) */}
