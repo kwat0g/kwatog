@@ -53,7 +53,9 @@ jobs:
       - name: Vitest
         env:
           CI: 'true'
-        run: npm test -- --run
+        # --passWithNoTests so a clean tree (no specs yet on a sub-tree) is not a failure;
+        # vitest still exits non-zero on any actual failed assertion.
+        run: npm test -- --run --passWithNoTests
 
       - name: Production build
         run: npm run build
