@@ -12,6 +12,8 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { ChainHeader } from '@/components/chain/ChainHeader';
+import { LinkedRecords } from '@/components/chain/LinkedRecords';
 import { usePermission } from '@/hooks/usePermission';
 import type { DeliveryStatus } from '@/types/supplyChain';
 
@@ -130,6 +132,21 @@ export default function DeliveryDetailPage() {
         }
       />
 
+      {/* Sprint 7 audit fix: chain visualization (Order-to-Cash). */}
+      <div className="px-5 py-3 border-b border-default">
+        <ChainHeader
+          steps={[
+            { key: 'order',   label: 'Order',         state: 'done' },
+            { key: 'mrp',     label: 'MRP planned',   state: 'done' },
+            { key: 'wo',      label: 'In production', state: 'done' },
+            { key: 'qc',      label: 'QC outgoing',   state: 'done' },
+            { key: 'deliver', label: 'Delivered',     state: data.status === 'confirmed' ? 'done' : data.status === 'cancelled' ? 'pending' : 'active' },
+            { key: 'invoice', label: 'Invoiced',      state: data.invoice ? (data.status === 'confirmed' ? 'done' : 'active') : 'pending' },
+            { key: 'collect', label: 'Collected',     state: 'pending' },
+          ]}
+        />
+      </div>
+
       <div className="px-5 grid grid-cols-3 gap-4">
         <div className="col-span-2 space-y-4">
           <Panel title="Schedule">
@@ -224,6 +241,37 @@ export default function DeliveryDetailPage() {
               <p className="whitespace-pre-line text-sm">{data.notes}</p>
             </Panel>
           )}
+          {/* Sprint 7 audit fix: LinkedRecords (O2C chain) */}
+          <Panel title="Linked records">
+            <LinkedRecords
+              groups={[
+                ...(data.sales_order ? [{
+                  label: 'Sales order',
+                  items: [{ id: data.sales_order.so_number, href: `/crm/sales-orders/${data.sales_order.id}` }],
+                }] : []),
+                ...(data.invoice ? [{
+                  label: 'Invoice',
+                  items: [{
+                    id: data.invoice.invoice_number,
+                    href: `/accounting/invoices/${data.invoice.id}`,
+                    meta: `${data.invoice.total_amount} · ${data.invoice.status}`,
+                  }],
+                }] : []),
+                ...(data.items?.length
+                  ? [{
+                      label: 'Inspections',
+                      items: data.items
+                        .filter((i) => i.inspection)
+                        .map((i) => ({
+                          id: i.inspection!.inspection_number,
+                          href: `/quality/inspections/${i.inspection!.id}`,
+                          meta: i.inspection!.status,
+                        })),
+                    }]
+                  : []),
+              ]}
+            />
+          </Panel>
           <Panel title="Navigation">
             <Link to="/supply-chain/deliveries" className="text-xs text-accent hover:underline">← Back to deliveries</Link>
           </Panel>
