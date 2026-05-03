@@ -6,6 +6,7 @@ namespace App\Modules\CRM\Services;
 
 use App\Common\Services\DocumentSequenceService;
 use App\Modules\Auth\Models\User;
+use App\Modules\CRM\Enums\ComplaintStatus;
 use App\Modules\CRM\Models\Complaint8DReport;
 use App\Modules\CRM\Models\CustomerComplaint;
 use App\Modules\Quality\Enums\NcrSeverity;
@@ -144,11 +145,12 @@ class ComplaintService
 
     public function resolve(CustomerComplaint $c): CustomerComplaint
     {
-        if (in_array($c->status, ['closed', 'cancelled'], true)) {
+        $current = $c->status instanceof ComplaintStatus ? $c->status : ComplaintStatus::from((string) $c->status);
+        if ($current->isTerminal()) {
             throw new RuntimeException('Complaint is already terminal.');
         }
         $c->forceFill([
-            'status'      => 'resolved',
+            'status'      => ComplaintStatus::Resolved->value,
             'resolved_at' => now(),
         ])->save();
         return $this->show($c);
@@ -156,9 +158,10 @@ class ComplaintService
 
     public function close(CustomerComplaint $c): CustomerComplaint
     {
-        if (in_array($c->status, ['closed', 'cancelled'], true)) return $this->show($c);
+        $current = $c->status instanceof ComplaintStatus ? $c->status : ComplaintStatus::from((string) $c->status);
+        if ($current->isTerminal()) return $this->show($c);
         $c->forceFill([
-            'status'    => 'closed',
+            'status'    => ComplaintStatus::Closed->value,
             'closed_at' => now(),
         ])->save();
         return $this->show($c);
