@@ -81,7 +81,7 @@ class SalesOrderService
             'creator:id,name,role_id',
             'items.product:id,part_number,name,unit_of_measure',
             'mrpPlan:id,mrp_plan_no,version,status,shortages_found,auto_pr_count,draft_wo_count,sales_order_id',
-            'workOrders:id,wo_number,product_id,status,quantity_target,quantity_produced,sales_order_id,planned_start',
+            'workOrders:id,wo_number,product_id,status,quantity_target,quantity_produced,sales_order_id,mrp_plan_id,planned_start',
             'workOrders.product:id,part_number,name',
         ]);
     }

@@ -198,6 +198,9 @@ class DemoDataSeeder extends Seeder
             $this->command?->info("Seeded demo sales order {$so->so_number} (confirmed).");
         } catch (Throwable $e) {
             $this->command?->warn('Demo SO seeding skipped: ' . $e->getMessage());
+            $this->command?->warn('  at ' . $e->getFile() . ':' . $e->getLine());
+            // First few frames are usually enough to locate the bug.
+            $this->command?->warn(implode("\n", array_slice(explode("\n", $e->getTraceAsString()), 0, 10)));
         }
     }
 
