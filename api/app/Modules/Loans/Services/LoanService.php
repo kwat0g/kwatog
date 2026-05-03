@@ -67,7 +67,9 @@ class LoanService
             }
         }
 
-        return $q->orderByDesc('created_at')->paginate(min((int) ($filters['per_page'] ?? 25), 100));
+        return $q->with(['employee:id,employee_no,first_name,last_name,department_id'])
+            ->orderByDesc('created_at')
+            ->paginate(min((int) ($filters['per_page'] ?? 25), 100));
     }
 
     public function show(EmployeeLoan $loan): EmployeeLoan
