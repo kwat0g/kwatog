@@ -46,7 +46,7 @@ class InspectionSpecService
 
     public function show(InspectionSpec $spec): InspectionSpec
     {
-        return $spec->load(['product:id,part_number,name', 'items', 'creator:id,name']);
+        return $spec->load(['product:id,part_number,name', 'items', 'creator:id,name,role_id']);
     }
 
     public function forProduct(int $productId): ?InspectionSpec

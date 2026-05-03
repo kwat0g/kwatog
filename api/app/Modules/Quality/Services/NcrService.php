@@ -49,7 +49,7 @@ class NcrService
         $q = NonConformanceReport::query()->with([
             'product:id,part_number,name',
             'inspection:id,inspection_number,stage,status',
-            'creator:id,name',
+            'creator:id,name,role_id',
             'assignee:id,name',
         ]);
 
@@ -74,11 +74,11 @@ class NcrService
         return $ncr->load([
             'product:id,part_number,name',
             'inspection:id,inspection_number,stage,status,product_id',
-            'creator:id,name',
+            'creator:id,name,role_id',
             'assignee:id,name',
             'closer:id,name',
             'replacementWorkOrder:id,wo_number,status,quantity_target',
-            'actions' => fn ($q) => $q->with('performer:id,name')->orderBy('performed_at'),
+            'actions' => fn ($q) => $q->with('performer:id,name,role_id')->orderBy('performed_at'),
         ]);
     }
 
@@ -161,7 +161,7 @@ class NcrService
             if ($ncr->status === NcrStatus::Open) {
                 $ncr->forceFill(['status' => NcrStatus::InProgress->value])->save();
             }
-            return $action->load('performer:id,name');
+            return $action->load('performer:id,name,role_id');
         });
     }
 

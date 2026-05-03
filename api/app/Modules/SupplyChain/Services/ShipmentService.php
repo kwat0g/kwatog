@@ -38,7 +38,7 @@ class ShipmentService
     {
         $q = Shipment::query()->with([
             'purchaseOrder:id,po_number,vendor_id',
-            'creator:id,name',
+            'creator:id,name,role_id',
         ]);
 
         foreach (['status'] as $f) if (! empty($filters[$f])) $q->where($f, $filters[$f]);
@@ -57,8 +57,8 @@ class ShipmentService
     {
         return $s->load([
             'purchaseOrder:id,po_number,vendor_id',
-            'creator:id,name',
-            'documents' => fn ($q) => $q->with('uploader:id,name')->orderBy('uploaded_at'),
+            'creator:id,name,role_id',
+            'documents' => fn ($q) => $q->with('uploader:id,name,role_id')->orderBy('uploaded_at'),
         ]);
     }
 
@@ -135,7 +135,7 @@ class ShipmentService
                 'notes'             => $notes,
                 'uploaded_by'       => $by->id,
                 'uploaded_at'       => now(),
-            ])->load('uploader:id,name');
+            ])->load('uploader:id,name,role_id');
         });
     }
 
