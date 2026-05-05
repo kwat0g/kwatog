@@ -22,6 +22,7 @@ class PurchaseOrderResource extends JsonResource
             'is_vatable'             => (bool) $this->is_vatable,
             'status'                 => (string) $this->status?->value,
             'requires_vp_approval'   => (bool) $this->requires_vp_approval,
+            'is_auto_generated'      => (bool) $this->is_auto_generated,
             'current_approval_step'  => (int) $this->current_approval_step,
             'approved_at'            => optional($this->approved_at)->toIso8601String(),
             'sent_to_supplier_at'    => optional($this->sent_to_supplier_at)->toIso8601String(),

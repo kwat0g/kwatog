@@ -34,7 +34,12 @@ export default function PurchaseOrdersListPage() {
 
   const columns: Column<PurchaseOrder>[] = [
     { key: 'po', header: 'PO #', cell: (r) => (
-      <Link to={`/purchasing/purchase-orders/${r.id}`} className="font-mono text-accent">{r.po_number}</Link>
+      <span className="flex items-center gap-2">
+        <Link to={`/purchasing/purchase-orders/${r.id}`} className="font-mono text-accent">{r.po_number}</Link>
+        {r.is_auto_generated && (
+          <span title="Auto-generated for critical stock"><Chip variant="info">Auto</Chip></span>
+        )}
+      </span>
     ) },
     { key: 'date', header: 'Date', cell: (r) => <span className="font-mono">{formatDate(r.date)}</span> },
     { key: 'vendor', header: 'Vendor', cell: (r) => r.vendor?.name ?? '—' },
