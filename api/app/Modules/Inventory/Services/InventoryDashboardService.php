@@ -125,7 +125,7 @@ class InventoryDashboardService
             'recent_movements'       => $recentMovements->map(fn ($m) => [
                 'id'             => $m->hash_id,
                 'created_at'     => $m->created_at?->toIso8601String(),
-                'movement_type'  => (string) $m->movement_type,
+                'movement_type'  => $m->movement_type?->value,
                 'item'           => $m->item ? ['code' => $m->item->code, 'name' => $m->item->name] : null,
                 'quantity'       => (string) $m->quantity,
                 'unit_cost'      => (string) $m->unit_cost,

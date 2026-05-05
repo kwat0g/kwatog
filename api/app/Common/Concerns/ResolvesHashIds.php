@@ -82,6 +82,18 @@ trait ResolvesHashIds
 
     private function decodeWildcardPath(array &$payload, string $path, string $modelClass): bool
     {
+        if (str_ends_with($path, '.*')) {
+            $prefix = substr($path, 0, -2);
+            $list = data_get($payload, $prefix);
+            if (! is_array($list)) return false;
+
+            $changed = false;
+            foreach ($list as $idx => $_val) {
+                $changed = $this->decodeScalarPath($payload, "{$prefix}.{$idx}", $modelClass) || $changed;
+            }
+            return $changed;
+        }
+
         // Walk to the array segment, then iterate.
         [$prefix, $suffix] = explode('.*.', $path, 2);
         $list = data_get($payload, $prefix);

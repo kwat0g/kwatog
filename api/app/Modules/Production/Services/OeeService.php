@@ -234,7 +234,7 @@ class OeeService
             ->orderByDesc('minutes')
             ->get()
             ->map(fn ($r) => [
-                'category' => (string) $r->category,
+                'category' => $r->category instanceof \UnitEnum ? (string) $r->category->value : (string) $r->category,
                 'minutes'  => (int) $r->minutes,
             ])
             ->all();
