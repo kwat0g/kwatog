@@ -28,6 +28,11 @@ Route::prefix('admin')
     ->group(function (): void {
         Route::get('audit-logs',         [\App\Modules\Admin\Controllers\AuditLogController::class, 'index'])
             ->middleware('permission:admin.audit_logs.view');
+        // Sprint P7 — CSV export. Same filter set as `index`. Must come
+        // before the `{id}` route to keep `export` from being matched as
+        // an id segment.
+        Route::get('audit-logs/export',  [\App\Modules\Admin\Controllers\AuditLogController::class, 'export'])
+            ->middleware('permission:admin.audit_logs.view');
         Route::get('audit-logs/{id}',    [\App\Modules\Admin\Controllers\AuditLogController::class, 'show'])
             ->middleware('permission:admin.audit_logs.view')
             ->whereNumber('id');
