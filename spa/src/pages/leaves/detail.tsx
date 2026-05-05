@@ -12,11 +12,12 @@ import { Panel } from '@/components/ui/Panel';
 import { Textarea } from '@/components/ui/Textarea';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { ChainHeader } from '@/components/chain';
+import { ChainHeader, ApprovalTimeline } from '@/components/chain';
 import { buildLeaveChain } from '@/lib/chains';
+import { fromLeaveRequest } from '@/lib/approvals';
 import { usePermission } from '@/hooks/usePermission';
 import { useAuthStore } from '@/stores/authStore';
-import { formatDate, formatDateTime } from '@/lib/formatDate';
+import { formatDate } from '@/lib/formatDate';
 
 export default function LeaveDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
@@ -121,28 +122,7 @@ export default function LeaveDetailPage() {
         </div>
 
         <Panel title="Approval chain">
-          <ol className="space-y-3 text-sm">
-            <ChainStep
-              label="Submitted"
-              done
-              by={req.employee?.full_name ?? null}
-              when={req.created_at}
-            />
-            <ChainStep
-              label="Department head"
-              done={!!req.dept_approver}
-              active={req.status === 'pending_dept'}
-              by={req.dept_approver?.name ?? null}
-              when={req.dept_approved_at}
-            />
-            <ChainStep
-              label="HR Officer"
-              done={!!req.hr_approver && req.status === 'approved'}
-              active={req.status === 'pending_hr'}
-              by={req.hr_approver?.name ?? null}
-              when={req.hr_approved_at}
-            />
-          </ol>
+          <ApprovalTimeline steps={fromLeaveRequest(req)} />
         </Panel>
       </div>
 
@@ -171,29 +151,4 @@ function Item({ label, value, sub, mono }: { label: string; value: React.ReactNo
   );
 }
 
-function ChainStep({
-  label, done, active, by, when,
-}: {
-  label: string;
-  done?: boolean;
-  active?: boolean;
-  by?: string | null;
-  when?: string | null;
-}) {
-  return (
-    <li className="flex items-start gap-3">
-      <span className={
-        'mt-0.5 inline-flex items-center justify-center w-4 h-4 rounded-full ring-1 ring-inset shrink-0 ' +
-        (done ? 'bg-success-bg text-success-fg ring-success-fg' :
-         active ? 'bg-info-bg text-info-fg ring-info-fg' : 'bg-elevated text-muted ring-default')
-      }>
-        {done && <Check size={10} />}
-      </span>
-      <div className="min-w-0">
-        <div className={'text-sm ' + (done || active ? 'font-medium text-primary' : 'text-muted')}>{label}</div>
-        {by && <div className="text-xs text-muted">{by}</div>}
-        {when && <div className="text-xs text-muted font-mono">{formatDateTime(when)}</div>}
-      </div>
-    </li>
-  );
-}
+

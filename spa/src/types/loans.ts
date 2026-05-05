@@ -9,6 +9,8 @@ export interface LoanPayment {
   remarks: string | null;
 }
 
+import type { ApprovalRecordPayload } from '@/lib/approvals';
+
 export interface EmployeeLoan {
   id: string;
   loan_no: string;
@@ -29,6 +31,7 @@ export interface EmployeeLoan {
   approved_at?: string | null;
   is_final_pay_deduction: boolean;
   payments?: LoanPayment[];
+  approval_records?: ApprovalRecordPayload[];
   created_at: string;
   updated_at: string;
 }

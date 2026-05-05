@@ -129,12 +129,20 @@ const config: Config = {
           '0%': { opacity: '0', transform: 'translateY(8px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
         },
+        // Sprint P3 — soft pulse on the active step of an ApprovalTimeline
+        // (and reusable for any "current bottleneck" indicator). 1.5s cycle,
+        // gentle on the eyes, respects prefers-reduced-motion via globals.css.
+        'approval-pulse': {
+          '0%, 100%': { boxShadow: '0 0 0 0 rgba(79,70,229,0.55)' },
+          '50%':      { boxShadow: '0 0 0 6px rgba(79,70,229,0)' },
+        },
       },
 
       animation: {
         shimmer: 'shimmer 1.5s linear infinite',
         'fade-in': 'fade-in var(--duration-slow) var(--ease-default)',
         'slide-up': 'slide-up var(--duration-slow) var(--ease-default)',
+        'approval-pulse': 'approval-pulse 1.5s ease-in-out infinite',
       },
     },
   },

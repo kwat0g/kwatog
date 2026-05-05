@@ -61,7 +61,7 @@ class PurchaseOrderService
         return $po->load([
             'vendor', 'purchaseRequest:id,pr_number',
             'items.item:id,code,name,unit_of_measure',
-            'approvalRecords',
+            'approvalRecords.approver:id,name',
             'goodsReceiptNotes:id,grn_number,received_date,status,purchase_order_id',
             'bills:id,bill_number,total_amount,balance,status,purchase_order_id',
             'creator:id,name,role_id', 'approver:id,name,role_id',

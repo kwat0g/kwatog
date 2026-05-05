@@ -74,7 +74,7 @@ class LoanService
 
     public function show(EmployeeLoan $loan): EmployeeLoan
     {
-        return $loan->load(['employee', 'payments']);
+        return $loan->load(['employee', 'payments', 'approvalRecords.approver:id,name']);
     }
 
     /** @return array{principal_max:string, has_active:bool} */

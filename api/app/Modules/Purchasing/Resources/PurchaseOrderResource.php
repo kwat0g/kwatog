@@ -52,11 +52,17 @@ class PurchaseOrderResource extends JsonResource
                 'status'       => (string) $b->status,
             ])->all()),
             'approval_records'       => $this->whenLoaded('approvalRecords', fn () => $this->approvalRecords->map(fn ($r) => [
-                'step_order' => $r->step_order,
-                'role_slug'  => $r->role_slug,
-                'action'     => $r->action,
-                'remarks'    => $r->remarks,
-                'acted_at'   => optional($r->acted_at)->toIso8601String(),
+                'step_order'    => (int) $r->step_order,
+                'role_slug'     => $r->role_slug,
+                'action'        => $r->action,
+                'remarks'       => $r->remarks,
+                'acted_at'      => optional($r->acted_at)->toIso8601String(),
+                'approver'      => $r->relationLoaded('approver') && $r->approver ? [
+                    'id'   => $r->approver->hash_id,
+                    'name' => $r->approver->name,
+                ] : null,
+                'is_overdue'    => (bool) $r->is_overdue,
+                'overdue_hours' => $r->is_overdue ? (int) $r->overdue_hours : null,
             ])->all()),
             'creator'                => $this->whenLoaded('creator', fn () => $this->creator ? [
                 'id' => $this->creator->hash_id, 'name' => $this->creator->name,
