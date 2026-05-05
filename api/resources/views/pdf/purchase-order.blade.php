@@ -91,13 +91,10 @@
     <tr class="total"><td class="label">Total (PHP)</td><td class="amt">{{ number_format((float) $po->total_amount, 2) }}</td></tr>
 </table>
 
-<div class="signatures">
-    <div class="sig"><div class="line">Prepared by</div></div>
-    <div class="sig"><div class="line">Approved by</div></div>
-    @if($po->requires_vp_approval)
-        <div class="sig"><div class="line">Endorsed by VP</div></div>
-    @endif
-</div>
+{{-- Sprint P9 — 4-tier approval signature block sourced from
+     ApprovalSignatureBuilder::for($po). Replaces the previous hard-coded
+     three-line block. --}}
+@include('pdf._components.approval_signatures', ['approvals' => $approvals])
 
 <div class="footer">
     Generated on {{ $now->format('M d, Y · H:i') }} ·

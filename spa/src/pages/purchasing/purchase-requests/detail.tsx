@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
-import { Send, ThumbsUp, ThumbsDown, X, ShoppingCart } from 'lucide-react';
+import { Send, ThumbsUp, ThumbsDown, X, ShoppingCart, FileText } from 'lucide-react';
 import { purchaseRequestsApi } from '@/api/purchasing/purchase-requests';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -93,6 +93,9 @@ export default function PurchaseRequestDetailPage() {
             {data.status === 'approved' && can('purchasing.po.create') && (
               <Button size="sm" variant="primary" icon={<ShoppingCart size={14} />} onClick={() => nav(`/purchasing/purchase-orders/create?pr_id=${data.id}`)}>Convert to PO</Button>
             )}
+            <a href={purchaseRequestsApi.pdfUrl(data.id)} target="_blank" rel="noreferrer">
+              <Button size="sm" variant="secondary" icon={<FileText size={14} />}>PDF</Button>
+            </a>
             {(data.status === 'draft' || data.status === 'pending') && (
               <Button size="sm" variant="secondary" icon={<X size={14} />} onClick={() => setConfirm('cancel')} loading={cancel.isPending}>Cancel</Button>
             )}

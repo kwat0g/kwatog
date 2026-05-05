@@ -22,4 +22,6 @@ export const purchaseRequestsApi = {
     client.patch<ApiSuccess<PurchaseRequest>>(`/purchasing/purchase-requests/${id}/cancel`).then((r) => r.data.data),
   convert: (id: string, vendor_map: Record<number, number>) =>
     client.post<{ data: PurchaseOrder[] }>(`/purchasing/purchase-requests/${id}/convert`, { vendor_map }).then((r) => r.data.data),
+  /** Sprint P9 — printable PR with 4-tier approval signature block. */
+  pdfUrl: (id: string) => `/api/v1/purchasing/purchase-requests/${id}/pdf`,
 };

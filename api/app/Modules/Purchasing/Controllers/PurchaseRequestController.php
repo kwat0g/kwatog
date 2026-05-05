@@ -12,10 +12,12 @@ use App\Modules\Purchasing\Requests\UpdatePurchaseRequestRequest;
 use App\Modules\Purchasing\Resources\PurchaseOrderResource;
 use App\Modules\Purchasing\Resources\PurchaseRequestResource;
 use App\Modules\Purchasing\Services\PurchaseOrderService;
+use App\Modules\Purchasing\Services\PurchaseRequestPdfService;
 use App\Modules\Purchasing\Services\PurchaseRequestService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Symfony\Component\HttpFoundation\Response;
 use RuntimeException;
 
 class PurchaseRequestController
@@ -23,7 +25,14 @@ class PurchaseRequestController
     public function __construct(
         private readonly PurchaseRequestService $service,
         private readonly PurchaseOrderService $poService,
+        private readonly PurchaseRequestPdfService $pdf,
     ) {}
+
+    /** Sprint P9 — printable PR with 4-tier approval signature block. */
+    public function printPdf(PurchaseRequest $purchaseRequest): Response
+    {
+        return $this->pdf->render($purchaseRequest);
+    }
 
     public function index(Request $request): AnonymousResourceCollection
     {
