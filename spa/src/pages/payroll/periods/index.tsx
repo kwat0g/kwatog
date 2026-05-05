@@ -50,8 +50,13 @@ export default function PayrollPeriodsPage() {
       cell: (r) => (
         <StackedCell
           primary={
-            <span className="font-mono">
-              {formatDate(r.period_start)} – {formatDate(r.period_end)}
+            <span className="flex items-center gap-2">
+              <span className="font-mono">
+                {formatDate(r.period_start)} – {formatDate(r.period_end)}
+              </span>
+              {r.is_auto_created && (
+                <span title="Auto-scheduled by system"><Chip variant="info">Auto</Chip></span>
+              )}
             </span>
           }
           secondary={r.label}

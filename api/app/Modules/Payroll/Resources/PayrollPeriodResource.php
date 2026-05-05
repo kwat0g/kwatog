@@ -25,6 +25,8 @@ class PayrollPeriodResource extends JsonResource
             'status_label'        => $this->status?->label(),
             'is_locked'           => $this->isLocked(),
             'label'               => $this->label(),
+            'is_auto_created'     => (bool) $this->is_auto_created,
+            'auto_created_at'     => optional($this->auto_created_at)->toIso8601String(),
             'employee_count'      => (int) ($this->payrolls_count ?? 0),
 
             'creator'             => $this->whenLoaded('creator', fn () => [
