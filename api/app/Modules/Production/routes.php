@@ -44,6 +44,8 @@ Route::middleware(['auth:sanctum', 'feature:production'])->prefix('production')-
     /* ─── OEE (Task 57) ─── */
     Route::get('/oee/machine/{machine}', [OeeController::class, 'forMachine'])->middleware('permission:production.dashboard.view');
     Route::get('/oee/today',             [OeeController::class, 'todayAll']) ->middleware('permission:production.dashboard.view');
+    // Sprint P10 — full OEE report page.
+    Route::get('/oee/report',            [OeeController::class, 'report'])   ->middleware('permission:production.dashboard.view');
 
     /* ─── Production dashboard (Task 58) ─── */
     Route::get('/dashboard', [DashboardController::class, 'index'])->middleware('permission:production.dashboard.view');

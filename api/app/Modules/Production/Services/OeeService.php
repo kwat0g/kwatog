@@ -152,4 +152,113 @@ class OeeService
         $today = Carbon::today();
         return $this->calculate($m, $today, $today->copy()->endOfDay());
     }
+
+    /**
+     * Sprint P10 — full OEE report.
+     *
+     * Returns aggregated overall metrics, per-machine rows, daily trend, and a
+     * downtime-by-category breakdown for the given window. Used by the
+     * `/production/oee` page.
+     *
+     * @param  Carbon       $from        Start of window (inclusive).
+     * @param  Carbon       $to          End of window (inclusive).
+     * @param  Machine|null $onlyMachine If provided, scope the report to a
+     *                                   single machine. Otherwise report on all
+     *                                   active machines.
+     * @return array{
+     *     range: array{from:string,to:string},
+     *     overall: array{availability:float,performance:float,quality:float,oee:float},
+     *     machines: \Illuminate\Support\Collection,
+     *     trend: array<int, array{date:string,oee:float}>,
+     *     downtime_breakdown: array<int, array{category:string,minutes:int}>
+     * }
+     */
+    public function report(Carbon $from, Carbon $to, ?Machine $onlyMachine = null): array
+    {
+        $machineRows = $onlyMachine
+            ? collect([$this->machineRow($onlyMachine, $from, $to)])
+            : Machine::orderBy('machine_code')->get()
+                ->map(fn ($m) => $this->machineRow($m, $from, $to));
+
+        // Aggregate overall metrics — straight average across machines that
+        // had any production activity (run_time > 0). Machines with no
+        // schedule contribute zeros and would tank the average otherwise.
+        $active = $machineRows->filter(fn ($r) => ($r['diagnostics']['run_time'] ?? 0) > 0);
+        $overallAvg = static function (string $field) use ($active) {
+            $count = $active->count();
+            return $count === 0 ? 0.0 : round($active->avg($field), 4);
+        };
+        $overall = [
+            'availability' => $overallAvg('availability'),
+            'performance'  => $overallAvg('performance'),
+            'quality'      => $overallAvg('quality'),
+            'oee'          => $overallAvg('oee'),
+        ];
+
+        // Daily trend — one OEE point per day in the window. Capped at 92 days
+        // (≈ 3 months) to bound work for the per-day call. Beyond that the UI
+        // should down-sample to weekly buckets.
+        $trend = [];
+        $cap   = 92;
+        $cursor = $from->copy()->startOfDay();
+        $end    = $to->copy()->startOfDay();
+        $days   = $cursor->diffInDays($end) + 1;
+        if ($days <= $cap) {
+            $machinesForTrend = $onlyMachine
+                ? Machine::whereKey($onlyMachine->id)->get()
+                : Machine::all();
+            while ($cursor->lte($end)) {
+                $dayStart = $cursor->copy();
+                $dayEnd   = $cursor->copy()->endOfDay();
+                $perDay = $machinesForTrend
+                    ->map(fn ($m) => $this->calculate($m, $dayStart, $dayEnd))
+                    ->filter(fn ($r) => ($r['diagnostics']['run_time'] ?? 0) > 0);
+                $trend[] = [
+                    'date' => $cursor->toDateString(),
+                    'oee'  => $perDay->isEmpty() ? 0.0 : round($perDay->avg('oee'), 4),
+                ];
+                $cursor->addDay();
+            }
+        }
+
+        // Downtime by category across all machines in scope.
+        $downtimeQuery = MachineDowntime::query()
+            ->whereBetween('start_time', [$from, $to])
+            ->whereNotNull('duration_minutes');
+        if ($onlyMachine) {
+            $downtimeQuery->where('machine_id', $onlyMachine->id);
+        }
+        $downtimeRows = $downtimeQuery
+            ->selectRaw('category, SUM(duration_minutes) as minutes')
+            ->groupBy('category')
+            ->orderByDesc('minutes')
+            ->get()
+            ->map(fn ($r) => [
+                'category' => (string) $r->category,
+                'minutes'  => (int) $r->minutes,
+            ])
+            ->all();
+
+        return [
+            'range'   => [
+                'from' => $from->toDateString(),
+                'to'   => $to->toDateString(),
+            ],
+            'overall'            => $overall,
+            'machines'           => $machineRows->values(),
+            'trend'              => $trend,
+            'downtime_breakdown' => $downtimeRows,
+        ];
+    }
+
+    private function machineRow(Machine $m, Carbon $from, Carbon $to): array
+    {
+        return [
+            'machine_id'   => $m->hash_id,
+            'machine_code' => $m->machine_code,
+            'name'         => $m->name,
+            'tonnage'      => $m->tonnage,
+            'status'       => (string) $m->status?->value,
+        ] + $this->calculate($m, $from, $to);
+    }
 }

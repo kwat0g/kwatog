@@ -1,5 +1,11 @@
 import { client } from '../client';
-import type { MachineOeeRow, OeeResult } from '@/types/production';
+import type { MachineOeeRow, OeeResult, OeeReport } from '@/types/production';
+
+export interface OeeReportParams {
+  from?: string;
+  to?: string;
+  machine_id?: string;
+}
 
 export const oeeApi = {
   forMachine: (machineId: string, from?: string, to?: string) =>
@@ -7,4 +13,7 @@ export const oeeApi = {
       .then((r) => r.data.data),
   todayAll: () =>
     client.get<{ data: MachineOeeRow[] }>('/production/oee/today').then((r) => r.data.data),
+  /** Sprint P10 — full OEE report (per-machine + trend + downtime). */
+  report: (params?: OeeReportParams) =>
+    client.get<{ data: OeeReport }>('/production/oee/report', { params }).then((r) => r.data.data),
 };

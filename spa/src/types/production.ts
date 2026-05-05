@@ -117,6 +117,18 @@ export interface MachineOeeRow extends OeeResult {
   status: string;
 }
 
+/**
+ * Sprint P10 — full OEE report payload.
+ * Matches `OeeService::report()` output 1:1.
+ */
+export interface OeeReport {
+  range: { from: string; to: string };
+  overall: { availability: number; performance: number; quality: number; oee: number };
+  machines: MachineOeeRow[];
+  trend: Array<{ date: string; oee: number }>;
+  downtime_breakdown: Array<{ category: string; minutes: number }>;
+}
+
 export interface ProductionDashboardPayload {
   kpis: {
     today_output_total: number;

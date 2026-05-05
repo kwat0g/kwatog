@@ -155,6 +155,7 @@ const WorkOrderDetailPage       = lazy(() => import('@/pages/production/work-ord
 const RecordOutputPage          = lazy(() => import('@/pages/production/work-orders/record-output'));
 const ProductionSchedulePage    = lazy(() => import('@/pages/production/schedule'));
 const ProductionDashboardPage   = lazy(() => import('@/pages/production/dashboard'));
+const OeeReportPage             = lazy(() => import('@/pages/production/oee'));
 
 // Maintenance (Sprint 8 — Task 69)
 const MaintenanceHomePage          = lazy(() => import('@/pages/maintenance'));
@@ -666,6 +667,9 @@ export default function App() {
 
             <Route path="/production/dashboard"
               element={<PermissionGuard permission="production.dashboard.view"><ProductionDashboardPage /></PermissionGuard>} />
+            {/* Sprint P10 — full OEE report. */}
+            <Route path="/production/oee"
+              element={<PermissionGuard permission="production.dashboard.view"><OeeReportPage /></PermissionGuard>} />
 
             <Route path="/production/schedule"
               element={<PermissionGuard permission="production.schedule.view"><ProductionSchedulePage /></PermissionGuard>} />
