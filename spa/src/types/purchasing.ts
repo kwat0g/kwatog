@@ -92,6 +92,7 @@ export interface PurchaseOrder {
   is_vatable: boolean;
   status: PurchaseOrderStatus;
   requires_vp_approval: boolean;
+  is_auto_generated: boolean;
   current_approval_step: number;
   approved_at: string | null;
   sent_to_supplier_at: string | null;

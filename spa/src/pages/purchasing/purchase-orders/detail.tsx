@@ -79,6 +79,9 @@ export default function PurchaseOrderDetailPage() {
           <div className="flex items-center gap-2 flex-wrap">
             <Chip variant={variant[data.status]}>{data.status.replace(/_/g, ' ')}</Chip>
             {data.requires_vp_approval && <Chip variant="warning">VP req.</Chip>}
+            {data.is_auto_generated && (
+              <span title="Auto-generated for critical stock"><Chip variant="info">Auto</Chip></span>
+            )}
             {data.status === 'draft' && can('purchasing.po.create') && (
               <Button size="sm" variant="primary" icon={<Send size={14} />} onClick={() => setConfirm('submit')} loading={submit.isPending}>Submit</Button>
             )}
