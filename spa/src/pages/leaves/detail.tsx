@@ -12,6 +12,8 @@ import { Panel } from '@/components/ui/Panel';
 import { Textarea } from '@/components/ui/Textarea';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { ChainHeader } from '@/components/chain';
+import { buildLeaveChain } from '@/lib/chains';
 import { usePermission } from '@/hooks/usePermission';
 import { useAuthStore } from '@/stores/authStore';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
@@ -89,6 +91,7 @@ export default function LeaveDetailPage() {
             )}
           </>
         }
+        bottom={<ChainHeader steps={buildLeaveChain(req)} className="mt-2" />}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 px-5 py-4">

@@ -18,8 +18,8 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
-import type { ApprovalRecord, PurchaseOrder, PurchaseOrderStatus } from '@/types/purchasing';
-import type { ChainStep } from '@/types/chain';
+import { buildPurchaseOrderChain } from '@/lib/chains';
+import type { ApprovalRecord, PurchaseOrderStatus } from '@/types/purchasing';
 
 const variant: Record<PurchaseOrderStatus, 'neutral' | 'info' | 'warning' | 'success' | 'danger'> = {
   draft: 'neutral', pending_approval: 'info', approved: 'success', sent: 'info',
@@ -104,7 +104,7 @@ export default function PurchaseOrderDetailPage() {
       />
       <div className="px-5 py-4 space-y-4">
         <Panel title="Procure-to-pay chain">
-          <ChainHeader steps={buildChainSteps(data)} />
+          <ChainHeader steps={buildPurchaseOrderChain(data)} />
         </Panel>
       </div>
       <div className="px-5 grid grid-cols-3 gap-4 pb-6">
@@ -260,45 +260,6 @@ export default function PurchaseOrderDetailPage() {
       />
     </div>
   );
-}
-
-/** Build the procure-to-pay chain visualization for a PO. */
-function buildChainSteps(po: PurchaseOrder): ChainStep[] {
-  const status = po.status;
-  const isAtOrPast = (target: PurchaseOrderStatus[]): boolean => {
-    const order: PurchaseOrderStatus[] = [
-      'draft', 'pending_approval', 'approved', 'sent', 'partially_received', 'received', 'closed',
-    ];
-    const cur = order.indexOf(status);
-    return target.some((t) => cur >= order.indexOf(t));
-  };
-  const stateOf = (target: PurchaseOrderStatus, active?: PurchaseOrderStatus): 'done' | 'active' | 'pending' => {
-    if (status === 'cancelled') return 'pending';
-    if (status === active) return 'active';
-    return isAtOrPast([target]) ? 'done' : 'pending';
-  };
-  const hasGrn = (po.goods_receipt_notes ?? []).length > 0;
-  const hasBill = (po.bills ?? []).length > 0;
-  const hasPaidBill = (po.bills ?? []).some((b) => b.status === 'paid');
-  return [
-    { key: 'pr',       label: po.purchase_request ? `PR ${po.purchase_request.pr_number}` : 'PR',
-      date: po.purchase_request ? '✓' : undefined,
-      state: po.purchase_request ? 'done' : 'pending' },
-    { key: 'po',       label: 'PO Created',  date: formatDate(po.date),
-      state: 'done' },
-    { key: 'approved', label: 'PO Approved', date: po.approved_at ? formatDate(po.approved_at) : undefined,
-      state: stateOf('approved', 'pending_approval') },
-    { key: 'sent',     label: 'Sent',        date: po.sent_to_supplier_at ? formatDate(po.sent_to_supplier_at) : undefined,
-      state: stateOf('sent', 'approved') },
-    { key: 'grn',      label: 'GRN Received',
-      state: hasGrn ? 'done' : status === 'sent' || status === 'partially_received' ? 'active' : 'pending' },
-    { key: 'bill',     label: 'Bill Created',
-      state: hasBill ? 'done' : status === 'received' ? 'active' : 'pending' },
-    { key: 'paid',     label: 'Payment',
-      state: hasPaidBill ? 'done' : hasBill ? 'active' : 'pending' },
-    { key: 'closed',   label: 'Closed',
-      state: status === 'closed' ? 'done' : 'pending' },
-  ];
 }
 
 function ApprovalChain({ records }: { records: ApprovalRecord[] }) {
