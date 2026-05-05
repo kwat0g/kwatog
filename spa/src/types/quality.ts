@@ -123,6 +123,7 @@ export interface Ncr {
   disposition: NcrDisposition | null;
   defect_description: string;
   affected_quantity: number;
+  is_auto_generated: boolean;
   root_cause: string | null;
   corrective_action: string | null;
   closed_at: string | null;

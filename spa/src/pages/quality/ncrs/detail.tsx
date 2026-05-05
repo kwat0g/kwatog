@@ -188,6 +188,11 @@ export default function NcrDetailPage() {
             {data.ncr_number}
             <Chip variant={STATUS_CHIP[data.status]} className="ml-3">{data.status.replace('_', ' ')}</Chip>
             <Chip variant={SEVERITY_CHIP[data.severity]} className="ml-2">{data.severity}</Chip>
+            {data.is_auto_generated && (
+              <span title="Auto-generated from inspection failure" className="ml-2 inline-block">
+                <Chip variant="info">Auto</Chip>
+              </span>
+            )}
           </span>
         }
         subtitle={data.product ? `${data.product.part_number} — ${data.product.name}` : data.source.replace('_', ' ')}
