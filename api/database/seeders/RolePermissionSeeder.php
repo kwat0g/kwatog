@@ -173,6 +173,9 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'mrp.molds.view',     'name' => 'View Molds'],
                 ['slug' => 'mrp.plans.view',     'name' => 'View MRP Plans'],
                 ['slug' => 'mrp.plans.run',      'name' => 'Re-run MRP Plan'],
+                // Task A1
+                ['slug' => 'mrp.runs.view',      'name' => 'View MRP Run History'],
+                ['slug' => 'mrp.runs.trigger',   'name' => 'Trigger MRP Run Manually'],
             ],
 
             // CRM — Sprint 6 Tasks 47, 48
@@ -246,6 +249,13 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'search.global',                       'name' => 'Use Global Search'],
                 ['slug' => 'notifications.view',                  'name' => 'View Own Notifications'],
                 ['slug' => 'notifications.preferences.manage',    'name' => 'Manage Own Notification Preferences'],
+                // Task A2 — alert engine
+                ['slug' => 'alerts.view',                         'name' => 'View Alerts'],
+                ['slug' => 'alerts.dismiss',                      'name' => 'Dismiss Alerts'],
+            ],
+            // Task A9 — payroll anomaly flags
+            'payroll_anomalies' => [
+                ['slug' => 'payroll.anomalies.review',            'name' => 'Review Payroll Anomaly Flags'],
             ],
         ];
     }
@@ -279,9 +289,11 @@ class RolePermissionSeeder extends Seeder
                         'payroll.periods.approve',
                         'payroll.adjustments.create',
                         'payroll.thirteenth_month.run',
+                        'payroll.anomalies.review', // Task A9
                         'dashboard.hr.view',
                         'search.global',
                         'notifications.preferences.manage',
+                        'alerts.view',                                            // Task A2
                     ],
                 ),
             ],
@@ -293,7 +305,12 @@ class RolePermissionSeeder extends Seeder
                     $this->module('accounting'),
                     $this->module('loans'),
                     $this->module('assets'),
-                    ['admin.gov_tables.manage', 'dashboard.accounting.view', 'search.global', 'notifications.preferences.manage'],
+                    [
+                        'admin.gov_tables.manage', 'dashboard.accounting.view',
+                        'search.global', 'notifications.preferences.manage',
+                        'payroll.anomalies.review',                                // Task A9
+                        'alerts.view', 'alerts.dismiss',                           // Task A2
+                    ],
                 ),
             ],
             'production_manager' => [
@@ -304,7 +321,9 @@ class RolePermissionSeeder extends Seeder
                     ['mrp.view', 'mrp.schedule', 'inventory.view', 'quality.view',
                      'dashboard.plant_manager.view', 'dashboard.ppc.view',
                      'maintenance.view', 'assets.view',
-                     'search.global', 'notifications.preferences.manage'],
+                     'search.global', 'notifications.preferences.manage',
+                     'alerts.view', 'alerts.dismiss',                              // Task A2
+                    ],
                 ),
             ],
             'ppc_head' => [
@@ -314,7 +333,10 @@ class RolePermissionSeeder extends Seeder
                     $this->module('mrp'),
                     ['production.view', 'production.work_orders.view', 'production.wo.create', 'production.wo.confirm',
                      'dashboard.ppc.view', 'maintenance.view', 'assets.view',
-                     'search.global', 'notifications.preferences.manage'],
+                     'search.global', 'notifications.preferences.manage',
+                     'alerts.view', 'alerts.dismiss',                              // Task A2
+                     // Task A1 already granted via $this->module('mrp')
+                    ],
                 ),
             ],
             'purchasing_officer' => [

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Modules\Assets\Jobs\RunMonthlyDepreciationJob;
 use App\Modules\Maintenance\Jobs\GeneratePreventiveMaintenanceJob;
 use Illuminate\Foundation\Inspiring;
@@ -27,3 +29,49 @@ Schedule::job(new RunMonthlyDepreciationJob)
     ->monthlyOn(1, '03:00')
     ->name('assets:run-monthly-depreciation')
     ->withoutOverlapping();
+
+/* ─── Automation tasks A1–A10 ─────────────────────────────────────── */
+
+// A1 — Daily MRP run
+Schedule::command('mrp:run-daily')
+    ->dailyAt('06:00')
+    ->withoutOverlapping()
+    ->onOneServer();
+
+// A2 — Alert engine every 15 minutes
+Schedule::command('alerts:run')
+    ->everyFifteenMinutes()
+    ->withoutOverlapping(10)
+    ->onOneServer();
+
+// A3 — Auto payroll period creation
+//   On the 14th at 23:00 → create period for 16th–end-of-month
+//   On the last day at 23:00 → create period for 1st–15th of next month
+Schedule::command('payroll:auto-create-period --half=second')
+    ->monthlyOn(14, '23:00')
+    ->onOneServer();
+Schedule::command('payroll:auto-create-period --half=first')
+    ->lastDayOfMonth('23:00')
+    ->onOneServer();
+
+// A5 — Preventive maintenance evaluation runs the existing Sprint 8
+//      job; the new running-hours recompute runs daily before that job.
+Schedule::command('maintenance:recompute-hours')
+    ->dailyAt('06:30')
+    ->withoutOverlapping()
+    ->onOneServer();
+
+// A7 — Approval escalation every 6 hours
+Schedule::command('approvals:run-escalations')
+    ->everySixHours()
+    ->withoutOverlapping()
+    ->onOneServer();
+
+// A10 — End-of-day production summary email at 18:00 (and weekly Friday)
+Schedule::command('production:send-daily-summary')
+    ->dailyAt('18:00')
+    ->onOneServer();
+Schedule::command('production:send-weekly-summary')
+    ->fridays()
+    ->at('18:00')
+    ->onOneServer();

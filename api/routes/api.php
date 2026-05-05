@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Common\Controllers\AlertController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -12,7 +13,7 @@ use Illuminate\Support\Facades\Route;
 | Per-module routes live in app/Modules/<Module>/routes.php and are
 | auto-mounted by App\Providers\ModuleServiceProvider during boot.
 |
-| Only cross-module / utility routes belong here.
+| Cross-module / utility routes belong here.
 |
 */
 
@@ -21,3 +22,15 @@ Route::get('/health', fn () => response()->json([
     'service'  => 'ogami-api',
     'time'     => now()->toIso8601String(),
 ]));
+
+/* ─── Alerts (Task A2) — cross-module so registered here ─────────── */
+Route::middleware(['auth:sanctum'])->prefix('alerts')->group(function () {
+    Route::get('/',                  [AlertController::class, 'index'])
+        ->middleware('permission:alerts.view');
+    Route::get('/unread-count',      [AlertController::class, 'unreadCount'])
+        ->middleware('permission:alerts.view');
+    Route::patch('/{alert}/dismiss', [AlertController::class, 'dismiss'])
+        ->middleware('permission:alerts.dismiss');
+    Route::patch('/{alert}/read',    [AlertController::class, 'markRead'])
+        ->middleware('permission:alerts.view');
+});

@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 use App\Modules\Payroll\Controllers\GovernmentTableController;
 use App\Modules\Payroll\Controllers\PayrollAdjustmentController;
+use App\Modules\Payroll\Controllers\PayrollAnomalyController;
 use App\Modules\Payroll\Controllers\PayrollController;
 use App\Modules\Payroll\Controllers\PayrollPeriodController;
 use Illuminate\Support\Facades\Route;
@@ -57,5 +58,13 @@ if (class_exists(PayrollPeriodController::class)) {
             Route::patch('/{adjustment}/approve', [PayrollAdjustmentController::class, 'approve'])->middleware('permission:payroll.adjustments.create');
             Route::patch('/{adjustment}/reject',  [PayrollAdjustmentController::class, 'reject'])->middleware('permission:payroll.adjustments.create');
         });
+
+        // ─── Payroll anomaly flags (Task A9) ─────────────────────
+        Route::prefix('payroll-periods/{period}/anomalies')->group(function () {
+            Route::get('/', [PayrollAnomalyController::class, 'index'])
+                ->middleware('permission:payroll.anomalies.review');
+        });
+        Route::patch('/payroll-anomalies/{flag}/resolve', [PayrollAnomalyController::class, 'resolve'])
+            ->middleware('permission:payroll.anomalies.review');
     });
 }

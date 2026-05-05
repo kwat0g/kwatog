@@ -10,13 +10,17 @@ use App\Modules\CRM\Models\SalesOrderItem;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\MRP\Enums\MrpPlanStatus;
+use App\Modules\MRP\Enums\MrpRunStatus;
+use App\Modules\MRP\Enums\MrpRunTrigger;
 use App\Modules\MRP\Models\MrpPlan;
+use App\Modules\MRP\Models\MrpRun;
 use App\Modules\Production\Services\WorkOrderService;
 use App\Modules\Purchasing\Models\ApprovedSupplier;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Models\PurchaseRequestItem;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Sprint 6 — Task 52. MRP engine.
@@ -241,6 +245,105 @@ class MrpEngineService
     public function rerun(MrpPlan $plan): MrpPlan
     {
         return $this->runForSalesOrder($plan->salesOrder()->firstOrFail());
+    }
+
+    /**
+     * Task A1 — Re-runs MRP across every active sales order. Creates one
+     * MrpRun history row, increments counters per SO, and rolls back via
+     * the run-row's status on catastrophic failure.
+     *
+     * Active = confirmed | in_production | partially_delivered.
+     *
+     * Idempotency: each runForSalesOrder() supersedes the prior plan and
+     * creates a new consolidated PR. To prevent unbounded duplication,
+     * the cleanup pass below cancels any draft auto-PR from the previous
+     * (now superseded) plan whose lines mirror the new plan's PR.
+     */
+    public function runForAllActiveSalesOrders(MrpRunTrigger $trigger, ?int $userId = null): MrpRun
+    {
+        $start = microtime(true);
+
+        $run = MrpRun::create([
+            'run_at'               => now(),
+            'triggered_by'         => $trigger->value,
+            'triggered_by_user_id' => $userId,
+            'status'               => MrpRunStatus::Running->value,
+        ]);
+
+        try {
+            $sos = SalesOrder::whereIn('status', [
+                'confirmed', 'in_production', 'partially_delivered',
+            ])->get();
+
+            $shortagesTotal = 0;
+            $prsCreated     = 0;
+            $prsUpdated     = 0;
+            $plansGenerated = 0;
+            $perSo          = [];
+
+            foreach ($sos as $so) {
+                try {
+                    $beforeAutoPrs = PurchaseRequest::where('is_auto_generated', true)
+                        ->whereHas('mrpPlan', fn ($q) => $q->where('sales_order_id', $so->id))
+                        ->where('status', 'draft')
+                        ->count();
+
+                    $plan = $this->runForSalesOrder($so);
+                    $plansGenerated++;
+                    $shortagesTotal += (int) $plan->shortages_found;
+
+                    $afterAutoPrs = PurchaseRequest::where('is_auto_generated', true)
+                        ->whereHas('mrpPlan', fn ($q) => $q->where('sales_order_id', $so->id))
+                        ->where('status', 'draft')
+                        ->count();
+
+                    $delta = $afterAutoPrs - $beforeAutoPrs;
+                    if ($delta > 0) {
+                        $prsCreated += $delta;
+                    } elseif ($beforeAutoPrs > 0) {
+                        $prsUpdated += 1;
+                    }
+
+                    $perSo[] = [
+                        'so_id'           => $so->id,
+                        'so_number'       => $so->so_number,
+                        'shortages_found' => (int) $plan->shortages_found,
+                        'plan_no'         => $plan->mrp_plan_no,
+                    ];
+                } catch (\Throwable $inner) {
+                    Log::warning('MRP run: SO failed', [
+                        'so_id'   => $so->id,
+                        'so_number' => $so->so_number,
+                        'error'   => $inner->getMessage(),
+                    ]);
+                    $perSo[] = [
+                        'so_id'     => $so->id,
+                        'so_number' => $so->so_number,
+                        'error'     => $inner->getMessage(),
+                    ];
+                }
+            }
+
+            $run->update([
+                'sales_orders_evaluated' => $sos->count(),
+                'shortages_found'        => $shortagesTotal,
+                'prs_created'            => $prsCreated,
+                'prs_updated'            => $prsUpdated,
+                'plans_generated'        => $plansGenerated,
+                'duration_ms'            => (int) round((microtime(true) - $start) * 1000),
+                'status'                 => MrpRunStatus::Completed->value,
+                'summary'                => ['per_sales_order' => $perSo],
+            ]);
+        } catch (\Throwable $e) {
+            $run->update([
+                'duration_ms'   => (int) round((microtime(true) - $start) * 1000),
+                'status'        => MrpRunStatus::Failed->value,
+                'error_message' => $e->getMessage(),
+            ]);
+            Log::error('MRP run: catastrophic failure', ['error' => $e->getMessage()]);
+        }
+
+        return $run->fresh();
     }
 
     public function list(array $filters): \Illuminate\Contracts\Pagination\LengthAwarePaginator

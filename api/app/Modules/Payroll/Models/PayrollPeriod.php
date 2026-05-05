@@ -27,6 +27,8 @@ class PayrollPeriod extends Model
         'status',
         'journal_entry_id',
         'created_by',
+        'is_auto_created',
+        'auto_created_at',
     ];
 
     protected $casts = [
@@ -36,6 +38,8 @@ class PayrollPeriod extends Model
         'is_first_half'       => 'boolean',
         'is_thirteenth_month' => 'boolean',
         'status'              => PayrollPeriodStatus::class,
+        'is_auto_created'     => 'boolean',
+        'auto_created_at'     => 'datetime',
     ];
 
     public function payrolls(): HasMany

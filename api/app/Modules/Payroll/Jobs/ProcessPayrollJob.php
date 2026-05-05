@@ -107,6 +107,16 @@ class ProcessPayrollJob implements ShouldQueue, ShouldBeUnique
             $period->status = PayrollPeriodStatus::Draft;
             $period->save();
             PayrollProgressEvent::dispatch($period, $processed, $total, $failures);
+
+            // Task A9 — detect anomalies on completed period.
+            try {
+                app(\App\Modules\Payroll\Services\PayrollAnomalyService::class)->detect($period);
+            } catch (\Throwable $e) {
+                Log::warning('PayrollAnomalyService::detect failed after job', [
+                    'period_id' => $period->id,
+                    'error'     => $e->getMessage(),
+                ]);
+            }
         }
     }
 

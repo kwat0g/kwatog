@@ -191,6 +191,16 @@ class PayrollPeriodService
         if ($period->status !== PayrollPeriodStatus::Approved) {
             throw new RuntimeException('Only approved periods can be finalized.');
         }
+
+        // Task A9 — block finalization while unresolved anomaly flags exist.
+        $unresolved = \App\Modules\Payroll\Models\PayrollAnomalyFlag::query()
+            ->where('payroll_period_id', $period->id)
+            ->where('is_resolved', false)
+            ->count();
+        if ($unresolved > 0) {
+            throw new RuntimeException("Cannot finalize: {$unresolved} unresolved payroll anomaly flag(s). Review and resolve them first.");
+        }
+
         $period->status = PayrollPeriodStatus::Finalized;
         $period->save();
         return $period->fresh();

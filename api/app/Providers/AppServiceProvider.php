@@ -7,10 +7,12 @@ namespace App\Providers;
 use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Observers\JournalEntryObserver;
+use App\Modules\Accounting\Listeners\NotifyFinanceOnDeliveryConfirmed;
 use App\Modules\Inventory\Events\StockMovementCompleted;
 use App\Modules\Inventory\Listeners\CheckReorderPoint;
 use App\Modules\MRP\Events\MachineStatusChanged;
 use App\Modules\Production\Listeners\HandleMachineBreakdown;
+use App\Modules\SupplyChain\Events\DeliveryConfirmed;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\URL;
@@ -49,5 +51,8 @@ class AppServiceProvider extends ServiceProvider
 
         // Sprint 6 Task 56: machine breakdown / restoration handling.
         Event::listen(MachineStatusChanged::class, [HandleMachineBreakdown::class, 'handle']);
+
+        // Task A4: Notify Finance when a delivery is confirmed (draft invoice ready).
+        Event::listen(DeliveryConfirmed::class, [NotifyFinanceOnDeliveryConfirmed::class, 'handle']);
     }
 }
