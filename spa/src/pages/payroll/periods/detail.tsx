@@ -159,6 +159,11 @@ export default function PayrollPeriodDetailPage() {
         actions={
           <>
             <Chip variant={periodStatusVariant(period.status)} className="mr-2">{period.status_label}</Chip>
+            {period.is_auto_created && (
+              <span title={period.auto_created_at ? `Auto-scheduled ${period.auto_created_at}` : 'Auto-scheduled by system'} className="mr-2">
+                <Chip variant="info">Auto</Chip>
+              </span>
+            )}
             {canCompute && (
               <Button variant="primary" size="sm" icon={<Play size={14} />}
                 onClick={() => computeMutation.mutate()}

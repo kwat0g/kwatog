@@ -48,6 +48,8 @@ export interface PayrollPeriod {
   status_label: string;
   is_locked: boolean;
   label: string;
+  is_auto_created: boolean;
+  auto_created_at: string | null;
   employee_count: number;
   creator?: { id: string; name: string };
   summary?: PayrollPeriodSummary | null;
