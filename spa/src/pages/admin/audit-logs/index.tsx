@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Download } from 'lucide-react';
 import { auditLogsApi, type AuditLogEntry, type AuditLogParams } from '@/api/admin/audit-logs';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -69,6 +70,13 @@ export default function AuditLogsPage() {
       <PageHeader
         title="Audit logs"
         subtitle={data ? `${data.meta.total.toLocaleString()} entries` : undefined}
+        actions={
+          <a href={auditLogsApi.exportUrl(filters)} download>
+            <Button variant="secondary" size="sm" icon={<Download size={14} />}>
+              Export CSV
+            </Button>
+          </a>
+        }
       />
 
       <FilterBar

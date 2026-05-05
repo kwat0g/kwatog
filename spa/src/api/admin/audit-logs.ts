@@ -25,4 +25,24 @@ export interface AuditLogParams extends ListParams {
 export const auditLogsApi = {
   list: (params?: AuditLogParams) =>
     client.get<PaginatedResponse<AuditLogEntry>>('/admin/audit-logs', { params }).then((r) => r.data),
+
+  /**
+   * Sprint P7 — download a CSV of the same filtered query.
+   *
+   * Triggers a browser download via a transient `<a download>` so the auth
+   * cookie travels with the request (no need to handle the blob in JS).
+   * Filters mirror `list()` exactly so what you see is what you export.
+   */
+  exportUrl: (params?: AuditLogParams): string => {
+    const search = new URLSearchParams();
+    if (params) {
+      for (const [key, value] of Object.entries(params)) {
+        if (value === undefined || value === null || value === '') continue;
+        if (key === 'page' || key === 'per_page') continue; // export ignores pagination
+        search.set(key, String(value));
+      }
+    }
+    const qs = search.toString();
+    return `/api/v1/admin/audit-logs/export${qs ? `?${qs}` : ''}`;
+  },
 };
