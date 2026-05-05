@@ -40,20 +40,35 @@ export function SelfServiceLayout() {
         </div>
       </header>
 
-      {/* Page content */}
-      <main className="flex-1 overflow-y-auto pb-16">
+      {/* Page content. Bottom padding accommodates the fixed nav PLUS the
+          iOS home-indicator safe area so content never tucks underneath. */}
+      <main
+        className="flex-1 overflow-y-auto"
+        style={{ paddingBottom: 'calc(56px + env(safe-area-inset-bottom, 0px))' }}
+      >
         <Outlet key={location.pathname} />
       </main>
 
-      {/* Bottom nav */}
-      <nav className="fixed bottom-0 left-0 right-0 h-14 border-t border-default bg-canvas grid grid-cols-5 z-10">
+      {/* Bottom nav. The nav itself extends past the safe-area inset so its
+          background tints the iOS home-indicator gutter; the inner row is
+          padded so tap targets stay above the gutter. */}
+      <nav
+        className="fixed bottom-0 left-0 right-0 border-t border-default bg-canvas grid grid-cols-5 z-10"
+        style={{
+          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+          height: 'calc(56px + env(safe-area-inset-bottom, 0px))',
+        }}
+        aria-label="Self-service navigation"
+      >
         {TABS.map(({ to, label, Icon, end }) => (
           <NavLink
             key={to}
             to={to}
             end={end}
             className={({ isActive }) =>
-              `flex flex-col items-center justify-center gap-0.5 text-[10px] tracking-wide ` +
+              // Each tab is 44×44 minimum (Apple HIG). The icon sits in a
+              // larger flex cell so the entire 56px row is tappable.
+              `flex flex-col items-center justify-center gap-0.5 text-[10px] tracking-wide min-h-[44px] ` +
               (isActive
                 ? 'text-accent font-medium'
                 : 'text-muted hover:text-primary')
