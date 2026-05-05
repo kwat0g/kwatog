@@ -12,8 +12,9 @@ import { Panel } from '@/components/ui/Panel';
 import { Textarea } from '@/components/ui/Textarea';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { ChainHeader } from '@/components/chain';
+import { ChainHeader, ApprovalTimeline } from '@/components/chain';
 import { buildLoanChain } from '@/lib/chains';
+import { fromApprovalRecords } from '@/lib/approvals';
 import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
@@ -154,15 +155,21 @@ export default function LoanDetailPage() {
 
         <div className="space-y-4">
           <Panel title="Approval chain">
-            <p className="text-sm text-muted mb-2">{loan.approval_chain_size}-step workflow.</p>
-            <p className="text-xs text-muted">
-              {loan.loan_type === 'company_loan'
-                ? 'Dept Head → Manager → Accounting → VP'
-                : 'Dept Head → Accounting → VP'}
-            </p>
-            <p className="text-xs text-muted mt-2">
-              Status: <Chip variant={chipVariantForStatus(loan.status)}>{loan.status}</Chip>
-            </p>
+            {loan.approval_records && loan.approval_records.length > 0 ? (
+              <ApprovalTimeline steps={fromApprovalRecords(loan.approval_records)} />
+            ) : (
+              <>
+                <p className="text-sm text-muted mb-2">{loan.approval_chain_size}-step workflow.</p>
+                <p className="text-xs text-muted">
+                  {loan.loan_type === 'company_loan'
+                    ? 'Dept Head → Manager → Accounting → VP'
+                    : 'Dept Head → Accounting → VP'}
+                </p>
+                <p className="text-xs text-muted mt-2">
+                  Status: <Chip variant={chipVariantForStatus(loan.status)}>{loan.status}</Chip>
+                </p>
+              </>
+            )}
           </Panel>
           <Panel title="Employee">
             <div className="text-sm">

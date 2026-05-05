@@ -12,12 +12,13 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
 import { ReasonDialog } from '@/components/ui/ReasonDialog';
 import { SkeletonTable } from '@/components/ui/Skeleton';
-import { ChainHeader } from '@/components/chain';
+import { ChainHeader, ApprovalTimeline } from '@/components/chain';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
-import type { ApprovalRecord, PurchaseRequest, PurchaseRequestStatus } from '@/types/purchasing';
+import { fromApprovalRecords } from '@/lib/approvals';
+import type { PurchaseRequest, PurchaseRequestStatus } from '@/types/purchasing';
 import type { ChainStep } from '@/types/chain';
 
 const errMsg = (e: unknown, fallback: string) =>
@@ -142,7 +143,7 @@ export default function PurchaseRequestDetailPage() {
         </div>
         <div className="space-y-4">
           <Panel title="Approval chain">
-            <ApprovalChain records={data.approval_records ?? []} />
+            <ApprovalTimeline steps={fromApprovalRecords(data.approval_records)} />
           </Panel>
           {data.purchase_orders && data.purchase_orders.length > 0 && (
             <Panel title="Linked POs">
@@ -236,26 +237,4 @@ function buildPrChainSteps(pr: PurchaseRequest): ChainStep[] {
   return steps;
 }
 
-function ApprovalChain({ records }: { records: ApprovalRecord[] }) {
-  if (records.length === 0) return <div className="text-sm text-muted">No approval workflow yet.</div>;
-  return (
-    <ol className="text-xs space-y-2">
-      {records.map((r) => (
-        <li key={r.step_order} className="flex items-start gap-2">
-          <span className={
-            'w-2 h-2 rounded-full mt-1.5 ' +
-            (r.action === 'approved' ? 'bg-success' : r.action === 'rejected' ? 'bg-danger' : r.action === 'skipped' ? 'bg-elevated' : 'bg-warning')
-          } />
-          <div className="flex-1">
-            <div className="font-medium">Step {r.step_order} — {r.role_slug.replace(/_/g, ' ')}</div>
-            <div className="text-muted">
-              <Chip variant={r.action === 'approved' ? 'success' : r.action === 'rejected' ? 'danger' : r.action === 'skipped' ? 'neutral' : 'warning'}>{r.action}</Chip>
-              {r.acted_at && <span className="ml-2 font-mono">{new Date(r.acted_at).toLocaleString()}</span>}
-            </div>
-            {r.remarks && <div className="text-muted italic mt-1">"{r.remarks}"</div>}
-          </div>
-        </li>
-      ))}
-    </ol>
-  );
-}
+

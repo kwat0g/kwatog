@@ -34,11 +34,17 @@ class PurchaseRequestResource extends JsonResource
             ] : null),
             'items'                   => PurchaseRequestItemResource::collection($this->whenLoaded('items')),
             'approval_records'        => $this->whenLoaded('approvalRecords', fn () => $this->approvalRecords->map(fn ($r) => [
-                'step_order' => $r->step_order,
-                'role_slug'  => $r->role_slug,
-                'action'     => $r->action,
-                'remarks'    => $r->remarks,
-                'acted_at'   => optional($r->acted_at)->toIso8601String(),
+                'step_order'    => (int) $r->step_order,
+                'role_slug'     => $r->role_slug,
+                'action'        => $r->action,
+                'remarks'       => $r->remarks,
+                'acted_at'      => optional($r->acted_at)->toIso8601String(),
+                'approver'      => $r->relationLoaded('approver') && $r->approver ? [
+                    'id'   => $r->approver->hash_id,
+                    'name' => $r->approver->name,
+                ] : null,
+                'is_overdue'    => (bool) $r->is_overdue,
+                'overdue_hours' => $r->is_overdue ? (int) $r->overdue_hours : null,
             ])->all()),
             'purchase_orders'         => $this->whenLoaded('purchaseOrders', fn () => $this->purchaseOrders->map(fn ($po) => [
                 'id'        => $po->hash_id,

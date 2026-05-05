@@ -13,13 +13,14 @@ import { Panel } from '@/components/ui/Panel';
 import { ReasonDialog } from '@/components/ui/ReasonDialog';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { StatCard } from '@/components/ui/StatCard';
-import { ChainHeader } from '@/components/chain';
+import { ChainHeader, ApprovalTimeline } from '@/components/chain';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import { buildPurchaseOrderChain } from '@/lib/chains';
-import type { ApprovalRecord, PurchaseOrderStatus } from '@/types/purchasing';
+import { fromApprovalRecords } from '@/lib/approvals';
+import type { PurchaseOrderStatus } from '@/types/purchasing';
 
 const variant: Record<PurchaseOrderStatus, 'neutral' | 'info' | 'warning' | 'success' | 'danger'> = {
   draft: 'neutral', pending_approval: 'info', approved: 'success', sent: 'info',
@@ -159,7 +160,9 @@ export default function PurchaseOrderDetailPage() {
           </Panel>
         </div>
         <div className="space-y-4">
-          <Panel title="Approval chain"><ApprovalChain records={data.approval_records ?? []} /></Panel>
+          <Panel title="Approval chain">
+            <ApprovalTimeline steps={fromApprovalRecords(data.approval_records)} />
+          </Panel>
           {data.goods_receipt_notes && data.goods_receipt_notes.length > 0 && (
             <Panel title="Linked GRNs">
               <ul className="text-xs divide-y divide-subtle">
@@ -262,24 +265,4 @@ export default function PurchaseOrderDetailPage() {
   );
 }
 
-function ApprovalChain({ records }: { records: ApprovalRecord[] }) {
-  if (records.length === 0) return <div className="text-sm text-muted">No approval workflow yet.</div>;
-  return (
-    <ol className="text-xs space-y-2">
-      {records.map((r) => (
-        <li key={r.step_order} className="flex items-start gap-2">
-          <span className={'w-2 h-2 rounded-full mt-1.5 ' +
-            (r.action === 'approved' ? 'bg-success' : r.action === 'rejected' ? 'bg-danger' : r.action === 'skipped' ? 'bg-elevated' : 'bg-warning')} />
-          <div className="flex-1">
-            <div className="font-medium">Step {r.step_order} — {r.role_slug.replace(/_/g, ' ')}</div>
-            <div>
-              <Chip variant={r.action === 'approved' ? 'success' : r.action === 'rejected' ? 'danger' : r.action === 'skipped' ? 'neutral' : 'warning'}>{r.action}</Chip>
-              {r.acted_at && <span className="ml-2 font-mono text-muted">{new Date(r.acted_at).toLocaleString()}</span>}
-            </div>
-            {r.remarks && <div className="text-muted italic mt-1">"{r.remarks}"</div>}
-          </div>
-        </li>
-      ))}
-    </ol>
-  );
-}
+

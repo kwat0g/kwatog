@@ -52,7 +52,7 @@ class PurchaseRequestService
             'requester:id,name,role_id',
             'department',
             'items.item',
-            'approvalRecords',
+            'approvalRecords.approver:id,name',
             'purchaseOrders:id,po_number,status,vendor_id,total_amount,purchase_request_id',
             'purchaseOrders.vendor:id,name',
         ]);

@@ -13,6 +13,10 @@ export interface ApprovalRecord {
   action: 'pending' | 'approved' | 'rejected' | 'skipped';
   remarks: string | null;
   acted_at: string | null;
+  /** Sprint P3 — populated when approver:id,name is eager-loaded. */
+  approver?: { id: string; name: string } | null;
+  is_overdue?: boolean;
+  overdue_hours?: number | null;
 }
 
 export interface PurchaseRequestItem {
