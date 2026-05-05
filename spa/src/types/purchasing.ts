@@ -38,6 +38,7 @@ export interface PurchaseRequest {
   priority: PurchaseRequestPriority;
   status: PurchaseRequestStatus;
   is_auto_generated: boolean;
+  has_overdue_approval: boolean;
   current_approval_step: number;
   submitted_at: string | null;
   approved_at: string | null;
@@ -93,6 +94,7 @@ export interface PurchaseOrder {
   status: PurchaseOrderStatus;
   requires_vp_approval: boolean;
   is_auto_generated: boolean;
+  has_overdue_approval: boolean;
   current_approval_step: number;
   approved_at: string | null;
   sent_to_supplier_at: string | null;

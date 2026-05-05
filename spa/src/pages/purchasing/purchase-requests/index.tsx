@@ -45,7 +45,14 @@ export default function PurchaseRequestsListPage() {
     { key: 'requester', header: 'Requester', cell: (r) => r.requester?.name ?? '—' },
     { key: 'dept', header: 'Dept', cell: (r) => r.department?.code ?? '—' },
     { key: 'priority', header: 'Priority', cell: (r) => <Chip variant={priorityVariant[r.priority]}>{r.priority}</Chip> },
-    { key: 'status', header: 'Status', cell: (r) => <Chip variant={statusVariant[r.status]}>{r.status}</Chip> },
+    { key: 'status', header: 'Status', cell: (r) => (
+      <span className="flex items-center gap-1.5">
+        <Chip variant={statusVariant[r.status]}>{r.status}</Chip>
+        {r.has_overdue_approval && (
+          <span title="Approval pending more than 24 hours"><Chip variant="danger">overdue</Chip></span>
+        )}
+      </span>
+    ) },
     { key: 'total', header: 'Estimated', align: 'right', cell: (r) => <NumCell>{formatPeso(r.total_estimated_amount)}</NumCell> },
   ];
 

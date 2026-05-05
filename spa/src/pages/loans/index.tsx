@@ -34,7 +34,14 @@ export default function LoansPage() {
     { key: 'balance', header: 'Balance', align: 'right', cell: (r) => <NumCell className="font-medium">{formatPeso(r.balance)}</NumCell> },
     { key: 'pay_periods', header: 'Periods', align: 'right', cell: (r) => <NumCell>{r.pay_periods_remaining}/{r.pay_periods_total}</NumCell> },
     { key: 'start_date', header: 'Start', align: 'left', cell: (r) => <NumCell>{r.start_date ? formatDate(r.start_date) : '—'}</NumCell> },
-    { key: 'status', header: 'Status', cell: (r) => <Chip variant={chipVariantForStatus(r.status)}>{r.status}</Chip> },
+    { key: 'status', header: 'Status', cell: (r) => (
+      <span className="flex items-center gap-1.5">
+        <Chip variant={chipVariantForStatus(r.status)}>{r.status}</Chip>
+        {r.has_overdue_approval && (
+          <span title="Approval pending more than 24 hours"><Chip variant="danger">overdue</Chip></span>
+        )}
+      </span>
+    ) },
   ];
 
   const filterConfig: FilterConfig[] = [

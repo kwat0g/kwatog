@@ -20,6 +20,9 @@ class PurchaseRequestResource extends JsonResource
             'status'                  => (string) $this->status?->value,
             'is_auto_generated'       => (bool) $this->is_auto_generated,
             'current_approval_step'   => (int) $this->current_approval_step,
+            'has_overdue_approval'    => $this->relationLoaded('approvalRecords')
+                ? $this->approvalRecords->contains(fn ($r) => $r->action === 'pending' && $r->is_overdue)
+                : false,
             'submitted_at'            => optional($this->submitted_at)->toIso8601String(),
             'approved_at'             => optional($this->approved_at)->toIso8601String(),
             'total_estimated_amount'  => $this->totalEstimatedAmount(),

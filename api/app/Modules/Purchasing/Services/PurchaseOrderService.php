@@ -38,6 +38,7 @@ class PurchaseOrderService
         $q = PurchaseOrder::query()->with([
             'vendor:id,name', 'creator:id,name,role_id',
             'purchaseRequest:id,pr_number',
+            'approvalRecords',
         ]);
         if (! empty($filters['status']))   $q->where('status', $filters['status']);
         if (! empty($filters['vendor_id'])) {

@@ -27,7 +27,10 @@ class LoanService
 
     public function list(array $filters, ?User $user = null): LengthAwarePaginator
     {
-        $q = EmployeeLoan::query()->with('employee:id,employee_no,first_name,middle_name,last_name,suffix,department_id');
+        $q = EmployeeLoan::query()->with([
+            'employee:id,employee_no,first_name,middle_name,last_name,suffix,department_id',
+            'approvalRecords',
+        ]);
         if (!empty($filters['employee_id'])) {
             $empId = \App\Common\Support\HashIdFilter::decode(
                 $filters['employee_id'], \App\Modules\HR\Models\Employee::class,
