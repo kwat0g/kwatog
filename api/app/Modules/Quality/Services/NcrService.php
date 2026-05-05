@@ -105,6 +105,7 @@ class NcrService
                 'affected_quantity' => (int) ($data['affected_quantity'] ?? 0),
                 'created_by'        => $by->id,
                 'assigned_to'       => $data['assigned_to'] ?? null,
+                'is_auto_generated' => (bool) ($data['is_auto_generated'] ?? false),
             ]);
             return $this->show($ncr);
         });
@@ -131,17 +132,45 @@ class NcrService
                 ? NcrSeverity::High->value
                 : NcrSeverity::Medium->value);
 
-        return $this->create([
+        $ncr = $this->create([
             'source'             => NcrSource::InspectionFail->value,
             'severity'           => $severity,
             'product_id'         => $inspection->product_id,
             'inspection_id'      => $inspection->id,
-            'defect_description' => 'Inspection '.$inspection->inspection_number.' failed: '
+            'defect_description' => 'Automated NCR from inspection '.$inspection->inspection_number.': '
                                    .$inspection->defect_count.' defect(s) on '
                                    .$inspection->stage->value.' stage'
-                                   .($criticalFail ? ' (critical parameter failure)' : ''),
+                                   .($criticalFail ? ' (critical parameter failure)' : '').'.',
             'affected_quantity'  => $inspection->batch_quantity,
+            'is_auto_generated'  => true,
         ], $by);
+
+        // Task A6 — notify QC Head so root cause / disposition can be filled.
+        try {
+            $qcHeads = \App\Modules\Auth\Models\User::query()
+                ->whereHas('role', fn ($q) => $q->whereIn('slug', ['qc_inspector', 'system_admin']))
+                ->where('is_active', true)
+                ->get();
+            foreach ($qcHeads as $u) {
+                $u->notifications()->create([
+                    'id'              => (string) \Illuminate\Support\Str::uuid(),
+                    'type'            => 'auto_ncr_created',
+                    'notifiable_type' => $u::class,
+                    'notifiable_id'   => $u->id,
+                    'data'            => [
+                        'ncr_id'        => $ncr->hash_id,
+                        'ncr_number'    => $ncr->ncr_number,
+                        'inspection_id' => $inspection->hash_id,
+                        'severity'      => $severity,
+                        'message'       => "NCR auto-created from {$inspection->stage->value} inspection. {$inspection->defect_count} pcs rejected. {$severity} severity. Review disposition.",
+                        'link'          => "/quality/ncrs/{$ncr->hash_id}",
+                    ],
+                    'read_at'         => null,
+                ]);
+            }
+        } catch (\Throwable) {}
+
+        return $ncr;
     }
 
     public function addAction(NonConformanceReport $ncr, array $data, User $by): NcrAction

@@ -6,6 +6,7 @@ use App\Modules\MRP\Controllers\BomController;
 use App\Modules\MRP\Controllers\MachineController;
 use App\Modules\MRP\Controllers\MoldController;
 use App\Modules\MRP\Controllers\MrpPlanController;
+use App\Modules\MRP\Controllers\MrpRunController;
 use App\Modules\MRP\Controllers\SchedulerController;
 use Illuminate\Support\Facades\Route;
 
@@ -58,4 +59,9 @@ Route::middleware(['auth:sanctum', 'feature:mrp'])->prefix('mrp')->group(functio
     Route::patch('/scheduler/{schedule}/reorder',    [SchedulerController::class, 'reorder'])->middleware('permission:mrp.schedule');
     Route::patch('/scheduler/{schedule}/reassign',   [SchedulerController::class, 'reassign'])->middleware('permission:mrp.schedule');
     Route::get('/scheduler/snapshot',                [SchedulerController::class, 'snapshot'])->middleware('permission:production.schedule.view');
+
+    /* ─── MRP runs (Task A1) ─── */
+    Route::get('/runs',                  [MrpRunController::class, 'index']) ->middleware('permission:mrp.runs.view');
+    Route::get('/runs/latest',           [MrpRunController::class, 'latest'])->middleware('permission:mrp.runs.view');
+    Route::post('/runs',                 [MrpRunController::class, 'store']) ->middleware('permission:mrp.runs.trigger');
 });

@@ -35,6 +35,20 @@ class AutoReplenishmentService
 
         if ($available > $reorder) return null;
 
+        // Task A8 — for critical items with exactly one preferred supplier,
+        // skip the PR workflow and go directly to an auto-PO routed to VP.
+        if ((bool) $item->is_critical) {
+            try {
+                $auto = app(\App\Modules\Purchasing\Services\AutoPurchaseOrderService::class)
+                    ->createForCriticalShortage($item);
+                if ($auto !== null) {
+                    return null; // PR workflow short-circuited
+                }
+            } catch (\Throwable) {
+                // Fall through to PR workflow on any auto-PO failure.
+            }
+        }
+
         // Skip if an open auto-PR already exists for this item.
         $hasOpen = PurchaseRequest::query()
             ->whereHas('items', fn ($q) => $q->where('item_id', $item->id))

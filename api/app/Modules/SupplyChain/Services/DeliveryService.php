@@ -14,6 +14,7 @@ use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\SupplyChain\Enums\DeliveryStatus;
+use App\Modules\SupplyChain\Events\DeliveryConfirmed;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\DeliveryItem;
 use App\Modules\SupplyChain\Models\Vehicle;
@@ -219,6 +220,7 @@ class DeliveryService
             ])->save();
 
             // Auto-create draft invoice (best-effort — Accounting may be disabled).
+            $invoiceId = null;
             try {
                 $invoiceId = $this->createDraftInvoice($d, $by);
                 if ($invoiceId) {
@@ -228,7 +230,13 @@ class DeliveryService
                 // Skip silently — manual invoicing remains possible.
             }
 
-            return $this->show($d);
+            // Task A4 — fan out a DeliveryConfirmed event after commit so
+            // listeners (Finance notification, dashboard refresh) only see
+            // the persisted state.
+            $delivery = $this->show($d);
+            DB::afterCommit(fn () => DeliveryConfirmed::dispatch($delivery, $invoiceId));
+
+            return $delivery;
         });
     }
 

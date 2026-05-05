@@ -29,6 +29,7 @@ class PurchaseOrder extends Model
         'status', 'requires_vp_approval', 'current_approval_step',
         'approved_by', 'approved_at', 'sent_to_supplier_at',
         'created_by', 'remarks',
+        'is_auto_generated',
     ];
 
     protected $casts = [
@@ -43,6 +44,7 @@ class PurchaseOrder extends Model
         'current_approval_step'  => 'integer',
         'approved_at'            => 'datetime',
         'sent_to_supplier_at'    => 'datetime',
+        'is_auto_generated'      => 'boolean',
     ];
 
     public function vendor(): BelongsTo

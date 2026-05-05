@@ -35,6 +35,7 @@ class NonConformanceReport extends Model
         'root_cause', 'corrective_action',
         'created_by', 'assigned_to', 'closed_by', 'closed_at',
         'replacement_work_order_id',
+        'is_auto_generated',
     ];
 
     protected $casts = [
@@ -44,6 +45,7 @@ class NonConformanceReport extends Model
         'disposition'       => NcrDisposition::class,
         'affected_quantity' => 'integer',
         'closed_at'         => 'datetime',
+        'is_auto_generated' => 'boolean',
     ];
 
     public function product(): BelongsTo

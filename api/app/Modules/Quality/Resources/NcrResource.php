@@ -20,6 +20,7 @@ class NcrResource extends JsonResource
             'disposition'        => $this->disposition instanceof \BackedEnum ? $this->disposition->value : $this->disposition,
             'defect_description' => $this->defect_description,
             'affected_quantity'  => (int) $this->affected_quantity,
+            'is_auto_generated'  => (bool) $this->is_auto_generated,
             'root_cause'         => $this->root_cause,
             'corrective_action'  => $this->corrective_action,
             'closed_at'          => optional($this->closed_at)?->toISOString(),
