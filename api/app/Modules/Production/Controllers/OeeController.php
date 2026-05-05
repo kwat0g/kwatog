@@ -28,6 +28,34 @@ class OeeController
         return response()->json(['data' => $this->service->calculateForAllMachines($today, $today->copy()->endOfDay())]);
     }
 
+    /**
+     * Sprint P10 — full OEE report.
+     *
+     * GET /production/oee/report?from=YYYY-MM-DD&to=YYYY-MM-DD&machine_id={hash}
+     *
+     * `from` and `to` default to the current month if omitted.
+     */
+    public function report(Request $request): JsonResponse
+    {
+        $from = $request->filled('from')
+            ? Carbon::parse($request->string('from')->toString())->startOfDay()
+            : Carbon::now()->startOfMonth();
+        $to = $request->filled('to')
+            ? Carbon::parse($request->string('to')->toString())->endOfDay()
+            : Carbon::now()->endOfDay();
+
+        $machine = null;
+        if ($request->filled('machine_id')) {
+            $raw = $request->string('machine_id')->toString();
+            $id = Machine::tryDecodeHash($raw);
+            if ($id !== null) {
+                $machine = Machine::query()->find($id);
+            }
+        }
+
+        return response()->json(['data' => $this->service->report($from, $to, $machine)]);
+    }
+
     private function window(Request $request): array
     {
         $from = Carbon::parse($request->query('from', Carbon::today()->toDateString()));

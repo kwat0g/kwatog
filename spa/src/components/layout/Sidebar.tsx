@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import {
+  Activity,
   LayoutDashboard,
   Users,
   Clock4,
@@ -124,6 +125,7 @@ const SECTIONS: NavSection[] = [
       { to: '/supply-chain/fleet',      label: 'Fleet',          icon: Truck, feature: 'supply_chain', permission: 'supply_chain.view' },
 
       { to: '/production/dashboard',    label: 'Production',         icon: Factory,     feature: 'production', permission: 'production.dashboard.view' },
+      { to: '/production/oee',          label: 'OEE report',         icon: Activity,    feature: 'production', permission: 'production.dashboard.view' },
       { to: '/production/schedule',     label: 'Schedule (Gantt)',   icon: CalendarClock, feature: 'production', permission: 'production.schedule.view' },
       { to: '/quality/inspection-specs',label: 'Inspection specs',   icon: ShieldCheck, feature: 'quality',    permission: 'quality.specs.view' },
       { to: '/production/work-orders',  label: 'Work orders',        icon: FileText,    feature: 'production', permission: 'production.work_orders.view' },
