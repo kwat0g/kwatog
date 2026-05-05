@@ -231,10 +231,15 @@ class RoleDashboardService
         }
 
         $max = max(1, max(array_column($stages, 'count')));
-        foreach ($stages as &$s) {
+        // P8: emit `key` so the SPA can map each stage to a drill-down URL
+        // via `lib/dashboardLinks.ts::chainStageLink()`.
+        $out = [];
+        foreach ($stages as $key => $s) {
+            $s['key']     = $key;
             $s['percent'] = (int) round(($s['count'] / $max) * 100);
+            $out[]        = $s;
         }
-        return array_values($stages);
+        return $out;
     }
 
     private function alerts(): array

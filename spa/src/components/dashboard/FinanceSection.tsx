@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { financeDashboardApi } from '@/api/accounting/dashboard';
 import { Panel } from '@/components/ui/Panel';
 import { StatCard } from '@/components/ui/StatCard';
@@ -8,13 +8,13 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
+import { kpiLink } from '@/lib/dashboardLinks';
 
 /**
  * Sprint 4 / Task 37 — Finance dashboard section.
  * Drops into pages/dashboard/index.tsx for any user with `accounting.dashboard.view`.
  */
 export function FinanceSection() {
-  const navigate = useNavigate();
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['accounting', 'dashboard', 'summary'],
     queryFn: () => financeDashboardApi.summary(),
@@ -37,16 +37,10 @@ export function FinanceSection() {
   return (
     <div className="px-5 py-4 space-y-4">
       <div className="grid grid-cols-4 gap-4">
-        <StatCard label="Cash Balance"   value={formatPeso(data.cash_balance)} className="cursor-pointer" />
-        <button onClick={() => navigate('/accounting/invoices?status=finalized')} className="text-left">
-          <StatCard label="AR Outstanding" value={formatPeso(data.ar_outstanding)} className="cursor-pointer hover:bg-elevated transition-colors" />
-        </button>
-        <button onClick={() => navigate('/accounting/bills?status=unpaid')} className="text-left">
-          <StatCard label="AP Outstanding" value={formatPeso(data.ap_outstanding)} className="cursor-pointer hover:bg-elevated transition-colors" />
-        </button>
-        <button onClick={() => navigate('/accounting/income-statement')} className="text-left">
-          <StatCard label="Revenue MTD"    value={formatPeso(data.revenue_mtd)}    className="cursor-pointer hover:bg-elevated transition-colors" />
-        </button>
+        <StatCard label="Cash Balance"   value={formatPeso(data.cash_balance)}   linkTo={kpiLink('Cash Balance')} />
+        <StatCard label="AR Outstanding" value={formatPeso(data.ar_outstanding)} linkTo={kpiLink('AR Outstanding')} />
+        <StatCard label="AP Outstanding" value={formatPeso(data.ap_outstanding)} linkTo={kpiLink('AP Outstanding')} />
+        <StatCard label="Revenue MTD"    value={formatPeso(data.revenue_mtd)}    linkTo={kpiLink('Revenue MTD')} />
       </div>
 
       <div className="grid grid-cols-2 gap-4">
