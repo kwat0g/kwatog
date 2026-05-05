@@ -1,5 +1,6 @@
 /** Sprint 8 — Tasks 72 + 73. Generic role dashboard renderer. */
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import { dashboardsApi, type DashboardEnvelope } from '@/api/dashboards';
 import { StatCard } from '@/components/ui/StatCard';
 import { Panel } from '@/components/ui/Panel';
@@ -8,6 +9,7 @@ import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { alertLink, chainStageLink, kpiLink } from '@/lib/dashboardLinks';
 
 type Role = 'plantManager' | 'hr' | 'ppc' | 'accounting';
 
@@ -55,6 +57,7 @@ export function RoleDashboard({ role }: { role: Role }) {
               label={k.label}
               value={k.unit === 'PHP' ? `₱ ${k.value}` : k.value}
               helper={k.unit !== 'PHP' && k.unit !== 'count' ? k.unit : undefined}
+              linkTo={kpiLink(k.label)}
             />
           ))}
         </section>
@@ -72,18 +75,34 @@ function RolePanels({ envelope }: { envelope: DashboardEnvelope }) {
       {Array.isArray(p.chain_stages) && (
         <Panel title="Active orders by chain stage">
           <ul className="space-y-2">
-            {p.chain_stages.map((s: any) => (
-              <li key={s.label}>
-                <div className="flex items-center justify-between text-sm mb-1">
-                  <span>{s.label}</span>
-                  <span className="font-mono tabular-nums">{s.count}</span>
-                </div>
-                <div className="h-1 bg-subtle rounded-full overflow-hidden">
-                  <div className={stageFillClass(s.color)}
-                    style={{ width: `${s.percent}%` }} />
-                </div>
-              </li>
-            ))}
+            {p.chain_stages.map((s: any) => {
+              const href = chainStageLink(s.key);
+              const inner = (
+                <>
+                  <div className="flex items-center justify-between text-sm mb-1">
+                    <span>{s.label}</span>
+                    <span className="font-mono tabular-nums">{s.count}</span>
+                  </div>
+                  <div className="h-1 bg-subtle rounded-full overflow-hidden">
+                    <div className={stageFillClass(s.color)} style={{ width: `${s.percent}%` }} />
+                  </div>
+                </>
+              );
+              return (
+                <li key={s.label}>
+                  {href ? (
+                    <Link
+                      to={href}
+                      className="block rounded-sm px-1 -mx-1 hover:bg-subtle transition-colors duration-fast"
+                    >
+                      {inner}
+                    </Link>
+                  ) : (
+                    inner
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </Panel>
       )}
@@ -91,15 +110,29 @@ function RolePanels({ envelope }: { envelope: DashboardEnvelope }) {
       {Array.isArray(p.alerts) && (
         <Panel title="Alerts" meta={p.alerts.reduce((a: number, x: any) => a + (x.count ?? 0), 0).toString()}>
           <ul className="divide-y divide-subtle">
-            {p.alerts.map((a: any) => (
-              <li key={a.kind} className="flex items-center justify-between py-2 text-sm">
-                <span className="flex items-center gap-2">
-                  <span className={alertDotClass(a.severity)} />
-                  {a.label}
+            {p.alerts.map((a: any) => {
+              const href = alertLink(a.kind);
+              const row = (
+                <span className="flex items-center justify-between w-full text-sm">
+                  <span className="flex items-center gap-2">
+                    <span className={alertDotClass(a.severity)} />
+                    {a.label}
+                  </span>
+                  <span className="font-mono tabular-nums">{a.count}</span>
                 </span>
-                <span className="font-mono tabular-nums">{a.count}</span>
-              </li>
-            ))}
+              );
+              return (
+                <li key={a.kind} className="py-2">
+                  {href ? (
+                    <Link to={href} className="block rounded-sm px-1 -mx-1 hover:bg-subtle transition-colors duration-fast">
+                      {row}
+                    </Link>
+                  ) : (
+                    row
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </Panel>
       )}
