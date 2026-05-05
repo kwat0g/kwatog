@@ -15,6 +15,7 @@ import { StatCard } from '@/components/ui/StatCard';
 import { Spinner } from '@/components/ui/Spinner';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { ChainHeader } from '@/components/chain/ChainHeader';
+import { AnomalyReviewPanel } from '@/components/payroll/AnomalyReviewPanel';
 import { LinkedRecords } from '@/components/chain/LinkedRecords';
 import type { LinkedGroup } from '@/types/chain';
 import { usePermission } from '@/hooks/usePermission';
@@ -36,7 +37,7 @@ export default function PayrollPeriodDetailPage() {
   const { id } = useParams<{ id: string }>();
   const qc = useQueryClient();
   const { can } = usePermission();
-  const [activeTab, setActiveTab] = useState<'employees' | 'failures' | 'summary'>('employees');
+  const [activeTab, setActiveTab] = useState<'employees' | 'failures' | 'anomalies' | 'summary'>('employees');
 
   const isProcessing = (period?: PayrollPeriod | null) => period?.status === 'processing';
 
@@ -225,6 +226,7 @@ export default function PayrollPeriodDetailPage() {
             {([
               { key: 'employees', label: `Employees (${summary?.employee_count ?? 0})` },
               { key: 'failures',  label: `Failures (${summary?.failed_count ?? 0})` },
+              { key: 'anomalies', label: 'Anomaly review' },
               { key: 'summary',   label: 'Deduction summary' },
             ] as const).map((t) => (
               <button
@@ -258,6 +260,10 @@ export default function PayrollPeriodDetailPage() {
                 />
               )}
             </>
+          )}
+
+          {activeTab === 'anomalies' && (
+            <AnomalyReviewPanel periodId={period.id} />
           )}
 
           {activeTab === 'summary' && (

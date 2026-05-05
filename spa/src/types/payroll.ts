@@ -65,6 +65,26 @@ export interface PayrollPeriod {
   updated_at: string;
 }
 
+export type PayrollAnomalyType =
+  | 'large_change'
+  | 'excessive_ot'
+  | 'high_deduction'
+  | 'first_payroll'
+  | 'zero_pay';
+
+export interface PayrollAnomalyFlag {
+  id: string;
+  flag_type: PayrollAnomalyType;
+  details: Record<string, unknown>;
+  is_resolved: boolean;
+  resolution_remarks: string | null;
+  resolved_at: string | null;
+  resolved_by?: { id: string; name: string } | null;
+  employee?: { id: string; employee_no: string; name: string } | null;
+  payroll_id: string | null;
+  created_at: string;
+}
+
 export interface PayrollEmployeeRef {
   id: string;
   employee_no: string;
