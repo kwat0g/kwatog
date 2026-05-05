@@ -25,7 +25,6 @@ export interface Alert {
   title: string;
   message: string;
   entity_type: string | null;
-  entity_id: number | null;
   entity?: { id: string; label: string; type: string } | null;
   metadata: Record<string, unknown>;
   is_read: boolean;

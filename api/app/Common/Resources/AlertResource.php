@@ -18,7 +18,8 @@ class AlertResource extends JsonResource
             'title'        => $this->title,
             'message'      => $this->message,
             'entity_type'  => $this->entity_type ? class_basename($this->entity_type) : null,
-            'entity_id'    => $this->entity_id, // raw — entity is internal; consumer can use the hash via entity preview
+            // Audit fix: never expose the raw integer entity_id — use the
+            // resolved $entity preview below for hash-encoded references.
             'entity'       => $this->whenLoaded('entity', function () {
                 $e = $this->entity;
                 if (! $e) return null;
