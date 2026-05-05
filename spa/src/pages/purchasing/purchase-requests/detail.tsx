@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { Send, ThumbsUp, ThumbsDown, X, ShoppingCart } from 'lucide-react';
@@ -12,7 +12,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
 import { ReasonDialog } from '@/components/ui/ReasonDialog';
 import { SkeletonTable } from '@/components/ui/Skeleton';
-import { ChainHeader, ApprovalTimeline } from '@/components/chain';
+import { ChainHeader, ApprovalTimeline, LinkedRecords } from '@/components/chain';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
@@ -145,17 +145,28 @@ export default function PurchaseRequestDetailPage() {
           <Panel title="Approval chain">
             <ApprovalTimeline steps={fromApprovalRecords(data.approval_records)} />
           </Panel>
+          {/* Sprint P2 — unified Linked records panel. */}
           {data.purchase_orders && data.purchase_orders.length > 0 && (
-            <Panel title="Linked POs">
-              <ul className="text-xs divide-y divide-subtle">
-                {data.purchase_orders.map((po) => (
-                  <li key={po.id} className="py-2">
-                    <Link to={`/purchasing/purchase-orders/${po.id}`} className="font-mono text-accent">{po.po_number}</Link>
-                    <div className="text-muted">{po.vendor?.name} · {formatPeso(po.total_amount)}</div>
-                    <Chip variant="info">{po.status.replace('_', ' ')}</Chip>
-                  </li>
-                ))}
-              </ul>
+            <Panel title="Linked records">
+              <LinkedRecords
+                groups={[
+                  {
+                    label: 'Purchase orders',
+                    items: data.purchase_orders.map((po) => ({
+                      id: po.po_number,
+                      href: `/purchasing/purchase-orders/${po.id}`,
+                      meta: `${po.vendor?.name ?? ''} · ${formatPeso(po.total_amount)}`,
+                      chip: {
+                        variant: (po.status === 'received' || po.status === 'closed' ? 'success'
+                                : po.status === 'cancelled' ? 'danger'
+                                : po.status === 'partially_received' ? 'warning'
+                                : 'info') as 'success' | 'danger' | 'warning' | 'info',
+                        text: po.status.replace('_', ' '),
+                      },
+                    })),
+                  },
+                ]}
+              />
             </Panel>
           )}
         </div>

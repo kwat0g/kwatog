@@ -13,7 +13,7 @@ import { Panel } from '@/components/ui/Panel';
 import { ReasonDialog } from '@/components/ui/ReasonDialog';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { StatCard } from '@/components/ui/StatCard';
-import { ChainHeader, ApprovalTimeline } from '@/components/chain';
+import { ChainHeader, ApprovalTimeline, LinkedRecords } from '@/components/chain';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
@@ -163,32 +163,49 @@ export default function PurchaseOrderDetailPage() {
           <Panel title="Approval chain">
             <ApprovalTimeline steps={fromApprovalRecords(data.approval_records)} />
           </Panel>
-          {data.goods_receipt_notes && data.goods_receipt_notes.length > 0 && (
-            <Panel title="Linked GRNs">
-              <ul className="text-xs divide-y divide-subtle">
-                {data.goods_receipt_notes.map((g) => (
-                  <li key={g.id} className="py-1.5">
-                    <Link to={`/inventory/grn/${g.id}`} className="font-mono text-accent">{g.grn_number}</Link>
-                    <span className="text-muted ml-2">{formatDate(g.received_date)}</span>
-                    <Chip variant={g.status === 'accepted' ? 'success' : g.status === 'pending_qc' ? 'warning' : 'info'}>
-                      {g.status.replace(/_/g, ' ')}
-                    </Chip>
-                  </li>
-                ))}
-              </ul>
-            </Panel>
-          )}
-          {data.bills && data.bills.length > 0 && (
-            <Panel title="Linked bills">
-              <ul className="text-xs divide-y divide-subtle">
-                {data.bills.map((b) => (
-                  <li key={b.id} className="py-1.5">
-                    <Link to={`/accounting/bills/${b.id}`} className="font-mono text-accent">{b.bill_number}</Link>
-                    <span className="ml-2 font-mono tabular-nums">{formatPeso(b.total_amount)}</span>
-                    <Chip variant={b.status === 'paid' ? 'success' : b.status === 'partial' ? 'info' : 'warning'}>{b.status}</Chip>
-                  </li>
-                ))}
-              </ul>
+          {/* Sprint P2 — unified Linked records panel (Procure-to-Pay). */}
+          {((data.goods_receipt_notes?.length ?? 0) > 0 || (data.bills?.length ?? 0) > 0 || data.purchase_request) && (
+            <Panel title="Linked records">
+              <LinkedRecords
+                groups={[
+                  ...(data.purchase_request ? [{
+                    label: 'Source PR',
+                    items: [{
+                      id: data.purchase_request.pr_number,
+                      href: `/purchasing/purchase-requests/${data.purchase_request.id}`,
+                    }],
+                  }] : []),
+                  ...((data.goods_receipt_notes?.length ?? 0) > 0 ? [{
+                    label: 'GRNs',
+                    items: data.goods_receipt_notes!.map((g) => ({
+                      id: g.grn_number,
+                      href: `/inventory/grn/${g.id}`,
+                      meta: formatDate(g.received_date),
+                      chip: {
+                        variant: (g.status === 'accepted' ? 'success'
+                                : g.status === 'pending_qc' ? 'warning'
+                                : g.status === 'rejected' ? 'danger'
+                                : 'info') as 'success' | 'warning' | 'info' | 'danger',
+                        text: g.status.replace(/_/g, ' '),
+                      },
+                    })),
+                  }] : []),
+                  ...((data.bills?.length ?? 0) > 0 ? [{
+                    label: 'Bills',
+                    items: data.bills!.map((b) => ({
+                      id: b.bill_number,
+                      href: `/accounting/bills/${b.id}`,
+                      meta: formatPeso(b.total_amount),
+                      chip: {
+                        variant: (b.status === 'paid' ? 'success'
+                                : b.status === 'partial' ? 'info'
+                                : 'warning') as 'success' | 'info' | 'warning',
+                        text: b.status,
+                      },
+                    })),
+                  }] : []),
+                ]}
+              />
             </Panel>
           )}
         </div>
