@@ -46,9 +46,16 @@ export default function NcrsListPage() {
       key: 'ncr_number',
       header: 'NCR',
       cell: (r) => (
-        <Link to={`/quality/ncrs/${r.id}`} className="font-mono text-accent hover:underline">
-          {r.ncr_number}
-        </Link>
+        <span className="flex items-center gap-2">
+          <Link to={`/quality/ncrs/${r.id}`} className="font-mono text-accent hover:underline">
+            {r.ncr_number}
+          </Link>
+          {r.is_auto_generated && (
+            <span title="Auto-generated from inspection failure">
+              <Chip variant="info">Auto</Chip>
+            </span>
+          )}
+        </span>
       ),
     },
     {
