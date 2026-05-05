@@ -40,8 +40,16 @@ class RecordOutputRequest extends FormRequest
         $validator->after(function ($v) {
             $good   = (int) $this->input('good_count');
             $reject = (int) $this->input('reject_count');
+            
             if ($good + $reject <= 0) {
-                $v->errors()->add('good_count', 'At least one of good_count or reject_count must be positive.');
+                $v->errors()->add('good_count', 'At least one of Good count or Reject count must be greater than zero.');
+            }
+
+            if ($reject > 0) {
+                $defects = $this->input('defects');
+                if (! is_array($defects) || empty($defects)) {
+                    $v->errors()->add('defects', 'You must specify the defect types when the Reject count is greater than zero.');
+                }
             }
         });
     }

@@ -107,7 +107,11 @@ class SalesOrderService
                 $qty          = (float) $item['quantity'];
 
                 // Resolve at delivery_date — that's the date the price applies to.
-                $agreement = $this->prices->resolve($customerId, $productId, $deliveryDate);
+                try {
+                    $agreement = $this->prices->resolve($customerId, $productId, $deliveryDate);
+                } catch (\App\Modules\CRM\Exceptions\NoPriceAgreementException $e) {
+                    throw new \App\Modules\CRM\Exceptions\NoPriceAgreementException("items.{$idx}.product_id");
+                }
                 $unitPrice = (float) $agreement->price;
                 $lineTotal = round($qty * $unitPrice, 2);
 
@@ -162,11 +166,15 @@ class SalesOrderService
             $subtotal = 0.0;
             $newLines = [];
 
-            foreach ($data['items'] as $item) {
+            foreach ($data['items'] as $idx => $item) {
                 $productId    = (int) $item['product_id'];
                 $deliveryDate = Carbon::parse($item['delivery_date']);
                 $qty          = (float) $item['quantity'];
-                $agreement = $this->prices->resolve($customerId, $productId, $deliveryDate);
+                try {
+                    $agreement = $this->prices->resolve($customerId, $productId, $deliveryDate);
+                } catch (\App\Modules\CRM\Exceptions\NoPriceAgreementException $e) {
+                    throw new \App\Modules\CRM\Exceptions\NoPriceAgreementException("items.{$idx}.product_id");
+                }
                 $unitPrice = (float) $agreement->price;
                 $lineTotal = round($qty * $unitPrice, 2);
                 $newLines[] = [

@@ -334,7 +334,7 @@ class InvoiceService
         foreach ($rawItems as $raw) {
             $accountId = HashIdFilter::decode($raw['revenue_account_id'] ?? null, Account::class);
             if (! $accountId) {
-                throw new RuntimeException('Invalid revenue_account_id on invoice item.');
+                throw new RuntimeException('Invalid revenue account selected on invoice item.');
             }
             $qty   = Money::round2((string) $raw['quantity']);
             $price = Money::round2((string) $raw['unit_price']);

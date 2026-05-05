@@ -57,11 +57,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             </span>
           )}
         </div>
-        {error ? (
-          <span id={`${inputId}-error`} className="text-xs text-danger">
-            {error}
-          </span>
-        ) : helper ? (
+        {helper && !error ? (
           <span id={`${inputId}-helper`} className="text-xs text-muted">
             {helper}
           </span>

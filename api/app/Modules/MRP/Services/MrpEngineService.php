@@ -159,6 +159,7 @@ class MrpEngineService
                         'priority' => $priority,
                         'unit'     => $item->unit_of_measure,
                         'estimated_unit_price' => (float) $item->standard_cost,
+                        'name'     => $item->name,
                     ];
 
                     $entry['action']   = 'pr_created';
@@ -188,7 +189,7 @@ class MrpEngineService
                     PurchaseRequestItem::create([
                         'purchase_request_id'  => $pr->id,
                         'item_id'              => $itemId,
-                        'description'          => null,
+                        'description'          => $s['name'],
                         'quantity'             => round($s['net'], 2),
                         'unit'                 => $s['unit'],
                         'estimated_unit_price' => round($s['estimated_unit_price'], 2),

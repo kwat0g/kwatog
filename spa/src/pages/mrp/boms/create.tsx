@@ -16,6 +16,7 @@ import { z } from 'zod';
 import { AxiosError } from 'axios';
 import { Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { onFormInvalid } from '@/lib/formErrors';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -90,7 +91,7 @@ export default function CreateBomPage() {
         Object.entries(e.response.data.errors).forEach(([field, msgs]) => {
           setError(field as any, { type: 'server', message: msgs[0] });
         });
-        toast.error('Please fix the errors below.');
+        toast.error(e.response?.data?.message || 'Validation failed.');
       } else {
         toast.error(e.response?.data?.message ?? 'Failed to save BOM.');
       }
@@ -110,7 +111,7 @@ export default function CreateBomPage() {
     <div>
       <PageHeader title="New BOM" backTo="/mrp/boms" backLabel="BOMs" />
       <form
-        onSubmit={handleSubmit((v) => create.mutate(v))}
+        onSubmit={handleSubmit((v) => create.mutate(v), onFormInvalid<FormValues>())}
         className="max-w-4xl mx-auto px-5 py-6"
       >
         <fieldset className="mb-8">

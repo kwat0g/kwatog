@@ -13,6 +13,7 @@ import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import toast from 'react-hot-toast';
+import { onFormInvalid } from '@/lib/formErrors';
 import type { AxiosError } from 'axios';
 import { inspectionsApi } from '@/api/quality/inspections';
 import { productsApi } from '@/api/crm/products';
@@ -89,7 +90,7 @@ export default function CreateInspectionPage() {
             batch_quantity: Number(v.batch_quantity),
             notes: v.notes,
           })
-        )}
+        , onFormInvalid<FormValues>())}
         className="px-5 py-4 grid grid-cols-3 gap-4"
       >
         <div className="col-span-2 space-y-4">

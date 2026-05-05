@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { onFormInvalid } from '@/lib/formErrors';
 import type { ApiValidationError } from '@/types';
 
 const schema = z.object({
@@ -50,7 +51,7 @@ export default function CreateAssetPage() {
       if (err.response?.status === 422 && err.response.data.errors) {
         Object.entries(err.response.data.errors).forEach(([k, v]) =>
           setError(k as keyof FormValues, { type: 'server', message: v[0] }));
-        toast.error('Please fix the errors below.');
+        toast.error(e.response?.data?.message || 'Validation failed.');
       }
     },
   });
@@ -58,7 +59,7 @@ export default function CreateAssetPage() {
   return (
     <div>
       <PageHeader title="New asset" backTo="/assets" backLabel="Assets" />
-      <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="max-w-3xl mx-auto px-5 py-6">
+      <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-3xl mx-auto px-5 py-6">
         <fieldset className="mb-6">
           <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">Identification</legend>
           <Input label="Name" {...register('name')} error={errors.name?.message} required />

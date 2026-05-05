@@ -43,7 +43,7 @@ export default function EditEmployeePage() {
         Object.entries(e.response.data.errors).forEach(([field, msgs]) => {
           setErrorRef.current?.(field as keyof EmployeeFormValues, msgs[0]);
         });
-        toast.error('Please fix the errors below.');
+        toast.error(e.response?.data?.message || 'Validation failed.');
       } else {
         toast.error('Failed to update employee.');
       }

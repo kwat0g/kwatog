@@ -64,21 +64,36 @@ class WorkOrderOutputService
         $reject = (int) ($data['reject_count'] ?? 0);
         $total  = $good + $reject;
         if ($total <= 0) {
-            throw new RuntimeException('At least one of good_count or reject_count must be positive.');
+            throw new RuntimeException('At least one of Good count or Reject count must be greater than zero.');
         }
 
         $defects = $data['defects'] ?? [];
         $defectSum = 0;
+        $uniqueDefectTypes = [];
+        
         foreach ($defects as $d) {
-            $defectSum += (int) ($d['count'] ?? 0);
+            $count = (int) ($d['count'] ?? 0);
+            if ($count > 0) {
+                $defectSum += $count;
+                $uniqueDefectTypes[] = $d['defect_type_id'];
+            }
         }
-        if ($defectSum > $reject) {
-            throw new RuntimeException("Sum of defect counts ({$defectSum}) cannot exceed reject_count ({$reject}).");
+        
+        if ($reject > 0 && $defectSum !== $reject) {
+            throw new RuntimeException("The total sum of defects ({$defectSum}) must exactly equal the Reject count ({$reject}).");
+        }
+        
+        if (count(array_unique($uniqueDefectTypes)) !== count($uniqueDefectTypes)) {
+            throw new RuntimeException('Duplicate defect types are not allowed.');
         }
 
         $output = DB::transaction(function () use ($wo, $data, $recordedBy, $good, $reject, $total, $defects) {
             // Lock + reload the WO so concurrent recordings don't lose increments.
             $fresh = WorkOrder::lockForUpdate()->find($wo->id);
+
+            if (($fresh->quantity_produced + $total) > $fresh->quantity_target) {
+                throw new RuntimeException("Recording this output would exceed the work order target quantity ({$fresh->quantity_target}).");
+            }
 
             // Generate batch code: {wo}-B{seq}.
             $existing = $fresh->outputs()->count();

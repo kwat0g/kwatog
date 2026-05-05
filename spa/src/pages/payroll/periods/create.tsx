@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { applyServerValidationErrors } from '@/lib/formErrors';
+import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import type { ApiValidationError } from '@/types';
 
 const schema = z.object({
@@ -60,7 +60,7 @@ export default function CreatePayrollPeriodPage() {
   return (
     <div>
       <PageHeader title="New Payroll Period" backTo="/payroll/periods" backLabel="Payroll" />
-      <form onSubmit={handleSubmit(onSubmit)} className="max-w-2xl mx-auto px-5 py-6">
+      <form onSubmit={handleSubmit(onSubmit, onFormInvalid<FormValues>())} className="max-w-2xl mx-auto px-5 py-6">
         <fieldset className="mb-8">
           <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">Schedule</legend>
           <div className="grid grid-cols-2 gap-3">

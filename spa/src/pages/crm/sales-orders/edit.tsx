@@ -15,6 +15,7 @@ import { z } from 'zod';
 import { AxiosError } from 'axios';
 import { Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { onFormInvalid } from '@/lib/formErrors';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
@@ -124,7 +125,7 @@ export default function EditSalesOrderPage() {
         Object.entries(e.response.data.errors).forEach(([field, msgs]) => {
           setError(field as any, { type: 'server', message: msgs[0] });
         });
-        toast.error('Please fix the errors below.');
+        toast.error(e.response?.data?.message || 'Validation failed.');
       } else {
         toast.error(e.response?.data?.message ?? 'Failed to update sales order.');
       }
@@ -171,7 +172,7 @@ export default function EditSalesOrderPage() {
   return (
     <div>
       <PageHeader title={`Edit ${detail.data.so_number}`} backTo={`/crm/sales-orders/${id}`} backLabel="Back to sales order" />
-      <form onSubmit={handleSubmit((v) => update.mutate(v))} className="max-w-4xl mx-auto px-5 py-6">
+      <form onSubmit={handleSubmit((v) => update.mutate(v), onFormInvalid<FormValues>())} className="max-w-4xl mx-auto px-5 py-6">
         <fieldset className="mb-8">
           <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">Order header</legend>
           <div className="grid grid-cols-2 gap-3">

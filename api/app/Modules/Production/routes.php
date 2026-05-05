@@ -14,6 +14,15 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth:sanctum', 'feature:production'])->prefix('production')->group(function () {
 
+    /* ─── Defect types (lookup for output recording) ─── */
+    Route::get('/defect-types', function () {
+        return response()->json([
+            'data' => \App\Modules\Production\Models\DefectType::active()
+                ->orderBy('code')
+                ->get(['id', 'code', 'name', 'description']),
+        ]);
+    })->middleware('permission:production.work_orders.view');
+
     /* ─── Work orders (Task 51) ─── */
     Route::get('/work-orders',                       [WorkOrderController::class, 'index']) ->middleware('permission:production.work_orders.view');
     Route::get('/work-orders/{workOrder}',           [WorkOrderController::class, 'show'])  ->middleware('permission:production.work_orders.view');

@@ -48,9 +48,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
             <ChevronDown size={14} />
           </span>
         </div>
-        {error ? (
-          <span className="text-xs text-danger">{error}</span>
-        ) : helper ? (
+        {helper && !error ? (
           <span className="text-xs text-muted">{helper}</span>
         ) : null}
       </div>

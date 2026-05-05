@@ -171,7 +171,7 @@ class DTRComputationService
             if ($shift['is_night_shift']) {
                 $timeOut = $timeOut->addDay();
             } else {
-                throw new InvalidArgumentException("time_out ({$timeOut}) is not after time_in ({$timeIn}).");
+                throw new InvalidArgumentException("Time out ({$timeOut}) must be after time in ({$timeIn}).");
             }
         }
 

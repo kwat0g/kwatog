@@ -34,7 +34,29 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           position="top-right"
           toastOptions={{
             duration: 4000,
-            style: { fontSize: '13px', borderRadius: '6px' },
+            style: {
+              fontSize: '13px',
+              borderRadius: '6px',
+              padding: '10px 14px',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+            },
+            success: {
+              style: {
+                background: 'var(--success-bg)',
+                color: 'var(--success-fg)',
+                border: '1px solid var(--success)',
+              },
+              iconTheme: { primary: 'var(--success)', secondary: 'var(--success-bg)' },
+            },
+            error: {
+              style: {
+                background: 'var(--danger-bg)',
+                color: 'var(--danger-fg)',
+                border: '1px solid var(--danger)',
+              },
+              iconTheme: { primary: 'var(--danger)', secondary: 'var(--danger-bg)' },
+              duration: 5000,
+            },
           }}
         />
       </BrowserRouter>

@@ -15,7 +15,7 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { applyServerValidationErrors } from '@/lib/formErrors';
+import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import type { CreateComplaintData, ComplaintSeverity } from '@/types/crm';
 
 const schema = z.object({
@@ -66,7 +66,7 @@ export default function CreateComplaintPage() {
     onError: (e: AxiosError<{ message?: string; errors?: Record<string, string[]> }>) => {
       if (e.response?.data?.errors) {
         applyServerValidationErrors(e.response.data.errors, setError);
-        toast.error('Please fix the errors below.');
+        toast.error(e.response?.data?.message || 'Validation failed.');
       } else {
         toast.error(e.response?.data?.message ?? 'Failed to open complaint');
       }
@@ -87,7 +87,7 @@ export default function CreateComplaintPage() {
             description: v.description,
             affected_quantity: Number(v.affected_quantity),
           })
-        )}
+        , onFormInvalid<FormValues>())}
         className="px-5 py-4 max-w-3xl"
       >
         <div className="space-y-4">

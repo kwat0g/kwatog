@@ -84,10 +84,10 @@ class ItemService
             // Forbid changing item_type or UOM if movements exist.
             if ($item->movements()->exists()) {
                 if (isset($data['item_type']) && $data['item_type'] !== $item->item_type->value) {
-                    throw new RuntimeException('Cannot change item_type after movements exist.');
+                    throw new RuntimeException('Cannot change item type after inventory movements exist.');
                 }
                 if (isset($data['unit_of_measure']) && $data['unit_of_measure'] !== $item->unit_of_measure) {
-                    throw new RuntimeException('Cannot change unit_of_measure after movements exist.');
+                    throw new RuntimeException('Cannot change unit of measure after inventory movements exist.');
                 }
             }
             $item->update($data);

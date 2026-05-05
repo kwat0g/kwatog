@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { applyServerValidationErrors } from '@/lib/formErrors';
+import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import type { ApiValidationError } from '@/types';
 
 const schema = z.object({
@@ -63,7 +63,7 @@ export default function CreatePayrollAdjustmentPage() {
   return (
     <div>
       <PageHeader title="Raise Payroll Adjustment" backTo="/payroll/adjustments" backLabel="Adjustments" />
-      <form onSubmit={handleSubmit(onSubmit)} className="max-w-2xl mx-auto px-5 py-6">
+      <form onSubmit={handleSubmit(onSubmit, onFormInvalid<FormValues>())} className="max-w-2xl mx-auto px-5 py-6">
         {empName && (
           <div className="mb-4 p-3 bg-surface border border-default rounded-md text-xs">
             <div className="text-muted uppercase tracking-wider mb-1">Source payroll</div>

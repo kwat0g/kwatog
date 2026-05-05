@@ -4,47 +4,60 @@ import type { FieldErrors, FieldValues, UseFormSetError, Path } from 'react-hook
 import type { ApiValidationError } from '@/types';
 
 /**
- * Build a `react-hook-form` `handleSubmit` error callback that fires a single
- * toast naming the failing fields. Use as the second argument to
- * `handleSubmit(onValid, onInvalid)` so the user sees feedback even when
- * errors are below the fold.
- *
- * Pass a `labels` map for human-friendly names (`{ first_name: 'First name' }`).
- * If the map is omitted, only the count is reported.
- *
- * The toast lists up to MAX_LISTED field names; anything beyond that is
- * collapsed into "…and N more".
+ * Recursively collect all error messages from a FieldErrors tree.
+ * Handles nested objects (like `items.0.product_id`) and array-level
+ * root messages (like `defects.root.message`).
  */
-const MAX_LISTED = 5;
+function collectMessages(errors: Record<string, any>): string[] {
+  const msgs: string[] = [];
+
+  for (const val of Object.values(errors)) {
+    if (!val) continue;
+
+    // Leaf error: { message: "..." }
+    if (typeof val.message === 'string' && val.message) {
+      msgs.push(val.message);
+      continue;
+    }
+
+    // Array root error: { root: { message: "..." } }
+    if (val.root && typeof val.root.message === 'string' && val.root.message) {
+      msgs.push(val.root.message);
+    }
+
+    // Recurse into nested objects / array items
+    if (typeof val === 'object') {
+      msgs.push(...collectMessages(val));
+    }
+  }
+
+  // Deduplicate
+  return [...new Set(msgs)];
+}
 
 export function onFormInvalid<T extends FieldValues>(
-  labels?: Partial<Record<keyof T & string, string>>,
+  _labels?: Partial<Record<keyof T & string, string>>,
 ): (errors: FieldErrors<T>) => void {
   return (errors) => {
-    const keys = Object.keys(errors) as Array<keyof T & string>;
-    if (keys.length === 0) return;
+    const messages = collectMessages(errors as Record<string, any>);
 
-    if (labels) {
-      const names = keys.map((k) => labels[k] ?? String(k));
-      const head = names.slice(0, MAX_LISTED).join(', ');
-      const more = names.length > MAX_LISTED ? ` and ${names.length - MAX_LISTED} more` : '';
-      toast.error(
-        names.length === 1
-          ? `Please fix: ${head}.`
-          : `Please fix ${names.length} fields — ${head}${more}.`,
-        { duration: 5000 },
-      );
+    if (messages.length === 0) {
+      toast.error('Please fix the highlighted fields before submitting.', { duration: 5000 });
       return;
     }
 
-    toast.error(
-      keys.length === 1
-        ? 'Please fix the highlighted field before submitting.'
-        : `Please fix ${keys.length} fields before submitting.`,
-      { duration: 5000 },
-    );
+    if (messages.length === 1) {
+      toast.error(messages[0], { duration: 5000 });
+      return;
+    }
+
+    // Multiple: show up to 3 specific messages, then "and N more"
+    const head = messages.slice(0, 3);
+    const more = messages.length > 3 ? `\n• …and ${messages.length - 3} more` : '';
+    toast.error(`Please fix the following:\n• ${head.join('\n• ')}${more}`, { duration: 6000 });
   };
 }
+
 
 /**
  * Map a Laravel 422 response into RHF `setError` calls and surface a toast.

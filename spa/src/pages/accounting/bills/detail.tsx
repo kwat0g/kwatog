@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
+import { onFormInvalid } from '@/lib/formErrors';
 import { Printer, Receipt, Ban } from 'lucide-react';
 import { billsApi } from '@/api/accounting/bills';
 import { accountsApi } from '@/api/accounting/accounts';
@@ -215,7 +216,7 @@ export default function BillDetailPage() {
       </div>
 
       <Modal isOpen={showPay} onClose={() => setShowPay(false)} title={`Record payment for ${bill.bill_number}`} size="sm">
-        <form onSubmit={handleSubmit((d) => payMut.mutate(d))} className="space-y-3">
+        <form onSubmit={handleSubmit((d) => payMut.mutate(d), onFormInvalid<PaymentFormValues>())} className="space-y-3">
           <Select label="Cash account" required {...register('cash_account_id')} error={errors.cash_account_id?.message}>
             <option value="">— Select —</option>
             {cashAccts.map((a) => <option key={a.id} value={a.id}>{a.code} — {a.name}</option>)}

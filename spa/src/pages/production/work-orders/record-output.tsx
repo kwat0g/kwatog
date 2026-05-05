@@ -3,15 +3,16 @@
  * Subscribes to production.wo.{id} for live cumulative updates while the
  * supervisor is filling the form.
  */
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useFieldArray, useForm } from 'react-hook-form';
+import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { AxiosError } from 'axios';
 import { Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { onFormInvalid } from '@/lib/formErrors';
 import { workOrdersApi } from '@/api/production/workOrders';
 import { client } from '@/api/client';
 import { Button } from '@/components/ui/Button';
@@ -24,8 +25,7 @@ import { useEcho } from '@/hooks/useEcho';
 import type { DefectType } from '@/types/production';
 
 const schema = z.object({
-  good_count:   z.string().regex(/^\d+$/, 'Use a non-negative integer'),
-  reject_count: z.string().regex(/^\d+$/, 'Use a non-negative integer'),
+  good_count:   z.string().regex(/^\d+$/, 'Good count must be a non-negative integer'),
   shift:        z.string().optional().or(z.literal('')),
   remarks:      z.string().max(500).optional().or(z.literal('')),
   defects:      z.array(z.object({
@@ -69,17 +69,25 @@ export default function RecordOutputPage() {
 
   const { register, control, handleSubmit, setError, reset, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { good_count: '0', reject_count: '0', shift: '', remarks: '', defects: [] },
+    defaultValues: { good_count: '0', shift: '', remarks: '', defects: [] },
   });
   const { fields, append, remove } = useFieldArray({ control, name: 'defects' });
+
+  // Live-compute reject count from defect rows.
+  const watchedDefects = useWatch({ control, name: 'defects' });
+  const rejectCount = useMemo(
+    () => (watchedDefects ?? []).reduce((sum, d) => sum + Number(d?.count || 0), 0),
+    [watchedDefects],
+  );
 
   const submit = useMutation({
     mutationFn: async (values: FormValues) => {
       // Generate a UUID-ish idempotency key.
       const key = `${id}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      const computedReject = values.defects.reduce((sum, d) => sum + Number(d.count || 0), 0);
       return workOrdersApi.recordOutput(id!, {
         good_count: Number(values.good_count),
-        reject_count: Number(values.reject_count),
+        reject_count: computedReject,
         shift: values.shift || undefined,
         remarks: values.remarks || undefined,
         defects: values.defects.map((d) => ({ defect_type_id: d.defect_type_id, count: Number(d.count) })),
@@ -87,14 +95,15 @@ export default function RecordOutputPage() {
     },
     onSuccess: (output) => {
       toast.success(`Output ${output.batch_code ?? ''} recorded.`);
-      reset({ good_count: '0', reject_count: '0', shift: '', remarks: '', defects: [] });
+      reset({ good_count: '0', shift: '', remarks: '', defects: [] });
+      navigate(`/production/work-orders/${id}`);
     },
     onError: (e: AxiosError<{ message?: string; errors?: Record<string, string[]> }>) => {
       if (e.response?.status === 422 && e.response.data.errors) {
         Object.entries(e.response.data.errors).forEach(([field, msgs]) => {
           setError(field as never, { type: 'server', message: msgs[0] });
         });
-        toast.error('Please fix the errors below.');
+        toast.error(e.response?.data?.message || 'Validation failed.');
       } else {
         toast.error(e.response?.data?.message ?? 'Failed to record output.');
       }
@@ -117,13 +126,17 @@ export default function RecordOutputPage() {
       />
       <div className="px-5 py-4 grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <form onSubmit={handleSubmit((v) => submit.mutate(v))}>
+          <form onSubmit={handleSubmit((v) => submit.mutate(v), onFormInvalid<FormValues>())}>
             <Panel title="New recording">
               <div className="grid grid-cols-2 gap-3">
                 <Input label="Good count" required type="number" min={0} {...register('good_count')}
                   error={errors.good_count?.message} className="font-mono text-right" />
-                <Input label="Reject count" required type="number" min={0} {...register('reject_count')}
-                  error={errors.reject_count?.message} className="font-mono text-right" />
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs text-muted font-medium">Reject count <span className="text-2xs">(auto-calculated)</span></span>
+                  <div className="flex items-center h-8 px-3 rounded-md border border-default bg-elevated text-sm font-mono text-right tabular-nums">
+                    {rejectCount}
+                  </div>
+                </div>
                 <Select label="Shift" {...register('shift')}>
                   <option value="">—</option>
                   <option value="day">Day</option>
@@ -143,7 +156,7 @@ export default function RecordOutputPage() {
                     Add defect
                   </Button>
                 </div>
-                {fields.length === 0 && <div className="text-xs text-muted">No defect breakdown — sum of defect counts must equal reject_count.</div>}
+                {fields.length === 0 && <div className="text-xs text-muted">No rejects — click "Add defect" to classify rejected units.</div>}
                 {fields.map((f, i) => (
                   <div key={f.id} className="flex items-end gap-2 mt-2">
                     <div className="flex-1">

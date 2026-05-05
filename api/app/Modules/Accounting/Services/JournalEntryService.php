@@ -262,7 +262,7 @@ class JournalEntryService
                 $accountId = HashIdFilter::decode((string) $accountId, Account::class);
             }
             if (! $accountId) {
-                throw new RuntimeException('Invalid account_id in journal entry line.');
+                throw new RuntimeException('Invalid account selected in journal entry line.');
             }
 
             $debit  = Money::round2((string) ($raw['debit']  ?? '0'));

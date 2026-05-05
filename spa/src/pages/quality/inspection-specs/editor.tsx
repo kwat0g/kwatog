@@ -20,6 +20,7 @@ import { z } from 'zod';
 import { AxiosError } from 'axios';
 import { Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { onFormInvalid } from '@/lib/formErrors';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -140,7 +141,7 @@ export default function InspectionSpecEditorPage() {
         Object.entries(e.response.data.errors).forEach(([field, msgs]) => {
           setError(field as any, { type: 'server', message: msgs[0] });
         });
-        toast.error('Please fix the errors below.');
+        toast.error(e.response?.data?.message || 'Validation failed.');
       } else {
         toast.error(e.response?.data?.message ?? 'Failed to save spec.');
       }
@@ -215,7 +216,7 @@ export default function InspectionSpecEditorPage() {
         backLabel="Inspection specs"
       />
       <form
-        onSubmit={handleSubmit((v) => upsert.mutate(v))}
+        onSubmit={handleSubmit((v) => upsert.mutate(v), onFormInvalid<FormValues>())}
         className="max-w-5xl mx-auto px-5 py-6"
       >
         <input type="hidden" {...register('product_id')} value={productId} />

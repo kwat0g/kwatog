@@ -312,7 +312,7 @@ class RolePermissionSeeder extends Seeder
                 'description' => 'Production Planning & Control — owns the schedule and BOMs.',
                 'permissions' => array_merge(
                     $this->module('mrp'),
-                    ['production.view', 'production.wo.create', 'production.wo.confirm',
+                    ['production.view', 'production.work_orders.view', 'production.wo.create', 'production.wo.confirm',
                      'dashboard.ppc.view', 'maintenance.view', 'assets.view',
                      'search.global', 'notifications.preferences.manage'],
                 ),

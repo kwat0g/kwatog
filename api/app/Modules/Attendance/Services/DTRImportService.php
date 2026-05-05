@@ -57,7 +57,7 @@ class DTRImportService
                 $timeOut = trim((string) ($row[$idx['time_out']] ?? ''));
 
                 if ($empNo === '' || $dateStr === '') {
-                    throw new \RuntimeException('employee_no and date are required.');
+                    throw new \RuntimeException('Employee number and date are required.');
                 }
 
                 if (! isset($cache[$empNo])) {

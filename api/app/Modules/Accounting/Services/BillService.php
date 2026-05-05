@@ -362,7 +362,7 @@ class BillService
         foreach ($rawItems as $raw) {
             $accountId = HashIdFilter::decode($raw['expense_account_id'] ?? null, Account::class);
             if (! $accountId) {
-                throw new RuntimeException('Invalid expense_account_id on bill item.');
+                throw new RuntimeException('Invalid expense account selected on bill item.');
             }
 
             $qty   = Money::round2((string) $raw['quantity']);

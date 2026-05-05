@@ -62,7 +62,7 @@ export default function BulkAssignShiftPage() {
         Object.entries(e.response.data.errors).forEach(([f, msgs]) =>
           setError(f as keyof FormValues, { type: 'server', message: msgs[0] }),
         );
-        toast.error('Please fix the errors below.');
+        toast.error(e.response?.data?.message || 'Validation failed.');
       } else {
         toast.error('Failed to assign shifts.');
       }

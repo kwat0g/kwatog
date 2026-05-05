@@ -11,6 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import toast from 'react-hot-toast';
+import { onFormInvalid } from '@/lib/formErrors';
 import type { AxiosError } from 'axios';
 import { ncrsApi } from '@/api/quality/ncrs';
 import { productsApi } from '@/api/crm/products';
@@ -76,7 +77,7 @@ export default function CreateNcrPage() {
             defect_description: v.defect_description,
             affected_quantity: Number(v.affected_quantity),
           })
-        )}
+        , onFormInvalid<FormValues>())}
         className="px-5 py-4"
       >
         <div className="space-y-4 max-w-3xl">

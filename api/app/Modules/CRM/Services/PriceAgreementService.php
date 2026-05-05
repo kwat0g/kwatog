@@ -121,7 +121,7 @@ class PriceAgreementService
         ?int $exceptId = null,
     ): void {
         if ($from > $to) {
-            throw new RuntimeException('effective_from must be on or before effective_to.');
+            throw new RuntimeException('The effective from date must be on or before the effective to date.');
         }
         $q = PriceAgreement::query()
             ->where('product_id', $productId)

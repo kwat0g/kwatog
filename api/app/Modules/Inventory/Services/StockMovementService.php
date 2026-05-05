@@ -150,7 +150,7 @@ class StockMovementService
 
         if ($in->type === StockMovementType::Transfer) {
             if (! $hasFrom || ! $hasTo) {
-                throw new InvalidMovementException('Transfer requires both from_location_id and to_location_id.');
+                throw new InvalidMovementException('Transfer requires both a source and destination location.');
             }
             if ($in->fromLocationId === $in->toLocationId) {
                 throw new InvalidMovementException('Transfer source and destination must differ.');
@@ -159,10 +159,10 @@ class StockMovementService
         }
 
         if ($in->type->isReceipt() && ! $hasTo) {
-            throw new InvalidMovementException("{$in->type->value} requires to_location_id.");
+            throw new InvalidMovementException("{$in->type->value} requires a destination location.");
         }
-        if ($in->type->isIssue() && ! $hasFrom) {
-            throw new InvalidMovementException("{$in->type->value} requires from_location_id.");
+        if (in_array($in->type, [StockMovementType::MaterialIssue, StockMovementType::AdjustmentOut, StockMovementType::Scrap]) && ! $in->fromLocationId) {
+            throw new InvalidMovementException("{$in->type->value} requires a source location.");
         }
     }
 
