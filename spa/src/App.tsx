@@ -21,6 +21,9 @@ const RolePermissionsPage = lazy(() => import('@/pages/admin/roles/permissions')
 const SettingsPage = lazy(() => import('@/pages/admin/settings'));
 const AuditLogsPage = lazy(() => import('@/pages/admin/audit-logs'));
 
+// Alerts (Task A2)
+const AlertsListPage = lazy(() => import('@/pages/alerts'));
+
 // HR (Sprint 2 — Tasks 13/14/15)
 const DepartmentsPage = lazy(() => import('@/pages/hr/departments'));
 const PositionsPage = lazy(() => import('@/pages/hr/positions'));
@@ -378,6 +381,14 @@ export default function App() {
             element={
               <PermissionGuard permission="admin.audit_logs.view">
                 <AuditLogsPage />
+              </PermissionGuard>
+            }
+          />
+          <Route
+            path="/alerts"
+            element={
+              <PermissionGuard permission="alerts.view">
+                <AlertsListPage />
               </PermissionGuard>
             }
           />

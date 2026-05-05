@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import {
   Activity,
+  AlertTriangle,
   LayoutDashboard,
   Users,
   Clock4,
@@ -62,6 +63,7 @@ const SECTIONS: NavSection[] = [
     label: 'Overview',
     items: [
       { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { to: '/alerts',    label: 'Alerts',    icon: AlertTriangle, permission: 'alerts.view' },
     ],
   },
   {
