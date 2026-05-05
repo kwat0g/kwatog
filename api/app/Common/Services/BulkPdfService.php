@@ -34,6 +34,7 @@ class BulkPdfService
      */
     private const RENDERERS = [
         'purchase_order'   => 'pdf.purchase-order',
+        'purchase_request' => 'pdf.purchase-request', // Sprint P9
         'bill'             => 'pdf.bill',
         'invoice'          => 'pdf.invoice',
     ];

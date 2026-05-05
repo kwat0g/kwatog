@@ -13,6 +13,8 @@ Route::middleware(['auth:sanctum', 'feature:purchasing'])->prefix('purchasing')-
     /* ─── Purchase Requests ─── */
     Route::get('/purchase-requests',       [PurchaseRequestController::class, 'index'])->middleware('permission:purchasing.view');
     Route::get('/purchase-requests/{purchaseRequest}', [PurchaseRequestController::class, 'show'])->middleware('permission:purchasing.view');
+    // Sprint P9 — printable PR with 4-tier approval signature block.
+    Route::get('/purchase-requests/{purchaseRequest}/pdf', [PurchaseRequestController::class, 'printPdf'])->middleware('permission:purchasing.view');
     Route::post('/purchase-requests',      [PurchaseRequestController::class, 'store'])->middleware('permission:purchasing.pr.create');
     Route::put('/purchase-requests/{purchaseRequest}', [PurchaseRequestController::class, 'update'])->middleware('permission:purchasing.pr.create');
     Route::delete('/purchase-requests/{purchaseRequest}', [PurchaseRequestController::class, 'destroy'])->middleware('permission:purchasing.pr.create');

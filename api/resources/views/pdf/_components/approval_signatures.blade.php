@@ -1,25 +1,44 @@
-{{-- Sprint 8 — Task 76. Reusable approval signature block.
+{{-- Sprint P9 — reusable approval signature block.
 
-     Expects $approvalRecords: array of:
-       [['role' => 'Prepared by', 'name' => 'Juan Cruz',  'signed_at' => '2026-04-20'],
-        ['role' => 'Noted by',    'name' => 'Maria Reyes','signed_at' => '2026-04-20'],
-        ['role' => 'Checked by',  'name' => 'Pedro Tan',  'signed_at' => '2026-04-21'],
-        ['role' => 'Approved by', 'name' => 'Anna Diaz',  'signed_at' => '2026-04-21']]
+     $approvals: array of:
+       [
+         'role'      => 'Prepared by' | 'Noted by' | 'Checked by'
+                        | 'Reviewed by' | 'Approved by',
+         'name'      => 'Maria Reyes'  // null/empty for pending steps
+         'signed_at' => '2026-04-20'   // null/empty for pending steps
+       ]
 
-     Designed for DomPDF; minimal CSS to keep render predictable.
---}}
-<table class="approval-signatures" style="width:100%; margin-top:30px; border-collapse:collapse; font-size:9pt;">
+     Approved tiers render the typed name + date.
+     Pending tiers leave the line blank for a physical signature.
+
+     Designed for DomPDF; minimal CSS to keep render predictable. --}}
+@php($_approvals = $approvals ?? $approvalRecords ?? [])
+<table class="approval-signatures"
+       style="width:100%; margin-top:30px; border-collapse:collapse; font-size:9pt;">
     <tr>
-        @foreach ($approvalRecords ?? [] as $rec)
-            <td style="width:25%; vertical-align:bottom; padding:0 8px;">
-                <div style="height:32px; border-bottom:1px solid #444;">&nbsp;</div>
-                <div style="margin-top:4px; text-align:center; font-weight:500;">
-                    {{ $rec['name'] ?? '—' }}
+        @foreach ($_approvals as $rec)
+            <td style="width:20%; vertical-align:bottom; padding:0 6px;">
+                <div style="height:32px; border-bottom:1px solid #444;">
+                    @if (! empty($rec['name']))
+                        <div style="text-align:center; padding-top:18px; font-size:9pt;">
+                            {{ $rec['name'] }}
+                        </div>
+                    @else
+                        &nbsp;
+                    @endif
                 </div>
-                <div style="text-align:center; color:#777; font-size:8pt;">
+                <div style="margin-top:4px; text-align:center; font-size:8pt; color:#444; text-transform:uppercase; letter-spacing:0.04em;">
                     {{ $rec['role'] ?? '' }}
-                    @if (! empty($rec['signed_at'])) · {{ $rec['signed_at'] }} @endif
                 </div>
+                @if (! empty($rec['signed_at']))
+                    <div style="text-align:center; font-size:8pt; color:#777;">
+                        {{ $rec['signed_at'] }}
+                    </div>
+                @else
+                    <div style="text-align:center; font-size:8pt; color:#bbb;">
+                        Date: ____________
+                    </div>
+                @endif
             </td>
         @endforeach
     </tr>
