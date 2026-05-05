@@ -30,6 +30,7 @@ class PurchaseRequestService
             'requester:id,name,role_id',
             'department:id,name,code',
             'items.item:id,code,name,unit_of_measure',
+            'approvalRecords',
         ]);
 
         if (! empty($filters['status']))   $q->where('status', $filters['status']);

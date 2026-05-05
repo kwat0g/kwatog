@@ -33,6 +33,9 @@ class EmployeeLoanResource extends JsonResource
             'purpose'                => $this->purpose,
             'status'                 => $this->status?->value,
             'is_final_pay_deduction' => (bool) $this->is_final_pay_deduction,
+            'has_overdue_approval'   => $this->relationLoaded('approvalRecords')
+                ? $this->approvalRecords->contains(fn ($r) => $r->action === 'pending' && $r->is_overdue)
+                : false,
             'payments'               => LoanPaymentResource::collection($this->whenLoaded('payments')),
             'approval_records'       => $this->whenLoaded('approvalRecords', fn () => $this->approvalRecords->map(fn ($r) => [
                 'step_order'    => (int) $r->step_order,

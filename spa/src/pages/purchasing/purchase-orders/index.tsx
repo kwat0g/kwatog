@@ -49,7 +49,14 @@ export default function PurchaseOrdersListPage() {
       </span>
     ) },
     { key: 'total', header: 'Total', align: 'right', cell: (r) => <NumCell className="font-medium">{formatPeso(r.total_amount)}</NumCell> },
-    { key: 'status', header: 'Status', cell: (r) => <Chip variant={variant[r.status]}>{r.status.replace(/_/g, ' ')}</Chip> },
+    { key: 'status', header: 'Status', cell: (r) => (
+      <span className="flex items-center gap-1.5">
+        <Chip variant={variant[r.status]}>{r.status.replace(/_/g, ' ')}</Chip>
+        {r.has_overdue_approval && (
+          <span title="Approval pending more than 24 hours"><Chip variant="danger">overdue</Chip></span>
+        )}
+      </span>
+    ) },
     { key: 'rcv', header: 'Received', align: 'right', cell: (r) => <NumCell>{r.quantity_received_pct.toFixed(0)}%</NumCell> },
   ];
 

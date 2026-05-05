@@ -24,6 +24,9 @@ class PurchaseOrderResource extends JsonResource
             'requires_vp_approval'   => (bool) $this->requires_vp_approval,
             'is_auto_generated'      => (bool) $this->is_auto_generated,
             'current_approval_step'  => (int) $this->current_approval_step,
+            'has_overdue_approval'   => $this->relationLoaded('approvalRecords')
+                ? $this->approvalRecords->contains(fn ($r) => $r->action === 'pending' && $r->is_overdue)
+                : false,
             'approved_at'            => optional($this->approved_at)->toIso8601String(),
             'sent_to_supplier_at'    => optional($this->sent_to_supplier_at)->toIso8601String(),
             'remarks'                => $this->remarks,
