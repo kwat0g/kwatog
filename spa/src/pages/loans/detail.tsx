@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { ChainHeader } from '@/components/chain';
-import type { ChainStep } from '@/types/chain';
+import { buildLoanChain } from '@/lib/chains';
 import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
@@ -53,15 +53,7 @@ export default function LoanDetailPage() {
 
   const isPending = loan.status === 'pending';
 
-  const totalPaid = parseFloat(loan.total_paid ?? '0');
-  const balance = parseFloat(loan.balance ?? '0');
-  const loanChain: ChainStep[] = [
-    { key: 'submitted', label: 'Submitted', state: 'done', date: loan.created_at?.slice(0, 10) },
-    { key: 'approved',  label: 'Approved',  state: ['active', 'paid'].includes(loan.status) ? 'done' : loan.status === 'pending' ? 'active' : 'pending', date: loan.approved_at?.slice(0, 10) },
-    { key: 'disbursed', label: 'Disbursed', state: ['active', 'paid'].includes(loan.status) ? 'done' : 'pending', date: loan.start_date ?? undefined },
-    { key: 'repaying',  label: 'Repaying',  state: loan.status === 'paid' ? 'done' : loan.status === 'active' && totalPaid > 0 ? 'active' : 'pending' },
-    { key: 'settled',   label: 'Settled',   state: loan.status === 'paid' || balance <= 0 ? 'done' : 'pending', date: loan.end_date ?? undefined },
-  ];
+  const loanChain = buildLoanChain(loan);
   const remainingPercent = parseFloat(loan.principal) > 0
     ? Math.min(100, (parseFloat(loan.total_paid) / parseFloat(loan.principal)) * 100)
     : 0;

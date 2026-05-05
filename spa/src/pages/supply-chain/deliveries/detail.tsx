@@ -14,6 +14,7 @@ import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { ChainHeader } from '@/components/chain/ChainHeader';
 import { LinkedRecords } from '@/components/chain/LinkedRecords';
+import { buildDeliveryO2cChain } from '@/lib/chains';
 import { usePermission } from '@/hooks/usePermission';
 import type { DeliveryStatus } from '@/types/supplyChain';
 
@@ -132,19 +133,9 @@ export default function DeliveryDetailPage() {
         }
       />
 
-      {/* Sprint 7 audit fix: chain visualization (Order-to-Cash). */}
+      {/* P1 — Order-to-Cash chain anchored on the Delivery record. */}
       <div className="px-5 py-3 border-b border-default">
-        <ChainHeader
-          steps={[
-            { key: 'order',   label: 'Order',         state: 'done' },
-            { key: 'mrp',     label: 'MRP planned',   state: 'done' },
-            { key: 'wo',      label: 'In production', state: 'done' },
-            { key: 'qc',      label: 'QC outgoing',   state: 'done' },
-            { key: 'deliver', label: 'Delivered',     state: data.status === 'confirmed' ? 'done' : data.status === 'cancelled' ? 'pending' : 'active' },
-            { key: 'invoice', label: 'Invoiced',      state: data.invoice ? (data.status === 'confirmed' ? 'done' : 'active') : 'pending' },
-            { key: 'collect', label: 'Collected',     state: 'pending' },
-          ]}
-        />
+        <ChainHeader steps={buildDeliveryO2cChain(data)} />
       </div>
 
       <div className="px-5 grid grid-cols-3 gap-4">
