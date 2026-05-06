@@ -13,7 +13,6 @@ use App\Modules\HR\Models\Position;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
-use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 /**
@@ -41,17 +40,6 @@ class UserInviteTest extends TestCase
     {
         parent::setUp();
         $this->seed(RolePermissionSeeder::class);
-    }
-
-    /**
-     * The API uses Sanctum with stateful cookies; tests need
-     * `Sanctum::actingAs(...)` instead of the default `actingAs($user)`
-     * which only sets the `web` guard.
-     */
-    private function as(User $user): static
-    {
-        Sanctum::actingAs($user);
-        return $this;
     }
 
     private function makeHrUser(): User
@@ -121,7 +109,7 @@ class UserInviteTest extends TestCase
         $emp   = $this->makeEmployee();
         $role  = Role::where('slug', 'employee')->firstOrFail();
 
-        $resp = $this->as($admin)->postJson('/api/v1/auth/invites', [
+        $resp = $this->actingAs($admin)->postJson('/api/v1/auth/invites', [
             'employee_id' => $emp->hash_id,
             'role_id'     => $role->hash_id,
             'email'       => 'jane.portal@example.test',
@@ -155,7 +143,7 @@ class UserInviteTest extends TestCase
             'employee_id' => $emp->id,
         ]);
 
-        $this->as($admin)
+        $this->actingAs($admin)
             ->postJson('/api/v1/auth/invites', [
                 'employee_id' => $emp->hash_id,
                 'role_id'     => $role->hash_id,
@@ -170,7 +158,7 @@ class UserInviteTest extends TestCase
         $u   = $this->makeNonHrUser();
         $emp = $this->makeEmployee();
 
-        $this->as($u)
+        $this->actingAs($u)
             ->postJson('/api/v1/auth/invites', [
                 'employee_id' => $emp->hash_id,
                 'email'       => 'x@x.test',
@@ -184,7 +172,7 @@ class UserInviteTest extends TestCase
         $role  = Role::where('slug', 'employee')->firstOrFail();
         $emp   = $this->makeEmployee();
 
-        $this->as($admin)
+        $this->actingAs($admin)
             ->postJson('/api/v1/auth/invites', [
                 'employee_id' => $emp->hash_id,
                 'role_id'     => $role->hash_id,
@@ -219,7 +207,7 @@ class UserInviteTest extends TestCase
         $defaultRole = Role::where('slug', 'employee')->firstOrFail();
         $emp         = $this->makeEmployee($defaultRole->id);
 
-        $this->as($admin)
+        $this->actingAs($admin)
             ->postJson('/api/v1/auth/invites', [
                 'employee_id' => $emp->hash_id,
                 'email'       => 'jane.fallback@example.test',
@@ -248,7 +236,7 @@ class UserInviteTest extends TestCase
         $role  = Role::where('slug', 'employee')->firstOrFail();
         $emp   = $this->makeEmployee();
 
-        $this->as($admin)
+        $this->actingAs($admin)
             ->postJson('/api/v1/auth/invites', [
                 'employee_id' => $emp->hash_id,
                 'role_id'     => $role->hash_id,
@@ -277,7 +265,7 @@ class UserInviteTest extends TestCase
         $role  = Role::where('slug', 'employee')->firstOrFail();
         $emp   = $this->makeEmployee();
 
-        $this->as($admin)
+        $this->actingAs($admin)
             ->postJson('/api/v1/auth/invites', [
                 'employee_id' => $emp->hash_id,
                 'role_id'     => $role->hash_id,
@@ -309,7 +297,7 @@ class UserInviteTest extends TestCase
         $role  = Role::where('slug', 'employee')->firstOrFail();
         $emp   = $this->makeEmployee();
 
-        $this->as($admin)
+        $this->actingAs($admin)
             ->postJson('/api/v1/auth/invites', [
                 'employee_id' => $emp->hash_id,
                 'role_id'     => $role->hash_id,
@@ -319,7 +307,7 @@ class UserInviteTest extends TestCase
 
         $invite = UserInvite::where('email', 'revoke@example.test')->firstOrFail();
 
-        $this->as($admin)
+        $this->actingAs($admin)
             ->deleteJson('/api/v1/auth/invites/'.$invite->hash_id)
             ->assertNoContent();
 
@@ -341,7 +329,7 @@ class UserInviteTest extends TestCase
         $emp3 = $this->makeEmployee(null, 'c@example.test');
 
         foreach ([['pending@x.test', $emp1], ['used@x.test', $emp2], ['revoked@x.test', $emp3]] as [$email, $emp]) {
-            $this->as($admin)
+            $this->actingAs($admin)
                 ->postJson('/api/v1/auth/invites', [
                     'employee_id' => $emp->hash_id,
                     'role_id'     => $role->hash_id,
@@ -353,11 +341,11 @@ class UserInviteTest extends TestCase
         UserInvite::where('email', 'used@x.test')->update(['used_at' => now()]);
         // Revoke another.
         $revoked = UserInvite::where('email', 'revoked@x.test')->firstOrFail();
-        $this->as($admin)
+        $this->actingAs($admin)
             ->deleteJson('/api/v1/auth/invites/'.$revoked->hash_id)
             ->assertNoContent();
 
-        $resp = $this->as($admin)
+        $resp = $this->actingAs($admin)
             ->getJson('/api/v1/auth/invites?status=pending')
             ->assertOk();
 
