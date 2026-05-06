@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Common\Controllers\AlertController;
+use App\Common\Controllers\ChainController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -33,4 +34,11 @@ Route::middleware(['auth:sanctum'])->prefix('alerts')->group(function () {
         ->middleware('permission:alerts.dismiss');
     Route::patch('/{alert}/read',    [AlertController::class, 'markRead'])
         ->middleware('permission:alerts.view');
+});
+
+/* ─── WS-D.1 Chain registry — definitions endpoint ───────────────────── */
+Route::middleware(['auth:sanctum'])->prefix('chains')->group(function () {
+    Route::get('/',                    [ChainController::class, 'index']);
+    Route::get('/{key}/definition',    [ChainController::class, 'definition'])
+        ->where('key', '[a-z_]+');
 });
