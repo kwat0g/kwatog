@@ -77,7 +77,10 @@ class UserInviteTest extends TestCase
 
     private function makeEmployee(?int $defaultRoleId = null, ?string $email = 'jane.doe@example.test'): Employee
     {
-        $dept = Department::create(['name' => 'Test Dept', 'code' => 'TST']);
+        // Department.code is unique; uniqid keeps each call independent so
+        // tests that need multiple employees do not trip the constraint.
+        $code = strtoupper(substr(uniqid('T', true), 0, 16));
+        $dept = Department::create(['name' => 'Test Dept '.$code, 'code' => $code]);
         $pos  = Position::create([
             'title'             => 'Tester',
             'department_id'     => $dept->id,
@@ -183,13 +186,15 @@ class UserInviteTest extends TestCase
         $invite = UserInvite::where('email', 'jane.portal@example.test')->firstOrFail();
         $this->assertNull($invite->used_at);
 
-        // Public, unauthenticated endpoint.
+        // Public, unauthenticated endpoint. JsonResource returns 201 because
+        // the underlying Eloquent model has wasRecentlyCreated = true; this is
+        // semantically correct for "account just provisioned".
         $this->postJson('/api/v1/auth/invites/accept', [
             'token'                 => $invite->token,
             'name'                  => 'Jane Doe',
             'password'              => 'NewPassword1!',
             'password_confirmation' => 'NewPassword1!',
-        ])->assertOk()
+        ])->assertCreated()
           ->assertJsonPath('data.email', 'jane.portal@example.test')
           ->assertJsonPath('data.employee.full_name', 'Jane Doe');
 
@@ -222,7 +227,7 @@ class UserInviteTest extends TestCase
             'name'                  => 'Jane Doe',
             'password'              => 'NewPassword1!',
             'password_confirmation' => 'NewPassword1!',
-        ])->assertOk();
+        ])->assertCreated();
 
         $this->assertDatabaseHas('users', [
             'email'   => 'jane.fallback@example.test',
@@ -280,7 +285,7 @@ class UserInviteTest extends TestCase
             'name'                  => 'Jane Doe',
             'password'              => 'NewPassword1!',
             'password_confirmation' => 'NewPassword1!',
-        ])->assertOk();
+        ])->assertCreated();
 
         // Second attempt with same token should fail.
         $this->postJson('/api/v1/auth/invites/accept', [
