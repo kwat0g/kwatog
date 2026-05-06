@@ -28,6 +28,12 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'admin.print.bulk',         'name' => 'Bulk Print Approved Forms'],
             ],
 
+            // WS-A.1 — Auth / portal-account lifecycle
+            'auth' => [
+                ['slug' => 'auth.users.invite', 'name' => 'Invite Employee to Self-Service Portal',
+                 'description' => 'Issue, list, and revoke one-time invites that link an employee record to a portal user account.'],
+            ],
+
             // HR
             'hr' => [
                 ['slug' => 'hr.departments.view',         'name' => 'View Departments'],
@@ -294,6 +300,7 @@ class RolePermissionSeeder extends Seeder
                         'search.global',
                         'notifications.preferences.manage',
                         'alerts.view',                                            // Task A2
+                        'auth.users.invite',                                      // WS-A.1
                     ],
                 ),
             ],

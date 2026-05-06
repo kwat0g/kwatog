@@ -11,6 +11,10 @@ import { FullPageLoader } from '@/components/ui/Spinner';
 // Auth flow
 const LoginPage = lazy(() => import('@/pages/auth/login'));
 const ChangePasswordPage = lazy(() => import('@/pages/auth/change-password'));
+const AcceptInvitePage = lazy(() => import('@/pages/auth/accept-invite'));
+
+// WS-A.1 — Self-service portal invites admin page
+const PortalInvitesPage = lazy(() => import('@/pages/admin/users/invites'));
 
 // App
 const DashboardPage = lazy(() => import('@/pages/dashboard'));
@@ -207,6 +211,8 @@ export default function App() {
         {/* Auth (no AuthGuard) */}
         <Route element={<AuthLayout />}>
           <Route path="/login" element={<LoginPage />} />
+          {/* WS-A.1 — public invite acceptance, no AuthGuard. */}
+          <Route path="/accept-invite" element={<AcceptInvitePage />} />
         </Route>
 
         <Route
@@ -381,6 +387,16 @@ export default function App() {
             element={
               <PermissionGuard permission="admin.audit_logs.view">
                 <AuditLogsPage />
+              </PermissionGuard>
+            }
+          />
+
+          {/* WS-A.1 — Self-service portal invites */}
+          <Route
+            path="/admin/users/invites"
+            element={
+              <PermissionGuard permission="auth.users.invite">
+                <PortalInvitesPage />
               </PermissionGuard>
             }
           />

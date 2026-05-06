@@ -8,11 +8,27 @@ use App\Modules\Auth\Controllers\LoginController;
 use App\Modules\Auth\Controllers\LogoutController;
 use App\Modules\Auth\Controllers\NotificationController;
 use App\Modules\Auth\Controllers\PreferencesController;
+use App\Modules\Auth\Controllers\UserInviteController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('auth')->group(function (): void {
     // Public — login attempt + CSRF priming.
     Route::post('login', LoginController::class)->middleware('throttle:auth');
+
+    // WS-A.1 — Public accept of an invite token (no auth, throttled).
+    // Placed BEFORE the auth:sanctum group so the accept endpoint stays
+    // reachable for users who do not yet have a session.
+    Route::post('invites/accept', [UserInviteController::class, 'accept'])
+        ->middleware('throttle:auth');
+
+    // WS-A.1 — Authenticated invite management (HR / system_admin).
+    Route::middleware(['auth:sanctum', 'session.timeout', 'password.expired',
+                       'permission:auth.users.invite'])
+        ->group(function (): void {
+            Route::get('invites',              [UserInviteController::class, 'index']);
+            Route::post('invites',             [UserInviteController::class, 'store']);
+            Route::delete('invites/{invite}',  [UserInviteController::class, 'destroy']);
+        });
 
     // Authenticated. NOTE: GET /auth/user is intentionally OUTSIDE the
     // `password.expired` gate — the SPA must be able to bootstrap (and the

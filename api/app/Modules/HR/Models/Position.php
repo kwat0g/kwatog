@@ -19,11 +19,17 @@ class Position extends Model
         'title',
         'department_id',
         'salary_grade',
+        'default_role_id',
     ];
 
     public function department(): BelongsTo
     {
         return $this->belongsTo(Department::class);
+    }
+
+    public function defaultRole(): BelongsTo
+    {
+        return $this->belongsTo(\App\Modules\Auth\Models\Role::class, 'default_role_id');
     }
 
     public function employees(): HasMany
