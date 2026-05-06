@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Common\Controllers\AlertController;
 use App\Common\Controllers\ChainController;
+use App\Common\Controllers\ExportController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -41,4 +42,11 @@ Route::middleware(['auth:sanctum'])->prefix('chains')->group(function () {
     Route::get('/',                    [ChainController::class, 'index']);
     Route::get('/{key}/definition',    [ChainController::class, 'definition'])
         ->where('key', '[a-z_]+');
+});
+
+/* ─── WS-E.1 Generic export endpoint ─────────────────────────────────── */
+Route::middleware(['auth:sanctum'])->prefix('exports')->group(function () {
+    Route::get('/',             [ExportController::class, 'index']);
+    Route::get('/{resource}',   [ExportController::class, 'download'])
+        ->where('resource', '[a-z_.]+');
 });

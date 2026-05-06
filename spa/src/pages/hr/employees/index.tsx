@@ -10,6 +10,7 @@ import { DataTable, NumCell, StackedCell, type Column } from '@/components/ui/Da
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
+import { ExportButton } from '@/components/ui/ExportButton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
@@ -127,11 +128,18 @@ export default function EmployeesListPage() {
         title="Employees"
         subtitle={data ? `${data.meta.total.toLocaleString()} employees` : undefined}
         actions={
-          can('hr.employees.create') && (
-            <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/hr/employees/create')}>
-              Add employee
-            </Button>
-          )
+          <>
+            <ExportButton
+              resource="hr.employees"
+              filters={filters as Record<string, string | number | boolean | undefined>}
+              permission="hr.employees.export"
+            />
+            {can('hr.employees.create') && (
+              <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/hr/employees/create')}>
+                Add employee
+              </Button>
+            )}
+          </>
         }
       />
 
