@@ -50,4 +50,20 @@ class RoleController
         $role = $this->service->syncPermissions($role, $request->validated('permission_slugs'));
         return new RoleResource($role);
     }
+
+    /**
+     * WS-B.1 — Clone an existing role with its full permission set into a
+     * new role. Optional overrides: name, slug, description.
+     */
+    public function clone(Request $request, Role $role): JsonResponse
+    {
+        $overrides = $request->validate([
+            'name'        => ['nullable', 'string', 'max:50'],
+            'slug'        => ['nullable', 'string', 'max:50', 'alpha_dash'],
+            'description' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $clone = $this->service->clone($role, $overrides);
+        return (new RoleResource($clone))->response()->setStatusCode(201);
+    }
 }

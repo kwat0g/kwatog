@@ -18,6 +18,9 @@ Route::prefix('admin')
             Route::delete('roles/{role}',        [RoleController::class, 'destroy'])->middleware('permission:admin.roles.manage');
             Route::put('roles/{role}/permissions', [RoleController::class, 'syncPermissions'])->middleware('permission:admin.roles.manage');
 
+            // WS-B.1 — Clone an existing role with its permission set.
+            Route::post('roles/{role}/clone',     [RoleController::class, 'clone'])->middleware('permission:admin.roles.manage');
+
             Route::get('permissions/matrix',     [PermissionController::class, 'matrix'])->middleware('permission:admin.roles.manage');
         });
 
