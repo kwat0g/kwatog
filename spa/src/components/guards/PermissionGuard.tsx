@@ -1,25 +1,22 @@
 import { type ReactNode } from 'react';
 import { usePermission } from '@/hooks/usePermission';
-import { EmptyState } from '@/components/ui/EmptyState';
+import ForbiddenPage from '@/pages/error/Forbidden';
 
 interface PermissionGuardProps {
   permission: string;
   children: ReactNode;
 }
 
+/**
+ * Route-level guard. Renders the proper /403 page when the user is
+ * authenticated but lacks the permission, instead of the previous inline
+ * EmptyState that looked like a list-empty rather than a denial.
+ */
 export function PermissionGuard({ permission, children }: PermissionGuardProps) {
   const { can } = usePermission();
 
   if (!can(permission)) {
-    return (
-      <div className="px-5 py-10">
-        <EmptyState
-          icon="lock"
-          title="Forbidden"
-          description="You do not have permission to view this page."
-        />
-      </div>
-    );
+    return <ForbiddenPage permission={permission} />;
   }
 
   return <>{children}</>;
