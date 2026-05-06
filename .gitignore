@@ -28,6 +28,9 @@ api/storage/app/admin-credentials.txt
 spa/dist/
 spa/.vite/
 spa/coverage/
+
+# Agent-tools integration (sync script caches)
+vendor/*/.not-ported.txt
 api/coverage/
 api/.phpunit.cache/
 api/.phpunit.result.cache
