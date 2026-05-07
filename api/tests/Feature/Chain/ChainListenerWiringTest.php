@@ -17,9 +17,13 @@ use App\Modules\Payroll\Events\PayrollPeriodFinalized;
 use App\Modules\Payroll\Listeners\NotifyEmployeesOnPayrollFinalized;
 use App\Modules\Production\Events\WorkOrderCompleted;
 use App\Modules\Purchasing\Events\PurchaseOrderApproved;
+use App\Modules\Purchasing\Events\PurchaseRequestApproved;
 use App\Modules\Purchasing\Listeners\NotifyOnPurchaseOrderApproved;
+use App\Modules\Purchasing\Listeners\NotifyOnPurchaseRequestApproved;
+use App\Modules\Quality\Events\InspectionFailed;
 use App\Modules\Quality\Events\InspectionPassed;
 use App\Modules\Quality\Listeners\CreateDeliveryDraftOnQcPass;
+use App\Modules\Quality\Listeners\RejectGRNOnQcFail;
 use App\Modules\Quality\Listeners\TriggerIncomingQC;
 use App\Modules\Quality\Listeners\TriggerOutgoingQC;
 use Illuminate\Support\Facades\Event;
@@ -46,7 +50,9 @@ class ChainListenerWiringTest extends TestCase
     public function test_c2_p2p_listeners_are_bound(): void
     {
         $this->assertTrue(Event::hasListeners(GoodsReceiptNoteCreated::class));
+        $this->assertTrue(Event::hasListeners(PurchaseRequestApproved::class));
         $this->assertTrue(Event::hasListeners(PurchaseOrderApproved::class));
+        $this->assertTrue(Event::hasListeners(InspectionFailed::class));
     }
 
     public function test_c3_h2r_listeners_are_bound(): void
@@ -67,7 +73,9 @@ class ChainListenerWiringTest extends TestCase
             TriggerOutgoingQC::class,
             CreateDeliveryDraftOnQcPass::class,
             TriggerIncomingQC::class,
+            NotifyOnPurchaseRequestApproved::class,
             NotifyOnPurchaseOrderApproved::class,
+            RejectGRNOnQcFail::class,
             InitializeLeaveBalances::class,
             NotifyOnSeparationInitiated::class,
             DeactivateAccountOnClearanceComplete::class,

@@ -145,13 +145,25 @@ class PurchaseRequestService
         }
         return DB::transaction(function () use ($pr, $by, $remarks) {
             $this->approvals->approve($pr, $by, $remarks);
+            $becameApproved = false;
             if ($this->approvals->isFullyApproved($pr)) {
                 $pr->update([
                     'status'      => PurchaseRequestStatus::Approved,
                     'approved_at' => now(),
                 ]);
+                $becameApproved = true;
             }
-            return $pr->fresh();
+            $fresh = $pr->fresh();
+            if ($becameApproved) {
+                // Series C — Task C2. Domain event for chain listeners
+                // (NotifyOnPurchaseRequestApproved + future auto-PO
+                // consolidation when AutoPurchaseOrderService grows a
+                // multi-vendor consolidation entry point).
+                DB::afterCommit(fn () =>
+                    event(new \App\Modules\Purchasing\Events\PurchaseRequestApproved($fresh))
+                );
+            }
+            return $fresh;
         });
     }
 

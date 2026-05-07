@@ -25,9 +25,13 @@ use App\Modules\Payroll\Listeners\NotifyEmployeesOnPayrollFinalized;
 use App\Modules\Production\Events\WorkOrderCompleted;
 use App\Modules\Production\Listeners\HandleMachineBreakdown;
 use App\Modules\Purchasing\Events\PurchaseOrderApproved;
+use App\Modules\Purchasing\Events\PurchaseRequestApproved;
 use App\Modules\Purchasing\Listeners\NotifyOnPurchaseOrderApproved;
+use App\Modules\Purchasing\Listeners\NotifyOnPurchaseRequestApproved;
+use App\Modules\Quality\Events\InspectionFailed;
 use App\Modules\Quality\Events\InspectionPassed;
 use App\Modules\Quality\Listeners\CreateDeliveryDraftOnQcPass;
+use App\Modules\Quality\Listeners\RejectGRNOnQcFail;
 use App\Modules\Quality\Listeners\TriggerIncomingQC;
 use App\Modules\Quality\Listeners\TriggerOutgoingQC;
 use App\Modules\SupplyChain\Events\DeliveryConfirmed;
@@ -80,8 +84,10 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(InspectionPassed::class,    [CreateDeliveryDraftOnQcPass::class, 'handle']);
 
         // C2 Procure-to-Pay
-        Event::listen(GoodsReceiptNoteCreated::class, [TriggerIncomingQC::class,            'handle']);
-        Event::listen(PurchaseOrderApproved::class,   [NotifyOnPurchaseOrderApproved::class, 'handle']);
+        Event::listen(GoodsReceiptNoteCreated::class, [TriggerIncomingQC::class,                'handle']);
+        Event::listen(PurchaseRequestApproved::class, [NotifyOnPurchaseRequestApproved::class,  'handle']);
+        Event::listen(PurchaseOrderApproved::class,   [NotifyOnPurchaseOrderApproved::class,    'handle']);
+        Event::listen(InspectionFailed::class,        [RejectGRNOnQcFail::class,                'handle']);
 
         // C3 Hire-to-Retire
         Event::listen(EmployeeCreated::class,         [InitializeLeaveBalances::class,             'handle']);
