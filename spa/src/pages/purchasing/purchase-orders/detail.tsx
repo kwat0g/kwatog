@@ -16,6 +16,7 @@ import { StatCard } from '@/components/ui/StatCard';
 import { ChainHeader, ApprovalTimeline, LinkedRecords } from '@/components/chain';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
+import { useChainProgress } from '@/hooks/useChainProgress';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import { buildPurchaseOrderChain } from '@/lib/chains';
@@ -37,6 +38,9 @@ export default function PurchaseOrderDetailPage() {
     queryFn: () => purchaseOrdersApi.show(id),
     enabled: !!id,
   });
+
+  // Series C — Task C4. Real-time chain progress.
+  useChainProgress('purchase_order', id, ['purchasing', 'purchase-orders', id]);
 
   const [confirm, setConfirm] = useState<'submit' | 'approve' | 'send' | 'close' | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);

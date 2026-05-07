@@ -198,7 +198,7 @@ class PurchaseOrderService
         if (! in_array($po->status, [PurchaseOrderStatus::PendingApproval, PurchaseOrderStatus::Draft], true)) {
             throw new RuntimeException('PO is not in an approvable state.');
         }
-        return DB::transaction(function () use ($po, $by, $remarks) {
+        $result = DB::transaction(function () use ($po, $by, $remarks) {
             $this->approvals->approve($po, $by, $remarks);
             if ($this->approvals->isFullyApproved($po)) {
                 $po->update([
@@ -216,15 +216,21 @@ class PurchaseOrderService
             }
             return $po->fresh();
         });
+
+        // Series C — Task C4. Real-time chain progress.
+        $this->broadcastChain($result, $by);
+        return $result;
     }
 
     public function reject(PurchaseOrder $po, User $by, string $reason): PurchaseOrder
     {
-        return DB::transaction(function () use ($po, $by, $reason) {
+        $result = DB::transaction(function () use ($po, $by, $reason) {
             $this->approvals->reject($po, $by, $reason);
             $po->update(['status' => PurchaseOrderStatus::Cancelled]);
             return $po->fresh();
         });
+        $this->broadcastChain($result, $by);
+        return $result;
     }
 
     public function markAsSent(PurchaseOrder $po): PurchaseOrder
@@ -233,7 +239,9 @@ class PurchaseOrderService
             throw new RuntimeException('Only approved POs can be marked as sent.');
         }
         $po->update(['status' => PurchaseOrderStatus::Sent, 'sent_to_supplier_at' => now()]);
-        return $po->fresh();
+        $fresh = $po->fresh();
+        $this->broadcastChain($fresh, null);
+        return $fresh;
     }
 
     public function cancel(PurchaseOrder $po, string $reason): PurchaseOrder
@@ -248,7 +256,9 @@ class PurchaseOrderService
             'status'  => PurchaseOrderStatus::Cancelled,
             'remarks' => trim(($po->remarks ? $po->remarks."\n" : '').'Cancelled: '.$reason),
         ]);
-        return $po->fresh();
+        $fresh = $po->fresh();
+        $this->broadcastChain($fresh, null);
+        return $fresh;
     }
 
     public function close(PurchaseOrder $po): PurchaseOrder
@@ -257,7 +267,16 @@ class PurchaseOrderService
             throw new RuntimeException('Only fully received POs can be closed.');
         }
         $po->update(['status' => PurchaseOrderStatus::Closed]);
-        return $po->fresh();
+        $fresh = $po->fresh();
+        $this->broadcastChain($fresh, null);
+        return $fresh;
+    }
+
+    /** Series C — Task C4. */
+    private function broadcastChain(PurchaseOrder $po, ?User $actor): void
+    {
+        app(\App\Common\Services\ChainBroadcaster::class)
+            ->broadcastFor($po, $po->status?->value ?? '', $actor ?? auth()->user());
     }
 
     public function delete(PurchaseOrder $po): void

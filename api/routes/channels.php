@@ -52,3 +52,18 @@ Broadcast::channel('maintenance.dashboard', fn (User $user): bool =>
 Broadcast::channel('user.{userId}', fn (User $user, int $userId): bool =>
     $user->id === $userId
 );
+
+/* Series C — Task C4. Chain progress (sales_order/work_order/purchase_order/
+ * delivery/grn). One private channel per entity instance. Permission is
+ * derived from the entity-type slug. Hash IDs are passed verbatim — the
+ * subscribing component is the only consumer that knows what they map to.
+ */
+Broadcast::channel(
+    'chain.{entityType}.{hashId}',
+    function (User $user, string $entityType, string $hashId): bool {
+        if (! in_array($entityType, \App\Common\Support\ChainDefinitions::allowedTypes(), true)) {
+            return false;
+        }
+        return $user->hasPermission(\App\Common\Support\ChainDefinitions::viewPermission($entityType));
+    }
+);

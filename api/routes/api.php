@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Common\Controllers\AlertController;
+use App\Common\Controllers\ChainBottleneckController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -33,4 +34,10 @@ Route::middleware(['auth:sanctum'])->prefix('alerts')->group(function () {
         ->middleware('permission:alerts.dismiss');
     Route::patch('/{alert}/read',    [AlertController::class, 'markRead'])
         ->middleware('permission:alerts.view');
+});
+
+/* ─── Chain bottlenecks (Series C — Task C5) ─────────────────────── */
+Route::middleware(['auth:sanctum'])->prefix('chain')->group(function () {
+    Route::get('/bottlenecks', [ChainBottleneckController::class, 'index'])
+        ->middleware('permission:dashboard.view_bottlenecks');
 });

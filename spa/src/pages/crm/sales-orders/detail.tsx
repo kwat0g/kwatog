@@ -16,6 +16,7 @@ import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { ChainHeader } from '@/components/chain';
 import { usePermission } from '@/hooks/usePermission';
+import { useChainProgress } from '@/hooks/useChainProgress';
 import type { SalesOrderStatus } from '@/types/crm';
 
 const statusVariant: Record<SalesOrderStatus, 'success' | 'info' | 'warning' | 'neutral' | 'danger'> = {
@@ -46,6 +47,9 @@ export default function SalesOrderDetailPage() {
     queryFn: () => salesOrdersApi.chain(id!),
     enabled: !!id,
   });
+
+  // Series C — Task C4. Real-time chain progress.
+  useChainProgress('sales_order', id, ['crm', 'sales-orders', 'detail', id]);
 
   const confirm = useMutation({
     mutationFn: () => salesOrdersApi.confirm(id!),

@@ -16,6 +16,7 @@ import { ChainHeader } from '@/components/chain/ChainHeader';
 import { LinkedRecords } from '@/components/chain/LinkedRecords';
 import { buildDeliveryO2cChain } from '@/lib/chains';
 import { usePermission } from '@/hooks/usePermission';
+import { useChainProgress } from '@/hooks/useChainProgress';
 import type { DeliveryStatus } from '@/types/supplyChain';
 
 const STATUS_CHIP: Record<DeliveryStatus, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
@@ -44,6 +45,9 @@ export default function DeliveryDetailPage() {
     enabled: Boolean(id),
     placeholderData: (prev) => prev,
   });
+
+  // Series C — Task C4. Real-time chain progress.
+  useChainProgress('delivery', id, ['supply-chain', 'deliveries', id]);
 
   const advance = useMutation({
     mutationFn: (next: DeliveryStatus) => deliveriesApi.updateStatus(id, next),

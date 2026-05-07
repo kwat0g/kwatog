@@ -249,6 +249,8 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'dashboard.hr.view',           'name' => 'View HR Dashboard'],
                 ['slug' => 'dashboard.ppc.view',          'name' => 'View PPC Dashboard'],
                 ['slug' => 'dashboard.accounting.view',   'name' => 'View Accounting Dashboard'],
+                // Series C — Task C5
+                ['slug' => 'dashboard.view_bottlenecks',  'name' => 'View Chain Bottleneck Widget'],
             ],
             'platform' => [
                 ['slug' => 'search.global',                       'name' => 'Use Global Search'],
@@ -316,6 +318,7 @@ class RolePermissionSeeder extends Seeder
                         'search.global', 'notifications.preferences.manage',
                         'payroll.anomalies.review',                                // Task A9
                         'alerts.view', 'alerts.dismiss',                           // Task A2
+                        'dashboard.view_bottlenecks',                              // Series C — Task C5
                     ],
                 ),
             ],
@@ -329,6 +332,7 @@ class RolePermissionSeeder extends Seeder
                      'maintenance.view', 'assets.view',
                      'search.global', 'notifications.preferences.manage',
                      'alerts.view', 'alerts.dismiss',                              // Task A2
+                     'dashboard.view_bottlenecks',                                 // Series C — Task C5
                     ],
                 ),
             ],
@@ -341,6 +345,7 @@ class RolePermissionSeeder extends Seeder
                      'dashboard.ppc.view', 'maintenance.view', 'assets.view',
                      'search.global', 'notifications.preferences.manage',
                      'alerts.view', 'alerts.dismiss',                              // Task A2
+                     'dashboard.view_bottlenecks',                                 // Series C — Task C5
                      // Task A1 already granted via $this->module('mrp')
                     ],
                 ),

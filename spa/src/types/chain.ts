@@ -63,3 +63,55 @@ export interface ApprovalStep {
   /** Hours since pending was raised — populated when is_overdue=true. */
   overdue_hours?: number | null;
 }
+
+/* ──────────────────────────────────────────────────────────────────
+ * Series C — Task C4. Real-time chain progress broadcast.
+ * Mirrors ChainStepAdvanced::broadcastWith() on the API.
+ * ────────────────────────────────────────────────────────────────── */
+
+export type ChainEntityType =
+  | 'sales_order'
+  | 'work_order'
+  | 'purchase_order'
+  | 'delivery'
+  | 'grn';
+
+export interface ChainStepEvent {
+  entity_type: ChainEntityType;
+  entity_id: string;
+  doc_number: string;
+  new_status: string;
+  active_step: string;
+  completed_steps: string[];
+  actor_name: string | null;
+}
+
+/* ──────────────────────────────────────────────────────────────────
+ * Series C — Task C5. Chain bottleneck dashboard widget payload.
+ * Mirrors ChainBottleneckController::index() output.
+ * ────────────────────────────────────────────────────────────────── */
+
+export interface ChainBottleneckRow {
+  key: string;
+  label: string;
+  audience: string;
+  entity_type: string;
+  entity_id: string;
+  doc_number: string;
+  status: string;
+  stuck_since: string | null;
+  hours_stuck: number | null;
+}
+
+export interface ChainBottleneckGroup {
+  key: string;
+  label: string;
+  audience: string | null;
+  count: number;
+  rows: ChainBottleneckRow[];
+}
+
+export interface ChainBottlenecks {
+  total: number;
+  groups: ChainBottleneckGroup[];
+}
