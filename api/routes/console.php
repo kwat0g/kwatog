@@ -2,17 +2,11 @@
 
 declare(strict_types=1);
 
-use App\Common\Console\RunDueScheduledExports;
 use App\Modules\Assets\Jobs\RunMonthlyDepreciationJob;
 use App\Modules\Maintenance\Jobs\GeneratePreventiveMaintenanceJob;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
-
-// Series E (Task E2) — wire up the artisan command so dev can invoke it.
-Artisan::starting(function ($artisan) {
-    $artisan->resolve(RunDueScheduledExports::class);
-});
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
