@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Common\Services\SettingsService;
+use App\Modules\HR\Exports\EmployeeMasterExport;
 use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Observers\JournalEntryObserver;
 use App\Modules\Accounting\Listeners\NotifyFinanceOnDeliveryConfirmed;
@@ -49,6 +50,11 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // Series E (Task E2) — register exportable columns once per process.
+        // ColumnSelectorModal in the SPA reads these from
+        // GET /api/v1/exports/{module}/columns.
+        EmployeeMasterExport::registerColumns();
+
         // Keep N+1 detection + lazy-loading prevention in non-prod, but allow
         // accessing attributes that weren't selected in column-restricted
         // eager loads. The latter caused dozens of MissingAttributeException

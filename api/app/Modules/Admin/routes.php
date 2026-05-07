@@ -69,3 +69,42 @@ Route::middleware(['auth:sanctum', 'feature:search', 'permission:search.global',
 /* Sprint 8 — Task 76. Bulk approval PDF print. */
 Route::middleware(['auth:sanctum', 'permission:admin.print.bulk'])
     ->post('/print/bulk', [\App\Modules\Admin\Controllers\BulkPrintController::class, 'print']);
+
+/*
+ * Series E (E1/E3) — Document vault HTTP surface.
+ * Per-entity authorization is enforced inside the controller (delegated to
+ * each document type's existing module permissions).
+ */
+Route::middleware(['auth:sanctum', 'session.timeout', 'password.expired'])
+    ->prefix('documents')
+    ->group(function (): void {
+        Route::get('/',                        [\App\Common\Controllers\DocumentController::class, 'index']);
+        Route::get('{document}',               [\App\Common\Controllers\DocumentController::class, 'show']);
+        Route::get('{document}/view',          [\App\Common\Controllers\DocumentController::class, 'view'])
+            ->name('documents.view');
+        Route::get('{document}/download',      [\App\Common\Controllers\DocumentController::class, 'download'])
+            ->name('documents.download');
+        Route::delete('{document}',            [\App\Common\Controllers\DocumentController::class, 'destroy']);
+    });
+
+/*
+ * Series E (E2) — Export endpoints + scheduled-export CRUD.
+ * Module-specific permissions are enforced in ExportController::resolvePermission().
+ */
+Route::middleware(['auth:sanctum', 'session.timeout', 'password.expired'])
+    ->group(function (): void {
+        Route::get('/exports/{module}/columns',  [\App\Common\Controllers\ExportController::class, 'columns']);
+        Route::put('/exports/{module}/columns',  [\App\Common\Controllers\ExportController::class, 'saveColumns']);
+        Route::get('/exports/{module}/preview',  [\App\Common\Controllers\ExportController::class, 'preview']);
+        Route::get('/exports/{module}/download', [\App\Common\Controllers\ExportController::class, 'download']);
+    });
+
+Route::middleware(['auth:sanctum', 'session.timeout', 'password.expired'])
+    ->prefix('scheduled-exports')
+    ->group(function (): void {
+        Route::get('/',                       [\App\Common\Controllers\ScheduledExportController::class, 'index']);
+        Route::post('/',                      [\App\Common\Controllers\ScheduledExportController::class, 'store']);
+        Route::get('{scheduledExport}',       [\App\Common\Controllers\ScheduledExportController::class, 'show']);
+        Route::put('{scheduledExport}',       [\App\Common\Controllers\ScheduledExportController::class, 'update']);
+        Route::delete('{scheduledExport}',    [\App\Common\Controllers\ScheduledExportController::class, 'destroy']);
+    });

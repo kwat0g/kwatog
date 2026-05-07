@@ -26,6 +26,8 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'admin.users.manage',       'name' => 'Manage Users'],
                 ['slug' => 'admin.gov_tables.manage',  'name' => 'Manage Government Contribution Tables'],
                 ['slug' => 'admin.print.bulk',         'name' => 'Bulk Print Approved Forms'],
+                // Series E (E2/E3) — exports + document vault.
+                ['slug' => 'admin.scheduled_exports.view', 'name' => 'View Scheduled Exports'],
             ],
 
             // HR
@@ -39,6 +41,8 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'hr.employees.edit',           'name' => 'Edit Employees'],
                 ['slug' => 'hr.employees.delete',         'name' => 'Delete Employees'],
                 ['slug' => 'hr.employees.export',         'name' => 'Export Employees'],
+                // Series E (E1/E3) — view generated documents on an employee detail page.
+                ['slug' => 'hr.employees.documents.view', 'name' => 'View Employee Documents'],
                 ['slug' => 'hr.employees.view_sensitive', 'name' => 'View Sensitive Employee Data (SSS, TIN, Bank)'],
                 ['slug' => 'hr.employees.separate',       'name' => 'Initiate Employee Separation'],
                 // U1 — system account lifecycle.

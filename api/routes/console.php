@@ -2,11 +2,17 @@
 
 declare(strict_types=1);
 
+use App\Common\Console\RunDueScheduledExports;
 use App\Modules\Assets\Jobs\RunMonthlyDepreciationJob;
 use App\Modules\Maintenance\Jobs\GeneratePreventiveMaintenanceJob;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
+
+// Series E (Task E2) — wire up the artisan command so dev can invoke it.
+Artisan::starting(function ($artisan) {
+    $artisan->resolve(RunDueScheduledExports::class);
+});
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
@@ -95,5 +101,13 @@ Schedule::command('chain:check-bottlenecks')
 // January are no-ops.
 Schedule::command('hr:reset-leave-balances')
     ->yearlyOn(1, 1, '00:01')
+    ->withoutOverlapping()
+    ->onOneServer();
+
+// Series E (Task E2) — every 5 minutes scan for due scheduled exports
+// and fire them off. Idempotent (each row's next_run_at advances on
+// success), so re-runs are safe.
+Schedule::command('exports:run-due')
+    ->everyFiveMinutes()
     ->withoutOverlapping()
     ->onOneServer();
