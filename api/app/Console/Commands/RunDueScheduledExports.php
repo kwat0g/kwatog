@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Common\Console;
+namespace App\Console\Commands;
 
 use App\Common\Enums\ExportFormat;
 use App\Common\Enums\ExportFrequency;
