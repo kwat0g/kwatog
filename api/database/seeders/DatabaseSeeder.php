@@ -59,6 +59,11 @@ class DatabaseSeeder extends Seeder
             // Sprint 8 — supplements demo data with maintenance schedules,
             // sample maintenance work orders, and the asset register.
             Sprint8DemoSeeder::class,
+
+            // Series E — seeds document-vault rows (payslips + invoices),
+            // scheduled exports, and column preferences so the new admin
+            // pages and Documents tabs aren't empty after migrate --seed.
+            SeriesEDemoSeeder::class,
         ]);
     }
 }
