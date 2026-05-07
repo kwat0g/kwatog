@@ -34,8 +34,12 @@ class DocumentResource extends JsonResource
                     'name' => $this->generatedBy->name,
                 ] : null;
             }),
-            'view_url'        => route('documents.view', ['document' => $this->hash_id]),
-            'download_url'    => route('documents.download', ['document' => $this->hash_id]),
+            // Relative paths (no host) so the SPA can hit them via its
+            // dev-server proxy and the Sanctum session cookie travels with
+            // the request. Absolute URLs from route() would cross origins
+            // (SPA at :3000, API at :8000) and the cookie would be dropped.
+            'view_url'        => '/api/v1/documents/' . $this->hash_id . '/view',
+            'download_url'    => '/api/v1/documents/' . $this->hash_id . '/download',
         ];
     }
 }
