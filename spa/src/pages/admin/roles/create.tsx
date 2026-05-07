@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -44,7 +44,17 @@ type FormValues = z.infer<typeof schema>;
 
 export default function CreateRolePage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
+
+  // Series R/R1 — when arriving from the index page's "Clone" action, the
+  // referrer passes the source role's hash_id via router state. Pre-fill the
+  // clone toggle and source dropdown so the admin lands on a ready-to-submit
+  // form instead of having to flip the switch and re-pick the role.
+  const cloneFromState =
+    typeof location.state === 'object' && location.state !== null && 'cloneFrom' in location.state
+      ? String((location.state as { cloneFrom?: unknown }).cloneFrom ?? '')
+      : '';
 
   const {
     register,
@@ -55,7 +65,13 @@ export default function CreateRolePage() {
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { clone: false, name: '', slug: '', description: '', source_role_id: '' },
+    defaultValues: {
+      clone: !!cloneFromState,
+      name: '',
+      slug: '',
+      description: '',
+      source_role_id: cloneFromState,
+    },
   });
 
   const cloneMode = watch('clone');

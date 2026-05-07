@@ -126,11 +126,17 @@ class RoleService
      */
     public function syncPermissions(Role $role, array $slugs): Role
     {
-        // R1: system_admin's '*' permission set is sacred — refuse changes.
+        // R1: system roles are seeded by RolePermissionSeeder and must remain
+        // in lockstep with the seeder so deployments don't drift. Reject any
+        // direct API attempt to alter a system role's permission set —
+        // including non-`system_admin` ones like `hr_officer`. Custom roles
+        // (is_system=false) remain freely editable.
         abort_if(
-            $role->slug === 'system_admin',
+            (bool) $role->is_system,
             422,
-            'The System Administrator role always has every permission and cannot be edited.',
+            $role->slug === 'system_admin'
+                ? 'The System Administrator role always has every permission and cannot be edited.'
+                : 'System roles cannot be edited. Clone the role first to create a customizable copy.',
         );
 
         return DB::transaction(function () use ($role, $slugs) {

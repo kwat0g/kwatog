@@ -5,7 +5,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Panel } from '@/components/ui/Panel';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Spinner } from '@/components/ui/Spinner';
+import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { FinanceSection } from '@/components/dashboard/FinanceSection';
 import { getWidgetComponent } from '@/components/dashboard/registry';
 import { dashboardLayoutApi } from '@/api/dashboard-layout';
@@ -71,12 +71,8 @@ export default function DashboardPage() {
       />
 
       <div className="px-5 py-4">
-        {/* Loading */}
-        {layout.isLoading && (
-          <div className="flex items-center justify-center py-10 text-muted">
-            <Spinner /> <span className="ml-2 text-sm">Loading dashboard…</span>
-          </div>
-        )}
+        {/* Loading — PATTERNS.md §19: skeleton, not spinner. */}
+        {layout.isLoading && !layout.data && <SkeletonDetail />}
 
         {/* Error */}
         {layout.isError && (

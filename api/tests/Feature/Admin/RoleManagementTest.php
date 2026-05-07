@@ -146,6 +146,21 @@ class RoleManagementTest extends TestCase
             ->assertStatus(422);
     }
 
+    public function test_permission_sync_blocked_on_non_system_admin_system_role(): void
+    {
+        // System roles other than system_admin must also reject permission
+        // sync via the API so deployments stay in lockstep with the seeder.
+        // Custom roles remain freely editable (covered by the diff test above).
+        $admin = $this->seedAdmin();
+        $hrOfficer = Role::where('slug', 'hr_officer')->firstOrFail();
+
+        $this->actingAs($admin)
+            ->putJson("/api/v1/admin/roles/{$hrOfficer->hash_id}/permissions", [
+                'permission_slugs' => ['hr.employees.view'],
+            ])
+            ->assertStatus(422);
+    }
+
     public function test_clone_requires_admin_roles_manage_permission(): void
     {
         // Create a user without admin.roles.manage.
