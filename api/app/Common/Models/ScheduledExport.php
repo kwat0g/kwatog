@@ -6,6 +6,7 @@ namespace App\Common\Models;
 
 use App\Common\Enums\ExportFormat;
 use App\Common\Enums\ExportFrequency;
+use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\Auth\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -18,7 +19,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class ScheduledExport extends Model
 {
-    use HasFactory, HasHashId;
+    use HasFactory, HasHashId, HasAuditLog;
 
     protected $fillable = [
         'owner_id', 'name', 'module',

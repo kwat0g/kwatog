@@ -85,13 +85,16 @@ class DocumentVaultService
      * Replace an existing vault row's blob (e.g. regenerate after data fix).
      * The new row is written first, then the old blob is purged so we never
      * lose data on partial failure.
+     *
+     * The new row reuses the original `entity_type` + `entity_id` directly
+     * so we don't need to resolve the morphTo relation — that lets us
+     * regenerate even when the underlying entity has been soft-deleted, and
+     * keeps tests happy when fixtures use anonymous models.
      */
     public function regenerate(Document $existing, string $bytes, ?User $user = null): Document
     {
-        $existing->loadMissing('entity');
-        $entity = $existing->entity;
-        if (! $entity instanceof Model) {
-            throw new RuntimeException('Cannot regenerate a document whose entity has been deleted.');
+        if ($bytes === '') {
+            throw new RuntimeException('Refusing to regenerate with empty bytes.');
         }
 
         $type = $existing->document_type;
@@ -99,19 +102,42 @@ class DocumentVaultService
             throw new RuntimeException('Existing document has an unknown type.');
         }
 
-        $fresh = $this->store($bytes, $type, $entity, $user, $existing->is_confidential);
+        $entityRef = $existing->entity_id !== null ? 'rec-'.$existing->entity_id : 'rec';
+        $filename = sprintf(
+            '%s-%s-%s-%s.pdf',
+            $type->value,
+            $entityRef,
+            now()->format('YmdHis'),
+            Str::lower(Str::random(6)),
+        );
+        $path = sprintf('documents/%s/%s', $type->value, $filename);
 
-        // Soft-delete the old vault row + remove blob.
-        DB::transaction(function () use ($existing) {
+        return DB::transaction(function () use ($bytes, $type, $existing, $user, $path, $filename) {
+            Storage::disk(self::DISK)->put($path, $bytes);
+
+            $fresh = Document::create([
+                'document_type'    => $type,
+                'entity_type'      => $existing->entity_type,
+                'entity_id'        => $existing->entity_id,
+                'file_path'        => $path,
+                'file_name'        => $filename,
+                'file_size'        => strlen($bytes),
+                'mime_type'        => 'application/pdf',
+                'generated_by'     => $user?->id,
+                'generated_at'     => now(),
+                'is_confidential'  => (bool) $existing->is_confidential,
+                'checksum_sha256'  => hash('sha256', $bytes),
+            ]);
+
+            // Soft-delete the old vault row + remove blob.
             $oldPath = $existing->file_path;
-            $existing->delete(); // soft delete
-
+            $existing->delete();
             if ($oldPath && Storage::disk(self::DISK)->exists($oldPath)) {
                 Storage::disk(self::DISK)->delete($oldPath);
             }
-        });
 
-        return $fresh;
+            return $fresh;
+        });
     }
 
     /** Stream a vault row inline (browser preview iframe). */

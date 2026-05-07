@@ -41,7 +41,7 @@ class ScheduledExportController
         return new ScheduledExportResource($scheduledExport->load('owner:id,name'));
     }
 
-    public function store(Request $request): ScheduledExportResource
+    public function store(Request $request): \Illuminate\Http\JsonResponse
     {
         $user = $request->user();
         abort_unless($user, 401);
@@ -71,7 +71,9 @@ class ScheduledExportController
             'is_active'    => true,
         ]);
 
-        return new ScheduledExportResource($row->load('owner:id,name'));
+        return (new ScheduledExportResource($row->load('owner:id,name')))
+            ->response()
+            ->setStatusCode(201);
     }
 
     public function update(ScheduledExport $scheduledExport, Request $request): ScheduledExportResource

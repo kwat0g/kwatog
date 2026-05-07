@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Common\Models;
 
 use App\Common\Enums\DocumentType;
+use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\Auth\Models\User;
 use Illuminate\Database\Eloquent\Builder;
@@ -22,7 +23,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  */
 class Document extends Model
 {
-    use HasFactory, SoftDeletes, HasHashId;
+    use HasFactory, SoftDeletes, HasHashId, HasAuditLog;
 
     protected $fillable = [
         'document_type',

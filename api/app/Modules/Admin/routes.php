@@ -72,24 +72,29 @@ Route::middleware(['auth:sanctum', 'permission:admin.print.bulk'])
 
 /*
  * Series E (E1/E3) — Document vault HTTP surface.
- * Per-entity authorization is enforced inside the controller (delegated to
- * each document type's existing module permissions).
+ * The route group requires *some* baseline document permission so anonymous
+ * permission scopes can't probe the vault; per-entity authorization is then
+ * enforced inside the controller (delegated to each document type's existing
+ * module permissions, e.g. payroll.view, accounting.invoices.view, etc.).
  */
 Route::middleware(['auth:sanctum', 'session.timeout', 'password.expired'])
     ->prefix('documents')
     ->group(function (): void {
-        Route::get('/',                        [\App\Common\Controllers\DocumentController::class, 'index']);
+        Route::get('/',                        [\App\Common\Controllers\DocumentController::class, 'index'])
+            ->middleware('permission:admin.audit_logs.view');
         Route::get('{document}',               [\App\Common\Controllers\DocumentController::class, 'show']);
         Route::get('{document}/view',          [\App\Common\Controllers\DocumentController::class, 'view'])
             ->name('documents.view');
         Route::get('{document}/download',      [\App\Common\Controllers\DocumentController::class, 'download'])
             ->name('documents.download');
-        Route::delete('{document}',            [\App\Common\Controllers\DocumentController::class, 'destroy']);
+        Route::delete('{document}',            [\App\Common\Controllers\DocumentController::class, 'destroy'])
+            ->middleware('permission:admin.audit_logs.view');
     });
 
 /*
- * Series E (E2) — Export endpoints + scheduled-export CRUD.
- * Module-specific permissions are enforced in ExportController::resolvePermission().
+ * Series E (E2) — Export endpoints. Module-specific permissions are enforced
+ * inside ExportController::guardModule() because each module requires a
+ * different slug (hr.employees.export, payroll.view, inventory.view, ...).
  */
 Route::middleware(['auth:sanctum', 'session.timeout', 'password.expired'])
     ->group(function (): void {
@@ -99,7 +104,15 @@ Route::middleware(['auth:sanctum', 'session.timeout', 'password.expired'])
         Route::get('/exports/{module}/download', [\App\Common\Controllers\ExportController::class, 'download']);
     });
 
-Route::middleware(['auth:sanctum', 'session.timeout', 'password.expired'])
+/*
+ * Series E (E2) — Scheduled-export CRUD. Anyone with the view permission can
+ * list + create their own; ownership-or-admin enforced inside the controller
+ * for show/update/destroy.
+ */
+Route::middleware([
+    'auth:sanctum', 'session.timeout', 'password.expired',
+    'permission:admin.scheduled_exports.view',
+])
     ->prefix('scheduled-exports')
     ->group(function (): void {
         Route::get('/',                       [\App\Common\Controllers\ScheduledExportController::class, 'index']);
