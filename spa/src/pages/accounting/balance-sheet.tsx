@@ -27,7 +27,7 @@ export default function BalanceSheetPage() {
             <a href={statementsApi.csvUrl('balance-sheet', { as_of: asOf })}>
               <Button variant="secondary" size="sm" icon={<Download size={14} />}>CSV</Button>
             </a>
-            <a href={statementsApi.pdfUrl('balance-sheet', { as_of: asOf })} target="_blank" rel="noreferrer">
+            <a href={statementsApi.pdfUrl('balance-sheet', { as_of: asOf })} target="_blank" rel="noopener">
               <Button variant="secondary" size="sm" icon={<Printer size={14} />}>PDF</Button>
             </a>
           </div>

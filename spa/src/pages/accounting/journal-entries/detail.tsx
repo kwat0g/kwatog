@@ -76,7 +76,7 @@ export default function JournalEntryDetailPage() {
         backLabel="Journal Entries"
         actions={
           <div className="flex gap-1.5">
-            <a href={journalEntriesApi.pdfUrl(je.id)} target="_blank" rel="noreferrer">
+            <a href={journalEntriesApi.pdfUrl(je.id)} target="_blank" rel="noopener">
               <Button variant="secondary" size="sm" icon={<Printer size={14} />}>Print</Button>
             </a>
             {isDraft && can('accounting.journal.post') && (

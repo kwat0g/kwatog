@@ -31,7 +31,7 @@ export default function TrialBalancePage() {
             <a href={statementsApi.csvUrl('trial-balance', { from, to })}>
               <Button variant="secondary" size="sm" icon={<Download size={14} />}>CSV</Button>
             </a>
-            <a href={statementsApi.pdfUrl('trial-balance', { from, to })} target="_blank" rel="noreferrer">
+            <a href={statementsApi.pdfUrl('trial-balance', { from, to })} target="_blank" rel="noopener">
               <Button variant="secondary" size="sm" icon={<Printer size={14} />}>PDF</Button>
             </a>
           </div>

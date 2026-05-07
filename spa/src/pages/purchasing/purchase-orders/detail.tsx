@@ -101,7 +101,7 @@ export default function PurchaseOrderDetailPage() {
             {data.status === 'received' && can('purchasing.po.create') && (
               <Button size="sm" variant="secondary" icon={<CheckSquare size={14} />} onClick={() => setConfirm('close')} loading={close.isPending}>Close</Button>
             )}
-            <a href={purchaseOrdersApi.pdfUrl(id)} target="_blank" rel="noreferrer">
+            <a href={purchaseOrdersApi.pdfUrl(id)} target="_blank" rel="noopener">
               <Button size="sm" variant="secondary" icon={<FileText size={14} />}>PDF</Button>
             </a>
             {!['received', 'closed', 'cancelled'].includes(data.status) && (

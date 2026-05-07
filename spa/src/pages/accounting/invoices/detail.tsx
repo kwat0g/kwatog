@@ -127,7 +127,7 @@ export default function InvoiceDetailPage() {
         backLabel="Invoices"
         actions={
           <div className="flex gap-1.5">
-            <a href={invoicesApi.pdfUrl(invoice.id)} target="_blank" rel="noreferrer">
+            <a href={invoicesApi.pdfUrl(invoice.id)} target="_blank" rel="noopener">
               <Button variant="secondary" size="sm" icon={<Printer size={14} />}>Print</Button>
             </a>
             {isDraft && can('accounting.invoices.create') && (

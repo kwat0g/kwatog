@@ -30,7 +30,7 @@ export default function IncomeStatementPage() {
             <a href={statementsApi.csvUrl('income-statement', { from, to })}>
               <Button variant="secondary" size="sm" icon={<Download size={14} />}>CSV</Button>
             </a>
-            <a href={statementsApi.pdfUrl('income-statement', { from, to })} target="_blank" rel="noreferrer">
+            <a href={statementsApi.pdfUrl('income-statement', { from, to })} target="_blank" rel="noopener">
               <Button variant="secondary" size="sm" icon={<Printer size={14} />}>PDF</Button>
             </a>
           </div>
