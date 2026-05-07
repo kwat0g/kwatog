@@ -61,25 +61,28 @@ class PdfRenderService
     }
 
     /**
-     * Make sure the dompdf font cache and temp directories actually exist and
-     * are writable before the first render. The dompdf config points at
-     * storage/fonts/ and storage/app/dompdf-tmp/; on freshly-cloned repos
-     * (and in containers where storage/ is volume-mounted from outside)
-     * those directories aren't created by Laravel's default skeleton.
+     * Make sure every directory the PDF render path needs actually exists and
+     * is writable before the first render:
      *
-     * The cost of failing to mkdir is "Please provide a valid cache path"
-     * deep inside dompdf's font loader, which is what the Series E seeder
-     * was hitting on first run. Idempotent — only mkdir if missing.
+     *   - storage/fonts            (dompdf font cache)
+     *   - storage/app/dompdf-tmp   (dompdf temp render dir)
+     *   - storage/framework/views  (Blade compiled views — the most common
+     *                               cause of "Please provide a valid cache
+     *                               path" thrown by Illuminate\View\Compilers
+     *                               on a freshly-cloned repo)
+     *
+     * Idempotent — only mkdir if missing. 0775 so the running user + group
+     * can read/write/exec.
      */
     private function ensureDompdfDirs(): void
     {
         foreach ([
-            (string) config('dompdf.options.font_dir', storage_path('fonts')),
+            (string) config('dompdf.options.font_dir',   storage_path('fonts')),
             (string) config('dompdf.options.font_cache', storage_path('fonts')),
-            (string) config('dompdf.options.temp_dir', storage_path('app/dompdf-tmp')),
+            (string) config('dompdf.options.temp_dir',   storage_path('app/dompdf-tmp')),
+            (string) config('view.compiled',             storage_path('framework/views')),
         ] as $dir) {
             if ($dir === '' || is_dir($dir)) continue;
-            // 0775 so the running user + group can read/write/exec.
             @mkdir($dir, 0775, true);
         }
     }
