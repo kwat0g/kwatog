@@ -143,7 +143,14 @@ class EmployeeService
             // pick up any complete-on-create info.
             $this->onboarding->recompute($employee);
 
-            return $employee->load(['department', 'position']);
+            $fresh = $employee->load(['department', 'position']);
+            // Series C — Task C3. Domain event for chain listeners
+            // (InitializeLeaveBalances pro-ration for any rows the in-service
+            // seed didn't already create).
+            DB::afterCommit(fn () =>
+                event(new \App\Modules\HR\Events\EmployeeCreated($fresh))
+            );
+            return $fresh;
         });
     }
 

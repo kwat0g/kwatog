@@ -200,6 +200,7 @@ class PurchaseOrderService
         }
         $result = DB::transaction(function () use ($po, $by, $remarks) {
             $this->approvals->approve($po, $by, $remarks);
+            $becameApproved = false;
             if ($this->approvals->isFullyApproved($po)) {
                 $po->update([
                     'status'      => PurchaseOrderStatus::Approved,
@@ -213,8 +214,17 @@ class PurchaseOrderService
                         ['last_price' => $line->unit_price, 'last_price_at' => now()]
                     );
                 }
+                $becameApproved = true;
             }
-            return $po->fresh();
+            $fresh = $po->fresh();
+            if ($becameApproved) {
+                // Series C — Task C2. Domain event for chain listeners
+                // (NotifyOnPurchaseOrderApproved + future SendPOToSupplier).
+                DB::afterCommit(fn () =>
+                    event(new \App\Modules\Purchasing\Events\PurchaseOrderApproved($fresh))
+                );
+            }
+            return $fresh;
         });
 
         // Series C — Task C4. Real-time chain progress.
