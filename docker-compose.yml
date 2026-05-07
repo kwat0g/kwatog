@@ -32,13 +32,12 @@ services:
       - VITE_HMR_PORT=${NGINX_PORT:-80}
       - NGINX_PORT=${NGINX_PORT:-80}
       # Reverb / WebSocket — must match REVERB_APP_KEY in the API .env.
-      # Host/port/scheme intentionally left blank so the browser uses its
-      # own origin and reaches Reverb via the Nginx `/ws` proxy.
+      # Host blank => browser uses its own hostname; port must match
+      # REVERB_HOST_PORT below since pusher-js cannot use a path prefix.
       - VITE_REVERB_APP_KEY=${REVERB_APP_KEY:-ogami_reverb}
       - VITE_REVERB_HOST=${VITE_REVERB_HOST:-}
-      - VITE_REVERB_PORT=${VITE_REVERB_PORT:-}
-      - VITE_REVERB_SCHEME=${VITE_REVERB_SCHEME:-}
-      - VITE_REVERB_PATH=${VITE_REVERB_PATH:-/ws}
+      - VITE_REVERB_PORT=${VITE_REVERB_PORT:-${REVERB_HOST_PORT:-8080}}
+      - VITE_REVERB_SCHEME=${VITE_REVERB_SCHEME:-http}
     command: sh -c "npm install --no-audit --no-fund && npm run dev -- --host 0.0.0.0"
     networks: [ogami-net]
 
@@ -97,6 +96,11 @@ services:
     volumes:
       - ./api:/var/www
     command: php artisan reverb:start --host=0.0.0.0 --port=8080
+    ports:
+      # Browser connects directly via ws://<host>:8080/app/<key>.
+      # pusher-js does not support a path prefix, so we cannot proxy
+      # this through Nginx — the Reverb port must be reachable.
+      - "${REVERB_HOST_PORT:-8080}:8080"
     depends_on:
       - api
     networks: [ogami-net]
