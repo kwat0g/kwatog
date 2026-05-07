@@ -119,7 +119,7 @@ export default function BillDetailPage() {
         backLabel="Bills"
         actions={
           <div className="flex gap-1.5">
-            <a href={billsApi.pdfUrl(bill.id)} target="_blank" rel="noreferrer">
+            <a href={billsApi.pdfUrl(bill.id)} target="_blank" rel="noopener">
               <Button variant="secondary" size="sm" icon={<Printer size={14} />}>Print</Button>
             </a>
             {isOpen && can('accounting.bills.pay') && (

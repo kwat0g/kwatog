@@ -93,7 +93,7 @@ export default function PurchaseRequestDetailPage() {
             {data.status === 'approved' && can('purchasing.po.create') && (
               <Button size="sm" variant="primary" icon={<ShoppingCart size={14} />} onClick={() => nav(`/purchasing/purchase-orders/create?pr_id=${data.id}`)}>Convert to PO</Button>
             )}
-            <a href={purchaseRequestsApi.pdfUrl(data.id)} target="_blank" rel="noreferrer">
+            <a href={purchaseRequestsApi.pdfUrl(data.id)} target="_blank" rel="noopener">
               <Button size="sm" variant="secondary" icon={<FileText size={14} />}>PDF</Button>
             </a>
             {(data.status === 'draft' || data.status === 'pending') && (

@@ -96,7 +96,7 @@ export default function SelfServicePayslipsPage() {
                 <a
                   href={payrollsApi.payslipUrl(p.id)}
                   target="_blank"
-                  rel="noreferrer"
+                  rel="noopener"
                   className="shrink-0 inline-flex items-center gap-1 px-3 h-11 text-sm rounded-md border border-default bg-canvas text-primary hover:bg-elevated"
                   aria-label={`Download payslip PDF for ${p.computed_at ? formatDate(p.computed_at) : 'this period'}`}
                 >
