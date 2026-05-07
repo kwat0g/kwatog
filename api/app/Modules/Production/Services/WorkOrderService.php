@@ -342,6 +342,9 @@ class WorkOrderService
             return $this->show($wo->fresh());
         });
         $this->broadcastStatusChange($result, $from, WorkOrderStatus::Completed->value);
+        // Series C — Task C1. Emit a domain event the chain orchestrator
+        // listeners (TriggerOutgoingQC) consume.
+        event(new \App\Modules\Production\Events\WorkOrderCompleted($result));
         return $result;
     }
 

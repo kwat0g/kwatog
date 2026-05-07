@@ -203,6 +203,14 @@ class PayrollPeriodService
 
         $period->status = PayrollPeriodStatus::Finalized;
         $period->save();
-        return $period->fresh();
+        $fresh = $period->fresh();
+
+        // Series C — Task C3. Domain event for chain listeners
+        // (NotifyEmployeesOnPayrollFinalized + future per-employee payslip
+        // PDF dispatch). Best-effort dispatch is fine here — the period is
+        // already finalized regardless of listener health.
+        event(new \App\Modules\Payroll\Events\PayrollPeriodFinalized($fresh));
+
+        return $fresh;
     }
 }

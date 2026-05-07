@@ -126,6 +126,12 @@ class GrnService
 
             $this->refreshPoStatus($po);
 
+            // Series C — Task C2. Domain event for chain listeners
+            // (TriggerIncomingQC). Fires after commit so the row is visible.
+            DB::afterCommit(fn () =>
+                event(new \App\Modules\Inventory\Events\GoodsReceiptNoteCreated($grn->fresh()))
+            );
+
             return $this->show($grn->fresh());
         });
     }
