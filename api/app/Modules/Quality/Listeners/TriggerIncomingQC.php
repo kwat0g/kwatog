@@ -39,7 +39,7 @@ class TriggerIncomingQC implements ShouldQueue
 
             $exists = Inspection::query()
                 ->where('stage', InspectionStage::Incoming->value)
-                ->where('entity_type', 'goods_receipt_note')
+                ->where('entity_type', \App\Modules\Quality\Enums\InspectionEntityType::Grn->value)
                 ->where('entity_id', $grn->id)
                 ->exists();
             if ($exists) return;
@@ -57,7 +57,7 @@ class TriggerIncomingQC implements ShouldQueue
                     'stage'             => InspectionStage::Incoming->value,
                     'status'            => InspectionStatus::Draft->value,
                     'product_id'        => $line->item_id, // resin / RM SKU
-                    'entity_type'       => 'goods_receipt_note',
+                    'entity_type'       => \App\Modules\Quality\Enums\InspectionEntityType::Grn->value,
                     'entity_id'         => $grn->id,
                     'batch_quantity'    => $batchQty,
                     'sample_size'       => (int) $aql['sample_size'],

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Payroll\Listeners;
 
-use App\Modules\HR\Models\Employee;
+use App\Modules\Auth\Models\User;
 use App\Modules\Payroll\Events\PayrollPeriodFinalized;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Facades\DB;
@@ -29,34 +29,45 @@ class NotifyEmployeesOnPayrollFinalized implements ShouldQueue
         try {
             $period = $event->period;
 
-            // We notify all active employees who had a payroll row this
-            // period. This avoids a notification flood when a separated
-            // employee's account is already deactivated.
+            // We notify all active users who had a payroll row this period.
+            // Separated employees are skipped (their user.is_active=false +
+            // employees.user_id may be null).
             $userIds = DB::table('payrolls')
                 ->where('payroll_period_id', $period->id)
                 ->join('employees', 'payrolls.employee_id', '=', 'employees.id')
                 ->whereNotNull('employees.user_id')
                 ->pluck('employees.user_id');
+            if ($userIds->isEmpty()) return;
 
-            foreach ($userIds as $userId) {
-                DB::table('notifications')->insert([
+            $users = User::query()->whereIn('id', $userIds)->where('is_active', true)->get();
+            $periodLabel = $this->periodLabel($period);
+            $periodHashId = method_exists($period, 'getHashIdAttribute') ? $period->hash_id : null;
+
+            foreach ($users as $user) {
+                $user->notifications()->create([
                     'id'              => (string) Str::uuid(),
                     'type'            => 'chain.payslip_ready',
-                    'notifiable_type' => Employee::class === Employee::class ? \App\Modules\Auth\Models\User::class : '',
-                    'notifiable_id'   => (int) $userId,
-                    'data'            => json_encode([
-                        'period_id'   => $period->hash_id ?? null,
-                        'period_name' => "{$period->start_date} – {$period->end_date}",
+                    'notifiable_type' => $user::class,
+                    'notifiable_id'   => $user->id,
+                    'data'            => [
+                        'period_id'   => $periodHashId,
+                        'period_name' => $periodLabel,
                         'message'     => 'Your payslip is ready.',
                         'link'        => '/self-service/payslips',
-                    ]),
+                    ],
                     'read_at'         => null,
-                    'created_at'      => now(),
-                    'updated_at'      => now(),
                 ]);
             }
         } catch (\Throwable $e) {
             Log::warning('NotifyEmployeesOnPayrollFinalized failed', ['error' => $e->getMessage()]);
         }
+    }
+
+    /** Defensive period label — payroll periods may carry start_date / end_date or pay_period_start / etc. */
+    private function periodLabel(object $period): string
+    {
+        $start = $period->start_date ?? $period->period_start ?? null;
+        $end   = $period->end_date   ?? $period->period_end   ?? null;
+        return $start && $end ? "{$start} – {$end}" : (string) ($period->name ?? 'Payroll Period');
     }
 }
