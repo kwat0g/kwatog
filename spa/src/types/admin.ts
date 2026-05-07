@@ -80,3 +80,32 @@ export interface CreateAdminUserResponse {
     temp_password: string | null;
   };
 }
+
+// ─── Per-User Permission Overrides (Series R/R2) ──────────────────
+export type PermissionOverrideType = 'grant' | 'revoke';
+
+export interface UserPermissionOverride {
+  id: string;
+  type: PermissionOverrideType;
+  permission: {
+    id: string;
+    slug: string;
+    name: string;
+    module: string;
+    description: string | null;
+  };
+  granted_by: { id: string; name: string; email: string } | null;
+  reason: string;
+  expires_at: string | null;
+  is_expired: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface CreateUserPermissionOverrideData {
+  permission_slug: string;
+  type: PermissionOverrideType;
+  reason: string;
+  /** ISO datetime string. Null/omitted = never expires. */
+  expires_at?: string | null;
+}

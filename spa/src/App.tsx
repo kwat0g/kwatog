@@ -15,8 +15,9 @@ const ChangePasswordPage = lazy(() => import('@/pages/auth/change-password'));
 // App
 const DashboardPage = lazy(() => import('@/pages/dashboard'));
 
-// Admin (Sprint 1)
+// Admin (Sprint 1; Series R/R1 adds /admin/roles/create)
 const RolesIndexPage = lazy(() => import('@/pages/admin/roles'));
+const CreateRolePage = lazy(() => import('@/pages/admin/roles/create'));
 const RolePermissionsPage = lazy(() => import('@/pages/admin/roles/permissions'));
 const SettingsPage = lazy(() => import('@/pages/admin/settings'));
 const AuditLogsPage = lazy(() => import('@/pages/admin/audit-logs'));
@@ -375,6 +376,14 @@ export default function App() {
             element={
               <PermissionGuard permission="admin.roles.manage">
                 <RolesIndexPage />
+              </PermissionGuard>
+            }
+          />
+          <Route
+            path="/admin/roles/create"
+            element={
+              <PermissionGuard permission="admin.roles.manage">
+                <CreateRolePage />
               </PermissionGuard>
             }
           />

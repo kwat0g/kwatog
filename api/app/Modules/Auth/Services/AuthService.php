@@ -7,6 +7,7 @@ namespace App\Modules\Auth\Services;
 use App\Modules\Admin\Services\LoginHistoryService;
 use App\Modules\Auth\Models\PasswordHistory;
 use App\Modules\Auth\Models\User;
+use App\Modules\Dashboard\Services\DashboardLayoutService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -22,6 +23,7 @@ class AuthService
 
     public function __construct(
         private readonly LoginHistoryService $loginHistory,
+        private readonly DashboardLayoutService $dashboardLayouts,
     ) {}
 
     /**
@@ -76,6 +78,22 @@ class AuthService
 
             $this->logAuthEvent('login.success', $user, $request);
             $this->loginHistory->record($user, $email, $request, LoginHistoryService::STATUS_SUCCESS);
+
+            // Series R — Task R4: clone the role's default dashboard layout
+            // to the user the first time they log in. Idempotent: subsequent
+            // logins are no-ops because user-owned rows already exist.
+            // Skipped silently for system_admin (sees every widget anyway).
+            if ($user->role?->slug !== 'system_admin') {
+                try {
+                    $this->dashboardLayouts->cloneRoleDefaultToUser($user);
+                } catch (\Throwable $e) {
+                    // Never block login on a dashboard hiccup — log and proceed.
+                    Log::channel('auth')->warning('dashboard.clone_failed', [
+                        'user_id' => $user->id,
+                        'message' => $e->getMessage(),
+                    ]);
+                }
+            }
 
             return $user->fresh(['role.permissions']);
         });

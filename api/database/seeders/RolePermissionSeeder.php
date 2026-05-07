@@ -24,6 +24,8 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'admin.settings.manage',    'name' => 'Manage System Settings'],
                 ['slug' => 'admin.audit_logs.view',    'name' => 'View Audit Logs'],
                 ['slug' => 'admin.users.manage',       'name' => 'Manage Users'],
+                // Series R — Task R2: per-user permission overrides.
+                ['slug' => 'admin.users.manage_permissions', 'name' => 'Manage Per-User Permission Overrides'],
                 ['slug' => 'admin.gov_tables.manage',  'name' => 'Manage Government Contribution Tables'],
                 ['slug' => 'admin.print.bulk',         'name' => 'Bulk Print Approved Forms'],
                 // Series E (E2/E3) — exports + document vault.
@@ -263,6 +265,9 @@ class RolePermissionSeeder extends Seeder
                 // Task A2 — alert engine
                 ['slug' => 'alerts.view',                         'name' => 'View Alerts'],
                 ['slug' => 'alerts.dismiss',                      'name' => 'Dismiss Alerts'],
+                // Series R — Task R4: dashboard layout management.
+                ['slug' => 'dashboard.layout.reset',              'name' => 'Reset Own Dashboard Layout to Default'],
+                ['slug' => 'dashboard.role_defaults.manage',      'name' => 'Manage Role-Default Dashboard Layouts'],
             ],
             // Task A9 — payroll anomaly flags
             'payroll_anomalies' => [
@@ -454,18 +459,26 @@ class RolePermissionSeeder extends Seeder
         $allSlugs = collect($allPermissions)->pluck('id', 'slug');
 
         // 2. Insert/update roles + sync permissions.
+        // Series R — Task R1: every seeded role is a system role and cannot
+        // be edited or deleted through the admin UI.
         foreach ($this->roleCatalog() as $slug => $def) {
             $role = Role::updateOrCreate(
                 ['slug' => $slug],
                 [
                     'name'        => $def['name'],
                     'description' => $def['description'],
+                    'is_system'   => true,
                 ],
             );
 
+            // Series R — Task R4: every role gets the layout-reset permission
+            // by default so users can always restore their dashboard.
             $permissions = $def['permissions'] === '*'
                 ? '*'
-                : array_values(array_unique(array_merge((array) $def['permissions'], ['notifications.view'])));
+                : array_values(array_unique(array_merge(
+                    (array) $def['permissions'],
+                    ['notifications.view', 'dashboard.layout.reset'],
+                )));
 
             $ids = $permissions === '*'
                 ? $allSlugs->values()->all()

@@ -15,6 +15,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { adminUsersApi } from '@/api/admin/users';
 import { client } from '@/api/client';
 import type { AdminUserDetail } from '@/types/admin';
+import { PermissionOverrides } from './_components/PermissionOverrides';
 
 interface RoleOption { id: string; name: string }
 interface RolesResponse { data: RoleOption[] }
@@ -285,11 +286,12 @@ export default function AdminUserDetailPage() {
           )}
         </Panel>
 
-        {/* Permission overrides placeholder (Task R2) */}
-        <Panel title="Permission Overrides" className="lg:col-span-3">
-          <p className="text-xs text-muted">
-            Per-user permission overrides will be available after Task R2.
-          </p>
+        {/* Permission overrides — Series R / Task R2 */}
+        <Panel title="Permission overrides" className="lg:col-span-3">
+          <PermissionOverrides
+            userId={id}
+            isSystemAdminUser={user.role?.slug === 'system_admin'}
+          />
         </Panel>
       </div>
 

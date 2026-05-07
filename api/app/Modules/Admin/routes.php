@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Modules\Admin\Controllers\PermissionController;
 use App\Modules\Admin\Controllers\RoleController;
 use App\Modules\Admin\Controllers\UserAdminController;
+use App\Modules\Admin\Controllers\UserPermissionOverrideController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('admin')
@@ -18,9 +19,20 @@ Route::prefix('admin')
             Route::put('roles/{role}',           [RoleController::class, 'update'])->middleware('permission:admin.roles.manage');
             Route::delete('roles/{role}',        [RoleController::class, 'destroy'])->middleware('permission:admin.roles.manage');
             Route::put('roles/{role}/permissions', [RoleController::class, 'syncPermissions'])->middleware('permission:admin.roles.manage');
+            // Series R — Task R1: clone an existing role into a new custom role.
+            Route::post('roles/{role}/clone',    [RoleController::class, 'clone'])->middleware('permission:admin.roles.manage');
 
             Route::get('permissions/matrix',     [PermissionController::class, 'matrix'])->middleware('permission:admin.roles.manage');
         });
+
+        // Series R — Task R2: per-user permission overrides.
+        Route::middleware('permission:admin.users.manage_permissions')
+            ->prefix('users/{user}/overrides')
+            ->group(function (): void {
+                Route::get('/',           [UserPermissionOverrideController::class, 'index']);
+                Route::post('/',          [UserPermissionOverrideController::class, 'store']);
+                Route::delete('{override}', [UserPermissionOverrideController::class, 'destroy']);
+            });
 
         // U2 — central user-management surface.
         Route::prefix('users')

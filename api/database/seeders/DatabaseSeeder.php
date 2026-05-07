@@ -64,6 +64,11 @@ class DatabaseSeeder extends Seeder
             // scheduled exports, and column preferences so the new admin
             // pages and Documents tabs aren't empty after migrate --seed.
             SeriesEDemoSeeder::class,
+
+            // Series R — Task R4. Catalog must run before role-default
+            // layouts so widget keys exist when layouts reference them.
+            DashboardWidgetSeeder::class,
+            DashboardRoleLayoutSeeder::class,
         ]);
     }
 }

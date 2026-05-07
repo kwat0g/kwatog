@@ -10,11 +10,15 @@ class RoleResource extends JsonResource
 {
     public function toArray($request): array
     {
+        $isSystem = (bool) ($this->is_system ?? false);
+
         return [
             'id'                => $this->hash_id,
             'name'              => $this->name,
             'slug'              => $this->slug,
             'description'       => $this->description,
+            'is_system'         => $isSystem,
+            'type'              => $isSystem ? 'System' : 'Custom',
             'users_count'       => $this->users_count ?? null,
             'permissions_count' => $this->permissions_count ?? null,
             'permissions'       => $this->whenLoaded('permissions', fn () =>
