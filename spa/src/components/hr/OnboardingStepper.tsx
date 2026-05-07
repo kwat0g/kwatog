@@ -35,7 +35,7 @@ export function OnboardingStepper({ employeeId, bare = false }: Props) {
         <div className="text-xs text-danger">Failed to load onboarding status.</div>
       )}
 
-      {data && (
+      {data && Array.isArray(data.steps) && (
         <>
           <div className="flex flex-wrap items-start gap-x-4 gap-y-3">
             {data.steps.map((step, idx) => (
