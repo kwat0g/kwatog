@@ -72,15 +72,28 @@ class SeriesEDemoSeeder extends Seeder
             return;
         }
 
+        // payrolls table doesn't have its own status — finalization lives on
+        // payroll_periods. Pick the most recent rows from finalized periods,
+        // and if there are none yet, fall back to whatever is computed.
         $rows = Payroll::query()
             ->with(['employee.department', 'employee.position', 'period', 'deductionDetails'])
-            ->where('status', 'finalized')
+            ->whereHas('period', fn ($q) => $q->where('status', 'finalized'))
+            ->whereNotNull('computed_at')
             ->orderByDesc('id')
             ->limit(5)
             ->get();
 
         if ($rows->isEmpty()) {
-            $this->command?->info('SeriesEDemoSeeder: no finalized payrolls to attach payslips to.');
+            $rows = Payroll::query()
+                ->with(['employee.department', 'employee.position', 'period', 'deductionDetails'])
+                ->whereNotNull('computed_at')
+                ->orderByDesc('id')
+                ->limit(5)
+                ->get();
+        }
+
+        if ($rows->isEmpty()) {
+            $this->command?->info('SeriesEDemoSeeder: no computed payrolls to attach payslips to.');
             return;
         }
 
@@ -103,8 +116,11 @@ class SeriesEDemoSeeder extends Seeder
             return;
         }
 
+        // Invoice::status is enum-cast to InvoiceStatus, but the DB column
+        // stores the string value ("finalized", "partial", "paid"). whereIn
+        // works against the underlying string values.
         $invoices = Invoice::query()
-            ->with(['customer', 'items.product', 'items.account'])
+            ->with(['customer', 'items'])
             ->whereIn('status', ['finalized', 'partial', 'paid'])
             ->orderByDesc('id')
             ->limit(3)
