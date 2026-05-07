@@ -1,5 +1,4 @@
 import { client } from '../client';
-import type { ApiSuccess } from '@/types';
 import type {
   EmployeeAccountStatus,
   ProvisionAccountPayload,
@@ -13,9 +12,13 @@ import type {
  */
 export const employeeAccountsApi = {
   status: (employeeId: string) =>
+    // Laravel wraps a JsonResource in `{ data: ... }`; unwrap one level so
+    // the consumer gets a flat EmployeeAccountStatus.
     client
-      .get<ApiSuccess<EmployeeAccountStatus>>(`/hr/employees/${employeeId}/account-status`)
-      .then((r) => (r.data as { data?: EmployeeAccountStatus } & EmployeeAccountStatus).data ?? (r.data as unknown as EmployeeAccountStatus)),
+      .get<{ data?: EmployeeAccountStatus } & EmployeeAccountStatus>(
+        `/hr/employees/${employeeId}/account-status`,
+      )
+      .then((r) => r.data?.data ?? (r.data as unknown as EmployeeAccountStatus)),
 
   provision: (employeeId: string, payload?: ProvisionAccountPayload) =>
     client
