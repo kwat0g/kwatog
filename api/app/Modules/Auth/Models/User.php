@@ -82,15 +82,57 @@ class User extends Authenticatable
 
     /**
      * @return array<int, string>
+     *
+     * Series R — Task R2.
+     *
+     * Effective permission set = role permissions + grants - revokes,
+     * with expired overrides ignored. Cached for 5 min; mutations through
+     * UserPermissionOverrideService::set / ::remove flush this key via
+     * flushPermissionsCache(). RolePermissionSync flushes all caches.
+     *
+     * The system_admin short-circuit lives in hasPermission() — overrides
+     * are intentionally NOT applied to system_admin so the role remains a
+     * hard escape hatch (deliberate policy; documented on the PR).
      */
     public function getPermissionSlugsAttribute(): array
     {
         return Cache::remember(
             "auth:permissions:{$this->id}",
             300,
-            fn () => $this->role
-                ? $this->role->permissions()->pluck('slug')->all()
-                : []
+            function () {
+                if (! $this->role) {
+                    return [];
+                }
+
+                /** @var array<int, string> $rolePerms */
+                $rolePerms = $this->role->permissions()->pluck('permissions.slug', 'permissions.id')->all();
+
+                $overrideRows = \App\Modules\Admin\Models\UserPermissionOverride::query()
+                    ->where('user_id', $this->id)
+                    ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+                    ->with('permission:id,slug')
+                    ->get();
+
+                foreach ($overrideRows as $row) {
+                    /** @var \App\Modules\Auth\Models\Permission|null $perm */
+                    $perm = $row->permission;
+                    if (! $perm) {
+                        continue;
+                    }
+
+                    $type = $row->type instanceof \App\Common\Enums\PermissionOverrideType
+                        ? $row->type
+                        : \App\Common\Enums\PermissionOverrideType::tryFrom((string) $row->type);
+
+                    if ($type === \App\Common\Enums\PermissionOverrideType::Grant) {
+                        $rolePerms[$perm->id] = $perm->slug;
+                    } elseif ($type === \App\Common\Enums\PermissionOverrideType::Revoke) {
+                        unset($rolePerms[$perm->id]);
+                    }
+                }
+
+                return array_values($rolePerms);
+            },
         );
     }
 

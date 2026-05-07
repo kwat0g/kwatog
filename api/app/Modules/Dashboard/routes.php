@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Modules\Dashboard\Controllers\DashboardController;
+use App\Modules\Dashboard\Controllers\DashboardLayoutController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -24,3 +25,19 @@ Route::middleware('auth:sanctum')->prefix('dashboards')->group(function () {
     // beyond authentication needed (every authenticated user can see their own).
     Route::get('/employee',       [DashboardController::class, 'employee']);
 });
+
+/*
+ * Series R — Task R4 — role-defaulted dashboard layout endpoints.
+ *
+ * No `permission:` middleware on the layout endpoints themselves: every
+ * authenticated user has a dashboard. Per-widget permission gating happens
+ * inside DashboardLayoutService::getEffectiveLayout / ::listAvailableWidgets.
+ */
+Route::prefix('dashboard')
+    ->middleware(['auth:sanctum', 'session.timeout', 'password.expired'])
+    ->group(function (): void {
+        Route::get('/widgets',       [DashboardLayoutController::class, 'widgets']);
+        Route::get('/layout',        [DashboardLayoutController::class, 'show']);
+        Route::put('/layout',        [DashboardLayoutController::class, 'save']);
+        Route::post('/layout/reset', [DashboardLayoutController::class, 'reset']);
+    });

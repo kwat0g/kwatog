@@ -45,7 +45,7 @@ export default function CreateMaintenanceWorkOrderPage() {
         Object.entries(error.response.data.errors).forEach(([field, messages]) => {
           setError(field as keyof FormValues, { type: 'server', message: messages[0] });
         });
-        toast.error(e.response?.data?.message || 'Validation failed.');
+        toast.error(error.response?.data?.message || 'Validation failed.');
       }
     },
   });

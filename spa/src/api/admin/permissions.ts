@@ -5,6 +5,8 @@ export interface PermissionRow {
   slug: string;
   name: string;
   module: string;
+  /** Series R/R1 — present in matrix payload to populate the editor's per-row hint. */
+  description?: string | null;
 }
 
 export type PermissionMatrix = Record<string, PermissionRow[]>;

@@ -15,14 +15,13 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { ChainHeader, ApprovalTimeline } from '@/components/chain';
 import { buildLeaveChain } from '@/lib/chains';
 import { fromLeaveRequest } from '@/lib/approvals';
-import { usePermission } from '@/hooks/usePermission';
+import { CanDo } from '@/components/guards/CanDo';
 import { useAuthStore } from '@/stores/authStore';
 import { formatDate } from '@/lib/formatDate';
 
 export default function LeaveDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
   const qc = useQueryClient();
-  const { can } = usePermission();
   const user = useAuthStore((s) => s.user);
   const [reject, setReject] = useState(false);
   const [reason, setReason] = useState('');
@@ -75,17 +74,18 @@ export default function LeaveDetailPage() {
         backLabel="Leaves"
         actions={
           <>
-            {req.status === 'pending_dept' && can('leave.approve_dept') && (
-              <>
+            {/* Series R/R3 — declarative permission gating via <CanDo>. */}
+            {req.status === 'pending_dept' && (
+              <CanDo permission="leave.approve_dept">
                 <Button variant="primary" size="sm" icon={<Check size={12} />} disabled={approveDept.isPending} loading={approveDept.isPending} onClick={() => approveDept.mutate()}>Approve</Button>
                 <Button variant="danger" size="sm" icon={<X size={12} />} onClick={() => setReject(true)}>Reject</Button>
-              </>
+              </CanDo>
             )}
-            {req.status === 'pending_hr' && can('leave.approve_hr') && (
-              <>
+            {req.status === 'pending_hr' && (
+              <CanDo permission="leave.approve_hr">
                 <Button variant="primary" size="sm" icon={<Check size={12} />} disabled={approveHR.isPending} loading={approveHR.isPending} onClick={() => approveHR.mutate()}>Approve</Button>
                 <Button variant="danger" size="sm" icon={<X size={12} />} onClick={() => setReject(true)}>Reject</Button>
-              </>
+              </CanDo>
             )}
             {canCancel && (
               <Button variant="secondary" size="sm" icon={<RotateCcw size={12} />} onClick={() => cancelMut.mutate()} disabled={cancelMut.isPending}>Cancel</Button>

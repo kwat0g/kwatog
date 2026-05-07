@@ -51,7 +51,7 @@ export default function CreateAssetPage() {
       if (err.response?.status === 422 && err.response.data.errors) {
         Object.entries(err.response.data.errors).forEach(([k, v]) =>
           setError(k as keyof FormValues, { type: 'server', message: v[0] }));
-        toast.error(e.response?.data?.message || 'Validation failed.');
+        toast.error(err.response?.data?.message || 'Validation failed.');
       }
     },
   });

@@ -3,14 +3,14 @@
 > Every table, every column, every type. Tasks reference this document.
 > **Conventions:** PKs = `id` bigint auto-increment (exposed as HashIDs). Money = `decimal(15,2)` NEVER float. Timestamps = `created_at, updated_at`. FK columns = `{table_singular}_id`. Soft deletes where noted.
 
-## Total: ~85 tables across 15 modules
+## Total: ~88 tables across 15 modules
 
 ---
 
-## AUTH & SYSTEM (12 tables)
+## AUTH & SYSTEM (13 tables)
 
 ### roles
-id, name (string 50), slug (string 50 unique), description (text nullable), created_at, updated_at
+id, name (string 50), slug (string 50 unique), description (text nullable), is_system (bool default false — Series R/R1), created_at, updated_at
 
 ### permissions
 id, name (string 100), slug (string 100 unique), module (string 50), description (text nullable), created_at, updated_at
@@ -47,6 +47,25 @@ id, user_id (FK users), notification_type (string 100), channel (string 20: in_a
 
 ### settings
 id, key (string 100 unique), value (json), group (string 50), created_at, updated_at
+
+### user_permission_overrides (Series R — Task R2)
+id, user_id (FK users cascade), permission_id (FK permissions cascade), type (string 10: 'grant'|'revoke'), granted_by (FK users), reason (text), expires_at (timestamp nullable), created_at, updated_at, UNIQUE (user_id, permission_id), INDEX (expires_at), INDEX (user_id, type)
+
+> Per-user permission overrides. At runtime the effective permission set is `role.permissions + grants - revokes`, expired rows ignored. The runtime resolver lives in `User::getPermissionSlugsAttribute`. `system_admin` short-circuits before overrides are applied (deliberate policy: hard escape hatch).
+
+---
+
+## DASHBOARDS (2 tables — Series R / Task R4)
+
+### dashboard_widgets
+id, key (string 100 unique), name (string 100), description (text nullable), module (string 50), permission (string 100 nullable), default_w (tinyint default 12), default_h (tinyint default 4), created_at, updated_at, INDEX (module)
+
+> Catalog of widget keys. The SPA registry maps each `key` to a React component; rows whose `permission` is missing from the user's effective set are stripped at render time.
+
+### dashboard_layouts
+id, owner_type (string 10: 'role'|'user'), owner_id (bigint), widget_key (string 100 — no FK), position_x (smallint default 0), position_y (smallint default 0), width (tinyint default 12), height (tinyint default 4), created_at, updated_at, INDEX (owner_type, owner_id), INDEX (widget_key)
+
+> Polymorphic widget placement. Role rows = seeded defaults (one per role), user rows = personal overrides. `AuthService::login` clones role rows → user rows on first login (idempotent).
 
 ---
 

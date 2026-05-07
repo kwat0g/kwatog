@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Admin\Controllers;
 
+use App\Modules\Admin\Requests\CloneRoleRequest;
 use App\Modules\Admin\Requests\StoreRoleRequest;
 use App\Modules\Admin\Requests\SyncRolePermissionsRequest;
 use App\Modules\Admin\Requests\UpdateRoleRequest;
@@ -49,5 +50,14 @@ class RoleController
     {
         $role = $this->service->syncPermissions($role, $request->validated('permission_slugs'));
         return new RoleResource($role);
+    }
+
+    /**
+     * R1 — POST /admin/roles/{role}/clone
+     */
+    public function clone(CloneRoleRequest $request, Role $role): JsonResponse
+    {
+        $clone = $this->service->clone($role, $request->validated());
+        return (new RoleResource($clone))->response()->setStatusCode(201);
     }
 }
