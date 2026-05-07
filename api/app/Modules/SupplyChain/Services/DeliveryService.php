@@ -186,6 +186,11 @@ class DeliveryService
             }
         }
 
+        // Series C — Task C4. Real-time chain progress for the delivery
+        // detail page on the SPA.
+        app(\App\Common\Services\ChainBroadcaster::class)
+            ->broadcastFor($d->fresh(), $next->value, auth()->user());
+
         return $this->show($d);
     }
 
@@ -234,7 +239,12 @@ class DeliveryService
             // listeners (Finance notification, dashboard refresh) only see
             // the persisted state.
             $delivery = $this->show($d);
-            DB::afterCommit(fn () => DeliveryConfirmed::dispatch($delivery, $invoiceId));
+            DB::afterCommit(function () use ($delivery, $invoiceId, $by) {
+                DeliveryConfirmed::dispatch($delivery, $invoiceId);
+                // Series C — Task C4. Real-time chain progress.
+                app(\App\Common\Services\ChainBroadcaster::class)
+                    ->broadcastFor($delivery, DeliveryStatus::Confirmed->value, $by);
+            });
 
             return $delivery;
         });

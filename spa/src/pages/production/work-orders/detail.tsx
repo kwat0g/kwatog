@@ -18,6 +18,7 @@ import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { ChainHeader, LinkedRecords, ActivityStream } from '@/components/chain';
 import { useEcho } from '@/hooks/useEcho';
+import { useChainProgress } from '@/hooks/useChainProgress';
 import { usePermission } from '@/hooks/usePermission';
 import type { WorkOrderStatus } from '@/types/production';
 
@@ -68,6 +69,9 @@ export default function WorkOrderDetailPage() {
   useEcho(`production.wo.${id}`, '.output.recorded', () => {
     qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'detail', id] });
   });
+
+  // Series C — Task C4. Real-time chain progress (status transitions).
+  useChainProgress('work_order', id, ['production', 'work-orders', 'detail', id]);
 
   const mut = useMutation({
     mutationFn: async (action: LifecycleAction) => {

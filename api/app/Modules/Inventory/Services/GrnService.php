@@ -159,7 +159,14 @@ class GrnService
                 'accepted_by' => $by->id,
                 'accepted_at' => now(),
             ]);
-            return $grn->fresh();
+            $fresh = $grn->fresh();
+            // Series C — Task C4. Real-time chain progress for the GRN
+            // detail page on the SPA.
+            DB::afterCommit(fn () =>
+                app(\App\Common\Services\ChainBroadcaster::class)
+                    ->broadcastFor($fresh, GrnStatus::Accepted->value, $by)
+            );
+            return $fresh;
         });
     }
 
@@ -211,7 +218,7 @@ class GrnService
         if ($grn->status !== GrnStatus::PendingQc) {
             throw new RuntimeException('Only pending_qc GRNs can be rejected.');
         }
-        return DB::transaction(function () use ($grn, $reason, $by) {
+        $result = DB::transaction(function () use ($grn, $reason, $by) {
             $grn->update([
                 'status'          => GrnStatus::Rejected,
                 'rejected_reason' => $reason,
@@ -220,6 +227,15 @@ class GrnService
             ]);
             return $grn->fresh();
         });
+
+        // Series C — Task C4. Real-time chain progress.
+        app(\App\Common\Services\ChainBroadcaster::class)->broadcastFor(
+            $result,
+            GrnStatus::Rejected->value,
+            $by,
+        );
+
+        return $result;
     }
 
     /**

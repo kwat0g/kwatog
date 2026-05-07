@@ -439,6 +439,14 @@ class WorkOrderService
     {
         if ($from === $to) return;
         event(new \App\Modules\Production\Events\WorkOrderStatusChanged($wo, $from, $to, $reason));
+
+        // Series C — Task C4. Re-broadcast as the canonical chain event so
+        // SPA detail pages can subscribe via a uniform `private-chain.*` channel.
+        app(\App\Common\Services\ChainBroadcaster::class)->broadcastFor(
+            $wo,
+            $to,
+            auth()->user(),
+        );
     }
 
     /**

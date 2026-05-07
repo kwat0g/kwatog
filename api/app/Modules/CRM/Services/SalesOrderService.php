@@ -237,7 +237,18 @@ class SalesOrderService
 
             // Sprint 6 audit §1.7: broadcast on production.dashboard so the
             // chain stage breakdown updates without a manual refetch.
-            DB::afterCommit(fn () => event(new \App\Modules\CRM\Events\SalesOrderConfirmed($so->fresh())));
+            DB::afterCommit(function () use ($so) {
+                $fresh = $so->fresh();
+                event(new \App\Modules\CRM\Events\SalesOrderConfirmed($fresh));
+
+                // Series C — Task C4. Real-time chain progress for the
+                // SO detail page.
+                app(\App\Common\Services\ChainBroadcaster::class)->broadcastFor(
+                    $fresh,
+                    \App\Modules\CRM\Enums\SalesOrderStatus::Confirmed->value,
+                    auth()->user(),
+                );
+            });
 
             return $this->show($so->fresh());
         });
@@ -284,6 +295,15 @@ class SalesOrderService
                     $woService->cancel($wo, $reason ?? "Sales order {$so->so_number} cancelled");
                 }
             }
+
+            // Series C — Task C4. Real-time chain progress.
+            DB::afterCommit(function () use ($so) {
+                app(\App\Common\Services\ChainBroadcaster::class)->broadcastFor(
+                    $so->fresh(),
+                    \App\Modules\CRM\Enums\SalesOrderStatus::Cancelled->value,
+                    auth()->user(),
+                );
+            });
 
             return $this->show($so->fresh());
         });

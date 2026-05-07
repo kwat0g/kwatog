@@ -82,3 +82,10 @@ Schedule::command('hr:onboarding-reminders')
     ->dailyAt('09:00')
     ->withoutOverlapping()
     ->onOneServer();
+
+// Series C — Task C5. Chain bottleneck scan, hourly. Idempotent (24h
+// dedup window inside the command), so re-running is safe.
+Schedule::command('chain:check-bottlenecks')
+    ->hourly()
+    ->withoutOverlapping(10)
+    ->onOneServer();
