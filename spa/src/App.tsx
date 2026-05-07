@@ -21,6 +21,11 @@ const RolePermissionsPage = lazy(() => import('@/pages/admin/roles/permissions')
 const SettingsPage = lazy(() => import('@/pages/admin/settings'));
 const AuditLogsPage = lazy(() => import('@/pages/admin/audit-logs'));
 
+// Admin > Users (Task U2)
+const AdminUsersIndexPage = lazy(() => import('@/pages/admin/users'));
+const AdminUserDetailPage = lazy(() => import('@/pages/admin/users/detail'));
+const AdminCreateUserPage = lazy(() => import('@/pages/admin/users/create'));
+
 // Alerts (Task A2)
 const AlertsListPage = lazy(() => import('@/pages/alerts'));
 
@@ -184,11 +189,14 @@ const HrDashboardPage           = lazy(() => import('@/pages/dashboard/hr'));
 const PpcDashboardPage          = lazy(() => import('@/pages/dashboard/ppc'));
 const AccountingDashboardPage   = lazy(() => import('@/pages/dashboard/accounting'));
 
-// Self-service (Sprint 8 — Task 74)
+// Self-service (Sprint 8 — Task 74; U3 adds /leaves, /profile, /loans canonical slugs)
 const SelfServiceHomePage             = lazy(() => import('@/pages/self-service'));
 const SelfServiceDtrPage              = lazy(() => import('@/pages/self-service/dtr'));
 const SelfServiceLeavePage            = lazy(() => import('@/pages/self-service/leave'));
+const SelfServiceLeavesPage           = lazy(() => import('@/pages/self-service/leaves'));
 const SelfServiceMePage               = lazy(() => import('@/pages/self-service/me'));
+const SelfServiceProfilePage          = lazy(() => import('@/pages/self-service/profile'));
+const SelfServiceLoansPage            = lazy(() => import('@/pages/self-service/loans'));
 const SelfServiceNotifPrefsPage       = lazy(() => import('@/pages/self-service/notification-preferences'));
 
 // Notifications (Sprint 8 — Task 77)
@@ -381,6 +389,32 @@ export default function App() {
             element={
               <PermissionGuard permission="admin.audit_logs.view">
                 <AuditLogsPage />
+              </PermissionGuard>
+            }
+          />
+
+          {/* U2 — Admin user management */}
+          <Route
+            path="/admin/users"
+            element={
+              <PermissionGuard permission="admin.users.manage">
+                <AdminUsersIndexPage />
+              </PermissionGuard>
+            }
+          />
+          <Route
+            path="/admin/users/create"
+            element={
+              <PermissionGuard permission="admin.users.manage">
+                <AdminCreateUserPage />
+              </PermissionGuard>
+            }
+          />
+          <Route
+            path="/admin/users/:id"
+            element={
+              <PermissionGuard permission="admin.users.manage">
+                <AdminUserDetailPage />
               </PermissionGuard>
             }
           />
@@ -706,8 +740,13 @@ export default function App() {
         >
           <Route path="/self-service" element={<SelfServiceHomePage />} />
           <Route path="/self-service/dtr" element={<SelfServiceDtrPage />} />
+          {/* Legacy slugs (kept for backward compatibility); canonical paths below. */}
           <Route path="/self-service/leave" element={<SelfServiceLeavePage />} />
           <Route path="/self-service/me" element={<SelfServiceMePage />} />
+          {/* U3 — canonical slugs aligned with bottom nav. */}
+          <Route path="/self-service/leaves" element={<SelfServiceLeavesPage />} />
+          <Route path="/self-service/profile" element={<SelfServiceProfilePage />} />
+          <Route path="/self-service/loans" element={<SelfServiceLoansPage />} />
           <Route path="/self-service/notification-preferences" element={<SelfServiceNotifPrefsPage />} />
           <Route
             path="/self-service/payslips"

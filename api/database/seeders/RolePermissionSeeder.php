@@ -41,6 +41,11 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'hr.employees.export',         'name' => 'Export Employees'],
                 ['slug' => 'hr.employees.view_sensitive', 'name' => 'View Sensitive Employee Data (SSS, TIN, Bank)'],
                 ['slug' => 'hr.employees.separate',       'name' => 'Initiate Employee Separation'],
+                // U1 — system account lifecycle.
+                ['slug' => 'hr.employees.account_status',     'name' => 'View Employee System-Account Status'],
+                ['slug' => 'hr.employees.provision_account',  'name' => 'Provision Employee System Account'],
+                ['slug' => 'hr.employees.deactivate_account', 'name' => 'Deactivate Employee System Account'],
+                ['slug' => 'hr.employees.reset_password',     'name' => 'Reset Employee System Account Password'],
             ],
 
             // Attendance
@@ -294,6 +299,7 @@ class RolePermissionSeeder extends Seeder
                         'search.global',
                         'notifications.preferences.manage',
                         'alerts.view',                                            // Task A2
+                        // U1 — provisioning workflow (covered by $this->module('hr')).
                     ],
                 ),
             ],

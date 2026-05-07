@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { Home, Calendar, FileText, Receipt, User } from 'lucide-react';
+import { Home, Calendar, FileText, Receipt, User, Wallet } from 'lucide-react';
 
 /**
  * Sprint 8 — Task 74. Mobile-first shell for the self-service portal.
@@ -18,12 +18,16 @@ import { Home, Calendar, FileText, Receipt, User } from 'lucide-react';
  * an employee ID. Bottom nav has 5 large tap targets at ≥ 44px (Apple HIG).
  */
 
+// U3 — Bottom nav. Uses canonical slugs `/leaves`, `/profile`, `/loans`;
+// legacy `/leave` and `/me` routes still resolve via re-export shims for
+// backward compatibility (registered separately in App.tsx).
 const TABS = [
   { to: '/self-service',                 label: 'Home',    Icon: Home,     end: true },
   { to: '/self-service/dtr',             label: 'DTR',     Icon: Calendar, end: false },
-  { to: '/self-service/leave',           label: 'Leave',   Icon: FileText, end: false },
+  { to: '/self-service/leaves',          label: 'Leave',   Icon: FileText, end: false },
+  { to: '/self-service/loans',           label: 'Loans',   Icon: Wallet,   end: false },
   { to: '/self-service/payslips',        label: 'Payslip', Icon: Receipt,  end: false },
-  { to: '/self-service/me',              label: 'Me',      Icon: User,     end: false },
+  { to: '/self-service/profile',         label: 'Me',      Icon: User,     end: false },
 ] as const;
 
 export function SelfServiceLayout() {
@@ -53,7 +57,7 @@ export function SelfServiceLayout() {
           background tints the iOS home-indicator gutter; the inner row is
           padded so tap targets stay above the gutter. */}
       <nav
-        className="fixed bottom-0 left-0 right-0 border-t border-default bg-canvas grid grid-cols-5 z-10"
+        className="fixed bottom-0 left-0 right-0 border-t border-default bg-canvas grid grid-cols-6 z-10"
         style={{
           paddingBottom: 'env(safe-area-inset-bottom, 0px)',
           height: 'calc(56px + env(safe-area-inset-bottom, 0px))',

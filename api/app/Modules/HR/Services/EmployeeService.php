@@ -18,6 +18,7 @@ class EmployeeService
 {
     public function __construct(
         private readonly DocumentSequenceService $sequences,
+        private readonly OnboardingService $onboarding,
     ) {}
 
     public function list(array $filters, ?User $user = null): LengthAwarePaginator
@@ -114,6 +115,10 @@ class EmployeeService
                 'created_at'     => now(),
             ]);
 
+            // U4 — initialize onboarding tracker (auto-completes profile +
+            // leave-balance steps inside this same transaction).
+            $this->onboarding->initialize($employee);
+
             // Seed default leave balances if leave module is loaded.
             if (Schema::hasTable('leave_types') && Schema::hasTable('employee_leave_balances')) {
                 $year = (int) now()->format('Y');
@@ -133,6 +138,10 @@ class EmployeeService
                         );
                     });
             }
+
+            // Recompute once at the very end so derived steps (gov ids, banking)
+            // pick up any complete-on-create info.
+            $this->onboarding->recompute($employee);
 
             return $employee->load(['department', 'position']);
         });

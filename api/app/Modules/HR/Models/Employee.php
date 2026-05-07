@@ -87,6 +87,11 @@ class Employee extends Model
         return $this->hasOne(\App\Modules\Auth\Models\User::class, 'employee_id');
     }
 
+    public function onboarding(): HasOne
+    {
+        return $this->hasOne(EmployeeOnboarding::class);
+    }
+
     public function documents(): HasMany
     {
         return $this->hasMany(EmployeeDocument::class)->orderByDesc('uploaded_at');

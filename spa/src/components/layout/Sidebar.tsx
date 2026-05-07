@@ -154,6 +154,7 @@ const SECTIONS: NavSection[] = [
     label: 'Admin',
     items: [
       { to: '/admin/settings', label: 'Settings', icon: SettingsIcon, permission: 'admin.settings.manage' },
+      { to: '/admin/users', label: 'Users', icon: Users2, permission: 'admin.users.manage' },
       { to: '/admin/roles', label: 'Roles', icon: Lock, permission: 'admin.roles.manage' },
       { to: '/admin/gov-tables', label: 'Gov Tables', icon: Landmark, permission: 'admin.gov_tables.manage' },
       { to: '/admin/audit-logs', label: 'Audit logs', icon: BookOpen, permission: 'admin.audit_logs.view' },

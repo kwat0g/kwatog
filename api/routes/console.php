@@ -75,3 +75,10 @@ Schedule::command('production:send-weekly-summary')
     ->fridays()
     ->at('18:00')
     ->onOneServer();
+
+// U4 — Onboarding reminders. Daily at 09:00, notifies HR for any
+// employee onboarding open > 3 days without completion.
+Schedule::command('hr:onboarding-reminders')
+    ->dailyAt('09:00')
+    ->withoutOverlapping()
+    ->onOneServer();
