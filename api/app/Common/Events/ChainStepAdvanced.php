@@ -6,7 +6,7 @@ namespace App\Common\Events;
 
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
@@ -26,7 +26,7 @@ use Illuminate\Queue\SerializesModels;
  * items. Channel access is gated by per-entity-type permissions in
  * routes/channels.php. Do NOT extend the payload without a security review.
  */
-class ChainStepAdvanced implements ShouldBroadcast
+class ChainStepAdvanced implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
