@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Auth\Services;
 
+use App\Modules\Admin\Services\LoginHistoryService;
 use App\Modules\Auth\Models\PasswordHistory;
 use App\Modules\Auth\Models\User;
 use Illuminate\Http\Request;
@@ -19,6 +20,10 @@ class AuthService
     private const LOCK_MINUTES = 15;
     private const PASSWORD_HISTORY_DEPTH = 3;
 
+    public function __construct(
+        private readonly LoginHistoryService $loginHistory,
+    ) {}
+
     /**
      * Authenticate by email + password. Increments lock counter on failure,
      * resets on success, regenerates the session, and logs the event.
@@ -31,13 +36,20 @@ class AuthService
             /** @var User|null $user */
             $user = User::where('email', $email)->first();
 
-            if (! $user || ! $user->is_active) {
+            if (! $user) {
+                $this->loginHistory->record(null, $email, $request, LoginHistoryService::STATUS_FAILED_CREDENTIALS, 'unknown_email');
+                throw ValidationException::withMessages(['email' => 'Invalid credentials.']);
+            }
+
+            if (! $user->is_active) {
+                $this->loginHistory->record($user, $email, $request, LoginHistoryService::STATUS_FAILED_INACTIVE, 'account_inactive');
                 throw ValidationException::withMessages(['email' => 'Invalid credentials.']);
             }
 
             if ($user->isLocked()) {
                 $remaining = (int) max(now()->diffInMinutes($user->locked_until, false), 0);
                 $this->logAuthEvent('login.locked', $user, $request);
+                $this->loginHistory->record($user, $email, $request, LoginHistoryService::STATUS_FAILED_LOCKED, 'account_locked');
                 abort(423, "Account locked. Try again in {$remaining} minutes.");
             }
 
@@ -49,6 +61,7 @@ class AuthService
                 }
                 $user->save();
                 $this->logAuthEvent('login.failed', $user, $request);
+                $this->loginHistory->record($user, $email, $request, LoginHistoryService::STATUS_FAILED_CREDENTIALS, 'invalid_password');
                 throw ValidationException::withMessages(['email' => 'Invalid credentials.']);
             }
 
@@ -62,6 +75,7 @@ class AuthService
             $request->session()->regenerate();
 
             $this->logAuthEvent('login.success', $user, $request);
+            $this->loginHistory->record($user, $email, $request, LoginHistoryService::STATUS_SUCCESS);
 
             return $user->fresh(['role.permissions']);
         });

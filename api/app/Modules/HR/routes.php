@@ -3,8 +3,12 @@
 declare(strict_types=1);
 
 use App\Modules\HR\Controllers\DepartmentController;
+use App\Modules\HR\Controllers\EmployeeAccountController;
 use App\Modules\HR\Controllers\EmployeeController;
+use App\Modules\HR\Controllers\EmployeeOnboardingController;
 use App\Modules\HR\Controllers\PositionController;
+use App\Modules\HR\Controllers\ProfileUpdateReviewController;
+use App\Modules\HR\Controllers\SelfServiceController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function () {
@@ -31,14 +35,54 @@ Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function 
     Route::prefix('employees')->group(function () {
         Route::get('/', [EmployeeController::class, 'index'])->middleware('permission:hr.employees.view');
         Route::post('/', [EmployeeController::class, 'store'])->middleware('permission:hr.employees.create');
+
+        // U1 — bulk account provisioning (must come before {employee} segment).
+        Route::post('/bulk-provision-accounts', [EmployeeAccountController::class, 'bulkProvision'])
+            ->middleware('permission:hr.employees.provision_account');
+
         Route::get('/{employee}', [EmployeeController::class, 'show'])->middleware('permission:hr.employees.view');
         Route::put('/{employee}', [EmployeeController::class, 'update'])->middleware('permission:hr.employees.edit');
         Route::delete('/{employee}', [EmployeeController::class, 'destroy'])->middleware('permission:hr.employees.delete');
         Route::patch('/{employee}/separate', [EmployeeController::class, 'separate'])->middleware('permission:hr.employees.separate');
 
+        // U1 — system account lifecycle.
+        Route::get('/{employee}/account-status',     [EmployeeAccountController::class, 'status'])
+            ->middleware('permission:hr.employees.account_status');
+        Route::post('/{employee}/provision-account', [EmployeeAccountController::class, 'provision'])
+            ->middleware('permission:hr.employees.provision_account');
+        Route::post('/{employee}/deactivate-account',[EmployeeAccountController::class, 'deactivate'])
+            ->middleware('permission:hr.employees.deactivate_account');
+        Route::patch('/{employee}/reset-password',   [EmployeeAccountController::class, 'resetPassword'])
+            ->middleware('permission:hr.employees.reset_password');
+
+        // U4 — onboarding workflow.
+        Route::get('/{employee}/onboarding',           [EmployeeOnboardingController::class, 'show'])
+            ->middleware('permission:hr.employees.view');
+        Route::post('/{employee}/onboarding/recompute',[EmployeeOnboardingController::class, 'recompute'])
+            ->middleware('permission:hr.employees.edit');
+
         // Sprint 8 — Task 71: separation + clearance flow
         Route::post('/{employee}/separation', [\App\Modules\HR\Controllers\SeparationController::class, 'initiate'])
             ->middleware('permission:hr.separation.initiate');
+    });
+
+    // U3 (HR side) — review queue for profile-update requests.
+    Route::prefix('profile-update-requests')->group(function () {
+        Route::get('/', [ProfileUpdateReviewController::class, 'index'])
+            ->middleware('permission:hr.employees.view');
+        Route::patch('/{profileUpdateRequest}/review', [ProfileUpdateReviewController::class, 'review'])
+            ->middleware('permission:hr.employees.edit');
+    });
+
+    // U3 — Self-service portal (every employee). Auth-only; the controller
+    // resolves the employee from the session and rejects cross-employee access.
+    Route::prefix('self-service')->group(function () {
+        Route::get('/home',                   [SelfServiceController::class, 'home']);
+        Route::get('/loans',                  [SelfServiceController::class, 'loans']);
+        Route::post('/loans',                 [SelfServiceController::class, 'applyLoan']);
+        Route::get('/profile',                [SelfServiceController::class, 'profile']);
+        Route::post('/profile/request-update',[SelfServiceController::class, 'requestProfileUpdate']);
+        Route::get('/profile/update-requests',[SelfServiceController::class, 'profileUpdateRequests']);
     });
 
     // Sprint 8 — Task 71: clearance lifecycle

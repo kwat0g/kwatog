@@ -70,6 +70,7 @@ const SECTIONS: NavSection[] = [
     label: 'People',
     items: [
       { to: '/hr/employees', label: 'Employees', icon: Users, feature: 'hr', permission: 'hr.employees.view' },
+      { to: '/hr/profile-update-requests', label: 'Profile Requests', icon: Users, feature: 'hr', permission: 'hr.employees.view' },
       { to: '/hr/departments', label: 'Departments', icon: Building2, feature: 'hr', permission: 'hr.departments.view' },
       { to: '/hr/positions', label: 'Positions', icon: Briefcase, feature: 'hr', permission: 'hr.positions.view' },
       { to: '/hr/attendance', label: 'Attendance', icon: Clock4, feature: 'attendance', permission: 'attendance.view' },
@@ -154,6 +155,7 @@ const SECTIONS: NavSection[] = [
     label: 'Admin',
     items: [
       { to: '/admin/settings', label: 'Settings', icon: SettingsIcon, permission: 'admin.settings.manage' },
+      { to: '/admin/users', label: 'Users', icon: Users2, permission: 'admin.users.manage' },
       { to: '/admin/roles', label: 'Roles', icon: Lock, permission: 'admin.roles.manage' },
       { to: '/admin/gov-tables', label: 'Gov Tables', icon: Landmark, permission: 'admin.gov_tables.manage' },
       { to: '/admin/audit-logs', label: 'Audit logs', icon: BookOpen, permission: 'admin.audit_logs.view' },

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Modules\Admin\Controllers\PermissionController;
 use App\Modules\Admin\Controllers\RoleController;
+use App\Modules\Admin\Controllers\UserAdminController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('admin')
@@ -21,6 +22,20 @@ Route::prefix('admin')
             Route::get('permissions/matrix',     [PermissionController::class, 'matrix'])->middleware('permission:admin.roles.manage');
         });
 
+        // U2 — central user-management surface.
+        Route::prefix('users')
+            ->middleware('permission:admin.users.manage')
+            ->group(function (): void {
+                Route::get('/',                       [UserAdminController::class, 'index']);
+                Route::post('/',                      [UserAdminController::class, 'store']);
+                Route::get('{user}',                  [UserAdminController::class, 'show']);
+                Route::patch('{user}/unlock',         [UserAdminController::class, 'unlock']);
+                Route::patch('{user}/deactivate',     [UserAdminController::class, 'deactivate']);
+                Route::patch('{user}/activate',       [UserAdminController::class, 'activate']);
+                Route::patch('{user}/role',           [UserAdminController::class, 'changeRole']);
+                Route::patch('{user}/reset-password', [UserAdminController::class, 'resetPassword']);
+                Route::get('{user}/login-history',    [UserAdminController::class, 'loginHistory']);
+            });
     });
 
 Route::prefix('admin')

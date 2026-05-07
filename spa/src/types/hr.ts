@@ -72,6 +72,58 @@ export interface EmployeeContact {
   emergency_contact_phone: string | null;
 }
 
+// ─── Onboarding (Task U4) ─────────────────────────────────────────
+export type OnboardingStepKey =
+  | 'profile_completed'
+  | 'shift_assigned'
+  | 'leave_balances_initialized'
+  | 'account_provisioned'
+  | 'dept_team_notified'
+  | 'gov_ids_recorded'
+  | 'banking_recorded';
+
+export interface OnboardingStep {
+  key: OnboardingStepKey;
+  label: string;
+  completed_at: string | null;
+}
+
+export interface EmployeeOnboarding {
+  steps: OnboardingStep[];
+  completed_at: string | null;
+  is_complete: boolean;
+}
+
+// ─── System Account (Task U1) ─────────────────────────────────────
+export interface EmployeeAccountStatus {
+  account_exists: boolean;
+  is_active: boolean;
+  is_locked: boolean;
+  email: string | null;
+  user_id: string | null;
+  role: { id: string; name: string; slug: string } | null;
+  last_login_at: string | null;
+  must_change_password: boolean;
+}
+
+export interface ProvisionAccountPayload {
+  email?: string;
+  role_id?: string;
+  send_welcome?: boolean;
+}
+
+export interface BulkProvisionResultRow {
+  employee_id: string;
+  status: 'success' | 'skipped' | 'failed';
+  message: string;
+  user_id?: string;
+}
+
+export interface BulkProvisionResponse {
+  summary: { total: number; success: number; skipped: number; failed: number };
+  results: BulkProvisionResultRow[];
+}
+
 export interface Employee {
   id: string;
   employee_no: string;

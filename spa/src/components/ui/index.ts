@@ -3,6 +3,8 @@ export { Badge } from './Badge';
 export { Button } from './Button';
 export { Checkbox } from './Checkbox';
 export { Chip, chipVariantForStatus, type ChipVariant } from './Chip';
+export { BottomSheet } from './BottomSheet';
+export { ConfirmDialog, type ConfirmVariant } from './ConfirmDialog';
 export {
   DataTable,
   NumCell,

@@ -18,6 +18,8 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { OnboardingStepper } from '@/components/hr/OnboardingStepper';
+import { SystemAccountSection } from '@/components/hr/SystemAccountSection';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
@@ -82,6 +84,11 @@ export default function EmployeeDetailPage() {
           </>
         }
       />
+
+      {/* U4 — Onboarding stepper. Above tabs so HR sees it on every visit. */}
+      <div className="px-5 pt-3">
+        <OnboardingStepper employeeId={id} />
+      </div>
 
       {/* Tabs */}
       <div className="border-b border-default px-5 flex gap-4">
@@ -150,6 +157,13 @@ export default function EmployeeDetailPage() {
               )}
             </dl>
           </Panel>
+
+          {/* U1 — System account section. Renders empty/data states itself
+              and is gated by hr.employees.account_status. */}
+          <SystemAccountSection
+            employeeId={id}
+            suggestedEmail={employee.contact?.email ?? undefined}
+          />
         </div>
       </div>
 

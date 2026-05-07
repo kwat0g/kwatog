@@ -65,9 +65,19 @@ class User extends Authenticatable
         return $this->belongsTo(Role::class);
     }
 
+    public function employee(): BelongsTo
+    {
+        return $this->belongsTo(\App\Modules\HR\Models\Employee::class, 'employee_id');
+    }
+
     public function passwordHistory(): HasMany
     {
         return $this->hasMany(PasswordHistory::class)->orderByDesc('created_at');
+    }
+
+    public function loginHistory(): HasMany
+    {
+        return $this->hasMany(\App\Modules\Admin\Models\LoginHistory::class)->orderByDesc('created_at');
     }
 
     /**

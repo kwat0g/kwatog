@@ -1,26 +1,51 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Plus, KeyRound } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { employeesApi, type EmployeeListParams } from '@/api/hr/employees';
 import { departmentsApi } from '@/api/hr/departments';
+import { employeeAccountsApi } from '@/api/hr/employee-accounts';
 import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { DataTable, NumCell, StackedCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
+import { Modal } from '@/components/ui/Modal';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
-import type { Employee } from '@/types/hr';
+import type { Employee, BulkProvisionResponse } from '@/types/hr';
 
 export default function EmployeesListPage() {
   const navigate = useNavigate();
   const { can } = usePermission();
+  const queryClient = useQueryClient();
+  const [bulkResult, setBulkResult] = useState<BulkProvisionResponse | null>(null);
 
   const [filters, setFilters] = useState<EmployeeListParams>({
     page: 1, per_page: 25, sort: 'employee_no', direction: 'desc',
+  });
+
+  // U1 — bulk system-account provisioning.
+  const bulkProvision = useMutation({
+    mutationFn: (rows: Employee[]) =>
+      employeeAccountsApi.bulkProvision(rows.map((r) => r.id), true),
+    onSuccess: (r) => {
+      const { summary } = r;
+      const msg = `Created ${summary.success}/${summary.total} accounts`
+        + (summary.skipped ? ` · ${summary.skipped} skipped` : '')
+        + (summary.failed ? ` · ${summary.failed} failed` : '');
+      if (summary.failed > 0) {
+        toast.error(msg);
+      } else {
+        toast.success(msg);
+      }
+      setBulkResult(r);
+      queryClient.invalidateQueries({ queryKey: ['hr', 'employees'] });
+    },
+    onError: () => toast.error('Bulk provisioning failed.'),
   });
 
   const { data: depts = [] } = useQuery({
@@ -175,8 +200,62 @@ export default function EmployeesListPage() {
           currentSort={filters.sort}
           currentDirection={filters.direction}
           onRowClick={(row) => navigate(`/hr/employees/${row.id}`)}
+          selectable={can('hr.employees.provision_account')}
+          bulkActions={
+            can('hr.employees.provision_account')
+              ? [
+                  {
+                    label: bulkProvision.isPending ? 'Provisioning…' : 'Create system accounts',
+                    icon: <KeyRound size={12} />,
+                    variant: 'primary',
+                    onClick: (rows) => bulkProvision.mutate(rows),
+                  },
+                ]
+              : undefined
+          }
         /></div>
       )}
+
+      {/* Bulk-provision result modal */}
+      <Modal
+        isOpen={!!bulkResult}
+        onClose={() => setBulkResult(null)}
+        title="Bulk provisioning results"
+        size="md"
+      >
+        {bulkResult && (
+          <div className="space-y-3 text-sm">
+            <div className="text-muted">
+              Total: <span className="font-mono tabular-nums text-primary">{bulkResult.summary.total}</span> ·
+              {' '}<span className="text-success">{bulkResult.summary.success} success</span> ·
+              {' '}<span className="text-warning">{bulkResult.summary.skipped} skipped</span> ·
+              {' '}<span className="text-danger">{bulkResult.summary.failed} failed</span>
+            </div>
+            <ul className="border border-default rounded-md max-h-64 overflow-auto divide-y divide-subtle">
+              {bulkResult.results.map((row) => (
+                <li key={row.employee_id} className="flex items-center justify-between px-3 py-2 text-xs">
+                  <span className="font-mono tabular-nums text-secondary">{row.employee_id}</span>
+                  <Chip
+                    variant={
+                      row.status === 'success'
+                        ? 'success'
+                        : row.status === 'skipped'
+                        ? 'warning'
+                        : 'danger'
+                    }
+                  >
+                    {row.status}
+                  </Chip>
+                  <span className="text-muted truncate ml-2 flex-1 text-right">{row.message}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="flex justify-end pt-2 border-t border-default">
+              <Button variant="primary" onClick={() => setBulkResult(null)}>Done</Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
