@@ -89,3 +89,11 @@ Schedule::command('chain:check-bottlenecks')
     ->hourly()
     ->withoutOverlapping(10)
     ->onOneServer();
+
+// Series C — Task C3. Yearly leave balance rollover at Jan 1 00:01.
+// Idempotent (updateOrInsert keyed by emp+type+year), so re-runs in
+// January are no-ops.
+Schedule::command('hr:reset-leave-balances')
+    ->yearlyOn(1, 1, '00:01')
+    ->withoutOverlapping()
+    ->onOneServer();

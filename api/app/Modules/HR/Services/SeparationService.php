@@ -118,6 +118,12 @@ class SeparationService
                 'approved_by'    => $by->id,
             ]);
 
+            // Series C — Task C3. Domain event for chain listeners.
+            $fresh = $clearance->fresh();
+            DB::afterCommit(fn () =>
+                event(new \App\Modules\HR\Events\SeparationInitiated($fresh))
+            );
+
             return $this->show($clearance);
         });
     }
@@ -150,10 +156,23 @@ class SeparationService
             $clearance->clearance_items = $items;
 
             $allCleared = collect($items)->every(fn (array $i) => ($i['status'] ?? '') === 'cleared');
+            $becameCompleted = false;
             if ($allCleared) {
+                $becameCompleted = $clearance->status !== ClearanceStatus::Completed
+                    && $clearance->status !== ClearanceStatus::Finalized;
                 $clearance->status = ClearanceStatus::Completed->value;
             }
             $clearance->save();
+
+            if ($becameCompleted) {
+                // Series C — Task C3. Domain event for chain listeners
+                // (DeactivateAccountOnClearanceComplete + future final-pay
+                // automation). Fires only on the transition, not every save.
+                $fresh = $clearance->fresh();
+                DB::afterCommit(fn () =>
+                    event(new \App\Modules\HR\Events\ClearanceFullySigned($fresh))
+                );
+            }
 
             return $this->show($clearance);
         });

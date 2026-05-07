@@ -306,7 +306,15 @@ class InspectionService
                         // NCR module may not be bootable in some test contexts —
                         // failing to auto-open is non-fatal for the inspection.
                     }
+                    // Series C — Task C1/C2. Domain event for chain listeners.
+                    event(new \App\Modules\Quality\Events\InspectionFailed($inspection->fresh()));
                 });
+            } else {
+                // Series C — Task C1/C2. Inspection passed → drive the
+                // outgoing-delivery / incoming-bill cascades.
+                DB::afterCommit(fn () =>
+                    event(new \App\Modules\Quality\Events\InspectionPassed($inspection->fresh()))
+                );
             }
 
             return $this->show($inspection);
