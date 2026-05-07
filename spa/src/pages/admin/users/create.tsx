@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -27,6 +27,7 @@ type FormValues = z.infer<typeof schema>;
 /** U2 — Admin > Create User (standalone, no employee link). */
 export default function AdminCreateUserPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [tempPasswordModal, setTempPasswordModal] = useState<string | null>(null);
 
   const rolesQuery = useQuery<RolesResponse>({
@@ -48,6 +49,7 @@ export default function AdminCreateUserPage() {
   const mutation = useMutation({
     mutationFn: (v: FormValues) => adminUsersApi.create(v),
     onSuccess: (r) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
       toast.success(r.message ?? 'User created.');
       if (r.data.temp_password) {
         setTempPasswordModal(r.data.temp_password);
