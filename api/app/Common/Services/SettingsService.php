@@ -23,10 +23,24 @@ class SettingsService
             return $default;
         }
 
-        return Cache::remember("settings:{$key}", self::CACHE_TTL, function () use ($key, $default) {
-            $row = \DB::table('settings')->where('key', $key)->first();
-            return $row ? json_decode($row->value, true) : $default;
-        });
+        // Cache::remember can throw "Please provide a valid cache path" when
+        // the configured driver (file/redis) isn't usable in the current
+        // process — most often during artisan seeders that boot a partial
+        // application container, or when redis is briefly unavailable. Wrap
+        // it in a try/catch and fall back to a direct DB read so callers
+        // (PDF rendering, branding lookup, etc.) never crash on a transient
+        // cache outage.
+        try {
+            return Cache::remember("settings:{$key}", self::CACHE_TTL, fn () => $this->fetch($key, $default));
+        } catch (\Throwable $e) {
+            return $this->fetch($key, $default);
+        }
+    }
+
+    private function fetch(string $key, mixed $default): mixed
+    {
+        $row = \DB::table('settings')->where('key', $key)->first();
+        return $row ? json_decode($row->value, true) : $default;
     }
 
     public function set(string $key, mixed $value, ?string $group = null): void
@@ -55,7 +69,12 @@ class SettingsService
             ]);
         }
 
-        Cache::forget("settings:{$key}");
+        try {
+            Cache::forget("settings:{$key}");
+        } catch (\Throwable $e) {
+            // Cache layer may be unavailable; the next read will go straight
+            // to the DB so this is non-fatal.
+        }
     }
 
     /**
