@@ -37,6 +37,9 @@ const CreateEmployeePage = lazy(() => import('@/pages/hr/employees/create'));
 const EmployeeDetailPage = lazy(() => import('@/pages/hr/employees/detail'));
 const EditEmployeePage = lazy(() => import('@/pages/hr/employees/edit'));
 
+// HR > Profile Change Requests (Task U3 — HR review queue)
+const ProfileUpdateRequestsPage = lazy(() => import('@/pages/hr/profile-update-requests'));
+
 // Attendance (Sprint 2 — Tasks 16/17/18/19)
 const ShiftsPage = lazy(() => import('@/pages/attendance/shifts'));
 const BulkAssignShiftPage = lazy(() => import('@/pages/attendance/shifts/assign'));
@@ -264,6 +267,10 @@ export default function App() {
             <Route
               path="/hr/employees/:id/edit"
               element={<PermissionGuard permission="hr.employees.edit"><EditEmployeePage /></PermissionGuard>}
+            />
+            <Route
+              path="/hr/profile-update-requests"
+              element={<PermissionGuard permission="hr.employees.view"><ProfileUpdateRequestsPage /></PermissionGuard>}
             />
           </Route>
 

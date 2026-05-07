@@ -7,6 +7,7 @@ use App\Modules\HR\Controllers\EmployeeAccountController;
 use App\Modules\HR\Controllers\EmployeeController;
 use App\Modules\HR\Controllers\EmployeeOnboardingController;
 use App\Modules\HR\Controllers\PositionController;
+use App\Modules\HR\Controllers\ProfileUpdateReviewController;
 use App\Modules\HR\Controllers\SelfServiceController;
 use Illuminate\Support\Facades\Route;
 
@@ -63,6 +64,14 @@ Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function 
         // Sprint 8 — Task 71: separation + clearance flow
         Route::post('/{employee}/separation', [\App\Modules\HR\Controllers\SeparationController::class, 'initiate'])
             ->middleware('permission:hr.separation.initiate');
+    });
+
+    // U3 (HR side) — review queue for profile-update requests.
+    Route::prefix('profile-update-requests')->group(function () {
+        Route::get('/', [ProfileUpdateReviewController::class, 'index'])
+            ->middleware('permission:hr.employees.view');
+        Route::patch('/{profileUpdateRequest}/review', [ProfileUpdateReviewController::class, 'review'])
+            ->middleware('permission:hr.employees.edit');
     });
 
     // U3 — Self-service portal (every employee). Auth-only; the controller

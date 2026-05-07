@@ -70,6 +70,7 @@ const SECTIONS: NavSection[] = [
     label: 'People',
     items: [
       { to: '/hr/employees', label: 'Employees', icon: Users, feature: 'hr', permission: 'hr.employees.view' },
+      { to: '/hr/profile-update-requests', label: 'Profile Requests', icon: Users, feature: 'hr', permission: 'hr.employees.view' },
       { to: '/hr/departments', label: 'Departments', icon: Building2, feature: 'hr', permission: 'hr.departments.view' },
       { to: '/hr/positions', label: 'Positions', icon: Briefcase, feature: 'hr', permission: 'hr.positions.view' },
       { to: '/hr/attendance', label: 'Attendance', icon: Clock4, feature: 'attendance', permission: 'attendance.view' },
