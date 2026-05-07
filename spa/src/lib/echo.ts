@@ -24,13 +24,21 @@ const env = (k: string, fallback?: string): string | undefined => {
   return v == null || v === '' ? fallback : String(v);
 };
 
+// In dev, Reverb is NOT exposed to the host directly — Nginx proxies the
+// WebSocket upgrade at `/ws` on the same origin as the SPA (see
+// docker/nginx/default.conf). Defaulting to that path means the browser
+// always reaches Reverb via the same host:port it loaded the SPA from,
+// which avoids CORS/CSP/port-mapping foot-guns.
+const isHttps = window.location.protocol === 'https:';
+
 export const echo = new Echo({
   broadcaster: 'reverb',
-  key: env('VITE_REVERB_APP_KEY', 'app-key'),
+  key: env('VITE_REVERB_APP_KEY', 'ogami_reverb'),
   wsHost: env('VITE_REVERB_HOST', window.location.hostname),
-  wsPort: Number(env('VITE_REVERB_PORT', '8080')),
+  wsPort: Number(env('VITE_REVERB_PORT', isHttps ? '443' : (window.location.port || '80'))),
   wssPort: Number(env('VITE_REVERB_PORT', '443')),
-  forceTLS: env('VITE_REVERB_SCHEME', 'http') === 'https',
+  wsPath: env('VITE_REVERB_PATH', '/ws'),
+  forceTLS: env('VITE_REVERB_SCHEME', isHttps ? 'https' : 'http') === 'https',
   enabledTransports: ['ws', 'wss'],
   authEndpoint: '/api/v1/broadcasting/auth',
   withCredentials: true, // MANDATORY for cookie-based Sanctum auth
