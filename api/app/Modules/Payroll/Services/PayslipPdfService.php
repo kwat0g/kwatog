@@ -4,40 +4,49 @@ declare(strict_types=1);
 
 namespace App\Modules\Payroll\Services;
 
-use App\Common\Services\SettingsService;
+use App\Common\Enums\DocumentType;
+use App\Common\Models\Document;
+use App\Common\Services\DocumentVaultService;
+use App\Common\Services\Pdf\PdfRenderService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Payroll\Models\Payroll;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
+/**
+ * Renders + persists payslips through the central document vault. Direct
+ * DomPDF calls have been removed — every payslip now produces an audit
+ * trail in the `documents` table (Series E / Task E1).
+ */
 class PayslipPdfService
 {
-    public function __construct(private readonly SettingsService $settings) {}
+    public function __construct(
+        private readonly PdfRenderService $renderer,
+        private readonly DocumentVaultService $vault,
+    ) {}
 
     /**
-     * Build a PDF binary for one payroll row.
+     * Build the payslip PDF binary (no persistence).
      */
     public function generate(Payroll $payroll, ?User $generator = null): string
     {
         $payroll->loadMissing(['employee.department', 'employee.position', 'period', 'deductionDetails']);
 
-        $companyName    = (string) ($this->settings->get('company.name', 'Philippine Ogami Corporation'));
-        $companyAddress = (string) ($this->settings->get('company.address', ''));
-        $companyTin     = (string) ($this->settings->get('company.tin', ''));
-
-        $pdf = Pdf::loadView('pdf.payslip', [
-            'payroll'        => $payroll,
-            'employee'       => $payroll->employee,
-            'period'         => $payroll->period,
-            'details'        => $payroll->deductionDetails,
-            'companyName'    => $companyName,
-            'companyAddress' => $companyAddress,
-            'companyTin'     => $companyTin,
-            'generator'      => $generator,
-            'generatedAt'    => now(),
-        ])->setPaper('a5', 'portrait');
-
-        return $pdf->output();
+        return $this->renderer->render(
+            'pdf.payslip',
+            [
+                'payroll'  => $payroll,
+                'employee' => $payroll->employee,
+                'period'   => $payroll->period,
+                'details'  => $payroll->deductionDetails,
+            ],
+            [
+                'paper'         => 'a5',
+                'orientation'   => 'portrait',
+                'confidential'  => true,
+                'generator'     => $generator,
+                'title'         => 'Payslip',
+            ],
+        );
     }
 
     public function filename(Payroll $payroll): string
@@ -49,20 +58,21 @@ class PayslipPdfService
     }
 
     /**
-     * Stream the payslip PDF as an HTTP response (Content-Disposition: attachment).
+     * Render + persist to vault, return the vault row.
+     */
+    public function generateAndStore(Payroll $payroll, ?User $generator = null): Document
+    {
+        $bytes = $this->generate($payroll, $generator);
+        return $this->vault->store($bytes, DocumentType::Payslip, $payroll, $generator, true);
+    }
+
+    /**
+     * Stream as attachment. Persists to vault as a side effect so every
+     * download leaves an audit trail.
      */
     public function stream(Payroll $payroll, ?User $generator = null): StreamedResponse
     {
-        $bytes = $this->generate($payroll, $generator);
-        $filename = $this->filename($payroll);
-
-        return response()->streamDownload(
-            fn () => print $bytes,
-            $filename,
-            [
-                'Content-Type' => 'application/pdf',
-                'Cache-Control' => 'no-store, no-cache, must-revalidate',
-            ],
-        );
+        $doc = $this->generateAndStore($payroll, $generator);
+        return $this->vault->streamDownload($doc);
     }
 }

@@ -69,3 +69,55 @@ Route::middleware(['auth:sanctum', 'feature:search', 'permission:search.global',
 /* Sprint 8 — Task 76. Bulk approval PDF print. */
 Route::middleware(['auth:sanctum', 'permission:admin.print.bulk'])
     ->post('/print/bulk', [\App\Modules\Admin\Controllers\BulkPrintController::class, 'print']);
+
+/*
+ * Series E (E1/E3) — Document vault HTTP surface.
+ * The route group requires *some* baseline document permission so anonymous
+ * permission scopes can't probe the vault; per-entity authorization is then
+ * enforced inside the controller (delegated to each document type's existing
+ * module permissions, e.g. payroll.view, accounting.invoices.view, etc.).
+ */
+Route::middleware(['auth:sanctum', 'session.timeout', 'password.expired'])
+    ->prefix('documents')
+    ->group(function (): void {
+        Route::get('/',                        [\App\Common\Controllers\DocumentController::class, 'index'])
+            ->middleware('permission:admin.audit_logs.view');
+        Route::get('{document}',               [\App\Common\Controllers\DocumentController::class, 'show']);
+        Route::get('{document}/view',          [\App\Common\Controllers\DocumentController::class, 'view'])
+            ->name('documents.view');
+        Route::get('{document}/download',      [\App\Common\Controllers\DocumentController::class, 'download'])
+            ->name('documents.download');
+        Route::delete('{document}',            [\App\Common\Controllers\DocumentController::class, 'destroy'])
+            ->middleware('permission:admin.audit_logs.view');
+    });
+
+/*
+ * Series E (E2) — Export endpoints. Module-specific permissions are enforced
+ * inside ExportController::guardModule() because each module requires a
+ * different slug (hr.employees.export, payroll.view, inventory.view, ...).
+ */
+Route::middleware(['auth:sanctum', 'session.timeout', 'password.expired'])
+    ->group(function (): void {
+        Route::get('/exports/{module}/columns',  [\App\Common\Controllers\ExportController::class, 'columns']);
+        Route::put('/exports/{module}/columns',  [\App\Common\Controllers\ExportController::class, 'saveColumns']);
+        Route::get('/exports/{module}/preview',  [\App\Common\Controllers\ExportController::class, 'preview']);
+        Route::get('/exports/{module}/download', [\App\Common\Controllers\ExportController::class, 'download']);
+    });
+
+/*
+ * Series E (E2) — Scheduled-export CRUD. Anyone with the view permission can
+ * list + create their own; ownership-or-admin enforced inside the controller
+ * for show/update/destroy.
+ */
+Route::middleware([
+    'auth:sanctum', 'session.timeout', 'password.expired',
+    'permission:admin.scheduled_exports.view',
+])
+    ->prefix('scheduled-exports')
+    ->group(function (): void {
+        Route::get('/',                       [\App\Common\Controllers\ScheduledExportController::class, 'index']);
+        Route::post('/',                      [\App\Common\Controllers\ScheduledExportController::class, 'store']);
+        Route::get('{scheduledExport}',       [\App\Common\Controllers\ScheduledExportController::class, 'show']);
+        Route::put('{scheduledExport}',       [\App\Common\Controllers\ScheduledExportController::class, 'update']);
+        Route::delete('{scheduledExport}',    [\App\Common\Controllers\ScheduledExportController::class, 'destroy']);
+    });

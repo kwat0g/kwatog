@@ -21,6 +21,9 @@ const RolePermissionsPage = lazy(() => import('@/pages/admin/roles/permissions')
 const SettingsPage = lazy(() => import('@/pages/admin/settings'));
 const AuditLogsPage = lazy(() => import('@/pages/admin/audit-logs'));
 
+// Admin > Scheduled exports (Series E — Task E2)
+const ScheduledExportsPage = lazy(() => import('@/pages/admin/scheduled-exports'));
+
 // Admin > Users (Task U2)
 const AdminUsersIndexPage = lazy(() => import('@/pages/admin/users'));
 const AdminUserDetailPage = lazy(() => import('@/pages/admin/users/detail'));
@@ -396,6 +399,16 @@ export default function App() {
             element={
               <PermissionGuard permission="admin.audit_logs.view">
                 <AuditLogsPage />
+              </PermissionGuard>
+            }
+          />
+
+          {/* Series E (E2) — scheduled CSV/Excel exports */}
+          <Route
+            path="/admin/scheduled-exports"
+            element={
+              <PermissionGuard permission="admin.scheduled_exports.view">
+                <ScheduledExportsPage />
               </PermissionGuard>
             }
           />

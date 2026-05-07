@@ -1,12 +1,22 @@
+{{--
+    Series E (E1) shared PDF chrome — every per-document Blade extends or
+    @includes from this. Letterhead, watermark, and footer come from
+    pdf/_components/*.
+
+    Variables provided by App\Common\Services\Pdf\PdfRenderService:
+      - $company       (array — name/address/phone/email/tin/...)
+      - $generated     (array — by/by_user/at/at_text)
+      - $confidential  (bool)
+      - $watermark     (string|null)
+      - $docTitle      (string|null)
+      - $companyName / $companyAddress / $companyTin / $user (legacy keys)
+--}}
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>@yield('title', 'Document')</title>
+<title>@yield('title', $docTitle ?? 'Document')</title>
 <style>
-  /* DomPDF: DejaVu Sans is the only font we ship; Geist is SPA-only.
-     Numbers use the same family — alignment is okay because all DOM tables
-     align via CSS text-align rather than tabular figures. */
   * { box-sizing: border-box; }
   html, body { font-family: 'DejaVu Sans', sans-serif; font-size: 10px; color: #09090B; margin: 0; padding: 0; }
   .header { display: table; width: 100%; border-bottom: 1px solid #999; padding: 8px 0; margin-bottom: 12px; }
@@ -28,45 +38,22 @@
   .totals tr td.label { color: #555; }
   .totals tr td.v { text-align: right; }
   .totals tr.grand td { border-top: 2px solid #09090B; border-bottom: 2px solid #09090B; font-weight: bold; }
-  .footer { position: fixed; bottom: 12px; left: 0; right: 0; text-align: center; font-size: 8px; color: #888; }
-  .watermark { position: fixed; top: 40%; left: 12%; right: 12%; font-size: 80px; color: #F4F4F5; transform: rotate(-30deg); text-align: center; font-weight: bold; letter-spacing: 8px; z-index: -1; }
   .signatures { display: table; width: 100%; margin-top: 32px; }
-  .sig { display: table-cell; width: 33%; padding: 0 12px; vertical-align: top; }
+  .sig { display: table-cell; padding: 0 12px; vertical-align: top; }
   .sig .line { border-top: 1px solid #555; padding-top: 4px; font-size: 9px; color: #555; text-align: center; }
   .chip { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 8px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.04em; background: #F4F4F5; color: #555; }
+  .qr { float: right; }
 </style>
 </head>
 <body>
 
-@hasSection('watermark') <div class="watermark">@yield('watermark')</div> @endif
+@include('pdf._components.watermark')
 
-<div class="header">
-  <div class="left">
-    <h1>{{ $company['name'] }}</h1>
-    <div class="addr">{{ $company['address'] ?? '' }}</div>
-    @if (!empty($company['tin']))
-      <div class="addr">TIN: {{ $company['tin'] }}</div>
-    @endif
-  </div>
-  <div class="right">
-    Generated: {{ now()->format('M d, Y H:i') }}<br>
-    By: {{ $user ?? 'system' }}
-  </div>
-</div>
+@include('pdf._components.letterhead')
 
 @yield('content')
 
-<div class="footer">
-  Page <span class="pagenum"></span> · {{ $company['name'] }} · Confidential — for internal use
-</div>
-
-<script type="text/php">
-  if (isset($pdf)) {
-    $font = $fontMetrics->getFont('DejaVu Sans');
-    $size = 8;
-    $pdf->page_text(280, 820, "Page {PAGE_NUM} of {PAGE_COUNT}", $font, $size, [0.4, 0.4, 0.4]);
-  }
-</script>
+@include('pdf._components.footer')
 
 </body>
 </html>
