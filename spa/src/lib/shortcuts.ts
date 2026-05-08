@@ -1,17 +1,19 @@
 // Series X / Task X1 — central keyboard-shortcut registry.
 //
-// Single source of truth so the help modal and the hook stay in sync. Edit
-// here whenever you add/remove a shortcut; do NOT mount `useHotkeys` ad-hoc
-// in components.
+// Single source of truth for the help modal. The actual key handling lives
+// in `hooks/useKeyboardShortcuts.ts` — that hook reads no values from this
+// file at runtime; this registry exists to drive the help dialog and the
+// no-duplicates unit test. Edit both places together when you add a shortcut.
 //
 // Conventions:
-//  - `keys` uses react-hotkeys-hook syntax. `mod` = ⌘ on macOS, Ctrl elsewhere.
+//  - `keys` is a display token (e.g. 'g h', 'mod+s', '?'). Not parsed at
+//    runtime — informational only.
+//  - `hint` is the pretty rendering shown in the help modal (⌘ S, g h, Esc).
 //  - `scope` controls when the shortcut is active. The shortcut-scope store
 //    decides which scope is current (e.g. inside a modal, only `modal`
 //    scope shortcuts fire alongside global ones; the modal stack ensures
 //    Esc only closes the topmost modal).
-//  - `id` is used by registry consumers (forms, list pages) to register a
-//    runtime handler — see `usePageActions` and `useFormSubmitShortcut`.
+//  - `id` is used by handler-registration consumers — see `usePageActions`.
 
 export type ShortcutScope = 'global' | 'modal' | 'form' | 'table';
 
@@ -36,13 +38,13 @@ export interface ShortcutEntry {
 
 export const SHORTCUTS: ShortcutEntry[] = [
   // Navigation — `g <letter>` go-to shortcuts.
-  { id: 'nav.hr',         keys: 'g>h', label: 'Go to HR / Employees',  hint: 'g h', group: 'navigation', scope: 'global', navigate: '/hr/employees' },
-  { id: 'nav.payroll',    keys: 'g>p', label: 'Go to Payroll',         hint: 'g p', group: 'navigation', scope: 'global', navigate: '/payroll/periods' },
-  { id: 'nav.accounting', keys: 'g>a', label: 'Go to Accounting',      hint: 'g a', group: 'navigation', scope: 'global', navigate: '/accounting' },
-  { id: 'nav.inventory',  keys: 'g>i', label: 'Go to Inventory',       hint: 'g i', group: 'navigation', scope: 'global', navigate: '/inventory/items' },
-  { id: 'nav.sales',      keys: 'g>s', label: 'Go to Sales Orders',    hint: 'g s', group: 'navigation', scope: 'global', navigate: '/crm/sales-orders' },
-  { id: 'nav.mrp',        keys: 'g>m', label: 'Go to MRP Plans',       hint: 'g m', group: 'navigation', scope: 'global', navigate: '/mrp/plans' },
-  { id: 'nav.dashboard',  keys: 'g>d', label: 'Go to Dashboard',       hint: 'g d', group: 'navigation', scope: 'global', navigate: '/dashboard' },
+  { id: 'nav.hr',         keys: 'g h', label: 'Go to HR / Employees',  hint: 'g h', group: 'navigation', scope: 'global', navigate: '/hr/employees' },
+  { id: 'nav.payroll',    keys: 'g p', label: 'Go to Payroll',         hint: 'g p', group: 'navigation', scope: 'global', navigate: '/payroll/periods' },
+  { id: 'nav.accounting', keys: 'g a', label: 'Go to Accounting',      hint: 'g a', group: 'navigation', scope: 'global', navigate: '/accounting' },
+  { id: 'nav.inventory',  keys: 'g i', label: 'Go to Inventory',       hint: 'g i', group: 'navigation', scope: 'global', navigate: '/inventory/items' },
+  { id: 'nav.sales',      keys: 'g s', label: 'Go to Sales Orders',    hint: 'g s', group: 'navigation', scope: 'global', navigate: '/crm/sales-orders' },
+  { id: 'nav.mrp',        keys: 'g m', label: 'Go to MRP Plans',       hint: 'g m', group: 'navigation', scope: 'global', navigate: '/mrp/plans' },
+  { id: 'nav.dashboard',  keys: 'g d', label: 'Go to Dashboard',       hint: 'g d', group: 'navigation', scope: 'global', navigate: '/dashboard' },
 
   // Actions — global commands.
   { id: 'action.search',     keys: 'mod+k',       label: 'Open command palette / search', hint: '⌘ K',     group: 'actions', scope: 'global' },
