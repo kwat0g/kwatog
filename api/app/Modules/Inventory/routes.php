@@ -8,6 +8,7 @@ use App\Modules\Inventory\Controllers\ItemCategoryController;
 use App\Modules\Inventory\Controllers\ItemController;
 use App\Modules\Inventory\Controllers\MaterialIssueSlipController;
 use App\Modules\Inventory\Controllers\StockAdjustmentController;
+use App\Modules\Inventory\Controllers\StockCardController;
 use App\Modules\Inventory\Controllers\StockLevelController;
 use App\Modules\Inventory\Controllers\StockMovementController;
 use App\Modules\Inventory\Controllers\StockTransferController;
@@ -29,6 +30,10 @@ Route::middleware(['auth:sanctum', 'feature:inventory'])->prefix('inventory')->g
     Route::post('/items',          [ItemController::class, 'store'])->middleware('permission:inventory.items.manage');
     Route::put('/items/{item}',    [ItemController::class, 'update'])->middleware('permission:inventory.items.manage');
     Route::delete('/items/{item}', [ItemController::class, 'destroy'])->middleware('permission:inventory.items.manage');
+
+    /* ─── Series F / Task F3 — Stock Card ─── */
+    Route::get('/items/{item}/stock-card', [StockCardController::class, 'show'])
+        ->middleware('permission:inventory.view');
 
     /* ─── Warehouse / Zones / Locations ─── */
     Route::get('/warehouse',                 [WarehouseController::class, 'tree'])->middleware('permission:inventory.view');

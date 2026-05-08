@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Modules\Purchasing\Controllers\ApprovedSupplierController;
 use App\Modules\Purchasing\Controllers\PurchaseOrderController;
 use App\Modules\Purchasing\Controllers\PurchaseRequestController;
+use App\Modules\Purchasing\Controllers\SupplierPerformanceController;
 use App\Modules\Purchasing\Controllers\ThreeWayMatchController;
 use Illuminate\Support\Facades\Route;
 
@@ -47,4 +48,12 @@ Route::middleware(['auth:sanctum', 'feature:purchasing'])->prefix('purchasing')-
 
     /* ─── 3-way match ─── */
     Route::get('/three-way-match/{bill}',   [ThreeWayMatchController::class, 'show'])->middleware('permission:accounting.bills.view');
+
+    /* ─── Series F / Task F4 — Supplier performance dashboard ─── */
+    Route::get('/vendors/{vendor}/performance',
+        [SupplierPerformanceController::class, 'show'])
+        ->middleware('permission:purchasing.suppliers.performance.view');
+    Route::post('/vendors/{vendor}/performance/recompute',
+        [SupplierPerformanceController::class, 'recompute'])
+        ->middleware('permission:purchasing.suppliers.performance.recompute');
 });
