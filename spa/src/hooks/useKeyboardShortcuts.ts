@@ -1,22 +1,18 @@
 // Series X / Task X1 — global keyboard shortcuts hook.
 //
-// Mounts every registered global navigation/action shortcut once at the top
-// of the authenticated app (see AppLayout). Reads handlers from the
-// PageActionsContext so per-page commands (Save, New, Export, Print) work
-// without each page wiring its own keybinding.
+// Implementation note: react-hotkeys-hook 4.x does NOT support two-key
+// sequence shortcuts natively (the syntax `'g>h'` parses as a single key
+// literally named "g>h" and never fires). We therefore implement the
+// `g <letter>` go-to navigation and the `?` help toggle with a vanilla
+// keydown listener on `document`. Pure chord shortcuts (⌘ S, ⌘ ⇧ N etc.)
+// also flow through the same listener for consistency.
 //
-// Forms register Save via `usePageActions({ onSave: () => handleSubmit(onSubmit)() })`.
-// List pages register Create/Export via `usePageActions({ onCreate, onExport })`.
-// Detail pages register Print similarly.
-//
-// ⌘K / Ctrl+K stays owned by Topbar (it always has — see Topbar's vanilla
-// keydown listener and the CommandPalette it renders). We list the shortcut
-// in the registry for the help modal but don't bind it again here.
+// Mounts once near the root of the authenticated app (see AppLayout).
+// Owns the help-modal open state so callers can render the matching
+// modal.
 
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useHotkeys } from 'react-hotkeys-hook';
-import { shortcutById } from '@/lib/shortcuts';
 import { usePageActionsDispatcher } from '@/contexts/PageActionsContext';
 
 export interface KeyboardShortcutsApi {
@@ -24,59 +20,136 @@ export interface KeyboardShortcutsApi {
   setHelpOpen: (open: boolean) => void;
 }
 
-// Pre-extract the keys at module load so the order of useHotkeys calls is
-// stable across renders.
-const KEYS = {
-  navHr:        shortcutById('nav.hr')!.keys,
-  navPayroll:   shortcutById('nav.payroll')!.keys,
-  navAccounting:shortcutById('nav.accounting')!.keys,
-  navInventory: shortcutById('nav.inventory')!.keys,
-  navSales:     shortcutById('nav.sales')!.keys,
-  navMrp:       shortcutById('nav.mrp')!.keys,
-  navDashboard: shortcutById('nav.dashboard')!.keys,
-  save:         shortcutById('action.save')!.keys,
-  newRecord:    shortcutById('action.new')!.keys,
-  exportList:   shortcutById('action.export')!.keys,
-  print:        shortcutById('action.print')!.keys,
-  help:         shortcutById('help.toggle')!.keys,
+const SEQUENCE_TIMEOUT_MS = 1000;
+
+const NAV_TARGETS: Record<string, string> = {
+  h: '/hr/employees',
+  p: '/payroll/periods',
+  a: '/accounting',
+  i: '/inventory/items',
+  s: '/crm/sales-orders',
+  m: '/mrp/plans',
+  d: '/dashboard',
 };
 
-/**
- * Mount once near the root of the authenticated app. Owns the help-modal
- * open state.
- */
+function isTypingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  const tag = target.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+  if (target.isContentEditable) return true;
+  return false;
+}
+
 export function useKeyboardShortcuts(): KeyboardShortcutsApi {
   const navigate = useNavigate();
   const fireAction = usePageActionsDispatcher();
   const [helpOpen, setHelpOpen] = useState(false);
 
-  // Default react-hotkeys-hook behavior already disables shortcuts inside
-  // form inputs (input/textarea/select/contenteditable). We do NOT override
-  // that — typing "g" inside a search box must not navigate to HR.
+  // Track the leader key (`g`) for two-key sequences. We use a ref so the
+  // listener doesn't need to re-bind every render.
+  const leaderActiveRef = useRef(false);
+  const leaderTimeoutRef = useRef<number | null>(null);
 
-  // Navigation: g <letter> two-key sequences.
-  useHotkeys(KEYS.navHr,         () => navigate('/hr/employees'),     { preventDefault: true }, [navigate]);
-  useHotkeys(KEYS.navPayroll,    () => navigate('/payroll/periods'),  { preventDefault: true }, [navigate]);
-  useHotkeys(KEYS.navAccounting, () => navigate('/accounting'),       { preventDefault: true }, [navigate]);
-  useHotkeys(KEYS.navInventory,  () => navigate('/inventory/items'),  { preventDefault: true }, [navigate]);
-  useHotkeys(KEYS.navSales,      () => navigate('/crm/sales-orders'), { preventDefault: true }, [navigate]);
-  useHotkeys(KEYS.navMrp,        () => navigate('/mrp/plans'),        { preventDefault: true }, [navigate]);
-  useHotkeys(KEYS.navDashboard,  () => navigate('/dashboard'),        { preventDefault: true }, [navigate]);
+  const clearLeader = useCallback(() => {
+    leaderActiveRef.current = false;
+    if (leaderTimeoutRef.current !== null) {
+      window.clearTimeout(leaderTimeoutRef.current);
+      leaderTimeoutRef.current = null;
+    }
+  }, []);
 
-  // Help — toggle on `?` (shift+/).
-  useHotkeys(KEYS.help, () => setHelpOpen((v) => !v), { preventDefault: true });
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const typing = isTypingTarget(e.target);
+      const mod = e.metaKey || e.ctrlKey;
 
-  // Page actions. ⌘S is enabled inside form inputs (you should be able to
-  // save without leaving the active field).
-  useHotkeys(
-    KEYS.save,
-    () => fireAction('onSave'),
-    { enableOnFormTags: ['input', 'textarea', 'select'], preventDefault: true },
-    [fireAction],
-  );
-  useHotkeys(KEYS.newRecord,  () => fireAction('onCreate'), { preventDefault: true }, [fireAction]);
-  useHotkeys(KEYS.exportList, () => fireAction('onExport'), { preventDefault: true }, [fireAction]);
-  useHotkeys(KEYS.print,      () => fireAction('onPrint'),  { preventDefault: true }, [fireAction]);
+      // ─── Action chords (work in any context for ⌘S; others only outside inputs) ──
+
+      // ⌘ S — save the current form. Allowed inside inputs.
+      if (mod && !e.shiftKey && !e.altKey && (e.key === 's' || e.key === 'S')) {
+        e.preventDefault();
+        fireAction('onSave');
+        clearLeader();
+        return;
+      }
+
+      // ⌘ ⇧ N — new record on the current list page.
+      if (mod && e.shiftKey && (e.key === 'N' || e.key === 'n')) {
+        if (typing) return;
+        e.preventDefault();
+        fireAction('onCreate');
+        clearLeader();
+        return;
+      }
+
+      // ⌘ ⇧ E — export current list.
+      if (mod && e.shiftKey && (e.key === 'E' || e.key === 'e')) {
+        if (typing) return;
+        e.preventDefault();
+        fireAction('onExport');
+        clearLeader();
+        return;
+      }
+
+      // ⌘ ⇧ P — print current detail.
+      if (mod && e.shiftKey && (e.key === 'P' || e.key === 'p')) {
+        if (typing) return;
+        e.preventDefault();
+        fireAction('onPrint');
+        clearLeader();
+        return;
+      }
+
+      // From here on, all shortcuts are blocked while typing in form fields.
+      if (typing) return;
+
+      // ─── Help toggle: `?` ────────────────────────────────────────────
+      if (e.key === '?' && !mod) {
+        e.preventDefault();
+        setHelpOpen((v) => !v);
+        clearLeader();
+        return;
+      }
+
+      // ─── Two-key sequence: `g <letter>` ──────────────────────────────
+      // Pressing `g` starts the leader window. Pressing any nav-target letter
+      // within SEQUENCE_TIMEOUT_MS triggers the navigation. Any other key
+      // cancels.
+
+      if (!mod && !e.shiftKey && !e.altKey) {
+        if (leaderActiveRef.current) {
+          const target = NAV_TARGETS[e.key];
+          // Always cancel the leader on the next keypress, regardless of match.
+          clearLeader();
+          if (target) {
+            e.preventDefault();
+            navigate(target);
+            return;
+          }
+          // No match — fall through (the key wasn't a nav target).
+          return;
+        }
+
+        if (e.key === 'g') {
+          // Don't preventDefault — the user might be holding 'g' for autorepeat
+          // or the page might have an interactive element bound to 'g'. We
+          // simply set the leader flag and consume the *next* key.
+          leaderActiveRef.current = true;
+          leaderTimeoutRef.current = window.setTimeout(() => {
+            leaderActiveRef.current = false;
+            leaderTimeoutRef.current = null;
+          }, SEQUENCE_TIMEOUT_MS);
+          return;
+        }
+      }
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      clearLeader();
+    };
+  }, [navigate, fireAction, clearLeader]);
 
   return { helpOpen, setHelpOpen };
 }
