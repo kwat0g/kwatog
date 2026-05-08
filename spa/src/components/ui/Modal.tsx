@@ -1,5 +1,6 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
+import { useShortcutScopeStore } from '@/stores/shortcutScopeStore';
 
 type Size = 'sm' | 'md' | 'lg' | 'xl';
 
@@ -30,16 +31,32 @@ export function Modal({
   className,
 }: ModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
+  // Series X / Task X1 — push this modal onto the global scope stack so Esc
+  // only closes the topmost modal, and so other shortcut hooks can read
+  // modal depth.
+  const stackId = useId();
+  const pushModal = useShortcutScopeStore((s) => s.pushModal);
+  const popModal = useShortcutScopeStore((s) => s.popModal);
+  const isTopmost = useShortcutScopeStore((s) => s.isTopmost);
 
-  // Close on ESC.
+  useEffect(() => {
+    if (!isOpen) return;
+    pushModal(stackId);
+    return () => popModal(stackId);
+  }, [isOpen, stackId, pushModal, popModal]);
+
+  // Close on ESC — but only if this modal is the topmost in the stack.
   useEffect(() => {
     if (!isOpen) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape' && isTopmost(stackId)) {
+        e.stopPropagation();
+        onClose();
+      }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, isTopmost, stackId]);
 
   // Lock body scroll while open.
   useEffect(() => {
