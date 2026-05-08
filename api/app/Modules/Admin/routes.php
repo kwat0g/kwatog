@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Modules\Admin\Controllers\ActivityFeedController;
 use App\Modules\Admin\Controllers\PermissionController;
 use App\Modules\Admin\Controllers\RoleController;
 use App\Modules\Admin\Controllers\UserAdminController;
@@ -11,6 +12,10 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('admin')
     ->middleware(['auth:sanctum', 'session.timeout', 'password.expired'])
     ->group(function (): void {
+
+        // Series F / Task F7 — Company-wide activity feed.
+        Route::get('activity', [ActivityFeedController::class, 'index'])
+            ->middleware('permission:admin.activity.view');
 
         Route::middleware('permission:admin.roles.manage')->group(function (): void {
             Route::get('roles',                  [RoleController::class, 'index'])->middleware('permission:admin.roles.manage');

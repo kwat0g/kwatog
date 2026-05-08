@@ -49,6 +49,11 @@ Route::middleware(['auth:sanctum', 'feature:quality'])->prefix('quality')->group
     /* ─── NCRs (Task 61) ─── */
     Route::get('/ncrs',                                         [NcrController::class, 'index'])
         ->middleware('permission:quality.ncr.view');
+
+    // Series F / Task F6 — Bulk close NCRs (must precede /ncrs/{ncr}).
+    Route::post('/ncrs/bulk-close',                             [NcrController::class, 'bulkClose'])
+        ->middleware('permission:quality.ncr.manage');
+
     Route::get('/ncrs/{ncr}',                                   [NcrController::class, 'show'])
         ->middleware('permission:quality.ncr.view');
     Route::post('/ncrs',                                        [NcrController::class, 'store'])

@@ -51,6 +51,9 @@ id, key (string 100 unique), value (json), group (string 50), created_at, update
 ### user_permission_overrides (Series R — Task R2)
 id, user_id (FK users cascade), permission_id (FK permissions cascade), type (string 10: 'grant'|'revoke'), granted_by (FK users), reason (text), expires_at (timestamp nullable), created_at, updated_at, UNIQUE (user_id, permission_id), INDEX (expires_at), INDEX (user_id, type)
 
+### activity_events (Series F — Task F7)
+id, type (string 30: transaction|approval|automation|alert|auth), action (string 50), actor_user_id (FK users nullable), actor_type (string 20: user|system), subject_type (string 100 nullable), subject_id (bigint nullable), summary (string 200), detail (json nullable), link (string 200 nullable), severity (string 10: info|success|warning|danger), ip_address (string 45 nullable), created_at, INDEX (created_at), INDEX (type), INDEX (actor_user_id), INDEX (subject_type, subject_id), INDEX (severity)
+
 > Per-user permission overrides. At runtime the effective permission set is `role.permissions + grants - revokes`, expired rows ignored. The runtime resolver lives in `User::getPermissionSlugsAttribute`. `system_admin` short-circuits before overrides are applied (deliberate policy: hard escape hatch).
 
 ---
@@ -248,6 +251,9 @@ id, purchase_order_id (FK purchase_orders), item_id (FK items), description (str
 
 ### approved_suppliers
 id, item_id (FK items), vendor_id (FK vendors), is_preferred (bool default false), lead_time_days (int), last_price (decimal 15,2 nullable), created_at, updated_at, UNIQUE (item_id, vendor_id)
+
+### supplier_performance_snapshots (Series F — Task F4)
+id, vendor_id (FK vendors cascade), period_year (smallint), period_month (tinyint), on_time_delivery_rate (decimal 5,2 nullable), quality_pass_rate (decimal 5,2 nullable), price_variance_pct (decimal 5,2 nullable), lead_time_variance_days (decimal 5,2 nullable), overall_score (decimal 5,2 nullable), po_count (int default 0), grn_count (int default 0), computed_at (timestamp), timestamps, UNIQUE (vendor_id, period_year, period_month), INDEX (period_year, period_month), INDEX (overall_score)
 
 ---
 
