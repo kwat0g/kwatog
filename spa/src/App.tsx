@@ -212,6 +212,14 @@ const NotificationsListPage = lazy(() => import('@/pages/notifications'));
 // Audit log diff (Sprint 8 — Task 79; list page already exists)
 const AuditLogDetailPage = lazy(() => import('@/pages/admin/audit-logs/detail'));
 
+// Series F (Tasks F1–F7) — new features
+const CalendarPage              = lazy(() => import('@/pages/calendar'));
+const ApprovalsBoardPage        = lazy(() => import('@/pages/approvals'));
+const StockCardPage             = lazy(() => import('@/pages/inventory/items/stock-card'));
+const SupplierPerformancePage   = lazy(() => import('@/pages/purchasing/suppliers/performance'));
+const EmployeeDirectoryPage     = lazy(() => import('@/pages/hr/directory'));
+const AdminActivityFeedPage     = lazy(() => import('@/pages/admin/activity'));
+
 // Errors
 const NotFoundPage = lazy(() => import('@/pages/error/NotFound'));
 
@@ -246,6 +254,24 @@ export default function App() {
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
 
+          {/* Series F / Task F1 — Cross-module calendar */}
+          <Route
+            path="/calendar"
+            element={<PermissionGuard permission="calendar.view"><CalendarPage /></PermissionGuard>}
+          />
+
+          {/* Series F / Task F2 — Approvals Kanban board */}
+          <Route
+            path="/approvals"
+            element={<PermissionGuard permission="approvals.board.view"><ApprovalsBoardPage /></PermissionGuard>}
+          />
+
+          {/* Series F / Task F7 — System activity feed */}
+          <Route
+            path="/admin/activity"
+            element={<PermissionGuard permission="admin.activity.view"><AdminActivityFeedPage /></PermissionGuard>}
+          />
+
           {/* HR module */}
           <Route element={<ModuleGuard module="hr" />}>
             <Route
@@ -275,6 +301,11 @@ export default function App() {
             <Route
               path="/hr/profile-update-requests"
               element={<PermissionGuard permission="hr.employees.view"><ProfileUpdateRequestsPage /></PermissionGuard>}
+            />
+            {/* Series F / Task F5 — Employee directory + org chart */}
+            <Route
+              path="/hr/directory"
+              element={<PermissionGuard permission="hr.directory.view"><EmployeeDirectoryPage /></PermissionGuard>}
             />
           </Route>
 
@@ -532,6 +563,9 @@ export default function App() {
               element={<PermissionGuard permission="inventory.view"><ItemDetailPage /></PermissionGuard>} />
             <Route path="/inventory/items/:id/edit"
               element={<PermissionGuard permission="inventory.items.manage"><EditItemPage /></PermissionGuard>} />
+            {/* Series F / Task F3 — per-item stock card */}
+            <Route path="/inventory/items/:id/stock-card"
+              element={<PermissionGuard permission="inventory.view"><StockCardPage /></PermissionGuard>} />
 
             <Route path="/inventory/categories"
               element={<PermissionGuard permission="inventory.view"><ItemCategoriesPage /></PermissionGuard>} />
@@ -580,6 +614,10 @@ export default function App() {
 
             <Route path="/purchasing/approved-suppliers"
               element={<PermissionGuard permission="purchasing.view"><ApprovedSuppliersPage /></PermissionGuard>} />
+
+            {/* Series F / Task F4 — Supplier performance dashboard */}
+            <Route path="/purchasing/suppliers/:id/performance"
+              element={<PermissionGuard permission="purchasing.suppliers.performance.view"><SupplierPerformancePage /></PermissionGuard>} />
           </Route>
 
           {/* CRM module (Sprint 6 — Tasks 47, 48) */}

@@ -67,6 +67,12 @@ Schedule::command('approvals:run-escalations')
     ->withoutOverlapping()
     ->onOneServer();
 
+// Series F / Task F4 — Monthly supplier performance recompute on the 1st at 02:00.
+Schedule::command('purchasing:recompute-supplier-performance')
+    ->monthlyOn(1, '02:00')
+    ->withoutOverlapping()
+    ->onOneServer();
+
 // A10 — End-of-day production summary email at 18:00 (and weekly Friday)
 Schedule::command('production:send-daily-summary')
     ->dailyAt('18:00')

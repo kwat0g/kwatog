@@ -30,6 +30,8 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'admin.print.bulk',         'name' => 'Bulk Print Approved Forms'],
                 // Series E (E2/E3) — exports + document vault.
                 ['slug' => 'admin.scheduled_exports.view', 'name' => 'View Scheduled Exports'],
+                // Series F — Task F7: company-wide activity feed.
+                ['slug' => 'admin.activity.view',          'name' => 'View System Activity Feed'],
             ],
 
             // HR
@@ -52,6 +54,8 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'hr.employees.provision_account',  'name' => 'Provision Employee System Account'],
                 ['slug' => 'hr.employees.deactivate_account', 'name' => 'Deactivate Employee System Account'],
                 ['slug' => 'hr.employees.reset_password',     'name' => 'Reset Employee System Account Password'],
+                // Series F — Task F5: directory + org chart (lighter trust than full employee view).
+                ['slug' => 'hr.directory.view',               'name' => 'View Employee Directory'],
             ],
 
             // Attendance
@@ -144,6 +148,9 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'purchasing.po.create',    'name' => 'Create Purchase Order'],
                 ['slug' => 'purchasing.po.approve',   'name' => 'Approve Purchase Order'],
                 ['slug' => 'purchasing.po.send',      'name' => 'Send PO to Supplier'],
+                // Series F — Task F4: supplier performance dashboard.
+                ['slug' => 'purchasing.suppliers.performance.view',     'name' => 'View Supplier Performance'],
+                ['slug' => 'purchasing.suppliers.performance.recompute','name' => 'Recompute Supplier Performance Snapshots'],
             ],
 
             // Supply Chain
@@ -268,6 +275,9 @@ class RolePermissionSeeder extends Seeder
                 // Series R — Task R4: dashboard layout management.
                 ['slug' => 'dashboard.layout.reset',              'name' => 'Reset Own Dashboard Layout to Default'],
                 ['slug' => 'dashboard.role_defaults.manage',      'name' => 'Manage Role-Default Dashboard Layouts'],
+                // Series F — Task F1 & F2: cross-module aggregator pages.
+                ['slug' => 'calendar.view',                       'name' => 'View Company Calendar'],
+                ['slug' => 'approvals.board.view',                'name' => 'View Approvals Kanban Board'],
             ],
             // Task A9 — payroll anomaly flags
             'payroll_anomalies' => [
@@ -328,6 +338,8 @@ class RolePermissionSeeder extends Seeder
                         'payroll.anomalies.review',                                // Task A9
                         'alerts.view', 'alerts.dismiss',                           // Task A2
                         'dashboard.view_bottlenecks',                              // Series C — Task C5
+                        // Series F — Task F4: read-only insight into supplier health
+                        'purchasing.suppliers.performance.view',
                     ],
                 ),
             ],
@@ -477,7 +489,15 @@ class RolePermissionSeeder extends Seeder
                 ? '*'
                 : array_values(array_unique(array_merge(
                     (array) $def['permissions'],
-                    ['notifications.view', 'dashboard.layout.reset'],
+                    [
+                        'notifications.view',
+                        'dashboard.layout.reset',
+                        // Series F — Tasks F1, F2, F5: cross-cutting reads
+                        // available to every authenticated role.
+                        'calendar.view',
+                        'approvals.board.view',
+                        'hr.directory.view',
+                    ],
                 )));
 
             $ids = $permissions === '*'

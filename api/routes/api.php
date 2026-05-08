@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use App\Common\Controllers\AlertController;
+use App\Common\Controllers\ApprovalBoardController;
+use App\Common\Controllers\CalendarController;
 use App\Common\Controllers\ChainBottleneckController;
 use Illuminate\Broadcasting\BroadcastController;
 use Illuminate\Support\Facades\Route;
@@ -59,3 +61,15 @@ Route::middleware(['auth:sanctum'])->prefix('chain')->group(function () {
     Route::get('/bottlenecks', [ChainBottleneckController::class, 'index'])
         ->middleware('permission:dashboard.view_bottlenecks');
 });
+
+/* ─── Series F — Cross-module aggregator endpoints ───────────────── */
+
+// Task F1 — Calendar (per-layer permissions enforced inside the service)
+Route::middleware(['auth:sanctum'])
+    ->get('/calendar/events', [CalendarController::class, 'index'])
+    ->middleware('permission:calendar.view');
+
+// Task F2 — Approvals Kanban board (read-only — mutations stay on per-entity controllers)
+Route::middleware(['auth:sanctum'])
+    ->get('/approvals/board', [ApprovalBoardController::class, 'index'])
+    ->middleware('permission:approvals.board.view');

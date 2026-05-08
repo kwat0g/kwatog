@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Modules\HR\Controllers\DepartmentController;
 use App\Modules\HR\Controllers\EmployeeAccountController;
 use App\Modules\HR\Controllers\EmployeeController;
+use App\Modules\HR\Controllers\EmployeeDirectoryController;
 use App\Modules\HR\Controllers\EmployeeOnboardingController;
 use App\Modules\HR\Controllers\PositionController;
 use App\Modules\HR\Controllers\ProfileUpdateReviewController;
@@ -12,6 +13,12 @@ use App\Modules\HR\Controllers\SelfServiceController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function () {
+    // Series F / Task F5 — Employee directory + org chart.
+    Route::get('/directory',           [EmployeeDirectoryController::class, 'index'])
+        ->middleware('permission:hr.directory.view');
+    Route::get('/directory/org-chart', [EmployeeDirectoryController::class, 'orgChart'])
+        ->middleware('permission:hr.directory.view');
+
     // Departments
     Route::prefix('departments')->group(function () {
         Route::get('/tree', [DepartmentController::class, 'tree'])->middleware('permission:hr.departments.view');
