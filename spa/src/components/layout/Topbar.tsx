@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Menu, Moon, Sun, Search, LogOut } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
@@ -12,9 +12,11 @@ import { useTheme } from '@/hooks/useTheme';
 interface TopbarProps {
   user?: { name: string; email: string } | null;
   onLogout?: () => void;
+  /** Extra controls injected just before the avatar (e.g. shortcut help, X1). */
+  rightExtras?: ReactNode;
 }
 
-export function Topbar({ user, onLogout }: TopbarProps) {
+export function Topbar({ user, onLogout, rightExtras }: TopbarProps) {
   const toggleSidebar = useSidebarStore((s) => s.toggle);
   const { resolvedTheme, toggle } = useTheme();
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -78,6 +80,8 @@ export function Topbar({ user, onLogout }: TopbarProps) {
       </Tooltip>
 
       <NotificationBell />
+
+      {rightExtras}
 
       {user && (
         <div className="flex items-center gap-2 pl-2 ml-1 border-l border-default">

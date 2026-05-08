@@ -1,4 +1,5 @@
 import { forwardRef, type InputHTMLAttributes, type ReactNode } from 'react';
+import { Check, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
 export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'prefix'> {
@@ -8,6 +9,8 @@ export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 
   prefix?: ReactNode;
   suffix?: ReactNode;
   containerClassName?: string;
+  /** Series X / Task X2 — show inline check / X based on validation state. */
+  validState?: 'idle' | 'valid' | 'invalid';
 }
 
 // Non-text input types that open a native picker — render with the same
@@ -15,9 +18,35 @@ export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 
 const PICKER_TYPES = new Set(['date', 'time', 'datetime-local', 'month', 'week', 'color']);
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ label, helper, error, prefix, suffix, required, id, className, containerClassName, type, ...rest }, ref) => {
+  (
+    {
+      label,
+      helper,
+      error,
+      prefix,
+      suffix,
+      required,
+      id,
+      className,
+      containerClassName,
+      type,
+      validState = 'idle',
+      ...rest
+    },
+    ref,
+  ) => {
     const inputId = id ?? `input-${rest.name ?? Math.random().toString(36).slice(2, 8)}`;
     const isPicker = type && PICKER_TYPES.has(type);
+
+    // Inline validation icon (X2). Error always wins.
+    const showValidIcon = validState === 'valid' && !error;
+    const showInvalidIcon = validState === 'invalid' || !!error;
+    const validIcon = showInvalidIcon ? (
+      <X size={12} className="text-danger" aria-hidden />
+    ) : showValidIcon ? (
+      <Check size={12} className="text-success" aria-hidden />
+    ) : null;
+
     return (
       <div className={cn('flex flex-col gap-1', containerClassName)}>
         {label && (
@@ -51,13 +80,22 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             )}
             {...rest}
           />
+          {validIcon && (
+            <span className="flex items-center px-2" aria-hidden>
+              {validIcon}
+            </span>
+          )}
           {suffix && (
             <span className="flex items-center px-2 text-xs text-muted bg-elevated border-l border-default">
               {suffix}
             </span>
           )}
         </div>
-        {helper && !error ? (
+        {error ? (
+          <span id={`${inputId}-error`} className="text-xs text-danger">
+            {error}
+          </span>
+        ) : helper ? (
           <span id={`${inputId}-helper`} className="text-xs text-muted">
             {helper}
           </span>
