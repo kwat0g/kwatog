@@ -338,6 +338,8 @@ class RolePermissionSeeder extends Seeder
                         'payroll.anomalies.review',                                // Task A9
                         'alerts.view', 'alerts.dismiss',                           // Task A2
                         'dashboard.view_bottlenecks',                              // Series C — Task C5
+                        // Series F — Task F4: read-only insight into supplier health
+                        'purchasing.suppliers.performance.view',
                     ],
                 ),
             ],
