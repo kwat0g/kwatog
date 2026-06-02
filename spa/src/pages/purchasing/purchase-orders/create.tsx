@@ -131,6 +131,7 @@ export default function CreatePurchaseOrderPage() {
         title="New purchase order"
         backTo="/purchasing/purchase-orders"
         backLabel="Purchase orders"
+        breadcrumbs={[{ label: 'Purchasing', href: '/purchasing' }, { label: 'Purchase orders', href: '/purchasing/purchase-orders' }, { label: 'New purchase order' }]}
         actions={requiresVp ? <Chip variant="warning">VP approval required</Chip> : null}
       />
       <form

@@ -12,7 +12,7 @@ class MaterialIssueSlipItemResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'id' => (int) $this->id,
+            'id' => $this->hash_id,
             'item'            => $this->whenLoaded('item', fn () => [
                 'id'              => $this->item->hash_id,
                 'code'            => $this->item->code,

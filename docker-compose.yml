@@ -52,6 +52,7 @@ services:
     depends_on:
       - api
       - spa
+      - reverb
     networks: [ogami-net]
 
   db:

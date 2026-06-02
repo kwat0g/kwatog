@@ -99,19 +99,15 @@ class DocumentVaultServiceTest extends TestCase
     {
         // Use a real model class so morphTo round-trips work; pick Alert
         // (smallest schema) and stub it as if it exists.
-        return new class($id) extends Model {
+        $entity = new class extends Model {
             protected $table = 'fake_entities';
             public $exists = true;
-
-            public function __construct(int $id)
-            {
-                parent::__construct();
-                $this->id = $id;
-                $this->employee_no = 'EMP-'.$id;
-            }
 
             public function getKey() { return $this->id; }
             public function getMorphClass(): string { return 'fake_entity'; }
         };
+        $entity->id = $id;
+        $entity->employee_no = 'EMP-'.$id;
+        return $entity;
     }
 }

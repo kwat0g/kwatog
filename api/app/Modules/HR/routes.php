@@ -79,6 +79,9 @@ Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function 
             ->middleware('permission:hr.employees.view');
         Route::patch('/{profileUpdateRequest}/review', [ProfileUpdateReviewController::class, 'review'])
             ->middleware('permission:hr.employees.edit');
+        // Task SS2 — Finance leg for bank-account changes (dual approval).
+        Route::patch('/{profileUpdateRequest}/finance-review', [ProfileUpdateReviewController::class, 'financeReview'])
+            ->middleware('permission:hr.profile_updates.finance_review');
     });
 
     // U3 — Self-service portal (every employee). Auth-only; the controller
@@ -90,6 +93,16 @@ Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function 
         Route::get('/profile',                [SelfServiceController::class, 'profile']);
         Route::post('/profile/request-update',[SelfServiceController::class, 'requestProfileUpdate']);
         Route::get('/profile/update-requests',[SelfServiceController::class, 'profileUpdateRequests']);
+
+        // Task SS1 — overtime requests (scoped to the session employee).
+        Route::get('/overtime',               [SelfServiceController::class, 'overtime']);
+        Route::post('/overtime',              [SelfServiceController::class, 'applyOvertime']);
+
+        // Task SS3 — employee document downloads (auto-generated certificates).
+        Route::get('/documents',                              [SelfServiceController::class, 'documents']);
+        Route::get('/documents/employment-certificate',       [SelfServiceController::class, 'employmentCertificate']);
+        Route::get('/documents/contributions/{type}',         [SelfServiceController::class, 'contributionCertificate']);
+        Route::get('/documents/bir-2316',                     [SelfServiceController::class, 'bir2316']);
     });
 
     // Sprint 8 — Task 71: clearance lifecycle

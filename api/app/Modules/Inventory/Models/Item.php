@@ -19,6 +19,11 @@ class Item extends Model
 {
     use HasFactory, HasHashId, HasAuditLog, SoftDeletes;
 
+    protected static function newFactory(): \Database\Factories\ItemFactory
+    {
+        return \Database\Factories\ItemFactory::new();
+    }
+
     protected $fillable = [
         'code', 'name', 'description', 'category_id', 'item_type',
         'unit_of_measure', 'standard_cost', 'reorder_method',

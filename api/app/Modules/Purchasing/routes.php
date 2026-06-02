@@ -3,16 +3,25 @@
 declare(strict_types=1);
 
 use App\Modules\Purchasing\Controllers\ApprovedSupplierController;
+use App\Modules\Purchasing\Controllers\ProcurementChainController;
 use App\Modules\Purchasing\Controllers\PurchaseOrderController;
 use App\Modules\Purchasing\Controllers\PurchaseRequestController;
+use App\Modules\Purchasing\Controllers\PurchaseRequestTemplateController;
 use App\Modules\Purchasing\Controllers\SupplierPerformanceController;
 use App\Modules\Purchasing\Controllers\ThreeWayMatchController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth:sanctum', 'feature:purchasing'])->prefix('purchasing')->group(function () {
 
+    /* ─── ADV5 — Procurement Chain overview ─── */
+    Route::get('/chain', [ProcurementChainController::class, 'index'])->middleware('permission:purchasing.view');
+
+
     /* ─── Purchase Requests ─── */
     Route::get('/purchase-requests',       [PurchaseRequestController::class, 'index'])->middleware('permission:purchasing.view');
+    // Static routes (no {purchaseRequest} param) must come BEFORE the wildcard.
+    Route::get('/purchase-requests/pending-count', [PurchaseRequestController::class, 'pendingCount'])->middleware('permission:purchasing.pr.approve');
+    Route::post('/purchase-requests/bulk-approve', [PurchaseRequestController::class, 'bulkApprove'])->middleware('permission:purchasing.pr.approve');
     Route::get('/purchase-requests/{purchaseRequest}', [PurchaseRequestController::class, 'show'])->middleware('permission:purchasing.view');
     // Sprint P9 — printable PR with 4-tier approval signature block.
     Route::get('/purchase-requests/{purchaseRequest}/pdf', [PurchaseRequestController::class, 'printPdf'])->middleware('permission:purchasing.view');
@@ -25,6 +34,14 @@ Route::middleware(['auth:sanctum', 'feature:purchasing'])->prefix('purchasing')-
     Route::patch('/purchase-requests/{purchaseRequest}/reject',  [PurchaseRequestController::class, 'reject'])->middleware('permission:purchasing.pr.approve');
     Route::patch('/purchase-requests/{purchaseRequest}/cancel',  [PurchaseRequestController::class, 'cancel'])->middleware('permission:purchasing.pr.create');
     Route::post('/purchase-requests/{purchaseRequest}/convert',  [PurchaseRequestController::class, 'convert'])->middleware('permission:purchasing.po.create');
+
+    /* ─── PR Templates ─── */
+    Route::get('/pr-templates',                     [PurchaseRequestTemplateController::class, 'index'])->middleware('permission:purchasing.view');
+    Route::get('/pr-templates/active',              [PurchaseRequestTemplateController::class, 'active'])->middleware('permission:purchasing.view');
+    Route::get('/pr-templates/{template}',           [PurchaseRequestTemplateController::class, 'show'])->middleware('permission:purchasing.view');
+    Route::post('/pr-templates',                    [PurchaseRequestTemplateController::class, 'store'])->middleware('permission:purchasing.pr.create');
+    Route::put('/pr-templates/{template}',           [PurchaseRequestTemplateController::class, 'update'])->middleware('permission:purchasing.pr.create');
+    Route::delete('/pr-templates/{template}',        [PurchaseRequestTemplateController::class, 'destroy'])->middleware('permission:purchasing.pr.create');
 
     /* ─── Purchase Orders ─── */
     Route::get('/purchase-orders',       [PurchaseOrderController::class, 'index'])->middleware('permission:purchasing.view');

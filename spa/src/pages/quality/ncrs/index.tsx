@@ -24,9 +24,8 @@ const STATUS_CHIP: Record<NcrStatus, 'success' | 'danger' | 'warning' | 'neutral
 };
 
 const SEVERITY_CHIP: Record<NcrSeverity, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
-  low: 'neutral',
-  medium: 'info',
-  high: 'warning',
+  minor: 'neutral',
+  major: 'warning',
   critical: 'danger',
 };
 
@@ -129,9 +128,8 @@ export default function NcrsListPage() {
       type: 'select',
       options: [
         { value: '', label: 'All' },
-        { value: 'low', label: 'Low' },
-        { value: 'medium', label: 'Medium' },
-        { value: 'high', label: 'High' },
+        { value: 'minor', label: 'Minor' },
+        { value: 'major', label: 'Major' },
         { value: 'critical', label: 'Critical' },
       ],
     },

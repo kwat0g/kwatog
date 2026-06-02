@@ -13,6 +13,11 @@ class StockLevel extends Model
 {
     use HasFactory, HasHashId;
 
+    protected static function newFactory(): \Database\Factories\StockLevelFactory
+    {
+        return \Database\Factories\StockLevelFactory::new();
+    }
+
     public $timestamps = false;
 
     protected $fillable = [

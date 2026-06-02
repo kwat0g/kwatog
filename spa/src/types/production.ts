@@ -34,9 +34,24 @@ export interface WorkOrderOutput {
   defects?: WorkOrderDefectRow[];
 }
 
+/** ADV3 — IATF 16949 material lot reference snapshot per work order. */
+export interface WorkOrderMaterialLotReference {
+  item_id: string | null;
+  item_code: string | null;
+  item_name: string | null;
+  grn_number: string | null;
+  material_lot_number: string | null;
+  supplier_lot_reference: string | null;
+  quantity_used: string | null;
+}
+
 export interface WorkOrder {
   id: string;
   wo_number: string;
+  /** ADV3 — Production batch number (BATCH-YYYYMM-NNNN). Set when the WO is started. */
+  batch_number: string | null;
+  /** ADV3 — Snapshot of the supplier lots used by this batch. */
+  material_lot_references: WorkOrderMaterialLotReference[];
   product?: { id: string; part_number: string; name: string };
   sales_order?: { id: string; so_number: string } | null;
   machine?: { id: string; machine_code: string; name: string } | null;

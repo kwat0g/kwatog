@@ -8,6 +8,7 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Services\JournalEntryService;
 use App\Modules\Auth\Models\User;
+use App\Modules\HR\Enums\PayType;
 use App\Modules\HR\Models\Clearance;
 use App\Modules\HR\Models\Employee;
 use Illuminate\Support\Facades\DB;
@@ -114,7 +115,12 @@ class FinalPayService
         if (($advance + $property) > 0) {
             $lines[] = ['account_id' => $accrued->id, 'debit' => '0.00', 'credit' => number_format($advance + $property, 2, '.', ''), 'description' => 'Settle advance / unreturned property'];
         }
-        $lines[] = ['account_id' => $cashInBank->id, 'debit' => '0.00', 'credit' => number_format($net, 2, '.', ''), 'description' => 'Final pay disbursement'];
+        // Only add the cash disbursement line when net > 0. When deductions exactly cancel
+        // earnings (net = 0.00) the JournalEntryService rejects a line with both debit and
+        // credit equal to zero ("exactly one of debit or credit greater than zero").
+        if ($net > 0) {
+            $lines[] = ['account_id' => $cashInBank->id, 'debit' => '0.00', 'credit' => number_format($net, 2, '.', ''), 'description' => 'Final pay disbursement'];
+        }
 
         $je = $this->journals->create([
             'date'           => $clearance->separation_date->toDateString(),
@@ -130,13 +136,16 @@ class FinalPayService
 
     private function lastSalaryProRated(Employee $e, $separationDate): float
     {
-        if ($e->pay_type === 'monthly' && $e->basic_monthly_salary !== null) {
+        // Bug fix: $e->pay_type is a PayType enum (cast in Employee model), not a raw string.
+        // Comparing === 'monthly' / === 'daily' always returned false, making this method
+        // always return 0.0. Use enum cases instead.
+        if ($e->pay_type === PayType::Monthly && $e->basic_monthly_salary !== null) {
             // Pro-rate by working days into the half-month period.
             // Simplification: half a monthly salary if separation falls before the 16th,
             // a full half otherwise. Real implementation goes through DTRComputationService.
             return (float) $e->basic_monthly_salary / 2;
         }
-        if ($e->pay_type === 'daily' && $e->daily_rate !== null) {
+        if ($e->pay_type === PayType::Daily && $e->daily_rate !== null) {
             // Assume 11 working days unbilled.
             return (float) $e->daily_rate * 11;
         }

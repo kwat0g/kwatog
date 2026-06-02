@@ -10,6 +10,7 @@ enum PayrollPeriodStatus: string
     case Processing = 'processing';
     case Approved   = 'approved';
     case Finalized  = 'finalized';
+    case Disbursed  = 'disbursed';
 
     public function label(): string
     {
@@ -18,12 +19,13 @@ enum PayrollPeriodStatus: string
             self::Processing => 'Processing',
             self::Approved   => 'Approved',
             self::Finalized  => 'Finalized',
+            self::Disbursed  => 'Disbursed',
         };
     }
 
     public function isLocked(): bool
     {
-        return $this === self::Finalized;
+        return $this === self::Finalized || $this === self::Disbursed;
     }
 
     /** @return array<int, string> */

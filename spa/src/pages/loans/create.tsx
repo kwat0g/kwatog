@@ -99,7 +99,7 @@ export default function CreateLoanPage() {
 
   return (
     <div>
-      <PageHeader title="New loan request" backTo="/hr/loans" backLabel="Loans" />
+      <PageHeader title="New loan request" backTo="/hr/loans" backLabel="Loans" breadcrumbs={[{ label: 'HR', href: '/hr' }, { label: 'Loans', href: '/hr/loans' }, { label: 'New Request' }]} />
       <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-3xl mx-auto px-5 py-6 space-y-4">
         <Panel title="Type & employee">
           <div className="space-y-3">

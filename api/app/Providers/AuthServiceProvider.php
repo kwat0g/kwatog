@@ -30,8 +30,8 @@ class AuthServiceProvider extends ServiceProvider
                 return true;
             }
 
-            // Permission-slug shape: lowercase, dot-separated, 3+ segments.
-            if (preg_match('/^[a-z0-9_]+(?:\.[a-z0-9_]+){2,}$/', $ability) === 1) {
+            // Permission-slug shape: lowercase, dot-separated, 2+ segments.
+            if (preg_match('/^[a-z0-9_]+(?:\.[a-z0-9_]+){1,}$/', $ability) === 1) {
                 return $user->hasPermission($ability);
             }
 

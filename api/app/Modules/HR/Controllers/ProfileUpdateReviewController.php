@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\HR\Controllers;
 
 use App\Modules\HR\Models\ProfileUpdateRequest;
+use App\Modules\HR\Requests\FinanceReviewProfileUpdateRequest;
 use App\Modules\HR\Requests\ReviewProfileUpdateRequest;
 use App\Modules\HR\Resources\ProfileUpdateRequestResource;
 use App\Modules\HR\Services\ProfileUpdateRequestService;
@@ -36,6 +37,24 @@ class ProfileUpdateReviewController
 
         $updated = $action === 'approve'
             ? $this->service->approve($profileUpdateRequest, $request->user(), $remarks)
+            : $this->service->reject($profileUpdateRequest, $request->user(), $remarks);
+
+        return new ProfileUpdateRequestResource($updated);
+    }
+
+    /**
+     * Task SS2 — Finance leg of a bank-account change. Only valid for a
+     * request already HR-approved and sitting in `pending_finance`.
+     */
+    public function financeReview(
+        FinanceReviewProfileUpdateRequest $request,
+        ProfileUpdateRequest $profileUpdateRequest,
+    ): ProfileUpdateRequestResource {
+        $action = $request->validated('action');
+        $remarks = $request->validated('remarks');
+
+        $updated = $action === 'approve'
+            ? $this->service->financeApprove($profileUpdateRequest, $request->user(), $remarks)
             : $this->service->reject($profileUpdateRequest, $request->user(), $remarks);
 
         return new ProfileUpdateRequestResource($updated);

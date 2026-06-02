@@ -96,6 +96,8 @@ export default function AttendancePage() {
       <PageHeader
         title="Daily Time Records"
         subtitle={data ? `${data.meta.total.toLocaleString()} records` : undefined}
+        backTo="/hr/attendance/hub"
+        backLabel="Attendance & Leave"
         actions={
           <>
             <Button variant="secondary" size="sm" icon={<Calendar size={14} />} onClick={() => navigate('/hr/attendance/overtime')}>

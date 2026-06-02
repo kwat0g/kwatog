@@ -55,6 +55,34 @@
         <td>{{ $delivery_number }}</td>
       </tr>
     @endif
+    {{-- ADV3 — IATF 16949 batch + lot traceability rows. --}}
+    @if (!empty($batch_number))
+      <tr>
+        <td><strong>Batch No.</strong></td>
+        <td><span style="font-family: 'DejaVuSansMono', monospace;">{{ $batch_number }}</span></td>
+      </tr>
+    @endif
+    @if (!empty($lot_number))
+      <tr>
+        <td><strong>Shipment Lot No.</strong></td>
+        <td><span style="font-family: 'DejaVuSansMono', monospace;">{{ $lot_number }}</span></td>
+      </tr>
+    @endif
+    @if (!empty($material_lot_references) && is_array($material_lot_references))
+      <tr>
+        <td><strong>Material Lot References</strong></td>
+        <td>
+          @foreach ($material_lot_references as $ref)
+            <div style="font-size:10px;">
+              {{ $ref['item_code'] ?? '—' }}
+              @if (!empty($ref['grn_number'])) · GRN {{ $ref['grn_number'] }} @endif
+              @if (!empty($ref['material_lot_number'])) · Lot {{ $ref['material_lot_number'] }} @endif
+              @if (!empty($ref['supplier_lot_reference'])) · Supplier {{ $ref['supplier_lot_reference'] }} @endif
+            </div>
+          @endforeach
+        </td>
+      </tr>
+    @endif
   </tbody>
 </table>
 

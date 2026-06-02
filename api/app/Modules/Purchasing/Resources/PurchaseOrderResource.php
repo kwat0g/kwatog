@@ -54,6 +54,9 @@ class PurchaseOrderResource extends JsonResource
                 'total_amount' => (string) $b->total_amount,
                 'balance'      => (string) $b->balance,
                 'status'       => (string) $b->status,
+                'due_date'     => optional($b->due_date)->toDateString(),
+                'has_variances' => (bool) $b->has_variances,
+                'three_way_overridden' => (bool) $b->three_way_overridden,
             ])->all()),
             'approval_records'       => $this->whenLoaded('approvalRecords', fn () => $this->approvalRecords->map(fn ($r) => [
                 'step_order'    => (int) $r->step_order,

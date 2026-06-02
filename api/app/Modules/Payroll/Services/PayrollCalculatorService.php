@@ -85,10 +85,19 @@ class PayrollCalculatorService
             $existing = Payroll::where('payroll_period_id', $period->id)
                 ->where('employee_id', $employee->id)
                 ->first();
+            $replacedId = $existing?->id; // remembered so we can re-parent adjustment FKs after new row is inserted
             if ($existing) {
                 PayrollDeductionDetail::where('payroll_id', $existing->id)->delete();
                 LoanPayment::where('payroll_id', $existing->id)->delete(); // reverse loan deductions
                 $this->reverseLoanDeductions($existing);
+
+                // applied_to_payroll_id is nullable — safe to null out before deletion.
+                PayrollAdjustment::where('applied_to_payroll_id', $existing->id)
+                    ->update(['applied_to_payroll_id' => null]);
+
+                // original_payroll_id is NOT NULL (no cascade in schema), so we cannot null it.
+                // We re-parent those references to the replacement payroll AFTER it is created (see below).
+
                 $existing->delete();
             }
 
@@ -165,6 +174,14 @@ class PayrollCalculatorService
                 'total_deductions' => '0.00', 'net_pay' => '0.00',
                 'computed_at' => now(),
             ]);
+
+            // ─── Re-parent adjustment FKs from replaced payroll ──
+            // original_payroll_id is NOT NULL with no ON DELETE rule; point references
+            // at the new replacement row so the audit trail is preserved.
+            if ($replacedId !== null) {
+                PayrollAdjustment::where('original_payroll_id', $replacedId)
+                    ->update(['original_payroll_id' => $payroll->id]);
+            }
 
             // ─── Deduction detail rows for gov ───────────────────
             $this->addDeductionDetail($payroll, DeductionType::Sss, 'SSS Employee Share', $sssEe);

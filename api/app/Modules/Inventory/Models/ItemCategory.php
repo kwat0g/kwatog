@@ -15,6 +15,11 @@ class ItemCategory extends Model
 {
     use HasFactory, HasHashId, HasAuditLog;
 
+    protected static function newFactory(): \Database\Factories\ItemCategoryFactory
+    {
+        return \Database\Factories\ItemCategoryFactory::new();
+    }
+
     protected $fillable = ['name', 'parent_id'];
 
     public function parent(): BelongsTo

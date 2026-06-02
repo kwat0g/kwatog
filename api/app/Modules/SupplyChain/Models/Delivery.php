@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Delivery extends Model
 {
@@ -25,6 +26,8 @@ class Delivery extends Model
         'status', 'scheduled_date', 'departed_at', 'delivered_at',
         'confirmed_at', 'confirmed_by', 'receipt_photo_path',
         'invoice_id', 'notes', 'created_by',
+        // ADV7 — Proof of Delivery receiver capture.
+        'receiver_name', 'receiver_position', 'received_at', 'delivery_remarks',
     ];
 
     protected $casts = [
@@ -33,6 +36,7 @@ class Delivery extends Model
         'departed_at'    => 'datetime',
         'delivered_at'   => 'datetime',
         'confirmed_at'   => 'datetime',
+        'received_at'    => 'datetime',
     ];
 
     public function salesOrder(): BelongsTo
@@ -65,9 +69,21 @@ class Delivery extends Model
         return $this->belongsTo(Invoice::class);
     }
 
+    /** ADV3 — most recent shipment lot for this delivery, if any. */
+    public function shipmentLot(): HasOne
+    {
+        return $this->hasOne(ShipmentLot::class)->latestOfMany('id');
+    }
+
     public function items(): HasMany
     {
         return $this->hasMany(DeliveryItem::class);
+    }
+
+    /** ADV7 — proof-of-delivery files (signed DRs, photos, customer PO confirmations). */
+    public function proofs(): HasMany
+    {
+        return $this->hasMany(DeliveryProof::class);
     }
 
     public function scopeStatus(Builder $q, DeliveryStatus|string $s): Builder

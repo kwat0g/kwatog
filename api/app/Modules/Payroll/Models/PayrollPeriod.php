@@ -18,6 +18,11 @@ class PayrollPeriod extends Model
 {
     use HasFactory, HasHashId, HasAuditLog;
 
+    protected static function newFactory(): \Database\Factories\PayrollPeriodFactory
+    {
+        return \Database\Factories\PayrollPeriodFactory::new();
+    }
+
     protected $fillable = [
         'period_start',
         'period_end',
@@ -25,6 +30,9 @@ class PayrollPeriod extends Model
         'is_first_half',
         'is_thirteenth_month',
         'status',
+        'disbursement_status',
+        'disbursed_at',
+        'disbursed_by',
         'journal_entry_id',
         'created_by',
         'is_auto_created',
@@ -38,6 +46,8 @@ class PayrollPeriod extends Model
         'is_first_half'       => 'boolean',
         'is_thirteenth_month' => 'boolean',
         'status'              => PayrollPeriodStatus::class,
+        'disbursement_status' => 'string',
+        'disbursed_at'        => 'datetime',
         'is_auto_created'     => 'boolean',
         'auto_created_at'     => 'datetime',
     ];
@@ -57,9 +67,19 @@ class PayrollPeriod extends Model
         return $this->hasMany(BankFileRecord::class);
     }
 
+    public function disbursementProofs(): HasMany
+    {
+        return $this->hasMany(DisbursementProof::class, 'payroll_period_id');
+    }
+
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function disburser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'disbursed_by');
     }
 
     public function scopeNotFinalized(Builder $q): Builder

@@ -41,6 +41,11 @@ class ActivityFeedController
                     'id'    => app('hashids')->encode($e->actor->id),
                     'name'  => $e->actor->name,
                     'email' => $e->actor->email,
+                    // ADV4 — role chip alongside actor name.
+                    'role'  => $e->actor->role ? [
+                        'name' => $e->actor->role->name,
+                        'slug' => $e->actor->role->slug,
+                    ] : null,
                 ] : null,
                 'actor_type'   => $e->actor_type,
                 'subject_type' => $e->subject_type,

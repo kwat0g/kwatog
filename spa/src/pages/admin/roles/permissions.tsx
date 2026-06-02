@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { Save, ChevronDown, ChevronRight, Lock } from 'lucide-react';
 import { rolesApi } from '@/api/admin/roles';
+import { formatDateTime } from '@/lib/formatDate';
 import { permissionsApi } from '@/api/admin/permissions';
 import { Button } from '@/components/ui/Button';
 import { Checkbox } from '@/components/ui/Checkbox';
@@ -145,7 +146,7 @@ export default function RolePermissionsPage() {
         title={role.data ? `${role.data.name} permissions` : 'Permissions'}
         subtitle={
           role.data ? (
-            <span className="flex items-center gap-2">
+            <span className="flex items-center gap-2 flex-wrap">
               <Chip variant={isSystem ? 'info' : 'neutral'}>{isSystem ? 'System' : 'Custom'}</Chip>
               <span className="text-muted">Toggle which actions this role can perform.</span>
               {diff.total > 0 && (
@@ -153,11 +154,28 @@ export default function RolePermissionsPage() {
                   {diff.total} change{diff.total === 1 ? '' : 's'} unsaved
                 </Chip>
               )}
+              {role.data.last_modified_by && (
+                <span className="text-2xs text-muted ml-2">
+                  Last modified by{' '}
+                  <span className="text-secondary">{role.data.last_modified_by}</span>
+                  {role.data.last_modified_at ? (
+                    <>
+                      {' '}on{' '}
+                      <span className="font-mono">{formatDateTime(role.data.last_modified_at)}</span>
+                    </>
+                  ) : null}
+                </span>
+              )}
             </span>
           ) : undefined
         }
-        backTo="/admin/roles"
-        backLabel="Roles"
+        backTo="/admin/users-roles" backLabel="Users & Roles"
+        breadcrumbs={[
+          { label: 'Admin', href: '/admin' },
+          { label: 'Users & Roles', href: '/admin/users-roles' },
+          { label: 'Roles', href: '/admin/roles' },
+          { label: role.data ? `${role.data.name} permissions` : 'Permissions' },
+        ]}
         actions={
           <>
             <Button variant="secondary" size="sm" onClick={() => navigate('/admin/roles')}>

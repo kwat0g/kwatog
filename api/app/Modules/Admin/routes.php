@@ -20,6 +20,10 @@ Route::prefix('admin')
         Route::middleware('permission:admin.roles.manage')->group(function (): void {
             Route::get('roles',                  [RoleController::class, 'index'])->middleware('permission:admin.roles.manage');
             Route::post('roles',                 [RoleController::class, 'store'])->middleware('permission:admin.roles.manage');
+            // ADV4 — side-by-side permission diff. MUST be declared before the
+            // `roles/{role}` binding or the literal `compare` segment would be
+            // captured as a hash_id and 404.
+            Route::get('roles/compare',          [RoleController::class, 'compare']);
             Route::get('roles/{role}',           [RoleController::class, 'show'])->middleware('permission:admin.roles.manage');
             Route::put('roles/{role}',           [RoleController::class, 'update'])->middleware('permission:admin.roles.manage');
             Route::delete('roles/{role}',        [RoleController::class, 'destroy'])->middleware('permission:admin.roles.manage');
@@ -99,6 +103,10 @@ Route::middleware(['auth:sanctum', 'session.timeout', 'password.expired'])
     ->group(function (): void {
         Route::get('/',                        [\App\Common\Controllers\DocumentController::class, 'index'])
             ->middleware('permission:admin.audit_logs.view');
+        // NOTE: show/view/download are deliberately NOT gated by a blanket
+        // permission — DocumentController::authorizeAccess() enforces per-document
+        // access (confidentiality + ownership) so non-admin users can fetch their
+        // own documents (e.g. payslips). index/destroy remain admin-only below.
         Route::get('{document}',               [\App\Common\Controllers\DocumentController::class, 'show']);
         Route::get('{document}/view',          [\App\Common\Controllers\DocumentController::class, 'view'])
             ->name('documents.view');

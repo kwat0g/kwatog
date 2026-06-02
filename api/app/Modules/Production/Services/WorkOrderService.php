@@ -211,6 +211,40 @@ class WorkOrderService
      * also releases reservations and creates MaterialIssue stock movements
      * via StockMovementService.
      */
+    /**
+     * ADV3 — Snapshot the supplier-lot trail of every issued material onto
+     * `work_orders.material_lot_references`. This enables IATF 16949
+     * backward traceability: "this batch used Resin from GRN X, supplier lot Y".
+     */
+    private function captureMaterialLotReferences(WorkOrder $wo): void
+    {
+        $refs = [];
+        $materials = $wo->materials()->with('item:id,code,name')->get();
+        foreach ($materials as $material) {
+            $latestGrnItem = \App\Modules\Inventory\Models\GrnItem::query()
+                ->where('item_id', $material->item_id)
+                ->whereNotNull('material_lot_number')
+                ->with('grn:id,grn_number,received_date')
+                ->latest('id')
+                ->first();
+            if (! $latestGrnItem) {
+                continue;
+            }
+            $refs[] = [
+                'item_id'                => $material->item ? $material->item->hash_id : null,
+                'item_code'              => $material->item->code ?? null,
+                'item_name'              => $material->item->name ?? null,
+                'grn_number'             => $latestGrnItem->grn?->grn_number,
+                'material_lot_number'    => $latestGrnItem->material_lot_number,
+                'supplier_lot_reference' => $latestGrnItem->supplier_lot_reference,
+                'quantity_used'          => (string) $material->bom_quantity,
+            ];
+        }
+        if (! empty($refs)) {
+            $wo->update(['material_lot_references' => $refs]);
+        }
+    }
+
     public function start(WorkOrder $wo): WorkOrder
     {
         $this->assertTransition($wo, WorkOrderStatus::InProgress);
@@ -235,15 +269,26 @@ class WorkOrderService
             ]);
             $mold->update(['status' => MoldStatus::InUse->value]);
 
+            // ADV3 — IATF 16949 traceability: every WO run is a Production Batch.
+            // Generate batch_number on first start (assertTransition prevents double-start).
+            $batchNumber = $wo->batch_number ?: $this->sequences->generate('production_batch');
+
             $wo->update([
                 'status'       => WorkOrderStatus::InProgress->value,
                 'actual_start' => $wo->actual_start ?? Carbon::now(),
+                'batch_number' => $batchNumber,
             ]);
 
             // Issue reserved materials. Best-effort: if no reservation exists
             // (e.g. legacy WOs that were confirmed before the audit fix), the
             // WO still starts — material_issue rows just won't be created.
             $this->issueReservedMaterials($wo, (int) ($wo->creator?->id ?? $wo->created_by));
+
+            // ADV3 — Capture incoming material lot references for backward traceability.
+            // Best-effort: queries the latest GRN item with a material_lot_number for
+            // each WO material's item_id. If no lot info exists in seeded data, the
+            // attribute stays an empty array — the WO still starts cleanly.
+            $this->captureMaterialLotReferences($wo);
 
             return $this->show($wo->fresh());
         });

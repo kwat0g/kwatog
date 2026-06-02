@@ -330,4 +330,18 @@ export interface FinanceDashboardSummary {
     customer_id: string; customer_name: string;
     current: string; d1_30: string; d31_60: string; d61_90: string; d91_plus: string; total: string;
   }>;
+  // Task D5 — Finance Officer dashboard extensions. All optional so older
+  // server payloads (and tests with fewer fixtures) keep type-checking.
+  payroll_pipeline?: {
+    draft: number; processing: number; approved: number;
+    finalized: number; disbursed: number; total: number;
+  };
+  unposted_jes?: { count: number; oldest_date: string | null };
+  ap_due_this_week?: {
+    count: number; total: string;
+    items: Array<{ id: string; bill_number: string; vendor_name: string; due_date: string; balance: string }>;
+  };
+  budget_vs_actual_top?: Array<{
+    category: string; budget: string; actual: string; variance: string; variance_pct: number;
+  }> | null;
 }

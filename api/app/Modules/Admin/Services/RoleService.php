@@ -8,6 +8,7 @@ use App\Common\Models\AuditLog;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -36,12 +37,143 @@ class RoleService
             $query->orderBy($sort, $direction);
         }
 
-        return $query->paginate(min((int) ($filters['per_page'] ?? 25), 100));
+        $page = $query->paginate(min((int) ($filters['per_page'] ?? 25), 100));
+
+        // ADV4 — attach last-modified audit metadata to each role on this page.
+        $ids = collect($page->items())->pluck('id')->all();
+        $meta = $this->lastModifiedFor($ids);
+        foreach ($page->items() as $r) {
+            $r->setAttribute('last_modified_meta', $meta[$r->id] ?? ['by' => null, 'at' => null]);
+        }
+
+        return $page;
     }
 
     public function show(Role $role): Role
     {
-        return $role->load('permissions');
+        $role->load('permissions');
+
+        // ADV4 — attach last-modified audit metadata for the detail view.
+        $meta = $this->lastModifiedFor([$role->id]);
+        $role->setAttribute('last_modified_meta', $meta[$role->id] ?? ['by' => null, 'at' => null]);
+
+        return $role;
+    }
+
+    /**
+     * ADV4 — Compute the most recent edit (updated, permissions_synced, or
+     * cloned) for each given role from `audit_logs`, joined to the actor's
+     * name. Returns a map keyed by role id; absent ids fall back to nulls
+     * upstream.
+     *
+     * P3.8 fix: uses a correlated subquery to fetch only ONE row per role id
+     * (the one with the latest created_at) instead of loading all audit rows
+     * into PHP. The subquery is portable across SQLite (tests) and PostgreSQL
+     * (production): `SELECT MAX(created_at) FROM audit_logs WHERE model_id = a.model_id ...`
+     * is ANSI SQL and supported by both engines.
+     *
+     * @param  array<int, int>  $roleIds
+     * @return array<int, array{by: ?string, at: ?string}>
+     */
+    private function lastModifiedFor(array $roleIds): array
+    {
+        if (empty($roleIds)) return [];
+
+        $morph = (new Role)->getMorphClass();
+
+        // Correlated subquery: for each row, check that its created_at equals
+        // the MAX created_at for that model_id among the same filtered set.
+        // This yields at most one row per model_id (the latest). Portable on
+        // both SQLite and PostgreSQL.
+        $rows = DB::table('audit_logs as a')
+            ->leftJoin('users as u', 'u.id', '=', 'a.user_id')
+            ->select('a.model_id', 'a.created_at', 'u.name as actor_name')
+            ->where('a.model_type', $morph)
+            ->whereIn('a.model_id', $roleIds)
+            ->whereIn('a.action', ['updated', 'permissions_synced', 'cloned'])
+            ->whereRaw('a.created_at = (
+                SELECT MAX(a2.created_at)
+                FROM audit_logs AS a2
+                WHERE a2.model_type = a.model_type
+                  AND a2.model_id   = a.model_id
+                  AND a2.action     IN (\'updated\', \'permissions_synced\', \'cloned\')
+            )')
+            ->get();
+
+        $map = [];
+        foreach ($rows as $r) {
+            $rid = (int) $r->model_id;
+            if (isset($map[$rid])) continue; // guard against ties (same MAX timestamp, multiple rows)
+            $map[$rid] = [
+                'by' => $r->actor_name ?? null,
+                'at' => $r->created_at ? Carbon::parse((string) $r->created_at)->toIso8601String() : null,
+            ];
+        }
+        return $map;
+    }
+
+    /**
+     * ADV4 — Side-by-side permission diff between two roles.
+     *
+     * @return array{
+     *   role_a: array{id: string, name: string, slug: string, is_system: bool, permissions_count: int},
+     *   role_b: array{id: string, name: string, slug: string, is_system: bool, permissions_count: int},
+     *   common: array<int, array{slug: string, name: string, module: string}>,
+     *   only_in_a: array<int, array{slug: string, name: string, module: string}>,
+     *   only_in_b: array<int, array{slug: string, name: string, module: string}>,
+     *   modules: array<string, array{common: int, only_a: int, only_b: int}>,
+     * }
+     */
+    public function compare(Role $a, Role $b): array
+    {
+        $a->loadMissing('permissions');
+        $b->loadMissing('permissions');
+
+        $byA = $a->permissions->keyBy('slug');
+        $byB = $b->permissions->keyBy('slug');
+
+        $allSlugs = array_unique(array_merge($byA->keys()->all(), $byB->keys()->all()));
+        $common = []; $onlyA = []; $onlyB = [];
+        $modules = [];
+        foreach ($allSlugs as $slug) {
+            $row = $byA->get($slug) ?? $byB->get($slug);
+            $entry = ['slug' => $row->slug, 'name' => $row->name, 'module' => $row->module];
+            $modules[$row->module] ??= ['common' => 0, 'only_a' => 0, 'only_b' => 0];
+            $hasA = $byA->has($slug);
+            $hasB = $byB->has($slug);
+            if ($hasA && $hasB) {
+                $common[] = $entry;
+                $modules[$row->module]['common']++;
+            } elseif ($hasA) {
+                $onlyA[] = $entry;
+                $modules[$row->module]['only_a']++;
+            } else {
+                $onlyB[] = $entry;
+                $modules[$row->module]['only_b']++;
+            }
+        }
+        $sortByMod = fn ($x, $y) => [$x['module'], $x['slug']] <=> [$y['module'], $y['slug']];
+        usort($common, $sortByMod);
+        usort($onlyA, $sortByMod);
+        usort($onlyB, $sortByMod);
+        ksort($modules);
+
+        $card = fn (Role $r) => [
+            'id'                => $r->hash_id,
+            'name'              => $r->name,
+            'slug'              => $r->slug,
+            'is_system'         => (bool) $r->is_system,
+            'permissions_count' => $r->permissions->count(),
+        ];
+
+        return [
+            'role_a'    => $card($a),
+            'role_b'    => $card($b),
+            'common'    => $common,
+            'only_in_a' => $onlyA,
+            'only_in_b' => $onlyB,
+            'modules'   => $modules,
+        ];
     }
 
     public function create(array $data): Role

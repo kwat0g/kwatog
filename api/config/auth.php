@@ -11,12 +11,30 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+        // ADV10 — B2B Portal auth guards (Sanctum API token-based)
+        'supplier_portal' => [
+            'driver' => 'sanctum',
+            'provider' => 'supplier_portal_users',
+        ],
+        'customer_portal' => [
+            'driver' => 'sanctum',
+            'provider' => 'customer_portal_users',
+        ],
     ],
 
     'providers' => [
         'users' => [
             'driver' => 'eloquent',
             'model' => env('AUTH_MODEL', App\Modules\Auth\Models\User::class),
+        ],
+        // ADV10 — B2B Portal providers
+        'supplier_portal_users' => [
+            'driver' => 'eloquent',
+            'model' => App\Modules\B2B\Models\SupplierPortalUser::class,
+        ],
+        'customer_portal_users' => [
+            'driver' => 'eloquent',
+            'model' => App\Modules\B2B\Models\CustomerPortalUser::class,
         ],
     ],
 

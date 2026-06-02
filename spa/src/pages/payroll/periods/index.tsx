@@ -125,6 +125,8 @@ export default function PayrollPeriodsPage() {
       <PageHeader
         title="Payroll Periods"
         subtitle={data ? `${data.meta.total} periods` : undefined}
+        backTo="/payroll/hub"
+        backLabel="Payroll"
         actions={
           <>
             {canRunThirteenth && (

@@ -12,7 +12,7 @@ class PurchaseRequestItemResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'id' => (int) $this->id,
+            'id' => $this->hash_id,
             'item'                 => $this->whenLoaded('item', fn () => $this->item ? [
                 'id'              => $this->item->hash_id,
                 'code'            => $this->item->code,
@@ -25,6 +25,10 @@ class PurchaseRequestItemResource extends JsonResource
             'estimated_unit_price' => $this->estimated_unit_price ? (string) $this->estimated_unit_price : null,
             'estimated_total'      => $this->estimated_total,
             'purpose'              => $this->purpose,
+            'suggested_vendor'     => $this->whenLoaded('suggestedVendor', fn () => $this->suggestedVendor ? [
+                'id'   => $this->suggestedVendor->hash_id,
+                'name' => $this->suggestedVendor->name,
+            ] : null),
         ];
     }
 }

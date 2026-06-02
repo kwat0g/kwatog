@@ -106,7 +106,8 @@ export default function CreateWorkOrderPage() {
 
   return (
     <div>
-      <PageHeader title="New work order" backTo="/production/work-orders" backLabel="Work orders" />
+      <PageHeader title="New work order" backTo="/production/work-orders" backLabel="Work orders"
+        breadcrumbs={[{ label: 'Production', href: '/production' }, { label: 'Work orders', href: '/production/work-orders' }, { label: 'New work order' }]} />
       <form
         onSubmit={handleSubmit((v) => create.mutate(v), onFormInvalid<FormValues>())}
         className="max-w-2xl mx-auto px-5 py-6"

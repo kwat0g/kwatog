@@ -115,6 +115,10 @@ class ThirteenthMonthService
             // Wipe any partial run so this is idempotent.
             $oldPayrollIds = Payroll::where('payroll_period_id', $period->id)->pluck('id');
             PayrollDeductionDetail::whereIn('payroll_id', $oldPayrollIds)->delete();
+            // Clear the FK reference on accruals before deleting the payroll rows;
+            // otherwise SQLite (and strict FK DBs) raise a constraint violation.
+            ThirteenthMonthAccrual::whereIn('payroll_id', $oldPayrollIds)
+                ->update(['payroll_id' => null]);
             Payroll::whereIn('id', $oldPayrollIds)->delete();
 
             $accruals = ThirteenthMonthAccrual::query()

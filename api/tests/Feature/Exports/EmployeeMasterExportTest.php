@@ -46,6 +46,9 @@ class EmployeeMasterExportTest extends TestCase
             'employee_no'    => 'OGM-2026-0001',
             'first_name'     => 'Juan',
             'last_name'      => 'Cruz',
+            'birth_date'     => '1990-01-01',
+            'gender'         => 'male',
+            'civil_status'   => 'single',
             'department_id'  => $dept->id,
             'position_id'    => $pos->id,
             'employment_type' => 'regular',
@@ -69,12 +72,14 @@ class EmployeeMasterExportTest extends TestCase
 
         Employee::create([
             'employee_no' => 'A', 'first_name' => 'A', 'last_name' => 'A',
+            'birth_date' => '1990-01-01', 'gender' => 'male', 'civil_status' => 'single',
             'department_id' => $dept->id, 'position_id' => $pos->id,
             'employment_type' => 'regular', 'pay_type' => 'monthly',
             'date_hired' => '2026-01-01', 'status' => 'active',
         ]);
         Employee::create([
             'employee_no' => 'B', 'first_name' => 'B', 'last_name' => 'B',
+            'birth_date' => '1990-01-01', 'gender' => 'male', 'civil_status' => 'single',
             'department_id' => $dept->id, 'position_id' => $pos->id,
             'employment_type' => 'regular', 'pay_type' => 'monthly',
             'date_hired' => '2026-01-01', 'status' => 'resigned',

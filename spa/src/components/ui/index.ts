@@ -28,4 +28,7 @@ export { Spinner, FullPageLoader } from './Spinner';
 export { StatCard } from './StatCard';
 export { Switch } from './Switch';
 export { Textarea, type TextareaProps } from './Textarea';
+export { TabNavigation, type Tab } from './TabNavigation';
+export { Breadcrumb } from './Breadcrumb';
+export type { BreadcrumbSegment } from './Breadcrumb';
 export { Tooltip } from './Tooltip';

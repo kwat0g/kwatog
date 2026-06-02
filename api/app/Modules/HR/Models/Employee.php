@@ -23,6 +23,11 @@ class Employee extends Model
 {
     use HasFactory, SoftDeletes, HasHashId, HasAuditLog;
 
+    protected static function newFactory(): \Database\Factories\EmployeeFactory
+    {
+        return \Database\Factories\EmployeeFactory::new();
+    }
+
     protected $fillable = [
         'employee_no',
         'first_name', 'middle_name', 'last_name', 'suffix',

@@ -14,6 +14,7 @@ use App\Modules\Payroll\Services\ThirteenthMonthService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use RuntimeException;
 
 class PayrollPeriodController
 {
@@ -25,6 +26,16 @@ class PayrollPeriodController
     public function index(Request $request): AnonymousResourceCollection
     {
         return PayrollPeriodResource::collection($this->service->list($request->query()));
+    }
+
+    /**
+     * CA3 — Pipeline view: all 24 half-month slots for the year with
+     * auto-schedule status and summary data.
+     */
+    public function pipeline(Request $request): JsonResponse
+    {
+        $year = (int) ($request->query('year') ?? now()->year);
+        return response()->json(['data' => $this->service->pipeline($year)]);
     }
 
     public function store(CreatePayrollPeriodRequest $request): JsonResponse
@@ -62,6 +73,22 @@ class PayrollPeriodController
             \App\Modules\Payroll\Jobs\PostPayrollToGlJob::dispatch($period);
         }
         return new PayrollPeriodResource($period);
+    }
+
+    /**
+     * ADV1 — Mark a finalized period as fully disbursed.
+     * Requires at least one disbursement proof to be uploaded first.
+     */
+    public function markDisbursed(PayrollPeriod $period, Request $request): PayrollPeriodResource
+    {
+        if (! class_exists(\App\Modules\Payroll\Models\DisbursementProof::class)) {
+            throw new RuntimeException('DisbursementProof model not yet available.');
+        }
+        $user = $request->user();
+        if (! $user) {
+            throw new RuntimeException('Authenticated user required.');
+        }
+        return new PayrollPeriodResource($this->service->markDisbursed($period, $user));
     }
 
     public function bankFile(PayrollPeriod $period, Request $request)

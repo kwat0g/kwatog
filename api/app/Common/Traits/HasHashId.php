@@ -27,9 +27,10 @@ trait HasHashId
             return $this->where($field, $value)->firstOrFail();
         }
 
-        // Numeric values are treated as raw integer IDs only in non-production
-        // (useful in seeds/tests). Production always decodes through HashIDs.
-        if (! app()->environment('production') && ctype_digit((string) $value)) {
+        // Numeric values are treated as raw integer IDs only in the testing
+        // environment. Local/staging/production always decode through HashIDs,
+        // so staging pentests surface the same enumeration surface as prod.
+        if (app()->environment('testing') && ctype_digit((string) $value)) {
             return $this->newQuery()->whereKey((int) $value)->firstOrFail();
         }
 

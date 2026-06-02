@@ -13,4 +13,7 @@ export const dashboardsApi = {
   ppc:          () => client.get<ApiSuccess<DashboardEnvelope>>('/dashboards/ppc').then(r => r.data.data),
   accounting:   () => client.get<ApiSuccess<DashboardEnvelope>>('/dashboards/accounting').then(r => r.data.data),
   employee:     () => client.get<ApiSuccess<DashboardEnvelope>>('/dashboards/employee').then(r => r.data.data),
+  purchasing:   () => client.get<ApiSuccess<DashboardEnvelope>>('/dashboards/purchasing').then(r => r.data.data),
+  warehouse:    () => client.get<ApiSuccess<DashboardEnvelope>>('/dashboards/warehouse').then(r => r.data.data),
+  quality:      () => client.get<ApiSuccess<DashboardEnvelope>>('/dashboards/quality').then(r => r.data.data),
 };

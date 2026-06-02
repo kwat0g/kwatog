@@ -31,6 +31,10 @@ class RoleResource extends JsonResource
             ),
             'created_at'        => $this->created_at?->toISOString(),
             'updated_at'        => $this->updated_at?->toISOString(),
+            // ADV4 — most recent edit (updated / permissions_synced / cloned)
+            // sourced from audit_logs by RoleService::lastModifiedFor().
+            'last_modified_by'  => isset($this->last_modified_meta) ? $this->last_modified_meta['by'] : null,
+            'last_modified_at'  => isset($this->last_modified_meta) ? $this->last_modified_meta['at'] : null,
         ];
     }
 }

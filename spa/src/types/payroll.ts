@@ -1,4 +1,6 @@
-export type PayrollPeriodStatus = 'draft' | 'processing' | 'approved' | 'finalized';
+export type PayrollPeriodStatus = 'draft' | 'processing' | 'approved' | 'finalized' | 'disbursed';
+export type DisbursementStatus = 'pending' | 'partially_disbursed' | 'disbursed';
+export type ProofType = 'deposit_slip' | 'bank_confirmation' | 'transfer_receipt' | 'other';
 export type PayrollAdjustmentType = 'underpayment' | 'overpayment';
 export type PayrollAdjustmentStatusValue = 'pending' | 'approved' | 'rejected' | 'applied';
 export type DeductionTypeValue =
@@ -61,8 +63,30 @@ export interface PayrollPeriod {
     applied: number;
     rejected: number;
   };
+  /** ADV1 — Salary disbursement proof files attached to this period. */
+  disbursement_proofs?: DisbursementProof[];
+  disbursement_status?: DisbursementStatus;
+  disbursed_at?: string | null;
+  disburser?: { id: string; name: string } | null;
   created_at: string;
   updated_at: string;
+}
+
+/**
+ * ADV1 — One proof file (deposit slip / bank confirmation) attached to
+ * a payroll period after salaries have been disbursed.
+ */
+export interface DisbursementProof {
+  id: string;
+  proof_type: ProofType;
+  file_name: string;
+  bank_name: string | null;
+  transaction_reference: string | null;
+  disbursed_amount: string | null;
+  disbursement_date: string;
+  notes: string | null;
+  uploader: { id: string; name: string } | null;
+  created_at: string;
 }
 
 export type PayrollAnomalyType =
@@ -126,6 +150,8 @@ export interface Payroll {
   net_pay: string;
   error_message: string | null;
   computed_at: string | null;
+  /** ADV1 — Disbursement status from the parent period. */
+  period_disbursement_status?: 'pending' | 'partially_disbursed' | 'disbursed';
   deduction_details?: PayrollDeductionDetail[];
   created_at: string;
   updated_at: string;
@@ -161,4 +187,51 @@ export interface CreatePayrollAdjustmentData {
   type: PayrollAdjustmentType;
   amount: string;
   reason: string;
+}
+
+// ─── CA3 — Payroll pipeline ─────────────────────────────────────────
+
+export interface PipelinePeriod {
+  id: string | null;
+  period_start: string;
+  period_end: string;
+  is_first_half: boolean;
+  status: PayrollPeriodStatus | 'scheduled' | 'not_created';
+  status_label: string;
+  is_auto_created: boolean;
+  employee_count: number;
+  total_gross: string;
+  total_net: string;
+  label: string;
+  exists: boolean;
+}
+
+export interface PayrollPipeline {
+  year: number;
+  periods: PipelinePeriod[];
+  auto_schedule_enabled: boolean;
+  next_auto_run: string | null;
+}
+
+// CA3 — Payroll pipeline
+export interface PipelinePeriod {
+  id: string | null;
+  period_start: string;
+  period_end: string;
+  is_first_half: boolean;
+  status: PayrollPeriodStatus | 'scheduled' | 'not_created';
+  status_label: string;
+  is_auto_created: boolean;
+  employee_count: number;
+  total_gross: string;
+  total_net: string;
+  label: string;
+  exists: boolean;
+}
+
+export interface PayrollPipeline {
+  year: number;
+  periods: PipelinePeriod[];
+  auto_schedule_enabled: boolean;
+  next_auto_run: string | null;
 }

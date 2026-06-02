@@ -20,6 +20,8 @@ class GrnItem extends Model
         'goods_receipt_note_id', 'purchase_order_item_id', 'item_id',
         'location_id', 'quantity_received', 'quantity_accepted',
         'unit_cost', 'remarks',
+        // ADV3 — IATF 16949 incoming material lot tracking (line-level).
+        'material_lot_number', 'supplier_lot_reference',
     ];
 
     protected $casts = [

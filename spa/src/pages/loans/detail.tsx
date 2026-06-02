@@ -71,6 +71,11 @@ export default function LoanDetailPage() {
         subtitle={`${loan.employee?.full_name} · ${loan.loan_type === 'company_loan' ? 'Company loan' : 'Cash advance'}`}
         backTo="/hr/loans"
         backLabel="Loans"
+        breadcrumbs={[
+          { label: 'HR', href: '/hr' },
+          { label: 'Loans', href: '/hr/loans' },
+          { label: loan.loan_no },
+        ]}
         actions={
           <>
             {isPending && can('loans.approve') && (

@@ -69,6 +69,10 @@ class DatabaseSeeder extends Seeder
             // layouts so widget keys exist when layouts reference them.
             DashboardWidgetSeeder::class,
             DashboardRoleLayoutSeeder::class,
+
+            // Comprehensive demo data — fills all 24 modules so every
+            // feature page has realistic records to browse and test.
+            ComprehensiveDemoSeeder::class,
         ]);
     }
 }

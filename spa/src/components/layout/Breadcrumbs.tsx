@@ -11,7 +11,39 @@ import { ChevronRight } from 'lucide-react';
  *
  * Module pages are free to override breadcrumbs entirely via
  * <PageHeader backTo="…" /> — this component is the global default.
+ *
+ * ADV2 (Adviser feedback Task 2): the first URL segment is mapped to its
+ * restructured module display name (e.g. "mrp" → "Production Planning",
+ * "supply-chain" → "Supply Chain") so the breadcrumb mirrors the new
+ * sidebar IA without changing any URLs.
  */
+
+/**
+ * Restructured module names — ADV2 sidebar IA. Keyed by the **first**
+ * URL segment only; later segments fall through to TITLE_OVERRIDES /
+ * titleize().
+ */
+const MODULE_LABELS: Record<string, string> = {
+  dashboard: 'Dashboard',
+  alerts: 'Alerts',
+  calendar: 'Calendar',
+  approvals: 'Approvals',
+  notifications: 'Notifications',
+  crm: 'Sales & CRM',
+  mrp: 'Production Planning',
+  production: 'Production',
+  'supply-chain': 'Supply Chain',
+  purchasing: 'Procurement',
+  inventory: 'Warehouse',
+  quality: 'Quality Control',
+  accounting: 'Finance & Accounting',
+  hr: 'Human Resources',
+  payroll: 'Payroll & Benefits',
+  maintenance: 'Maintenance',
+  assets: 'Maintenance',
+  admin: 'Administration',
+  'self-service': 'Self-service',
+};
 
 const TITLE_OVERRIDES: Record<string, string> = {
   hr: 'HR',
@@ -19,11 +51,18 @@ const TITLE_OVERRIDES: Record<string, string> = {
   crm: 'CRM',
   qc: 'QC',
   ncr: 'NCR',
+  ncrs: 'NCRs',
   po: 'PO',
   pr: 'PR',
   so: 'SO',
   wo: 'WO',
   rbac: 'RBAC',
+  coa: 'Chart of Accounts',
+  boms: 'BOMs',
+  grn: 'GRN',
+  oee: 'OEE',
+  dtr: 'DTR',
+  ppc: 'PPC',
 };
 
 const titleize = (segment: string): string => {
@@ -42,7 +81,7 @@ export function Breadcrumbs() {
   if (segments.length === 0) return null;
 
   const crumbs = segments.map((segment, i) => ({
-    label: titleize(segment),
+    label: i === 0 && MODULE_LABELS[segment] ? MODULE_LABELS[segment] : titleize(segment),
     to: '/' + segments.slice(0, i + 1).join('/'),
   }));
 

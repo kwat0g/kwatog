@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Purchasing\Controllers;
 
+use App\Common\Support\HashIdFilter;
+use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Requests\ConvertPrToPoRequest;
 use App\Modules\Purchasing\Requests\RejectPurchaseRequestRequest;
@@ -17,6 +19,7 @@ use App\Modules\Purchasing\Services\PurchaseRequestService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\Validator;
 use Symfony\Component\HttpFoundation\Response;
 use RuntimeException;
 
@@ -93,6 +96,55 @@ class PurchaseRequestController
         try { $pr = $this->service->cancel($purchaseRequest); }
         catch (RuntimeException $e) { abort(422, $e->getMessage()); }
         return new PurchaseRequestResource($this->service->show($pr));
+    }
+
+    /**
+     * ADV6 — Bulk approve multiple PRs at once.
+     * Accepts hash IDs from the frontend and decodes them server-side.
+     * Expects JSON body: { ids: [string, string, ...], remarks?: string }
+     */
+    public function bulkApprove(Request $request): JsonResponse
+    {
+        $validated = Validator::make($request->all(), [
+            'ids'     => 'required|array|min:1',
+            'ids.*'   => 'string',
+            'remarks' => 'nullable|string|max:500',
+        ])->validate();
+
+        // Decode hash IDs to numeric DB IDs.
+        $ids = array_map(fn ($hash) => HashIdFilter::decode($hash, PurchaseRequest::class), $validated['ids']);
+        $ids = array_filter($ids);
+
+        if (empty($ids)) {
+            return response()->json(['message' => 'No valid PR IDs provided.'], 422);
+        }
+
+        $results = $this->service->bulkApprove(
+            $ids,
+            $request->user(),
+            $validated['remarks'] ?? null
+        );
+
+        return response()->json(['data' => $results]);
+    }
+
+    /**
+     * ADV6 — Pending PR count for the sidebar badge.
+     * Only PRs that the current user can see (assigned to their role).
+     */
+    public function pendingCount(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $roleSlug = $user->role?->slug;
+
+        // Count pending PRs where the current approval step matches the user's role.
+        $count = \App\Common\Models\ApprovalRecord::where('approvable_type', (new PurchaseRequest)->getMorphClass())
+            ->where('action', 'pending')
+            ->where('role_slug', $roleSlug)
+            ->whereHas('approvable', fn ($q) => $q->where('status', PurchaseRequestStatus::Pending))
+            ->count();
+
+        return response()->json(['data' => ['count' => $count]]);
     }
 
     public function convert(ConvertPrToPoRequest $request, PurchaseRequest $purchaseRequest): JsonResponse

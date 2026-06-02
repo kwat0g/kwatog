@@ -8,6 +8,9 @@ use App\Modules\Auth\Models\User;
 use App\Modules\HR\Enums\EmployeeStatus;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Payroll\Enums\PayrollPeriodStatus;
+use App\Modules\Payroll\Events\PayrollPeriodDisbursed;
+use App\Modules\Payroll\Events\PayrollPeriodFinalized;
+use App\Modules\Payroll\Models\DisbursementProof;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -82,7 +85,7 @@ class PayrollPeriodService
     {
         $period = $period
             ->loadCount('payrolls')
-            ->load(['creator', 'payrolls.employee', 'bankFileRecords.generator', 'adjustments']);
+            ->load(['creator', 'payrolls.employee', 'bankFileRecords.generator', 'adjustments', 'disbursementProofs.uploader', 'disburser']);
         $period->summary = $this->summary($period);
 
         // Pull the journal entry number (if posted) without a full JE relation,
@@ -186,6 +189,143 @@ class PayrollPeriodService
         return $period->fresh();
     }
 
+    public function markDisbursed(PayrollPeriod $period, User $user): PayrollPeriod
+    {
+        if ($period->status !== PayrollPeriodStatus::Finalized) {
+            throw new RuntimeException('Only finalized periods can be marked as disbursed.');
+        }
+
+        // P3.4 — capture the result so we can fire the event AFTER the
+        // transaction commits (avoids listeners seeing uncommitted state).
+        $fresh = DB::transaction(function () use ($period, $user) {
+            $proofCount = $period->disbursementProofs()->count();
+            if ($proofCount === 0) {
+                throw new RuntimeException('At least one disbursement proof must be uploaded before marking the period as disbursed.');
+            }
+
+            $period->status = PayrollPeriodStatus::Disbursed;
+            $period->disbursement_status = 'disbursed';
+            $period->disbursed_at = now();
+            $period->disbursed_by = $user->id;
+            $period->save();
+
+            return $period->fresh()->load('disburser', 'disbursementProofs.uploader');
+        });
+
+        // P3.4 — fire PayrollPeriodDisbursed (not PayrollPeriodFinalized) so
+        // employees do NOT receive a second "payslip ready" notification.
+        event(new PayrollPeriodDisbursed($fresh));
+
+        return $fresh;
+    }
+
+    /**
+     * CA3 — Payroll pipeline view. Returns all periods for a given year,
+     * including future scheduled ones that haven't been created yet.
+     */
+    public function pipeline(int $year): array
+    {
+        // Get all existing periods for the year
+        $existing = PayrollPeriod::query()
+            ->whereYear('period_start', $year)
+            ->where('is_thirteenth_month', false)
+            ->orderBy('period_start')
+            ->get();
+
+        // Attach summaries in bulk
+        $ids = $existing->pluck('id')->all();
+        $summaries = [];
+        if (!empty($ids)) {
+            $rows = DB::table('payrolls')
+                ->whereIn('payroll_period_id', $ids)
+                ->groupBy('payroll_period_id')
+                ->selectRaw('
+                    payroll_period_id,
+                    COUNT(*) as employee_count,
+                    COALESCE(SUM(gross_pay), 0) as total_gross,
+                    COALESCE(SUM(net_pay), 0) as total_net
+                ')
+                ->get()
+                ->keyBy('payroll_period_id');
+            foreach ($rows as $pid => $r) {
+                $summaries[$pid] = [
+                    'employee_count' => (int) $r->employee_count,
+                    'total_gross'    => number_format((float) $r->total_gross, 2, '.', ''),
+                    'total_net'      => number_format((float) $r->total_net, 2, '.', ''),
+                ];
+            }
+        }
+
+        // Build periods list — 24 half-month slots per year
+        $periods = [];
+        for ($month = 1; $month <= 12; $month++) {
+            foreach ([true, false] as $isFirstHalf) {
+                $start = CarbonImmutable::create($year, $month, $isFirstHalf ? 1 : 16);
+                $end = $isFirstHalf
+                    ? CarbonImmutable::create($year, $month, 15)
+                    : CarbonImmutable::create($year, $month, 1)->endOfMonth()->startOfDay();
+
+                $match = $existing->first(function ($p) use ($start) {
+                    return $p->period_start->format('Y-m-d') === $start->format('Y-m-d');
+                });
+
+                if ($match) {
+                    $periods[] = [
+                        'id'              => $match->hash_id,
+                        'period_start'    => $match->period_start->format('Y-m-d'),
+                        'period_end'      => $match->period_end->format('Y-m-d'),
+                        'is_first_half'   => (bool) $match->is_first_half,
+                        'status'          => $match->status?->value,
+                        'status_label'    => $match->status?->label(),
+                        'is_auto_created' => (bool) $match->is_auto_created,
+                        'employee_count'  => $summaries[$match->id]['employee_count'] ?? 0,
+                        'total_gross'     => $summaries[$match->id]['total_gross'] ?? '0.00',
+                        'total_net'       => $summaries[$match->id]['total_net'] ?? '0.00',
+                        'label'           => $match->label(),
+                        'exists'          => true,
+                    ];
+                } else {
+                    $label = $start->format('M j') . '–' . $end->format('M j, Y');
+                    $periods[] = [
+                        'id'              => null,
+                        'period_start'    => $start->format('Y-m-d'),
+                        'period_end'      => $end->format('Y-m-d'),
+                        'is_first_half'   => $isFirstHalf,
+                        'status'          => $start->isFuture() ? 'scheduled' : 'not_created',
+                        'status_label'    => $start->isFuture() ? 'Scheduled' : 'Not Created',
+                        'is_auto_created' => false,
+                        'employee_count'  => 0,
+                        'total_gross'     => '0.00',
+                        'total_net'       => '0.00',
+                        'label'           => $label,
+                        'exists'          => false,
+                    ];
+                }
+            }
+        }
+
+        // Auto-schedule config
+        $autoScheduleEnabled = (bool) DB::table('settings')
+            ->where('key', 'payroll.auto_schedule')
+            ->value('value');
+
+        // Next auto-run date
+        $now = CarbonImmutable::now();
+        $nextRun = null;
+        if ($now->day <= 14) {
+            $nextRun = $now->copy()->day(14)->setTime(23, 0)->format('M j \a\t g:i A');
+        } else {
+            $nextRun = $now->copy()->endOfMonth()->startOfDay()->setTime(23, 0)->format('M j \a\t g:i A');
+        }
+
+        return [
+            'year'                  => $year,
+            'periods'               => $periods,
+            'auto_schedule_enabled' => $autoScheduleEnabled,
+            'next_auto_run'         => $nextRun,
+        ];
+    }
+
     public function finalize(PayrollPeriod $period): PayrollPeriod
     {
         if ($period->status !== PayrollPeriodStatus::Approved) {
@@ -201,15 +341,20 @@ class PayrollPeriodService
             throw new RuntimeException("Cannot finalize: {$unresolved} unresolved payroll anomaly flag(s). Review and resolve them first.");
         }
 
-        $period->status = PayrollPeriodStatus::Finalized;
-        $period->save();
-        $fresh = $period->fresh();
+        // P3.5 — wrap the status mutation in a transaction so any DB write
+        // that throws rolls back atomically, matching other lifecycle methods.
+        // The event is fired AFTER commit so listeners see persisted state.
+        $fresh = DB::transaction(function () use ($period) {
+            $period->status = PayrollPeriodStatus::Finalized;
+            $period->save();
+            return $period->fresh();
+        });
 
         // Series C — Task C3. Domain event for chain listeners
         // (NotifyEmployeesOnPayrollFinalized + future per-employee payslip
         // PDF dispatch). Best-effort dispatch is fine here — the period is
         // already finalized regardless of listener health.
-        event(new \App\Modules\Payroll\Events\PayrollPeriodFinalized($fresh));
+        event(new PayrollPeriodFinalized($fresh));
 
         return $fresh;
     }

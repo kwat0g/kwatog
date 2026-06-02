@@ -21,6 +21,8 @@ class Machine extends Model
         'machine_code', 'name', 'tonnage', 'machine_type',
         'operators_required', 'available_hours_per_day', 'status',
         'current_work_order_id',
+        'running_hours_total',
+        'running_hours_updated_at',
     ];
 
     protected $casts = [
@@ -29,6 +31,8 @@ class Machine extends Model
         'operators_required'      => 'decimal:1',
         'available_hours_per_day' => 'decimal:1',
         'current_work_order_id'   => 'integer',
+        'running_hours_total'     => 'decimal:2',
+        'running_hours_updated_at' => 'datetime',
     ];
 
     public function compatibleMolds(): BelongsToMany

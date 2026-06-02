@@ -42,9 +42,8 @@ const STATUS_CHIP: Record<NcrStatus, 'success' | 'danger' | 'warning' | 'neutral
 };
 
 const SEVERITY_CHIP: Record<NcrSeverity, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
-  low: 'neutral',
-  medium: 'info',
-  high: 'warning',
+  minor: 'neutral',
+  major: 'warning',
   critical: 'danger',
 };
 
@@ -196,6 +195,7 @@ export default function NcrDetailPage() {
           </span>
         }
         subtitle={data.product ? `${data.product.part_number} — ${data.product.name}` : data.source.replace('_', ' ')}
+        breadcrumbs={[{ label: 'Quality', href: '/quality' }, { label: 'NCRs', href: '/quality/ncrs' }, { label: data.ncr_number }]}
         actions={
           <div className="flex items-center gap-2">
             {!isTerminal && data.disposition && can('quality.ncr.manage') && (

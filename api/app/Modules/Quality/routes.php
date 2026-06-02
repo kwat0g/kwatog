@@ -6,6 +6,9 @@ use App\Modules\Quality\Controllers\AnalyticsController;
 use App\Modules\Quality\Controllers\InspectionController;
 use App\Modules\Quality\Controllers\InspectionSpecController;
 use App\Modules\Quality\Controllers\NcrController;
+use App\Modules\Quality\Controllers\NcrTemplateController;
+use App\Modules\Quality\Controllers\ShipmentLotController;
+use App\Modules\Quality\Controllers\TraceabilityController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -46,6 +49,20 @@ Route::middleware(['auth:sanctum', 'feature:quality'])->prefix('quality')->group
     Route::get('/inspections/{inspection}/coc',                 [InspectionController::class, 'coc'])
         ->middleware('permission:quality.inspections.view');
 
+    /* ─── ADV7 — NCR templates ─── */
+    Route::get('/ncr-templates/active',                        [NcrTemplateController::class, 'active'])
+        ->middleware('permission:quality.ncr.view');
+    Route::get('/ncr-templates',                                [NcrTemplateController::class, 'index'])
+        ->middleware('permission:quality.ncr.view');
+    Route::get('/ncr-templates/{ncrTemplate}',                  [NcrTemplateController::class, 'show'])
+        ->middleware('permission:quality.ncr.view');
+    Route::post('/ncr-templates',                               [NcrTemplateController::class, 'store'])
+        ->middleware('permission:quality.ncr.manage');
+    Route::patch('/ncr-templates/{ncrTemplate}',                 [NcrTemplateController::class, 'update'])
+        ->middleware('permission:quality.ncr.manage');
+    Route::delete('/ncr-templates/{ncrTemplate}',               [NcrTemplateController::class, 'destroy'])
+        ->middleware('permission:quality.ncr.manage');
+
     /* ─── NCRs (Task 61) ─── */
     Route::get('/ncrs',                                         [NcrController::class, 'index'])
         ->middleware('permission:quality.ncr.view');
@@ -72,4 +89,18 @@ Route::middleware(['auth:sanctum', 'feature:quality'])->prefix('quality')->group
         ->middleware('permission:quality.view');
     Route::get('/analytics/defect-pareto/drill',                [AnalyticsController::class, 'paretoDrillDown'])
         ->middleware('permission:quality.view');
+
+    /* ─── ADV3 — IATF 16949 traceability (batch + lot search, shipment lots) ─── */
+    Route::get('/traceability/search', [TraceabilityController::class, 'search'])
+        ->middleware('permission:quality.inspections.view');
+
+    Route::get('/traceability/deliveries/{delivery}/shipment-lot',
+        [ShipmentLotController::class, 'showForDelivery'])
+        ->middleware('permission:quality.inspections.view');
+    Route::post('/traceability/deliveries/{delivery}/shipment-lot',
+        [ShipmentLotController::class, 'createForDelivery'])
+        ->middleware('permission:quality.inspections.manage');
+    Route::get('/traceability/shipment-lots/{shipmentLot}',
+        [ShipmentLotController::class, 'show'])
+        ->middleware('permission:quality.inspections.view');
 });

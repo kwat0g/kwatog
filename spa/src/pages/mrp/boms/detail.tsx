@@ -16,10 +16,12 @@ export default function BomDetailPage() {
     enabled: !!id,
   });
 
-  if (isLoading) return <div><PageHeader title="BOM" backTo="/mrp/boms" backLabel="BOMs" /><SkeletonDetail /></div>;
+  if (isLoading) return <div><PageHeader title="BOM" backTo="/mrp/boms" backLabel="BOMs"
+    breadcrumbs={[{ label: 'MRP', href: '/mrp' }, { label: 'BOMs', href: '/mrp/boms' }, { label: 'Loading…' }]} /><SkeletonDetail /></div>;
   if (isError || !data) return (
     <div>
-      <PageHeader title="BOM" backTo="/mrp/boms" backLabel="BOMs" />
+      <PageHeader title="BOM" backTo="/mrp/boms" backLabel="BOMs"
+        breadcrumbs={[{ label: 'MRP', href: '/mrp' }, { label: 'BOMs', href: '/mrp/boms' }, { label: 'Error' }]} />
       <EmptyState icon="alert-circle" title="Failed to load BOM"
         action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />
     </div>
@@ -37,6 +39,7 @@ export default function BomDetailPage() {
         }
         backTo="/mrp/boms"
         backLabel="BOMs"
+        breadcrumbs={[{ label: 'MRP', href: '/mrp' }, { label: 'BOMs', href: '/mrp/boms' }, { label: data.product?.part_number ?? 'BOM' }]}
       />
       <div className="px-5 py-4 space-y-4">
         <Panel title="Materials" meta={`${data.item_count} ${data.item_count === 1 ? 'line' : 'lines'}`} noPadding>

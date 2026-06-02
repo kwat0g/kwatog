@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
-import { Send, ThumbsUp, ThumbsDown, X, ShoppingCart, FileText } from 'lucide-react';
+import { Send, ThumbsUp, ThumbsDown, X, ShoppingCart, FileText, AlertTriangle, Zap } from 'lucide-react';
 import { purchaseRequestsApi } from '@/api/purchasing/purchase-requests';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -77,10 +77,12 @@ export default function PurchaseRequestDetailPage() {
       <PageHeader
         title={<span className="font-mono">{data.pr_number}</span>}
         backTo="/purchasing/purchase-requests" backLabel="Purchase requests"
+        breadcrumbs={[{ label: 'Purchasing', href: '/purchasing' }, { label: 'Purchase requests', href: '/purchasing/purchase-requests' }, { label: data.pr_number }]}
         actions={
           <div className="flex items-center gap-2">
             <Chip variant={statusVariant[data.status]}>{data.status}</Chip>
             {data.is_auto_generated && <Chip variant="warning">AUTO</Chip>}
+            {data.is_urgent && <Chip variant="danger"><Zap size={12} className="inline mr-0.5" />URGENT</Chip>}
             {data.status === 'draft' && can('purchasing.pr.create') && (
               <Button size="sm" variant="primary" icon={<Send size={14} />} onClick={() => setConfirm('submit')} loading={submit.isPending}>Submit</Button>
             )}
@@ -112,8 +114,9 @@ export default function PurchaseRequestDetailPage() {
           <Panel title="Header">
             <dl className="grid grid-cols-3 gap-y-3 gap-x-6 text-sm">
               <div><dt className="text-2xs uppercase tracking-wider text-muted">Date</dt><dd className="font-mono">{formatDate(data.date)}</dd></div>
-              <div><dt className="text-2xs uppercase tracking-wider text-muted">Priority</dt><dd>{data.priority}</dd></div>
+              <div><dt className="text-2xs uppercase tracking-wider text-muted">Priority</dt><dd className="flex items-center gap-1">{data.priority}{data.is_urgent && <span title={data.urgency_reason ?? ''}><AlertTriangle size={12} className="text-danger" /></span>}</dd></div>
               <div><dt className="text-2xs uppercase tracking-wider text-muted">Department</dt><dd>{data.department?.name ?? '—'}</dd></div>
+              <div><dt className="text-2xs uppercase tracking-wider text-muted">Template</dt><dd>{data.template?.name ?? '—'}</dd></div>
               <div><dt className="text-2xs uppercase tracking-wider text-muted">Requester</dt><dd>{data.requester?.name ?? '—'}</dd></div>
               <div><dt className="text-2xs uppercase tracking-wider text-muted">Total estimate</dt><dd className="font-mono tabular-nums">{formatPeso(data.total_estimated_amount)}</dd></div>
               {data.reason && <div className="col-span-3"><dt className="text-2xs uppercase tracking-wider text-muted">Reason</dt><dd>{data.reason}</dd></div>}
@@ -137,7 +140,10 @@ export default function PurchaseRequestDetailPage() {
                     <td className="text-right font-mono tabular-nums">{Number(l.quantity).toFixed(2)}</td>
                     <td>{l.unit}</td>
                     <td className="text-right font-mono tabular-nums">{l.estimated_unit_price ? Number(l.estimated_unit_price).toFixed(2) : '—'}</td>
-                    <td className="text-right font-mono tabular-nums font-medium">{l.estimated_total}</td>
+                    <td className="text-right font-mono tabular-nums font-medium">
+                      {l.estimated_total}
+                      {(l as any).suggested_vendor && <div className="text-2xs text-muted mt-0.5">Vendor: {(l as any).suggested_vendor.name}</div>}
+                    </td>
                   </tr>
                 ))}
               </tbody>

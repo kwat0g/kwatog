@@ -113,7 +113,8 @@ class ShipmentService
 
     /**
      * Upload (or replace) a document of a given type. Files are stored
-     * under storage/app/public/shipments/{shipment_id}/.
+     * under storage/app/shipments/{shipment_id}/ on the LOCAL disk (never
+     * public) and served only through a permission-gated controller action.
      */
     public function uploadDocument(
         Shipment $s,
@@ -124,7 +125,7 @@ class ShipmentService
     ): ShipmentDocument {
         return DB::transaction(function () use ($s, $file, $type, $by, $notes) {
             $folder = "shipments/{$s->id}";
-            $path = $file->store($folder, 'public');
+            $path = $file->store($folder, 'local');
             return ShipmentDocument::create([
                 'shipment_id'       => $s->id,
                 'document_type'     => $type->value,
@@ -143,7 +144,7 @@ class ShipmentService
     {
         DB::transaction(function () use ($doc) {
             if ($doc->file_path) {
-                Storage::disk('public')->delete($doc->file_path);
+                Storage::disk('local')->delete($doc->file_path);
             }
             $doc->delete();
         });
@@ -156,7 +157,7 @@ class ShipmentService
         }
         DB::transaction(function () use ($s) {
             foreach ($s->documents as $doc) {
-                if ($doc->file_path) Storage::disk('public')->delete($doc->file_path);
+                if ($doc->file_path) Storage::disk('local')->delete($doc->file_path);
             }
             $s->delete();
         });

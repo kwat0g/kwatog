@@ -84,6 +84,8 @@ export default function OvertimeListPage() {
       <PageHeader
         title="Overtime requests"
         subtitle={data ? `${data.meta.total} total · ${grouped.pending.length} pending` : undefined}
+        backTo="/hr/attendance/hub"
+        backLabel="Attendance & Leave"
         actions={
           <>
             <Button variant="secondary" size="sm" onClick={() => setView(view === 'list' ? 'kanban' : 'list')}>

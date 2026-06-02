@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
-import { Send, ThumbsUp, ThumbsDown, Truck, X, FileText, CheckSquare } from 'lucide-react';
+import { Send, ThumbsUp, ThumbsDown, Truck, X, FileText, CheckSquare, Scale, Receipt, Package as PackageIcon, AlertTriangle } from 'lucide-react';
 import { purchaseOrdersApi } from '@/api/purchasing/purchase-orders';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -79,12 +79,22 @@ export default function PurchaseOrderDetailPage() {
       <PageHeader
         title={<span className="font-mono">{data.po_number}</span>}
         backTo="/purchasing/purchase-orders" backLabel="Purchase orders"
+        breadcrumbs={[{ label: 'Purchasing', href: '/purchasing' }, { label: 'Purchase orders', href: '/purchasing/purchase-orders' }, { label: data.po_number }]}
         actions={
           <div className="flex items-center gap-2 flex-wrap">
             <Chip variant={variant[data.status]}>{data.status.replace(/_/g, ' ')}</Chip>
             {data.requires_vp_approval && <Chip variant="warning">VP req.</Chip>}
             {data.is_auto_generated && (
               <span title="Auto-generated for critical stock"><Chip variant="info">Auto</Chip></span>
+            )}
+            {/* ADV5 — 3-way match indicator */}
+            {data.bills && data.bills.length > 0 && data.bills.some((b) => 'has_variances' in b) && (
+              <Chip
+                variant={data.bills.some((b: any) => b.has_variances && !b.three_way_overridden) ? 'warning' : 'success'}
+              >
+                <Scale size={12} className="mr-0.5" />
+                {data.bills.some((b: any) => b.has_variances && !b.three_way_overridden) ? 'Variance' : 'Matched'}
+              </Chip>
             )}
             {data.status === 'draft' && can('purchasing.po.create') && (
               <Button size="sm" variant="primary" icon={<Send size={14} />} onClick={() => setConfirm('submit')} loading={submit.isPending}>Submit</Button>
@@ -170,6 +180,91 @@ export default function PurchaseOrderDetailPage() {
           <Panel title="Approval chain">
             <ApprovalTimeline steps={fromApprovalRecords(data.approval_records)} />
           </Panel>
+          {/* ADV5 — Billing process panel: GRN → 3-way match → Bill → Payment. */}
+          {(data.status !== 'draft' && data.status !== 'pending_approval' && data.status !== 'cancelled') && (
+            <Panel
+              title={<span className="inline-flex items-center gap-1.5"><Receipt size={14} className="text-accent" />Billing</span>}
+              meta={(() => {
+                const grnCount = data.goods_receipt_notes?.length ?? 0;
+                const billCount = data.bills?.length ?? 0;
+                return `${grnCount} GRN${grnCount === 1 ? '' : 's'} · ${billCount} bill${billCount === 1 ? '' : 's'}`;
+              })()}
+            >
+              <div className="space-y-3 text-sm">
+                {/* Step 1 — Receiving (GRN) */}
+                <div className="flex items-start gap-2">
+                  <PackageIcon size={14} className="mt-0.5 text-muted shrink-0" />
+                  <div className="flex-1">
+                    <div className="text-2xs uppercase tracking-wider text-muted">Receiving</div>
+                    {(data.goods_receipt_notes?.length ?? 0) === 0 ? (
+                      <div className="text-muted">No GRN yet — awaiting goods receipt.</div>
+                    ) : (
+                      <div>
+                        {data.goods_receipt_notes!.map((g) => (
+                          <div key={g.id} className="flex items-center justify-between">
+                            <Link to={`/inventory/grn/${g.id}`} className="font-mono text-accent hover:underline">{g.grn_number}</Link>
+                            <span className="text-2xs text-muted">{formatDate(g.received_date)} · {g.status.replace(/_/g, ' ')}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Step 2 — 3-way match */}
+                <div className="flex items-start gap-2">
+                  <Scale size={14} className="mt-0.5 text-muted shrink-0" />
+                  <div className="flex-1">
+                    <div className="text-2xs uppercase tracking-wider text-muted">3-way match</div>
+                    {(data.bills?.length ?? 0) === 0 ? (
+                      <div className="text-muted">Pending bill</div>
+                    ) : data.bills!.some((b: any) => b.has_variances && !b.three_way_overridden) ? (
+                      <div className="inline-flex items-center gap-1 text-warning">
+                        <AlertTriangle size={12} /> Variance detected — review required
+                      </div>
+                    ) : data.bills!.some((b: any) => b.three_way_overridden) ? (
+                      <span className="text-info">Variance overridden by Finance</span>
+                    ) : (
+                      <span className="text-success">Matched within tolerance</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Step 3 — Billing */}
+                <div className="flex items-start gap-2">
+                  <Receipt size={14} className="mt-0.5 text-muted shrink-0" />
+                  <div className="flex-1">
+                    <div className="text-2xs uppercase tracking-wider text-muted">Bills</div>
+                    {(data.bills?.length ?? 0) === 0 ? (
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted">No bill received from supplier yet</span>
+                        {can('accounting.bills.create') && (data.goods_receipt_notes?.length ?? 0) > 0 && (
+                          <Link to="/accounting/bills" className="text-2xs text-accent hover:underline">Create bill →</Link>
+                        )}
+                      </div>
+                    ) : (
+                      <ul className="space-y-1">
+                        {data.bills!.map((b) => (
+                          <li key={b.id} className="flex items-center justify-between">
+                            <Link to={`/accounting/bills/${b.id}`} className="font-mono text-accent hover:underline">{b.bill_number}</Link>
+                            <span className="text-2xs">
+                              <span className="font-mono tabular-nums">{formatPeso(b.total_amount)}</span>
+                              <Chip
+                                variant={b.status === 'paid' ? 'success' : b.status === 'partial' ? 'info' : 'warning'}
+                                className="ml-1.5"
+                              >
+                                {b.status}
+                              </Chip>
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </Panel>
+          )}
           {/* Sprint P2 — unified Linked records panel (Procure-to-Pay). */}
           {((data.goods_receipt_notes?.length ?? 0) > 0 || (data.bills?.length ?? 0) > 0 || data.purchase_request) && (
             <Panel title="Linked records">
@@ -199,17 +294,25 @@ export default function PurchaseOrderDetailPage() {
                   }] : []),
                   ...((data.bills?.length ?? 0) > 0 ? [{
                     label: 'Bills',
-                    items: data.bills!.map((b) => ({
-                      id: b.bill_number,
-                      href: `/accounting/bills/${b.id}`,
-                      meta: formatPeso(b.total_amount),
-                      chip: {
-                        variant: (b.status === 'paid' ? 'success'
-                                : b.status === 'partial' ? 'info'
-                                : 'warning') as 'success' | 'info' | 'warning',
-                        text: b.status,
-                      },
-                    })),
+                    items: data.bills!.map((b) => {
+                      const bAny = b as any;
+                      const matchChip = bAny.has_variances
+                        ? bAny.three_way_overridden
+                          ? { variant: 'info' as const, text: 'overridden' }
+                          : { variant: 'warning' as const, text: 'variance' }
+                        : undefined;
+                      return {
+                        id: b.bill_number,
+                        href: `/accounting/bills/${b.id}`,
+                        meta: formatPeso(b.total_amount),
+                        chip: matchChip ?? {
+                          variant: (b.status === 'paid' ? 'success'
+                                  : b.status === 'partial' ? 'info'
+                                  : 'warning') as 'success' | 'info' | 'warning',
+                          text: b.status,
+                        },
+                      };
+                    }),
                   }] : []),
                 ]}
               />

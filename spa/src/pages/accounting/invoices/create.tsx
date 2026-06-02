@@ -103,7 +103,12 @@ export default function CreateInvoicePage() {
 
   return (
     <div>
-      <PageHeader title="New invoice" backTo="/accounting/invoices" backLabel="Invoices" />
+      <PageHeader title="New invoice" backTo="/accounting/invoices" backLabel="Invoices"
+        breadcrumbs={[
+          { label: 'Accounting' },
+          { label: 'Invoices', href: '/accounting/invoices' },
+          { label: 'New invoice' },
+        ]} />
       <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-5xl mx-auto px-5 py-6 space-y-4">
         <Panel title="Header">
           <div className="grid grid-cols-3 gap-3">

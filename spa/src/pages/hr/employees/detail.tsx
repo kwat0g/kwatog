@@ -69,6 +69,11 @@ export default function EmployeeDetailPage() {
         subtitle={<span className="font-mono">{employee.employee_no} · {employee.position?.title} · {employee.department?.name}</span>}
         backTo="/hr/employees"
         backLabel="Employees"
+        breadcrumbs={[
+          { label: 'HR', href: '/hr' },
+          { label: 'Employees', href: '/hr/employees' },
+          { label: employee.full_name },
+        ]}
         actions={
           <>
             {can('hr.employees.edit') && (

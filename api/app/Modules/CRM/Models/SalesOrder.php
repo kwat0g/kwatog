@@ -7,8 +7,10 @@ namespace App\Modules\CRM\Models;
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\Accounting\Models\Customer;
+use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Enums\SalesOrderStatus;
+use App\Modules\SupplyChain\Models\Delivery;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -18,6 +20,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class SalesOrder extends Model
 {
     use HasFactory, HasHashId, HasAuditLog;
+
+    protected static function newFactory(): \Database\Factories\SalesOrderFactory
+    {
+        return \Database\Factories\SalesOrderFactory::new();
+    }
 
     protected $fillable = [
         'so_number', 'customer_id', 'date', 'subtotal', 'vat_amount',
@@ -62,6 +69,18 @@ class SalesOrder extends Model
     public function workOrders(): HasMany
     {
         return $this->hasMany(\App\Modules\Production\Models\WorkOrder::class);
+    }
+
+    /** Relationship consumed by B2B Customer Portal order detail. */
+    public function deliveries(): HasMany
+    {
+        return $this->hasMany(Delivery::class);
+    }
+
+    /** Relationship consumed by B2B Customer Portal order detail. */
+    public function invoices(): HasMany
+    {
+        return $this->hasMany(Invoice::class, 'sales_order_id');
     }
 
     /** Scope used by list filters. */

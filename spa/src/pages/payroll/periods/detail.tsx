@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Play, CheckCircle2, Lock, Download, AlertCircle } from 'lucide-react';
+import { Play, CheckCircle2, Lock, Download, AlertCircle, Upload, Eye, Trash2, Banknote } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { periodsApi } from '@/api/payroll/periods';
 import { payrollsApi, type PayrollListParams } from '@/api/payroll/payrolls';
@@ -16,16 +16,18 @@ import { Spinner } from '@/components/ui/Spinner';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { ChainHeader } from '@/components/chain/ChainHeader';
 import { AnomalyReviewPanel } from '@/components/payroll/AnomalyReviewPanel';
-import { LinkedRecords } from '@/components/chain/LinkedRecords';
-import type { LinkedGroup } from '@/types/chain';
+import { Modal } from '@/components/ui/Modal';
+import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
 import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
 import { formatDate, formatRelative } from '@/lib/formatDate';
-import type { Payroll, PayrollPeriod } from '@/types/payroll';
+import type { DisbursementProof, Payroll, PayrollPeriod } from '@/types/payroll';
 
 const periodStatusVariant = (status: string | null | undefined): ChipVariant => {
   switch (status) {
-    case 'finalized': return 'success';
+    case 'disbursed': return 'success';
+    case 'finalized': return 'info';
     case 'approved':  return 'info';
     case 'processing': return 'info';
     case 'draft':     return 'warning';
@@ -80,6 +82,19 @@ export default function PayrollPeriodDetailPage() {
       toast.error(err.response?.data?.message ?? 'Failed to finalize period.'),
   });
 
+  // ADV1 — Disbursement proof
+  const [showUploadModal, setShowUploadModal] = useState(false);
+
+  const markDisbursedMutation = useMutation({
+    mutationFn: () => periodsApi.markDisbursed(id!),
+    onSuccess: () => {
+      toast.success('Period marked as disbursed.');
+      qc.invalidateQueries({ queryKey: ['payroll-period', id] });
+    },
+    onError: (err: { response?: { data?: { message?: string } } }) =>
+      toast.error(err.response?.data?.message ?? 'Failed to mark period as disbursed.'),
+  });
+
   // Force refetch when computation finishes (status flips back to draft).
   useEffect(() => {
     if (period && period.status !== 'processing') qc.invalidateQueries({ queryKey: ['payrolls', payrollFilters] });
@@ -89,7 +104,7 @@ export default function PayrollPeriodDetailPage() {
   if (periodLoading && !period) {
     return (
       <div>
-        <PageHeader title="Loading…" backTo="/payroll/periods" backLabel="Payroll" />
+        <PageHeader title="Loading…"        backTo="/payroll/hub" backLabel="Payroll" breadcrumbs={[{ label: 'Payroll', href: '/payroll/hub' }, { label: 'Period' }]} />
         <div className="px-5 py-4"><SkeletonTable columns={6} rows={6} /></div>
       </div>
     );
@@ -98,7 +113,7 @@ export default function PayrollPeriodDetailPage() {
   if (periodError || !period) {
     return (
       <div>
-        <PageHeader title="Payroll Period" backTo="/payroll/periods" backLabel="Payroll" />
+        <PageHeader title="Payroll Period"        backTo="/payroll/hub" backLabel="Payroll" breadcrumbs={[{ label: 'Payroll', href: '/payroll/hub' }, { label: 'Period' }]} />
         <EmptyState
           icon="alert-circle"
           title="Failed to load period"
@@ -112,14 +127,17 @@ export default function PayrollPeriodDetailPage() {
   const chainSteps = [
     { key: 'draft',      label: 'Draft',      state: 'done' as const },
     { key: 'processing', label: 'Computed',   state: (period.status === 'draft' ? 'pending' : 'done') as 'pending' | 'done' | 'active' },
-    { key: 'approved',   label: 'Approved',   state: (['approved','finalized'].includes(period.status) ? 'done' : (period.status === 'processing' ? 'active' : 'pending')) as 'pending' | 'done' | 'active' },
-    { key: 'finalized',  label: 'Finalized',  state: (period.status === 'finalized' ? 'done' : 'pending') as 'pending' | 'done' | 'active' },
+    { key: 'approved',   label: 'Approved',   state: (['approved','finalized','disbursed'].includes(period.status) ? 'done' : (period.status === 'processing' ? 'active' : 'pending')) as 'pending' | 'done' | 'active' },
+    { key: 'finalized',  label: 'Finalized',  state: (['finalized','disbursed'].includes(period.status) ? 'done' : 'pending') as 'pending' | 'done' | 'active' },
+    { key: 'disbursed',  label: 'Disbursed',  state: (period.status === 'disbursed' ? 'done' : 'pending') as 'pending' | 'done' | 'active' },
   ];
 
-  const canCompute  = can('payroll.periods.compute')  && period.status === 'draft' && !period.is_thirteenth_month;
-  const canApprove  = can('payroll.periods.approve')  && period.status === 'draft';
-  const canFinalize = can('payroll.periods.finalize') && period.status === 'approved';
-  const canBankFile = can('payroll.periods.finalize') && period.status === 'finalized';
+  const canCompute    = can('payroll.periods.compute')  && period.status === 'draft' && !period.is_thirteenth_month;
+  const canApprove    = can('payroll.periods.approve')  && period.status === 'draft';
+  const canFinalize   = can('payroll.periods.finalize') && period.status === 'approved';
+  const canBankFile   = can('payroll.periods.finalize') && (period.status === 'finalized' || period.status === 'disbursed');
+  const canDisburse   = can('payroll.periods.finalize') && period.status === 'finalized';
+  const canUploadProof = can('payroll.periods.finalize') && (period.status === 'finalized' || period.status === 'disbursed');
   const isProc = period.status === 'processing';
 
   const columns: Column<Payroll>[] = [
@@ -156,7 +174,12 @@ export default function PayrollPeriodDetailPage() {
       <PageHeader
         title={period.label}
         subtitle={<>Payroll date <span className="font-mono">{formatDate(period.payroll_date)}</span> · created by {period.creator?.name ?? '—'}</>}
-        backTo="/payroll/periods" backLabel="Payroll"
+               backTo="/payroll/hub" backLabel="Payroll"
+        breadcrumbs={[
+          { label: 'Payroll', href: '/payroll/hub' },
+          { label: 'Periods', href: '/payroll/periods' },
+          { label: period.label },
+        ]}
         actions={
           <>
             <Chip variant={periodStatusVariant(period.status)} className="mr-2">{period.status_label}</Chip>
@@ -198,6 +221,19 @@ export default function PayrollPeriodDetailPage() {
               >
                 <Download size={14} /> Bank file
               </a>
+            )}
+            {canUploadProof && (
+              <Button variant="secondary" size="sm" icon={<Upload size={14} />}
+                onClick={() => setShowUploadModal(true)}>
+                Upload Proof
+              </Button>
+            )}
+            {canDisburse && (
+              <Button variant="primary" size="sm" icon={<Banknote size={14} />}
+                onClick={() => markDisbursedMutation.mutate()}
+                disabled={markDisbursedMutation.isPending} loading={markDisbursedMutation.isPending}>
+                Mark as Disbursed
+              </Button>
             )}
           </>
         }
@@ -275,92 +311,208 @@ export default function PayrollPeriodDetailPage() {
           )}
         </div>
 
-        {/* LinkedRecords sidebar */}
-        <LinkedRecordsSidebar period={period} />
+        {/* ADV1 — Disbursement Proof Section */}
+        <div className="col-span-1 lg:col-span-2">
+          <Panel title="Disbursement Proof">
+            {(!period.disbursement_proofs || period.disbursement_proofs.length === 0) ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="inline-block h-2 w-2 rounded-full bg-warning" aria-hidden />
+                  <span className="text-xs font-medium text-muted">Status: Pending disbursement</span>
+                </div>
+                <p className="text-xs text-muted">
+                  No proof uploaded yet. After transferring salaries, upload the bank deposit slip or transaction confirmation here.
+                </p>
+                {canUploadProof && (
+                  <Button variant="secondary" size="sm" icon={<Upload size={14} />}
+                    onClick={() => setShowUploadModal(true)}>
+                    Upload Deposit Slip / Bank Confirmation
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="inline-block h-2 w-2 rounded-full bg-success" aria-hidden />
+                  <span className="text-xs font-medium text-muted">
+                    Status: {' '}
+                    {period.status === 'disbursed'
+                      ? `Disbursed on ${formatDate(period.disbursed_at ?? '')}`
+                      : 'Proof uploaded — mark as disbursed to complete'}
+                  </span>
+                </div>
+
+                {period.disbursement_proofs.map((proof) => (
+                  <DisbursementProofCard key={proof.id} proof={proof} periodId={period.id} />
+                ))}
+
+                {canUploadProof && (
+                  <Button variant="secondary" size="sm" icon={<Upload size={14} />}
+                    onClick={() => setShowUploadModal(true)}>
+                    Upload Another
+                  </Button>
+                )}
+              </div>
+            )}
+          </Panel>
+        </div>
+      </div>
+
+      {/* ADV1 — Upload Proof Modal */}
+      <UploadProofModal
+        open={showUploadModal}
+        onClose={() => setShowUploadModal(false)}
+        periodId={period.id}
+        onSuccess={() => {
+          qc.invalidateQueries({ queryKey: ['payroll-period', id] });
+          setShowUploadModal(false);
+        }}
+      />
+    </div>
+  );
+}
+
+/** ADV1 — A single disbursement proof card showing file info & actions. */
+function DisbursementProofCard({ proof, periodId }: { proof: DisbursementProof; periodId: string }) {
+  const qc = useQueryClient();
+
+  const deleteMutation = useMutation({
+    mutationFn: () => periodsApi.deleteProof(periodId, proof.id),
+    onSuccess: () => {
+      toast.success('Proof deleted.');
+      qc.invalidateQueries({ queryKey: ['payroll-period', periodId] });
+    },
+    onError: () => toast.error('Failed to delete proof.'),
+  });
+
+  const proofTypeLabel: Record<string, string> = {
+    deposit_slip: 'Deposit Slip',
+    bank_confirmation: 'Bank Confirmation',
+    transfer_receipt: 'Transfer Receipt',
+    other: 'Other',
+  };
+
+  return (
+    <div className="flex items-start gap-3 rounded-md border border-default bg-canvas p-3">
+      <div className="shrink-0 flex h-10 w-10 items-center justify-center rounded border border-default bg-elevated">
+        <Download size={16} className="text-muted" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium truncate">{proof.file_name}</span>
+          <Chip variant="neutral">{proofTypeLabel[proof.proof_type] ?? proof.proof_type}</Chip>
+        </div>
+        <div className="mt-1 text-xs text-muted">
+          {proof.bank_name && <span>Bank: {proof.bank_name} · </span>}
+          {proof.transaction_reference && <span>Ref: {proof.transaction_reference} · </span>}
+          {proof.disbursed_amount && <span>Amount: {formatPeso(proof.disbursed_amount)} · </span>}
+          <span>Date: {formatDate(proof.disbursement_date)}</span>
+        </div>
+        <div className="mt-0.5 text-xs text-muted">
+          Uploaded by {proof.uploader?.name ?? '—'} · {proof.created_at ? formatRelative(proof.created_at) : ''}
+        </div>
+      </div>
+      <div className="shrink-0 flex items-center gap-1">
+        <a
+          href={periodsApi.downloadProof(periodId, proof.id)}
+          target="_blank"
+          rel="noopener"
+          className="inline-flex items-center justify-center h-8 w-8 rounded hover:bg-elevated text-muted hover:text-primary transition-colors"
+          title="View proof"
+        >
+          <Eye size={14} />
+        </a>
+        <button
+          onClick={() => { if (confirm('Delete this proof file?')) deleteMutation.mutate(); }}
+          disabled={deleteMutation.isPending}
+          className="inline-flex items-center justify-center h-8 w-8 rounded hover:bg-danger-bg text-muted hover:text-danger-fg transition-colors"
+          title="Delete proof"
+        >
+          <Trash2 size={14} />
+        </button>
       </div>
     </div>
   );
 }
 
-function LinkedRecordsSidebar({ period }: { period: PayrollPeriod }) {
-  const groups: LinkedGroup[] = [];
+/** ADV1 — Modal form to upload a new disbursement proof file. */
+function UploadProofModal({
+  open, onClose, periodId, onSuccess,
+}: {
+  open: boolean; onClose: () => void; periodId: string; onSuccess: () => void;
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [proofType, setProofType] = useState('deposit_slip');
+  const [file, setFile] = useState<File | null>(null);
+  const [bankName, setBankName] = useState('');
+  const [transactionReference, setTransactionReference] = useState('');
+  const [disbursedAmount, setDisbursedAmount] = useState('');
+  const [disbursementDate, setDisbursementDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [notes, setNotes] = useState('');
 
-  // GL Journal Entry — only present once posted.
-  if (period.gl_entry_number) {
-    groups.push({
-      label: 'General Ledger',
-      items: [{
-        id: period.gl_entry_number,
-        meta: 'Posted to GL',
-        chip: { variant: 'success', text: 'Posted' },
-      }],
-    });
-  } else if (period.status === 'finalized') {
-    groups.push({
-      label: 'General Ledger',
-      items: [{
-        id: 'Pending',
-        meta: 'Posting queued — waiting for accounting feature flag or worker',
-        chip: { variant: 'warning', text: 'Pending' },
-      }],
-    });
-  }
-
-  // Bank file disbursements.
-  if (period.bank_files && period.bank_files.length > 0) {
-    groups.push({
-      label: 'Bank files',
-      items: period.bank_files.map((f) => ({
-        id: `${f.record_count} records`,
-        meta: `${formatPeso(f.total_amount)} · by ${f.generator?.name ?? 'system'} ${f.generated_at ? formatRelative(f.generated_at) : ''}`,
-        chip: { variant: 'success', text: 'Generated' },
-      })),
-    });
-  }
-
-  // Adjustments rolling into / out of this period.
-  if (period.adjustment_counts) {
-    const ac = period.adjustment_counts;
-    const total = ac.pending + ac.approved + ac.applied + ac.rejected;
-    if (total > 0) {
-      groups.push({
-        label: 'Adjustments',
-        items: [
-          ...(ac.pending  ? [{ id: `${ac.pending} pending`,  meta: 'Awaiting approval', chip: { variant: 'warning' as const, text: 'Pending' } }] : []),
-          ...(ac.approved ? [{ id: `${ac.approved} approved`, meta: 'Will apply next period', chip: { variant: 'info' as const, text: 'Approved' } }] : []),
-          ...(ac.applied  ? [{ id: `${ac.applied} applied`,  meta: 'Already netted', chip: { variant: 'success' as const, text: 'Applied' } }] : []),
-        ],
-      });
-    }
-  }
-
-  // 13th-month accruals — only on the special period.
-  if (period.is_thirteenth_month) {
-    groups.push({
-      label: '13th Month',
-      items: [{
-        id: `Year ${period.period_start.slice(0, 4)}`,
-        meta: 'Special disbursement period — accruals locked.',
-        chip: { variant: 'info', text: '13th' },
-      }],
-    });
-  }
-
-  if (groups.length === 0) {
-    return (
-      <aside className="hidden lg:block">
-        <Panel title="Linked records">
-          <div className="text-xs text-muted">
-            Linked GL entries, bank files, and adjustments will appear here after the period is computed and finalized.
-          </div>
-        </Panel>
-      </aside>
-    );
-  }
+  const mutation = useMutation({
+    mutationFn: () => {
+      const fd = new FormData();
+      fd.append('proof_type', proofType);
+      if (file) fd.append('file', file);
+      if (bankName) fd.append('bank_name', bankName);
+      if (transactionReference) fd.append('transaction_reference', transactionReference);
+      if (disbursedAmount) fd.append('disbursed_amount', disbursedAmount);
+      fd.append('disbursement_date', disbursementDate);
+      if (notes) fd.append('notes', notes);
+      return periodsApi.uploadProof(periodId, fd);
+    },
+    onSuccess: () => {
+      toast.success('Proof uploaded.');
+      onSuccess();
+    },
+    onError: (err: { response?: { data?: { message?: string } } }) =>
+      toast.error(err.response?.data?.message ?? 'Failed to upload proof.'),
+  });
 
   return (
-    <aside className="bg-surface border border-default rounded-md p-4">
-      <LinkedRecords groups={groups} />
-    </aside>
+    <Modal isOpen={open} onClose={onClose} size="md" title="Upload Disbursement Proof">
+      <div className="space-y-3 py-3">
+        <Select label="Proof type" value={proofType} onChange={(e) => setProofType(e.target.value)}>
+          <option value="deposit_slip">Deposit Slip</option>
+          <option value="bank_confirmation">Bank Confirmation</option>
+          <option value="transfer_receipt">Transfer Receipt</option>
+          <option value="other">Other</option>
+        </Select>
+
+        <div>
+          <label className="block text-xs font-medium text-primary mb-1">File (PDF, JPG, PNG — max 10MB)</label>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,.jpg,.jpeg,.png"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            className="block w-full text-xs text-muted file:mr-3 file:py-1 file:px-3 file:rounded file:border file:border-default file:text-xs file:bg-elevated file:text-primary hover:file:bg-strong"
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Input label="Bank name" value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="e.g. BDO Unibank" />
+          <Input label="Transaction ref." value={transactionReference} onChange={(e) => setTransactionReference(e.target.value)} placeholder="e.g. TXN20260415001" />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Input label="Disbursed amount" value={disbursedAmount} onChange={(e) => setDisbursedAmount(e.target.value)} placeholder="e.g. 2847500.00" />
+          <Input label="Disbursement date" type="date" value={disbursementDate} onChange={(e) => setDisbursementDate(e.target.value)} />
+        </div>
+
+        <Input label="Notes (optional)" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Any additional notes…" />
+      </div>
+
+      <div className="flex justify-end gap-2 pt-3 border-t border-default">
+        <Button variant="secondary" onClick={onClose} disabled={mutation.isPending}>Cancel</Button>
+        <Button variant="primary" onClick={() => mutation.mutate()}
+          disabled={!file || mutation.isPending} loading={mutation.isPending}>
+          {mutation.isPending ? 'Uploading…' : 'Upload'}
+        </Button>
+      </div>
+    </Modal>
   );
 }
+
+

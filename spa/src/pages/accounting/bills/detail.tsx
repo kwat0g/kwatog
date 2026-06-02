@@ -117,6 +117,11 @@ export default function BillDetailPage() {
         }
         backTo="/accounting/bills"
         backLabel="Bills"
+        breadcrumbs={[
+          { label: 'Accounting', href: '/accounting' },
+          { label: 'Bills', href: '/accounting/bills' },
+          { label: bill.bill_number },
+        ]}
         actions={
           <div className="flex gap-1.5">
             <a href={billsApi.pdfUrl(bill.id)} target="_blank" rel="noopener">

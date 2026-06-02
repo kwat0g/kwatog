@@ -17,7 +17,7 @@ class AuditLogController
 {
     public function index(Request $request): AnonymousResourceCollection
     {
-        $query = $this->filteredQuery($request)->with('user:id,name,email,role_id');
+        $query = $this->filteredQuery($request)->with(['user:id,name,email,role_id', 'user.role:id,name,slug']);
 
         $perPage = min((int) ($request->integer('per_page') ?: 25), 100);
 
@@ -33,7 +33,7 @@ class AuditLogController
     {
         $decoded = AuditLog::tryDecodeHash($id) ?? (ctype_digit($id) ? (int) $id : null);
         abort_if($decoded === null, 404);
-        $log = AuditLog::query()->with('user:id,name,email,role_id')->findOrFail($decoded);
+        $log = AuditLog::query()->with(['user:id,name,email,role_id', 'user.role:id,name,slug'])->findOrFail($decoded);
         $diff = $this->buildDiff(
             (string) $log->model_type,
             (array) ($log->old_values ?? []),
@@ -49,6 +49,10 @@ class AuditLogController
                     'id'    => $log->user->hash_id,
                     'name'  => $log->user->name,
                     'email' => $log->user->email,
+                    'role'  => $log->user->role ? [
+                        'name' => $log->user->role->name,
+                        'slug' => $log->user->role->slug,
+                    ] : null,
                 ] : null,
                 'ip_address' => $log->ip_address,
                 'user_agent' => $log->user_agent,

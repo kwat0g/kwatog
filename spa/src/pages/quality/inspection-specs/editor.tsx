@@ -157,7 +157,8 @@ export default function InspectionSpecEditorPage() {
   if (isNewMode && !pickedProductId) {
     return (
       <div>
-        <PageHeader title="New inspection spec" backTo="/quality/inspection-specs" backLabel="Inspection specs" />
+        <PageHeader title="New inspection spec" backTo="/quality/inspection-specs" backLabel="Inspection specs"
+          breadcrumbs={[{ label: 'Quality', href: '/quality' }, { label: 'Inspection specs', href: '/quality/inspection-specs' }, { label: 'New' }]} />
         <div className="max-w-2xl mx-auto px-5 py-6 space-y-4">
           <Select
             label="Product"
@@ -182,7 +183,8 @@ export default function InspectionSpecEditorPage() {
   if (productId && existing.isLoading) {
     return (
       <div>
-        <PageHeader title="Inspection spec" backTo="/quality/inspection-specs" backLabel="Inspection specs" />
+        <PageHeader title="Inspection spec" backTo="/quality/inspection-specs" backLabel="Inspection specs"
+          breadcrumbs={[{ label: 'Quality', href: '/quality' }, { label: 'Inspection specs', href: '/quality/inspection-specs' }, { label: 'Loading…' }]} />
         <SkeletonForm />
       </div>
     );
@@ -192,7 +194,8 @@ export default function InspectionSpecEditorPage() {
   if (existing.isError) {
     return (
       <div>
-        <PageHeader title="Inspection spec" backTo="/quality/inspection-specs" backLabel="Inspection specs" />
+        <PageHeader title="Inspection spec" backTo="/quality/inspection-specs" backLabel="Inspection specs"
+          breadcrumbs={[{ label: 'Quality', href: '/quality' }, { label: 'Inspection specs', href: '/quality/inspection-specs' }, { label: 'Error' }]} />
         <EmptyState
           icon="alert-circle"
           title="Failed to load spec"
@@ -214,6 +217,7 @@ export default function InspectionSpecEditorPage() {
         }
         backTo="/quality/inspection-specs"
         backLabel="Inspection specs"
+        breadcrumbs={[{ label: 'Quality', href: '/quality' }, { label: 'Inspection specs', href: '/quality/inspection-specs' }, { label: productLabel || 'Inspection spec' }]}
       />
       <form
         onSubmit={handleSubmit((v) => upsert.mutate(v), onFormInvalid<FormValues>())}

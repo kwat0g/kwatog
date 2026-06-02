@@ -10,6 +10,7 @@ use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -172,6 +173,77 @@ class RoleManagementTest extends TestCase
                 'name' => 'X', 'slug' => 'x_clone',
             ])
             ->assertForbidden();
+    }
+
+    /**
+     * P3.8 — lastModifiedFor() must return the LATEST timestamp, not an older one.
+     *
+     * Create a custom role, then insert two audit_log rows for it at different
+     * timestamps (old and newer). Call GET /roles/{id} and assert that
+     * last_modified_at reflects the NEWER timestamp, not the older one.
+     * This pins the correlated-subquery fix and guards against regressions
+     * where unbounded ORDER BY DESC was replaced by a MAX subquery.
+     */
+    public function test_last_modified_for_returns_latest_timestamp_not_oldest(): void
+    {
+        $admin  = $this->seedAdmin();
+        $custom = $this->makeCustomRole('audit_order_check', ['hr.employees.view']);
+
+        $morph = $custom->getMorphClass();
+        $older = now()->subHours(2)->toDateTimeString();
+        $newer = now()->subMinutes(30)->toDateTimeString();
+
+        // Insert OLDER audit row first.
+        DB::table('audit_logs')->insert([
+            'user_id'    => $admin->id,
+            'action'     => 'updated',
+            'model_type' => $morph,
+            'model_id'   => $custom->id,
+            'old_values' => null,
+            'new_values' => null,
+            'ip_address' => null,
+            'user_agent' => null,
+            'created_at' => $older,
+        ]);
+
+        // Insert NEWER audit row second.
+        DB::table('audit_logs')->insert([
+            'user_id'    => $admin->id,
+            'action'     => 'updated',
+            'model_type' => $morph,
+            'model_id'   => $custom->id,
+            'old_values' => null,
+            'new_values' => null,
+            'ip_address' => null,
+            'user_agent' => null,
+            'created_at' => $newer,
+        ]);
+
+        $resp = $this->actingAs($admin)
+            ->getJson("/api/v1/admin/roles/{$custom->hash_id}");
+
+        $resp->assertOk();
+
+        $returnedAt = $resp->json('data.last_modified_at');
+        $this->assertNotNull($returnedAt, 'last_modified_at must not be null when audit rows exist');
+
+        // The returned ISO timestamp must correspond to the NEWER row,
+        // not the older one. We compare Carbon instances for tolerance-free assertion.
+        $returnedCarbon = \Illuminate\Support\Carbon::parse($returnedAt);
+        $newerCarbon    = \Illuminate\Support\Carbon::parse($newer);
+        $olderCarbon    = \Illuminate\Support\Carbon::parse($older);
+
+        $this->assertTrue(
+            $returnedCarbon->greaterThan($olderCarbon),
+            "last_modified_at ({$returnedAt}) should be newer than the older audit row ({$older})"
+        );
+
+        $this->assertEqualsWithDelta(
+            $newerCarbon->timestamp,
+            $returnedCarbon->timestamp,
+            1, // 1-second tolerance for timestamp comparison
+            "last_modified_at should match the most recent audit row ({$newer}), got {$returnedAt}"
+        );
     }
 
     private function seedAdmin(): User

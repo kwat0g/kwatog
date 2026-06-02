@@ -135,7 +135,7 @@ export default function QualityDashboardPage() {
                     <Link to={`/quality/ncrs/${n.id}`} className="block hover:bg-subtle rounded-md -mx-1 px-1">
                       <div className="flex items-center gap-2 mb-0.5">
                         <span className="font-mono text-xs text-accent">{n.ncr_number}</span>
-                        <Chip variant={n.severity === 'critical' ? 'danger' : n.severity === 'high' ? 'warning' : 'info'}>
+                        <Chip variant={n.severity === 'critical' ? 'danger' : n.severity === 'major' ? 'warning' : 'info'}>
                           {n.severity}
                         </Chip>
                       </div>

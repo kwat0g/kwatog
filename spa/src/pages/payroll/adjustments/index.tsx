@@ -121,6 +121,8 @@ export default function PayrollAdjustmentsPage() {
       <PageHeader
         title="Payroll Adjustments"
         subtitle={data ? `${data.meta.total} adjustments` : undefined}
+        backTo="/payroll/hub"
+        backLabel="Payroll"
         actions={can('payroll.adjustments.create') ? (
           <Button variant="primary" size="sm" icon={<Plus size={14} />}
             onClick={() => navigate('/payroll/adjustments/create')}>

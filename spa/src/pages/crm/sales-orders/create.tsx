@@ -135,7 +135,12 @@ export default function CreateSalesOrderPage() {
 
   return (
     <div>
-      <PageHeader title="New sales order" backTo="/crm/sales-orders" backLabel="Sales orders" />
+      <PageHeader title="New sales order" backTo="/crm/sales-orders" backLabel="Sales orders"
+        breadcrumbs={[
+          { label: 'CRM' },
+          { label: 'Sales orders', href: '/crm/sales-orders' },
+          { label: 'New sales order' },
+        ]} />
       <form
         onSubmit={handleSubmit((v) => create.mutate(v), onFormInvalid<FormValues>())}
         className="max-w-4xl mx-auto px-5 py-6"

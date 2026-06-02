@@ -25,7 +25,12 @@ export default function ProductDetailPage() {
   if (isLoading) {
     return (
       <div>
-        <PageHeader title="Product" backTo="/crm/products" backLabel="Products" />
+        <PageHeader title="Product" backTo="/crm/products" backLabel="Products"
+          breadcrumbs={[
+            { label: 'CRM' },
+            { label: 'Products', href: '/crm/products' },
+            { label: 'Product' },
+          ]} />
         <SkeletonDetail />
       </div>
     );
@@ -33,7 +38,12 @@ export default function ProductDetailPage() {
   if (isError || !data) {
     return (
       <div>
-        <PageHeader title="Product" backTo="/crm/products" backLabel="Products" />
+        <PageHeader title="Product" backTo="/crm/products" backLabel="Products"
+          breadcrumbs={[
+            { label: 'CRM' },
+            { label: 'Products', href: '/crm/products' },
+            { label: 'Product' },
+          ]} />
         <EmptyState
           icon="alert-circle"
           title="Failed to load product"
@@ -58,6 +68,11 @@ export default function ProductDetailPage() {
         subtitle={data.name}
         backTo="/crm/products"
         backLabel="Products"
+        breadcrumbs={[
+          { label: 'CRM' },
+          { label: 'Products', href: '/crm/products' },
+          { label: data.part_number },
+        ]}
         actions={canManage && (
           <Button
             variant="secondary"

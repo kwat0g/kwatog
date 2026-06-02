@@ -16,6 +16,11 @@ class Vendor extends Model
 {
     use HasFactory, SoftDeletes, HasHashId, HasAuditLog;
 
+    protected static function newFactory(): \Database\Factories\VendorFactory
+    {
+        return \Database\Factories\VendorFactory::new();
+    }
+
     protected $fillable = [
         'name', 'contact_person', 'email', 'phone', 'address',
         'tin', 'payment_terms_days', 'is_active',

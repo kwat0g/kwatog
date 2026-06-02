@@ -19,6 +19,11 @@ class GoodsReceiptNote extends Model
 {
     use HasFactory, HasHashId, HasAuditLog;
 
+    protected static function newFactory(): \Database\Factories\GoodsReceiptNoteFactory
+    {
+        return \Database\Factories\GoodsReceiptNoteFactory::new();
+    }
+
     protected $table = 'goods_receipt_notes';
 
     protected $fillable = [

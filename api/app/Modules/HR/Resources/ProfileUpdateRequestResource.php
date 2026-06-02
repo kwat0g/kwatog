@@ -13,6 +13,7 @@ class ProfileUpdateRequestResource extends JsonResource
         return [
             'id'      => $this->hash_id,
             'status'  => $this->status,
+            'requires_finance' => (bool) $this->requires_finance,
             'changes' => $this->changes,
             'note'    => $this->note,
             'employee' => $this->relationLoaded('employee') && $this->employee ? [
@@ -34,6 +35,12 @@ class ProfileUpdateRequestResource extends JsonResource
             ] : null,
             'reviewed_at'    => optional($this->reviewed_at)->toIso8601String(),
             'review_remarks' => $this->review_remarks,
+            'finance_reviewer' => $this->relationLoaded('financeReviewer') && $this->financeReviewer ? [
+                'id'   => $this->financeReviewer->hash_id,
+                'name' => $this->financeReviewer->name,
+            ] : null,
+            'finance_reviewed_at' => optional($this->finance_reviewed_at)->toIso8601String(),
+            'finance_remarks'     => $this->finance_remarks,
             'created_at'     => optional($this->created_at)->toIso8601String(),
         ];
     }

@@ -12,7 +12,7 @@ class BillItemResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'id'          => (int) $this->id,
+            'id'          => $this->hash_id,
             'description' => $this->description,
             'quantity'    => (string) $this->quantity,
             'unit'        => $this->unit,

@@ -1,6 +1,6 @@
 import { client } from '../client';
 import type { ApiSuccess, PaginatedResponse, ListParams } from '@/types';
-import type { Shipment, Delivery, Vehicle, ShipmentStatus, DeliveryStatus } from '@/types/supplyChain';
+import type { Shipment, Delivery, DeliveryProof, DeliveryProofType, Vehicle, ShipmentStatus, DeliveryStatus } from '@/types/supplyChain';
 
 export interface ShipmentListParams extends ListParams {
   status?: ShipmentStatus;
@@ -35,8 +35,23 @@ export const deliveriesApi = {
     fd.append('file', file);
     return client.post<ApiSuccess<Delivery>>(`/supply-chain/deliveries/${id}/receipt`, fd).then((r) => r.data.data);
   },
-  confirm: (id: string) =>
-    client.post<ApiSuccess<Delivery>>(`/supply-chain/deliveries/${id}/confirm`).then((r) => r.data.data),
+  confirm: (id: string, data?: { receiver_name?: string; receiver_position?: string; delivery_remarks?: string }) =>
+    client.post<ApiSuccess<Delivery>>(`/supply-chain/deliveries/${id}/confirm`, data ?? {}).then((r) => r.data.data),
+};
+
+/** ADV7 — Proof of Delivery file management. */
+export const deliveryProofsApi = {
+  list: (deliveryId: string) =>
+    client.get<ApiSuccess<DeliveryProof[]>>(`/supply-chain/deliveries/${deliveryId}/proofs`).then((r) => r.data.data),
+  upload: (deliveryId: string, file: File, proof_type: DeliveryProofType, notes?: string) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('proof_type', proof_type);
+    if (notes) fd.append('notes', notes);
+    return client.post<ApiSuccess<DeliveryProof>>(`/supply-chain/deliveries/${deliveryId}/proofs`, fd).then((r) => r.data.data);
+  },
+  destroy: (deliveryId: string, proofId: string) =>
+    client.delete(`/supply-chain/deliveries/${deliveryId}/proofs/${proofId}`).then((r) => r.data),
 };
 
 export const vehiclesApi = {

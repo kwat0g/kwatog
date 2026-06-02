@@ -22,6 +22,11 @@ class PurchaseOrder extends Model
 {
     use HasFactory, HasHashId, HasAuditLog, HasApprovalWorkflow;
 
+    protected static function newFactory(): \Database\Factories\PurchaseOrderFactory
+    {
+        return \Database\Factories\PurchaseOrderFactory::new();
+    }
+
     protected $fillable = [
         'po_number', 'vendor_id', 'purchase_request_id',
         'date', 'expected_delivery_date',
@@ -93,12 +98,8 @@ class PurchaseOrder extends Model
 
     public function getQuantityReceivedPercentAttribute(): float
     {
-        $totalOrdered = 0.0;
-        $totalReceived = 0.0;
-        foreach ($this->items as $line) {
-            $totalOrdered  += (float) $line->quantity;
-            $totalReceived += (float) $line->quantity_received;
-        }
+        $totalOrdered  = (float) $this->items()->sum('quantity');
+        $totalReceived = (float) $this->items()->sum('quantity_received');
         if ($totalOrdered <= 0) return 0.0;
         return round(($totalReceived / $totalOrdered) * 100, 2);
     }

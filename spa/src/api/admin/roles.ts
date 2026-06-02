@@ -19,8 +19,34 @@ export interface Role {
   users_count?: number;
   permissions_count?: number;
   permissions?: { id: string; slug: string; name: string; module: string }[];
+  /** ADV4 — admin who last edited this role (description / permissions / clone source). */
+  last_modified_by: string | null;
+  last_modified_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface RoleSummary {
+  id: string;
+  name: string;
+  slug: string;
+  is_system: boolean;
+  permissions_count: number;
+}
+
+export interface RolePermissionRow {
+  slug: string;
+  name: string;
+  module: string;
+}
+
+export interface RoleCompareResult {
+  role_a: RoleSummary;
+  role_b: RoleSummary;
+  common: RolePermissionRow[];
+  only_in_a: RolePermissionRow[];
+  only_in_b: RolePermissionRow[];
+  modules: Record<string, { common: number; only_a: number; only_b: number }>;
 }
 
 export interface CreateRoleData {
@@ -70,5 +96,11 @@ export const rolesApi = {
   clone: (sourceId: string, data: CloneRoleData) =>
     client
       .post<ApiSuccess<Role>>(`/admin/roles/${sourceId}/clone`, data)
+      .then((r) => r.data.data),
+
+  /** ADV4 — side-by-side permission diff between two roles. */
+  compare: (a: string, b: string) =>
+    client
+      .get<{ data: RoleCompareResult }>('/admin/roles/compare', { params: { a, b } })
       .then((r) => r.data.data),
 };

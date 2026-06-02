@@ -9,12 +9,18 @@ use App\Common\Traits\HasHashId;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Modules\Inventory\Models\Item;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class WarehouseLocation extends Model
 {
     use HasFactory, HasHashId, HasAuditLog;
+
+    protected static function newFactory(): \Database\Factories\WarehouseLocationFactory
+    {
+        return \Database\Factories\WarehouseLocationFactory::new();
+    }
 
     protected $fillable = ['zone_id', 'code', 'rack', 'bin', 'is_active'];
 
@@ -28,6 +34,11 @@ class WarehouseLocation extends Model
     public function stockLevels(): HasMany
     {
         return $this->hasMany(StockLevel::class, 'location_id');
+    }
+
+    public function currentItem(): BelongsTo
+    {
+        return $this->belongsTo(Item::class, 'current_item_id');
     }
 
     public function scopeActive(Builder $q): Builder

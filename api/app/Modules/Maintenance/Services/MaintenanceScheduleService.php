@@ -134,6 +134,34 @@ class MaintenanceScheduleService
     }
 
     /**
+     * Machine schedules whose running_hours_total exceeds the interval_value.
+     * Only applies to machine-type schedules with interval_type='hours' where
+     * the schedule tracks cumulative running hours rather than wall-clock time.
+     *
+     * Also respects next_due_at so a completed PM isn't immediately re-triggered
+     * on the next cron run (running_hours_total stays >= interval_value).
+     */
+    public function machineHourSchedulesAtOrAboveThreshold(): iterable
+    {
+        return MaintenanceSchedule::query()
+            ->active()
+            ->where('maintainable_type', MaintainableType::Machine->value)
+            ->where('interval_type', MaintenanceScheduleInterval::Hours->value)
+            ->where(function (Builder $q) {
+                $q->whereNull('next_due_at')->orWhere('next_due_at', '<=', now());
+            })
+            ->whereDoesntHave('workOrders', fn (Builder $q) => $q->whereNotIn('status', ['completed', 'cancelled']))
+            ->get()
+            ->filter(function (MaintenanceSchedule $s) {
+                $machine = Machine::find($s->maintainable_id);
+                if (! $machine) return false;
+                $elapsed = (float) $machine->running_hours_total;
+                return $elapsed >= (float) $s->interval_value;
+            })
+            ->values();
+    }
+
+    /**
      * Mold-shot schedules currently exceeding the configured shot threshold.
      */
     public function moldShotSchedulesAtOrAboveThreshold(float $thresholdPct = 100.0)

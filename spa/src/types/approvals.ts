@@ -15,6 +15,8 @@ export interface ApprovalCardActive {
   age_hours: number;
   amount: string | null;
   summary: string;
+  /** ADV4 — original requester of the approvable, with their role. */
+  requester?: { name: string; role: { name: string; slug: string } | null } | null;
 }
 
 export interface ApprovalCardActioned {
@@ -27,6 +29,8 @@ export interface ApprovalCardActioned {
   remarks: string;
   amount: string | null;
   summary: string;
+  /** ADV4 — the user who approved/rejected, with their role. */
+  actor?: { id: string; name: string; role: { name: string; slug: string } | null } | null;
 }
 
 export interface ApprovalBoard {

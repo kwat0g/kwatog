@@ -9,6 +9,9 @@
 > Execute Task [CODE] from docs/POLISH-TASKS.md completely."`
 
 ---
+Read CLAUDE.md, docs/PATTERNS.md, docs/DESIGN-SYSTEM.md. Enhance and improve Task S1-2 and D1-8 from docs/POLISH-TASKS.md completely. Those tasks was already implemented but they need a improvement and   enhancement.
+
+
 
 ## SERIES D — ROLE-SPECIFIC DASHBOARDS
 

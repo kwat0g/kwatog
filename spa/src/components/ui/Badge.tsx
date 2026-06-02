@@ -5,6 +5,8 @@ interface BadgeProps {
   children: ReactNode;
   variant?: 'accent' | 'warning' | 'danger' | 'neutral';
   className?: string;
+  /** Optional accessible label, e.g. "5 pending". */
+  'aria-label'?: string;
 }
 
 const variants = {
@@ -14,9 +16,10 @@ const variants = {
   neutral: 'bg-elevated text-muted',
 } as const;
 
-export function Badge({ children, variant = 'accent', className }: BadgeProps) {
+export function Badge({ children, variant = 'accent', className, ...rest }: BadgeProps) {
   return (
     <span
+      aria-label={rest['aria-label']}
       className={cn(
         'inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-[10px] font-medium leading-none',
         variants[variant],

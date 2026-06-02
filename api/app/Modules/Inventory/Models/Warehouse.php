@@ -15,6 +15,11 @@ class Warehouse extends Model
 {
     use HasFactory, HasHashId, HasAuditLog;
 
+    protected static function newFactory(): \Database\Factories\WarehouseFactory
+    {
+        return \Database\Factories\WarehouseFactory::new();
+    }
+
     protected $fillable = ['name', 'code', 'address', 'is_active'];
 
     protected $casts = ['is_active' => 'boolean'];

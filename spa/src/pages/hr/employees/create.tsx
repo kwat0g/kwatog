@@ -46,6 +46,11 @@ export default function CreateEmployeePage() {
         title="Add employee"
         backTo="/hr/employees"
         backLabel="Employees"
+        breadcrumbs={[
+          { label: 'HR', href: '/hr' },
+          { label: 'Employees', href: '/hr/employees' },
+          { label: 'New Employee' },
+        ]}
       />
       <EmployeeForm
         onSubmit={(d) => mutation.mutate(d)}

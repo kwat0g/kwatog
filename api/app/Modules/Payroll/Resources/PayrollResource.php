@@ -53,6 +53,10 @@ class PayrollResource extends JsonResource
             'error_message'   => $this->error_message,
             'computed_at'     => optional($this->computed_at)->toIso8601String(),
 
+            // ADV1 — Disbursement status from the parent period so payslip
+            // pages can display "Disbursed on [date]" to employees.
+            'period_disbursement_status' => $this->whenLoaded('period', fn () => $this->period->disbursement_status ?? 'pending'),
+
             'deduction_details' => PayrollDeductionDetailResource::collection($this->whenLoaded('deductionDetails')),
 
             'created_at'      => optional($this->created_at)->toIso8601String(),

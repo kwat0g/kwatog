@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Leave\Services;
 
+use App\Modules\Leave\Exceptions\InsufficientLeaveBalanceException;
 use App\Modules\Leave\Models\EmployeeLeaveBalance;
 use App\Modules\Leave\Models\LeaveType;
 use Illuminate\Support\Facades\DB;
@@ -33,6 +34,11 @@ class LeaveBalanceService
                 ->where('year', $year)
                 ->lockForUpdate()
                 ->firstOrFail();
+            if ($days > (float) $bal->remaining) {
+                throw new InsufficientLeaveBalanceException(
+                    "Insufficient leave balance ({$bal->remaining} remaining; {$days} requested)."
+                );
+            }
             $bal->used = (float) $bal->used + $days;
             $bal->remaining = (float) $bal->total_credits - (float) $bal->used;
             $bal->save();

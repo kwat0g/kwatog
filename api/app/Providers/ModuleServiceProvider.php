@@ -11,12 +11,12 @@ use Illuminate\Support\ServiceProvider;
  * Auto-loads /api/v1/* routes from every app/Modules/<Module>/routes.php file.
  *
  * Each module is responsible for its own controllers, models, services,
- * requests, resources, jobs, enums, and routes — the modular monolith approach.
+ * requests, resources, jobs, enums, and routes - the modular monolith approach.
  */
 class ModuleServiceProvider extends ServiceProvider
 {
     /**
-     * Module list — order matters only for IDE navigation; routing is independent.
+     * Module list - order matters only for IDE navigation; routing is independent.
      *
      * @var array<int, string>
      */
@@ -39,6 +39,9 @@ class ModuleServiceProvider extends ServiceProvider
         'Maintenance',
         'Assets',
         'Dashboard',
+        'B2B',
+        'Forecasting',
+        'ReturnManagement',
     ];
 
     public function boot(): void

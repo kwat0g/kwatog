@@ -6,6 +6,7 @@ import { approvalsApi } from '@/api/approvals';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { UserBadge } from '@/components/ui/UserBadge';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { cn } from '@/lib/cn';
 import type {
@@ -206,6 +207,11 @@ function ActiveCard({ card, onOpen }: { card: ApprovalCardActive; onOpen: () => 
           ₱ {Number(card.amount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
         </div>
       )}
+      {card.requester && (
+        <div className="text-2xs text-muted mt-1.5">
+          requested by <UserBadge name={card.requester.name} role={card.requester.role} />
+        </div>
+      )}
       <div className="text-2xs text-muted mt-1.5 flex items-center gap-1">
         <ExternalLink size={10} />
         Open record to act
@@ -239,6 +245,11 @@ function ActionedCard({
       <div className="text-xs text-secondary line-clamp-2">{card.summary}</div>
       {card.remarks && (
         <div className="text-2xs text-muted mt-1 italic line-clamp-2">“{card.remarks}”</div>
+      )}
+      {card.actor && (
+        <div className="text-2xs text-muted mt-1.5">
+          by <UserBadge name={card.actor.name} role={card.actor.role} />
+        </div>
       )}
     </button>
   );

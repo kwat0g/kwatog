@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Common\Services\SettingsService;
+use App\Common\Models\ApprovalRecord;
+use App\Modules\Dashboard\Observers\BadgeInvalidationObserver;
 use App\Modules\HR\Exports\EmployeeMasterExport;
 use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Observers\JournalEntryObserver;
@@ -34,7 +36,9 @@ use App\Modules\Quality\Events\InspectionPassed;
 use App\Modules\Quality\Listeners\CreateDeliveryDraftOnQcPass;
 use App\Modules\Quality\Listeners\RejectGRNOnQcFail;
 use App\Modules\Quality\Listeners\TriggerIncomingQC;
+use App\Modules\Quality\Listeners\TriggerInProcessQC;
 use App\Modules\Quality\Listeners\TriggerOutgoingQC;
+use App\Modules\Production\Events\WorkOrderStatusChanged;
 use App\Modules\SupplyChain\Events\DeliveryConfirmed;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Event;
@@ -50,6 +54,12 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // Fail fast if production is misconfigured with debug on — prevents
+        // leaking stack traces, query bindings, and secrets in error responses.
+        if ($this->app->isProduction() && (bool) config('app.debug') === true) {
+            throw new \RuntimeException('APP_DEBUG must be false in production.');
+        }
+
         // Series E (Task E2) — register exportable columns once per process.
         // ColumnSelectorModal in the SPA reads these from
         // GET /api/v1/exports/{module}/columns.
@@ -74,6 +84,26 @@ class AppServiceProvider extends ServiceProvider
         // Sprint 4: invalidate financial-statement caches on JE mutation.
         JournalEntry::observe(JournalEntryObserver::class);
 
+        // Polish Task S2 (real-time): bump the badge cache version + broadcast
+        // BadgesChanged on any write to a model that backs a sidebar badge, so
+        // connected clients refetch their counts instantly. StockLevel is
+        // intentionally excluded — its write frequency would flood the channel;
+        // low-stock relies on the 30s cache + 60s SPA poll instead.
+        foreach ([
+            ApprovalRecord::class,
+            \App\Modules\Purchasing\Models\PurchaseRequest::class,
+            \App\Modules\Leave\Models\LeaveRequest::class,
+            \App\Modules\Attendance\Models\OvertimeRequest::class,
+            \App\Modules\Maintenance\Models\MaintenanceWorkOrder::class,
+            \App\Modules\Quality\Models\NonConformanceReport::class,
+            \App\Modules\HR\Models\ProfileUpdateRequest::class,
+            \App\Modules\Production\Models\WorkOrder::class,
+            \App\Modules\SupplyChain\Models\Delivery::class,
+            \App\Modules\Payroll\Models\PayrollPeriod::class,
+        ] as $badgeModel) {
+            $badgeModel::observe(BadgeInvalidationObserver::class);
+        }
+
         // Sprint 5: low-stock auto-replenishment listener.
         Event::listen(StockMovementCompleted::class, [CheckReorderPoint::class, 'handle']);
 
@@ -86,7 +116,9 @@ class AppServiceProvider extends ServiceProvider
         // ─── Series C — Chain orchestrator listeners (C1, C2, C3) ─────
         // C1 Order-to-Cash
         Event::listen(SalesOrderConfirmed::class, [NotifyOnSalesOrderConfirmed::class, 'handle']);
-        Event::listen(WorkOrderCompleted::class,  [TriggerOutgoingQC::class,           'handle']);
+        // ADV7 — auto-trigger in-process QC on WO start.
+        Event::listen(WorkOrderStatusChanged::class, [TriggerInProcessQC::class,          'handle']);
+        Event::listen(WorkOrderCompleted::class,     [TriggerOutgoingQC::class,           'handle']);
         Event::listen(InspectionPassed::class,    [CreateDeliveryDraftOnQcPass::class, 'handle']);
 
         // C2 Procure-to-Pay

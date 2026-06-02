@@ -137,6 +137,8 @@ export default function AdminUsersIndexPage() {
       <PageHeader
         title="User Management"
         subtitle={data ? `${data.meta.total} users` : undefined}
+        backTo="/admin/users-roles"
+        backLabel="Users & Roles"
         actions={
           can('admin.users.manage') && (
             <Button

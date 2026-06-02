@@ -16,6 +16,11 @@ class Department extends Model
 {
     use HasFactory, HasHashId, HasAuditLog;
 
+    protected static function newFactory(): \Database\Factories\DepartmentFactory
+    {
+        return \Database\Factories\DepartmentFactory::new();
+    }
+
     protected $fillable = [
         'name',
         'code',

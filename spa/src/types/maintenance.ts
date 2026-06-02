@@ -90,3 +90,91 @@ export interface CreateMaintenanceWorkOrderData {
   priority: MaintenancePriority;
   description: string;
 }
+
+/* ── ADV8 — Condition Readings ─────────────────────────────── */
+
+export type ConditionMetric = 'temperature' | 'vibration' | 'pressure' | 'current' | 'oil_quality';
+export type ConditionSource = 'manual' | 'iot_sensor' | 'plc' | 'api';
+export type HealthStatus = 'ok' | 'warning' | 'critical';
+
+export interface MachineConditionReading {
+  id: string;
+  machine_id: string | null;
+  metric: ConditionMetric;
+  value: string;
+  unit: string;
+  recorded_at: string | null;
+  source: ConditionSource;
+  notes: string | null;
+  created_at: string | null;
+}
+
+export interface MachineHealthSnapshot {
+  metric: ConditionMetric;
+  value: number | null;
+  unit: string;
+  recorded_at: string | null;
+  status: HealthStatus;
+}
+
+export interface ConditionTrendPoint {
+  recorded_at: string;
+  value: number;
+}
+
+export interface RecordConditionReadingData {
+  machine_id: number;
+  metric: ConditionMetric;
+  value: number;
+  unit?: string;
+  recorded_at?: string;
+  source?: ConditionSource;
+  notes?: string;
+}
+
+export interface ConditionReadingResult {
+  data: MachineConditionReading;
+  triggered: boolean;
+  reason: string | null;
+  work_order: { id: string; mwo_number: string } | null;
+}
+
+/* ── ADV8 — Downtime Analytics ─────────────────────────────── */
+
+export interface DowntimeCategoryBreakdown {
+  category: string;
+  minutes: number;
+  count: number;
+}
+
+export interface DowntimeSummary {
+  total_downtime_minutes: number;
+  breakdown_count: number;
+  mtbf_hours: number | null;
+  mttr_minutes: number | null;
+  availability_pct: number;
+  category_breakdown: DowntimeCategoryBreakdown[];
+}
+
+export interface DailyDowntimeTrend {
+  date: string;
+  total_minutes: number;
+  breakdown_minutes: number;
+}
+
+export interface TopMachineDowntime {
+  machine_id: number;
+  machine_code: string;
+  name: string;
+  downtime_minutes: number;
+  breakdown_count: number;
+}
+
+export interface MachineDowntimeSummary {
+  machine: {
+    id: number;
+    code: string;
+    name: string;
+  };
+  summary: DowntimeSummary;
+}

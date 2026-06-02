@@ -77,6 +77,8 @@ export interface SelfServiceProfile {
   emergency_contact_name: string | null;
   emergency_contact_relation: string | null;
   emergency_contact_phone: string | null;
+  bank_name: string | null;
+  bank_account_last4: string | null;
   sss_no_last4: string | null;
   philhealth_no_last4: string | null;
   pagibig_no_last4: string | null;
@@ -85,9 +87,52 @@ export interface SelfServiceProfile {
 
 export interface ProfileUpdateRequestRecord {
   id: string;
-  status: 'pending' | 'approved' | 'rejected';
+  // pending_finance: HR approved, awaiting Finance (bank-account changes only).
+  status: 'pending' | 'pending_finance' | 'approved' | 'rejected';
   changes: Record<string, string | null>;
   note: string | null;
   reviewed_at: string | null;
   created_at: string | null;
+}
+
+// ─── Overtime (Task SS1) ──────────────────────────────────────────
+export type OvertimeStatus = 'pending' | 'approved' | 'rejected';
+
+export interface SelfServiceOvertimeRequest {
+  id: string;
+  date: string | null;
+  hours_requested: string;
+  reason: string | null;
+  status: OvertimeStatus | null;
+  rejection_reason: string | null;
+  approver: string | null;
+  created_at: string | null;
+}
+
+export interface SelfServiceOvertimeResponse {
+  pending: SelfServiceOvertimeRequest[];
+  history: SelfServiceOvertimeRequest[];
+  todays_shift: SelfServiceShift | null;
+  /** Estimated hourly rate for the OT pay preview (display-only). */
+  hourly_rate: string | null;
+}
+
+export interface ApplyOvertimePayload {
+  date: string;
+  hours_requested: number;
+  reason: string;
+}
+
+// ─── Documents (Task SS3) ─────────────────────────────────────────
+export interface SelfServiceCertificate {
+  key: 'employment' | 'sss' | 'philhealth' | 'pagibig' | 'bir_2316';
+  label: string;
+  available: boolean;
+  note: string;
+}
+
+export interface SelfServiceDocumentsResponse {
+  certificates: SelfServiceCertificate[];
+  current_year: number;
+  bir_2316_year: number;
 }

@@ -72,6 +72,11 @@ export default function LeaveDetailPage() {
         subtitle={`${req.employee?.full_name} · ${req.leave_type?.code}`}
         backTo="/hr/leaves"
         backLabel="Leaves"
+        breadcrumbs={[
+          { label: 'HR', href: '/hr' },
+          { label: 'Leaves', href: '/hr/leaves' },
+          { label: req.leave_request_no },
+        ]}
         actions={
           <>
             {/* Series R/R3 — declarative permission gating via <CanDo>. */}

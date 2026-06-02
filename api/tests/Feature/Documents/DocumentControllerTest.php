@@ -97,7 +97,7 @@ class DocumentControllerTest extends TestCase
             ['name' => 'Test', 'description' => 'Test role'],
         );
         foreach ($permissions as $slug) {
-            $perm = Permission::firstOrCreate(['slug' => $slug], ['name' => $slug]);
+            $perm = Permission::firstOrCreate(['slug' => $slug], ['name' => $slug, 'module' => explode('.', $slug)[0]]);
             $role->permissions()->syncWithoutDetaching([$perm->id]);
         }
         return User::factory()->create([

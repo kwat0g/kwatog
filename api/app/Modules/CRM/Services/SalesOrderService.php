@@ -254,6 +254,117 @@ class SalesOrderService
         });
     }
 
+    /**
+     * Resolve the CapacityPlanningService via the container so this module
+     * can run without the MRP module being booted.
+     */
+    private function capacityPlanner(): ?\App\Modules\MRP\Services\CapacityPlanningService
+    {
+        $cls = '\\App\\Modules\\MRP\\Services\\CapacityPlanningService';
+        return class_exists($cls) ? app($cls) : null;
+    }
+
+    /**
+     * Resolve PickingListService via the container (optional dependency).
+     */
+    private function pickingListService(): ?\App\Modules\Inventory\Services\PickingListService
+    {
+        $cls = '\\App\\Modules\\Inventory\\Services\\PickingListService';
+        return class_exists($cls) ? app($cls) : null;
+    }
+
+    /**
+     * Confirm SO and return a chain summary of everything auto-created.
+     *
+     * Wraps confirm() which runs MRP (creating WOs + PRs), then attempts
+     * capacity scheduling via CapacityPlanningService. Non-fatal if scheduling
+     * fails — the WOs still exist as 'planned'.
+     */
+    public function confirmWithChainResult(SalesOrder $so): array
+    {
+        // The confirm() call already runs MRP inside its transaction.
+        $confirmedSo = $this->confirm($so);
+
+        // Gather what MRP created.
+        $confirmedSo->load([
+            'mrpPlan',
+            'workOrders.product:id,part_number,name',
+            'workOrders.machine:id,machine_code,name',
+            'workOrders.mold:id,mold_code,name',
+        ]);
+
+        $plan = $confirmedSo->mrpPlan;
+        $workOrders = $confirmedSo->workOrders;
+
+        // Attempt auto-scheduling via CapacityPlanner.
+        $schedulingResult = ['scheduled' => [], 'conflicts' => []];
+        $planner = $this->capacityPlanner();
+        if ($planner && $workOrders->isNotEmpty()) {
+            $plannedWoIds = $workOrders
+                ->where('status', \App\Modules\Production\Enums\WorkOrderStatus::Planned)
+                ->pluck('id')
+                ->all();
+            if (!empty($plannedWoIds)) {
+                try {
+                    $schedulingResult = $planner->run($plannedWoIds);
+                } catch (\Throwable $e) {
+                    // Scheduling failure is non-fatal — WOs still exist as planned.
+                }
+            }
+        }
+
+        // Reload WOs after scheduling may have changed their machine/mold.
+        $confirmedSo->load([
+            'workOrders.product:id,part_number,name',
+            'workOrders.machine:id,machine_code,name',
+            'workOrders.mold:id,mold_code,name',
+            'workOrders.schedules',
+        ]);
+        $workOrders = $confirmedSo->workOrders;
+
+        // Build per-WO summaries.
+        $woSummaries = $workOrders->map(function ($wo) use ($schedulingResult) {
+            $schedule = collect($schedulingResult['scheduled'])
+                ->firstWhere('work_order_id', $wo->hash_id);
+            return [
+                'id' => $wo->hash_id,
+                'wo_number' => $wo->wo_number,
+                'product' => $wo->product ? [
+                    'part_number' => $wo->product->part_number,
+                    'name' => $wo->product->name,
+                ] : null,
+                'status' => $wo->status?->value,
+                'quantity_target' => (int) $wo->quantity_target,
+                'machine' => $wo->machine ? $wo->machine->machine_code . ' ' . $wo->machine->name : null,
+                'scheduled_start' => $schedule['scheduled_start'] ?? optional($wo->planned_start)->toIso8601String(),
+                'scheduled_end' => $schedule['scheduled_end'] ?? optional($wo->planned_end)->toIso8601String(),
+                'needs_manual_scheduling' => $wo->status?->value === 'planned' && !$wo->machine_id,
+            ];
+        })->values()->all();
+
+        // Count auto-created PRs from the MRP plan.
+        $prsCreated = 0;
+        $shortageCount = 0;
+        if ($plan) {
+            $prsCreated = (int) $plan->auto_pr_count;
+            $shortageCount = (int) $plan->shortages_found;
+        }
+
+        return [
+            'so' => $this->show($confirmedSo),
+            'chain_result' => [
+                'so_number' => $confirmedSo->so_number,
+                'work_orders_created' => count($woSummaries),
+                'auto_scheduled' => collect($woSummaries)->where('needs_manual_scheduling', false)->count(),
+                'needs_manual' => collect($woSummaries)->where('needs_manual_scheduling', true)->count(),
+                'shortages' => $shortageCount,
+                'prs_created' => $prsCreated,
+                'work_orders' => $woSummaries,
+                'scheduling_conflicts' => $schedulingResult['conflicts'],
+            ],
+        ];
+    }
+
     public function cancel(SalesOrder $so, ?string $reason = null): SalesOrder
     {
         if (! $so->is_cancellable) {

@@ -38,6 +38,9 @@ export interface PurchaseRequest {
   priority: PurchaseRequestPriority;
   status: PurchaseRequestStatus;
   is_auto_generated: boolean;
+  auto_generated_reason: string | null;
+  is_urgent: boolean;
+  urgency_reason: string | null;
   has_overdue_approval: boolean;
   current_approval_step: number;
   submitted_at: string | null;
@@ -45,6 +48,7 @@ export interface PurchaseRequest {
   total_estimated_amount: string;
   requester: { id: string; name: string } | null;
   department: { id: string; name: string; code: string } | null;
+  template: { id: number; name: string } | null;
   items?: PurchaseRequestItem[];
   approval_records?: ApprovalRecord[];
   purchase_orders?: Array<{
@@ -54,11 +58,31 @@ export interface PurchaseRequest {
   }>;
 }
 
+export interface PurchaseRequestTemplate {
+  id: number;
+  name: string;
+  department: { id: string; name: string; code: string } | null;
+  items: Array<{
+    item_id?: string | null;
+    description: string;
+    quantity: string;
+    unit?: string | null;
+    estimated_unit_price?: string | null;
+  }>;
+  notes: string | null;
+  created_by: string | null;
+  is_active: boolean;
+  created_at: string | null;
+}
+
 export interface CreatePurchaseRequestData {
   department_id?: number;
   date?: string;
   reason?: string;
   priority?: PurchaseRequestPriority;
+  is_urgent?: boolean;
+  urgency_reason?: string;
+  template_id?: number;
   items: Array<{
     item_id?: string | null;
     description: string;
@@ -133,6 +157,33 @@ export interface ApprovedSupplier {
   lead_time_days: number;
   last_price: string | null;
   last_price_at: string | null;
+}
+
+/* ─── ADV5 — Procurement Chain Overview ─────────────────────────── */
+
+export interface ProcurementChainOverview {
+  material_requirements: {
+    pr_pending: number;
+    pr_approved: number;
+    po_draft: number;
+    po_sent: number;
+    po_partially_received: number;
+    po_received: number;
+  };
+  receiving: {
+    grn_received: number;
+    grn_pending_qc: number;
+  };
+  billing: {
+    bills_unpaid: number;
+    bills_overdue: number;
+    bills_this_month: string;
+  };
+  three_way_match: {
+    matched: number;
+    has_variances: number;
+    overridden: number;
+  };
 }
 
 export interface ThreeWayMatchResult {

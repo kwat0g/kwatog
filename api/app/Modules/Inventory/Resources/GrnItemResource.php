@@ -12,8 +12,8 @@ class GrnItemResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'id' => (int) $this->id,
-            'purchase_order_item_id' => $this->purchase_order_item_id,
+            'id' => $this->hash_id,
+            'purchase_order_item_id' => $this->purchase_order_item_id ? app('hashids')->encode((int) $this->purchase_order_item_id) : null,
             'item'                   => $this->whenLoaded('item', fn () => [
                 'id'              => $this->item->hash_id,
                 'code'            => $this->item->code,

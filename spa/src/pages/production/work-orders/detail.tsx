@@ -100,10 +100,12 @@ export default function WorkOrderDetailPage() {
     },
   });
 
-  if (isLoading) return <div><PageHeader title="Work order" backTo="/production/work-orders" backLabel="Work orders" /><SkeletonDetail /></div>;
+  if (isLoading) return <div>      <PageHeader title="Work order" backTo="/production/work-orders" backLabel="Work orders"
+        breadcrumbs={[{ label: 'Production', href: '/production' }, { label: 'Work orders', href: '/production/work-orders' }, { label: 'Loading…' }]} /><SkeletonDetail /></div>;
   if (isError || !data) return (
     <div>
-      <PageHeader title="Work order" backTo="/production/work-orders" backLabel="Work orders" />
+      <PageHeader title="Work order" backTo="/production/work-orders" backLabel="Work orders"
+        breadcrumbs={[{ label: 'Production', href: '/production' }, { label: 'Work orders', href: '/production/work-orders' }, { label: 'Error' }]} />
       <EmptyState icon="alert-circle" title="Failed to load work order"
         action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />
     </div>
@@ -130,6 +132,7 @@ export default function WorkOrderDetailPage() {
         subtitle={data.product ? `${data.product.part_number} — ${data.product.name}` : undefined}
         backTo="/production/work-orders"
         backLabel="Work orders"
+        breadcrumbs={[{ label: 'Production', href: '/production' }, { label: 'Work orders', href: '/production/work-orders' }, { label: data.wo_number }]}
         actions={
           <div className="flex gap-1.5">
             {showConfirm  && <Button size="sm" variant="primary"   icon={<Check size={14} />}      onClick={() => {
@@ -151,6 +154,62 @@ export default function WorkOrderDetailPage() {
 
       <div className="px-5 py-4 grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-4">
+          {/* ADV3 — IATF 16949 Production Batch panel. Visible once the WO has
+              been started (batch_number is generated on first start). */}
+          {data.batch_number && (
+            <Panel title="Production batch" meta="IATF 16949 traceability">
+              <dl className="grid grid-cols-3 gap-x-4 gap-y-3 text-sm">
+                <dt className="text-muted">Batch no.</dt>
+                <dd className="col-span-2 font-mono tabular-nums">{data.batch_number}</dd>
+                <dt className="text-muted">Machine / Mold</dt>
+                <dd className="col-span-2 font-mono">
+                  {data.machine?.machine_code ?? '—'} / {data.mold?.mold_code ?? '—'}
+                </dd>
+                <dt className="text-muted">Produced</dt>
+                <dd className="col-span-2 font-mono tabular-nums">
+                  {data.quantity_good.toLocaleString()} good / {data.quantity_rejected.toLocaleString()} rejected
+                </dd>
+              </dl>
+              {data.material_lot_references.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-subtle">
+                  <div className="text-2xs uppercase tracking-wider text-muted font-medium mb-2">
+                    Material lots used
+                  </div>
+                  <table className="w-full text-xs">
+                    <thead className="bg-subtle">
+                      <tr>
+                        <th className="px-2 py-1.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Item</th>
+                        <th className="px-2 py-1.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">GRN</th>
+                        <th className="px-2 py-1.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Material lot</th>
+                        <th className="px-2 py-1.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Supplier ref</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.material_lot_references.map((ref, i) => (
+                        <tr key={`${ref.material_lot_number ?? 'lot'}-${i}`} className="border-t border-subtle">
+                          <td className="px-2 py-1.5">
+                            <div className="font-mono">{ref.item_code ?? '—'}</div>
+                            <div className="text-muted">{ref.item_name ?? ''}</div>
+                          </td>
+                          <td className="px-2 py-1.5 font-mono">{ref.grn_number ?? '—'}</td>
+                          <td className="px-2 py-1.5 font-mono">{ref.material_lot_number ?? '—'}</td>
+                          <td className="px-2 py-1.5 font-mono">{ref.supplier_lot_reference ?? '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <div className="mt-3 text-xs">
+                <Link
+                  to={`/quality/traceability?term=${encodeURIComponent(data.batch_number)}`}
+                  className="text-accent hover:underline"
+                >
+                  View full traceability →
+                </Link>
+              </div>
+            </Panel>
+          )}
           <Panel title="Overview">
             <dl className="grid grid-cols-3 gap-x-4 gap-y-3 text-sm">
               <dt className="text-muted">Product</dt>

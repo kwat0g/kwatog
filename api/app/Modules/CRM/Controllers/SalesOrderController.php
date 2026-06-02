@@ -61,11 +61,14 @@ class SalesOrderController
             return response()->json(['message' => 'Forbidden'], 403);
         }
         try {
-            $so = $this->service->confirm($salesOrder);
+            $result = $this->service->confirmWithChainResult($salesOrder);
         } catch (RuntimeException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
-        return new SalesOrderResource($so);
+        return response()->json([
+            'data' => (new SalesOrderResource($result['so']))->resolve(),
+            'chain_result' => $result['chain_result'],
+        ]);
     }
 
     public function cancel(CancelSalesOrderRequest $request, SalesOrder $salesOrder): SalesOrderResource|JsonResponse

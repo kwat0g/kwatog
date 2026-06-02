@@ -29,10 +29,12 @@ export default function MoldDetailPage() {
     enabled: !!id,
   });
 
-  if (detail.isLoading) return <div><PageHeader title="Mold" backTo="/mrp/molds" backLabel="Molds" /><SkeletonDetail /></div>;
+  if (detail.isLoading) return <div><PageHeader title="Mold" backTo="/mrp/molds" backLabel="Molds"
+    breadcrumbs={[{ label: 'MRP', href: '/mrp' }, { label: 'Molds', href: '/mrp/molds' }, { label: 'Loading…' }]} /><SkeletonDetail /></div>;
   if (detail.isError || !detail.data) return (
     <div>
-      <PageHeader title="Mold" backTo="/mrp/molds" backLabel="Molds" />
+      <PageHeader title="Mold" backTo="/mrp/molds" backLabel="Molds"
+        breadcrumbs={[{ label: 'MRP', href: '/mrp' }, { label: 'Molds', href: '/mrp/molds' }, { label: 'Error' }]} />
       <EmptyState
         icon="alert-circle"
         title="Failed to load mold"
@@ -58,6 +60,7 @@ export default function MoldDetailPage() {
         }
         backTo="/mrp/molds"
         backLabel="Molds"
+        breadcrumbs={[{ label: 'MRP', href: '/mrp' }, { label: 'Molds', href: '/mrp/molds' }, { label: m.mold_code }]}
       />
 
       <div className="px-5 py-4 grid grid-cols-3 gap-4">

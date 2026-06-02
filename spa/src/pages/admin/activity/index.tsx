@@ -7,6 +7,7 @@ import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
+import { UserBadge } from '@/components/ui/UserBadge';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { cn } from '@/lib/cn';
 import type {
@@ -57,6 +58,13 @@ export default function AdminActivityFeedPage() {
       <PageHeader
         title="System activity"
         subtitle={data ? `${data.meta.total.toLocaleString()} events` : undefined}
+        backTo="/admin/users-roles"
+        backLabel="Users & Roles"
+        breadcrumbs={[
+          { label: 'Admin', href: '/admin' },
+          { label: 'Users & Roles', href: '/admin/users-roles' },
+          { label: 'Activity' },
+        ]}
         actions={
           isFetching ? (
             <span className="text-xs text-muted">Refreshing…</span>
@@ -158,7 +166,11 @@ export default function AdminActivityFeedPage() {
                     <Chip variant={e.severity}>{e.type}</Chip>
                   </div>
                   <div className="text-2xs text-muted flex items-center gap-2">
-                    <span>{e.actor ? e.actor.name : 'System'}</span>
+                    {e.actor ? (
+                      <UserBadge name={e.actor.name} role={e.actor.role} />
+                    ) : (
+                      <span>System</span>
+                    )}
                     <span>·</span>
                     <span className="font-mono tabular-nums">{relTime(e.created_at)}</span>
                     {e.action && (

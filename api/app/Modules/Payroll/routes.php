@@ -5,6 +5,7 @@ declare(strict_types=1);
 // Payroll module routes.
 // Mounted automatically under /api/v1 by App\Providers\ModuleServiceProvider.
 
+use App\Modules\Payroll\Controllers\DisbursementProofController;
 use App\Modules\Payroll\Controllers\GovernmentTableController;
 use App\Modules\Payroll\Controllers\PayrollAdjustmentController;
 use App\Modules\Payroll\Controllers\PayrollAnomalyController;
@@ -35,6 +36,7 @@ if (class_exists(PayrollPeriodController::class)) {
     Route::middleware(['auth:sanctum', 'feature:payroll'])->group(function () {
         Route::prefix('payroll-periods')->group(function () {
             Route::get('/',                       [PayrollPeriodController::class, 'index'])->middleware('permission:payroll.view');
+            Route::get('/pipeline',               [PayrollPeriodController::class, 'pipeline'])->middleware('permission:payroll.view');
             Route::post('/',                      [PayrollPeriodController::class, 'store'])->middleware('permission:payroll.periods.create');
             Route::post('/thirteenth-month',      [PayrollPeriodController::class, 'runThirteenthMonth'])->middleware('permission:payroll.thirteenth_month.run');
             Route::get('/{period}',               [PayrollPeriodController::class, 'show'])->middleware('permission:payroll.view');
@@ -42,7 +44,19 @@ if (class_exists(PayrollPeriodController::class)) {
             Route::patch('/{period}/approve',     [PayrollPeriodController::class, 'approve'])->middleware('permission:payroll.periods.approve');
             Route::patch('/{period}/finalize',    [PayrollPeriodController::class, 'finalize'])->middleware('permission:payroll.periods.finalize');
             Route::get('/{period}/bank-file',     [PayrollPeriodController::class, 'bankFile'])->middleware('permission:payroll.periods.finalize');
+            // ADV1 — Disbursement proof (salary deposit slip / bank confirmation).
+            Route::patch('/{period}/mark-disbursed', [PayrollPeriodController::class, 'markDisbursed'])->middleware('permission:payroll.periods.finalize');
         });
+
+        // ADV1 — Disbursement proof CRUD (linked to a period).
+        if (class_exists(\App\Modules\Payroll\Controllers\DisbursementProofController::class)) {
+            Route::prefix('payroll-periods/{period}/disbursement-proofs')->group(function () {
+                Route::get('/',                         [DisbursementProofController::class, 'index'])->middleware('permission:payroll.view');
+                Route::post('/',                        [DisbursementProofController::class, 'store'])->middleware('permission:payroll.periods.finalize');
+                Route::get('/{proof}',                  [DisbursementProofController::class, 'show'])->middleware('permission:payroll.view');
+                Route::delete('/{proof}',               [DisbursementProofController::class, 'destroy'])->middleware('permission:payroll.periods.finalize');
+            });
+        }
 
         Route::prefix('payrolls')->group(function () {
             Route::get('/',                       [PayrollController::class, 'index'])->middleware('permission:payroll.view');

@@ -4,5 +4,5 @@ import type { FinanceDashboardSummary } from '@/types/accounting';
 
 export const financeDashboardApi = {
   summary: () =>
-    client.get<ApiSuccess<FinanceDashboardSummary>>('/dashboard/finance').then((r) => r.data.data),
+    client.get<ApiSuccess<FinanceDashboardSummary>>('/dashboards/finance').then((r) => r.data.data),
 };

@@ -74,6 +74,11 @@ export default function JournalEntryDetailPage() {
         }
         backTo="/accounting/journal-entries"
         backLabel="Journal Entries"
+        breadcrumbs={[
+          { label: 'Accounting' },
+          { label: 'Journal Entries', href: '/accounting/journal-entries' },
+          { label: je.entry_number },
+        ]}
         actions={
           <div className="flex gap-1.5">
             <a href={journalEntriesApi.pdfUrl(je.id)} target="_blank" rel="noopener">

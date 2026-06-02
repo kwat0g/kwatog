@@ -25,7 +25,6 @@ const ALL_LAYERS: { key: CalendarLayer; label: string; variant: CalendarEventVar
 ];
 
 function startOfMonth(d: Date): Date { return new Date(d.getFullYear(), d.getMonth(), 1); }
-function endOfMonth(d: Date): Date { return new Date(d.getFullYear(), d.getMonth() + 1, 0); }
 function fmtDate(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -72,7 +71,6 @@ export default function CalendarPage() {
   const [selected, setSelected] = useState<CalendarEvent | null>(null);
 
   const monthStart = startOfMonth(cursor);
-  const monthEnd = endOfMonth(cursor);
   const grid = useMemo(() => buildGrid(monthStart), [monthStart]);
   const fromStr = fmtDate(grid[0][0]);
   const toStr = fmtDate(grid[5][6]);

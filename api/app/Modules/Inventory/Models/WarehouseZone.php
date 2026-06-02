@@ -16,6 +16,11 @@ class WarehouseZone extends Model
 {
     use HasFactory, HasHashId, HasAuditLog;
 
+    protected static function newFactory(): \Database\Factories\WarehouseZoneFactory
+    {
+        return \Database\Factories\WarehouseZoneFactory::new();
+    }
+
     protected $fillable = ['warehouse_id', 'name', 'code', 'zone_type'];
 
     protected $casts = ['zone_type' => WarehouseZoneType::class];

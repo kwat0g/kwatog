@@ -25,6 +25,12 @@ class PayrollPeriodResource extends JsonResource
             'status_label'        => $this->status?->label(),
             'is_locked'           => $this->isLocked(),
             'label'               => $this->label(),
+            'disbursement_status' => $this->disbursement_status ?? 'pending',
+            'disbursed_at'        => optional($this->disbursed_at)->toIso8601String(),
+            'disburser'           => $this->whenLoaded('disburser', fn () => [
+                'id'   => $this->disburser?->hash_id,
+                'name' => $this->disburser?->name,
+            ]),
             'is_auto_created'     => (bool) $this->is_auto_created,
             'auto_created_at'     => optional($this->auto_created_at)->toIso8601String(),
             'employee_count'      => (int) ($this->payrolls_count ?? 0),
@@ -65,6 +71,24 @@ class PayrollPeriodResource extends JsonResource
                 'applied'  => $this->adjustments->where('status', \App\Modules\Payroll\Enums\PayrollAdjustmentStatus::Applied)->count(),
                 'rejected' => $this->adjustments->where('status', \App\Modules\Payroll\Enums\PayrollAdjustmentStatus::Rejected)->count(),
             ]),
+
+            // ADV1 — Disbursement proofs.
+            'disbursement_proofs' => $this->whenLoaded('disbursementProofs', fn () =>
+                $this->disbursementProofs->map(fn ($p) => [
+                    'id'                   => $p->hash_id,
+                    'proof_type'           => $p->proof_type,
+                    'file_name'            => $p->file_name,
+                    'bank_name'            => $p->bank_name,
+                    'transaction_reference' => $p->transaction_reference,
+                    'disbursed_amount'     => $p->disbursed_amount,
+                    'disbursement_date'    => optional($p->disbursement_date)->toDateString(),
+                    'notes'                => $p->notes,
+                    'uploader'             => $p->relationLoaded('uploader') && $p->uploader
+                        ? ['id' => $p->uploader->hash_id, 'name' => $p->uploader->name]
+                        : null,
+                    'created_at'           => optional($p->created_at)->toIso8601String(),
+                ])->all(),
+            ),
 
             'created_at'          => optional($this->created_at)->toIso8601String(),
             'updated_at'          => optional($this->updated_at)->toIso8601String(),

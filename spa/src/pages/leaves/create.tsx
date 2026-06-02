@@ -110,7 +110,7 @@ export default function CreateLeavePage() {
 
   return (
     <div>
-      <PageHeader title="Request leave" backTo="/hr/leaves" backLabel="Leaves" />
+      <PageHeader title="Request leave" backTo="/hr/leaves" backLabel="Leaves" breadcrumbs={[{ label: 'HR', href: '/hr' }, { label: 'Leaves', href: '/hr/leaves' }, { label: 'New Request' }]} />
       <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-2xl mx-auto px-5 py-6 space-y-4">
         <Panel title="Leave details">
           <div className="grid grid-cols-2 gap-3">

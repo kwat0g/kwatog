@@ -9,6 +9,8 @@ export interface ActivityActor {
   id: string;
   name: string;
   email: string | null;
+  /** ADV4 — actor's role for chip display in feed. */
+  role: { name: string; slug: string } | null;
 }
 
 export interface ActivityEvent {

@@ -14,7 +14,7 @@ class AuditLogResource extends JsonResource
             'id'          => $this->hash_id,
             'action'      => $this->action,
             'model_type'  => class_basename($this->model_type),
-            'model_id'    => $this->model_id,
+            'model_id'    => $this->model_id ? app('hashids')->encode((int) $this->model_id) : null,
             'old_values'  => $this->old_values,
             'new_values'  => $this->new_values,
             'ip_address'  => $this->ip_address,
@@ -24,6 +24,11 @@ class AuditLogResource extends JsonResource
                 'id'    => $this->user->hash_id,
                 'name'  => $this->user->name,
                 'email' => $this->user->email,
+                // ADV4 — role chip alongside the actor's name.
+                'role'  => $this->user->role ? [
+                    'name' => $this->user->role->name,
+                    'slug' => $this->user->role->slug,
+                ] : null,
             ]),
         ];
     }

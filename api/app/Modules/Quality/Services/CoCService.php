@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace App\Modules\Quality\Services;
 
 use App\Common\Services\SettingsService;
+use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Models\Inspection;
+use App\Modules\SupplyChain\Models\Delivery;
+use App\Modules\SupplyChain\Models\ShipmentLot;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Response;
 use RuntimeException;
@@ -36,23 +39,31 @@ class CoCService
         $this->assertEligible($inspection);
         $inspection->loadMissing(['product', 'inspector']);
 
+        // ADV3 — IATF 16949 traceability: pull batch / lot / material lot refs.
+        [$batchNumber, $materialLotRefs] = $this->traceFromInspection($inspection);
+        $lotNumber = $this->lotNumberForDelivery($deliveryNumber);
+
         $cocNumber = $this->cocNumber($inspection);
         $payload = [
-            'company'             => $this->company(),
-            'user'                => optional(request()?->user())->name,
-            'coc_number'          => $cocNumber,
-            'issued_at'           => now()->format('M d, Y H:i'),
-            'inspection_number'   => $inspection->inspection_number,
-            'stage'               => $inspection->stage instanceof InspectionStage ? $inspection->stage->value : $inspection->stage,
-            'product_part_number' => $inspection->product?->part_number ?? '—',
-            'product_name'        => $inspection->product?->name ?? '—',
-            'batch_quantity'      => (int) $inspection->batch_quantity,
-            'sample_size'         => (int) $inspection->sample_size,
-            'aql_code'            => $inspection->aql_code,
-            'defect_count'        => (int) $inspection->defect_count,
-            'accept_count'        => (int) $inspection->accept_count,
-            'inspector_name'      => $inspection->inspector?->name,
-            'delivery_number'     => $deliveryNumber,
+            'company'                 => $this->company(),
+            'user'                    => optional(request()?->user())->name,
+            'coc_number'              => $cocNumber,
+            'issued_at'               => now()->format('M d, Y H:i'),
+            'inspection_number'       => $inspection->inspection_number,
+            'stage'                   => $inspection->stage instanceof InspectionStage ? $inspection->stage->value : $inspection->stage,
+            'product_part_number'     => $inspection->product?->part_number ?? '—',
+            'product_name'            => $inspection->product?->name ?? '—',
+            'batch_quantity'          => (int) $inspection->batch_quantity,
+            'sample_size'             => (int) $inspection->sample_size,
+            'aql_code'                => $inspection->aql_code,
+            'defect_count'            => (int) $inspection->defect_count,
+            'accept_count'            => (int) $inspection->accept_count,
+            'inspector_name'          => $inspection->inspector?->name,
+            'delivery_number'         => $deliveryNumber,
+            // ADV3 traceability fields (rendered conditionally by the blade).
+            'batch_number'            => $batchNumber,
+            'lot_number'              => $lotNumber,
+            'material_lot_references' => $materialLotRefs,
         ];
 
         return Pdf::loadView('pdf.coc', $payload)
@@ -77,6 +88,40 @@ class CoCService
     private function cocNumber(Inspection $inspection): string
     {
         return 'COC-'.str_replace('QC-', '', $inspection->inspection_number);
+    }
+
+    /**
+     * ADV3 — derive batch_number + material_lot_references for the inspection.
+     * Outgoing-QC inspections are linked to a work_order via entity_type/entity_id.
+     *
+     * @return array{0: string|null, 1: array<int, array<string, mixed>>}
+     */
+    private function traceFromInspection(Inspection $inspection): array
+    {
+        if ($inspection->entity_type !== 'work_order' || ! $inspection->entity_id) {
+            return [null, []];
+        }
+        $wo = WorkOrder::query()->find($inspection->entity_id);
+        if (! $wo) {
+            return [null, []];
+        }
+        return [
+            $wo->batch_number,
+            (array) ($wo->material_lot_references ?? []),
+        ];
+    }
+
+    /** ADV3 — look up the most recent shipment lot for a delivery number, if any (single join). */
+    private function lotNumberForDelivery(?string $deliveryNumber): ?string
+    {
+        if (! $deliveryNumber) {
+            return null;
+        }
+        return ShipmentLot::query()
+            ->join('deliveries', 'shipment_lots.delivery_id', '=', 'deliveries.id')
+            ->where('deliveries.delivery_number', $deliveryNumber)
+            ->latest('shipment_lots.id')
+            ->value('shipment_lots.lot_number');
     }
 
     private function company(): array

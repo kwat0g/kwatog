@@ -56,6 +56,8 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'hr.employees.reset_password',     'name' => 'Reset Employee System Account Password'],
                 // Series F — Task F5: directory + org chart (lighter trust than full employee view).
                 ['slug' => 'hr.directory.view',               'name' => 'View Employee Directory'],
+                // Task SS2 — Finance leg of employee bank-account change approval.
+                ['slug' => 'hr.profile_updates.finance_review', 'name' => 'Approve Employee Bank-Account Changes (Finance)'],
             ],
 
             // Attendance
@@ -132,12 +134,16 @@ class RolePermissionSeeder extends Seeder
 
             // Inventory
             'inventory' => [
-                ['slug' => 'inventory.view',              'name' => 'View Inventory'],
-                ['slug' => 'inventory.items.manage',      'name' => 'Manage Items'],
-                ['slug' => 'inventory.warehouse.manage',  'name' => 'Manage Warehouse Structure'],
-                ['slug' => 'inventory.grn.create',        'name' => 'Create / Accept GRN'],
-                ['slug' => 'inventory.issue.create',      'name' => 'Issue Materials'],
-                ['slug' => 'inventory.adjust',            'name' => 'Adjust / Transfer Stock'],
+                ['slug' => 'inventory.view',                'name' => 'View Inventory'],
+                ['slug' => 'inventory.items.manage',        'name' => 'Manage Items'],
+                ['slug' => 'inventory.warehouse.manage',    'name' => 'Manage Warehouse Structure'],
+                ['slug' => 'inventory.grn.create',          'name' => 'Create / Accept GRN'],
+                ['slug' => 'inventory.issue.create',        'name' => 'Issue Materials'],
+                ['slug' => 'inventory.adjust',              'name' => 'Adjust / Transfer Stock'],
+                // ADV8 — WMS
+                ['slug' => 'inventory.stock_count.view',    'name' => 'View Stock Count Sessions'],
+                ['slug' => 'inventory.stock_count.manage',  'name' => 'Create / Complete Stock Count Sessions'],
+                ['slug' => 'inventory.picking.view',        'name' => 'View Picking Lists'],
             ],
 
             // Purchasing
@@ -229,7 +235,7 @@ class RolePermissionSeeder extends Seeder
                 // tolerances without authoring them).
                 ['slug' => 'quality.specs.view',           'name' => 'View Inspection Specs'],
                 ['slug' => 'quality.specs.manage',         'name' => 'Manage Inspection Specs'],
-                ['slug' => 'quality.ncr.view',             'name' => 'View NCRs'],
+                ['slug' =>                        'quality.ncr.view',             'name' => 'View NCRs'],
                 ['slug' => 'quality.ncr.manage',           'name' => 'Manage NCRs'],
             ],
 
@@ -262,6 +268,10 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'dashboard.hr.view',           'name' => 'View HR Dashboard'],
                 ['slug' => 'dashboard.ppc.view',          'name' => 'View PPC Dashboard'],
                 ['slug' => 'dashboard.accounting.view',   'name' => 'View Accounting Dashboard'],
+                // D6, D7, D8 — New role-specific dashboards
+                ['slug' => 'dashboard.purchasing.view',   'name' => 'View Purchasing Officer Dashboard'],
+                ['slug' => 'dashboard.warehouse.view',    'name' => 'View Warehouse Staff Dashboard'],
+                ['slug' => 'dashboard.quality.view',       'name' => 'View QC Inspector Dashboard'],
                 // Series C — Task C5
                 ['slug' => 'dashboard.view_bottlenecks',  'name' => 'View Chain Bottleneck Widget'],
             ],
@@ -282,6 +292,25 @@ class RolePermissionSeeder extends Seeder
             // Task A9 — payroll anomaly flags
             'payroll_anomalies' => [
                 ['slug' => 'payroll.anomalies.review',            'name' => 'Review Payroll Anomaly Flags'],
+            ],
+
+            // ADV11 — Demand & Sales Forecasting
+            'forecasting' => [
+                ['slug' => 'forecasting.view',   'name' => 'View Demand Forecasts & Stock-Out Projections'],
+                ['slug' => 'forecasting.manage', 'name' => 'Recompute / Override Demand Forecasts'],
+            ],
+
+            // ADV12 — Return Management (RMA)
+            'return_management' => [
+                ['slug' => 'return_management.view',   'name' => 'View Return Requests (RMA)'],
+                ['slug' => 'return_management.manage', 'name' => 'Create / Approve / Complete Return Requests'],
+            ],
+
+            // ADV9 — Budgeting
+            'budgeting' => [
+                ['slug' => 'budgeting.view',    'name' => 'View Budgets & Reports'],
+                ['slug' => 'budgeting.manage',  'name' => 'Create / Edit / Submit Budgets'],
+                ['slug' => 'budgeting.approve', 'name' => 'Approve / Reject Budgets & Transfers'],
             ],
         ];
     }
@@ -330,16 +359,23 @@ class RolePermissionSeeder extends Seeder
                 'permissions' => array_merge(
                     $this->module('payroll'),
                     $this->module('accounting'),
+                    $this->module('budgeting'),
                     $this->module('loans'),
                     $this->module('assets'),
                     [
                         'admin.gov_tables.manage', 'dashboard.accounting.view',
                         'search.global', 'notifications.preferences.manage',
+                        // Task SS2 — Finance approves employee bank-account changes.
+                        'hr.profile_updates.finance_review',
                         'payroll.anomalies.review',                                // Task A9
                         'alerts.view', 'alerts.dismiss',                           // Task A2
                         'dashboard.view_bottlenecks',                              // Series C — Task C5
                         // Series F — Task F4: read-only insight into supplier health
                         'purchasing.suppliers.performance.view',
+                        // ADV11 — stock-out projection drives cash-flow planning
+                        'forecasting.view',
+                        // ADV12 — return management
+                        'return_management.view',
                     ],
                 ),
             ],
@@ -354,6 +390,8 @@ class RolePermissionSeeder extends Seeder
                      'search.global', 'notifications.preferences.manage',
                      'alerts.view', 'alerts.dismiss',                              // Task A2
                      'dashboard.view_bottlenecks',                                 // Series C — Task C5
+                     // ADV12 — RMA visibility for production manager
+                     'return_management.view',
                     ],
                 ),
             ],
@@ -362,12 +400,15 @@ class RolePermissionSeeder extends Seeder
                 'description' => 'Production Planning & Control — owns the schedule and BOMs.',
                 'permissions' => array_merge(
                     $this->module('mrp'),
+                    $this->module('forecasting'), // ADV11
                     ['production.view', 'production.work_orders.view', 'production.wo.create', 'production.wo.confirm',
                      'dashboard.ppc.view', 'maintenance.view', 'assets.view',
                      'search.global', 'notifications.preferences.manage',
                      'alerts.view', 'alerts.dismiss',                              // Task A2
                      'dashboard.view_bottlenecks',                                 // Series C — Task C5
                      // Task A1 already granted via $this->module('mrp')
+                     // ADV12 — PPC coordinates customer returns
+                     'return_management.view', 'return_management.manage',
                     ],
                 ),
             ],
@@ -380,25 +421,46 @@ class RolePermissionSeeder extends Seeder
                         'inventory.view', 'inventory.grn.create', 'supply_chain.shipments.manage',
                         // Read-only ledger insight for 3-way matching (Sprint 5).
                         'accounting.vendors.view', 'accounting.bills.view',
+                        // ADV11 — read forecasts to anticipate orders
+                        'forecasting.view',
+                        // ADV12 — supplier returns
+                        'return_management.view', 'return_management.manage',
+                        // D6 — Purchasing Officer Dashboard
+                        'dashboard.purchasing.view',
                     ],
                 ),
             ],
             'warehouse_staff' => [
                 'name' => 'Warehouse Staff',
-                'description' => 'Receives goods, issues materials, counts stock.',
-                'permissions' => [
+                'description' => 'Receives goods, issues materials, counts stock, manages warehouse map.',
+                'permissions' =>                [
                     'inventory.view',
                     'inventory.items.manage',
                     'inventory.warehouse.manage',
                     'inventory.grn.create',
                     'inventory.issue.create',
                     'inventory.adjust',
+                    // ADV8 — WMS
+                    'inventory.stock_count.view',
+                    'inventory.stock_count.manage',
+                    'inventory.picking.view',
+                    // ADV12 — warehouse receives returned goods
+                    'return_management.view',
+                    // D7 — Warehouse Staff Dashboard
+                    'dashboard.warehouse.view',
                 ],
             ],
             'qc_inspector' => [
                 'name' => 'QC Inspector',
-                'description' => 'Logs inspection results, raises NCRs.',
-                'permissions' => $this->module('quality'),
+                'description' => 'Logs inspection results, raises NCRs, views RMAs.',
+                'permissions' => array_merge(
+                    $this->module('quality'),
+                    [
+                        'return_management.view',
+                        // D8 — QC Inspector Dashboard
+                        'dashboard.quality.view',
+                    ],
+                ),
             ],
             'maintenance_tech' => [
                 'name' => 'Maintenance Technician',

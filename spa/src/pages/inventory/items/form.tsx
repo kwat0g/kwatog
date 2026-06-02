@@ -104,6 +104,7 @@ export default function ItemFormPage({ mode }: { mode: 'create' | 'edit' }) {
       <PageHeader
         title={mode === 'create' ? 'New item' : `Edit ${existing?.code ?? 'item'}`}
         backTo="/inventory/items" backLabel="Items"
+        breadcrumbs={[{ label: 'Inventory', href: '/inventory' }, { label: 'Items', href: '/inventory/items' }, { label: mode === 'create' ? 'New item' : `Edit ${existing?.code ?? 'item'}` }]}
       />
       <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())}
             className="max-w-3xl mx-auto px-5 py-6 space-y-4">

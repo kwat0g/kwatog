@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Controllers;
 
-use App\Modules\Accounting\Services\FinanceDashboardService;
+use App\Modules\Dashboard\Services\FinanceDashboardService;
 use Illuminate\Http\JsonResponse;
 
 class FinanceDashboardController

@@ -6,6 +6,7 @@ namespace App\Common\Services;
 
 use App\Modules\Auth\Models\User;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -78,15 +79,35 @@ class ApprovalBoardService
             }
         }
 
+        // ADV4 — batch-load source rows for active steps so we can also
+        // surface the requester's role on each card without N+1.
+        $activePrefetch = [];
+        $creatorIds = [];
+        foreach ($activeStepByApprovable as $key => $row) {
+            $meta = self::TYPE_MAP[$row->approvable_type] ?? null;
+            if (! $meta) continue;
+            $source = DB::table($meta['table'])->where('id', $row->approvable_id)->first();
+            if (! $source) continue;
+            $activePrefetch[$key] = ['row' => $row, 'meta' => $meta, 'source' => $source];
+            if (property_exists($source, 'created_by') && $source->created_by) {
+                $creatorIds[] = (int) $source->created_by;
+            }
+        }
+        $creators = $this->loadUsersWithRole($creatorIds);
+
+        // ADV4 — batch-load approvers for actioned cards (one query, with role).
+        $approverIds = $actioned->pluck('approver_id')->filter()->map(fn ($v) => (int) $v)->unique()->all();
+        $approvers = $this->loadUsersWithRole($approverIds);
+
         $myAction = [];
         $awaitingOthers = [];
 
-        foreach ($activeStepByApprovable as $key => $row) {
-            $card = $this->cardForActive($row);
+        foreach ($activePrefetch as $entry) {
+            $card = $this->cardForActive($entry['row'], $entry['meta'], $entry['source'], $creators);
             if ($card === null) continue;
             if ($kindFilter !== null && $card['type'] !== $kindFilter) continue;
 
-            if (in_array($row->role_slug, $userRoleSlugs, true)) {
+            if (in_array($entry['row']->role_slug, $userRoleSlugs, true)) {
                 $myAction[] = $card;
             } else {
                 $awaitingOthers[] = $card;
@@ -102,7 +123,7 @@ class ApprovalBoardService
             if (isset($seen[$key])) continue;
             $seen[$key] = true;
 
-            $card = $this->cardForActioned($row);
+            $card = $this->cardForActioned($row, $approvers);
             if ($card === null) continue;
             if ($kindFilter !== null && $card['type'] !== $kindFilter) continue;
 
@@ -138,22 +159,33 @@ class ApprovalBoardService
     }
 
     /**
-     * @param  object  $row  Active pending approval_records row.
+     * @param  object  $row      Active pending approval_records row.
+     * @param  array<string, mixed>  $meta     Pre-resolved type metadata.
+     * @param  object  $source   Pre-fetched approvable source row.
+     * @param  Collection<int, User>  $creators  Pre-loaded users keyed by id.
      * @return array<string, mixed>|null
      */
-    private function cardForActive(object $row): ?array
+    private function cardForActive(object $row, array $meta, object $source, Collection $creators): ?array
     {
-        $meta = self::TYPE_MAP[$row->approvable_type] ?? null;
-        if ($meta === null) return null;
-
-        $source = DB::table($meta['table'])
-            ->where('id', $row->approvable_id)
-            ->first();
-        if (! $source) return null;
-
         $hashId = app('hashids')->encode((int) $row->approvable_id);
         $number = $meta['number'] ? (string) ($source->{$meta['number']} ?? $hashId) : $hashId;
         $created = $row->created_at ? Carbon::parse((string) $row->created_at) : Carbon::now();
+
+        // ADV4 — surface the requester (creator of the approvable) along with
+        // their role chip when the underlying table has a `created_by` column.
+        $requester = null;
+        if (property_exists($source, 'created_by') && $source->created_by) {
+            $u = $creators->get((int) $source->created_by);
+            if ($u) {
+                $requester = [
+                    'name' => $u->name,
+                    'role' => $u->role ? [
+                        'name' => $u->role->name,
+                        'slug' => $u->role->slug,
+                    ] : null,
+                ];
+            }
+        }
 
         return [
             'id'           => $hashId,
@@ -166,14 +198,16 @@ class ApprovalBoardService
             'age_hours'    => (int) abs(Carbon::now()->diffInHours($created)),
             'amount'       => $this->extractAmount($source),
             'summary'      => $this->summaryFor($meta['kind'], $source),
+            'requester'    => $requester,
         ];
     }
 
     /**
-     * @param  object  $row  Approved/rejected approval_records row.
+     * @param  object  $row        Approved/rejected approval_records row.
+     * @param  Collection<int, User>  $approvers  Pre-loaded users keyed by id.
      * @return array<string, mixed>|null
      */
-    private function cardForActioned(object $row): ?array
+    private function cardForActioned(object $row, Collection $approvers): ?array
     {
         $meta = self::TYPE_MAP[$row->approvable_type] ?? null;
         if ($meta === null) return null;
@@ -186,6 +220,22 @@ class ApprovalBoardService
         $hashId = app('hashids')->encode((int) $row->approvable_id);
         $number = $meta['number'] ? (string) ($source->{$meta['number']} ?? $hashId) : $hashId;
 
+        // ADV4 — surface the approver actor with their role chip.
+        $actor = null;
+        if ($row->approver_id) {
+            $u = $approvers->get((int) $row->approver_id);
+            if ($u) {
+                $actor = [
+                    'id'   => app('hashids')->encode((int) $row->approver_id),
+                    'name' => $u->name,
+                    'role' => $u->role ? [
+                        'name' => $u->role->name,
+                        'slug' => $u->role->slug,
+                    ] : null,
+                ];
+            }
+        }
+
         return [
             'id'        => $hashId,
             'type'      => $meta['kind'],
@@ -196,7 +246,21 @@ class ApprovalBoardService
             'remarks'   => (string) ($row->remarks ?? ''),
             'amount'    => $this->extractAmount($source),
             'summary'   => $this->summaryFor($meta['kind'], $source),
+            'actor'     => $actor,
         ];
+    }
+
+    /**
+     * ADV4 — batch-load Users (with their role) for a list of ids.
+     *
+     * @param  array<int, int>  $ids
+     * @return Collection<int, User>
+     */
+    private function loadUsersWithRole(array $ids): Collection
+    {
+        $ids = array_values(array_unique(array_filter($ids)));
+        if (empty($ids)) return collect();
+        return User::with('role:id,name,slug')->whereIn('id', $ids)->get()->keyBy('id');
     }
 
     private function extractAmount(object $source): ?string

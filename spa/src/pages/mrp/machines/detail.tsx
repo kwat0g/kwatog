@@ -25,10 +25,12 @@ export default function MachineDetailPage() {
     enabled: !!id,
   });
 
-  if (isLoading) return <div><PageHeader title="Machine" backTo="/mrp/machines" backLabel="Machines" /><SkeletonDetail /></div>;
+  if (isLoading) return <div><PageHeader title="Machine" backTo="/mrp/machines" backLabel="Machines"
+    breadcrumbs={[{ label: 'MRP', href: '/mrp' }, { label: 'Machines', href: '/mrp/machines' }, { label: 'Loading…' }]} /><SkeletonDetail /></div>;
   if (isError || !data) return (
     <div>
-      <PageHeader title="Machine" backTo="/mrp/machines" backLabel="Machines" />
+      <PageHeader title="Machine" backTo="/mrp/machines" backLabel="Machines"
+        breadcrumbs={[{ label: 'MRP', href: '/mrp' }, { label: 'Machines', href: '/mrp/machines' }, { label: 'Error' }]} />
       <EmptyState
         icon="alert-circle"
         title="Failed to load machine"
@@ -49,6 +51,7 @@ export default function MachineDetailPage() {
         }
         backTo="/mrp/machines"
         backLabel="Machines"
+        breadcrumbs={[{ label: 'MRP', href: '/mrp' }, { label: 'Machines', href: '/mrp/machines' }, { label: data.machine_code }]}
       />
 
       <div className="px-5 py-4 grid grid-cols-3 gap-4">

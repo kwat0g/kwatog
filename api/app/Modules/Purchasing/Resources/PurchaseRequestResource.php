@@ -19,6 +19,9 @@ class PurchaseRequestResource extends JsonResource
             'priority'                => (string) $this->priority?->value,
             'status'                  => (string) $this->status?->value,
             'is_auto_generated'       => (bool) $this->is_auto_generated,
+            'auto_generated_reason'   => $this->auto_generated_reason,
+            'is_urgent'               => (bool) $this->is_urgent,
+            'urgency_reason'          => $this->urgency_reason,
             'current_approval_step'   => (int) $this->current_approval_step,
             'has_overdue_approval'    => $this->relationLoaded('approvalRecords')
                 ? $this->approvalRecords->contains(fn ($r) => $r->action === 'pending' && $r->is_overdue)
@@ -34,6 +37,10 @@ class PurchaseRequestResource extends JsonResource
                 'id'   => $this->department->hash_id,
                 'name' => $this->department->name,
                 'code' => $this->department->code,
+            ] : null),
+            'template'                => $this->whenLoaded('template', fn () => $this->template ? [
+                'id'   => app('hashids')->encode((int) $this->template->id),
+                'name' => $this->template->name,
             ] : null),
             'items'                   => PurchaseRequestItemResource::collection($this->whenLoaded('items')),
             'approval_records'        => $this->whenLoaded('approvalRecords', fn () => $this->approvalRecords->map(fn ($r) => [

@@ -53,6 +53,10 @@ Broadcast::channel('user.{userId}', fn (User $user, int $userId): bool =>
     $user->id === $userId
 );
 
+// Sidebar badge counts — any authenticated user may listen; the payload is
+// empty and each client refetches only the keys it has permission to see.
+Broadcast::channel('badges', fn (User $user): bool => true);
+
 /* Series C — Task C4. Chain progress (sales_order/work_order/purchase_order/
  * delivery/grn). One private channel per entity instance. Permission is
  * derived from the entity-type slug. Hash IDs are passed verbatim — the

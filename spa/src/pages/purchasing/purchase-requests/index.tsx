@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import { Plus, Zap } from 'lucide-react';
+import { AxiosError } from 'axios';
+import toast from 'react-hot-toast';
 import { purchaseRequestsApi } from '@/api/purchasing/purchase-requests';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
-import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
+import { DataTable, NumCell, type Column, type BulkAction } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
@@ -23,8 +25,12 @@ const priorityVariant: Record<PurchaseRequestPriority, 'neutral' | 'warning' | '
   normal: 'neutral', urgent: 'warning', critical: 'danger',
 };
 
+const errMsg = (e: unknown, fallback: string) =>
+  (e instanceof AxiosError ? e.response?.data?.message : undefined) ?? fallback;
+
 export default function PurchaseRequestsListPage() {
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const { can } = usePermission();
   const [filters, setFilters] = useState<any>({ page: 1, per_page: 25 });
 
@@ -34,17 +40,45 @@ export default function PurchaseRequestsListPage() {
     placeholderData: (prev) => prev,
   });
 
+  const bulkApproveMut = useMutation({
+    mutationFn: (ids: string[]) => purchaseRequestsApi.bulkApprove(ids),
+    onSuccess: (results) => {
+      qc.invalidateQueries({ queryKey: ['purchasing', 'purchase-requests'] });
+      const approved = results.filter((r: any) => r.status === 'approved').length;
+      const skipped = results.filter((r: any) => r.status === 'skipped').length;
+      toast.success(`${approved} approved, ${skipped} skipped`);
+    },
+    onError: (e) => toast.error(errMsg(e, 'Failed to bulk approve.')),
+  });
+
+  const bulkActions: BulkAction<PurchaseRequest>[] = [
+    {
+      label: 'Approve selected',
+      variant: 'primary',
+      onClick: (rows) => {
+        const ids = rows.map((r) => r.id);
+        bulkApproveMut.mutate(ids);
+      },
+    },
+  ];
+
   const columns: Column<PurchaseRequest>[] = [
     { key: 'pr', header: 'PR #', cell: (r) => (
       <div>
         <Link to={`/purchasing/purchase-requests/${r.id}`} className="font-mono text-accent">{r.pr_number}</Link>
         {r.is_auto_generated && <Chip variant="warning" className="ml-2">AUTO</Chip>}
+        {r.is_urgent && <Chip variant="danger" className="ml-1"><Zap size={10} className="inline mr-0.5" />URGENT</Chip>}
       </div>
     ) },
     { key: 'date', header: 'Date', cell: (r) => <span className="font-mono">{formatDate(r.date)}</span> },
     { key: 'requester', header: 'Requester', cell: (r) => r.requester?.name ?? '—' },
     { key: 'dept', header: 'Dept', cell: (r) => r.department?.code ?? '—' },
-    { key: 'priority', header: 'Priority', cell: (r) => <Chip variant={priorityVariant[r.priority]}>{r.priority}</Chip> },
+    { key: 'priority', header: 'Priority', cell: (r) => (
+      <span className="flex items-center gap-1">
+        <Chip variant={priorityVariant[r.priority]}>{r.priority}</Chip>
+        {r.is_urgent && <Zap size={12} className="text-danger" />}
+      </span>
+    ) },
     { key: 'status', header: 'Status', cell: (r) => (
       <span className="flex items-center gap-1.5">
         <Chip variant={statusVariant[r.status]}>{r.status}</Chip>
@@ -88,7 +122,15 @@ export default function PurchaseRequestsListPage() {
       )}
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
-          <DataTable columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters((f: any) => ({ ...f, page }))} />
+          <DataTable
+            columns={columns}
+            data={data.data}
+            meta={data.meta}
+            onPageChange={(page) => setFilters((f: any) => ({ ...f, page }))}
+            // ADV6 — Bulk approve via built-in select + bulkActions
+            selectable={can('purchasing.pr.approve')}
+            bulkActions={can('purchasing.pr.approve') ? bulkActions : undefined}
+          />
         </div>
       )}
     </div>

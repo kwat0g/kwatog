@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use App\Modules\Accounting\Controllers\AccountController;
 use App\Modules\Accounting\Controllers\BillController;
+use App\Modules\Accounting\Controllers\BudgetController;
+use App\Modules\Accounting\Controllers\BudgetTransferController;
 use App\Modules\Accounting\Controllers\CustomerController;
 use App\Modules\Accounting\Controllers\FinanceDashboardController;
 use App\Modules\Accounting\Controllers\FinancialStatementController;
@@ -85,4 +87,27 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
 
     Route::get('/dashboard/finance', [FinanceDashboardController::class, 'summary'])
         ->middleware('permission:accounting.dashboard.view');
+
+    /* ─── Budgeting (ADV9) ────────────────────────────── */
+    Route::prefix('budgets')->group(function () {
+        Route::get('/',                               [BudgetController::class, 'index'])        ->middleware('permission:budgeting.view');
+        Route::get('/fiscal-years',                   [BudgetController::class, 'fiscalYears'])  ->middleware('permission:budgeting.view');
+        Route::get('/overview',                       [BudgetController::class, 'overview'])     ->middleware('permission:budgeting.view');
+        Route::get('/budget-vs-actual',               [BudgetController::class, 'budgetVsActual'])->middleware('permission:budgeting.view');
+        Route::get('/check-availability',             [BudgetController::class, 'checkAvailability'])->middleware('permission:budgeting.view');
+        Route::get('/{budget}',                       [BudgetController::class, 'show'])         ->middleware('permission:budgeting.view');
+        Route::post('/',                              [BudgetController::class, 'store'])        ->middleware('permission:budgeting.manage');
+        Route::put('/{budget}',                       [BudgetController::class, 'update'])       ->middleware('permission:budgeting.manage');
+        Route::post('/{budget}/submit',               [BudgetController::class, 'submit'])       ->middleware('permission:budgeting.manage');
+        Route::post('/{budget}/approve',              [BudgetController::class, 'approve'])      ->middleware('permission:budgeting.approve');
+        Route::post('/{budget}/close',                [BudgetController::class, 'close'])        ->middleware('permission:budgeting.manage');
+    });
+
+    Route::prefix('budget-transfers')->group(function () {
+        Route::get('/',                               [BudgetTransferController::class, 'index'])  ->middleware('permission:budgeting.view');
+        Route::get('/{transfer}',                     [BudgetTransferController::class, 'show'])    ->middleware('permission:budgeting.view');
+        Route::post('/',                              [BudgetTransferController::class, 'store'])   ->middleware('permission:budgeting.manage');
+        Route::post('/{transfer}/approve',            [BudgetTransferController::class, 'approve']) ->middleware('permission:budgeting.approve');
+        Route::post('/{transfer}/reject',             [BudgetTransferController::class, 'reject'])  ->middleware('permission:budgeting.approve');
+    });
 });

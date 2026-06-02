@@ -224,6 +224,12 @@ class MaintenanceWorkOrderService
                     $machine->forceFill(['status' => 'idle'])->save();
                 }
             }
+            // Recompute schedule next_due_at on cancel so running-hours-based
+            // schedules don't re-trigger immediately on the next cron run.
+            if ($wo->schedule_id) {
+                $schedule = MaintenanceSchedule::find($wo->schedule_id);
+                if ($schedule) $this->schedules->recomputeNextDueAt($schedule, now());
+            }
             $this->log($wo, 'Cancelled'.($reason ? ': '.$reason : '.'), $by);
             return $this->show($wo);
         });

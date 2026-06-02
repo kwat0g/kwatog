@@ -137,7 +137,12 @@ export default function EditSalesOrderPage() {
   if (detail.isLoading) {
     return (
       <div>
-        <PageHeader title="Edit sales order" backTo="/crm/sales-orders" backLabel="Sales orders" />
+        <PageHeader title="Edit sales order" backTo="/crm/sales-orders" backLabel="Sales orders"
+          breadcrumbs={[
+            { label: 'CRM' },
+            { label: 'Sales orders', href: '/crm/sales-orders' },
+            { label: 'Edit' },
+          ]} />
         <SkeletonForm />
       </div>
     );
@@ -145,7 +150,12 @@ export default function EditSalesOrderPage() {
   if (detail.isError || !detail.data) {
     return (
       <div>
-        <PageHeader title="Edit sales order" backTo="/crm/sales-orders" backLabel="Sales orders" />
+        <PageHeader title="Edit sales order" backTo="/crm/sales-orders" backLabel="Sales orders"
+          breadcrumbs={[
+            { label: 'CRM' },
+            { label: 'Sales orders', href: '/crm/sales-orders' },
+            { label: 'Edit sales order' },
+          ]} />
         <EmptyState
           icon="alert-circle"
           title="Failed to load sales order"
@@ -158,7 +168,12 @@ export default function EditSalesOrderPage() {
   if (!isDraft) {
     return (
       <div>
-        <PageHeader title={`Edit ${detail.data.so_number}`} backTo={`/crm/sales-orders/${id}`} backLabel="Back to sales order" />
+        <PageHeader title={`Edit ${detail.data.so_number}`} backTo={`/crm/sales-orders/${id}`} backLabel="Back to sales order"
+          breadcrumbs={[
+            { label: 'CRM' },
+            { label: 'Sales orders', href: '/crm/sales-orders' },
+            { label: `Edit ${detail.data.so_number}` },
+          ]} />
         <EmptyState
           icon="lock"
           title="This sales order can no longer be edited"
@@ -171,7 +186,12 @@ export default function EditSalesOrderPage() {
 
   return (
     <div>
-      <PageHeader title={`Edit ${detail.data.so_number}`} backTo={`/crm/sales-orders/${id}`} backLabel="Back to sales order" />
+      <PageHeader title={`Edit ${detail.data.so_number}`} backTo={`/crm/sales-orders/${id}`} backLabel="Back to sales order"
+        breadcrumbs={[
+          { label: 'CRM' },
+          { label: 'Sales orders', href: '/crm/sales-orders' },
+          { label: `Edit ${detail.data.so_number}` },
+        ]} />
       <form onSubmit={handleSubmit((v) => update.mutate(v), onFormInvalid<FormValues>())} className="max-w-4xl mx-auto px-5 py-6">
         <fieldset className="mb-8">
           <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">Order header</legend>

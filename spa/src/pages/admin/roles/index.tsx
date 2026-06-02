@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Plus, ShieldCheck, Trash2, Copy, KeyRound } from 'lucide-react';
+import { Plus, ShieldCheck, Trash2, Copy, KeyRound, GitCompareArrows } from 'lucide-react';
 import { rolesApi, type Role } from '@/api/admin/roles';
+import { formatDateTime } from '@/lib/formatDate';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -34,6 +35,11 @@ export default function RolesIndexPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { can } = usePermission();
+  const formatModification = (row: Role): string | null => {
+    if (row.last_modified_by) return row.last_modified_by;
+    if (row.last_modified_at) return '(unknown user)';
+    return null;
+  };
   const [filters, setFilters] = useState<RoleListParams>({
     page: 1,
     per_page: 25,
@@ -103,6 +109,25 @@ export default function RolesIndexPage() {
         ) : (
           <Chip variant="neutral">Custom</Chip>
         ),
+    },
+    {
+      key: 'last_modified',
+      header: 'Last modified',
+      cell: (row) => {
+        const who = formatModification(row);
+        return who ? (
+          <StackedCell
+            primary={who}
+            secondary={
+              <span className="text-muted">
+                {row.last_modified_at ? formatDateTime(row.last_modified_at) : '—'}
+              </span>
+            }
+          />
+        ) : (
+          <span className="text-muted">—</span>
+        );
+      },
     },
     {
       key: 'actions',
@@ -182,16 +207,28 @@ export default function RolesIndexPage() {
       <PageHeader
         title="Roles & permissions"
         subtitle={data ? `${data.meta.total} roles` : undefined}
+        backTo="/admin/users-roles"
+        backLabel="Users & Roles"
         actions={
           can('admin.roles.manage') && (
-            <Button
-              variant="primary"
-              size="sm"
-              icon={<Plus size={14} />}
-              onClick={() => navigate('/admin/roles/create')}
-            >
-              New role
-            </Button>
+            <>
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<GitCompareArrows size={14} />}
+                onClick={() => navigate('/admin/roles/compare')}
+              >
+                Compare roles
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                icon={<Plus size={14} />}
+                onClick={() => navigate('/admin/roles/create')}
+              >
+                New role
+              </Button>
+            </>
           )
         }
       />

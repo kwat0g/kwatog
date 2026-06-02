@@ -204,7 +204,7 @@ class DocumentVaultService
             $headers['X-Content-Type-Options'] = 'nosniff';
         }
 
-        return response()->streamDownload(fn () => print $bytes, $doc->file_name, $headers);
+        return new StreamedResponse(fn () => print $bytes, 200, $headers);
     }
 
     private function entityRef(Model $entity): string

@@ -114,8 +114,14 @@ export default function AdminUserDetailPage() {
         subtitle={
           <span className="font-mono tabular-nums text-muted">{user.email}</span>
         }
-        backTo="/admin/users"
-        backLabel="Users"
+        backTo="/admin/users-roles"
+        backLabel="Users & Roles"
+        breadcrumbs={[
+          { label: 'Admin', href: '/admin' },
+          { label: 'Users & Roles', href: '/admin/users-roles' },
+          { label: 'Users', href: '/admin/users' },
+          { label: user.name },
+        ]}
         actions={
           <div className="flex gap-1.5">
             {user.is_locked && (

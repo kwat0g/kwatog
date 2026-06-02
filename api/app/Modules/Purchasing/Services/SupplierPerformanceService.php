@@ -11,20 +11,22 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Series F — Task F4. Supplier performance computation.
+ * Series F — Task F4 / ADV7. Supplier performance computation.
  *
  * Metrics (computed per (vendor, year, month)):
  *
  *   - on_time_delivery_rate  = POs received on/before expected_delivery_date
  *                              ÷ POs received that month × 100
- *   - quality_pass_rate      = GRNs that passed incoming QC ÷ total GRNs × 100
+ *   - quality_pass_rate      = Incoming QC inspections passed ÷ total incoming inspections × 100
+ *                              (falls back to GRN status when no QC data)
+ *   - ncr_rate               = NCRs linked to this vendor's GRNs ÷ total GRNs × 100
+ *                              (lower is better; inverted in scoring)
  *   - price_variance_pct     = avg |actual_unit_cost - po_unit_price| / po_unit_price × 100
- *                              (actual cost taken from goods_receipt_notes.items[*].unit_cost
- *                               or as a proxy from PO items if absent)
+ *                              (approximated by receipt shortfall when per-line costs absent)
  *   - lead_time_variance_days = avg(actual_lead_days - quoted_lead_days)
  *                               where quoted = first approved_supplier.lead_time_days for the item
  *   - overall_score          = weighted avg:
- *                              30% on-time + 40% quality + 15% price + 15% lead_time
+ *                              25% on-time + 35% quality + 10% NCR rate + 15% price + 15% lead_time
  *                              (each scored 0–100; lower-is-better metrics inverted)
  */
 class SupplierPerformanceService
@@ -38,7 +40,10 @@ class SupplierPerformanceService
             $end   = $start->copy()->endOfMonth()->endOfDay();
 
             $onTime    = $this->onTimeDeliveryRate($vendor->id, $start, $end);
-            $quality   = $this->qualityPassRate($vendor->id, $start, $end);
+            $qcMetrics = $this->qualityMetrics($vendor->id, $start, $end);
+            $quality   = $qcMetrics['passRate'];
+            $qcBreakdown = $qcMetrics['breakdown'];
+            $ncrRate   = $this->ncrRate($vendor->id, $start, $end);
             $price     = $this->priceVariancePct($vendor->id, $start, $end);
             $leadTime  = $this->leadTimeVarianceDays($vendor->id, $start, $end);
 
@@ -51,7 +56,7 @@ class SupplierPerformanceService
                 ->whereBetween('received_date', [$start, $end])
                 ->count();
 
-            $overall = $this->compositeScore($onTime, $quality, $price, $leadTime);
+            $overall = $this->compositeScore($onTime, $quality, $ncrRate, $price, $leadTime);
 
             return SupplierPerformanceSnapshot::updateOrCreate(
                 [
@@ -62,6 +67,10 @@ class SupplierPerformanceService
                 [
                     'on_time_delivery_rate'   => $onTime,
                     'quality_pass_rate'       => $quality,
+                    'incoming_quality_rate'   => $qcBreakdown['incoming'] ?? null,
+                    'in_process_quality_rate' => $qcBreakdown['in_process'] ?? null,
+                    'outgoing_quality_rate'   => $qcBreakdown['outgoing'] ?? null,
+                    'ncr_rate'                => $ncrRate,
                     'price_variance_pct'      => $price,
                     'lead_time_variance_days' => $leadTime,
                     'overall_score'           => $overall,
@@ -130,29 +139,101 @@ class SupplierPerformanceService
         return $total > 0 ? round(($onTime / $total) * 100, 2) : null;
     }
 
-    private function qualityPassRate(int $vendorId, Carbon $start, Carbon $end): ?float
+    /**
+     * ADV7 — Single-query quality metrics: overall pass rate + per-stage breakdown.
+     *
+     * Queries incoming QC inspections linked to this vendor's GRNs.
+     * Falls back to GRN status when no QC inspection exists.
+     */
+    private function qualityMetrics(int $vendorId, Carbon $start, Carbon $end): array
     {
-        $rows = DB::table('goods_receipt_notes')
+        $breakdown = ['incoming' => null, 'in_process' => null, 'outgoing' => null];
+
+        // Single query: all GRN-linked inspections for this vendor in period.
+        $rows = DB::table('goods_receipt_notes as grn')
+            ->join('inspections as i', function ($join) {
+                $join->on('i.entity_id', '=', 'grn.id')
+                     ->where('i.entity_type', '=', 'grn');
+            })
+            ->select(['i.stage', 'i.status'])
+            ->where('grn.vendor_id', $vendorId)
+            ->whereBetween('grn.received_date', [$start, $end])
+            ->get();
+
+        if ($rows->isNotEmpty()) {
+            // P3.3 fix: restrict DENOMINATOR to terminal statuses only so
+            // open (draft / in_progress) inspections do not dilute the score.
+            $terminal = $rows->whereIn('status', ['passed', 'failed']);
+            $terminalCount = $terminal->count();
+            $passed = $terminal->where('status', 'passed')->count();
+            $passRate = $terminalCount > 0
+                ? round(($passed / $terminalCount) * 100, 2)
+                : null;
+
+            $byStage = $rows->groupBy('stage');
+            foreach (['incoming', 'in_process', 'outgoing'] as $stage) {
+                $stageRows = $byStage->get($stage);
+                if ($stageRows && $stageRows->isNotEmpty()) {
+                    $stageTerminal = $stageRows->whereIn('status', ['passed', 'failed']);
+                    $stageTerminalCount = $stageTerminal->count();
+                    if ($stageTerminalCount > 0) {
+                        $stagePassed = $stageTerminal->where('status', 'passed')->count();
+                        $breakdown[$stage] = round(($stagePassed / $stageTerminalCount) * 100, 2);
+                    }
+                }
+            }
+
+            return ['passRate' => $passRate, 'breakdown' => $breakdown];
+        }
+
+        // Fallback: use GRN status for overall pass rate only.
+        $grnRows = DB::table('goods_receipt_notes')
             ->select(['status'])
             ->where('vendor_id', $vendorId)
             ->whereBetween('received_date', [$start, $end])
             ->get();
 
-        if ($rows->isEmpty()) return null;
+        if ($grnRows->isEmpty()) {
+            return ['passRate' => null, 'breakdown' => $breakdown];
+        }
 
-        $accepted = $rows->where('status', 'accepted')->count();
-        return round(($accepted / $rows->count()) * 100, 2);
+        $accepted = $grnRows->where('status', 'accepted')->count();
+        return [
+            'passRate'  => round(($accepted / $grnRows->count()) * 100, 2),
+            'breakdown' => $breakdown,
+        ];
+    }
+
+    /**
+     * ADV7 — NCR rate: NCRs linked to this vendor's GRNs ÷ total GRNs × 100.
+     * Lower is better. Uses NCRs sourced from inspection_fail that are linked
+     * to inspections which are in turn linked to this vendor's GRNs.
+     */
+    private function ncrRate(int $vendorId, Carbon $start, Carbon $end): ?float
+    {
+        $totalGrns = (int) DB::table('goods_receipt_notes')
+            ->where('vendor_id', $vendorId)
+            ->whereBetween('received_date', [$start, $end])
+            ->count();
+
+        if ($totalGrns === 0) return null;
+
+        $ncrCount = (int) DB::table('non_conformance_reports as ncr')
+            ->join('inspections as i', 'ncr.inspection_id', '=', 'i.id')
+            ->join('goods_receipt_notes as grn', function ($join) {
+                $join->on('i.entity_id', '=', 'grn.id')
+                     ->where('i.entity_type', '=', 'grn');
+            })
+            ->where('grn.vendor_id', $vendorId)
+            ->whereBetween('grn.received_date', [$start, $end])
+            ->where('ncr.source', 'inspection_fail')
+            ->count();
+
+        return round(($ncrCount / $totalGrns) * 100, 2);
     }
 
     private function priceVariancePct(int $vendorId, Carbon $start, Carbon $end): ?float
     {
-        // We compare PO line unit_price vs the per-item weighted-avg cost
-        // realized at GRN. Without per-line GRN unit costs persisted, we
-        // approximate by treating any PO line whose received quantity equals
-        // the ordered quantity as on-spec (variance = 0). Where receipts are
-        // partial we compute (received_qty / qty) shortfall as a positive
-        // variance proxy. This is an approximation; production would persist
-        // GRN-line unit cost.
         $rows = DB::table('purchase_orders as po')
             ->join('purchase_order_items as poi', 'poi.purchase_order_id', '=', 'po.id')
             ->select([
@@ -194,20 +275,32 @@ class SupplierPerformanceService
         return round($avg, 2);
     }
 
-    private function compositeScore(?float $onTime, ?float $quality, ?float $price, ?float $leadTime): ?float
-    {
+    /**
+     * ADV7 — Updated composite score with NCR rate weighting.
+     *
+     * Weights: 25% on-time + 35% quality + 10% NCR rate + 15% price + 15% lead_time
+     */
+    private function compositeScore(
+        ?float $onTime,
+        ?float $quality,
+        ?float $ncrRate,
+        ?float $price,
+        ?float $leadTime,
+    ): ?float {
         if ($onTime === null && $quality === null) {
             return null;
         }
 
         // Score each on 0–100 (higher is better).
-        $onTimeScore   = $onTime ?? 0;                          // already 0-100
-        $qualityScore  = $quality ?? 0;                         // already 0-100
-        $priceScore    = $price === null ? 50 : max(0, 100 - $price * 2);    // 0% var → 100
+        $onTimeScore   = $onTime ?? 0;                                   // already 0-100
+        $qualityScore  = $quality ?? 0;                                  // already 0-100
+        $ncrScore      = $ncrRate === null ? 50 : max(0, 100 - $ncrRate * 2);  // 0% NCR → 100
+        $priceScore    = $price === null ? 50 : max(0, 100 - $price * 2);       // 0% var → 100
         $leadTimeScore = $leadTime === null ? 50 : max(0, 100 - abs($leadTime) * 5);
 
-        $score = ($onTimeScore * 0.30)
-               + ($qualityScore * 0.40)
+        $score = ($onTimeScore * 0.25)
+               + ($qualityScore * 0.35)
+               + ($ncrScore     * 0.10)
                + ($priceScore   * 0.15)
                + ($leadTimeScore * 0.15);
 

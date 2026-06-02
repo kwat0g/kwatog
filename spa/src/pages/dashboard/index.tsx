@@ -1,134 +1,47 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import toast from 'react-hot-toast';
-import { RotateCcw } from 'lucide-react';
-import { PageHeader } from '@/components/layout/PageHeader';
-import { Panel } from '@/components/ui/Panel';
-import { Button } from '@/components/ui/Button';
-import { EmptyState } from '@/components/ui/EmptyState';
-import { SkeletonDetail } from '@/components/ui/Skeleton';
-import { FinanceSection } from '@/components/dashboard/FinanceSection';
-import { getWidgetComponent } from '@/components/dashboard/registry';
-import { dashboardLayoutApi } from '@/api/dashboard-layout';
+import { Navigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { usePermission } from '@/hooks/usePermission';
+import DashboardDefaultPage from '@/pages/dashboard/default';
 
 /**
- * Series R — Task R4 — role-default dashboard rendering.
+ * Task D1 — Role-default dashboard router.
  *
- * Renders the user's effective layout (personal → role default → empty).
- * Each widget key resolves through the registry; unknown keys render as a
- * placeholder so a stale seed doesn't break the page.
+ * Reads `user.role.slug` from the auth store and, if a role-specific
+ * dashboard exists AND the user has the gating permission, redirects with
+ * `replace` (so the back-button doesn't trap the user in a redirect loop).
+ * Otherwise renders the generic widget-layout home.
  *
- * The original FinanceSection (Sprint 4 / Task 37) is kept for users with
- * `accounting.dashboard.view` because its body is deeper than a single
- * widget card.
+ * The route table includes `/dashboard/default` as a direct escape hatch so
+ * users who prefer the generic widgets can bookmark it; the redirect here
+ * never points there to keep `/dashboard` as the canonical landing URL.
+ *
+ * Note: `production_manager` is the closest match to the adviser brief's
+ * "Plant Manager" persona — there is no `plant_manager` role slug in our
+ * RBAC catalog (see RolePermissionSeeder). `finance_officer` maps to
+ * `/dashboard/finance` (the canonical URL after Task D5; the legacy
+ * `/dashboard/accounting` route now 301s into it).
  */
+const ROLE_DASHBOARDS: Record<string, { path: string; permission: string }> = {
+  production_manager: { path: '/dashboard/plant-manager', permission: 'dashboard.plant_manager.view' },
+  hr_officer:         { path: '/dashboard/hr',            permission: 'dashboard.hr.view' },
+  ppc_head:           { path: '/dashboard/ppc',           permission: 'dashboard.ppc.view' },
+  finance_officer:    { path: '/dashboard/finance',       permission: 'dashboard.accounting.view' },
+  // D6, D7, D8 — New role-specific dashboards
+  purchasing_officer: { path: '/dashboard/purchasing',    permission: 'dashboard.purchasing.view' },
+  warehouse_staff:    { path: '/dashboard/warehouse',     permission: 'dashboard.warehouse.view' },
+  qc_inspector:       { path: '/dashboard/quality',       permission: 'dashboard.quality.view' },
+};
+
 export default function DashboardPage() {
-  const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
   const { can } = usePermission();
-  const canSeeFinance = can('accounting.dashboard.view');
-  const canResetLayout = can('dashboard.layout.reset');
 
-  const layout = useQuery({
-    queryKey: ['dashboard', 'layout'],
-    queryFn: () => dashboardLayoutApi.layout(),
-  });
+  const roleSlug = user?.role?.slug;
+  const target = roleSlug ? ROLE_DASHBOARDS[roleSlug] : undefined;
 
-  const reset = useMutation({
-    mutationFn: () => dashboardLayoutApi.reset(),
-    onSuccess: () => {
-      toast.success('Dashboard reset to your role default.');
-      queryClient.invalidateQueries({ queryKey: ['dashboard', 'layout'] });
-    },
-    onError: () => toast.error('Failed to reset layout.'),
-  });
+  if (target && can(target.permission)) {
+    return <Navigate to={target.path} replace />;
+  }
 
-  const subtitle = canSeeFinance
-    ? 'Foundation + Hire-to-Retire + Lean Accounting are live.'
-    : 'Your widgets reflect the default layout for your role. You can save a personal layout to override.';
-
-  return (
-    <div>
-      <PageHeader
-        title={`Welcome${user ? `, ${user.name}` : ''}`}
-        subtitle={subtitle}
-        actions={
-          canResetLayout && layout.data && layout.data.some((w) => w.source === 'user') && (
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={<RotateCcw size={14} />}
-              onClick={() => reset.mutate()}
-              loading={reset.isPending}
-              disabled={reset.isPending}
-              aria-label="Reset dashboard layout to role default"
-            >
-              Reset to default
-            </Button>
-          )
-        }
-      />
-
-      <div className="px-5 py-4">
-        {/* Loading — PATTERNS.md §19: skeleton, not spinner. */}
-        {layout.isLoading && !layout.data && <SkeletonDetail />}
-
-        {/* Error */}
-        {layout.isError && (
-          <EmptyState
-            icon="alert-circle"
-            title="Failed to load dashboard"
-            description="We couldn't load your dashboard layout."
-            action={
-              <Button variant="secondary" onClick={() => layout.refetch()}>
-                Retry
-              </Button>
-            }
-          />
-        )}
-
-        {/* Empty (no widgets configured for this role) */}
-        {layout.data && layout.data.length === 0 && (
-          <Panel title="No widgets configured">
-            <p className="text-sm text-muted">
-              Your role doesn't have any default dashboard widgets yet. Contact
-              an administrator to set them up, or use the navigation to access
-              modules directly.
-            </p>
-          </Panel>
-        )}
-
-        {/* Widgets */}
-        {layout.data && layout.data.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-            {layout.data.map((item) => {
-              const Component = getWidgetComponent(item.key);
-              return (
-                <div key={item.key} className="min-h-[120px]">
-                  {Component ? (
-                    <Component />
-                  ) : (
-                    <Panel title={item.name}>
-                      <p className="text-sm text-muted">
-                        Widget <code className="font-mono text-xs">{item.key}</code> is
-                        registered server-side but no SPA component exists yet.
-                      </p>
-                    </Panel>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Sprint 4 / Task 37 finance block — kept until widget-ised separately. */}
-        {canSeeFinance && (
-          <div className="mt-4">
-            <FinanceSection />
-          </div>
-        )}
-      </div>
-    </div>
-  );
+  return <DashboardDefaultPage />;
 }

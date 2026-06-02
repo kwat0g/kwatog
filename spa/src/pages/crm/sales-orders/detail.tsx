@@ -11,13 +11,14 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LinkedRecords } from '@/components/chain/LinkedRecords';
 import { ActivityStream } from '@/components/chain/ActivityStream';
+import { Modal } from '@/components/ui/Modal';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { ChainHeader } from '@/components/chain';
 import { usePermission } from '@/hooks/usePermission';
 import { useChainProgress } from '@/hooks/useChainProgress';
-import type { SalesOrderStatus } from '@/types/crm';
+import type { SalesOrderStatus, SoChainResult } from '@/types/crm';
 
 const statusVariant: Record<SalesOrderStatus, 'success' | 'info' | 'warning' | 'neutral' | 'danger'> = {
   draft: 'neutral',
@@ -36,6 +37,7 @@ export default function SalesOrderDetailPage() {
   const { can } = usePermission();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [chainResult, setChainResult] = useState<SoChainResult | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['crm', 'sales-orders', 'detail', id],
@@ -53,12 +55,13 @@ export default function SalesOrderDetailPage() {
 
   const confirm = useMutation({
     mutationFn: () => salesOrdersApi.confirm(id!),
-    onSuccess: (so) => {
+    onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ['crm', 'sales-orders'] });
       qc.invalidateQueries({ queryKey: ['crm', 'sales-orders', 'detail', id] });
       qc.invalidateQueries({ queryKey: ['crm', 'sales-orders', 'chain', id] });
-      toast.success(`Sales order ${so.so_number} confirmed.`);
       setConfirmOpen(false);
+      setChainResult(result.chain_result);
+      toast.success(`Sales order ${result.data.so_number} confirmed.`);
     },
     onError: (e: AxiosError<{ message?: string }>) => {
       toast.error(e.response?.data?.message ?? 'Failed to confirm sales order.');
@@ -82,7 +85,12 @@ export default function SalesOrderDetailPage() {
   if (isLoading) {
     return (
       <div>
-        <PageHeader title="Sales order" backTo="/crm/sales-orders" backLabel="Sales orders" />
+        <PageHeader title="Sales order" backTo="/crm/sales-orders" backLabel="Sales orders"
+          breadcrumbs={[
+            { label: 'CRM' },
+            { label: 'Sales orders', href: '/crm/sales-orders' },
+            { label: 'Sales order' },
+          ]} />
         <SkeletonDetail />
       </div>
     );
@@ -90,7 +98,12 @@ export default function SalesOrderDetailPage() {
   if (isError || !data) {
     return (
       <div>
-        <PageHeader title="Sales order" backTo="/crm/sales-orders" backLabel="Sales orders" />
+        <PageHeader title="Sales order" backTo="/crm/sales-orders" backLabel="Sales orders"
+          breadcrumbs={[
+            { label: 'CRM' },
+            { label: 'Sales orders', href: '/crm/sales-orders' },
+            { label: 'Sales order' },
+          ]} />
         <EmptyState
           icon="alert-circle"
           title="Failed to load sales order"
@@ -116,6 +129,11 @@ export default function SalesOrderDetailPage() {
         subtitle={data.customer?.name}
         backTo="/crm/sales-orders"
         backLabel="Sales orders"
+        breadcrumbs={[
+          { label: 'CRM' },
+          { label: 'Sales orders', href: '/crm/sales-orders' },
+          { label: data.so_number },
+        ]}
         actions={
           <div className="flex gap-1.5">
             {canEdit && (
@@ -270,14 +288,25 @@ export default function SalesOrderDetailPage() {
         isOpen={confirmOpen}
         onClose={() => setConfirmOpen(false)}
         onConfirm={() => confirm.mutate()}
-        title="Confirm sales order?"
+        title={`Confirm ${data.so_number}?`}
         description={
-          <>
-            Confirming <span className="font-mono font-medium text-primary">{data.so_number}</span> commits the order
-            and (once Task 52 lands) triggers the MRP run. Once confirmed it can no longer be edited.
-          </>
+          <div className="space-y-2 text-sm">
+            <p>
+              Customer: <span className="font-medium text-primary">{data.customer?.name}</span>
+              {' · '}{data.item_count} line items{' · '}
+              <span className="font-mono">₱ {Number(data.total_amount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+            </p>
+            <p className="text-muted">Confirming this order will automatically:</p>
+            <ul className="list-none space-y-1 text-muted">
+              <li>✓ Run MRP and check material availability</li>
+              <li>✓ Create Work Orders for all {data.item_count} lines</li>
+              <li>✓ Schedule production on available machines</li>
+              <li>✓ Reserve required materials in inventory</li>
+              <li>✓ Notify Production, Warehouse, and PPC teams</li>
+            </ul>
+          </div>
         }
-        confirmLabel="Confirm order"
+        confirmLabel="Confirm & Start Chain"
         variant="primary"
         pending={confirm.isPending}
       />
@@ -297,6 +326,80 @@ export default function SalesOrderDetailPage() {
         variant="danger"
         pending={cancel.isPending}
       />
+
+      <Modal
+        isOpen={!!chainResult}
+        onClose={() => setChainResult(null)}
+        title="Sales Order Confirmed"
+        size="lg"
+      >
+        {chainResult && (
+          <div className="py-4 space-y-4">
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-success font-medium">{chainResult.so_number} confirmed</span>
+            </div>
+
+            {/* Work Orders summary */}
+            <div>
+              <h4 className="text-xs uppercase tracking-wider text-muted font-medium mb-2">
+                Work Orders ({chainResult.work_orders_created})
+              </h4>
+              <div className="space-y-1.5">
+                {chainResult.work_orders.map((wo) => (
+                  <div key={wo.id} className="flex items-center justify-between text-sm border border-default rounded-md px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <Chip variant={wo.needs_manual_scheduling ? 'warning' : 'success'}>
+                        {wo.needs_manual_scheduling ? 'Manual' : 'Scheduled'}
+                      </Chip>
+                      <span className="font-mono">{wo.wo_number}</span>
+                      <span className="text-muted">{wo.product?.name}</span>
+                    </div>
+                    <div className="text-xs text-muted font-mono">
+                      {wo.machine ?? 'Needs scheduling'}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Material Planning */}
+            {(chainResult.shortages > 0 || chainResult.prs_created > 0) && (
+              <div>
+                <h4 className="text-xs uppercase tracking-wider text-muted font-medium mb-2">Material Planning</h4>
+                <div className="text-sm space-y-1">
+                  {chainResult.shortages > 0 && (
+                    <p className="text-warning">
+                      {chainResult.shortages} material shortage{chainResult.shortages > 1 ? 's' : ''} detected
+                    </p>
+                  )}
+                  {chainResult.prs_created > 0 && (
+                    <p className="text-muted">
+                      {chainResult.prs_created} Purchase Request{chainResult.prs_created > 1 ? 's' : ''} auto-created
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Summary line */}
+            <div className="text-xs text-muted border-t border-default pt-3">
+              {chainResult.auto_scheduled} auto-scheduled · {chainResult.needs_manual} need manual scheduling
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-default">
+              <Button variant="secondary" size="sm" onClick={() => { setChainResult(null); navigate('/production/work-orders'); }}>
+                View Work Orders
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => { setChainResult(null); navigate('/mrp/plans'); }}>
+                View MRP Plan
+              </Button>
+              <Button variant="primary" size="sm" onClick={() => setChainResult(null)}>
+                Done
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

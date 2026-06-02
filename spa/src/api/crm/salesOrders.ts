@@ -3,6 +3,7 @@ import type { ApiSuccess, PaginatedResponse, ListParams } from '@/types';
 import type {
   SalesOrder,
   SalesOrderChainStep,
+  SoChainResult,
   CreateSalesOrderData,
   UpdateSalesOrderData,
 } from '@/types/crm';
@@ -26,7 +27,7 @@ export const salesOrdersApi = {
   delete: (id: string) =>
     client.delete(`/crm/sales-orders/${id}`),
   confirm: (id: string) =>
-    client.post<ApiSuccess<SalesOrder>>(`/crm/sales-orders/${id}/confirm`).then((r) => r.data.data),
+    client.post<{ data: SalesOrder; chain_result: SoChainResult }>(`/crm/sales-orders/${id}/confirm`).then((r) => r.data),
   cancel: (id: string, reason?: string) =>
     client.post<ApiSuccess<SalesOrder>>(`/crm/sales-orders/${id}/cancel`, { reason }).then((r) => r.data.data),
   chain: (id: string) =>

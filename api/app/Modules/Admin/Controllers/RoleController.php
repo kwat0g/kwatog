@@ -60,4 +60,30 @@ class RoleController
         $clone = $this->service->clone($role, $request->validated());
         return (new RoleResource($clone))->response()->setStatusCode(201);
     }
+
+    /**
+     * ADV4 — GET /admin/roles/compare?a={hashId}&b={hashId}
+     *
+     * Side-by-side permission diff between two roles. Decodes both hash_ids,
+     * resolves the Role models, and returns the categorized diff used by the
+     * Compare Roles page.
+     */
+    public function compare(Request $request): JsonResponse
+    {
+        $request->validate([
+            'a' => ['required', 'string'],
+            'b' => ['required', 'string'],
+        ]);
+
+        $hashids = app('hashids');
+        $decodedA = $hashids->decode((string) $request->query('a'));
+        $decodedB = $hashids->decode((string) $request->query('b'));
+        $idA = $decodedA[0] ?? abort(404, 'Role A not found.');
+        $idB = $decodedB[0] ?? abort(404, 'Role B not found.');
+
+        $a = Role::findOrFail((int) $idA);
+        $b = Role::findOrFail((int) $idB);
+
+        return response()->json(['data' => $this->service->compare($a, $b)]);
+    }
 }

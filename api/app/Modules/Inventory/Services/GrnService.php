@@ -265,6 +265,227 @@ class GrnService
         }
     }
 
+    /**
+     * CA2 — Single-screen receiving. Creates GRN + records QC inspection + accepts/rejects
+     * in one atomic transaction, combining what were previously 3 separate API calls.
+     *
+     * @param  array  $items   Same format as create()
+     * @param  array  $meta    ['received_date' => ..., 'remarks' => ...]
+     * @param  array  $qcData  ['result' => passed|failed|passed_with_remarks|pending, 'inspector_id' => ..., 'product_id' => ..., 'checks' => [...], 'remarks' => ..., 'failure_reason' => ..., 'disposition' => ...]
+     * @return array{grn: GoodsReceiptNote, inspection: mixed, qc_result: string, disposition: string|null, stock_updated: bool}
+     */
+    public function receiveWithQc(
+        PurchaseOrder $po,
+        array $items,
+        array $meta,
+        array $qcData,
+        User $by,
+    ): array {
+        return DB::transaction(function () use ($po, $items, $meta, $qcData, $by) {
+            // 1. Create GRN (pending_qc)
+            $grn = $this->create($po, $items, $meta, $by);
+
+            // 2. Create QC inspection if inspection data provided
+            $inspection = null;
+            $inspectionService = $this->resolveInspectionService();
+
+            if ($inspectionService && ! empty($qcData)) {
+                $inspectorId = null;
+                if (! empty($qcData['inspector_id'])) {
+                    $inspectorId = HashIdFilter::decode($qcData['inspector_id'], User::class)
+                        ?? (ctype_digit((string) $qcData['inspector_id']) ? (int) $qcData['inspector_id'] : null);
+                }
+
+                $productId = null;
+                if (! empty($qcData['product_id'])) {
+                    $productId = HashIdFilter::decode($qcData['product_id'], \App\Modules\CRM\Models\Product::class)
+                        ?? (ctype_digit((string) $qcData['product_id']) ? (int) $qcData['product_id'] : null);
+                }
+
+                // Use the existing InspectionService::create() which builds
+                // measurement scaffolds from the product's inspection spec.
+                // This requires a product_id; if one is not supplied, we skip
+                // the full inspection record and still process the GRN result.
+                if ($productId) {
+                    $totalQty = collect($items)->sum(fn ($r) => (float) $r['quantity_received']);
+                    $inspector = $inspectorId
+                        ? User::query()->findOrFail($inspectorId)
+                        : $by;
+
+                    try {
+                        $inspection = $inspectionService->create([
+                            'stage'          => 'incoming',
+                            'product_id'     => $productId,
+                            'batch_quantity' => max(1, (int) $totalQty),
+                            'entity_type'    => 'grn',
+                            'entity_id'      => $grn->id,
+                            'notes'          => $qcData['remarks'] ?? null,
+                        ], $inspector);
+
+                        // The InspectionService::create() already back-links
+                        // qc_inspection_id onto the GRN via DB::table update,
+                        // so we reload to pick up the change.
+                        $grn->refresh();
+                    } catch (RuntimeException) {
+                        // No active inspection spec for this product — non-fatal
+                        // for the receiving flow. GRN proceeds without QC record.
+                    }
+                }
+            }
+
+            // 3. Based on QC result, accept or leave pending
+            $qcResult    = $qcData['result'] ?? 'passed';
+            $disposition = null;
+
+            if ($qcResult === 'passed' || $qcResult === 'passed_with_remarks') {
+                // If an inspection was created, fast-complete it as passed
+                // so the QC gate in acceptInternal() does not block.
+                if ($inspection) {
+                    $this->fastCompleteInspection($inspection, true, $by);
+                }
+                $grn = $this->acceptInternal($grn, $by);
+            } elseif ($qcResult === 'failed') {
+                $disposition = $qcData['disposition'] ?? 'return_to_supplier';
+                // Distinguish between a genuine quality failure (triggers NCR)
+                // and a logistics rejection such as wrong part number or short
+                // shipment (must NOT open an NCR — P3.6 audit fix).
+                $isQualityFailure = ($qcData['is_quality_failure'] ?? true) !== false;
+                if ($inspection) {
+                    $this->fastCompleteInspection($inspection, false, $by, $isQualityFailure);
+                }
+                $grn = $this->rejectInternal(
+                    $grn,
+                    $qcData['failure_reason'] ?? 'QC inspection failed',
+                    $by
+                );
+            }
+            // If 'pending', leave GRN in pending_qc status for later decision
+
+            return [
+                'grn'           => $this->show($grn->fresh()),
+                'inspection'    => $inspection,
+                'qc_result'     => $qcResult,
+                'disposition'   => $disposition,
+                'stock_updated' => in_array($qcResult, ['passed', 'passed_with_remarks'], true),
+            ];
+        });
+    }
+
+    /**
+     * Accept GRN internally — moves stock for every line. Used by receiveWithQc()
+     * to bypass the public accept() method's QC gate (since we control the flow).
+     */
+    private function acceptInternal(GoodsReceiptNote $grn, User $by): GoodsReceiptNote
+    {
+        foreach ($grn->items as $row) {
+            $row->quantity_accepted = $row->quantity_received;
+            $row->save();
+            $this->movements->move(new StockMovementInput(
+                type: StockMovementType::GrnReceipt,
+                itemId: $row->item_id,
+                fromLocationId: null,
+                toLocationId: $row->location_id,
+                quantity: (string) $row->quantity_received,
+                unitCost: (string) $row->unit_cost,
+                referenceType: 'goods_receipt_note',
+                referenceId: $grn->id,
+                remarks: "GRN {$grn->grn_number}",
+                createdBy: $by->id,
+            ));
+        }
+        $grn->update([
+            'status'      => GrnStatus::Accepted,
+            'accepted_by' => $by->id,
+            'accepted_at' => now(),
+        ]);
+
+        $fresh = $grn->fresh();
+        DB::afterCommit(fn () =>
+            app(\App\Common\Services\ChainBroadcaster::class)
+                ->broadcastFor($fresh, GrnStatus::Accepted->value, $by)
+        );
+
+        return $fresh;
+    }
+
+    /**
+     * Reject GRN internally — marks as rejected without stock movement.
+     */
+    private function rejectInternal(GoodsReceiptNote $grn, string $reason, User $by): GoodsReceiptNote
+    {
+        $grn->update([
+            'status'          => GrnStatus::Rejected,
+            'rejected_reason' => $reason,
+            'accepted_by'     => $by->id,
+            'accepted_at'     => now(),
+        ]);
+
+        $fresh = $grn->fresh();
+        DB::afterCommit(fn () =>
+            app(\App\Common\Services\ChainBroadcaster::class)
+                ->broadcastFor($fresh, GrnStatus::Rejected->value, $by)
+        );
+
+        return $fresh;
+    }
+
+    /**
+     * Fast-complete an inspection created inline during receiveWithQc().
+     * Sets all measurement rows to is_pass = $passed and finalises status
+     * so that the QC gate and downstream events fire correctly.
+     *
+     * When $isQualityFailure is false (a logistics rejection — e.g. wrong
+     * part number, short shipment) the inspection is cancelled instead of
+     * force-completed as failed. This prevents InspectionService::complete()
+     * from triggering the afterCommit → NcrService::openFromInspectionFailure()
+     * path, which would pollute the NCR queue with non-quality events.
+     *
+     * @param  bool  $isQualityFailure  true (default) = genuine QC failure,
+     *                                  NCR auto-created; false = logistics /
+     *                                  non-quality reason, no NCR created.
+     */
+    private function fastCompleteInspection(
+        \App\Modules\Quality\Models\Inspection $inspection,
+        bool $passed,
+        User $by,
+        bool $isQualityFailure = true,
+    ): void {
+        $svc = $this->resolveInspectionService();
+        if (! $svc) return;
+
+        // Logistics rejection: cancel the inspection so that complete() is
+        // never called and no NCR is auto-opened (P3.6 audit fix).
+        if (! $passed && ! $isQualityFailure) {
+            $svc->cancel($inspection, 'Logistics rejection — no quality issue found', $by);
+            return;
+        }
+
+        // Fill all measurement rows with the verdict so complete() won't
+        // complain about unresolved measurements.
+        $rows = \App\Modules\Quality\Models\InspectionMeasurement::query()
+            ->where('inspection_id', $inspection->id)
+            ->get();
+
+        $patches = [];
+        foreach ($rows as $m) {
+            $patches[$m->id] = ['is_pass' => $passed];
+        }
+        if (! empty($patches)) {
+            $svc->recordMeasurements($inspection, $patches, $by);
+        }
+
+        $svc->complete($inspection->fresh(), $by);
+    }
+
+    /**
+     * Resolve the InspectionService if the Quality module is available.
+     */
+    private function resolveInspectionService(): ?\App\Modules\Quality\Services\InspectionService
+    {
+        $cls = '\\App\\Modules\\Quality\\Services\\InspectionService';
+        return class_exists($cls) ? app($cls) : null;
+    }
+
     private function refreshPoStatus(PurchaseOrder $po): void
     {
         $po->load('items');

@@ -8,6 +8,7 @@ import { DataTable, NumCell, StackedCell, type Column } from '@/components/ui/Da
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
+import { UserBadge } from '@/components/ui/UserBadge';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatDateTime } from '@/lib/formatDate';
 
@@ -44,7 +45,10 @@ const columns: Column<AuditLogEntry>[] = [
     header: 'By',
     cell: (row) =>
       row.user ? (
-        <StackedCell primary={row.user.name} secondary={<span className="text-muted">{row.user.email}</span>} />
+        <StackedCell
+          primary={<UserBadge name={row.user.name} role={row.user.role} />}
+          secondary={<span className="text-muted">{row.user.email}</span>}
+        />
       ) : (
         <span className="text-muted">System</span>
       ),
@@ -70,6 +74,8 @@ export default function AuditLogsPage() {
       <PageHeader
         title="Audit logs"
         subtitle={data ? `${data.meta.total.toLocaleString()} entries` : undefined}
+        backTo="/admin/users-roles"
+        backLabel="Users & Roles"
         actions={
           <a href={auditLogsApi.exportUrl(filters)} download>
             <Button variant="secondary" size="sm" icon={<Download size={14} />}>

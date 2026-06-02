@@ -191,6 +191,35 @@ export default function SupplierPerformancePage() {
         </div>
       )}
 
+      {/* ADV7 — QC breakdown */}
+      {latest && (
+        <div className="px-5 py-4 border-t border-default">
+          <h3 className="text-sm font-medium mb-3">Quality breakdown</h3>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <StatCard
+              label="Incoming QC"
+              value={fmtPct(latest.incoming_quality_rate ?? null)}
+              helper="GRN-linked inspections"
+            />
+            <StatCard
+              label="In-process QC"
+              value={fmtPct(latest.in_process_quality_rate ?? null)}
+              helper="Work order inspections"
+            />
+            <StatCard
+              label="Outgoing QC"
+              value={fmtPct(latest.outgoing_quality_rate ?? null)}
+              helper="Pre-shipment inspections"
+            />
+            <StatCard
+              label="NCR rate"
+              value={fmtPct(latest.ncr_rate ?? null)}
+              helper="NCRs per GRN (lower is better)"
+            />
+          </div>
+        </div>
+      )}
+
       {/* Trend (simple bars) */}
       {data.trend.length > 1 && (
         <div className="px-5 py-4 border-t border-default">

@@ -16,6 +16,11 @@ class Customer extends Model
 {
     use HasFactory, SoftDeletes, HasHashId, HasAuditLog;
 
+    protected static function newFactory(): \Database\Factories\CustomerFactory
+    {
+        return \Database\Factories\CustomerFactory::new();
+    }
+
     protected $fillable = [
         'name', 'contact_person', 'email', 'phone', 'address',
         'tin', 'credit_limit', 'payment_terms_days', 'is_active',

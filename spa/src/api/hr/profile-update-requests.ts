@@ -1,11 +1,16 @@
 import { client } from '../client';
 import type { PaginatedResponse, ApiSuccess } from '@/types';
 
-export type ProfileUpdateRequestStatus = 'pending' | 'approved' | 'rejected';
+export type ProfileUpdateRequestStatus =
+  | 'pending'
+  | 'pending_finance'
+  | 'approved'
+  | 'rejected';
 
 export interface ProfileUpdateReviewItem {
   id: string;
   status: ProfileUpdateRequestStatus;
+  requires_finance: boolean;
   changes: Record<string, string | null>;
   note: string | null;
   employee: {
@@ -18,6 +23,9 @@ export interface ProfileUpdateReviewItem {
   reviewer: { id: string; name: string } | null;
   reviewed_at: string | null;
   review_remarks: string | null;
+  finance_reviewer: { id: string; name: string } | null;
+  finance_reviewed_at: string | null;
+  finance_remarks: string | null;
   created_at: string | null;
 }
 
@@ -31,6 +39,15 @@ export const profileUpdateRequestsApi = {
     client
       .patch<ApiSuccess<ProfileUpdateReviewItem>>(
         `/hr/profile-update-requests/${id}/review`,
+        { action, remarks: remarks ?? null },
+      )
+      .then((r) => (r.data as { data?: ProfileUpdateReviewItem }).data ?? (r.data as unknown as ProfileUpdateReviewItem)),
+
+  // Task SS2 — Finance leg for bank-account changes (HR + Finance dual approval).
+  financeReview: (id: string, action: 'approve' | 'reject', remarks?: string) =>
+    client
+      .patch<ApiSuccess<ProfileUpdateReviewItem>>(
+        `/hr/profile-update-requests/${id}/finance-review`,
         { action, remarks: remarks ?? null },
       )
       .then((r) => (r.data as { data?: ProfileUpdateReviewItem }).data ?? (r.data as unknown as ProfileUpdateReviewItem)),

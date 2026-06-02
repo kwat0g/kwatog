@@ -15,7 +15,10 @@ use App\Modules\SupplyChain\Services\ShipmentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use RuntimeException;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ShipmentController
 {
@@ -67,7 +70,7 @@ class ShipmentController
     {
         $data = $request->validate([
             'document_type' => ['required', Rule::in(ShipmentDocumentType::values())],
-            'file'          => ['required', 'file', 'max:20480'], // 20 MB
+            'file'          => ['required', 'file', 'mimes:pdf,jpg,jpeg,png,xlsx,csv', 'max:20480'], // 20 MB
             'notes'         => ['nullable', 'string', 'max:500'],
         ]);
         $doc = $this->service->uploadDocument(
@@ -78,6 +81,36 @@ class ShipmentController
             $data['notes'] ?? null,
         );
         return new ShipmentDocumentResource($doc);
+    }
+
+    /**
+     * Stream a shipment document to the authenticated user.
+     * Files live on the local disk and are NEVER served via a public URL.
+     * Route must be protected by permission:supply_chain.view (see routes.php).
+     */
+    public function downloadDocument(ShipmentDocument $document): StreamedResponse
+    {
+        $disk = Storage::disk('local');
+        if (! $disk->exists($document->file_path)) {
+            throw new RuntimeException('Shipment document file not found on disk.');
+        }
+
+        $contents = $disk->get($document->file_path);
+        $mime     = $document->mime_type ?? $disk->mimeType($document->file_path) ?? 'application/octet-stream';
+        $isImage  = str_starts_with($mime, 'image/');
+        $filename = $document->original_filename ?? basename($document->file_path);
+
+        return response()->stream(
+            fn () => print $contents,
+            200,
+            [
+                'Content-Type'        => $mime,
+                'Cache-Control'       => 'private, no-store, max-age=0',
+                'Content-Disposition' => $isImage
+                    ? sprintf('inline; filename="%s"', $filename)
+                    : sprintf('attachment; filename="%s"', $filename),
+            ],
+        );
     }
 
     public function destroyDocument(ShipmentDocument $document): JsonResponse

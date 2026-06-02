@@ -125,6 +125,11 @@ export default function InvoiceDetailPage() {
         }
         backTo="/accounting/invoices"
         backLabel="Invoices"
+        breadcrumbs={[
+          { label: 'Accounting' },
+          { label: 'Invoices', href: '/accounting/invoices' },
+          { label: invoice.invoice_number ?? 'Draft' },
+        ]}
         actions={
           <div className="flex gap-1.5">
             <a href={invoicesApi.pdfUrl(invoice.id)} target="_blank" rel="noopener">

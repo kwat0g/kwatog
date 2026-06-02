@@ -30,6 +30,8 @@ class WorkOrder extends Model
         'quantity_rejected', 'scrap_rate',
         'planned_start', 'planned_end', 'actual_start', 'actual_end',
         'status', 'pause_reason', 'priority', 'created_by',
+        // ADV3 — IATF 16949 traceability.
+        'batch_number', 'material_lot_references',
     ];
 
     protected $casts = [
@@ -44,6 +46,8 @@ class WorkOrder extends Model
         'quantity_rejected' => 'decimal:0',
         'scrap_rate'        => 'decimal:2',
         'priority'          => 'integer',
+        // ADV3 — array of {item_id, item_code, item_name, grn_number, material_lot_number, supplier_lot_reference, quantity_used}.
+        'material_lot_references' => 'array',
     ];
 
     public function product(): BelongsTo

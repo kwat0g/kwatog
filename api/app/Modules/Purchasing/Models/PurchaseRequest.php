@@ -23,9 +23,10 @@ class PurchaseRequest extends Model
 
     protected $fillable = [
         'pr_number', 'requested_by', 'department_id', 'mrp_plan_id',
-        'date', 'reason', 'priority', 'status',
-        'is_auto_generated', 'current_approval_step',
-        'submitted_at', 'approved_at',
+        'template_id', 'date', 'reason', 'priority', 'status',
+        'is_auto_generated', 'auto_generated_reason',
+        'is_urgent', 'urgency_reason',
+        'current_approval_step', 'submitted_at', 'approved_at',
     ];
 
     protected $casts = [
@@ -33,6 +34,7 @@ class PurchaseRequest extends Model
         'submitted_at'          => 'datetime',
         'approved_at'           => 'datetime',
         'is_auto_generated'     => 'boolean',
+        'is_urgent'             => 'boolean',
         'current_approval_step' => 'integer',
         'priority'              => PurchaseRequestPriority::class,
         'status'                => PurchaseRequestStatus::class,
@@ -58,6 +60,11 @@ class PurchaseRequest extends Model
         return $this->hasMany(PurchaseOrder::class);
     }
 
+    public function template(): BelongsTo
+    {
+        return $this->belongsTo(PurchaseRequestTemplate::class, 'template_id');
+    }
+
     public function scopeOpen(Builder $q): Builder
     {
         return $q->whereIn('status', [
@@ -69,10 +76,9 @@ class PurchaseRequest extends Model
 
     public function totalEstimatedAmount(): string
     {
-        $total = 0.0;
-        foreach ($this->items as $item) {
-            $total += (float) $item->quantity * (float) ($item->estimated_unit_price ?? 0);
-        }
+        $total = (float) $this->items()
+            ->selectRaw('COALESCE(SUM(quantity * estimated_unit_price), 0) as total')
+            ->value('total');
         return number_format($total, 2, '.', '');
     }
 }

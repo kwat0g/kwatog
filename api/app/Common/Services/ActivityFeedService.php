@@ -63,7 +63,12 @@ class ActivityFeedService
      */
     public function feed(array $filters): LengthAwarePaginator
     {
-        $q = ActivityEvent::query()->with(['actor:id,name,email']);
+        // ADV4 — also load the actor's role so the feed can render a role chip
+        // beside the user's name.
+        $q = ActivityEvent::query()->with([
+            'actor:id,name,email,role_id',
+            'actor.role:id,name,slug',
+        ]);
 
         if (! empty($filters['type'])) {
             $q->where('type', (string) $filters['type']);

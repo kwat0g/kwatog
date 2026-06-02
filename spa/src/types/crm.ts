@@ -178,3 +178,28 @@ export interface CreateComplaintData {
   affected_quantity?: number;
   assigned_to?: string | null;
 }
+
+// ─── CA1 — Chain result returned from SO confirm ────────────────────
+
+export interface SoChainResultWo {
+  id: string;
+  wo_number: string;
+  product: { part_number: string; name: string } | null;
+  status: string;
+  quantity_target: number;
+  machine: string | null;
+  scheduled_start: string | null;
+  scheduled_end: string | null;
+  needs_manual_scheduling: boolean;
+}
+
+export interface SoChainResult {
+  so_number: string;
+  work_orders_created: number;
+  auto_scheduled: number;
+  needs_manual: number;
+  shortages: number;
+  prs_created: number;
+  work_orders: SoChainResultWo[];
+  scheduling_conflicts: Array<{ work_order_id: string; wo_number: string; reasons: string[] }>;
+}

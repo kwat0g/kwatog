@@ -17,12 +17,18 @@ class PurchaseRequestItem extends Model
     protected $fillable = [
         'purchase_request_id', 'item_id', 'description',
         'quantity', 'unit', 'estimated_unit_price', 'purpose',
+        'suggested_vendor_id',
     ];
 
     protected $casts = [
         'quantity'             => 'decimal:2',
         'estimated_unit_price' => 'decimal:2',
     ];
+
+    public function suggestedVendor(): BelongsTo
+    {
+        return $this->belongsTo(\App\Modules\Accounting\Models\Vendor::class, 'suggested_vendor_id');
+    }
 
     public function purchaseRequest(): BelongsTo
     {

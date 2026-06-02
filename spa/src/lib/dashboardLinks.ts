@@ -82,6 +82,36 @@ export function kpiLink(label: string): string | undefined {
     case 'Pending Requests':
       return `/self-service/leave`;
 
+    // ─── Purchasing (D6) ───────────────────────────────────
+    case 'PRs Pending Action':
+      return `/purchasing/purchase-requests?status=pending`;
+    case 'Open POs':
+      return `/purchasing/purchase-orders?status=sent`;
+    case 'Overdue Deliveries':
+      return `/purchasing/purchase-orders?overdue=1`;
+    case 'Suppliers Due Review':
+      return `/purchasing/suppliers?below_score=80`;
+
+    // ─── Warehouse (D7) ────────────────────────────────────
+    case 'Pending GRNs':
+      return `/inventory/grn?status=pending`;
+    case 'Issues Today':
+      return `/inventory/material-issues?date=today`;
+    case 'Low Stock Items':
+      return `/inventory/items?below_reorder=1`;
+    case 'Pending Transfers':
+      return `/inventory/stock-movements?type=transfer&pending=1`;
+
+    // ─── Quality (D8) ──────────────────────────────────────
+    case 'Pending Inspections':
+      return `/quality/inspections?status=in_progress`;
+    case 'Pass Rate Today':
+      return `/quality/inspections?date=today`;
+    case 'Open NCRs':
+      return `/quality/ncrs?status=open`;
+    case 'CoCs Gen. MTD':
+      return `/quality/certificates`;
+
     default:
       return undefined;
   }
@@ -129,4 +159,17 @@ export function alertLink(kind: string): string | undefined {
     default:
       return undefined;
   }
+}
+
+/** Resolve an itemized alert row to its entity detail URL (or list fallback). */
+export function alertRefLink(ref: string | null, refId: string | null, kind: string): string {
+  if (ref && refId) {
+    switch (ref) {
+      case 'machine': return `/mrp/machines/${refId}`;
+      case 'ncr':     return `/quality/ncrs/${refId}`;
+      case 'mold':    return `/mrp/molds/${refId}`;
+    }
+  }
+  // Fall back to the existing kind→list mapping.
+  return alertLink(kind) ?? '/alerts';
 }

@@ -29,6 +29,8 @@ export default function AdminGovTablesPage() {
       <PageHeader
         title="Government Tables"
         subtitle="SSS, PhilHealth, Pag-IBIG, BIR — used by the payroll engine for contribution calculations"
+        backTo="/payroll/hub"
+        backLabel="Payroll"
       />
 
       <div className="px-5 pt-3">

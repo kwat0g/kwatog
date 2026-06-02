@@ -100,8 +100,8 @@ export interface AqlPlan {
 
 // ─── Sprint 7 Task 61 — NCR ────────────────────────────────────────────
 
-export type NcrSource = 'inspection_fail' | 'customer_complaint';
-export type NcrSeverity = 'low' | 'medium' | 'high' | 'critical';
+export type NcrSource = 'inspection_fail' | 'production' | 'customer_complaint' | 'audit';
+export type NcrSeverity = 'minor' | 'major' | 'critical';
 export type NcrStatus = 'open' | 'in_progress' | 'closed' | 'cancelled';
 export type NcrDisposition = 'scrap' | 'rework' | 'use_as_is' | 'return_to_supplier';
 export type NcrActionType = 'containment' | 'corrective' | 'preventive';
@@ -163,6 +163,31 @@ export interface ParetoResult {
   to: string;
   total_defects: number;
   rows: ParetoRow[];
+}
+
+// ─── ADV7 — NCR Templates ────────────────────────────────────────────
+
+export interface NcrTemplate {
+  id: string;
+  name: string;
+  source: NcrSource;
+  severity: NcrSeverity;
+  defect_description: string | null;
+  notes: string | null;
+  is_active: boolean;
+  product?: { id: string; part_number: string; name: string } | null;
+  creator?: { id: string; name: string } | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateNcrTemplateData {
+  name: string;
+  source: NcrSource;
+  severity: NcrSeverity;
+  product_id?: string | null;
+  defect_description?: string;
+  notes?: string;
 }
 
 export interface UpsertInspectionSpecData {

@@ -6,7 +6,6 @@ namespace App\Modules\SupplyChain\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
-use Illuminate\Support\Facades\Storage;
 
 class ShipmentDocumentResource extends JsonResource
 {
@@ -19,7 +18,7 @@ class ShipmentDocumentResource extends JsonResource
             'file_size_bytes'   => $this->file_size_bytes !== null ? (int) $this->file_size_bytes : null,
             'mime_type'         => $this->mime_type,
             'notes'             => $this->notes,
-            'url'               => $this->file_path ? Storage::disk('public')->url($this->file_path) : null,
+            'url'               => $this->file_path ? "/api/v1/supply-chain/shipment-documents/{$this->hash_id}/download" : null,
             'uploaded_at'       => optional($this->uploaded_at)?->toISOString(),
             'uploader'          => $this->whenLoaded('uploader', fn () => $this->uploader ? [
                 'id'   => $this->uploader->hash_id,

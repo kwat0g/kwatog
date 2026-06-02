@@ -58,7 +58,7 @@ class DeliveryService
 
     public function show(Delivery $d): Delivery
     {
-        return $d->load([
+        $d = $d->load([
             'salesOrder:id,so_number,customer_id',
             'vehicle:id,plate_number,name,vehicle_type',
             'driver:id,name,role_id',
@@ -67,7 +67,14 @@ class DeliveryService
             'invoice:id,invoice_number,total_amount,status',
             'items.salesOrderItem:id,sales_order_id,product_id,quantity,unit_price',
             'items.inspection:id,inspection_number,stage,status',
+            // ADV3 — surface the shipment lot for the detail page.
+            'shipmentLot.product:id,part_number,name',
+            'shipmentLot.customer:id,name',
+            // ADV7 — Proof of Delivery files for the detail page.
+            'proofs' => fn ($q) => $q->orderByDesc('created_at'),
+            'proofs.uploader:id,name',
         ]);
+        return $d;
     }
 
     /**
@@ -194,42 +201,120 @@ class DeliveryService
         return $this->show($d);
     }
 
-    public function uploadReceiptPhoto(Delivery $d, UploadedFile $file): Delivery
+    /**
+     * Quick receipt photo upload — sets the legacy receipt_photo_path AND
+     * registers a DeliveryProof row so it counts toward the ADV7 proof
+     * requirement for confirmation.
+     */
+    public function uploadReceiptPhoto(Delivery $d, UploadedFile $file, ?User $by = null): Delivery
     {
         $current = $d->status instanceof DeliveryStatus ? $d->status : DeliveryStatus::from((string) $d->status);
         if (! in_array($current, [DeliveryStatus::Delivered, DeliveryStatus::Confirmed], true)) {
             throw new RuntimeException('Receipt photo can only be uploaded after delivery is marked delivered.');
         }
-        $path = $file->store("deliveries/{$d->id}", 'public');
-        $d->forceFill(['receipt_photo_path' => $path])->save();
-        return $this->show($d);
+
+        // P3.2 — Store the file BEFORE opening the transaction so that a DB
+        // rollback cannot orphan a file that was written inside the transaction.
+        // If the transaction fails we delete the file and re-throw.
+        $path = $file->store("deliveries/{$d->id}", 'local');
+
+        try {
+            return DB::transaction(function () use ($d, $file, $path, $by) {
+                $d->forceFill(['receipt_photo_path' => $path])->save();
+
+                // ADV7 — also register the legacy upload as a DeliveryProof so the
+                // confirmation guard sees it. Falls back to the delivery creator
+                // if no user is supplied.
+                \App\Modules\SupplyChain\Models\DeliveryProof::create([
+                    'delivery_id' => $d->id,
+                    'proof_type'  => 'photo',
+                    'file_name'   => $file->getClientOriginalName() ?: basename($path),
+                    'file_path'   => $path,
+                    'file_size'   => $file->getSize() ?: null,
+                    'mime_type'   => $file->getMimeType(),
+                    'uploaded_by' => $by?->id ?? $d->created_by,
+                    'notes'       => 'Quick receipt photo',
+                ]);
+
+                return $this->show($d);
+            });
+        } catch (\Throwable $e) {
+            // Clean up the already-stored file so we don't leave orphans.
+            Storage::disk('local')->delete($path);
+            throw $e;
+        }
     }
 
     /**
      * CRM officer confirms delivery → auto-create draft invoice for the SO.
      * Idempotent: if an invoice is already linked, returns it untouched.
+     *
+     * ADV7 — Proof of Delivery is mandatory: the delivery must have at least
+     * one proof file uploaded before it can be confirmed. Optional receiver
+     * capture fields (receiver_name, receiver_position, delivery_remarks) may
+     * be supplied here to stamp the delivery in a single round-trip.
+     *
+     * @param array{
+     *   receiver_name?: string|null,
+     *   receiver_position?: string|null,
+     *   delivery_remarks?: string|null,
+     * } $receiverData
      */
-    public function confirm(Delivery $d, User $by): Delivery
+    public function confirm(Delivery $d, User $by, array $receiverData = []): Delivery
     {
         $current = $d->status instanceof DeliveryStatus ? $d->status : DeliveryStatus::from((string) $d->status);
-        if ($current === DeliveryStatus::Confirmed) return $this->show($d);
-        if ($current !== DeliveryStatus::Delivered) {
+        if ($current !== DeliveryStatus::Delivered && $current !== DeliveryStatus::Confirmed) {
             throw new RuntimeException('Only delivered deliveries can be confirmed.');
         }
 
-        return DB::transaction(function () use ($d, $by) {
-            $d->forceFill([
+        return DB::transaction(function () use ($d, $by, $receiverData) {
+            // P3.1 — Re-read the delivery under an exclusive row lock so that
+            // two concurrent confirm() calls cannot both pass the status check
+            // and both write a confirmed state / draft invoice.
+            $locked = Delivery::whereKey($d->id)->lockForUpdate()->first();
+
+            if (! $locked) {
+                throw new RuntimeException('Delivery not found.');
+            }
+
+            $lockedStatus = $locked->status instanceof DeliveryStatus
+                ? $locked->status
+                : DeliveryStatus::from((string) $locked->status);
+
+            // Already confirmed by a concurrent request — no-op.
+            if ($lockedStatus === DeliveryStatus::Confirmed) {
+                return $this->show($locked);
+            }
+
+            if ($lockedStatus !== DeliveryStatus::Delivered) {
+                throw new RuntimeException('Only delivered deliveries can be confirmed.');
+            }
+
+            // ADV7 — Block confirmation without proof. This is the legally
+            // defensible record for any future customer dispute.
+            if ($locked->proofs()->count() === 0) {
+                throw new RuntimeException('At least one proof of delivery (signed DR or photo) must be uploaded before confirming.');
+            }
+
+            $patch = [
                 'status'       => DeliveryStatus::Confirmed->value,
                 'confirmed_at' => now(),
                 'confirmed_by' => $by->id,
-            ])->save();
+            ];
+            if (! empty($receiverData['receiver_name']))     $patch['receiver_name']     = $receiverData['receiver_name'];
+            if (! empty($receiverData['receiver_position'])) $patch['receiver_position'] = $receiverData['receiver_position'];
+            if (! empty($receiverData['delivery_remarks']))  $patch['delivery_remarks']  = $receiverData['delivery_remarks'];
+            if (! $locked->received_at) $patch['received_at'] = now();
+            $locked->forceFill($patch)->save();
+            // Keep $d in sync with the locked copy so callers see the new state.
+            $d->forceFill($patch);
 
             // Auto-create draft invoice (best-effort — Accounting may be disabled).
             $invoiceId = null;
             try {
-                $invoiceId = $this->createDraftInvoice($d, $by);
+                $invoiceId = $this->createDraftInvoice($locked, $by);
                 if ($invoiceId) {
-                    $d->forceFill(['invoice_id' => $invoiceId])->save();
+                    $locked->forceFill(['invoice_id' => $invoiceId])->save();
                 }
             } catch (\Throwable) {
                 // Skip silently — manual invoicing remains possible.
@@ -238,7 +323,7 @@ class DeliveryService
             // Task A4 — fan out a DeliveryConfirmed event after commit so
             // listeners (Finance notification, dashboard refresh) only see
             // the persisted state.
-            $delivery = $this->show($d);
+            $delivery = $this->show($locked);
             DB::afterCommit(function () use ($delivery, $invoiceId, $by) {
                 DeliveryConfirmed::dispatch($delivery, $invoiceId);
                 // Series C — Task C4. Real-time chain progress.
@@ -282,7 +367,7 @@ class DeliveryService
             throw new RuntimeException('Cannot delete a confirmed delivery (an invoice may be attached).');
         }
         DB::transaction(function () use ($d) {
-            if ($d->receipt_photo_path) Storage::disk('public')->delete($d->receipt_photo_path);
+            if ($d->receipt_photo_path) Storage::disk('local')->delete($d->receipt_photo_path);
             $d->delete();
         });
     }

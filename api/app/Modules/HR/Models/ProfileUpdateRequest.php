@@ -17,16 +17,22 @@ class ProfileUpdateRequest extends Model
         'employee_id',
         'requested_by',
         'status',
+        'requires_finance',
         'changes',
         'note',
         'reviewed_by',
         'reviewed_at',
         'review_remarks',
+        'finance_reviewed_by',
+        'finance_reviewed_at',
+        'finance_remarks',
     ];
 
     protected $casts = [
-        'changes'     => 'array',
-        'reviewed_at' => 'datetime',
+        'changes'             => 'array',
+        'requires_finance'    => 'boolean',
+        'reviewed_at'         => 'datetime',
+        'finance_reviewed_at' => 'datetime',
     ];
 
     public function employee(): BelongsTo
@@ -42,5 +48,10 @@ class ProfileUpdateRequest extends Model
     public function reviewer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reviewed_by');
+    }
+
+    public function financeReviewer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'finance_reviewed_by');
     }
 }

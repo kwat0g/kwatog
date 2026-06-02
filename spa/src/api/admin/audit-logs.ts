@@ -11,7 +11,7 @@ export interface AuditLogEntry {
   ip_address: string | null;
   user_agent: string | null;
   created_at: string;
-  user?: { id: string; name: string; email: string };
+  user?: { id: string; name: string; email: string; role: { name: string; slug: string } | null };
 }
 
 export interface AuditLogParams extends ListParams {

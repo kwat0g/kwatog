@@ -21,6 +21,11 @@ export default function EditProductPage() {
         title={data ? `Edit ${data.part_number}` : 'Edit product'}
         backTo={data ? `/crm/products/${data.id}` : '/crm/products'}
         backLabel={data?.part_number ?? 'Products'}
+        breadcrumbs={[
+          { label: 'CRM' },
+          { label: 'Products', href: '/crm/products' },
+          { label: data ? `Edit ${data.part_number}` : 'Edit product' },
+        ]}
       />
       {isLoading && <SkeletonForm />}
       {isError && (

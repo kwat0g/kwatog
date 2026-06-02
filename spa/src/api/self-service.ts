@@ -4,6 +4,9 @@ import type {
   SelfServiceLoansResponse,
   SelfServiceProfile,
   ProfileUpdateRequestRecord,
+  SelfServiceOvertimeResponse,
+  ApplyOvertimePayload,
+  SelfServiceDocumentsResponse,
 } from '@/types/self-service';
 
 /** U3 — Self-service portal endpoints (always scoped to current user). */
@@ -36,4 +39,36 @@ export const selfServiceApi = {
     client
       .get<{ data: ProfileUpdateRequestRecord[] }>('/hr/self-service/profile/update-requests')
       .then((r) => r.data.data),
+
+  // ─── Overtime (SS1) ─────────────────────────────────────────────
+  overtime: () =>
+    client
+      .get<{ data: SelfServiceOvertimeResponse }>('/hr/self-service/overtime')
+      .then((r) => r.data.data),
+
+  applyOvertime: (payload: ApplyOvertimePayload) =>
+    client
+      .post<{ message: string; data: { id: string; status: string } }>(
+        '/hr/self-service/overtime',
+        payload,
+      )
+      .then((r) => r.data),
+
+  // ─── Documents (SS3) ────────────────────────────────────────────
+  documents: () =>
+    client
+      .get<{ data: SelfServiceDocumentsResponse }>('/hr/self-service/documents')
+      .then((r) => r.data.data),
+
+  /**
+   * Absolute URLs for PDF downloads. The browser sends the session cookie on
+   * <a href> navigation, so we never fetch the blob in JS — matches the
+   * payslip download pattern.
+   */
+  employmentCertificateUrl: (withSalary = false) =>
+    `/api/v1/hr/self-service/documents/employment-certificate${withSalary ? '?with_salary=1' : ''}`,
+  contributionCertificateUrl: (type: 'sss' | 'philhealth' | 'pagibig', year?: number) =>
+    `/api/v1/hr/self-service/documents/contributions/${type}${year ? `?year=${year}` : ''}`,
+  bir2316Url: (year?: number) =>
+    `/api/v1/hr/self-service/documents/bir-2316${year ? `?year=${year}` : ''}`,
 };

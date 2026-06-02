@@ -1,6 +1,6 @@
 import { client } from '../client';
 import type { ApiSuccess, PaginatedResponse, ListParams } from '@/types';
-import type { PurchaseOrder, CreatePurchaseOrderData, ThreeWayMatchResult } from '@/types/purchasing';
+import type { PurchaseOrder, CreatePurchaseOrderData, ThreeWayMatchResult, ProcurementChainOverview } from '@/types/purchasing';
 
 export const purchaseOrdersApi = {
   list: (params?: ListParams & { status?: string; vendor_id?: string; requires_vp_approval?: boolean | string; from?: string; to?: string }) =>
@@ -25,6 +25,12 @@ export const purchaseOrdersApi = {
   close: (id: string) =>
     client.patch<ApiSuccess<PurchaseOrder>>(`/purchasing/purchase-orders/${id}/close`).then((r) => r.data.data),
   pdfUrl: (id: string) => `/api/v1/purchasing/purchase-orders/${id}/pdf`,
+};
+
+/* ─── ADV5 — Procurement Chain overview ─── */
+export const procurementChainApi = {
+  overview: () =>
+    client.get<{ data: ProcurementChainOverview }>('/purchasing/chain').then((r) => r.data.data),
 };
 
 export const threeWayMatchApi = {

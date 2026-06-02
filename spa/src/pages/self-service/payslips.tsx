@@ -1,7 +1,7 @@
 /** Sprint 8 — Task 74 + Sprint P5. Self-service payslips, mobile-card layout. */
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Download } from 'lucide-react';
+import { Download, CheckCircle2, Clock } from 'lucide-react';
 import { payrollsApi, type PayrollListParams } from '@/api/payroll/payrolls';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -83,11 +83,22 @@ export default function SelfServicePayslipsPage() {
                   <Stat label="Net" value={formatPeso(p.net_pay)} bold />
                 </div>
 
-                <div className="mt-2">
+                <div className="mt-2 flex items-center gap-2">
                   {p.error_message ? (
                     <Chip variant="danger">Error</Chip>
                   ) : (
-                    <Chip variant="success">Ready</Chip>
+                    <Chip variant="success">Computed</Chip>
+                  )}
+                  {/* ADV1 — Show disbursement status if available */}
+                  {p.period_disbursement_status === 'disbursed' && (
+                    <span className="inline-flex items-center gap-1 text-xs text-success">
+                      <CheckCircle2 size={12} /> Disbursed
+                    </span>
+                  )}
+                  {p.period_disbursement_status === 'pending' && !p.error_message && (
+                    <span className="inline-flex items-center gap-1 text-xs text-muted">
+                      <Clock size={12} /> Awaiting disbursement
+                    </span>
                   )}
                 </div>
               </div>

@@ -15,6 +15,11 @@ class Position extends Model
 {
     use HasFactory, HasHashId, HasAuditLog;
 
+    protected static function newFactory(): \Database\Factories\PositionFactory
+    {
+        return \Database\Factories\PositionFactory::new();
+    }
+
     protected $fillable = [
         'title',
         'department_id',

@@ -79,6 +79,7 @@ export default function MaintenanceWorkOrderDetailPage() {
         subtitle={data.maintainable ? `${data.maintainable_type} · ${data.maintainable.name}` : undefined}
         backTo="/maintenance/work-orders"
         backLabel="Work orders"
+        breadcrumbs={[{ label: 'Maintenance', href: '/maintenance' }, { label: 'Work Orders', href: '/maintenance/work-orders' }, { label: data.mwo_number }]}
         actions={
           <div className="flex gap-1.5">
             <Chip variant={STATUS_CHIP[data.status]}>{data.status.replace('_', ' ')}</Chip>

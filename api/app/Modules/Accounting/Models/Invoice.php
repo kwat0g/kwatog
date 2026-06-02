@@ -18,6 +18,11 @@ class Invoice extends Model
 {
     use HasFactory, HasHashId, HasAuditLog;
 
+    protected static function newFactory(): \Database\Factories\InvoiceFactory
+    {
+        return \Database\Factories\InvoiceFactory::new();
+    }
+
     protected $fillable = [
         'invoice_number', 'customer_id', 'sales_order_id', 'delivery_id',
         'date', 'due_date', 'is_vatable',

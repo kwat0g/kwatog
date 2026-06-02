@@ -11,9 +11,11 @@ use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Services\Statements\BalanceSheetService;
 use App\Modules\Accounting\Services\Statements\IncomeStatementService;
 use App\Modules\Accounting\Services\Statements\TrialBalanceService;
+use App\Modules\Purchasing\Models\PurchaseOrder;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Generates PDFs for printable accounting artifacts using DomPDF.
@@ -83,6 +85,29 @@ class PdfService
             'user'    => optional(request()->user())->name,
         ])->setPaper('a4');
         return $pdf->stream("IncomeStatement-{$from->toDateString()}-{$to->toDateString()}.pdf");
+    }
+
+    public function purchaseOrder(PurchaseOrder $po): Response
+    {
+        $po->load(['vendor', 'items.item']);
+
+        $approvals = collect();
+        if (method_exists($po, 'approvalRecords') && $po->relationLoaded('approvalRecords')) {
+            $approvals = $po->approvalRecords->map(fn ($r) => [
+                'role'      => $r->role?->label ?? $r->role_slug,
+                'name'      => $r->approver?->name,
+                'signed_at' => optional($r->acted_at)->toDateString(),
+            ]);
+        }
+
+        $pdf = Pdf::loadView('pdf.purchase-order', [
+            'po'        => $po,
+            'company'   => $this->company(),
+            'user'      => optional(request()->user())->name,
+            'now'       => now(),
+            'approvals' => $approvals,
+        ])->setPaper('a4');
+        return $pdf->stream("{$po->po_number}.pdf");
     }
 
     public function balanceSheet(Carbon $asOf): Response

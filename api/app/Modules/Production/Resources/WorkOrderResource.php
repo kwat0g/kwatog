@@ -14,6 +14,9 @@ class WorkOrderResource extends JsonResource
         return [
             'id'                  => $this->hash_id,
             'wo_number'           => $this->wo_number,
+            // ADV3 — IATF 16949 traceability fields.
+            'batch_number'            => $this->batch_number,
+            'material_lot_references' => $this->material_lot_references ?? [],
             'product'             => $this->whenLoaded('product', fn () => [
                 'id' => $this->product->hash_id,
                 'part_number' => $this->product->part_number,
