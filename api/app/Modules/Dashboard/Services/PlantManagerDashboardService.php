@@ -118,24 +118,6 @@ class PlantManagerDashboardService
             ->sum('good_count');
     }
 
-    private function revenueWeek(): string
-    {
-        if (! Schema::hasTable('invoices')) return '0.00';
-        $sum = (float) DB::table('invoices')
-            ->whereBetween('date', [now()->startOfWeek(), now()->endOfWeek()])
-            ->sum('total_amount');
-        return number_format($sum, 2, '.', '');
-    }
-
-    private function productionWeek(): string
-    {
-        if (! Schema::hasTable('work_order_outputs')) return '0';
-        $sum = (int) DB::table('work_order_outputs')
-            ->whereBetween('recorded_at', [now()->startOfWeek(), now()->endOfWeek()])
-            ->sum('good_count');
-        return (string) $sum;
-    }
-
     private function oeeToday(): string
     {
         if (! Schema::hasTable('work_order_outputs')) return '0.0';

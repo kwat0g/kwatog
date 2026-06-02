@@ -96,7 +96,10 @@ export default function CreateSalesOrderPage() {
       };
       const so = await salesOrdersApi.create(payload);
       if (submitMode === 'confirm') {
-        return salesOrdersApi.confirm(so.id);
+        // confirm() returns { data, chain_result } — unwrap to the SalesOrder
+        // so the mutation result type is always SalesOrder.
+        const confirmed = await salesOrdersApi.confirm(so.id);
+        return confirmed.data;
       }
       return so;
     },

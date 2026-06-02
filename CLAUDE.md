@@ -46,7 +46,7 @@ React 18 SPA (Vite + TypeScript) ←HTTP-only cookies→ Laravel 11 REST API (PH
 
 Fully decoupled. API at `/api/v1/*`, SPA at `/*`, WebSocket at `/ws`. Docker Compose.
 
-## MODULES (12)
+## MODULES (17)
 
 | # | Module | Chains |
 |---|---|---|
@@ -55,20 +55,30 @@ Fully decoupled. API at `/api/v1/*`, SPA at `/*`, WebSocket at `/ws`. Docker Com
 | 3 | Leave (types, balances, approval workflow) | 3 |
 | 4 | Payroll (engine, gov deductions, payslip, bank file, 13th month) | 3 |
 | 5 | Loans (company loan + cash advance, auto-deduction) | 3 |
-| 6 | Accounting (COA, JE, AP, AR, VAT, financial statements) | all |
+| 6 | Accounting (COA, JE, AP, AR, VAT, financial statements, **budgeting + budget transfers + fiscal year**) | all |
 | 7 | Inventory (items, warehouse, GRN, issue, stock) | 1, 2 |
 | 8 | Purchasing (PR, PO, approval, 3-way match) | 2 |
 | 9 | Supply Chain (shipments, import docs, fleet, delivery) | 1, 2 |
 | 10 | Production (work orders, output, machine downtime, OEE) | 1 |
 | 11 | MRP / MRP II (BOM, material planning, capacity, Gantt, molds) | 1, 2 |
 | 12 | CRM (customers, price agreements, sales orders, complaints, 8D) | 1 |
+| 13 | B2B Portal (supplier + customer self-service portals) | 1, 2 |
+| 14 | Forecasting (demand forecasts) | 1, 2 |
+| 15 | Return Management (RMA / return requests) | 1, 2 |
+| 16 | Assets (fixed assets, depreciation, QR tracking) | 2 |
+| 17 | Budgeting (budgets, budget line items, revisions, transfers, fiscal year) | 6 |
+
+> **Scope note (2026-06):** Modules 13–17 were added beyond the original 12. They
+> are intentional scope expansion and are maintained/tested like the rest.
+> Budgeting lives inside the Accounting module namespace; it is listed separately
+> here for visibility.
 
 Plus: **Quality** (specs, inspections, NCR, CoC at 4 chain touchpoints, not a module), **Maintenance** (machine breakdowns, mold shot tracking, preventive schedules), **Dashboard** (live KPIs, chain stage breakdown, alerts, Pareto).
 
 ## NOT BUILDING (cut scope — scope discipline ships this thesis)
 
-- ❌ Finance module (budgets, cost accounting, cash flow forecasts)
-- ❌ Bank reconciliation, budget approval/transfers, closing wizards, fiscal period locking
+- ❌ Cost accounting, cash flow forecasts
+- ❌ Bank reconciliation, closing wizards, fiscal period locking
 - ❌ Tax compliance calendar
 - ❌ Customizable dashboards (react-grid-layout), saved views scheduling, automation rule builder UI
 - ❌ Setup wizard, guided tours, onboarding system, announcements, changelog, feedback form
