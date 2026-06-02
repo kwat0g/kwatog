@@ -14,9 +14,9 @@ final class StockMovementInput
     public function __construct(
         public readonly StockMovementType $type,
         public readonly int $itemId,
+        public readonly string $quantity,        // positive decimal string (required)
         public readonly ?int $fromLocationId = null,
         public readonly ?int $toLocationId = null,
-        public readonly string $quantity,        // positive decimal string
         public readonly ?string $unitCost = null,       // null for issues (use current WAC)
         public readonly ?string $referenceType = null,
         public readonly ?int $referenceId = null,

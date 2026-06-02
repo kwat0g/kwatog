@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Inventory\Services;
 
 use App\Common\Services\DocumentSequenceService;
+use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\ReorderMethod;
 use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Models\Item;
@@ -44,8 +45,12 @@ class AutoReplenishmentService
                 if ($auto !== null) {
                     return null; // PR workflow short-circuited
                 }
-            } catch (\Throwable) {
-                // Fall through to PR workflow on any auto-PO failure.
+            } catch (\Throwable $e) {
+                // Fall through to PR workflow on any auto-PO failure, but record why.
+                \Illuminate\Support\Facades\Log::warning(
+                    "AutoReplenishment: auto-PO failed for item {$item->code}, falling back to PR: {$e->getMessage()}",
+                    ['item_id' => $item->id, 'exception' => $e::class]
+                );
             }
         }
 
@@ -60,13 +65,19 @@ class AutoReplenishmentService
             ->exists();
         if ($hasOpen) return null;
 
+        // Auto-PRs are system-initiated; attribute to a system_admin (fallback:
+        // first user). If no user exists at all, skip rather than hit the
+        // non-null requested_by FK with a bogus id.
+        $systemUserId = $this->systemUserId();
+        if ($systemUserId === null) return null;
+
         $orderQty = $this->computeOrderQuantity($item);
         $priority = $available <= $safety ? PurchaseRequestPriority::Critical : PurchaseRequestPriority::Urgent;
 
-        return DB::transaction(function () use ($item, $orderQty, $priority) {
+        return DB::transaction(function () use ($item, $orderQty, $priority, $systemUserId) {
             $pr = PurchaseRequest::create([
                 'pr_number'         => $this->sequences->generate('pr'),
-                'requested_by'      => 1, // System / admin user — first user. Real impl picks from settings.
+                'requested_by'      => $systemUserId,
                 'department_id'     => null,
                 'date'              => now()->toDateString(),
                 'reason'            => "Auto-generated: {$item->code} below reorder point.",
@@ -85,6 +96,19 @@ class AutoReplenishmentService
             ]);
             return $pr;
         });
+    }
+
+    /**
+     * Resolve the user an auto-generated PR is attributed to: a system_admin
+     * if one exists, else the lowest user id. Null only when there are no users.
+     */
+    private function systemUserId(): ?int
+    {
+        $adminId = User::query()
+            ->whereHas('role', fn ($q) => $q->where('slug', 'system_admin'))
+            ->min('id');
+
+        return $adminId !== null ? (int) $adminId : (User::query()->min('id') !== null ? (int) User::query()->min('id') : null);
     }
 
     private function computeOrderQuantity(Item $item): string

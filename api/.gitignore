@@ -22,3 +22,6 @@ yarn-error.log
 /.vscode
 /.zed
 storage/app/admin-credentials.txt
+# Runtime-generated documents (CoC, work-order travelers, proofs, payslips)
+storage/app/documents/
+storage/app/public/

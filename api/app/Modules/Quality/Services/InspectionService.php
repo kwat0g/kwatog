@@ -302,9 +302,13 @@ class InspectionService
                             $inspection->fresh(['measurements']),
                             $by,
                         );
-                    } catch (\Throwable) {
-                        // NCR module may not be bootable in some test contexts —
-                        // failing to auto-open is non-fatal for the inspection.
+                    } catch (\Throwable $e) {
+                        // Auto-opening the NCR is non-fatal for the inspection,
+                        // but a silent miss is an IATF traceability gap — log it.
+                        \Illuminate\Support\Facades\Log::warning(
+                            "InspectionService: failed to auto-open NCR for inspection {$inspection->id}: {$e->getMessage()}",
+                            ['inspection_id' => $inspection->id, 'exception' => $e::class]
+                        );
                     }
                     // Series C — Task C1/C2. Domain event for chain listeners.
                     event(new \App\Modules\Quality\Events\InspectionFailed($inspection->fresh()));

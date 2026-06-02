@@ -10,6 +10,17 @@ use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Support\ThreeWayMatchResult;
 
+/**
+ * Variance check gating AP bill approval.
+ *
+ * DESIGN NOTE (intentional): variance tolerance is computed PO-vs-Bill only.
+ * GRN received quantities/costs ARE loaded and surfaced on each result line
+ * (`grn_quantity_accepted`, `grn_unit_cost`) for the reviewer, but they do NOT
+ * affect the matched/has_variances/blocked status. This is effectively a
+ * 2-way (PO↔Bill) gate with GRN shown for context. Making GRN-received a hard
+ * gate is a deliberate financial-control change — do not "fix" it silently;
+ * raise it as a policy decision first.
+ */
 class ThreeWayMatchService
 {
     public function __construct(private readonly SettingsService $settings) {}

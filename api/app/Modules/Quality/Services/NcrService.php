@@ -168,7 +168,13 @@ class NcrService
                     'read_at'         => null,
                 ]);
             }
-        } catch (\Throwable) {}
+        } catch (\Throwable $e) {
+            // NCR is already persisted; only the QC notification fan-out failed.
+            \Illuminate\Support\Facades\Log::warning(
+                "NcrService: failed to notify on NCR {$ncr->ncr_number}: {$e->getMessage()}",
+                ['ncr_id' => $ncr->id, 'exception' => $e::class]
+            );
+        }
 
         return $ncr;
     }
