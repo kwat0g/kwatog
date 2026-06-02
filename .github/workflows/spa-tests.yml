@@ -1,10 +1,9 @@
 name: SPA tests
 
-# Sprint 8 — Task 81. SPA-side CI: typecheck, lint, vitest, production build.
-# Existing pre-Sprint-8 type errors and lint warnings are baseline-grandfathered
-# via continue-on-error on lint/typecheck so this workflow surfaces NEW
-# regressions without blocking the PR on the legacy debt. Vitest + build are
-# enforced.
+# SPA-side CI: typecheck, lint, vitest, production build.
+# Typecheck is now ENFORCED — the legacy Sprint 1/2 type errors were cleared,
+# so `tsc --noEmit` is clean and any NEW type error blocks the PR. Lint stays
+# advisory (pre-existing no-explicit-any debt). Vitest + build are enforced.
 
 on:
   pull_request:
@@ -46,8 +45,7 @@ jobs:
         continue-on-error: true
         run: npm run lint
 
-      - name: Typecheck (advisory)
-        continue-on-error: true
+      - name: Typecheck (enforced)
         run: npm run typecheck
 
       - name: Vitest
