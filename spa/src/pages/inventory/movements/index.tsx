@@ -64,7 +64,7 @@ export default function StockMovementsPage() {
 
   return (
     <div>
-      <PageHeader title="Stock movements" subtitle={data ? `${data.meta.total} movements` : undefined} />
+      <PageHeader title="Stock movements" backTo="/inventory/items" backLabel="Items" subtitle={data ? `${data.meta.total} movements` : undefined} />
       <FilterBar filters={filterConfig} values={filters}
         onSearch={() => undefined}
         onFilter={(k, v) => setFilters((f: any) => ({ ...f, [k]: v, page: 1 }))}

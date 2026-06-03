@@ -156,6 +156,8 @@ export default function ItemCategoriesPage() {
     <div>
       <PageHeader
         title="Item categories"
+        backTo="/inventory/items"
+        backLabel="Items"
         subtitle={tree.data ? `${rows.length} ${rows.length === 1 ? 'category' : 'categories'}` : undefined}
         actions={
           canManage ? (

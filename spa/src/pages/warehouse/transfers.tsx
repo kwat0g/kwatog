@@ -95,6 +95,8 @@ export default function TransferOrdersPage() {
     <div>
       <PageHeader
         title="Transfer Orders"
+        backTo="/inventory/items"
+        backLabel="Items"
         subtitle={transfers ? `${transfers.length} transfers` : undefined}
         actions={canManage ? (
           <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => setShowCreateModal(true)}>

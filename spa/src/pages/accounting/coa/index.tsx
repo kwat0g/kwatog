@@ -45,6 +45,8 @@ export default function ChartOfAccountsPage() {
     <div>
       <PageHeader
         title="Chart of Accounts"
+        backTo="/accounting/journal-entries"
+        backLabel="Journal Entries"
         subtitle={data ? `${countAll(data)} accounts` : undefined}
         actions={
           <div className="flex gap-1.5">

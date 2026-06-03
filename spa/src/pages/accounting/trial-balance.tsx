@@ -26,6 +26,8 @@ export default function TrialBalancePage() {
     <div>
       <PageHeader
         title="Trial Balance"
+        backTo="/accounting/journal-entries"
+        backLabel="Journal Entries"
         actions={
           <div className="flex gap-1.5">
             <a href={statementsApi.csvUrl('trial-balance', { from, to })}>

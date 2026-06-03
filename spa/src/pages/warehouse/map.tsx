@@ -49,6 +49,8 @@ export default function WarehouseMapPage() {
     <div>
       <PageHeader
         title="Warehouse Map"
+        backTo="/inventory/items"
+        backLabel="Items"
         subtitle={data ? `${data.length} ${data.length === 1 ? 'warehouse' : 'warehouses'}` : undefined}
       />
       <div className="px-5 py-4 space-y-4">

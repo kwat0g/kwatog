@@ -48,7 +48,7 @@ export default function StockLevelsPage() {
 
   return (
     <div>
-      <PageHeader title="Stock levels" subtitle={data ? `${data.meta.total} entries` : undefined} />
+      <PageHeader title="Stock levels" backTo="/inventory/items" backLabel="Items" subtitle={data ? `${data.meta.total} entries` : undefined} />
       <FilterBar filters={filterConfig} values={filters}
         onSearch={(s) => setFilters((f: any) => ({ ...f, search: s, page: 1 }))}
         onFilter={(k, v) => setFilters((f: any) => ({ ...f, [k]: v, page: 1 }))}

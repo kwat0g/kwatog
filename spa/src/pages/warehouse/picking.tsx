@@ -35,6 +35,8 @@ export default function PickingListPage() {
     <div>
       <PageHeader
         title="Picking Lists"
+        backTo="/inventory/items"
+        backLabel="Items"
         subtitle={slipResp ? `${slips.length} ready to pick` : undefined}
       />
 

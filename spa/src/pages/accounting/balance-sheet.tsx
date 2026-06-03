@@ -22,6 +22,8 @@ export default function BalanceSheetPage() {
     <div>
       <PageHeader
         title="Balance Sheet"
+        backTo="/accounting/journal-entries"
+        backLabel="Journal Entries"
         actions={
           <div className="flex gap-1.5">
             <a href={statementsApi.csvUrl('balance-sheet', { as_of: asOf })}>

@@ -136,6 +136,8 @@ export default function StockCountPage() {
     <div>
       <PageHeader
         title="Stock Count"
+        backTo="/inventory/items"
+        backLabel="Items"
         subtitle={sessions ? `${sessions.length} sessions` : undefined}
         actions={canManage ? (
           <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => setShowCreateModal(true)}>

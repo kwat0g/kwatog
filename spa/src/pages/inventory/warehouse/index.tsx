@@ -115,6 +115,8 @@ export default function WarehousePage() {
     <div>
       <PageHeader
         title="Warehouse structure"
+        backTo="/inventory/items"
+        backLabel="Items"
         subtitle={data ? `${data.length} ${data.length === 1 ? 'warehouse' : 'warehouses'}` : undefined}
         actions={
           canManage ? (
