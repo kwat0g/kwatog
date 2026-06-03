@@ -82,7 +82,7 @@ export default function HrHubPage() {
               <NavTile to="/hr/positions" icon={Briefcase} label="Positions" description="Job titles and roles" />
               <NavTile to="/hr/directory" icon={BookUser} label="Directory" description="Employee lookup" />
               <NavTile to="/hr/separations" icon={UserX} label="Separations" description="Resignation and clearance" />
-              <NavTile to="/hr/profile-requests" icon={FileEdit} label="Profile Requests" description="Employee data change requests" />
+              <NavTile to="/hr/profile-update-requests" icon={FileEdit} label="Profile Requests" description="Employee data change requests" />
               <NavTile to="/hr/loans" icon={DollarSign} label="Loans" description="Company loans and cash advances" />
             </div>
           </div>

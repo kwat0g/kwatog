@@ -78,8 +78,9 @@ export default function MaintenanceHubPage() {
               <NavTile to="/maintenance/work-orders" icon={Wrench} label="Work Orders" description="Corrective and preventive tasks" />
               <NavTile to="/maintenance/schedules" icon={Calendar} label="Schedules" description="Preventive maintenance plans" />
               <NavTile to="/maintenance/machine-health" icon={Activity} label="Machine Health" description="Real-time condition monitoring" />
-              <NavTile to="/maintenance/downtime-analytics" icon={Clock} label="Downtime Analytics" description="MTBF and MTTR reports" />
+              <NavTile to="/maintenance/downtime" icon={Clock} label="Downtime Analytics" description="MTBF and MTTR reports" />
               <NavTile to="/assets" icon={Package} label="Assets" description="Fixed asset registry" />
+              <NavTile to="/admin/depreciation" icon={Clock} label="Depreciation" description="Asset depreciation runs" />
             </div>
           </div>
         </>

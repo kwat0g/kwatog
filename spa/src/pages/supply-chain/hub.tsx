@@ -83,7 +83,7 @@ export default function SupplyChainHubPage() {
               <NavTile to="/supply-chain/deliveries" icon={Truck} label="Deliveries" description="Outbound customer deliveries" />
               <NavTile to="/supply-chain/shipments" icon={Package} label="Shipments" description="Inbound supplier shipments" />
               <NavTile to="/supply-chain/fleet" icon={Car} label="Fleet" description="Company vehicles" />
-              <NavTile to="/supply-chain/returns" icon={RotateCcw} label="Return Management" description="RMA and return requests" />
+              <NavTile to="/return-management" icon={RotateCcw} label="Return Management" description="RMA and return requests" />
             </div>
           </div>
         </>

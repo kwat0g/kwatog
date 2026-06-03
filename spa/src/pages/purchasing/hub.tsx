@@ -21,7 +21,7 @@ export default function PurchasingHubPage() {
   const stats: HubStat[] = [
     { label: 'Pending PRs', value: pendingPrs, linkTo: '/purchasing/purchase-requests' },
     { label: 'Open POs', value: openPos, linkTo: '/purchasing/purchase-orders' },
-    { label: 'Approved Suppliers', value: approvedSuppliers, linkTo: '/purchasing/suppliers' },
+    { label: 'Approved Suppliers', value: approvedSuppliers, linkTo: '/purchasing/approved-suppliers' },
     { label: 'Avg Lead Time', value: `${avgLeadTime} days` },
   ];
 
@@ -71,10 +71,10 @@ export default function PurchasingHubPage() {
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
               <NavTile to="/purchasing/purchase-requests" icon={FileText} label="Purchase Requests" description="Material requisitions" />
               <NavTile to="/purchasing/purchase-orders" icon={ShoppingCart} label="Purchase Orders" description="Supplier POs" />
-              <NavTile to="/purchasing/suppliers" icon={Building} label="Approved Suppliers" description="Supplier registry" />
+              <NavTile to="/purchasing/approved-suppliers" icon={Building} label="Approved Suppliers" description="Supplier registry" />
               <NavTile to="/purchasing/pr-templates" icon={FileText} label="PR Templates" description="Recurring purchase patterns" />
-              <NavTile to="/purchasing/procurement-chain" icon={GitBranch} label="Procurement Chain" description="End-to-end tracking" />
-              <NavTile to="/purchasing/supplier-performance" icon={BarChart} label="Supplier Performance" description="Lead time and quality" />
+              <NavTile to="/purchasing/chain" icon={GitBranch} label="Procurement Chain" description="End-to-end tracking" />
+              <NavTile to="/forecasting/stock-out" icon={BarChart} label="Stock-out Forecast" description="Projected shortages" />
             </div>
           </div>
         </>

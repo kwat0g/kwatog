@@ -78,7 +78,7 @@ export default function AccountingHubPage() {
               <NavTile to="/accounting/trial-balance" icon={BarChart} label="Trial Balance" description="Account balances" />
               <NavTile to="/accounting/income-statement" icon={TrendingUp} label="Income Statement" description="P&L report" />
               <NavTile to="/accounting/balance-sheet" icon={FileBarChart} label="Balance Sheet" description="Assets, liabilities, equity" />
-              <NavTile to="/accounting/budgets" icon={TrendingUp} label="Budgets" description="Budget planning and tracking" />
+              <NavTile to="/budgeting" icon={TrendingUp} label="Budgets" description="Budget planning and tracking" />
             </div>
           </div>
         </>

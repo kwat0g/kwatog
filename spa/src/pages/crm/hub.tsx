@@ -79,7 +79,8 @@ export default function CrmHubPage() {
               <NavTile to="/crm/products" icon={Package} label="Products" description="Finished goods catalog" />
               <NavTile to="/crm/price-agreements" icon={DollarSign} label="Price Agreements" description="Customer pricing contracts" />
               <NavTile to="/crm/complaints" icon={MessageSquare} label="Complaints" description="Customer complaints and 8D" />
-              <NavTile to="/crm/customers" icon={Users} label="Customers" description="Customer accounts" />
+              <NavTile to="/accounting/customers" icon={Users} label="Customers" description="Customer accounts" />
+              <NavTile to="/forecasting/demand" icon={ShoppingCart} label="Demand Forecast" description="Projected customer demand" />
             </div>
           </div>
         </>
