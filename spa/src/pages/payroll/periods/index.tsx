@@ -125,10 +125,17 @@ export default function PayrollPeriodsPage() {
       <PageHeader
         title="Payroll Periods"
         subtitle={data ? `${data.meta.total} periods` : undefined}
-        backTo="/payroll/hub"
-        backLabel="Payroll"
         actions={
           <>
+            <Button variant="secondary" size="sm" onClick={() => navigate('/payroll/adjustments')}>
+              Adjustments
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => navigate('/payroll/pipeline')}>
+              Pipeline
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => navigate('/admin/gov-tables')}>
+              Gov Tables
+            </Button>
             {canRunThirteenth && (
               <Button
                 variant="secondary" size="sm" icon={<CalendarRange size={14} />}
