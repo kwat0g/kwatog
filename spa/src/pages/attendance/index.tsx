@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Upload, Calendar } from 'lucide-react';
+import { Upload, Calendar, Clock, Sun } from 'lucide-react';
 import { attendancesApi, type AttendanceListParams } from '@/api/attendance/attendances';
 import { departmentsApi } from '@/api/hr/departments';
 import { Button } from '@/components/ui/Button';
@@ -96,12 +96,16 @@ export default function AttendancePage() {
       <PageHeader
         title="Daily Time Records"
         subtitle={data ? `${data.meta.total.toLocaleString()} records` : undefined}
-        backTo="/hr/attendance/hub"
-        backLabel="Attendance"
         actions={
           <>
             <Button variant="secondary" size="sm" icon={<Calendar size={14} />} onClick={() => navigate('/hr/attendance/overtime')}>
               Overtime
+            </Button>
+            <Button variant="secondary" size="sm" icon={<Clock size={14} />} onClick={() => navigate('/hr/attendance/shifts')}>
+              Shifts
+            </Button>
+            <Button variant="secondary" size="sm" icon={<Sun size={14} />} onClick={() => navigate('/hr/attendance/holidays')}>
+              Holidays
             </Button>
             {can('attendance.import') && (
               <Button variant="primary" size="sm" icon={<Upload size={14} />} onClick={() => navigate('/hr/attendance/import')}>
