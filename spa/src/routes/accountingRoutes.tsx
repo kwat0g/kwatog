@@ -4,7 +4,6 @@ import { ModuleGuard } from '@/components/guards/ModuleGuard';
 import { PermissionGuard } from '@/components/guards/PermissionGuard';
 
 // Accounting (Sprint 4 — Tasks 31-37)
-const AccountingHubPage      = lazy(() => import('@/pages/accounting/hub'));
 const ChartOfAccountsPage    = lazy(() => import('@/pages/accounting/coa'));
 const JournalEntriesPage     = lazy(() => import('@/pages/accounting/journal-entries'));
 const CreateJournalEntryPage = lazy(() => import('@/pages/accounting/journal-entries/create'));
@@ -31,9 +30,7 @@ export const accountingRoutes = (
   <>
     {/* Accounting module (Sprint 4) */}
     <Route element={<ModuleGuard module="accounting" />}>
-      <Route path="/accounting" element={<Navigate to="/accounting/hub" replace />} />
-      <Route path="/accounting/hub"
-        element={<PermissionGuard permission="accounting.coa.view"><AccountingHubPage /></PermissionGuard>} />
+      <Route path="/accounting" element={<Navigate to="/accounting/journal-entries" replace />} />
 
       <Route path="/accounting/coa"
         element={<PermissionGuard permission="accounting.coa.view"><ChartOfAccountsPage /></PermissionGuard>} />

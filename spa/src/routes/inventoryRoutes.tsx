@@ -4,7 +4,6 @@ import { ModuleGuard } from '@/components/guards/ModuleGuard';
 import { PermissionGuard } from '@/components/guards/PermissionGuard';
 
 // Inventory (Sprint 5 — Tasks 39-41, 46)
-const InventoryHubPage          = lazy(() => import('@/pages/inventory/hub'));
 const InventoryDashboardPage    = lazy(() => import('@/pages/inventory/dashboard'));
 const ItemsListPage             = lazy(() => import('@/pages/inventory/items'));
 const CreateItemPage            = lazy(() => import('@/pages/inventory/items/create'));
@@ -35,9 +34,7 @@ export const inventoryRoutes = (
   <>
     {/* Inventory module (Sprint 5) */}
     <Route element={<ModuleGuard module="inventory" />}>
-      <Route path="/inventory" element={<Navigate to="/inventory/hub" replace />} />
-      <Route path="/inventory/hub"
-        element={<PermissionGuard permission="inventory.view"><InventoryHubPage /></PermissionGuard>} />
+      <Route path="/inventory" element={<Navigate to="/inventory/items" replace />} />
       <Route path="/inventory/dashboard"
         element={<PermissionGuard permission="inventory.view"><InventoryDashboardPage /></PermissionGuard>} />
 

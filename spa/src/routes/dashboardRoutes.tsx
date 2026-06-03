@@ -24,9 +24,6 @@ const CalendarPage       = lazy(() => import('@/pages/calendar'));
 const ApprovalsBoardPage = lazy(() => import('@/pages/approvals'));
 const NotificationsListPage = lazy(() => import('@/pages/notifications'));
 
-// Hub pages — landing pages for secondary sub-features
-const PayrollHubPage = lazy(() => import('@/pages/payroll/hub'));
-const AttendanceHubPage = lazy(() => import('@/pages/attendance/hub'));
 const AdminUsersRolesHubPage = lazy(() => import('@/pages/admin/users-roles'));
 
 const AdminActivityFeedPage = lazy(() => import('@/pages/admin/activity'));
@@ -80,9 +77,6 @@ export const dashboardRoutes = (
       element={<PermissionGuard permission="admin.activity.view"><AdminActivityFeedPage /></PermissionGuard>}
     />
 
-    {/* Hub pages — landing pages that aggregate secondary sub-features */}
-    <Route path="/payroll/hub" element={<PayrollHubPage />} />
-    <Route path="/hr/attendance/hub" element={<AttendanceHubPage />} />
     <Route path="/admin/users-roles" element={<AdminUsersRolesHubPage />} />
 
     {/* Notifications page (Sprint 8 — Task 77) */}
