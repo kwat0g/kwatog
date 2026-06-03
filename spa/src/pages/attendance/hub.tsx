@@ -29,15 +29,12 @@ const TABS: Tab[] = [
   { key: 'leaves', label: 'Leave', to: '/hr/attendance/hub?tab=leaves' },
 ];
 
-/** ── Quick-action buttons shown at the top of the hub ── */
+/** ── Quick-action buttons — only actions not already represented by tabs ── */
 function QuickActions() {
   const quickLinks = [
     { label: 'Daily Records',   to: '/hr/attendance',            icon: '📋' },
-    { label: 'Overtime',        to: '/hr/attendance/overtime',   icon: '⏰' },
-    { label: 'Shifts',          to: '/hr/attendance/shifts',     icon: '🔄' },
-    { label: 'Holidays',        to: '/hr/attendance/holidays',   icon: '🎉' },
-    { label: 'Leave Mgmt',      to: '/hr/leaves',                icon: '📅' },
     { label: 'Import DTR',      to: '/hr/attendance/import',     icon: '📤' },
+    { label: 'Bulk Assign',     to: '/hr/attendance/shifts/assign', icon: '👥' },
   ];
   return (
     <div className="px-5 pt-4 pb-2">

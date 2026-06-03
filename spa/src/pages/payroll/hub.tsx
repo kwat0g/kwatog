@@ -34,14 +34,12 @@ const PERIOD_STATUS_VARIANT: Record<string, 'neutral' | 'info' | 'warning' | 'su
   rejected: 'danger',
 };
 
-/** ── Quick-action buttons shown at the top of the hub ── */
+/** ── Quick-action buttons — only actions not already represented by tabs ── */
 function QuickActions() {
   const quickLinks = [
-    { label: 'All Periods',     to: '/payroll/periods',          icon: '📆' },
     { label: 'New Period',      to: '/payroll/periods/create',   icon: '➕' },
     { label: 'Pipeline',        to: '/payroll/pipeline',         icon: '🔬' },
-    { label: 'Adjustments',     to: '/payroll/adjustments',      icon: '⚖️' },
-    { label: 'Gov Tables',      to: '/admin/gov-tables',         icon: '📊' },
+    { label: 'New Adjustment',  to: '/payroll/adjustments/create', icon: '⚖️' },
   ];
   return (
     <div className="px-5 pt-4 pb-2">

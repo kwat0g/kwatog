@@ -25,15 +25,13 @@ const TABS: Tab[] = [
   { key: 'budgets', label: 'Budgets', to: '/accounting/hub?tab=budgets' },
 ];
 
-/** Quick-action buttons shown at the top of the hub */
+/** Quick-action buttons — create actions only (statements accessible via Statements tab) */
 function QuickActions() {
   const quickLinks = [
     { label: 'New JE',           to: '/accounting/journal-entries/create', icon: '📝' },
     { label: 'New Invoice',      to: '/accounting/invoices/create',        icon: '🧾' },
     { label: 'New Bill',         to: '/accounting/bills/create',           icon: '📄' },
-    { label: 'Trial Balance',    to: '/accounting/trial-balance',          icon: '⚖️' },
-    { label: 'Income Statement', to: '/accounting/income-statement',       icon: '📊' },
-    { label: 'Balance Sheet',    to: '/accounting/balance-sheet',          icon: '📈' },
+    { label: 'New Vendor',       to: '/accounting/vendors/create',         icon: '🏢' },
   ];
   return (
     <div className="px-5 pt-4 pb-2">
