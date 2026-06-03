@@ -1,9 +1,10 @@
 import { lazy } from 'react';
-import { Route } from 'react-router-dom';
+import { Route, Navigate } from 'react-router-dom';
 import { ModuleGuard } from '@/components/guards/ModuleGuard';
 import { PermissionGuard } from '@/components/guards/PermissionGuard';
 
 // HR (Sprint 2 — Tasks 13/14/15)
+const HrHubPage = lazy(() => import('@/pages/hr/hub'));
 const DepartmentsPage = lazy(() => import('@/pages/hr/departments'));
 const PositionsPage = lazy(() => import('@/pages/hr/positions'));
 const EmployeesListPage = lazy(() => import('@/pages/hr/employees'));
@@ -44,6 +45,11 @@ export const hrRoutes = (
   <>
     {/* HR module */}
     <Route element={<ModuleGuard module="hr" />}>
+      <Route path="/hr" element={<Navigate to="/hr/hub" replace />} />
+      <Route
+        path="/hr/hub"
+        element={<PermissionGuard permission="hr.employees.view"><HrHubPage /></PermissionGuard>}
+      />
       <Route
         path="/hr/departments"
         element={<PermissionGuard permission="hr.departments.view"><DepartmentsPage /></PermissionGuard>}

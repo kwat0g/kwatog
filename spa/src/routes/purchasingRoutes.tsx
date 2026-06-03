@@ -4,6 +4,7 @@ import { ModuleGuard } from '@/components/guards/ModuleGuard';
 import { PermissionGuard } from '@/components/guards/PermissionGuard';
 
 // Purchasing (Sprint 5 — Tasks 42-44)
+const PurchasingHubPage         = lazy(() => import('@/pages/purchasing/hub'));
 const PurchaseRequestsListPage  = lazy(() => import('@/pages/purchasing/purchase-requests'));
 const CreatePurchaseRequestPage = lazy(() => import('@/pages/purchasing/purchase-requests/create'));
 const PurchaseRequestDetailPage = lazy(() => import('@/pages/purchasing/purchase-requests/detail'));
@@ -26,7 +27,9 @@ export const purchasingRoutes = (
   <>
     {/* Purchasing module (Sprint 5) */}
     <Route element={<ModuleGuard module="purchasing" />}>
-      <Route path="/purchasing" element={<Navigate to="/purchasing/purchase-orders" replace />} />
+      <Route path="/purchasing" element={<Navigate to="/purchasing/hub" replace />} />
+      <Route path="/purchasing/hub"
+        element={<PermissionGuard permission="purchasing.view"><PurchasingHubPage /></PermissionGuard>} />
 
       <Route path="/purchasing/purchase-requests"
         element={<PermissionGuard permission="purchasing.view"><PurchaseRequestsListPage /></PermissionGuard>} />

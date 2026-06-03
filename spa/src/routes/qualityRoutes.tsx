@@ -4,6 +4,7 @@ import { ModuleGuard } from '@/components/guards/ModuleGuard';
 import { PermissionGuard } from '@/components/guards/PermissionGuard';
 
 // Quality (Sprint 7 — Task 59)
+const QualityHubPage           = lazy(() => import('@/pages/quality/hub'));
 const InspectionSpecsListPage  = lazy(() => import('@/pages/quality/inspection-specs'));
 const InspectionSpecEditorPage = lazy(() => import('@/pages/quality/inspection-specs/editor'));
 const InspectionsListPage      = lazy(() => import('@/pages/quality/inspections'));
@@ -23,7 +24,9 @@ export const qualityRoutes = (
   <>
     {/* Quality module (Sprint 7 — Tasks 59 + 60) */}
     <Route element={<ModuleGuard module="quality" />}>
-      <Route path="/quality" element={<Navigate to="/quality/dashboard" replace />} />
+      <Route path="/quality" element={<Navigate to="/quality/hub" replace />} />
+      <Route path="/quality/hub"
+        element={<PermissionGuard permission="quality.view"><QualityHubPage /></PermissionGuard>} />
       <Route path="/quality/dashboard"
         element={<PermissionGuard permission="quality.view"><QualityDashboardPage /></PermissionGuard>} />
       <Route path="/quality/inspection-specs"

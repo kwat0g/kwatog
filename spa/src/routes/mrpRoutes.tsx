@@ -4,6 +4,7 @@ import { ModuleGuard } from '@/components/guards/ModuleGuard';
 import { PermissionGuard } from '@/components/guards/PermissionGuard';
 
 // MRP (Sprint 6 — Tasks 49, 50, 52, 53; machine/mold detail + BOM create added in audit §3.1, §3.4)
+const MrpHubPage       = lazy(() => import('@/pages/mrp/hub'));
 const BomsListPage     = lazy(() => import('@/pages/mrp/boms'));
 const CreateBomPage    = lazy(() => import('@/pages/mrp/boms/create'));
 const BomDetailPage    = lazy(() => import('@/pages/mrp/boms/detail'));
@@ -18,7 +19,9 @@ export const mrpRoutes = (
   <>
     {/* MRP module (Sprint 6 — Tasks 49, 50, 52, 53) */}
     <Route element={<ModuleGuard module="mrp" />}>
-      <Route path="/mrp" element={<Navigate to="/mrp/plans" replace />} />
+      <Route path="/mrp" element={<Navigate to="/mrp/hub" replace />} />
+      <Route path="/mrp/hub"
+        element={<PermissionGuard permission="mrp.plans.view"><MrpHubPage /></PermissionGuard>} />
 
       <Route path="/mrp/boms"
         element={<PermissionGuard permission="mrp.boms.view"><BomsListPage /></PermissionGuard>} />
