@@ -1,12 +1,10 @@
 import { Link, useLocation } from 'react-router-dom';
 import {
-  AlertTriangle,
   LayoutDashboard,
   Users,
   Clock4,
   CalendarDays,
   Wallet,
-  HandCoins,
   BookOpen,
   Boxes,
   ShoppingCart,
@@ -22,8 +20,7 @@ import {
   Users2,
   FileText,
   Package,
-  DollarSign,
-  TrendingUp,
+  Bell,
   Inbox,
   type LucideIcon,
 } from 'lucide-react';
@@ -58,103 +55,92 @@ interface NavSection {
 }
 
 /**
- * S1 — Consolidated sidebar navigation.
- *
- * Primary module entry points link to standalone pages OR hub pages.
- * Hub pages (Attendance Hub, Payroll Hub) aggregate secondary
- * sub-features (overtime, shifts, holidays, adjustments, gov tables)
- * accessible from within the hub via tabs and deep links.
- *
- * Admin pages (Users, Roles, Audit Logs, Settings) are all important
- * enough for standalone sidebar entries.
+ * Consolidated sidebar — essential pages only.
+ * Secondary pages live in module hub pages accessible via their parent link.
+ * Removed items: Calendar, Alerts, Demand Forecast, Loans, Assets,
+ * Shipments, Budgets — all accessible from their respective hub pages.
  */
 const SECTIONS: NavSection[] = [
   {
     label: 'Overview',
     items: [
-      { to: '/dashboard',  label: 'Dashboard',  icon: LayoutDashboard },
-      { to: '/approvals',  label: 'Approvals',  icon: Inbox,         permission: 'approvals.board.view', badgeKey: 'approvals' },
-      { to: '/calendar',   label: 'Calendar',   icon: CalendarDays,  permission: 'calendar.view' },
-      { to: '/alerts',     label: 'Alerts',     icon: AlertTriangle, permission: 'alerts.view' },
+      { to: '/dashboard',      label: 'Dashboard',      icon: LayoutDashboard },
+      { to: '/approvals',      label: 'Approvals',      icon: Inbox,  permission: 'approvals.board.view', badgeKey: 'approvals' },
+      { to: '/notifications',  label: 'Notifications',  icon: Bell,   badgeKey: 'unread' },
     ],
   },
   {
     label: 'Sales & CRM',
     items: [
-      { to: '/crm/sales-orders',     label: 'Sales orders',     icon: Briefcase,     feature: 'crm', permission: 'crm.sales_orders.view' },
-      { to: '/accounting/customers', label: 'Customers',        icon: Users2,        feature: 'accounting', permission: 'accounting.customers.view' },
-      { to: '/forecasting/demand',   label: 'Demand Forecast', icon: TrendingUp, permission: 'forecasting.view' },
+      { to: '/crm/sales-orders',     label: 'Sales Orders',  icon: Briefcase, feature: 'crm', permission: 'crm.sales_orders.view', badgeKey: 'pending_so' },
+      { to: '/accounting/customers', label: 'Customers',     icon: Users2,    feature: 'accounting', permission: 'accounting.customers.view' },
     ],
   },
   {
     label: 'Production',
     items: [
-      { to: '/production/work-orders', label: 'Work orders',      icon: FileText,      feature: 'production', permission: 'production.work_orders.view', badgeKey: 'work_orders' },
+      { to: '/production/work-orders', label: 'Work Orders',      icon: FileText,      feature: 'production', permission: 'production.work_orders.view', badgeKey: 'work_orders' },
+      { to: '/mrp/hub',                label: 'MRP',              icon: Layers,        feature: 'mrp', permission: 'mrp.plans.view' },
       { to: '/production/schedule',    label: 'Schedule (Gantt)', icon: CalendarClock, feature: 'production', permission: 'production.schedule.view' },
-      { to: '/mrp/plans',              label: 'MRP plans',        icon: Layers,        feature: 'mrp', permission: 'mrp.plans.view' },
     ],
   },
   {
     label: 'Procurement',
     items: [
-      { to: '/purchasing/purchase-requests', label: 'Purchase requests', icon: FileText,     feature: 'purchasing', permission: 'purchasing.view', badgeKey: 'purchase_requests' },
-      { to: '/purchasing/purchase-orders',   label: 'Purchase orders',   icon: ShoppingCart, feature: 'purchasing', permission: 'purchasing.view' },
+      { to: '/purchasing/purchase-orders',   label: 'Purchase Orders',   icon: ShoppingCart, feature: 'purchasing', permission: 'purchasing.view', badgeKey: 'purchase_requests' },
+      { to: '/purchasing/purchase-requests', label: 'Purchase Requests', icon: FileText,     feature: 'purchasing', permission: 'purchasing.view' },
     ],
   },
   {
     label: 'Warehouse',
     items: [
-      { to: '/inventory/items',           label: 'Items',          icon: Boxes,    feature: 'inventory', permission: 'inventory.view' },
-      { to: '/inventory/grn',             label: 'Receiving (GRN)', icon: Package, feature: 'inventory', permission: 'inventory.view' },
+      { to: '/inventory/hub',            label: 'Inventory',       icon: Boxes,    feature: 'inventory', permission: 'inventory.view', badgeKey: 'low_stock' },
+      { to: '/inventory/grn',            label: 'Receiving (GRN)', icon: Package,  feature: 'inventory', permission: 'inventory.view' },
       { to: '/inventory/material-issues', label: 'Issuance',       icon: FileEdit, feature: 'inventory', permission: 'inventory.view' },
     ],
   },
   {
     label: 'Supply Chain',
     items: [
-      { to: '/supply-chain/deliveries', label: 'Deliveries', icon: Truck, feature: 'supply_chain', permission: 'supply_chain.view', badgeKey: 'deliveries' },
-      { to: '/supply-chain/shipments',  label: 'Shipments',  icon: Truck, feature: 'supply_chain', permission: 'supply_chain.view' },
+      { to: '/supply-chain/hub', label: 'Deliveries', icon: Truck, feature: 'supply_chain', permission: 'supply_chain.view', badgeKey: 'deliveries' },
     ],
   },
   {
-    label: 'Quality Control',
+    label: 'Quality',
     items: [
-      { to: '/quality/dashboard', label: 'Quality', icon: ShieldCheck, feature: 'quality', permission: 'quality.view', badgeKey: 'ncrs' },
+      { to: '/quality/hub', label: 'Quality', icon: ShieldCheck, feature: 'quality', permission: 'quality.view', badgeKey: 'ncrs' },
     ],
   },
   {
-    label: 'Finance & Accounting',
+    label: 'Finance',
     items: [
-      { to: '/accounting/journal-entries', label: 'Journal entries', icon: BookOpen,   feature: 'accounting', permission: 'accounting.journal.view' },
-      { to: '/accounting/invoices',        label: 'Invoices (AR)',   icon: FileText,   feature: 'accounting', permission: 'accounting.invoices.view' },
-      { to: '/accounting/bills',           label: 'Bills (AP)',      icon: Receipt,    feature: 'accounting', permission: 'accounting.bills.view' },
-      { to: '/budgeting',                  label: 'Budgets',         icon: DollarSign, permission: 'budgeting.view' },
+      { to: '/accounting/hub',             label: 'Accounting',     icon: BookOpen, feature: 'accounting', permission: 'accounting.journal.view' },
+      { to: '/accounting/invoices',        label: 'Invoices (AR)',  icon: FileText, feature: 'accounting', permission: 'accounting.invoices.view' },
+      { to: '/accounting/bills',           label: 'Bills (AP)',     icon: Receipt,  feature: 'accounting', permission: 'accounting.bills.view' },
     ],
   },
   {
     label: 'Human Resources',
     items: [
-      { to: '/hr/employees',             label: 'Employees',     icon: Users,       feature: 'hr', permission: 'hr.employees.view', badgeKey: 'profile_requests' },
-      { to: '/hr/attendance/hub',        label: 'Attendance',    icon: Clock4,      feature: 'attendance', permission: 'attendance.view', badgeKey: 'leaves' },
-      { to: '/hr/leaves',                label: 'Leave',         icon: CalendarDays, feature: 'leave', permission: 'leave.view' },
-      { to: '/payroll/hub',              label: 'Payroll',       icon: Wallet,      feature: 'payroll', permission: 'payroll.view', badgeKey: 'payroll' },
-      { to: '/hr/loans',                 label: 'Loans',         icon: HandCoins,   feature: 'loans', permission: 'loans.view' },
+      { to: '/hr/employees',      label: 'Employees',  icon: Users,       feature: 'hr', permission: 'hr.employees.view', badgeKey: 'profile_requests' },
+      { to: '/hr/attendance/hub', label: 'Attendance', icon: Clock4,      feature: 'attendance', permission: 'attendance.view', badgeKey: 'leaves' },
+      { to: '/hr/leaves',         label: 'Leave',      icon: CalendarDays, feature: 'leave', permission: 'leave.view' },
+      { to: '/payroll/hub',       label: 'Payroll',    icon: Wallet,      feature: 'payroll', permission: 'payroll.view', badgeKey: 'payroll' },
     ],
   },
   {
     label: 'Maintenance',
     items: [
-      { to: '/maintenance/work-orders', label: 'Maintenance',  icon: Wrench,   feature: 'maintenance', permission: 'maintenance.view', badgeKey: 'maintenance_wo' },
-      { to: '/assets',                  label: 'Assets',       icon: Package,  feature: 'assets', permission: 'assets.view' },
+      { to: '/maintenance/hub', label: 'Maintenance', icon: Wrench, feature: 'maintenance', permission: 'maintenance.view', badgeKey: 'maintenance_wo' },
     ],
   },
   {
     label: 'Administration',
     items: [
-      { to: '/admin/users',     label: 'Users',          icon: Users2,       permission: 'admin.users.manage' },
-      { to: '/admin/roles',     label: 'Roles',          icon: ShieldCheck,  permission: 'admin.roles.manage' },
-      { to: '/admin/audit-logs', label: 'Audit Logs',    icon: FileText,     permission: 'admin.audit_logs.view' },
-      { to: '/admin/settings',  label: 'System settings', icon: SettingsIcon, permission: 'admin.settings.manage' },
+      { to: '/admin/users',      label: 'Users',      icon: Users2,      permission: 'admin.users.manage' },
+      { to: '/admin/roles',      label: 'Roles',      icon: ShieldCheck, permission: 'admin.roles.manage' },
+      { to: '/admin/audit-logs', label: 'Audit Logs', icon: FileText,    permission: 'admin.audit_logs.view' },
+      { to: '/admin/settings',   label: 'Settings',   icon: SettingsIcon, permission: 'admin.settings.manage' },
     ],
   },
 ];
@@ -238,8 +224,8 @@ export function Sidebar({ permissions, features }: SidebarProps) {
                   return (
                     <li key={item.to}>
                       {collapsed ? (
-                        <Tooltip content={item.label} side="right">
-                          <NavLink item={item} active={isActive(item.to)} collapsed />
+                        <Tooltip content={`${item.label}${entry?.count ? ` (${entry.count})` : ''}`} side="right">
+                          <NavLink item={item} active={isActive(item.to)} collapsed badgeOverride={entry?.count} badgeVariant={entry?.severity} />
                         </Tooltip>
                       ) : (
                         <NavLink
@@ -294,6 +280,15 @@ function NavLink({
     >
       {active && <span className="absolute left-0 top-1 bottom-1 w-[2px] bg-accent" aria-hidden />}
       <Icon size={14} className={collapsed ? '' : 'shrink-0'} />
+      {collapsed && badgeValue != null && badgeValue > 0 && (
+        <span
+          className={cn(
+            'absolute top-1 right-2 h-2 w-2 rounded-full',
+            badgeVariant === 'danger' ? 'bg-danger' : badgeVariant === 'warning' ? 'bg-warning' : 'bg-accent',
+          )}
+          aria-hidden
+        />
+      )}
       {!collapsed && (
         <>
           <span className="truncate flex-1">{item.label}</span>
