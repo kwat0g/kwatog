@@ -57,12 +57,8 @@ interface NavSection {
 }
 
 /**
- * Consolidated sidebar — workflow pages only (2-3 per section).
- * Config/reference pages accessible via tab-based hubs or inline links.
- * Quality gets 2 items (Inspections + NCRs) instead of single hub.
- * Maintenance gets 2 items (Work Orders + Schedules) instead of single hub.
- * Supply Chain gets 2 items back (Deliveries + Shipments).
- * MRP Plans stays as direct link (hub removed — BOMs/machines/molds accessible from plan pages).
+ * Sidebar — workflow pages only. Sub-features accessible via buttons
+ * on their parent page (no hub pages).
  */
 const SECTIONS: NavSection[] = [
   {
@@ -98,7 +94,7 @@ const SECTIONS: NavSection[] = [
   {
     label: 'Warehouse',
     items: [
-      { to: '/inventory/hub',             label: 'Inventory Hub',   icon: Boxes,    feature: 'inventory', permission: 'inventory.view', badgeKey: 'low_stock' },
+      { to: '/inventory/items',            label: 'Items',           icon: Boxes,    feature: 'inventory', permission: 'inventory.view', badgeKey: 'low_stock' },
       { to: '/inventory/grn',             label: 'Receiving (GRN)', icon: Package,  feature: 'inventory', permission: 'inventory.view' },
       { to: '/inventory/material-issues', label: 'Issuance',        icon: FileEdit, feature: 'inventory', permission: 'inventory.view' },
     ],
@@ -120,7 +116,7 @@ const SECTIONS: NavSection[] = [
   {
     label: 'Finance',
     items: [
-      { to: '/accounting/hub',      label: 'Accounting Hub', icon: BookOpen, feature: 'accounting', permission: 'accounting.journal.view' },
+      { to: '/accounting/journal-entries', label: 'Journal Entries', icon: BookOpen, feature: 'accounting', permission: 'accounting.journal.view' },
       { to: '/accounting/invoices', label: 'Invoices (AR)',  icon: FileText, feature: 'accounting', permission: 'accounting.invoices.view' },
       { to: '/accounting/bills',    label: 'Bills (AP)',     icon: Receipt,  feature: 'accounting', permission: 'accounting.bills.view' },
     ],
@@ -129,9 +125,9 @@ const SECTIONS: NavSection[] = [
     label: 'Human Resources',
     items: [
       { to: '/hr/employees',      label: 'Employees',     icon: Users,        feature: 'hr', permission: 'hr.employees.view', badgeKey: 'profile_requests' },
-      { to: '/hr/attendance/hub', label: 'Attendance Hub', icon: Clock4,      feature: 'attendance', permission: 'attendance.view', badgeKey: 'leaves' },
+      { to: '/hr/attendance',     label: 'Attendance',     icon: Clock4,      feature: 'attendance', permission: 'attendance.view', badgeKey: 'leaves' },
       { to: '/hr/leaves',         label: 'Leave',         icon: CalendarDays, feature: 'leave', permission: 'leave.view' },
-      { to: '/payroll/hub',       label: 'Payroll Hub',   icon: Wallet,       feature: 'payroll', permission: 'payroll.view', badgeKey: 'payroll' },
+      { to: '/payroll/periods',   label: 'Payroll',       icon: Wallet,       feature: 'payroll', permission: 'payroll.view', badgeKey: 'payroll' },
     ],
   },
   {
