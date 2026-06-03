@@ -26,6 +26,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { chainStageLink, alertRefLink, kpiLink } from '@/lib/dashboardLinks';
 import { StockOutPanel } from '@/components/dashboard/StockOutPanel';
 import { DemandForecastPanel } from '@/components/dashboard/DemandForecastPanel';
+import { DonutBreakdown, BarComparison } from '@/components/charts';
 
 /* ───────────────────────── Typed interface ───────────────────────── */
 
@@ -485,6 +486,24 @@ export default function PpcDashboard() {
     refetchInterval: 60_000,
   });
 
+  // Compute chart data
+  const woStatusChartData = (q.data as unknown as PpcDashboardData)?.panels?.wo_status_breakdown?.map(i => ({
+    name: i.status.replace(/_/g, ' '),
+    value: i.count,
+    color: i.status === 'completed' ? 'var(--color-success)' : i.status === 'in_progress' ? 'var(--color-info)' : 'var(--color-warning)',
+  })) ?? [];
+
+  const machineUtilChartData = (q.data as unknown as PpcDashboardData)?.panels?.machine_util ? (() => {
+    const statusCounts: Record<string, number> = {};
+    (q.data as unknown as PpcDashboardData).panels.machine_util.forEach(m => {
+      statusCounts[m.status] = (statusCounts[m.status] || 0) + 1;
+    });
+    return Object.entries(statusCounts).map(([name, value]) => ({
+      label: name,
+      count: value,
+    }));
+  })() : [];
+
   const bottlenecks = useQuery({
     queryKey: ['chain-bottlenecks', 'ppc_head'],
     queryFn: (): Promise<ChainBottlenecks> => chainApi.bottlenecks('ppc_head'),
@@ -573,6 +592,33 @@ export default function PpcDashboard() {
 
         {/* ── Row 6: D3 — WO Status Breakdown (full width) ── */}
         <WoStatusBreakdownPanel items={panels?.wo_status_breakdown ?? []} />
+
+        {/* ── Row 6.5: Chart visualizations ── */}
+        <div className="grid grid-cols-2 gap-4">
+          <Panel title="WO Status Distribution">
+            {woStatusChartData.length === 0 ? (
+              <EmptyState icon="inbox" title="No work orders" description="No work order data available." />
+            ) : (
+              <DonutBreakdown
+                data={woStatusChartData}
+                centerLabel="Total WOs"
+                centerValue={String(woStatusChartData.reduce((sum, i) => sum + i.value, 0))}
+              />
+            )}
+          </Panel>
+          <Panel title="Machine Status Distribution">
+            {machineUtilChartData.length === 0 ? (
+              <EmptyState icon="cpu" title="No machines" description="No machine data available." />
+            ) : (
+              <BarComparison
+                data={machineUtilChartData}
+                bars={[{ dataKey: 'count', color: 'var(--color-accent)', label: 'Machines' }]}
+                xKey="label"
+                height={180}
+              />
+            )}
+          </Panel>
+        </div>
 
         {/* ── Row 7: Demand Forecast + Stock-out Risk ── */}
         <div className="grid grid-cols-2 gap-4">

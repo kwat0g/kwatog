@@ -17,6 +17,7 @@ import { SkeletonBlock, SkeletonDetail } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { ForecastPanel } from '@/components/dashboard/ForecastPanel';
+import { DonutBreakdown, BarComparison } from '@/components/charts';
 
 /* ───────────────────────── Typed interface ───────────────────────── */
 
@@ -285,6 +286,24 @@ export default function QcDashboard() {
     refetchInterval: 60_000,
   });
 
+  // Compute chart data
+  const inspectionStageData = (q.data as unknown as QualityDashboardData)?.panels?.inspection_queue ? (() => {
+    const stageCounts: Record<string, number> = {};
+    (q.data as unknown as QualityDashboardData).panels.inspection_queue.forEach(ins => {
+      stageCounts[ins.stage] = (stageCounts[ins.stage] || 0) + 1;
+    });
+    const colorMap: Record<string, string> = {
+      incoming: 'var(--color-info)',
+      in_process: 'var(--color-warning)',
+      outgoing: 'var(--color-danger)',
+    };
+    return Object.entries(stageCounts).map(([name, value]) => ({
+      name,
+      value,
+      color: colorMap[name] ?? 'var(--color-muted)',
+    }));
+  })() : [];
+
   /* ─── LOADING ─── */
   if (q.isLoading && !q.data) {
     return (
@@ -346,6 +365,33 @@ export default function QcDashboard() {
         <div className="grid grid-cols-2 gap-4">
           <NcrStatusPanel items={panels?.ncr_status ?? []} />
           <QcChainCoveragePanel coverage={panels?.qc_chain_coverage} />
+        </div>
+
+        {/* ── Row 3.5: Chart visualizations ── */}
+        <div className="grid grid-cols-2 gap-4">
+          <Panel title="Inspection Queue by Stage">
+            {inspectionStageData.length === 0 ? (
+              <EmptyState icon="check-circle" title="Queue empty" description="No pending inspections." />
+            ) : (
+              <DonutBreakdown
+                data={inspectionStageData}
+                centerLabel="Total"
+                centerValue={String(inspectionStageData.reduce((sum, i) => sum + i.value, 0))}
+              />
+            )}
+          </Panel>
+          <Panel title="Top Defects by Count">
+            {(panels?.defect_pareto ?? []).length === 0 ? (
+              <EmptyState icon="check-circle" title="No defects" description="No defects recorded." />
+            ) : (
+              <BarComparison
+                data={(panels?.defect_pareto ?? []).slice(0, 6).map(d => ({ label: d.code, count: d.count }))}
+                bars={[{ dataKey: 'count', color: 'var(--color-danger)', label: 'Occurrences' }]}
+                xKey="label"
+                height={180}
+              />
+            )}
+          </Panel>
         </div>
 
         {/* ── Row 4: Defect Rate Forecast ── */}

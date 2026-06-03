@@ -12,6 +12,7 @@ import { client } from '@/api/client';
 import { ChainBottleneckWidget } from '@/components/dashboard/ChainBottleneckWidget';
 import { StockOutPanel } from '@/components/dashboard/StockOutPanel';
 import { DemandForecastPanel } from '@/components/dashboard/DemandForecastPanel';
+import { DonutBreakdown, BarComparison } from '@/components/charts';
 import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
 import { alertRefLink } from '@/lib/dashboardLinks';
@@ -59,6 +60,27 @@ export default function PlantManagerDashboard() {
     refetchInterval: 60_000,
     placeholderData: (prev) => prev,
   });
+
+  // Compute chart data from existing panels
+  const machineStatusData = q.data ? (() => {
+    const statusCounts: Record<string, number> = {};
+    q.data.panels.machine_util.forEach(m => {
+      statusCounts[m.status] = (statusCounts[m.status] || 0) + 1;
+    });
+    const colorMap: Record<string, string> = {
+      running: 'var(--color-success)',
+      idle: 'var(--color-warning)',
+      setup: 'var(--color-info)',
+      breakdown: 'var(--color-danger)',
+      down: 'var(--color-danger)',
+      stopped: 'var(--color-muted)',
+    };
+    return Object.entries(statusCounts).map(([name, value]) => ({
+      name,
+      value,
+      color: colorMap[name] ?? 'var(--color-muted)',
+    }));
+  })() : [];
 
   return (
     <div>
@@ -128,6 +150,33 @@ export default function PlantManagerDashboard() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
               <AlertsPanel alerts={q.data.panels.alerts} />
               <FinancialSnapshotPanel snapshot={q.data.panels.financial_snapshot} />
+            </div>
+
+            {/* Row 4.5 — Chart visualizations */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              <Panel title="Machine Status Breakdown">
+                {machineStatusData.length === 0 ? (
+                  <p className="text-sm text-muted">No machine data available.</p>
+                ) : (
+                  <DonutBreakdown
+                    data={machineStatusData}
+                    centerLabel="Machines"
+                    centerValue={String(q.data.panels.machine_util.length)}
+                  />
+                )}
+              </Panel>
+              <Panel title="Top Defects">
+                {q.data.panels.defect_pareto.length === 0 ? (
+                  <p className="text-sm text-muted">No defects recorded.</p>
+                ) : (
+                  <BarComparison
+                    data={q.data.panels.defect_pareto.slice(0, 8).map(d => ({ label: d.code, count: d.count }))}
+                    bars={[{ dataKey: 'count', color: 'var(--color-danger)', label: 'Defects' }]}
+                    xKey="label"
+                    height={180}
+                  />
+                )}
+              </Panel>
             </div>
 
             {/* Row 5: Forecasting */}

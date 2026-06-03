@@ -16,6 +16,7 @@ import { SkeletonBlock, SkeletonDetail } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { StockOutPanel } from '@/components/dashboard/StockOutPanel';
+import { DonutBreakdown } from '@/components/charts';
 
 /* ───────────────────────── Typed interface ───────────────────────── */
 
@@ -226,6 +227,13 @@ export default function WarehouseDashboard() {
     refetchInterval: 60_000,
   });
 
+  // Compute chart data
+  const zoneUtilChartData = (q.data as unknown as WarehouseDashboardData)?.panels?.zone_utilization?.map(z => ({
+    name: z.name,
+    value: z.percent,
+    color: z.percent >= 90 ? 'var(--color-danger)' : z.percent >= 75 ? 'var(--color-warning)' : 'var(--color-success)',
+  })) ?? [];
+
   /* ─── LOADING ─── */
   if (q.isLoading && !q.data) {
     return (
@@ -288,6 +296,19 @@ export default function WarehouseDashboard() {
           <LowStockAlertsPanel items={panels?.low_stock_alerts ?? []} />
           <ZoneUtilizationPanel items={panels?.zone_utilization ?? []} />
         </div>
+
+        {/* ── Row 3.5: Chart visualizations ── */}
+        <Panel title="Zone Capacity Distribution">
+          {zoneUtilChartData.length === 0 ? (
+            <EmptyState icon="inbox" title="No zones" description="No warehouse zone data available." />
+          ) : (
+            <DonutBreakdown
+              data={zoneUtilChartData}
+              centerLabel="Avg Util"
+              centerValue={`${Math.round(zoneUtilChartData.reduce((sum, i) => sum + i.value, 0) / zoneUtilChartData.length)}%`}
+            />
+          )}
+        </Panel>
 
         {/* ── Row 4: Stock-out forecast ── */}
         <StockOutPanel horizonDays={30} hideWhenEmpty />

@@ -18,6 +18,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { StockOutPanel } from '@/components/dashboard/StockOutPanel';
 import { DemandForecastPanel } from '@/components/dashboard/DemandForecastPanel';
+import { DonutBreakdown, BarComparison } from '@/components/charts';
 
 /* ───────────────────────── Typed interface ───────────────────────── */
 
@@ -244,6 +245,24 @@ export default function PurchasingDashboard() {
     refetchInterval: 60_000,
   });
 
+  // Compute chart data
+  const poStatusChartData = (q.data as unknown as PurchasingDashboardData)?.panels?.po_pipeline?.map(i => ({
+    name: i.status.replace(/_/g, ' '),
+    value: i.count,
+    color: i.status === 'received' || i.status === 'closed' ? 'var(--color-success)' : i.status === 'sent' ? 'var(--color-info)' : 'var(--color-warning)',
+  })) ?? [];
+
+  const prStatusChartData = (q.data as unknown as PurchasingDashboardData)?.panels?.pr_action_queue ? (() => {
+    const statusCounts: Record<string, number> = { urgent: 0, high: 0, normal: 0 };
+    (q.data as unknown as PurchasingDashboardData).panels.pr_action_queue.forEach(pr => {
+      statusCounts[pr.urgency] = (statusCounts[pr.urgency] || 0) + 1;
+    });
+    return Object.entries(statusCounts).filter(([, v]) => v > 0).map(([name, value]) => ({
+      label: name,
+      count: value,
+    }));
+  })() : [];
+
   /* ─── LOADING ─── */
   if (q.isLoading && !q.data) {
     return (
@@ -305,6 +324,33 @@ export default function PurchasingDashboard() {
         <div className="grid grid-cols-2 gap-4">
           <SupplierPerformancePanel items={panels?.supplier_performance ?? []} />
           <UpcomingDeliveriesPanel items={panels?.upcoming_deliveries ?? []} />
+        </div>
+
+        {/* ── Row 3.5: Chart visualizations ── */}
+        <div className="grid grid-cols-2 gap-4">
+          <Panel title="PO Status Distribution">
+            {poStatusChartData.length === 0 ? (
+              <EmptyState icon="inbox" title="No POs" description="No purchase order data available." />
+            ) : (
+              <DonutBreakdown
+                data={poStatusChartData}
+                centerLabel="Total POs"
+                centerValue={String(poStatusChartData.reduce((sum, i) => sum + i.value, 0))}
+              />
+            )}
+          </Panel>
+          <Panel title="PR Pipeline by Urgency">
+            {prStatusChartData.length === 0 ? (
+              <EmptyState icon="inbox" title="No PRs" description="No pending purchase requests." />
+            ) : (
+              <BarComparison
+                data={prStatusChartData}
+                bars={[{ dataKey: 'count', color: 'var(--color-warning)', label: 'PRs' }]}
+                xKey="label"
+                height={180}
+              />
+            )}
+          </Panel>
         </div>
 
         {/* ── Row 4: Forecasting ── */}

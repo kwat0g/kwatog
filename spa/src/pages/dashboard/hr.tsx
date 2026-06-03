@@ -9,6 +9,7 @@ import { StatCard } from '@/components/ui/StatCard';
 import { Chip } from '@/components/ui/Chip';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { ForecastPanel } from '@/components/dashboard/ForecastPanel';
+import { DonutBreakdown } from '@/components/charts';
 import { client } from '@/api/client';
 import type { ApiSuccess } from '@/types';
 import type { ForecastPanelData } from '@/types/forecasting-dashboard';
@@ -56,6 +57,20 @@ export default function HrDashboard() {
       client.get<ApiSuccess<HrDashboardData>>('/dashboards/hr').then((r) => r.data.data),
     refetchInterval: 60_000,
   });
+
+  // Compute chart data from existing panels
+  const departmentDonutData = q.data?.panels.by_department.map(d => ({
+    name: d.label,
+    value: d.count,
+    color: 'var(--color-accent)',
+  })).slice(0, 6) ?? [];
+
+  const attendanceDonutData = q.data ? [
+    { name: 'Present', value: q.data.panels.attendance_summary.present, color: 'var(--color-success)' },
+    { name: 'Late', value: q.data.panels.attendance_summary.late, color: 'var(--color-warning)' },
+    { name: 'Absent', value: q.data.panels.attendance_summary.absent, color: 'var(--color-danger)' },
+    { name: 'On Leave', value: q.data.panels.attendance_summary.on_leave, color: 'var(--color-info)' },
+  ].filter(i => i.value > 0) : [];
 
   return (
     <div>
@@ -107,6 +122,32 @@ export default function HrDashboard() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
               <RecentHiresPanel hires={q.data.panels.recent_hires} />
               <PendingLeavesPanel leaves={q.data.panels.pending_leaves} />
+            </div>
+
+            {/* Row 5.5 — Chart visualizations */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              <Panel title="Department Headcount Breakdown">
+                {departmentDonutData.length === 0 ? (
+                  <p className="text-sm text-muted">No department data available.</p>
+                ) : (
+                  <DonutBreakdown
+                    data={departmentDonutData}
+                    centerLabel="Departments"
+                    centerValue={String(departmentDonutData.length)}
+                  />
+                )}
+              </Panel>
+              <Panel title="Attendance Today Breakdown">
+                {attendanceDonutData.length === 0 ? (
+                  <p className="text-sm text-muted">No attendance data available.</p>
+                ) : (
+                  <DonutBreakdown
+                    data={attendanceDonutData}
+                    centerLabel="Total"
+                    centerValue={String(attendanceDonutData.reduce((sum, i) => sum + i.value, 0))}
+                  />
+                )}
+              </Panel>
             </div>
 
             {/* Row 6 — Headcount forecast */}

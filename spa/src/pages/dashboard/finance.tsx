@@ -13,6 +13,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
 import { ChainBottleneckWidget } from '@/components/dashboard/ChainBottleneckWidget';
 import { ForecastPanel } from '@/components/dashboard/ForecastPanel';
+import { BarComparison } from '@/components/charts';
 
 /**
  * Task D5 — Finance Officer dashboard.
@@ -32,6 +33,23 @@ export default function FinanceDashboardPage() {
     queryFn: () => financeDashboardApi.summary(),
     refetchInterval: 60_000,
   });
+
+  // Compute chart data from aging buckets
+  const arAgingChartData = summary.data ? [
+    { label: 'Current', amount: parseFloat(summary.data.ar_aging_summary.current) },
+    { label: '1-30d', amount: parseFloat(summary.data.ar_aging_summary.d1_30) },
+    { label: '31-60d', amount: parseFloat(summary.data.ar_aging_summary.d31_60) },
+    { label: '61-90d', amount: parseFloat(summary.data.ar_aging_summary.d61_90) },
+    { label: '90+d', amount: parseFloat(summary.data.ar_aging_summary.d91_plus) },
+  ] : [];
+
+  const apAgingChartData = summary.data ? [
+    { label: 'Current', amount: parseFloat(summary.data.ap_aging_summary.current) },
+    { label: '1-30d', amount: parseFloat(summary.data.ap_aging_summary.d1_30) },
+    { label: '31-60d', amount: parseFloat(summary.data.ap_aging_summary.d31_60) },
+    { label: '61-90d', amount: parseFloat(summary.data.ap_aging_summary.d61_90) },
+    { label: '90+d', amount: parseFloat(summary.data.ap_aging_summary.d91_plus) },
+  ] : [];
 
   return (
     <div>
@@ -99,6 +117,36 @@ export default function FinanceDashboardPage() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
               <BudgetVsActualPanel rows={summary.data.budget_vs_actual_top ?? null} />
               <RecentJesPanel entries={summary.data.recent_journal_entries} />
+            </div>
+
+            {/* Row 4.5 — Chart visualizations */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              <Panel title="AR Aging Distribution">
+                {arAgingChartData.length === 0 ? (
+                  <p className="text-sm text-muted">No AR aging data available.</p>
+                ) : (
+                  <BarComparison
+                    data={arAgingChartData}
+                    bars={[{ dataKey: 'amount', color: 'var(--color-info)', label: 'Amount' }]}
+                    xKey="label"
+                    height={180}
+                    formatValue={(v) => formatPeso(String(v))}
+                  />
+                )}
+              </Panel>
+              <Panel title="AP Aging Distribution">
+                {apAgingChartData.length === 0 ? (
+                  <p className="text-sm text-muted">No AP aging data available.</p>
+                ) : (
+                  <BarComparison
+                    data={apAgingChartData}
+                    bars={[{ dataKey: 'amount', color: 'var(--color-warning)', label: 'Amount' }]}
+                    xKey="label"
+                    height={180}
+                    formatValue={(v) => formatPeso(String(v))}
+                  />
+                )}
+              </Panel>
             </div>
 
             {/* Row 5 — Revenue forecast */}
