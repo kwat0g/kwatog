@@ -8,6 +8,7 @@ const RolesIndexPage = lazy(() => import('@/pages/admin/roles'));
 const CreateRolePage = lazy(() => import('@/pages/admin/roles/create'));
 const CompareRolesPage = lazy(() => import('@/pages/admin/roles/compare'));
 const RolePermissionsPage = lazy(() => import('@/pages/admin/roles/permissions'));
+const PermissionSearchPage = lazy(() => import('@/pages/admin/roles/permission-search'));
 const SettingsPage = lazy(() => import('@/pages/admin/settings'));
 const AuditLogsPage = lazy(() => import('@/pages/admin/audit-logs'));
 
@@ -63,6 +64,14 @@ export const adminRoutes = (
       element={
         <PermissionGuard permission="admin.roles.manage">
           <CompareRolesPage />
+        </PermissionGuard>
+      }
+    />
+    <Route
+      path="/admin/roles/permissions-search"
+      element={
+        <PermissionGuard permission="admin.roles.manage">
+          <PermissionSearchPage />
         </PermissionGuard>
       }
     />

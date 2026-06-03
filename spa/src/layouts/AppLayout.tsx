@@ -7,6 +7,7 @@ import { DevErrorPanel } from '@/components/dev/DevErrorPanel';
 import { useAuthStore } from '@/stores/authStore';
 import { PageActionsProvider } from '@/contexts/PageActionsContext';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
+import { usePermissionSync } from '@/hooks/usePermissionSync';
 import { KeyboardShortcutHelp } from '@/components/ui/KeyboardShortcutHelp';
 import { RouteTransition } from '@/components/ui/RouteTransition';
 import { Tooltip } from '@/components/ui/Tooltip';
@@ -20,6 +21,9 @@ function AppLayoutInner() {
   const features = useAuthStore((s) => s.features);
   const logout = useAuthStore((s) => s.logout);
   const { helpOpen, setHelpOpen } = useKeyboardShortcuts();
+
+  // Listen for real-time permission and module toggle changes
+  usePermissionSync();
 
   const onLogout = async () => {
     await logout();
