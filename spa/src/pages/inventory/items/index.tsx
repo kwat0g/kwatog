@@ -118,11 +118,19 @@ export default function ItemsListPage() {
       <PageHeader
         title="Items"
         subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'item' : 'items'}` : undefined}
-        actions={canManage ? (
-          <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/inventory/items/create')}>
-            New item
-          </Button>
-        ) : null}
+        actions={
+          <>
+            <Button variant="secondary" size="sm" onClick={() => navigate('/inventory/categories')}>Categories</Button>
+            <Button variant="secondary" size="sm" onClick={() => navigate('/inventory/warehouse')}>Warehouses</Button>
+            <Button variant="secondary" size="sm" onClick={() => navigate('/inventory/stock-levels')}>Stock Levels</Button>
+            <Button variant="secondary" size="sm" onClick={() => navigate('/inventory/movements')}>Movements</Button>
+            {canManage && (
+              <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/inventory/items/create')}>
+                New item
+              </Button>
+            )}
+          </>
+        }
       />
       <FilterBar
         filters={filterConfig}
