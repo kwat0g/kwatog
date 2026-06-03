@@ -1,10 +1,9 @@
 import { lazy } from 'react';
-import { Route, Navigate } from 'react-router-dom';
+import { Route } from 'react-router-dom';
 import { ModuleGuard } from '@/components/guards/ModuleGuard';
 import { PermissionGuard } from '@/components/guards/PermissionGuard';
 
 // Maintenance (Sprint 8 — Task 69)
-const MaintenanceHubPage            = lazy(() => import('@/pages/maintenance/hub'));
 const MaintenanceHomePage           = lazy(() => import('@/pages/maintenance'));
 const MaintenanceWorkOrdersListPage = lazy(() => import('@/pages/maintenance/work-orders'));
 const CreateMaintenanceWorkOrderPage = lazy(() => import('@/pages/maintenance/work-orders/create'));
@@ -19,11 +18,7 @@ export const maintenanceRoutes = (
   <>
     {/* Maintenance module (Sprint 8 — Task 69 + ADV8) */}
     <Route element={<ModuleGuard module="maintenance" />}>
-      <Route path="/maintenance" element={<Navigate to="/maintenance/hub" replace />} />
-      <Route path="/maintenance/hub"
-        element={<PermissionGuard permission="maintenance.view"><MaintenanceHubPage /></PermissionGuard>} />
-      <Route path="/maintenance/home"
-        element={<PermissionGuard permission="maintenance.view"><MaintenanceHomePage /></PermissionGuard>} />
+      <Route path="/maintenance" element={<MaintenanceHomePage />} />
       {/* ADV8 — Predictive maintenance & downtime analytics */}
       <Route path="/maintenance/machine-health"
         element={<PermissionGuard permission="maintenance.view"><MachineHealthPage /></PermissionGuard>} />

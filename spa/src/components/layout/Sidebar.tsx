@@ -22,6 +22,8 @@ import {
   Package,
   Bell,
   Inbox,
+  AlertTriangle,
+  Calendar,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
@@ -55,10 +57,12 @@ interface NavSection {
 }
 
 /**
- * Consolidated sidebar — essential pages only.
- * Secondary pages live in module hub pages accessible via their parent link.
- * Removed items: Calendar, Alerts, Demand Forecast, Loans, Assets,
- * Shipments, Budgets — all accessible from their respective hub pages.
+ * Consolidated sidebar — workflow pages only (2-3 per section).
+ * Config/reference pages accessible via tab-based hubs or inline links.
+ * Quality gets 2 items (Inspections + NCRs) instead of single hub.
+ * Maintenance gets 2 items (Work Orders + Schedules) instead of single hub.
+ * Supply Chain gets 2 items back (Deliveries + Shipments).
+ * MRP Plans stays as direct link (hub removed — BOMs/machines/molds accessible from plan pages).
  */
 const SECTIONS: NavSection[] = [
   {
@@ -80,7 +84,7 @@ const SECTIONS: NavSection[] = [
     label: 'Production',
     items: [
       { to: '/production/work-orders', label: 'Work Orders',      icon: FileText,      feature: 'production', permission: 'production.work_orders.view', badgeKey: 'work_orders' },
-      { to: '/mrp/hub',                label: 'MRP',              icon: Layers,        feature: 'mrp', permission: 'mrp.plans.view' },
+      { to: '/mrp/plans',              label: 'MRP Plans',        icon: Layers,        feature: 'mrp', permission: 'mrp.plans.view' },
       { to: '/production/schedule',    label: 'Schedule (Gantt)', icon: CalendarClock, feature: 'production', permission: 'production.schedule.view' },
     ],
   },
@@ -94,52 +98,55 @@ const SECTIONS: NavSection[] = [
   {
     label: 'Warehouse',
     items: [
-      { to: '/inventory/hub',            label: 'Inventory',       icon: Boxes,    feature: 'inventory', permission: 'inventory.view', badgeKey: 'low_stock' },
-      { to: '/inventory/grn',            label: 'Receiving (GRN)', icon: Package,  feature: 'inventory', permission: 'inventory.view' },
-      { to: '/inventory/material-issues', label: 'Issuance',       icon: FileEdit, feature: 'inventory', permission: 'inventory.view' },
+      { to: '/inventory/hub',             label: 'Inventory Hub',   icon: Boxes,    feature: 'inventory', permission: 'inventory.view', badgeKey: 'low_stock' },
+      { to: '/inventory/grn',             label: 'Receiving (GRN)', icon: Package,  feature: 'inventory', permission: 'inventory.view' },
+      { to: '/inventory/material-issues', label: 'Issuance',        icon: FileEdit, feature: 'inventory', permission: 'inventory.view' },
     ],
   },
   {
     label: 'Supply Chain',
     items: [
-      { to: '/supply-chain/hub', label: 'Deliveries', icon: Truck, feature: 'supply_chain', permission: 'supply_chain.view', badgeKey: 'deliveries' },
+      { to: '/supply-chain/deliveries', label: 'Deliveries', icon: Truck,   feature: 'supply_chain', permission: 'supply_chain.view', badgeKey: 'deliveries' },
+      { to: '/supply-chain/shipments',  label: 'Shipments',  icon: Package, feature: 'supply_chain', permission: 'supply_chain.view' },
     ],
   },
   {
     label: 'Quality',
     items: [
-      { to: '/quality/hub', label: 'Quality', icon: ShieldCheck, feature: 'quality', permission: 'quality.view', badgeKey: 'ncrs' },
+      { to: '/quality/inspections', label: 'Inspections', icon: ShieldCheck, feature: 'quality', permission: 'quality.view' },
+      { to: '/quality/ncrs',        label: 'NCRs',        icon: AlertTriangle, feature: 'quality', permission: 'quality.view', badgeKey: 'ncrs' },
     ],
   },
   {
     label: 'Finance',
     items: [
-      { to: '/accounting/hub',             label: 'Accounting',     icon: BookOpen, feature: 'accounting', permission: 'accounting.journal.view' },
-      { to: '/accounting/invoices',        label: 'Invoices (AR)',  icon: FileText, feature: 'accounting', permission: 'accounting.invoices.view' },
-      { to: '/accounting/bills',           label: 'Bills (AP)',     icon: Receipt,  feature: 'accounting', permission: 'accounting.bills.view' },
+      { to: '/accounting/hub',      label: 'Accounting Hub', icon: BookOpen, feature: 'accounting', permission: 'accounting.journal.view' },
+      { to: '/accounting/invoices', label: 'Invoices (AR)',  icon: FileText, feature: 'accounting', permission: 'accounting.invoices.view' },
+      { to: '/accounting/bills',    label: 'Bills (AP)',     icon: Receipt,  feature: 'accounting', permission: 'accounting.bills.view' },
     ],
   },
   {
     label: 'Human Resources',
     items: [
-      { to: '/hr/employees',      label: 'Employees',  icon: Users,       feature: 'hr', permission: 'hr.employees.view', badgeKey: 'profile_requests' },
-      { to: '/hr/attendance/hub', label: 'Attendance', icon: Clock4,      feature: 'attendance', permission: 'attendance.view', badgeKey: 'leaves' },
-      { to: '/hr/leaves',         label: 'Leave',      icon: CalendarDays, feature: 'leave', permission: 'leave.view' },
-      { to: '/payroll/hub',       label: 'Payroll',    icon: Wallet,      feature: 'payroll', permission: 'payroll.view', badgeKey: 'payroll' },
+      { to: '/hr/employees',      label: 'Employees',     icon: Users,        feature: 'hr', permission: 'hr.employees.view', badgeKey: 'profile_requests' },
+      { to: '/hr/attendance/hub', label: 'Attendance Hub', icon: Clock4,      feature: 'attendance', permission: 'attendance.view', badgeKey: 'leaves' },
+      { to: '/hr/leaves',         label: 'Leave',         icon: CalendarDays, feature: 'leave', permission: 'leave.view' },
+      { to: '/payroll/hub',       label: 'Payroll Hub',   icon: Wallet,       feature: 'payroll', permission: 'payroll.view', badgeKey: 'payroll' },
     ],
   },
   {
     label: 'Maintenance',
     items: [
-      { to: '/maintenance/hub', label: 'Maintenance', icon: Wrench, feature: 'maintenance', permission: 'maintenance.view', badgeKey: 'maintenance_wo' },
+      { to: '/maintenance/work-orders', label: 'Work Orders', icon: Wrench,   feature: 'maintenance', permission: 'maintenance.view', badgeKey: 'maintenance_wo' },
+      { to: '/maintenance/schedules',   label: 'Schedules',   icon: Calendar, feature: 'maintenance', permission: 'maintenance.view' },
     ],
   },
   {
     label: 'Administration',
     items: [
-      { to: '/admin/users',      label: 'Users',      icon: Users2,      permission: 'admin.users.manage' },
-      { to: '/admin/roles',      label: 'Roles',      icon: ShieldCheck, permission: 'admin.roles.manage' },
-      { to: '/admin/audit-logs', label: 'Audit Logs', icon: FileText,    permission: 'admin.audit_logs.view' },
+      { to: '/admin/users',      label: 'Users',      icon: Users2,       permission: 'admin.users.manage' },
+      { to: '/admin/roles',      label: 'Roles',      icon: ShieldCheck,  permission: 'admin.roles.manage' },
+      { to: '/admin/audit-logs', label: 'Audit Logs', icon: FileText,     permission: 'admin.audit_logs.view' },
       { to: '/admin/settings',   label: 'Settings',   icon: SettingsIcon, permission: 'admin.settings.manage' },
     ],
   },

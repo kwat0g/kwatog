@@ -4,7 +4,6 @@ import { ModuleGuard } from '@/components/guards/ModuleGuard';
 import { PermissionGuard } from '@/components/guards/PermissionGuard';
 
 // CRM (Sprint 6 — Tasks 47, 48; SO edit added in audit §3.1)
-const CrmHubPage              = lazy(() => import('@/pages/crm/hub'));
 const ProductsListPage        = lazy(() => import('@/pages/crm/products'));
 const CreateProductPage       = lazy(() => import('@/pages/crm/products/create'));
 const EditProductPage         = lazy(() => import('@/pages/crm/products/edit'));
@@ -24,9 +23,7 @@ export const crmRoutes = (
   <>
     {/* CRM module (Sprint 6 — Tasks 47, 48) */}
     <Route element={<ModuleGuard module="crm" />}>
-      <Route path="/crm" element={<Navigate to="/crm/hub" replace />} />
-      <Route path="/crm/hub"
-        element={<PermissionGuard permission="crm.products.view"><CrmHubPage /></PermissionGuard>} />
+      <Route path="/crm" element={<Navigate to="/crm/products" replace />} />
 
       <Route path="/crm/products"
         element={<PermissionGuard permission="crm.products.view"><ProductsListPage /></PermissionGuard>} />

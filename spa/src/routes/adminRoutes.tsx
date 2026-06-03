@@ -1,9 +1,8 @@
 import { lazy } from 'react';
-import { Route, Navigate } from 'react-router-dom';
+import { Route } from 'react-router-dom';
 import { PermissionGuard } from '@/components/guards/PermissionGuard';
 
 // Admin (Sprint 1; Series R/R1 adds /admin/roles/create)
-const AdminHubPage = lazy(() => import('@/pages/admin/hub'));
 const RolesIndexPage = lazy(() => import('@/pages/admin/roles'));
 const CreateRolePage = lazy(() => import('@/pages/admin/roles/create'));
 const CompareRolesPage = lazy(() => import('@/pages/admin/roles/compare'));
@@ -31,16 +30,7 @@ const AuditLogDetailPage = lazy(() => import('@/pages/admin/audit-logs/detail'))
 
 export const adminRoutes = (
   <>
-    {/* Admin landing — redirect to hub */}
-    <Route path="/admin" element={<Navigate to="/admin/hub" replace />} />
-    <Route
-      path="/admin/hub"
-      element={
-        <PermissionGuard permission="admin.users.manage">
-          <AdminHubPage />
-        </PermissionGuard>
-      }
-    />
+    {/* Admin — no hub page, direct access to sub-pages */}
     {/* Admin */}
     <Route
       path="/admin/roles"
