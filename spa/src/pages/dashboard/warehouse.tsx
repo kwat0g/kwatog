@@ -15,6 +15,7 @@ import { Panel } from '@/components/ui/Panel';
 import { SkeletonBlock, SkeletonDetail } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
+import { StockOutPanel } from '@/components/dashboard/StockOutPanel';
 
 /* ───────────────────────── Typed interface ───────────────────────── */
 
@@ -287,6 +288,9 @@ export default function WarehouseDashboard() {
           <LowStockAlertsPanel items={panels?.low_stock_alerts ?? []} />
           <ZoneUtilizationPanel items={panels?.zone_utilization ?? []} />
         </div>
+
+        {/* ── Row 4: Stock-out forecast ── */}
+        <StockOutPanel horizonDays={30} hideWhenEmpty />
       </div>
     </div>
   );

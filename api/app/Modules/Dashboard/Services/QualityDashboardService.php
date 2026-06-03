@@ -6,6 +6,7 @@ namespace App\Modules\Dashboard\Services;
 
 use App\Modules\Auth\Models\User;
 use App\Modules\Dashboard\Services\Concerns\DashboardQueries;
+use App\Modules\Dashboard\Services\ForecastingDashboardService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -22,6 +23,10 @@ class QualityDashboardService
     use DashboardQueries;
 
     private const CACHE_TTL = 30;
+
+    public function __construct(
+        private readonly ForecastingDashboardService $forecastingService,
+    ) {}
 
     public function quality(User $user): array
     {
@@ -43,6 +48,7 @@ class QualityDashboardService
                     'defect_pareto'     => $this->defectPareto(),
                     'ncr_status'        => $this->qualityNcrList(),
                     'qc_chain_coverage' => $this->qualityChainCoverage(),
+                    'defect_rate_forecast' => $this->forecastingService->defectRateForecast(),
                 ],
             ];
         });

@@ -7,7 +7,7 @@ namespace App\Modules\CRM\Controllers;
 use App\Common\Concerns\ResolvesHashIds;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
-use App\Modules\CRM\Models\Customer;
+use App\Modules\Accounting\Models\Customer;
 use App\Modules\CRM\Models\CustomerComplaint;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;

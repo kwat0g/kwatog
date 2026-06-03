@@ -344,4 +344,5 @@ export interface FinanceDashboardSummary {
   budget_vs_actual_top?: Array<{
     category: string; budget: string; actual: string; variance: string; variance_pct: number;
   }> | null;
+  revenue_forecast?: import('./forecasting-dashboard').ForecastPanelData;
 }

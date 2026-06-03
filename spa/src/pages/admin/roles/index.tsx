@@ -207,8 +207,8 @@ export default function RolesIndexPage() {
       <PageHeader
         title="Roles & permissions"
         subtitle={data ? `${data.meta.total} roles` : undefined}
-        backTo="/admin/users-roles"
-        backLabel="Users & Roles"
+        backTo="/admin/roles"
+        backLabel="Admin"
         actions={
           can('admin.roles.manage') && (
             <>

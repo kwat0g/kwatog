@@ -211,7 +211,7 @@ class DocumentVaultService
     {
         // Pick the most identifying short field if available.
         foreach (['employee_no', 'invoice_number', 'po_number', 'wo_number',
-                  'inspection_number', 'delivery_note_number', 'bill_number',
+                  'inspection_number', 'delivery_number', 'bill_number',
                   'pr_number', 'je_number', 'reference_no', 'code'] as $col) {
             if (isset($entity->{$col}) && is_string($entity->{$col}) && $entity->{$col} !== '') {
                 return preg_replace('/[^A-Za-z0-9_-]+/', '-', (string) $entity->{$col}) ?: 'rec';

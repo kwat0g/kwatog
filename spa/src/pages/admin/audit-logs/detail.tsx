@@ -106,7 +106,6 @@ export default function AuditLogDetailPage() {
         backLabel="Audit logs"
         breadcrumbs={[
           { label: 'Admin', href: '/admin' },
-          { label: 'Users & Roles', href: '/admin/users-roles' },
           { label: 'Audit Logs', href: '/admin/audit-logs' },
           { label: `Entry #${data.id}` },
         ]}

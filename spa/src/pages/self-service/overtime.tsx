@@ -11,6 +11,7 @@ import { Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
 import { selfServiceApi } from '@/api/self-service';
+import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { BottomSheet } from '@/components/ui/BottomSheet';
@@ -52,18 +53,19 @@ export default function SelfServiceOvertimePage() {
   });
 
   return (
-    <div className="px-4 py-4 space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-base font-medium">Overtime requests</h1>
-        <Button
-          variant="primary"
-          size="sm"
-          icon={<Plus size={14} />}
-          onClick={() => setSheetOpen(true)}
-        >
-          Apply for OT
-        </Button>
-      </div>
+    <div>
+      <PageHeader title="Overtime Requests" backTo="/self-service" backLabel="Dashboard" />
+      <div className="px-5 py-4 space-y-4">
+        <div className="flex items-center justify-end">
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<Plus size={14} />}
+            onClick={() => setSheetOpen(true)}
+          >
+            Apply for OT
+          </Button>
+        </div>
 
       {/* LOADING */}
       {isLoading && !data && (
@@ -112,6 +114,7 @@ export default function SelfServiceOvertimePage() {
           setSheetOpen(false);
         }}
       />
+      </div>{/* .px-5 py-4 */}
     </div>
   );
 }

@@ -2,6 +2,7 @@ import type { ChangeEvent } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { client } from '@/api/client';
+import { PageHeader } from '@/components/layout/PageHeader';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { Switch } from '@/components/ui/Switch';
 
@@ -57,43 +58,48 @@ export default function NotificationPreferencesPage() {
 
   if (isLoading) {
     return (
-      <div className="px-4 py-4 space-y-2">
-        {[1, 2, 3, 4, 5].map((i) => <SkeletonBlock key={i} className="h-14 rounded-md" />)}
+      <div>
+        <PageHeader title="Notification Preferences" backTo="/self-service" backLabel="Dashboard" />
+        <div className="px-5 py-4 space-y-2">
+          {[1, 2, 3, 4, 5].map((i) => <SkeletonBlock key={i} className="h-14 rounded-md" />)}
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="px-4 py-4">
-      <h1 className="text-lg font-medium mb-3">Notification Preferences</h1>
-      <div className="rounded-md border border-default overflow-hidden">
-        <div className="grid grid-cols-12 px-3 py-2 border-b border-default bg-subtle text-[10px] uppercase tracking-wider text-muted font-medium">
-          <div className="col-span-8">Type</div>
-          <div className="col-span-2 text-right">In-app</div>
-          <div className="col-span-2 text-right">Email</div>
-        </div>
-        {NOTIFICATION_TYPES.map((row) => (
-          <div key={row.key} className="grid grid-cols-12 px-3 py-3 border-b border-subtle last:border-b-0 items-center">
-            <div className="col-span-8 pr-2">
-              <div className="text-sm font-medium">{row.label}</div>
-              <div className="text-xs text-muted">{row.description}</div>
-            </div>
-            <div className="col-span-2 flex justify-end">
-              <Switch
-                checked={isEnabled(row.key, 'in_app')}
-                onChange={handleSwitch(row.key, 'in_app')}
-                aria-label={`Enable in-app for ${row.label}`}
-              />
-            </div>
-            <div className="col-span-2 flex justify-end">
-              <Switch
-                checked={isEnabled(row.key, 'email')}
-                onChange={handleSwitch(row.key, 'email')}
-                aria-label={`Enable email for ${row.label}`}
-              />
-            </div>
+    <div>
+      <PageHeader title="Notification Preferences" backTo="/self-service" backLabel="Dashboard" />
+      <div className="px-5 py-4">
+        <div className="rounded-md border border-default overflow-hidden">
+          <div className="grid grid-cols-12 px-3 py-2 border-b border-default bg-subtle text-[10px] uppercase tracking-wider text-muted font-medium">
+            <div className="col-span-8">Type</div>
+            <div className="col-span-2 text-right">In-app</div>
+            <div className="col-span-2 text-right">Email</div>
           </div>
-        ))}
+          {NOTIFICATION_TYPES.map((row) => (
+            <div key={row.key} className="grid grid-cols-12 px-3 py-3 border-b border-subtle last:border-b-0 items-center">
+              <div className="col-span-8 pr-2">
+                <div className="text-sm font-medium">{row.label}</div>
+                <div className="text-xs text-muted">{row.description}</div>
+              </div>
+              <div className="col-span-2 flex justify-end">
+                <Switch
+                  checked={isEnabled(row.key, 'in_app')}
+                  onChange={handleSwitch(row.key, 'in_app')}
+                  aria-label={`Enable in-app for ${row.label}`}
+                />
+              </div>
+              <div className="col-span-2 flex justify-end">
+                <Switch
+                  checked={isEnabled(row.key, 'email')}
+                  onChange={handleSwitch(row.key, 'email')}
+                  aria-label={`Enable email for ${row.label}`}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

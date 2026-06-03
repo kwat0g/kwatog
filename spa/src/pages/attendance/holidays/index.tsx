@@ -67,7 +67,7 @@ export default function HolidaysPage() {
         title="Holidays"
         subtitle={`${holidays.length} for ${year}`}
         backTo="/hr/attendance/hub"
-        backLabel="Attendance & Leave"
+        backLabel="Attendance"
         actions={
           <>
             <Button variant="ghost" size="sm" onClick={() => setYear((y) => y - 1)} icon={<ChevronLeft size={12} />} aria-label="Previous year" />

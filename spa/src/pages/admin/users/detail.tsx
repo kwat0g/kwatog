@@ -114,11 +114,10 @@ export default function AdminUserDetailPage() {
         subtitle={
           <span className="font-mono tabular-nums text-muted">{user.email}</span>
         }
-        backTo="/admin/users-roles"
-        backLabel="Users & Roles"
+        backTo="/admin/users"
+        backLabel="Users"
         breadcrumbs={[
           { label: 'Admin', href: '/admin' },
-          { label: 'Users & Roles', href: '/admin/users-roles' },
           { label: 'Users', href: '/admin/users' },
           { label: user.name },
         ]}

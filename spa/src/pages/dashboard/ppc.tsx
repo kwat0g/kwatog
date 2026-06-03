@@ -24,6 +24,8 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { usePermission } from '@/hooks/usePermission';
 import { chainStageLink, alertRefLink, kpiLink } from '@/lib/dashboardLinks';
+import { StockOutPanel } from '@/components/dashboard/StockOutPanel';
+import { DemandForecastPanel } from '@/components/dashboard/DemandForecastPanel';
 
 /* ───────────────────────── Typed interface ───────────────────────── */
 
@@ -572,7 +574,13 @@ export default function PpcDashboard() {
         {/* ── Row 6: D3 — WO Status Breakdown (full width) ── */}
         <WoStatusBreakdownPanel items={panels?.wo_status_breakdown ?? []} />
 
-        {/* ── Row 7: Chain bottleneck widget (gated by permission, Series C — Task C5) ── */}
+        {/* ── Row 7: Demand Forecast + Stock-out Risk ── */}
+        <div className="grid grid-cols-2 gap-4">
+          <DemandForecastPanel hideWhenEmpty />
+          <StockOutPanel horizonDays={60} hideWhenEmpty />
+        </div>
+
+        {/* ── Row 8: Chain bottleneck widget (gated by permission, Series C — Task C5) ── */}
         {can('dashboard.view_bottlenecks') && renderBottleneckWidget(bottlenecks)}
       </div>
     </div>

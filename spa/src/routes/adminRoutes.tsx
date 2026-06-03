@@ -1,5 +1,5 @@
 import { lazy } from 'react';
-import { Route } from 'react-router-dom';
+import { Route, Navigate } from 'react-router-dom';
 import { PermissionGuard } from '@/components/guards/PermissionGuard';
 
 // Admin (Sprint 1; Series R/R1 adds /admin/roles/create)
@@ -29,6 +29,8 @@ const AuditLogDetailPage = lazy(() => import('@/pages/admin/audit-logs/detail'))
 
 export const adminRoutes = (
   <>
+    {/* Admin landing — redirect to users management */}
+    <Route path="/admin" element={<Navigate to="/admin/users" replace />} />
     {/* Admin */}
     <Route
       path="/admin/roles"

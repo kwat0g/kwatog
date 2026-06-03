@@ -16,6 +16,7 @@ import { Chip } from '@/components/ui/Chip';
 import { SkeletonBlock, SkeletonDetail } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
+import { ForecastPanel } from '@/components/dashboard/ForecastPanel';
 
 /* ───────────────────────── Typed interface ───────────────────────── */
 
@@ -61,6 +62,7 @@ interface QualityDashboardData {
       in_process: ChainCoverage;
       outgoing: ChainCoverage;
     };
+    defect_rate_forecast: import('@/types/forecasting-dashboard').ForecastPanelData;
   };
 }
 
@@ -345,6 +347,16 @@ export default function QcDashboard() {
           <NcrStatusPanel items={panels?.ncr_status ?? []} />
           <QcChainCoveragePanel coverage={panels?.qc_chain_coverage} />
         </div>
+
+        {/* ── Row 4: Defect Rate Forecast ── */}
+        <ForecastPanel
+          data={panels?.defect_rate_forecast}
+          isLoading={false}
+          isError={false}
+          title="Defect Rate Forecast (6 months)"
+          formatValue={(v) => `${v.toFixed(1)}%`}
+          unitLabel="%"
+        />
       </div>
     </div>
   );

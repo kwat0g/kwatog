@@ -7,7 +7,7 @@ namespace App\Modules\SupplyChain\Models;
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\Auth\Models\User;
-use App\Modules\CRM\Models\Customer;
+use App\Modules\Accounting\Models\Customer;
 use App\Modules\CRM\Models\Product;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;

@@ -21,6 +21,68 @@ const sizes: Record<Size, string> = {
   xl: 'max-w-4xl',
 };
 
+/**
+ * Focusable element selector — matches all standard interactive elements
+ * plus elements with explicit tabindex >= 0.
+ */
+const FOCUSABLE =
+  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/**
+ * Trap keyboard focus inside the modal content region so Tab/Shift+Tab
+ * cycle through focusable elements rather than escaping into the page
+ * behind the overlay. Returns a cleanup function.
+ */
+function useFocusTrap(
+  containerRef: React.RefObject<HTMLDivElement | null>,
+  isOpen: boolean,
+): void {
+  useEffect(() => {
+    if (!isOpen || !containerRef.current) return;
+
+    const container = containerRef.current;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+
+      const focusableElements = container.querySelectorAll<HTMLElement>(FOCUSABLE);
+      if (focusableElements.length === 0) {
+        // Nothing focusable inside — prevent focus from leaving the overlay.
+        e.preventDefault();
+        return;
+      }
+
+      const first = focusableElements[0];
+      const last = focusableElements[focusableElements.length - 1];
+
+      if (e.shiftKey) {
+        // Shift+Tab: wrap to last if we're on the first element
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        // Tab: wrap to first if we're on the last element
+        if (document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+
+    // Focus the first focusable element inside the modal on open.
+    requestAnimationFrame(() => {
+      const focusableElements = container.querySelectorAll<HTMLElement>(FOCUSABLE);
+      if (focusableElements.length > 0) {
+        focusableElements[0].focus();
+      }
+    });
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, containerRef]);
+}
+
 export function Modal({
   isOpen,
   onClose,
@@ -31,6 +93,10 @@ export function Modal({
   className,
 }: ModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
+
+  // Focus trap — keeps Tab cycling within the modal while open.
+  useFocusTrap(dialogRef, isOpen);
+
   // Series X / Task X1 — push this modal onto the global scope stack so Esc
   // only closes the topmost modal, and so other shortcut hooks can read
   // modal depth.

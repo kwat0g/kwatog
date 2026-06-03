@@ -56,10 +56,8 @@ export default function App() {
           {maintenanceRoutes}
           {assetsRoutes}
           {advancedRoutes}
+          {selfServiceRoutes}
         </Route>
-
-        {/* Self-service portal — separate mobile-friendly layout */}
-        {selfServiceRoutes}
 
         {/* B2B Portals — Supplier + Customer */}
         {portalRoutes}

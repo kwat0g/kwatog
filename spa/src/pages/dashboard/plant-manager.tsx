@@ -10,6 +10,8 @@ import { Chip } from '@/components/ui/Chip';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { client } from '@/api/client';
 import { ChainBottleneckWidget } from '@/components/dashboard/ChainBottleneckWidget';
+import { StockOutPanel } from '@/components/dashboard/StockOutPanel';
+import { DemandForecastPanel } from '@/components/dashboard/DemandForecastPanel';
 import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
 import { alertRefLink } from '@/lib/dashboardLinks';
@@ -126,6 +128,12 @@ export default function PlantManagerDashboard() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
               <AlertsPanel alerts={q.data.panels.alerts} />
               <FinancialSnapshotPanel snapshot={q.data.panels.financial_snapshot} />
+            </div>
+
+            {/* Row 5: Forecasting */}
+            <div className="grid grid-cols-2 gap-3">
+              <StockOutPanel title="Stock-out Risk Forecast" horizonDays={30} hideWhenEmpty />
+              <DemandForecastPanel hideWhenEmpty />
             </div>
 
             {/* Bottleneck widget */}

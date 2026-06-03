@@ -58,11 +58,10 @@ export default function AdminActivityFeedPage() {
       <PageHeader
         title="System activity"
         subtitle={data ? `${data.meta.total.toLocaleString()} events` : undefined}
-        backTo="/admin/users-roles"
-        backLabel="Users & Roles"
+        backTo="/admin/audit-logs"
+        backLabel="Audit Logs"
         breadcrumbs={[
-          { label: 'Admin', href: '/admin' },
-          { label: 'Users & Roles', href: '/admin/users-roles' },
+          { label: 'Admin', href: '/admin/audit-logs' },
           { label: 'Activity' },
         ]}
         actions={

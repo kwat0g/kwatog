@@ -23,6 +23,7 @@ import {
   FileText,
   Package,
   DollarSign,
+  TrendingUp,
   Inbox,
   type LucideIcon,
 } from 'lucide-react';
@@ -59,10 +60,13 @@ interface NavSection {
 /**
  * S1 — Consolidated sidebar navigation.
  *
- * Reduced from ~57 items to ~22 primary entry points. Sub-features are
- * accessed via tabs/sections within parent "hub" pages (PayrollHub,
- * AttendanceHub, AdminUsersRolesHub) or via deep links from the parent
- * page. Only PRIMARY module entry points appear here.
+ * Primary module entry points link to standalone pages OR hub pages.
+ * Hub pages (Attendance Hub, Payroll Hub) aggregate secondary
+ * sub-features (overtime, shifts, holidays, adjustments, gov tables)
+ * accessible from within the hub via tabs and deep links.
+ *
+ * Admin pages (Users, Roles, Audit Logs, Settings) are all important
+ * enough for standalone sidebar entries.
  */
 const SECTIONS: NavSection[] = [
   {
@@ -77,8 +81,9 @@ const SECTIONS: NavSection[] = [
   {
     label: 'Sales & CRM',
     items: [
-      { to: '/crm/sales-orders',     label: 'Sales orders', icon: Briefcase,     feature: 'crm', permission: 'crm.sales_orders.view' },
-      { to: '/accounting/customers', label: 'Customers',    icon: Users2,        feature: 'accounting', permission: 'accounting.customers.view' },
+      { to: '/crm/sales-orders',     label: 'Sales orders',     icon: Briefcase,     feature: 'crm', permission: 'crm.sales_orders.view' },
+      { to: '/accounting/customers', label: 'Customers',        icon: Users2,        feature: 'accounting', permission: 'accounting.customers.view' },
+      { to: '/forecasting/demand',   label: 'Demand Forecast', icon: TrendingUp, permission: 'forecasting.view' },
     ],
   },
   {
@@ -129,10 +134,11 @@ const SECTIONS: NavSection[] = [
   {
     label: 'Human Resources',
     items: [
-      { to: '/hr/employees',        label: 'Employees',         icon: Users,     feature: 'hr', permission: 'hr.employees.view', badgeKey: 'profile_requests' },
-      { to: '/hr/attendance/hub',    label: 'Attendance & Leave', icon: Clock4,   feature: 'attendance', permission: 'attendance.view', badgeKey: 'leaves' },
-      { to: '/payroll/hub',          label: 'Payroll',           icon: Wallet,    feature: 'payroll', permission: 'payroll.view', badgeKey: 'payroll' },
-      { to: '/hr/loans',             label: 'Loans',             icon: HandCoins, feature: 'loans', permission: 'loans.view' },
+      { to: '/hr/employees',             label: 'Employees',     icon: Users,       feature: 'hr', permission: 'hr.employees.view', badgeKey: 'profile_requests' },
+      { to: '/hr/attendance/hub',        label: 'Attendance',    icon: Clock4,      feature: 'attendance', permission: 'attendance.view', badgeKey: 'leaves' },
+      { to: '/hr/leaves',                label: 'Leave',         icon: CalendarDays, feature: 'leave', permission: 'leave.view' },
+      { to: '/payroll/hub',              label: 'Payroll',       icon: Wallet,      feature: 'payroll', permission: 'payroll.view', badgeKey: 'payroll' },
+      { to: '/hr/loans',                 label: 'Loans',         icon: HandCoins,   feature: 'loans', permission: 'loans.view' },
     ],
   },
   {
@@ -145,8 +151,10 @@ const SECTIONS: NavSection[] = [
   {
     label: 'Administration',
     items: [
-      { to: '/admin/users-roles', label: 'Users & Roles',   icon: Users2,       permission: 'admin.users.manage' },
-      { to: '/admin/settings',    label: 'System settings', icon: SettingsIcon, permission: 'admin.settings.manage' },
+      { to: '/admin/users',     label: 'Users',          icon: Users2,       permission: 'admin.users.manage' },
+      { to: '/admin/roles',     label: 'Roles',          icon: ShieldCheck,  permission: 'admin.roles.manage' },
+      { to: '/admin/audit-logs', label: 'Audit Logs',    icon: FileText,     permission: 'admin.audit_logs.view' },
+      { to: '/admin/settings',  label: 'System settings', icon: SettingsIcon, permission: 'admin.settings.manage' },
     ],
   },
 ];

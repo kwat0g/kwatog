@@ -28,7 +28,7 @@ export function Chip({ variant = 'neutral', className, children }: ChipProps) {
   return (
     <span
       className={cn(
-        'inline-flex items-center px-1.5 py-0.5 rounded-sm text-xs font-medium leading-tight whitespace-nowrap',
+        'inline-flex items-center px-1.5 py-0.5 rounded-sm text-xs font-medium leading-tight whitespace-nowrap transition-colors duration-fast',
         variants[variant],
         className,
       )}

@@ -7,12 +7,13 @@
  * Data source: GET /api/v1/dashboards/employee (via dashboardsApi.employee)
  * Backend:     RoleDashboardService::employee()
  * Cache:       30s Redis per user
- * Layout:      Mobile-first (390px viewport), 3 KPI tiles + 3 quick actions
+ * Layout:      Full-width SPA layout with PageHeader
  */
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { Calendar, FileText, Receipt, ChevronRight, Clock, FolderOpen } from 'lucide-react';
 import { dashboardsApi } from '@/api/dashboards';
+import { PageHeader } from '@/components/layout/PageHeader';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 
@@ -46,6 +47,15 @@ interface EmployeeDashboardData {
 /* ───────────────────────── Page component ───────────────────────── */
 
 export default function SelfServiceHome() {
+  return (
+    <div>
+      <PageHeader title="Dashboard" backTo="/self-service" backLabel="Self-service" />
+      <SelfServiceContent />
+    </div>
+  );
+}
+
+function SelfServiceContent() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['self-service', 'dashboard'],
     queryFn: () => dashboardsApi.employee(),
@@ -55,7 +65,7 @@ export default function SelfServiceHome() {
   /* ─── LOADING ─── */
   if (isLoading && !data) {
     return (
-      <div className="px-4 py-4 space-y-3" aria-label="Loading dashboard">
+      <div className="px-5 py-4 space-y-3" aria-label="Loading dashboard">
         {[1, 2, 3].map((i) => <SkeletonBlock key={i} className="h-20 rounded-md" />)}
       </div>
     );
@@ -64,7 +74,7 @@ export default function SelfServiceHome() {
   /* ─── ERROR ─── */
   if (isError || !data) {
     return (
-      <div className="px-4 py-6">
+      <div className="px-5 py-6">
         <EmptyState
           icon="alert-circle"
           title="Couldn't load your dashboard"
@@ -90,7 +100,7 @@ export default function SelfServiceHome() {
 
   /* ─── DATA ─── */
   return (
-    <div className="px-4 py-4 space-y-4">
+    <div className="px-5 py-4 space-y-4">
       {notice && (
         <div
           className="rounded-md border border-default bg-subtle px-3 py-2 text-sm text-muted"

@@ -24,13 +24,14 @@ const CalendarPage       = lazy(() => import('@/pages/calendar'));
 const ApprovalsBoardPage = lazy(() => import('@/pages/approvals'));
 const NotificationsListPage = lazy(() => import('@/pages/notifications'));
 
-// Series F / Task F7 — System activity feed
+// Hub pages — landing pages for secondary sub-features
+const PayrollHubPage = lazy(() => import('@/pages/payroll/hub'));
+const AttendanceHubPage = lazy(() => import('@/pages/attendance/hub'));
+const AdminUsersRolesHubPage = lazy(() => import('@/pages/admin/users-roles'));
+
 const AdminActivityFeedPage = lazy(() => import('@/pages/admin/activity'));
 
-// S1 — Hub pages
-const AdminUsersRolesHubPage = lazy(() => import('@/pages/admin/users-roles'));
-const PayrollHubPage         = lazy(() => import('@/pages/payroll/hub'));
-const AttendanceHubPage      = lazy(() => import('@/pages/attendance/hub'));
+
 
 export const dashboardRoutes = (
   <>
@@ -79,10 +80,10 @@ export const dashboardRoutes = (
       element={<PermissionGuard permission="admin.activity.view"><AdminActivityFeedPage /></PermissionGuard>}
     />
 
-    {/* S1 — Hub pages (supporting/admin features only) */}
-    <Route path="/admin/users-roles" element={<PermissionGuard permission="admin.users.manage"><AdminUsersRolesHubPage /></PermissionGuard>} />
-    <Route path="/payroll/hub" element={<PermissionGuard permission="payroll.view"><PayrollHubPage /></PermissionGuard>} />
-    <Route path="/hr/attendance/hub" element={<PermissionGuard permission="attendance.view"><AttendanceHubPage /></PermissionGuard>} />
+    {/* Hub pages — landing pages that aggregate secondary sub-features */}
+    <Route path="/payroll/hub" element={<PayrollHubPage />} />
+    <Route path="/hr/attendance/hub" element={<AttendanceHubPage />} />
+    <Route path="/admin/users-roles" element={<AdminUsersRolesHubPage />} />
 
     {/* Notifications page (Sprint 8 — Task 77) */}
     <Route path="/notifications" element={<NotificationsListPage />} />

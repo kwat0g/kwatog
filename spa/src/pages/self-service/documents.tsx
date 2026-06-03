@@ -12,6 +12,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { Download, FileText, Receipt, ChevronRight } from 'lucide-react';
 import { selfServiceApi } from '@/api/self-service';
+import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -39,8 +40,9 @@ export default function SelfServiceDocumentsPage() {
   };
 
   return (
-    <div className="px-4 py-4 space-y-4">
-      <h1 className="text-base font-medium">My documents</h1>
+    <div>
+      <PageHeader title="My Documents" backTo="/self-service" backLabel="Dashboard" />
+      <div className="px-5 py-4 space-y-4">
 
       {/* LOADING */}
       {isLoading && !data && (
@@ -120,6 +122,7 @@ export default function SelfServiceDocumentsPage() {
           </p>
         </>
       )}
+      </div>{/* .px-5 py-4 */}
     </div>
   );
 }

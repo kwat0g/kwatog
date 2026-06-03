@@ -290,7 +290,7 @@ export function DataTable<T>({
                 title="Customize columns"
                 aria-label="Customize columns"
                 onClick={() => setVisMenuOpen((v) => !v)}
-                className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-default text-muted hover:bg-elevated"
+                className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-default text-muted hover:bg-elevated transition-colors duration-fast cursor-pointer"
               >
                 <Settings2 size={14} />
               </button>
@@ -329,7 +329,7 @@ export function DataTable<T>({
                   title={`${d} rows`}
                   onClick={() => handleDensityChange(d)}
                   className={cn(
-                    'h-7 w-7 inline-flex items-center justify-center rounded-md border border-default',
+                    'h-7 w-7 inline-flex items-center justify-center rounded-md border border-default transition-colors duration-fast cursor-pointer',
                     density === d ? 'bg-elevated text-primary' : 'text-muted hover:bg-elevated',
                   )}
                 >
@@ -379,16 +379,15 @@ export function DataTable<T>({
                 return (
                   <th
                     key={col.key}
-                    style={isPinned ? { left: pinnedOffsets[col.key] } : undefined}
-                    className={cn(
-                      'px-2.5 text-2xs uppercase tracking-wider text-muted font-medium select-none bg-canvas',
-                      rowHeight.default,
-                      alignClass[col.align ?? 'left'],
-                      col.sortable && onSort && 'cursor-pointer hover:text-primary',
-                      isPinned && pinnedTHClass,
-                      isPinned && 'border-r border-default',
-                      col.className,
-                    )}
+                    style={isPinned ? { left: pinnedOffsets[col.key] } : undefined}                      className={cn(
+                        'px-2.5 text-2xs uppercase tracking-wider text-muted font-medium select-none bg-canvas',
+                        rowHeight.default,
+                        alignClass[col.align ?? 'left'],
+                        col.sortable && onSort && 'cursor-pointer hover:text-primary transition-colors duration-fast',
+                        isPinned && pinnedTHClass,
+                        isPinned && 'border-r border-default',
+                        col.className,
+                      )}
                     onClick={() => handleHeaderClick(col)}
                   >
                     <span className="inline-flex items-center">
@@ -410,7 +409,7 @@ export function DataTable<T>({
                   <tr
                     className={cn(
                       'border-b border-subtle transition-colors duration-fast',
-                      onRowClick && 'cursor-pointer hover:bg-subtle',
+                      onRowClick && 'cursor-pointer hover:bg-subtle active:bg-elevated',
                       isSelected && 'bg-info-bg',
                       highlightedRowId && rid === highlightedRowId && 'bg-elevated',
                       rowHeight[density],
@@ -495,13 +494,13 @@ export function DataTable<T>({
             {meta.from ?? 0}–{meta.to ?? 0} of {meta.total}
           </div>
           <div className="flex items-center gap-1">
-            <Button size="sm" variant="ghost" disabled={meta.current_page <= 1} onClick={() => onPageChange(1)} aria-label="First page" icon={<ChevronsLeft size={14} />} />
-            <Button size="sm" variant="ghost" disabled={meta.current_page <= 1} onClick={() => onPageChange(meta.current_page - 1)} aria-label="Previous page" icon={<ChevronLeft size={14} />} />
+            <button type="button" disabled={meta.current_page <= 1} onClick={() => onPageChange(1)} aria-label="First page" className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted hover:bg-elevated hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors duration-fast active:scale-[0.95]"><ChevronsLeft size={14} /></button>
+            <button type="button" disabled={meta.current_page <= 1} onClick={() => onPageChange(meta.current_page - 1)} aria-label="Previous page" className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted hover:bg-elevated hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors duration-fast active:scale-[0.95]"><ChevronLeft size={14} /></button>
             <span className="text-xs font-mono tabular-nums px-2 text-muted">
               Page {meta.current_page} of {meta.last_page}
             </span>
-            <Button size="sm" variant="ghost" disabled={meta.current_page >= meta.last_page} onClick={() => onPageChange(meta.current_page + 1)} aria-label="Next page" icon={<ChevronRight size={14} />} />
-            <Button size="sm" variant="ghost" disabled={meta.current_page >= meta.last_page} onClick={() => onPageChange(meta.last_page)} aria-label="Last page" icon={<ChevronsRight size={14} />} />
+            <button type="button" disabled={meta.current_page >= meta.last_page} onClick={() => onPageChange(meta.current_page + 1)} aria-label="Next page" className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted hover:bg-elevated hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors duration-fast active:scale-[0.95]"><ChevronRight size={14} /></button>
+            <button type="button" disabled={meta.current_page >= meta.last_page} onClick={() => onPageChange(meta.last_page)} aria-label="Last page" className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted hover:bg-elevated hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors duration-fast active:scale-[0.95]"><ChevronsRight size={14} /></button>
           </div>
         </div>
       )}

@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { cn } from '@/lib/cn';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -95,16 +96,20 @@ export default function EmployeeDetailPage() {
         <OnboardingStepper employeeId={id} />
       </div>
 
-      {/* Tabs */}
-      <div className="border-b border-default px-5 flex gap-4">
+      {/* Tabs — accessible tab pattern with cursor-pointer and cn() */}
+      <div className="border-b border-default px-5 flex gap-4" role="tablist" aria-label="Employee details">
         {TABS.map((t) => (
           <button
             key={t}
             type="button"
-            className={
-              'h-10 text-sm border-b-2 -mb-px transition-colors ' +
-              (tab === t ? 'border-accent text-primary font-medium' : 'border-transparent text-muted hover:text-primary')
-            }
+            role="tab"
+            aria-selected={tab === t}
+            className={cn(
+              'h-10 text-sm border-b-2 -mb-px transition-colors duration-fast cursor-pointer',
+              tab === t
+                ? 'border-accent text-primary font-medium'
+                : 'border-transparent text-muted hover:text-primary',
+            )}
             onClick={() => setTab(t)}
           >
             {t}

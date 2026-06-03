@@ -49,7 +49,7 @@ export function TabNavigation({ tabs, defaultKey, className }: TabNavigationProp
               role="tab"
               aria-selected={isActive}
               className={cn(
-                'relative flex items-center px-4 py-2.5 text-sm whitespace-nowrap transition-colors duration-fast',
+                'relative flex items-center px-4 py-2.5 text-sm whitespace-nowrap transition-colors duration-fast cursor-pointer',
                 isActive
                   ? 'text-primary font-medium'
                   : 'text-secondary hover:text-primary hover:bg-subtle',

@@ -13,6 +13,7 @@ use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Services\BillService;
 use App\Modules\Accounting\Services\BudgetService;
 use App\Modules\Accounting\Services\InvoiceService;
+use App\Modules\Dashboard\Services\ForecastingDashboardService;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
@@ -24,6 +25,7 @@ class FinanceDashboardService
     public function __construct(
         private readonly BillService $billService,
         private readonly InvoiceService $invoiceService,
+        private readonly ForecastingDashboardService $forecastingService,
     ) {}
 
     public function summary(): array
@@ -93,10 +95,11 @@ class FinanceDashboardService
                     'recent_journal_entries' => $recentJournalEntries,
                     'top_overdue_customers'  => $topOverdue,
                     // Task D5 — additional Finance Officer panels.
-                    'payroll_pipeline'       => $this->payrollPipeline(),
-                    'unposted_jes'           => $this->unpostedJes(),
-                    'ap_due_this_week'       => $this->apDueThisWeek(),
-                    'budget_vs_actual_top'   => $this->budgetVsActualTop(),
+                'payroll_pipeline'       => $this->payrollPipeline(),
+                'unposted_jes'           => $this->unpostedJes(),
+                'ap_due_this_week'       => $this->apDueThisWeek(),
+                'budget_vs_actual_top'   => $this->budgetVsActualTop(),
+                'revenue_forecast'       => $this->forecastingService->revenueForecast(),
                 ];
             });
     }

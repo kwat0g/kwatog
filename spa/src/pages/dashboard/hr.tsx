@@ -8,8 +8,10 @@ import { Panel } from '@/components/ui/Panel';
 import { StatCard } from '@/components/ui/StatCard';
 import { Chip } from '@/components/ui/Chip';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { ForecastPanel } from '@/components/dashboard/ForecastPanel';
 import { client } from '@/api/client';
 import type { ApiSuccess } from '@/types';
+import type { ForecastPanelData } from '@/types/forecasting-dashboard';
 
 /**
  * Task D4 — HR Officer dashboard.
@@ -43,6 +45,7 @@ interface HrDashboardData {
       birthdays_count: number;
     };
     pending_my_action: { leave_requests: number; profile_updates: number; clearances: number; total: number };
+    headcount_forecast: ForecastPanelData;
   };
 }
 
@@ -105,6 +108,16 @@ export default function HrDashboard() {
               <RecentHiresPanel hires={q.data.panels.recent_hires} />
               <PendingLeavesPanel leaves={q.data.panels.pending_leaves} />
             </div>
+
+            {/* Row 6 — Headcount forecast */}
+            <ForecastPanel
+              data={q.data.panels.headcount_forecast}
+              isLoading={false}
+              isError={false}
+              title="Headcount Forecast"
+              formatValue={(v) => String(v)}
+              unitLabel="employees"
+            />
           </>
         )}
       </div>

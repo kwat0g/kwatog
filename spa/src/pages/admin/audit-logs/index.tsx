@@ -74,8 +74,8 @@ export default function AuditLogsPage() {
       <PageHeader
         title="Audit logs"
         subtitle={data ? `${data.meta.total.toLocaleString()} entries` : undefined}
-        backTo="/admin/users-roles"
-        backLabel="Users & Roles"
+        backTo="/admin/audit-logs"
+        backLabel="Admin"
         actions={
           <a href={auditLogsApi.exportUrl(filters)} download>
             <Button variant="secondary" size="sm" icon={<Download size={14} />}>

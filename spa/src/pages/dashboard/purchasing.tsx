@@ -16,6 +16,8 @@ import { Chip } from '@/components/ui/Chip';
 import { SkeletonBlock, SkeletonDetail } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
+import { StockOutPanel } from '@/components/dashboard/StockOutPanel';
+import { DemandForecastPanel } from '@/components/dashboard/DemandForecastPanel';
 
 /* ───────────────────────── Typed interface ───────────────────────── */
 
@@ -303,6 +305,12 @@ export default function PurchasingDashboard() {
         <div className="grid grid-cols-2 gap-4">
           <SupplierPerformancePanel items={panels?.supplier_performance ?? []} />
           <UpcomingDeliveriesPanel items={panels?.upcoming_deliveries ?? []} />
+        </div>
+
+        {/* ── Row 4: Forecasting ── */}
+        <div className="grid grid-cols-2 gap-4">
+          <StockOutPanel horizonDays={30} hideWhenEmpty />
+          <DemandForecastPanel hideWhenEmpty />
         </div>
       </div>
     </div>

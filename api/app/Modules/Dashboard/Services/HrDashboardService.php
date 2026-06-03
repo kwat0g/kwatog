@@ -6,6 +6,7 @@ namespace App\Modules\Dashboard\Services;
 
 use App\Modules\Auth\Models\User;
 use App\Modules\Dashboard\Services\Concerns\DashboardQueries;
+use App\Modules\Dashboard\Services\ForecastingDashboardService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -21,6 +22,10 @@ class HrDashboardService
     use DashboardQueries;
 
     private const CACHE_TTL = 30;
+
+    public function __construct(
+        private readonly ForecastingDashboardService $forecastingService,
+    ) {}
 
     public function hr(User $user): array
     {
@@ -49,6 +54,7 @@ class HrDashboardService
                     'leave_calendar_week'=> $this->hrLeaveCalendarWeek(),
                     'hr_calendar_events' => $this->hrCalendarEvents(),
                     'pending_my_action'  => $this->hrPendingMyAction($user),
+                    'headcount_forecast' => $this->forecastingService->headcountForecast(),
                 ],
             ];
         });

@@ -87,7 +87,7 @@ export default function ShiftsPage() {
         title="Shifts"
         subtitle={data ? `${data.meta.total} shifts` : undefined}
         backTo="/hr/attendance/hub"
-        backLabel="Attendance & Leave"
+        backLabel="Attendance"
         actions={
           <>
             {can('attendance.shifts.manage') && (

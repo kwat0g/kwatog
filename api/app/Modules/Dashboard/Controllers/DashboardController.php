@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Dashboard\Controllers;
 
+use App\Modules\Dashboard\Services\ForecastingDashboardService;
 use App\Modules\Dashboard\Services\HrDashboardService;
 use App\Modules\Dashboard\Services\PlantManagerDashboardService;
 use App\Modules\Dashboard\Services\PpcDashboardService;

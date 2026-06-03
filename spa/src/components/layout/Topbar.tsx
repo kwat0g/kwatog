@@ -1,11 +1,11 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { Menu, Moon, Sun, Search, LogOut } from 'lucide-react';
-import { Avatar } from '@/components/ui/Avatar';
+import { Menu, Moon, Sun, Search } from 'lucide-react';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { CommandPalette } from '@/components/ui/CommandPalette';
 import { Breadcrumbs } from './Breadcrumbs';
 import { NotificationBell } from './NotificationBell';
+import { ProfileDropdown } from './ProfileDropdown';
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { useTheme } from '@/hooks/useTheme';
 
@@ -83,21 +83,7 @@ export function Topbar({ user, onLogout, rightExtras }: TopbarProps) {
 
       {rightExtras}
 
-      {user && (
-        <div className="flex items-center gap-2 pl-2 ml-1 border-l border-default">
-          <Avatar size="sm" name={user.name} />
-          <Tooltip content="Sign out">
-            <button
-              type="button"
-              onClick={onLogout}
-              aria-label="Sign out"
-              className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted hover:bg-elevated hover:text-primary"
-            >
-              <LogOut size={14} />
-            </button>
-          </Tooltip>
-        </div>
-      )}
+      {user && <ProfileDropdown user={user} onLogout={onLogout} />}
 
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </header>

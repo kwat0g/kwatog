@@ -34,6 +34,33 @@ const PERIOD_STATUS_VARIANT: Record<string, 'neutral' | 'info' | 'warning' | 'su
   rejected: 'danger',
 };
 
+/** ── Quick-action buttons shown at the top of the hub ── */
+function QuickActions() {
+  const quickLinks = [
+    { label: 'All Periods',     to: '/payroll/periods',          icon: '📆' },
+    { label: 'New Period',      to: '/payroll/periods/create',   icon: '➕' },
+    { label: 'Pipeline',        to: '/payroll/pipeline',         icon: '🔬' },
+    { label: 'Adjustments',     to: '/payroll/adjustments',      icon: '⚖️' },
+    { label: 'Gov Tables',      to: '/admin/gov-tables',         icon: '📊' },
+  ];
+  return (
+    <div className="px-5 pt-4 pb-2">
+      <div className="flex items-center gap-2 flex-wrap">
+        {quickLinks.map((link) => (
+          <Link
+            key={link.to}
+            to={link.to}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md border border-default bg-canvas text-secondary hover:bg-elevated hover:text-primary hover:border-accent transition-all duration-fast"
+          >
+            <span aria-hidden>{link.icon}</span>
+            {link.label}
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function PayrollHubPage() {
   const [searchParams] = useSearchParams();
   const activeTab = searchParams.get('tab') ?? 'periods';
@@ -47,6 +74,7 @@ export default function PayrollHubPage() {
           { label: 'Payroll' },
         ]}
       />
+      <QuickActions />
       <TabNavigation tabs={TABS} defaultKey="periods" />
       <div className="px-5 py-4">
         {activeTab === 'periods' && <PeriodsTab />}

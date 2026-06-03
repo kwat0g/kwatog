@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
+import { PageHeader } from '@/components/layout/PageHeader';
 import {
   BottomSheet,
   Button,
@@ -53,13 +54,14 @@ export default function SelfServiceLoansPage() {
   });
 
   return (
-    <div className="px-4 py-4 pb-24 space-y-4">
-      <header className="flex items-center justify-between">
-        <h1 className="text-lg font-medium">Loans</h1>
-        <Button variant="primary" size="sm" onClick={() => setShowApply(true)}>
-          Apply
-        </Button>
-      </header>
+    <div>
+      <PageHeader title="Loans" backTo="/self-service" backLabel="Dashboard" />
+      <div className="px-5 py-4 space-y-4">
+        <div className="flex items-center justify-end">
+          <Button variant="primary" size="sm" onClick={() => setShowApply(true)}>
+            Apply
+          </Button>
+        </div>
 
       {isLoading && (
         <div className="space-y-3">
@@ -118,6 +120,7 @@ export default function SelfServiceLoansPage() {
         onSubmit={(v) => apply.mutate(v)}
         pending={apply.isPending}
       />
+      </div>{/* .px-5 py-4 */}
     </div>
   );
 }

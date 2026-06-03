@@ -159,8 +159,9 @@ class CalendarAggregatorService
     private function deliveries(Carbon $from, Carbon $to): array
     {
         $rows = DB::table('deliveries as dl')
-            ->leftJoin('customers as c', 'dl.customer_id', '=', 'c.id')
-            ->select(['dl.id', 'dl.delivery_note_number', 'dl.scheduled_date', 'dl.status', 'c.name as customer_name'])
+            ->leftJoin('sales_orders as so', 'dl.sales_order_id', '=', 'so.id')
+            ->leftJoin('customers as c', 'so.customer_id', '=', 'c.id')
+            ->select(['dl.id', 'dl.delivery_number', 'dl.scheduled_date', 'dl.status', 'c.name as customer_name'])
             ->whereBetween('dl.scheduled_date', [$from->toDateString(), $to->toDateString()])
             ->orderBy('dl.scheduled_date')
             ->limit(500)
@@ -169,7 +170,7 @@ class CalendarAggregatorService
         return $rows->map(fn ($r) => [
             'id'             => 'delivery-'.$this->hash((int) $r->id),
             'type'           => 'delivery',
-            'title'          => (string) $r->delivery_note_number.' — '.(string) ($r->customer_name ?? ''),
+            'title'          => (string) $r->delivery_number.' — '.(string) ($r->customer_name ?? ''),
             'start'          => (string) $r->scheduled_date,
             'end'            => (string) $r->scheduled_date,
             'all_day'        => true,

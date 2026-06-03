@@ -12,6 +12,7 @@ import { financeDashboardApi } from '@/api/accounting/dashboard';
 import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
 import { ChainBottleneckWidget } from '@/components/dashboard/ChainBottleneckWidget';
+import { ForecastPanel } from '@/components/dashboard/ForecastPanel';
 
 /**
  * Task D5 — Finance Officer dashboard.
@@ -100,7 +101,17 @@ export default function FinanceDashboardPage() {
               <RecentJesPanel entries={summary.data.recent_journal_entries} />
             </div>
 
-            {/* Row 5 — Top overdue customers. */}
+            {/* Row 5 — Revenue forecast */}
+            <ForecastPanel
+              data={summary.data.revenue_forecast}
+              isLoading={summary.isLoading}
+              isError={summary.isError}
+              title="Revenue Forecast (6 months)"
+              formatValue={(v) => formatPeso(String(v))}
+              unitLabel="PHP"
+            />
+
+            {/* Row 6 — Top overdue customers. */}
             {summary.data.top_overdue_customers.length > 0 && (
               <Panel title="Top overdue customers">
                 <div className="overflow-x-auto">

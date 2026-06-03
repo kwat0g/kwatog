@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Download, CheckCircle2, Clock } from 'lucide-react';
 import { payrollsApi, type PayrollListParams } from '@/api/payroll/payrolls';
+import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -30,15 +31,16 @@ export default function SelfServicePayslipsPage() {
   });
 
   return (
-    <div className="px-4 py-4 space-y-3">
-      <div className="flex items-baseline justify-between">
-        <h1 className="text-base font-medium">My payslips</h1>
+    <div>
+      <PageHeader title="My Payslips" backTo="/self-service" backLabel="Dashboard" />
+      <div className="px-5 py-4 space-y-3">
         {data && (
-          <span className="text-xs text-muted font-mono tabular-nums">
-            {data.meta.total} total
-          </span>
+          <div className="flex items-baseline justify-end">
+            <span className="text-xs text-muted font-mono tabular-nums">
+              {data.meta.total} total
+            </span>
+          </div>
         )}
-      </div>
 
       {isLoading && !data && (
         <div className="space-y-2">
@@ -142,6 +144,7 @@ export default function SelfServicePayslipsPage() {
           )}
         </ul>
       )}
+      </div>{/* .px-5 py-4 */}
     </div>
   );
 }

@@ -18,6 +18,7 @@ import { AxiosError } from 'axios';
 import { selfServiceApi } from '@/api/self-service';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
+import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/Input';
@@ -85,8 +86,9 @@ export default function SelfServiceProfilePage() {
   };
 
   return (
-    <div className="px-4 py-4 space-y-4">
-      <h1 className="text-base font-medium">My profile</h1>
+    <div>
+      <PageHeader title="My Profile" backTo="/self-service" backLabel="Dashboard" />
+      <div className="px-5 py-4 space-y-4">
 
       {/* LOADING */}
       {isLoading && !profile && (
@@ -234,6 +236,7 @@ export default function SelfServiceProfilePage() {
       {user?.email && (
         <p className="text-2xs text-muted text-center">{user.email}</p>
       )}
+      </div>{/* .px-5 py-4 */}
     </div>
   );
 }

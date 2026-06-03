@@ -111,8 +111,8 @@ export default function LeavesPage() {
       <PageHeader
         title="Leave requests"
         subtitle={data ? `${data.meta.total} total · ${grouped.pending_dept.length + grouped.pending_hr.length} awaiting approval` : undefined}
-        backTo="/hr/attendance/hub"
-        backLabel="Attendance & Leave"
+        backTo="/hr/leaves"
+        backLabel="Leave"
         actions={
           <>
             <Button variant="secondary" size="sm" onClick={() => setView(view === 'list' ? 'kanban' : 'list')}>
