@@ -104,7 +104,7 @@ export default function PayrollPeriodDetailPage() {
   if (periodLoading && !period) {
     return (
       <div>
-        <PageHeader title="Loading…"        backTo="/payroll/hub" backLabel="Payroll" breadcrumbs={[{ label: 'Payroll', href: '/payroll/hub' }, { label: 'Period' }]} />
+        <PageHeader title="Loading…" backTo="/payroll/periods" backLabel="Payroll" breadcrumbs={[{ label: 'Payroll', href: '/payroll/periods' }, { label: 'Period' }]} />
         <div className="px-5 py-4"><SkeletonTable columns={6} rows={6} /></div>
       </div>
     );
@@ -113,7 +113,7 @@ export default function PayrollPeriodDetailPage() {
   if (periodError || !period) {
     return (
       <div>
-        <PageHeader title="Payroll Period"        backTo="/payroll/hub" backLabel="Payroll" breadcrumbs={[{ label: 'Payroll', href: '/payroll/hub' }, { label: 'Period' }]} />
+        <PageHeader title="Payroll Period" backTo="/payroll/periods" backLabel="Payroll" breadcrumbs={[{ label: 'Payroll', href: '/payroll/periods' }, { label: 'Period' }]} />
         <EmptyState
           icon="alert-circle"
           title="Failed to load period"
@@ -174,9 +174,9 @@ export default function PayrollPeriodDetailPage() {
       <PageHeader
         title={period.label}
         subtitle={<>Payroll date <span className="font-mono">{formatDate(period.payroll_date)}</span> · created by {period.creator?.name ?? '—'}</>}
-               backTo="/payroll/hub" backLabel="Payroll"
+               backTo="/payroll/periods" backLabel="Payroll"
         breadcrumbs={[
-          { label: 'Payroll', href: '/payroll/hub' },
+          { label: 'Payroll', href: "/payroll/periods" },
           { label: 'Periods', href: '/payroll/periods' },
           { label: period.label },
         ]}

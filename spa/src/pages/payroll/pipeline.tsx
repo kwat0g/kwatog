@@ -50,7 +50,7 @@ export default function PayrollPipelinePage() {
   if (isLoading) {
     return (
       <div>
-        <PageHeader title="Payroll Pipeline" backTo="/payroll/hub" backLabel="Payroll" />
+        <PageHeader title="Payroll Pipeline" backTo="/payroll/periods" backLabel="Payroll" />
         <SkeletonTable columns={6} rows={12} />
       </div>
     );
@@ -74,7 +74,7 @@ export default function PayrollPipelinePage() {
       <PageHeader
         title="Payroll Pipeline"
         subtitle={`${year} · ${data.periods.filter((p) => p.exists).length} of ${data.periods.length} periods created`}
-        backTo="/payroll/hub"
+        backTo="/payroll/periods"
         backLabel="Payroll"
         breadcrumbs={[
           { label: 'Payroll' },

@@ -62,7 +62,7 @@ export default function CreatePayrollAdjustmentPage() {
 
   return (
     <div>
-      <PageHeader title="Raise Payroll Adjustment" backTo="/payroll/hub" backLabel="Payroll" breadcrumbs={[{ label: 'Payroll', href: '/payroll/hub' }, { label: 'Adjustments', href: '/payroll/adjustments' }, { label: 'New Adjustment' }]} />
+      <PageHeader title="Raise Payroll Adjustment" backTo="/payroll/adjustments" backLabel="Adjustments" breadcrumbs={[{ label: 'Payroll', href: '/payroll/periods' }, { label: 'Adjustments', href: '/payroll/adjustments' }, { label: 'New Adjustment' }]} />
       <form onSubmit={handleSubmit(onSubmit, onFormInvalid<FormValues>())} className="max-w-2xl mx-auto px-5 py-6">
         {empName && (
           <div className="mb-4 p-3 bg-surface border border-default rounded-md text-xs">

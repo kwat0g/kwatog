@@ -66,7 +66,7 @@ export default function HolidaysPage() {
       <PageHeader
         title="Holidays"
         subtitle={`${holidays.length} for ${year}`}
-        backTo="/hr/attendance/hub"
+        backTo="/hr/attendance"
         backLabel="Attendance"
         actions={
           <>

@@ -86,7 +86,7 @@ export default function ShiftsPage() {
       <PageHeader
         title="Shifts"
         subtitle={data ? `${data.meta.total} shifts` : undefined}
-        backTo="/hr/attendance/hub"
+        backTo="/hr/attendance"
         backLabel="Attendance"
         actions={
           <>

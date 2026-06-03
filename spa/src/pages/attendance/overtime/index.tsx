@@ -84,7 +84,7 @@ export default function OvertimeListPage() {
       <PageHeader
         title="Overtime requests"
         subtitle={data ? `${data.meta.total} total · ${grouped.pending.length} pending` : undefined}
-        backTo="/hr/attendance/hub"
+        backTo="/hr/attendance"
         backLabel="Attendance"
         actions={
           <>
