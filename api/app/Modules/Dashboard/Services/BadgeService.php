@@ -217,12 +217,29 @@ class BadgeService
                     ->whereIn('status', ['loading', 'in_transit'])
                     ->count(),
             ],
+
+            // Overview > Notifications — unread notification count.
+            'unread' => [
+                'permissions' => [],
+                'counter'     => fn (): int => $user->unreadNotifications()->count(),
+            ],
+
+            // CRM > Sales orders — pending confirmation / draft.
+            'pending_so' => [
+                'permissions' => ['crm.sales_orders.view'],
+                'counter'     => fn (): int => \App\Modules\CRM\Models\SalesOrder::query()
+                    ->whereIn('status', ['draft', 'pending_confirmation'])
+                    ->count(),
+            ],
         ];
     }
 
     /** @param  array<int, string>  $permissions */
     private function userHasAny(User $user, array $permissions): bool
     {
+        if ($permissions === []) {
+            return true;
+        }
         foreach ($permissions as $slug) {
             if ($user->hasPermission($slug)) {
                 return true;
