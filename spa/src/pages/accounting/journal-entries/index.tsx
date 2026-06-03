@@ -58,11 +58,19 @@ export default function JournalEntriesPage() {
       <PageHeader
         title="Journal Entries"
         subtitle={data ? `${data.meta.total} entries` : undefined}
-        actions={can('accounting.journal.create') ? (
-          <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/accounting/journal-entries/create')}>
-            New entry
-          </Button>
-        ) : null}
+        actions={
+          <>
+            <Button variant="secondary" size="sm" onClick={() => navigate('/accounting/coa')}>COA</Button>
+            <Button variant="secondary" size="sm" onClick={() => navigate('/accounting/vendors')}>Vendors</Button>
+            <Button variant="secondary" size="sm" onClick={() => navigate('/accounting/trial-balance')}>Trial Balance</Button>
+            <Button variant="secondary" size="sm" onClick={() => navigate('/budgeting')}>Budgets</Button>
+            {can('accounting.journal.create') && (
+              <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/accounting/journal-entries/create')}>
+                New entry
+              </Button>
+            )}
+          </>
+        }
       />
 
       <FilterBar
