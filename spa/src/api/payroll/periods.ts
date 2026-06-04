@@ -58,4 +58,8 @@ export const periodsApi = {
   // CA3 — Payroll pipeline (full-year view)
   pipeline: (year?: number) =>
     client.get<{ data: PayrollPipeline }>('/payroll-periods/pipeline', { params: year ? { year } : undefined }).then((r) => r.data.data),
+
+  // Task 6 — BIR 2316 Alphalist CSV export
+  downloadBirAlphalist: (year: number) =>
+    client.get(`/payroll/bir-alphalist?year=${year}`, { responseType: 'blob' }),
 };

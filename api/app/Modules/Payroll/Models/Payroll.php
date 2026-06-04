@@ -16,6 +16,11 @@ class Payroll extends Model
 {
     use HasFactory, HasHashId, HasAuditLog;
 
+    protected static function newFactory(): \Database\Factories\PayrollFactory
+    {
+        return \Database\Factories\PayrollFactory::new();
+    }
+
     protected $fillable = [
         'payroll_period_id', 'employee_id', 'pay_type',
         'days_worked',

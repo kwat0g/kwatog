@@ -5,6 +5,7 @@ declare(strict_types=1);
 // Payroll module routes.
 // Mounted automatically under /api/v1 by App\Providers\ModuleServiceProvider.
 
+use App\Modules\Payroll\Controllers\BirAlphalistController;
 use App\Modules\Payroll\Controllers\DisbursementProofController;
 use App\Modules\Payroll\Controllers\GovernmentTableController;
 use App\Modules\Payroll\Controllers\PayrollAdjustmentController;
@@ -80,5 +81,9 @@ if (class_exists(PayrollPeriodController::class)) {
         });
         Route::patch('/payroll-anomalies/{flag}/resolve', [PayrollAnomalyController::class, 'resolve'])
             ->middleware('permission:payroll.anomalies.review');
+
+        // ─── BIR 2316 Alphalist export (Task 6) ──────────────────
+        Route::get('/payroll/bir-alphalist', [BirAlphalistController::class, 'download'])
+            ->middleware('permission:payroll.view');
     });
 }

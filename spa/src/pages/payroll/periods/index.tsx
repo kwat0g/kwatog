@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Plus, CalendarRange } from 'lucide-react';
+import { Plus, CalendarRange, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { periodsApi, type PeriodListParams } from '@/api/payroll/periods';
 import { Button } from '@/components/ui/Button';
@@ -117,8 +117,23 @@ export default function PayrollPeriodsPage() {
     },
   ];
 
+  const canView = can('payroll.view');
   const canCreate = can('payroll.periods.create');
   const canRunThirteenth = can('payroll.thirteenth_month.run') || can('payroll.periods.create');
+
+  const handleBir2316Download = () => {
+    const year = new Date().getFullYear();
+    periodsApi.downloadBirAlphalist(year)
+      .then((res) => {
+        const url = URL.createObjectURL(res.data as Blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `BIR-2316-Alphalist-${year}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+      })
+      .catch(() => toast.error('Failed to download BIR 2316 alphalist'));
+  };
 
   return (
     <div>
@@ -127,6 +142,14 @@ export default function PayrollPeriodsPage() {
         subtitle={data ? `${data.meta.total} periods` : undefined}
         actions={
           <>
+            {canView && (
+              <Button
+                variant="secondary" size="sm" icon={<Download size={14} />}
+                onClick={handleBir2316Download}
+              >
+                BIR 2316
+              </Button>
+            )}
             <Button variant="secondary" size="sm" onClick={() => navigate('/payroll/adjustments')}>
               Adjustments
             </Button>
