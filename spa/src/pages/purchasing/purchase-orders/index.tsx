@@ -29,7 +29,7 @@ export default function PurchaseOrdersListPage() {
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['purchasing', 'purchase-orders', filters],
-    queryFn: () => purchaseOrdersApi.list(filters),
+    queryFn: ({ signal }) => purchaseOrdersApi.list(filters, signal),
     placeholderData: (prev) => prev,
   });
 

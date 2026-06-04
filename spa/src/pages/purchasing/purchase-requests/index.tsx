@@ -37,7 +37,7 @@ export default function PurchaseRequestsListPage() {
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['purchasing', 'purchase-requests', filters],
-    queryFn: () => purchaseRequestsApi.list(filters),
+    queryFn: ({ signal }) => purchaseRequestsApi.list(filters, signal),
     placeholderData: (prev) => prev,
   });
 

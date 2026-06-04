@@ -3,8 +3,8 @@ import type { PaginatedResponse, ListParams } from '@/types';
 import type { PurchaseRequest, CreatePurchaseRequestData, PurchaseOrder, PurchaseRequestTemplate } from '@/types/purchasing';
 
 export const purchaseRequestsApi = {
-  list: (params?: ListParams & { status?: string; priority?: string; is_auto_generated?: boolean | string; is_urgent?: boolean | string; from?: string; to?: string }) =>
-    client.get<PaginatedResponse<PurchaseRequest>>('/purchasing/purchase-requests', { params }).then((r) => r.data),
+  list: (params?: ListParams & { status?: string; priority?: string; is_auto_generated?: boolean | string; is_urgent?: boolean | string; from?: string; to?: string }, signal?: AbortSignal) =>
+    client.get<PaginatedResponse<PurchaseRequest>>('/purchasing/purchase-requests', { params, signal }).then((r) => r.data),
   show: (id: string) =>
     client.get<PurchaseRequest>(`/purchasing/purchase-requests/${id}`).then((r) => r.data),
   create: (data: CreatePurchaseRequestData) =>
