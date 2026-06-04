@@ -11,8 +11,10 @@ use App\Modules\HR\Enums\SeparationReason;
 use App\Modules\HR\Models\Clearance;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\EmploymentHistory;
+use App\Modules\Loans\Models\EmployeeLoan;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
 /**
@@ -188,6 +190,24 @@ class SeparationService
         }
         if (! $clearance->final_pay_computed) {
             throw new RuntimeException('Final pay must be computed before finalization.');
+        }
+
+        // Hard block: outstanding loans must be settled or deducted from final pay
+        // before Finance can finalize. Consistent with FinalPayService which includes
+        // active|pending balances in the less_loan_balance deduction line.
+        $outstandingLoans = EmployeeLoan::query()
+            ->where('employee_id', $clearance->employee_id)
+            ->whereIn('status', ['active', 'pending'])
+            ->where('balance', '>', 0)
+            ->count();
+
+        if ($outstandingLoans > 0) {
+            throw ValidationException::withMessages([
+                'outstanding_loans' => [
+                    "Cannot finalize: employee has {$outstandingLoans} outstanding loan(s) with a remaining balance. "
+                    . 'Settle all loans or confirm deduction in the final pay breakdown before finalizing.',
+                ],
+            ]);
         }
 
         return DB::transaction(function () use ($clearance, $by, $finalPay) {
