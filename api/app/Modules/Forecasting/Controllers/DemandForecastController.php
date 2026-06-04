@@ -136,7 +136,6 @@ class DemandForecastController extends Controller
      */
     public function accuracy(Request $request): JsonResponse
     {
-        abort_unless($request->user()?->can('forecasting.view'), 403);
         $year = (int) $request->query('year', now()->year);
         return response()->json(['data' => $this->service->accuracy($year)]);
     }
