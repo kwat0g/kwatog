@@ -57,8 +57,7 @@ export const authApi = {
 
   login: async (payload: LoginPayload) => {
     await getCsrfCookie();
-    const { data } = await client.post<{ data: AuthUser }>('/auth/login', payload);
-    return data.data;
+    return (await client.post<AuthUser>('/auth/login', payload)).data;
   },
 
   logout: async () => {
@@ -66,8 +65,7 @@ export const authApi = {
   },
 
   me: async (): Promise<AuthUser> => {
-    const { data } = await client.get<{ data: AuthUser }>('/auth/user');
-    return data.data;
+    return (await client.get<AuthUser>('/auth/user')).data;
   },
 
   changePassword: async (payload: ChangePasswordPayload) => {
@@ -76,7 +74,6 @@ export const authApi = {
   },
 
   updatePreferences: async (payload: PreferencesPayload): Promise<AuthUser> => {
-    const { data } = await client.patch<{ data: AuthUser }>('/auth/user/preferences', payload);
-    return data.data;
+    return (await client.patch<AuthUser>('/auth/user/preferences', payload)).data;
   },
 };

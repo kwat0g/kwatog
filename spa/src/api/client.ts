@@ -31,6 +31,25 @@ export const client = axios.create({
   },
 });
 
+// ─── Response unwrap interceptor ──────────────────────────────
+// Unwrap Laravel's single-key { data: <payload> } envelope so callers
+// receive the payload directly via r.data.  Guard: only fires when 'data'
+// is the ONLY key — paginated responses ({ data, meta, links }) and
+// responses with extra keys pass through untouched.
+client.interceptors.response.use(
+  (response) => {
+    if (
+      response.data !== null &&
+      typeof response.data === 'object' &&
+      'data' in response.data &&
+      Object.keys(response.data).length === 1
+    ) {
+      response.data = (response.data as { data: unknown }).data;
+    }
+    return response;
+  },
+);
+
 // ─── Response interceptor ──────────────────────────────────────
 client.interceptors.response.use(
   (response) => response,
