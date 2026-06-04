@@ -7,6 +7,21 @@ export interface InspectionSpecListParams extends ListParams {
   is_active?: boolean | string;
 }
 
+/** SPC capability indices for a single inspection parameter. */
+export interface SpcResult {
+  parameter_name: string;
+  unit: string | null;
+  cp: number;
+  cpk: number;
+  cpu: number;
+  cpl: number;
+  mean: number;
+  std_dev: number;
+  sample_count: number;
+  usl: number;
+  lsl: number;
+}
+
 export const inspectionSpecsApi = {
   list: (params?: InspectionSpecListParams) =>
     client.get<PaginatedResponse<InspectionSpec>>('/quality/inspection-specs', { params }).then((r) => r.data),
@@ -18,4 +33,6 @@ export const inspectionSpecsApi = {
     client.post<ApiSuccess<InspectionSpec>>('/quality/inspection-specs', data).then((r) => r.data.data),
   deactivate: (id: string) =>
     client.delete<ApiSuccess<InspectionSpec>>(`/quality/inspection-specs/${id}`).then((r) => r.data.data),
+  spc: (id: string) =>
+    client.get<{ data: Record<string, SpcResult> }>(`/quality/inspection-specs/${id}/spc`).then((r) => r.data),
 };

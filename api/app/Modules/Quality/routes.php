@@ -27,6 +27,8 @@ Route::middleware(['auth:sanctum', 'feature:quality'])->prefix('quality')->group
         ->middleware('permission:quality.specs.manage');
     Route::delete('/inspection-specs/{inspectionSpec}',   [InspectionSpecController::class, 'destroy'])
         ->middleware('permission:quality.specs.manage');
+    Route::get('/inspection-specs/{inspectionSpec}/spc', [InspectionSpecController::class, 'spcData'])
+        ->middleware('permission:quality.specs.view');
 
     Route::get('/products/{product}/inspection-spec',     [InspectionSpecController::class, 'forProduct'])
         ->middleware('permission:quality.specs.view');

@@ -30,7 +30,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { SkeletonForm } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { productsApi } from '@/api/crm/products';
-import { inspectionSpecsApi } from '@/api/quality/inspectionSpecs';
+import { inspectionSpecsApi, type SpcResult } from '@/api/quality/inspectionSpecs';
 import type { UpsertInspectionSpecData } from '@/types/quality';
 
 const itemSchema = z.object({
@@ -68,6 +68,13 @@ export default function InspectionSpecEditorPage() {
     queryKey: ['quality', 'inspection-specs', 'for-product', productId],
     queryFn: () => inspectionSpecsApi.forProduct(productId),
     enabled: !!productId,
+  });
+
+  const specId = existing.data?.id ?? '';
+  const spcData = useQuery({
+    queryKey: ['quality', 'inspection-specs', 'spc', specId],
+    queryFn: () => inspectionSpecsApi.spc(specId),
+    enabled: !!specId,
   });
 
   const {
@@ -341,6 +348,61 @@ export default function InspectionSpecEditorPage() {
 
           {errors.items?.message && <p className="mt-2 text-xs text-danger">{errors.items.message as string}</p>}
         </fieldset>
+
+        {spcData.data && Object.keys(spcData.data.data).length > 0 && (
+          <div className="mb-8">
+            <h3 className="text-xs uppercase tracking-wider text-muted font-medium mb-4">
+              Process Capability (SPC)
+            </h3>
+            <div className="border border-default rounded-md overflow-hidden">
+              <table className="w-full text-xs">
+                <thead className="bg-subtle">
+                  <tr>
+                    <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Parameter</th>
+                    <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 font-mono">Cp</th>
+                    <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 font-mono">Cpk</th>
+                    <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 font-mono">Mean</th>
+                    <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 font-mono">σ</th>
+                    <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">n</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(spcData.data.data).map(([id, s]) => {
+                    const item = s as SpcResult;
+                    const cpColor = item.cp >= 1.33 ? 'text-emerald-600 dark:text-emerald-400' : item.cp >= 1.0 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400';
+                    const cpkColor = item.cpk >= 1.33 ? 'text-emerald-600 dark:text-emerald-400' : item.cpk >= 1.0 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400';
+                    return (
+                      <tr key={id} className="border-t border-subtle">
+                        <td className="px-2.5 py-2">
+                          {item.parameter_name}
+                          {item.unit && <span className="ml-1 text-muted">({item.unit})</span>}
+                        </td>
+                        <td className={`text-right px-2.5 py-2 font-mono tabular-nums ${cpColor}`}>
+                          {item.cp.toFixed(3)}
+                        </td>
+                        <td className={`text-right px-2.5 py-2 font-mono tabular-nums ${cpkColor}`}>
+                          {item.cpk.toFixed(3)}
+                        </td>
+                        <td className="text-right px-2.5 py-2 font-mono tabular-nums">
+                          {item.mean.toFixed(4)}
+                        </td>
+                        <td className="text-right px-2.5 py-2 font-mono tabular-nums">
+                          {item.std_dev.toFixed(4)}
+                        </td>
+                        <td className="text-right px-2.5 py-2 font-mono tabular-nums text-muted">
+                          {item.sample_count}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-2 text-2xs text-muted">
+              Cp / Cpk ≥ 1.33 = capable · 1.0–1.33 = marginal · &lt;1.0 = not capable · Minimum 5 measurements required per parameter
+            </p>
+          </div>
+        )}
 
         <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
           <Button type="button" variant="secondary" onClick={() => navigate('/quality/inspection-specs')}>

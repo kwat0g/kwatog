@@ -9,13 +9,17 @@ use App\Modules\Quality\Models\InspectionSpec;
 use App\Modules\Quality\Requests\UpsertInspectionSpecRequest;
 use App\Modules\Quality\Resources\InspectionSpecResource;
 use App\Modules\Quality\Services\InspectionSpecService;
+use App\Modules\Quality\Services\SpcService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class InspectionSpecController
 {
-    public function __construct(private readonly InspectionSpecService $service) {}
+    public function __construct(
+        private readonly InspectionSpecService $service,
+        private readonly SpcService $spc,
+    ) {}
 
     public function index(Request $request): AnonymousResourceCollection
     {
@@ -54,5 +58,20 @@ class InspectionSpecController
     public function destroy(InspectionSpec $inspectionSpec): InspectionSpecResource
     {
         return new InspectionSpecResource($this->service->deactivate($inspectionSpec));
+    }
+
+    /**
+     * Return SPC Cp/Cpk indices for every bilateral spec item on this spec,
+     * computed across all historical inspection measurements.
+     *
+     * Items with < 5 measurements or no bilateral tolerances are omitted.
+     * Keyed by inspection_spec_item_id (integer, internal key — not exposed
+     * as a URL segment, only used to correlate with existing items list).
+     */
+    public function spcData(InspectionSpec $inspectionSpec): JsonResponse
+    {
+        return response()->json([
+            'data' => $this->spc->computeForSpec($inspectionSpec->id),
+        ]);
     }
 }
