@@ -42,6 +42,7 @@ export function Chip({ variant = 'neutral', className, children }: ChipProps) {
  * Maps a status string to a chip variant.
  * Source: docs/DESIGN-SYSTEM.md status → variant table.
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export function chipVariantForStatus(status: string | null | undefined): ChipVariant {
   switch (status) {
     case 'completed':

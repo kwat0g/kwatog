@@ -142,7 +142,7 @@ export default function PurchaseRequestDetailPage() {
                     <td className="text-right font-mono tabular-nums">{l.estimated_unit_price ? Number(l.estimated_unit_price).toFixed(2) : '—'}</td>
                     <td className="text-right font-mono tabular-nums font-medium">
                       {l.estimated_total}
-                      {(l as any).suggested_vendor && <div className="text-2xs text-muted mt-0.5">Vendor: {(l as any).suggested_vendor.name}</div>}
+                      {l.suggested_vendor && <div className="text-2xs text-muted mt-0.5">Vendor: {l.suggested_vendor.name}</div>}
                     </td>
                   </tr>
                 ))}
@@ -235,7 +235,7 @@ function buildPrChainSteps(pr: PurchaseRequest): ChainStep[] {
     { key: 'draft', label: 'Draft', date: formatDate(pr.date),
       state: pr.status === 'draft' ? 'active' : 'done' },
     { key: 'submit', label: 'Submitted', date: pr.submitted_at ? formatDate(pr.submitted_at) : undefined,
-      state: pr.submitted_at ? 'done' : pr.status === 'draft' ? 'pending' : 'pending' },
+      state: pr.submitted_at ? 'done' : pr.status === 'draft' ? 'pending' : 'active' },
   ];
   for (const r of (pr.approval_records ?? [])) {
     steps.push({

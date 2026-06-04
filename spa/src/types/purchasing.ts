@@ -28,6 +28,8 @@ export interface PurchaseRequestItem {
   estimated_unit_price: string | null;
   estimated_total: string;
   purpose: string | null;
+  suggested_vendor?: { id: string; name: string } | null;
+  suggested_vendor_id?: string | null;
 }
 
 export interface PurchaseRequest {

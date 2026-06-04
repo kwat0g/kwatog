@@ -4,12 +4,19 @@ import { Link } from 'react-router-dom';
 import { dashboardsApi, type DashboardEnvelope } from '@/api/dashboards';
 import { StatCard } from '@/components/ui/StatCard';
 import { Panel } from '@/components/ui/Panel';
-import { Chip } from '@/components/ui/Chip';
+import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { alertLink, chainStageLink, kpiLink } from '@/lib/dashboardLinks';
+
+interface ChainStage { key: string; label: string; count: number; percent: number; color?: string }
+interface AlertItem { kind: string; label: string; count: number; severity?: string }
+interface MachineRow { id: string; code: string; name: string; status: string; has_active_wo: boolean }
+interface DefectRow { code: string; name: string; count: number }
+interface DeptRow { label: string; count: number }
+interface JeRow { id: string; entry_number: string; date: string; status: string; total_debit: string }
 
 type Role = 'plantManager' | 'hr' | 'ppc' | 'accounting';
 
@@ -75,7 +82,7 @@ function RolePanels({ envelope }: { envelope: DashboardEnvelope }) {
       {Array.isArray(p.chain_stages) && (
         <Panel title="Active orders by chain stage">
           <ul className="space-y-2">
-            {p.chain_stages.map((s: any) => {
+            {p.chain_stages.map((s: ChainStage) => {
               const href = chainStageLink(s.key);
               const inner = (
                 <>
@@ -108,9 +115,9 @@ function RolePanels({ envelope }: { envelope: DashboardEnvelope }) {
       )}
 
       {Array.isArray(p.alerts) && (
-        <Panel title="Alerts" meta={p.alerts.reduce((a: number, x: any) => a + (x.count ?? 0), 0).toString()}>
+        <Panel title="Alerts" meta={p.alerts.reduce((a: number, x: AlertItem) => a + (x.count ?? 0), 0).toString()}>
           <ul className="divide-y divide-subtle">
-            {p.alerts.map((a: any) => {
+            {p.alerts.map((a: AlertItem) => {
               const href = alertLink(a.kind);
               const row = (
                 <span className="flex items-center justify-between w-full text-sm">
@@ -149,11 +156,11 @@ function RolePanels({ envelope }: { envelope: DashboardEnvelope }) {
               </tr>
             </thead>
             <tbody>
-              {p.machine_util.map((m: any) => (
+              {p.machine_util.map((m: MachineRow) => (
                 <tr key={m.id} className="border-b border-subtle h-7">
                   <td className="font-mono">{m.code}</td>
                   <td className="text-muted">{m.name}</td>
-                  <td><Chip variant={m.status === 'running' ? 'info' : m.status === 'breakdown' ? 'danger' : m.status === 'maintenance' ? 'warning' : 'neutral'}>{m.status}</Chip></td>
+                  <td><Chip variant={chipVariantForStatus(m.status)}>{m.status}</Chip></td>
                   <td className="text-right font-mono">{m.has_active_wo ? '✓' : '—'}</td>
                 </tr>
               ))}
@@ -165,8 +172,8 @@ function RolePanels({ envelope }: { envelope: DashboardEnvelope }) {
       {Array.isArray(p.defect_pareto) && p.defect_pareto.length > 0 && (
         <Panel title="Defect Pareto · top 8">
           <ul className="space-y-1.5">
-            {p.defect_pareto.map((d: any) => {
-              const max = Math.max(1, ...p.defect_pareto.map((x: any) => x.count));
+            {(p.defect_pareto as DefectRow[]).map((d: DefectRow) => {
+              const max = Math.max(1, ...(p.defect_pareto as DefectRow[]).map((x: DefectRow) => x.count));
               return (
                 <li key={d.code}>
                   <div className="flex justify-between text-sm">
@@ -186,7 +193,7 @@ function RolePanels({ envelope }: { envelope: DashboardEnvelope }) {
       {Array.isArray(p.by_department) && (
         <Panel title="Headcount by department">
           <ul className="divide-y divide-subtle">
-            {p.by_department.map((row: any) => (
+            {p.by_department.map((row: DeptRow) => (
               <li key={row.label} className="flex items-center justify-between py-1.5 text-sm">
                 <span>{row.label}</span>
                 <span className="font-mono tabular-nums">{row.count}</span>
@@ -199,11 +206,11 @@ function RolePanels({ envelope }: { envelope: DashboardEnvelope }) {
       {Array.isArray(p.recent_jes) && (
         <Panel title="Recent journal entries">
           <ul className="divide-y divide-subtle">
-            {p.recent_jes.map((je: any) => (
+            {p.recent_jes.map((je: JeRow) => (
               <li key={je.id} className="flex items-center justify-between py-1.5 text-sm">
                 <span><span className="font-mono">{je.entry_number}</span> · <span className="text-muted">{je.date}</span></span>
                 <span className="flex items-center gap-2">
-                  <Chip variant={je.status === 'posted' ? 'success' : 'neutral'}>{je.status}</Chip>
+                  <Chip variant={chipVariantForStatus(je.status)}>{je.status}</Chip>
                   <span className="font-mono tabular-nums">₱{je.total_debit}</span>
                 </span>
               </li>
