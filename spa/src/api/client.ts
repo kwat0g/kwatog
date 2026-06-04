@@ -182,9 +182,8 @@ unwrappingClient.interceptors.response.use(
     }
     return response;
   },
+  handleResponseError,
 );
-
-unwrappingClient.interceptors.response.use((response) => response, handleResponseError);
 
 /**
  * Pre-flight CSRF endpoint. Sets the XSRF-TOKEN cookie that Axios
