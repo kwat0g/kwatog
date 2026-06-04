@@ -97,6 +97,7 @@ Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function 
         // Task SS1 — overtime requests (scoped to the session employee).
         Route::get('/overtime',               [SelfServiceController::class, 'overtime']);
         Route::post('/overtime',              [SelfServiceController::class, 'applyOvertime']);
+        Route::delete('/overtime/{id}',       [SelfServiceController::class, 'cancelOvertime']);
 
         // Task SS3 — employee document downloads (auto-generated certificates).
         Route::get('/documents',                              [SelfServiceController::class, 'documents']);

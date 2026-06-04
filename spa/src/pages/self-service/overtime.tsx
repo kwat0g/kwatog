@@ -52,6 +52,15 @@ export default function SelfServiceOvertimePage() {
     queryFn: () => selfServiceApi.overtime(),
   });
 
+  const cancel = useMutation({
+    mutationFn: (id: string) => selfServiceApi.cancelOvertime(id),
+    onSuccess: () => {
+      toast.success('Overtime request cancelled.');
+      queryClient.invalidateQueries({ queryKey: ['self-service', 'overtime'] });
+    },
+    onError: () => toast.error('Failed to cancel request.'),
+  });
+
   return (
     <div>
       <PageHeader title="Overtime Requests" backTo="/self-service" backLabel="Dashboard" />
@@ -90,7 +99,7 @@ export default function SelfServiceOvertimePage() {
             {data.pending.length === 0 ? (
               <p className="text-xs text-muted px-1 py-2">No pending requests.</p>
             ) : (
-              <RequestList rows={data.pending} />
+              <RequestList rows={data.pending} onCancel={(id) => cancel.mutate(id)} />
             )}
           </Section>
 
@@ -130,13 +139,19 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function RequestList({ rows }: { rows: SelfServiceOvertimeRequest[] }) {
+function RequestList({
+  rows,
+  onCancel,
+}: {
+  rows: SelfServiceOvertimeRequest[];
+  onCancel?: (id: string) => void;
+}) {
   return (
     <ul className="rounded-md border border-default divide-y divide-subtle bg-canvas">
       {rows.map((r) => (
         <li key={r.id} className="px-3 py-2.5">
           <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <div className="text-sm font-medium font-mono tabular-nums">
                 {r.date ?? '—'} · {r.hours_requested}h OT
               </div>
@@ -145,9 +160,21 @@ function RequestList({ rows }: { rows: SelfServiceOvertimeRequest[] }) {
                 <div className="text-xs text-danger mt-0.5">Reason: {r.rejection_reason}</div>
               )}
             </div>
-            <Chip variant={r.status ? STATUS_CHIP[r.status] : 'neutral'}>
-              {r.status === 'pending' ? 'Pending approval' : r.status ?? '—'}
-            </Chip>
+            <div className="flex items-center gap-2 shrink-0">
+              <Chip variant={r.status ? STATUS_CHIP[r.status] : 'neutral'}>
+                {r.status === 'pending' ? 'Pending approval' : r.status ?? '—'}
+              </Chip>
+              {onCancel && r.status === 'pending' && (
+                <button
+                  type="button"
+                  onClick={() => onCancel(r.id)}
+                  className="text-2xs text-danger hover:underline"
+                  aria-label="Cancel this overtime request"
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
           </div>
         </li>
       ))}

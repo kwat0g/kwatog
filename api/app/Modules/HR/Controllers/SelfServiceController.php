@@ -220,6 +220,31 @@ class SelfServiceController
         ], 201);
     }
 
+    /**
+     * Cancel a pending overtime request. Only the owning employee can cancel,
+     * and only while the request is still pending.
+     */
+    public function cancelOvertime(Request $request, string $id): JsonResponse
+    {
+        $employee = $this->currentEmployee($request);
+
+        $decoded = app('hashids')->decode($id);
+        abort_if(empty($decoded), 404);
+
+        /** @var OvertimeRequest|null $ot */
+        $ot = OvertimeRequest::query()
+            ->where('id', $decoded[0])
+            ->where('employee_id', $employee->id)
+            ->first();
+
+        abort_if(! $ot, 404);
+        abort_if($ot->status !== OvertimeStatus::Pending, 422, 'Only pending requests can be cancelled.');
+
+        $ot->update(['status' => OvertimeStatus::Rejected, 'rejection_reason' => 'Cancelled by employee.']);
+
+        return response()->json(['message' => 'Overtime request cancelled.']);
+    }
+
     public function profile(Request $request): JsonResponse
     {
         $employee = $this->currentEmployee($request);
