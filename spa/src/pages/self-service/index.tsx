@@ -35,8 +35,17 @@ interface NextHoliday {
   date?: string;
 }
 
+interface LeaveBalance {
+  code: string;
+  name: string;
+  total: number;
+  used: number;
+  remaining: number;
+}
+
 interface EmployeeDashboardData {
   kpis: EmployeeKpi[];
+  leave_balances: LeaveBalance[];
   panels: {
     latest_payslip: LatestPayslip | null;
     next_holiday: NextHoliday | null;
@@ -170,7 +179,48 @@ function SelfServiceContent() {
           subtitle="Employment certificate, contributions, BIR 2316"
         />
       </section>
+
+      {/* Leave balances */}
+      {raw.leave_balances && raw.leave_balances.length > 0 && (
+        <LeaveBalances balances={raw.leave_balances} />
+      )}
     </div>
+  );
+}
+
+/* ───────────────────────── Leave balances component ───────────────────────── */
+
+function LeaveBalances({ balances }: { balances: LeaveBalance[] }) {
+  if (!balances.length) return null;
+  return (
+    <section aria-label="Leave balances">
+      <div className="text-2xs uppercase tracking-wider text-muted font-medium mb-2">
+        Leave balances
+      </div>
+      <div className="rounded-md border border-default bg-canvas divide-y divide-subtle">
+        {balances.map((b) => {
+          const pct = b.total > 0 ? Math.min(100, (b.remaining / b.total) * 100) : 0;
+          return (
+            <div key={b.code} className="px-3 py-2.5">
+              <div className="flex items-baseline justify-between mb-1.5">
+                <span className="text-sm">{b.name}</span>
+                <span className="text-xs font-mono tabular-nums text-muted">
+                  {b.remaining} / {b.total} days
+                </span>
+              </div>
+              <div className="h-1.5 rounded-full bg-subtle overflow-hidden" aria-hidden="true">
+                <div
+                  className={`h-full rounded-full transition-[width] duration-500 ${
+                    pct <= 20 ? 'bg-danger' : pct <= 50 ? 'bg-warning' : 'bg-accent'
+                  }`}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
