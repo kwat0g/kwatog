@@ -30,4 +30,18 @@ class UserFactory extends Factory
             'sidebar_collapsed' => false,
         ];
     }
+
+    /**
+     * Assign a specific role by slug.
+     * Creates the role record if it doesn't exist yet (test environments).
+     */
+    public function withRole(string $slug): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role_id' => Role::firstOrCreate(
+                ['slug' => $slug],
+                ['name'  => ucwords(str_replace('_', ' ', $slug))],
+            )->id,
+        ]);
+    }
 }

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Dashboard\Controllers;
 
-use App\Modules\Dashboard\Services\ForecastingDashboardService;
+use App\Modules\Dashboard\Services\AdminDashboardService;
 use App\Modules\Dashboard\Services\HrDashboardService;
 use App\Modules\Dashboard\Services\PlantManagerDashboardService;
 use App\Modules\Dashboard\Services\PpcDashboardService;
@@ -27,6 +27,7 @@ class DashboardController
         private readonly PurchasingDashboardService   $purchasingService,
         private readonly WarehouseDashboardService    $warehouseService,
         private readonly QualityDashboardService      $qualityService,
+        private readonly AdminDashboardService        $adminService,
     ) {}
 
     public function plantManager(Request $request): JsonResponse
@@ -67,5 +68,10 @@ class DashboardController
     public function quality(Request $request): JsonResponse
     {
         return response()->json(['data' => $this->qualityService->quality($request->user())]);
+    }
+
+    public function admin(Request $request): JsonResponse
+    {
+        return response()->json(['data' => $this->adminService->admin($request->user())]);
     }
 }

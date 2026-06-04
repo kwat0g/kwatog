@@ -34,6 +34,8 @@ Route::middleware('auth:sanctum')->prefix('dashboards')->group(function () {
         ->middleware('permission:dashboard.warehouse.view');
     Route::get('/quality',        [DashboardController::class, 'quality'])
         ->middleware('permission:dashboard.quality.view');
+    Route::get('/admin',          [DashboardController::class, 'admin'])
+        ->middleware('permission:dashboard.admin.view');
 
     /*
      * Polish Task S2 — sidebar badge counts. Single endpoint that returns

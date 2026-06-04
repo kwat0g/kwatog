@@ -55,4 +55,18 @@ class AdminDashboardServiceTest extends TestCase
         $this->assertArrayHasKey('login_trend_7d', $ua);
         $this->assertCount(7, $ua['login_trend_7d']);
     }
+
+    public function test_admin_endpoint_requires_auth(): void
+    {
+        $this->getJson('/api/v1/dashboards/admin')->assertStatus(401);
+    }
+
+    public function test_admin_endpoint_returns_200_for_authenticated_user(): void
+    {
+        $user = User::factory()->withRole('system_admin')->create();
+        $this->actingAs($user)
+            ->getJson('/api/v1/dashboards/admin')
+            ->assertStatus(200)
+            ->assertJsonStructure(['data' => ['kpis', 'panels']]);
+    }
 }

@@ -272,6 +272,8 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'dashboard.purchasing.view',   'name' => 'View Purchasing Officer Dashboard'],
                 ['slug' => 'dashboard.warehouse.view',    'name' => 'View Warehouse Staff Dashboard'],
                 ['slug' => 'dashboard.quality.view',       'name' => 'View QC Inspector Dashboard'],
+                // Task 2 — System Administrator dashboard
+                ['slug' => 'dashboard.admin.view',         'name' => 'View System Administrator Dashboard'],
                 // Series C — Task C5
                 ['slug' => 'dashboard.view_bottlenecks',  'name' => 'View Chain Bottleneck Widget'],
             ],
