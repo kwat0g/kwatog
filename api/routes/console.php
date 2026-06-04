@@ -111,3 +111,12 @@ Schedule::command('exports:run-due')
     ->everyFiveMinutes()
     ->withoutOverlapping()
     ->onOneServer();
+
+// Task 7 — Prune audit logs older than 12 months on the 1st at 04:00.
+// Partition-aware: PostgreSQL routes the DELETE to the correct monthly
+// child partitions automatically via the created_at partition key.
+Schedule::command('audit:prune --months=12')
+    ->monthlyOn(1, '04:00')
+    ->runInBackground()
+    ->withoutOverlapping()
+    ->onOneServer();
