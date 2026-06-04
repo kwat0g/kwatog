@@ -10,6 +10,7 @@ import type {
   SelfServiceLeaveType,
   SelfServiceLeaveBalanceSelf,
   FileLeavePayload,
+  LoanAmortizationPreview,
 } from '@/types/self-service';
 
 /** U3 — Self-service portal endpoints (always scoped to current user). */
@@ -88,4 +89,13 @@ export const selfServiceApi = {
     client
       .post<{ message: string; data: { id: string } }>('/leaves/requests', payload)
       .then((r) => r.data),
+
+  // ─── Loan amortization preview (Task SS-LP) ─────────────────────
+  previewLoanAmortization: (principal: number, periods: number) =>
+    client
+      .post<{ data: LoanAmortizationPreview }>('/loans/preview-amortization', {
+        principal: principal.toFixed(2),
+        pay_periods: periods,
+      })
+      .then((r) => r.data.data),
 };

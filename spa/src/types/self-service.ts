@@ -161,3 +161,15 @@ export interface FileLeavePayload {
   end_date: string;
   reason?: string;
 }
+
+// ─── Loan amortization preview (Task SS-LP) ───────────────────────
+export interface LoanAmortizationRow {
+  period: number;
+  amount: string;
+  running_balance: string;
+}
+
+export interface LoanAmortizationPreview {
+  monthly_amortization: string;
+  schedule: LoanAmortizationRow[];
+}

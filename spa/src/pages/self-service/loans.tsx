@@ -183,9 +183,23 @@ function ApplyLoanSheet({
     handleSubmit,
     formState: { errors },
     reset,
+    watch,
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { loan_type: 'company_loan', amount: 0, periods: 6, reason: '' },
+  });
+
+  const watchedAmount = watch('amount');
+  const watchedPeriods = watch('periods');
+
+  const { data: preview, isFetching: previewLoading } = useQuery({
+    queryKey: ['loan-preview', watchedAmount, watchedPeriods],
+    queryFn: () => selfServiceApi.previewLoanAmortization(
+      Number(watchedAmount),
+      Number(watchedPeriods),
+    ),
+    enabled: Number(watchedAmount) > 0 && Number(watchedPeriods) >= 1,
+    staleTime: 30_000,
   });
 
   return (
@@ -227,6 +241,45 @@ function ApplyLoanSheet({
           error={errors.periods?.message}
           required
         />
+        {/* Amortization preview */}
+        {Number(watchedAmount) > 0 && Number(watchedPeriods) >= 1 && (
+          <div className="rounded-md border border-default bg-surface p-3 space-y-2">
+            <div className="flex items-center justify-between text-xs text-muted">
+              <span>Estimated monthly deduction</span>
+              {previewLoading && <span className="font-mono tabular-nums">…</span>}
+              {!previewLoading && preview && (
+                <span className="font-mono tabular-nums font-medium text-primary">
+                  ₱{preview.monthly_amortization}
+                </span>
+              )}
+            </div>
+            {preview && preview.schedule.length > 0 && (
+              <div className="max-h-36 overflow-y-auto">
+                <table className="w-full text-xs font-mono tabular-nums">
+                  <thead>
+                    <tr className="text-muted border-b border-subtle">
+                      <th className="text-left py-1 font-normal">Period</th>
+                      <th className="text-right py-1 font-normal">Deduction</th>
+                      <th className="text-right py-1 font-normal">Balance</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-subtle">
+                    {preview.schedule.slice(0, 24).map((row) => (
+                      <tr key={row.period}>
+                        <td className="py-1">{row.period}</td>
+                        <td className="text-right py-1">₱{row.amount}</td>
+                        <td className="text-right py-1 text-muted">₱{row.running_balance}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <p className="text-2xs text-muted">
+              Estimate only — final schedule set after approval.
+            </p>
+          </div>
+        )}
         <Textarea
           label="Reason (optional)"
           rows={3}
