@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { applyServerValidationErrors } from '../formErrors';
 import type { UseFormSetError } from 'react-hook-form';
 import { AxiosError } from 'axios';
+import toast from 'react-hot-toast';
 
 // react-hot-toast uses DOM APIs unavailable in jsdom; mock the whole module.
 vi.mock('react-hot-toast', () => ({
@@ -42,6 +43,9 @@ describe('applyServerValidationErrors', () => {
       type: 'server',
       message: 'The email has already been taken.',
     });
+    expect(toast.error).toHaveBeenCalledWith(
+      'The server flagged some fields. Please review and try again.',
+    );
   });
 
   it('maps multiple field errors to form fields', () => {
@@ -78,6 +82,7 @@ describe('applyServerValidationErrors', () => {
 
     expect(handled).toBe(true);
     expect(setError).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith('Something went wrong.');
   });
 
   it('returns false for non-422 errors', () => {
