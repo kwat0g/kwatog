@@ -43,6 +43,7 @@ type FormValues = z.infer<typeof schema>;
 export default function SelfServiceLeavePage() {
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
+  const hasEmployeeLink = Boolean(user?.employee?.id);
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const { data, isLoading, isError, refetch } = useQuery({
@@ -83,6 +84,9 @@ export default function SelfServiceLeavePage() {
 
   const selectedTypeId = watch('leave_type_id');
   const selectedBalance = selectedTypeId ? balanceMap[selectedTypeId] : null;
+  const selectedType = selectedTypeId
+    ? (types ?? []).find((t) => t.id === selectedTypeId) ?? null
+    : null;
 
   const file = useMutation({
     mutationFn: (v: FormValues) =>
@@ -177,6 +181,11 @@ export default function SelfServiceLeavePage() {
           title="File Leave Request"
         >
           <form onSubmit={handleSubmit((v) => file.mutate(v))} className="space-y-4">
+            {!hasEmployeeLink && (
+              <div className="rounded-md border border-default bg-subtle px-3 py-2 text-xs text-muted">
+                Your account is not linked to an employee record. Contact HR to file leave.
+              </div>
+            )}
             <Select
               label="Leave type"
               {...register('leave_type_id')}
@@ -207,6 +216,12 @@ export default function SelfServiceLeavePage() {
                     }}
                   />
                 </div>
+              </div>
+            )}
+
+            {selectedType?.requires_document && (
+              <div className="rounded-md border border-warning bg-warning-bg px-3 py-2 text-xs text-warning-fg">
+                ⚠ This leave type requires a supporting document. Submit it to HR separately after filing.
               </div>
             )}
 
@@ -242,7 +257,7 @@ export default function SelfServiceLeavePage() {
               <Button
                 type="submit"
                 variant="primary"
-                disabled={file.isPending}
+                disabled={file.isPending || !hasEmployeeLink}
                 loading={file.isPending}
               >
                 {file.isPending ? 'Submitting…' : 'Submit request'}
