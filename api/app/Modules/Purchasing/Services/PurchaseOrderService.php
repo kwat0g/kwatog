@@ -8,6 +8,7 @@ use App\Common\Services\ApprovalService;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\SettingsService;
 use App\Common\Support\HashIdFilter;
+use App\Modules\Accounting\Services\BudgetEnforcementService;
 use App\Common\Support\Money;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\User;
@@ -21,6 +22,7 @@ use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Models\PurchaseRequestItem;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
 class PurchaseOrderService
@@ -31,7 +33,21 @@ class PurchaseOrderService
         private readonly DocumentSequenceService $sequences,
         private readonly ApprovalService $approvals,
         private readonly SettingsService $settings,
+        private readonly BudgetEnforcementService $budget,
     ) {}
+
+    private function resolveDepartmentId(array $data): ?int
+    {
+        if (! empty($data['purchase_request_id'])) {
+            $prId = is_int($data['purchase_request_id'])
+                ? $data['purchase_request_id']
+                : HashIdFilter::decode($data['purchase_request_id'], PurchaseRequest::class);
+            if ($prId) {
+                return (int) PurchaseRequest::find($prId)?->department_id;
+            }
+        }
+        return null;
+    }
 
     public function list(array $filters): LengthAwarePaginator
     {
@@ -82,10 +98,22 @@ class PurchaseOrderService
             $total = Money::add($subtotal, $vat);
             $threshold = (float) $this->settings->get('approval.po.vp_threshold', 50000.0);
 
+            $deptId = $this->resolveDepartmentId($data);
+            if ($deptId) {
+                [$canProceed, $level, $message] = $this->budget->checkAvailability($deptId, (float) $total);
+                if (! $canProceed) {
+                    throw ValidationException::withMessages([
+                        'budget' => [$message],
+                    ]);
+                }
+            }
+
             $po = PurchaseOrder::create([
                 'po_number'            => $this->sequences->generate('purchase_order'),
                 'vendor_id'            => $vendorId,
-                'purchase_request_id'  => null,
+                'purchase_request_id'  => isset($data['purchase_request_id']) && is_int($data['purchase_request_id'])
+                    ? $data['purchase_request_id']
+                    : null,
                 'date'                 => $data['date'] ?? now()->toDateString(),
                 'expected_delivery_date' => $data['expected_delivery_date'] ?? null,
                 'subtotal'             => $subtotal,
@@ -135,14 +163,13 @@ class PurchaseOrderService
                     ];
                 }
                 $po = $this->create([
-                    'vendor_id' => $vendorId,
-                    'date'      => now()->toDateString(),
-                    'is_vatable'=> true,
-                    'remarks'   => "Auto-converted from PR {$pr->pr_number}",
-                    'items'     => $itemPayload,
+                    'vendor_id'           => $vendorId,
+                    'date'                => now()->toDateString(),
+                    'is_vatable'          => true,
+                    'remarks'             => "Auto-converted from PR {$pr->pr_number}",
+                    'items'               => $itemPayload,
+                    'purchase_request_id' => $pr->id,
                 ], $by);
-                $po->purchase_request_id = $pr->id;
-                $po->save();
                 $created[] = $po;
             }
             $pr->update(['status' => PurchaseRequestStatus::Converted]);

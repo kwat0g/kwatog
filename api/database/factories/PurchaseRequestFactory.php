@@ -32,7 +32,7 @@ class PurchaseRequestFactory extends Factory
             'auto_generated_reason'  => null,
             'is_urgent'              => false,
             'urgency_reason'         => null,
-            'current_approval_step'  => null,
+            'current_approval_step'  => 0,
             'submitted_at'           => null,
             'approved_at'            => null,
         ];

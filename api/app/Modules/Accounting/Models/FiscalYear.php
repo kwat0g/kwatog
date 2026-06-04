@@ -15,6 +15,11 @@ class FiscalYear extends Model
 {
     use HasFactory, HasHashId, HasAuditLog;
 
+    protected static function newFactory(): \Database\Factories\FiscalYearFactory
+    {
+        return \Database\Factories\FiscalYearFactory::new();
+    }
+
     protected $fillable = [
         'year',
         'start_date',

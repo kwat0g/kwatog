@@ -19,6 +19,7 @@ class StoreBillRequest extends FormRequest
             'bill_number'                  => ['required', 'string', 'max:50'],
             'vendor_id'                    => ['required', 'string'],
             'purchase_order_id'            => ['nullable'],
+            'department_id'                => ['nullable', 'string'],
             'allow_override'               => ['nullable', 'boolean'],
             'date'                         => ['required', 'date'],
             'due_date'                     => ['nullable', 'date', 'after_or_equal:date'],

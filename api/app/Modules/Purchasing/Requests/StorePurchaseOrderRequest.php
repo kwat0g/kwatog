@@ -7,6 +7,7 @@ namespace App\Modules\Purchasing\Requests;
 use App\Common\Concerns\ResolvesHashIds;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Purchasing\Models\PurchaseRequest;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StorePurchaseOrderRequest extends FormRequest
@@ -21,8 +22,9 @@ class StorePurchaseOrderRequest extends FormRequest
     protected function hashIdFields(): array
     {
         return [
-            'vendor_id'        => Vendor::class,
-            'items.*.item_id'  => Item::class,
+            'vendor_id'           => Vendor::class,
+            'items.*.item_id'     => Item::class,
+            'purchase_request_id' => PurchaseRequest::class,
         ];
     }
 
@@ -30,6 +32,7 @@ class StorePurchaseOrderRequest extends FormRequest
     {
         return [
             'vendor_id'              => ['required', 'integer', 'exists:vendors,id'],
+            'purchase_request_id'    => ['nullable', 'integer', 'exists:purchase_requests,id'],
             'date'                   => ['nullable', 'date'],
             'expected_delivery_date' => ['nullable', 'date', 'after_or_equal:date'],
             'is_vatable'             => ['nullable', 'boolean'],

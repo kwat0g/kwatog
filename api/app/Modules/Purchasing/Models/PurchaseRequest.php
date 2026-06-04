@@ -21,6 +21,11 @@ class PurchaseRequest extends Model
 {
     use HasFactory, HasHashId, HasAuditLog, HasApprovalWorkflow;
 
+    protected static function newFactory(): \Database\Factories\PurchaseRequestFactory
+    {
+        return \Database\Factories\PurchaseRequestFactory::new();
+    }
+
     protected $fillable = [
         'pr_number', 'requested_by', 'department_id', 'mrp_plan_id',
         'template_id', 'date', 'reason', 'priority', 'status',

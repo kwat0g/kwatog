@@ -5,9 +5,10 @@ declare(strict_types=1);
 namespace App\Modules\Accounting\Services;
 
 use App\Common\Support\SearchOperator;
-
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\Money;
+use App\Modules\Accounting\Services\BudgetEnforcementService;
+use App\Modules\HR\Models\Department;
 use App\Modules\Accounting\Enums\BillStatus;
 use App\Modules\Accounting\Enums\JournalEntryStatus;
 use App\Modules\Accounting\Models\Account;
@@ -22,6 +23,7 @@ use App\Modules\Purchasing\Services\ThreeWayMatchService;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
 class BillService
@@ -36,6 +38,7 @@ class BillService
     public function __construct(
         private readonly JournalEntryService $journals,
         private readonly ?ThreeWayMatchService $threeWayMatch = null,
+        private readonly ?BudgetEnforcementService $budget = null,
     ) {}
 
     public function list(array $filters): LengthAwarePaginator
@@ -102,6 +105,21 @@ class BillService
                 ->exists();
             if ($exists) {
                 throw new RuntimeException("Bill number '{$data['bill_number']}' already exists for this vendor.");
+            }
+
+            // Budget enforcement check.
+            if ($this->budget && ! empty($data['department_id'])) {
+                $deptId = is_int($data['department_id'])
+                    ? $data['department_id']
+                    : HashIdFilter::decode($data['department_id'], Department::class);
+                if ($deptId) {
+                    [$canProceed, , $message] = $this->budget->checkAvailability($deptId, (float) $total);
+                    if (! $canProceed) {
+                        throw ValidationException::withMessages([
+                            'budget' => [$message],
+                        ]);
+                    }
+                }
             }
 
             // Optional PO link + three-way match.

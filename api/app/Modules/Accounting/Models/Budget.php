@@ -17,6 +17,11 @@ class Budget extends Model
 {
     use HasFactory, HasHashId, HasAuditLog;
 
+    protected static function newFactory(): \Database\Factories\BudgetFactory
+    {
+        return \Database\Factories\BudgetFactory::new();
+    }
+
     protected $fillable = [
         'fiscal_year_id',
         'department_id',
