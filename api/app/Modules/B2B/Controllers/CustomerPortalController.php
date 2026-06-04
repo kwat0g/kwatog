@@ -9,6 +9,8 @@ use App\Modules\Accounting\Resources\InvoiceResource;
 use App\Modules\Accounting\Services\PdfService;
 use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\B2B\Models\DeliverySchedule;
+use App\Modules\B2B\Requests\Customer\CreateComplaintRequest;
+use App\Modules\B2B\Requests\Customer\CustomerStoreDeliveryScheduleRequest;
 use App\Modules\B2B\Resources\DeliveryScheduleResource;
 use App\Modules\CRM\Models\CustomerComplaint;
 use App\Modules\CRM\Models\SalesOrder;
@@ -233,16 +235,11 @@ class CustomerPortalController extends Controller
     /**
      * POST /api/v1/b2b/customer/complaints
      */
-    public function createComplaint(Request $request): JsonResponse
+    public function createComplaint(CreateComplaintRequest $request): JsonResponse
     {
         $user = $this->user($request);
 
-        $validated = $request->validate([
-            'order_id'         => ['nullable', 'exists:sales_orders,id'],
-            'severity'         => ['required', 'string', 'in:minor,major,critical'],
-            'description'      => ['required', 'string', 'max:2000'],
-            'affected_quantity'=> ['required', 'integer', 'min:1'],
-        ]);
+        $validated = $request->validated();
 
         $complaint = CustomerComplaint::create([
             'customer_id'       => $user->customer_id,
@@ -364,17 +361,11 @@ class CustomerPortalController extends Controller
      * POST /api/v1/b2b/customer/delivery-schedules
      * Submit monthly delivery requirements.
      */
-    public function storeDeliverySchedule(Request $request): JsonResponse
+    public function storeDeliverySchedule(CustomerStoreDeliveryScheduleRequest $request): JsonResponse
     {
         $user = $this->user($request);
 
-        $validated = $request->validate([
-            'month'                => ['required', 'date_format:Y-m'],
-            'lines'                => ['required', 'array', 'min:1'],
-            'lines.*.product_name' => ['required', 'string', 'max:255'],
-            'lines.*.quantity'     => ['required', 'numeric', 'min:0.01'],
-            'lines.*.notes'        => ['nullable', 'string', 'max:500'],
-        ]);
+        $validated = $request->validated();
 
         $schedule = DeliverySchedule::create([
             'customer_id' => $user->customer_id,

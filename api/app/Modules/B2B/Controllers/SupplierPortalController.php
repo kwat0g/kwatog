@@ -15,6 +15,11 @@ use App\Modules\Accounting\Services\BillService;
 use App\Modules\Accounting\Services\PdfService;
 use App\Modules\B2B\Models\DeliverySchedule;
 use App\Modules\B2B\Models\SupplierPortalUser;
+use App\Modules\B2B\Requests\Supplier\AcknowledgePoRequest;
+use App\Modules\B2B\Requests\Supplier\ShipmentUpdateRequest;
+use App\Modules\B2B\Requests\Supplier\StoreDeliveryScheduleRequest;
+use App\Modules\B2B\Requests\Supplier\SubmitInvoiceRequest;
+use App\Modules\B2B\Requests\Supplier\UploadShippingDocumentsRequest;
 use App\Modules\B2B\Resources\DeliveryScheduleResource;
 use App\Modules\Auth\Models\User;
 use App\Modules\Purchasing\Models\PurchaseOrder;
@@ -156,16 +161,12 @@ class SupplierPortalController extends Controller
      * POST /api/v1/b2b/supplier/purchase-orders/{id}/shipping-documents
      * Upload shipping documents for a PO.
      */
-    public function uploadShippingDocuments(PurchaseOrder $purchaseOrder, Request $request): JsonResponse
+    public function uploadShippingDocuments(PurchaseOrder $purchaseOrder, UploadShippingDocumentsRequest $request): JsonResponse
     {
         $user = $this->user($request);
         abort_if($purchaseOrder->vendor_id !== $user->vendor_id, 403);
 
-        $validated = $request->validate([
-            'document_type' => ['required', 'string', 'in:commercial_invoice,packing_list,bill_of_lading,other'],
-            'file'          => ['required', 'file', 'max:10240', 'mimes:pdf,jpg,jpeg,png'],
-            'notes'         => ['nullable', 'string', 'max:500'],
-        ]);
+        $validated = $request->validated();
 
         $file = $request->file('file');
         $folder = "portal/shipping-docs/{$purchaseOrder->id}";
@@ -234,19 +235,12 @@ class SupplierPortalController extends Controller
      * POST /api/v1/b2b/supplier/purchase-orders/{id}/submit-invoice
      * Supplier submits their invoice; creates a draft Bill in Accounts Payable.
      */
-    public function submitInvoice(PurchaseOrder $purchaseOrder, Request $request): JsonResponse
+    public function submitInvoice(PurchaseOrder $purchaseOrder, SubmitInvoiceRequest $request): JsonResponse
     {
         $user = $this->user($request);
         abort_if($purchaseOrder->vendor_id !== $user->vendor_id, 403);
 
-        $validated = $request->validate([
-            'bill_number'   => ['required', 'string', 'max:50'],
-            'date'          => ['required', 'date'],
-            'due_date'      => ['nullable', 'date', 'after_or_equal:date'],
-            'is_vatable'    => ['nullable', 'boolean'],
-            'remarks'       => ['nullable', 'string', 'max:1000'],
-            'file'          => ['nullable', 'file', 'max:10240', 'mimes:pdf,jpg,jpeg,png'],
-        ]);
+        $validated = $request->validated();
 
         // Build bill items from PO items
         $purchaseOrder->load(['vendor:id,name', 'items.item']);
@@ -407,24 +401,11 @@ class SupplierPortalController extends Controller
      * POST /api/v1/b2b/supplier/delivery-schedules
      * Supplier submits a delivery schedule for a PO.
      */
-    public function storeDeliverySchedule(Request $request): JsonResponse
+    public function storeDeliverySchedule(StoreDeliveryScheduleRequest $request): JsonResponse
     {
         $user = $this->user($request);
 
-        $validated = $request->validate([
-            'purchase_order_id' => ['required', function (string $attr, mixed $val, \Closure $fail) use ($user) {
-                $decoded = HashIdFilter::decode($val, PurchaseOrder::class);
-                $po = $decoded ? PurchaseOrder::find($decoded) : null;
-                if (! $po || $po->vendor_id !== $user->vendor_id) {
-                    $fail('Invalid purchase order.');
-                }
-            }],
-            'month'   => ['required', 'string', 'regex:/^\d{4}-\d{2}$/'],
-            'lines'   => ['required', 'array', 'min:1'],
-            'lines.*.product_name' => ['required', 'string', 'max:255'],
-            'lines.*.quantity'     => ['required', 'numeric', 'min:0.01'],
-            'lines.*.notes'        => ['nullable', 'string', 'max:500'],
-        ]);
+        $validated = $request->validated();
 
         $decodedPoId = HashIdFilter::decode($validated['purchase_order_id'], PurchaseOrder::class);
         $po = PurchaseOrder::findOrFail($decodedPoId);
@@ -446,15 +427,12 @@ class SupplierPortalController extends Controller
     /**
      * POST /api/v1/b2b/supplier/purchase-orders/{id}/acknowledge
      */
-    public function acknowledgePo(PurchaseOrder $purchaseOrder, Request $request): JsonResponse
+    public function acknowledgePo(PurchaseOrder $purchaseOrder, AcknowledgePoRequest $request): JsonResponse
     {
         $user = $this->user($request);
         abort_if($purchaseOrder->vendor_id !== $user->vendor_id, 403);
 
-        $validated = $request->validate([
-            'expected_delivery_date' => ['nullable', 'date'],
-            'notes'                  => ['nullable', 'string', 'max:500'],
-        ]);
+        $validated = $request->validated();
 
         $purchaseOrder->update([
             'status'                 => 'sent',
@@ -469,18 +447,12 @@ class SupplierPortalController extends Controller
     /**
      * POST /api/v1/b2b/supplier/purchase-orders/{id}/shipment-update
      */
-    public function updateShipment(PurchaseOrder $purchaseOrder, Request $request): JsonResponse
+    public function updateShipment(PurchaseOrder $purchaseOrder, ShipmentUpdateRequest $request): JsonResponse
     {
         $user = $this->user($request);
         abort_if($purchaseOrder->vendor_id !== $user->vendor_id, 403);
 
-        $validated = $request->validate([
-            'shipped_date'      => ['nullable', 'date'],
-            'carrier'           => ['nullable', 'string', 'max:100'],
-            'tracking_number'   => ['nullable', 'string', 'max:100'],
-            'estimated_arrival' => ['nullable', 'date'],
-            'notes'             => ['nullable', 'string', 'max:500'],
-        ]);
+        $validated = $request->validated();
 
         $estimatedArrival = $validated['estimated_arrival'] ?? $purchaseOrder->expected_delivery_date;
         $carrier   = $validated['carrier'] ?? 'N/A';
