@@ -5,6 +5,7 @@ import { Play, CheckCircle2, Lock, Download, AlertCircle, Upload, Eye, Trash2, B
 import toast from 'react-hot-toast';
 import { periodsApi } from '@/api/payroll/periods';
 import { payrollsApi, type PayrollListParams } from '@/api/payroll/payrolls';
+import type { PayrollVarianceReport } from '@/types/payroll';
 import { Button } from '@/components/ui/Button';
 import { Chip, type ChipVariant } from '@/components/ui/Chip';
 import { DataTable, NumCell, StackedCell, type Column } from '@/components/ui/DataTable';
@@ -39,7 +40,8 @@ export default function PayrollPeriodDetailPage() {
   const { id } = useParams<{ id: string }>();
   const qc = useQueryClient();
   const { can } = usePermission();
-  const [activeTab, setActiveTab] = useState<'employees' | 'failures' | 'anomalies' | 'summary'>('employees');
+  const [activeTab, setActiveTab] = useState<'employees' | 'failures' | 'anomalies' | 'summary' | 'variance'>('employees');
+  const [compareToId, setCompareToId] = useState<string>('');
 
   const isProcessing = (period?: PayrollPeriod | null) => period?.status === 'processing';
 
@@ -59,6 +61,18 @@ export default function PayrollPeriodDetailPage() {
     queryFn: () => payrollsApi.list(payrollFilters),
     enabled: !!id && (activeTab === 'employees' || activeTab === 'failures'),
     placeholderData: (prev) => prev,
+  });
+
+  const varianceQ = useQuery({
+    queryKey: ['payroll-period-variance', id, compareToId],
+    queryFn: () => periodsApi.variance(id!, compareToId),
+    enabled: !!id && compareToId !== '',
+  });
+
+  const periodsListQ = useQuery({
+    queryKey: ['payroll-periods-list-for-compare'],
+    queryFn: () => periodsApi.list({ per_page: 50, sort: 'period_start', direction: 'desc' }),
+    enabled: activeTab === 'variance',
   });
 
   const computeMutation = useMutation({
@@ -264,6 +278,7 @@ export default function PayrollPeriodDetailPage() {
               { key: 'failures',  label: `Failures (${summary?.failed_count ?? 0})` },
               { key: 'anomalies', label: 'Anomaly review' },
               { key: 'summary',   label: 'Deduction summary' },
+              { key: 'variance',  label: 'Period variance' },
             ] as const).map((t) => (
               <button
                 key={t.key}
@@ -308,6 +323,17 @@ export default function PayrollPeriodDetailPage() {
                 Aggregated deduction breakdown is available per-employee in their detail view. Future enhancement: show period totals by deduction type here.
               </div>
             </Panel>
+          )}
+
+          {activeTab === 'variance' && (
+            <VariancePanel
+              currentId={id!}
+              compareToId={compareToId}
+              onCompareToChange={setCompareToId}
+              periods={(periodsListQ.data?.data ?? []).filter((p) => p.id !== id)}
+              varianceData={varianceQ.data ?? null}
+              isLoading={varianceQ.isLoading}
+            />
           )}
         </div>
 
@@ -369,6 +395,125 @@ export default function PayrollPeriodDetailPage() {
         }}
       />
     </div>
+  );
+}
+
+/** Task 9 — Period-over-period variance panel. */
+function VariancePanel({
+  compareToId,
+  onCompareToChange,
+  periods,
+  varianceData,
+  isLoading,
+}: {
+  currentId: string;
+  compareToId: string;
+  onCompareToChange: (id: string) => void;
+  periods: Array<{ id: string; label: string; status: string }>;
+  varianceData: PayrollVarianceReport | null;
+  isLoading: boolean;
+}) {
+  const fmt = (n: number | string) => formatPeso(n);
+  const deltaColor = (n: number) => n > 0 ? 'text-success' : n < 0 ? 'text-danger' : 'text-muted';
+  const pctFmt = (n: number | null) => n === null ? '—' : `${n > 0 ? '+' : ''}${n.toFixed(1)}%`;
+
+  return (
+    <Panel title="Period-over-period variance">
+      <div className="space-y-4">
+        <div className="max-w-sm">
+          <label className="text-2xs uppercase tracking-wide text-muted mb-1 block">
+            Compare to period
+          </label>
+          <Select
+            value={compareToId}
+            onChange={(e) => onCompareToChange(e.target.value)}
+          >
+            <option value="">— Select a period to compare —</option>
+            {periods.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label} ({p.status})
+              </option>
+            ))}
+          </Select>
+        </div>
+
+        {!compareToId && (
+          <EmptyState
+            icon="bar-chart-2"
+            title="No period selected"
+            description="Pick a previous payroll period from the dropdown to compare."
+          />
+        )}
+
+        {compareToId && isLoading && (
+          <SkeletonTable columns={4} rows={4} />
+        )}
+
+        {varianceData && !isLoading && (
+          <div className="space-y-3">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-default text-left text-2xs uppercase tracking-wide text-muted">
+                  <th className="py-2 pr-4">Metric</th>
+                  <th className="py-2 pr-4 text-right">Previous<br /><span className="font-mono text-[10px] normal-case">{varianceData.previous.period_label}</span></th>
+                  <th className="py-2 pr-4 text-right">Current<br /><span className="font-mono text-[10px] normal-case">{varianceData.current.period_label}</span></th>
+                  <th className="py-2 pr-4 text-right">Delta</th>
+                  <th className="py-2 text-right">Change %</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  {
+                    label: 'Gross Pay',
+                    prev: fmt(varianceData.previous.total_gross),
+                    curr: fmt(varianceData.current.total_gross),
+                    delta: varianceData.delta.gross,
+                    pct: varianceData.pct_change.gross,
+                    isMoney: true,
+                  },
+                  {
+                    label: 'Total Deductions',
+                    prev: fmt(varianceData.previous.total_deductions),
+                    curr: fmt(varianceData.current.total_deductions),
+                    delta: varianceData.delta.deductions,
+                    pct: varianceData.pct_change.deductions,
+                    isMoney: true,
+                  },
+                  {
+                    label: 'Net Pay',
+                    prev: fmt(varianceData.previous.total_net),
+                    curr: fmt(varianceData.current.total_net),
+                    delta: varianceData.delta.net,
+                    pct: varianceData.pct_change.net,
+                    isMoney: true,
+                  },
+                  {
+                    label: 'Headcount',
+                    prev: String(varianceData.previous.employee_count),
+                    curr: String(varianceData.current.employee_count),
+                    delta: varianceData.delta.headcount,
+                    pct: varianceData.pct_change.headcount,
+                    isMoney: false,
+                  },
+                ].map((row) => (
+                  <tr key={row.label} className="border-b border-default/50 h-9">
+                    <td className="pr-4 font-medium">{row.label}</td>
+                    <td className="pr-4 text-right font-mono tabular-nums text-muted">{row.prev}</td>
+                    <td className="pr-4 text-right font-mono tabular-nums">{row.curr}</td>
+                    <td className={`pr-4 text-right font-mono tabular-nums ${deltaColor(row.delta)}`}>
+                      {row.delta > 0 ? '+' : ''}{row.isMoney ? fmt(row.delta) : row.delta}
+                    </td>
+                    <td className={`text-right font-mono tabular-nums text-xs ${deltaColor(row.pct ?? 0)}`}>
+                      {pctFmt(row.pct)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </Panel>
   );
 }
 

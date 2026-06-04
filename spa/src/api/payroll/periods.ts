@@ -1,6 +1,6 @@
 import { client } from '../client';
 import type { ApiSuccess, PaginatedResponse, ListParams } from '@/types';
-import type { CreatePayrollPeriodData, DisbursementProof, PayrollPeriod, PayrollPipeline, ProofType } from '@/types/payroll';
+import type { CreatePayrollPeriodData, DisbursementProof, PayrollPeriod, PayrollPipeline, PayrollVarianceReport, ProofType } from '@/types/payroll';
 
 export interface PeriodListParams extends ListParams {
   status?: string;
@@ -62,4 +62,10 @@ export const periodsApi = {
   // Task 6 — BIR 2316 Alphalist CSV export
   downloadBirAlphalist: (year: number) =>
     client.get(`/payroll/bir-alphalist?year=${year}`, { responseType: 'blob' }),
+
+  // Task 9 — Period-over-period variance report
+  variance: (id: string, compareTo: string) =>
+    client
+      .get<{ data: PayrollVarianceReport }>(`/payroll-periods/${id}/variance?compare_to=${compareTo}`)
+      .then((r) => r.data.data),
 };

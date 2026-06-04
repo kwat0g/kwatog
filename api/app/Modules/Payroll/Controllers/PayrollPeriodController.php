@@ -79,6 +79,30 @@ class PayrollPeriodController
      * ADV1 — Mark a finalized period as fully disbursed.
      * Requires at least one disbursement proof to be uploaded first.
      */
+    /**
+     * GET /payroll-periods/{period}/variance?compare_to={hash_id}
+     * Period-over-period variance report.
+     */
+    public function variance(Request $request, PayrollPeriod $period): JsonResponse
+    {
+        abort_unless($request->user()?->can('payroll.view'), 403);
+
+        $compareToId = (string) $request->query('compare_to', '');
+        if ($compareToId === '') {
+            abort(422, 'compare_to parameter is required.');
+        }
+
+        $decoded = \App\Common\Support\HashIdFilter::decode($compareToId, PayrollPeriod::class);
+        if (! $decoded) {
+            abort(404, 'Period not found.');
+        }
+        $previous = PayrollPeriod::findOrFail($decoded);
+
+        return response()->json([
+            'data' => $this->service->variance($period, $previous),
+        ]);
+    }
+
     public function markDisbursed(PayrollPeriod $period, Request $request): PayrollPeriodResource
     {
         if (! class_exists(\App\Modules\Payroll\Models\DisbursementProof::class)) {

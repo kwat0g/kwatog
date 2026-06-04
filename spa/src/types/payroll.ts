@@ -213,6 +213,33 @@ export interface PayrollPipeline {
   next_auto_run: string | null;
 }
 
+// Task 9 — Period-over-period variance report
+export interface PayrollVarianceSummary {
+  employee_count: number;
+  failed_count: number;
+  total_gross: string;
+  total_deductions: string;
+  total_net: string;
+  period_label: string;
+}
+
+export interface PayrollVarianceReport {
+  current: PayrollVarianceSummary;
+  previous: PayrollVarianceSummary;
+  delta: {
+    gross: number;
+    net: number;
+    deductions: number;
+    headcount: number;
+  };
+  pct_change: {
+    gross: number | null;
+    net: number | null;
+    deductions: number | null;
+    headcount: number | null;
+  };
+}
+
 // CA3 — Payroll pipeline
 export interface PipelinePeriod {
   id: string | null;

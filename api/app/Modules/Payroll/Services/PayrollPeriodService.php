@@ -124,6 +124,39 @@ class PayrollPeriodService
         ];
     }
 
+    /**
+     * Compare two payroll periods: delta and % change for gross, net, deductions, headcount.
+     */
+    public function variance(PayrollPeriod $current, PayrollPeriod $previous): array
+    {
+        $curr = $this->summary($current);
+        $prev = $this->summary($previous);
+
+        $delta = fn (string $key) => round((float) $curr[$key] - (float) $prev[$key], 2);
+        $pct   = fn (string $key) => (float) $prev[$key] > 0
+            ? round(((float) $curr[$key] - (float) $prev[$key]) / (float) $prev[$key] * 100, 2)
+            : null;
+
+        return [
+            'current'    => array_merge($curr, ['period_label' => $current->period_start . ' – ' . $current->period_end]),
+            'previous'   => array_merge($prev, ['period_label' => $previous->period_start . ' – ' . $previous->period_end]),
+            'delta'      => [
+                'gross'      => $delta('total_gross'),
+                'net'        => $delta('total_net'),
+                'deductions' => $delta('total_deductions'),
+                'headcount'  => $curr['employee_count'] - $prev['employee_count'],
+            ],
+            'pct_change' => [
+                'gross'      => $pct('total_gross'),
+                'net'        => $pct('total_net'),
+                'deductions' => $pct('total_deductions'),
+                'headcount'  => $prev['employee_count'] > 0
+                    ? round(($curr['employee_count'] - $prev['employee_count']) / $prev['employee_count'] * 100, 2)
+                    : null,
+            ],
+        ];
+    }
+
     public function create(array $data, User $user): PayrollPeriod
     {
         return DB::transaction(function () use ($data, $user) {

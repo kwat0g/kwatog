@@ -45,6 +45,7 @@ if (class_exists(PayrollPeriodController::class)) {
             Route::patch('/{period}/approve',     [PayrollPeriodController::class, 'approve'])->middleware('permission:payroll.periods.approve');
             Route::patch('/{period}/finalize',    [PayrollPeriodController::class, 'finalize'])->middleware('permission:payroll.periods.finalize');
             Route::get('/{period}/bank-file',     [PayrollPeriodController::class, 'bankFile'])->middleware('permission:payroll.periods.finalize');
+            Route::get('/{period}/variance',      [PayrollPeriodController::class, 'variance'])->middleware('permission:payroll.view');
             // ADV1 — Disbursement proof (salary deposit slip / bank confirmation).
             Route::patch('/{period}/mark-disbursed', [PayrollPeriodController::class, 'markDisbursed'])->middleware('permission:payroll.periods.finalize');
         });
