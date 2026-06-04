@@ -53,6 +53,7 @@ export function chipVariantForStatus(status: string | null | undefined): ChipVar
     case 'paid':
     case 'delivered':
     case 'confirmed':
+    case 'posted':
       return 'success';
     case 'in_production':
     case 'in_progress':
