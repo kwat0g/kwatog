@@ -12,6 +12,7 @@ import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
+import { PO_STATUSES } from '@/lib/constants/statuses';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import type { PurchaseOrder, PurchaseOrderStatus } from '@/types/purchasing';
@@ -24,7 +25,7 @@ const variant: Record<PurchaseOrderStatus, 'neutral' | 'info' | 'warning' | 'suc
 export default function PurchaseOrdersListPage() {
   const navigate = useNavigate();
   const { can } = usePermission();
-  const [filters, setFilters] = useState<any>({ page: 1, per_page: 25 });
+  const [filters, setFilters] = useState<Record<string, unknown>>({ page: 1, per_page: 25 });
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['purchasing', 'purchase-orders', filters],
@@ -63,7 +64,7 @@ export default function PurchaseOrdersListPage() {
   const filterConfig: FilterConfig[] = [
     { key: 'status', label: 'Status', type: 'select', options: [
       { value: '', label: 'All' },
-      ...Object.keys(variant).map((v) => ({ value: v, label: v.replace(/_/g, ' ') }))
+      ...PO_STATUSES,
     ]},
     { key: 'requires_vp_approval', label: 'VP threshold', type: 'select', options: [
       { value: '', label: 'All' }, { value: 'true', label: 'Yes' }, { value: 'false', label: 'No' },
@@ -77,8 +78,8 @@ export default function PurchaseOrdersListPage() {
           <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/purchasing/purchase-orders/create')}>New PO</Button>
         ) : null} />
       <FilterBar filters={filterConfig} values={filters}
-        onSearch={(s) => setFilters((f: any) => ({ ...f, search: s, page: 1 }))}
-        onFilter={(k, v) => setFilters((f: any) => ({ ...f, [k]: v, page: 1 }))}
+        onSearch={(s) => setFilters(f => ({ ...f, search: s, page: 1 }))}
+        onFilter={(k, v) => setFilters(f => ({ ...f, [k]: v, page: 1 }))}
         searchPlaceholder="Search PO number…" />
       {isLoading && !data && <SkeletonTable columns={7} rows={6} />}
       {isError && <EmptyState icon="alert-circle" title="Failed to load POs" action={<Button onClick={() => refetch()}>Retry</Button>} />}
@@ -92,7 +93,7 @@ export default function PurchaseOrdersListPage() {
             columns={columns}
             data={data.data}
             meta={data.meta}
-            onPageChange={(page) => setFilters((f: any) => ({ ...f, page }))}
+            onPageChange={(page) => setFilters(f => ({ ...f, page }))}
             selectable
             bulkActions={[
               {

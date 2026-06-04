@@ -13,6 +13,7 @@ import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
+import { PR_PRIORITIES, PR_STATUSES } from '@/lib/constants/statuses';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import type { PurchaseRequest, PurchaseRequestPriority, PurchaseRequestStatus } from '@/types/purchasing';
@@ -32,7 +33,7 @@ export default function PurchaseRequestsListPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { can } = usePermission();
-  const [filters, setFilters] = useState<any>({ page: 1, per_page: 25 });
+  const [filters, setFilters] = useState<Record<string, unknown>>({ page: 1, per_page: 25 });
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['purchasing', 'purchase-requests', filters],
@@ -44,8 +45,8 @@ export default function PurchaseRequestsListPage() {
     mutationFn: (ids: string[]) => purchaseRequestsApi.bulkApprove(ids),
     onSuccess: (results) => {
       qc.invalidateQueries({ queryKey: ['purchasing', 'purchase-requests'] });
-      const approved = results.filter((r: any) => r.status === 'approved').length;
-      const skipped = results.filter((r: any) => r.status === 'skipped').length;
+      const approved = results.filter((r: { status: string }) => r.status === 'approved').length;
+      const skipped = results.filter((r: { status: string }) => r.status === 'skipped').length;
       toast.success(`${approved} approved, ${skipped} skipped`);
     },
     onError: (e) => toast.error(errMsg(e, 'Failed to bulk approve.')),
@@ -93,11 +94,11 @@ export default function PurchaseRequestsListPage() {
   const filterConfig: FilterConfig[] = [
     { key: 'status', label: 'Status', type: 'select', options: [
       { value: '', label: 'All' },
-      ...['draft', 'pending', 'approved', 'rejected', 'converted', 'cancelled'].map((v) => ({ value: v, label: v }))
+      ...PR_STATUSES,
     ]},
     { key: 'priority', label: 'Priority', type: 'select', options: [
-      { value: '', label: 'All' }, { value: 'normal', label: 'Normal' },
-      { value: 'urgent', label: 'Urgent' }, { value: 'critical', label: 'Critical' },
+      { value: '', label: 'All' },
+      ...PR_PRIORITIES,
     ]},
     { key: 'is_auto_generated', label: 'Source', type: 'select', options: [
       { value: '', label: 'All' }, { value: 'true', label: 'Auto-generated' }, { value: 'false', label: 'Manual' },
@@ -111,8 +112,8 @@ export default function PurchaseRequestsListPage() {
           <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/purchasing/purchase-requests/create')}>New PR</Button>
         ) : null} />
       <FilterBar filters={filterConfig} values={filters}
-        onSearch={(s) => setFilters((f: any) => ({ ...f, search: s, page: 1 }))}
-        onFilter={(k, v) => setFilters((f: any) => ({ ...f, [k]: v, page: 1 }))}
+        onSearch={(s) => setFilters(f => ({ ...f, search: s, page: 1 }))}
+        onFilter={(k, v) => setFilters(f => ({ ...f, [k]: v, page: 1 }))}
         searchPlaceholder="Search PR number…" />
       {isLoading && !data && <SkeletonTable columns={7} rows={6} />}
       {isError && <EmptyState icon="alert-circle" title="Failed to load PRs" action={<Button onClick={() => refetch()}>Retry</Button>} />}
@@ -126,7 +127,7 @@ export default function PurchaseRequestsListPage() {
             columns={columns}
             data={data.data}
             meta={data.meta}
-            onPageChange={(page) => setFilters((f: any) => ({ ...f, page }))}
+            onPageChange={(page) => setFilters(f => ({ ...f, page }))}
             // ADV6 — Bulk approve via built-in select + bulkActions
             selectable={can('purchasing.pr.approve')}
             bulkActions={can('purchasing.pr.approve') ? bulkActions : undefined}
