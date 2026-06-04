@@ -71,6 +71,7 @@ export function chipVariantForStatus(status: string | null | undefined): ChipVar
     case 'setup':
     case 'partial':
     case 'partially_received':
+    case 'maintenance':
       return 'warning';
     case 'rejected':
     case 'failed':
