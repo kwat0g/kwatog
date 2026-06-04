@@ -15,6 +15,12 @@ class PruneAuditLogs extends Command
     public function handle(): int
     {
         $months = (int) $this->option('months');
+
+        if ($months < 1) {
+            $this->error('--months must be at least 1.');
+            return self::FAILURE;
+        }
+
         $cutoff = now()->subMonths($months)->startOfDay();
 
         $deleted = DB::table('audit_logs')
