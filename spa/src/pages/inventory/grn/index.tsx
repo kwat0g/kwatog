@@ -21,7 +21,7 @@ const variant: Record<GrnStatus, 'warning' | 'success' | 'info' | 'danger'> = {
 export default function GrnListPage() {
   const navigate = useNavigate();
   const { can } = usePermission();
-  const [filters, setFilters] = useState<any>({ page: 1, per_page: 25 });
+  const [filters, setFilters] = useState<Record<string, unknown>>({ page: 1, per_page: 25 });
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['inventory', 'grn', filters],
@@ -56,8 +56,8 @@ export default function GrnListPage() {
         ) : null}
       />
       <FilterBar filters={filterConfig} values={filters}
-        onSearch={(s) => setFilters((f: any) => ({ ...f, search: s, page: 1 }))}
-        onFilter={(k, v) => setFilters((f: any) => ({ ...f, [k]: v, page: 1 }))}
+        onSearch={(s) => setFilters(f => ({ ...f, search: s, page: 1 }))}
+        onFilter={(k, v) => setFilters(f => ({ ...f, [k]: v, page: 1 }))}
         searchPlaceholder="Search GRN number…" />
       {isLoading && !data && <SkeletonTable columns={6} rows={6} />}
       {isError && <EmptyState icon="alert-circle" title="Failed to load GRNs" action={<Button onClick={() => refetch()}>Retry</Button>} />}
@@ -68,7 +68,7 @@ export default function GrnListPage() {
       )}
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
-          <DataTable columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters((f: any) => ({ ...f, page }))} />
+          <DataTable columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters(f => ({ ...f, page }))} />
         </div>
       )}
     </div>

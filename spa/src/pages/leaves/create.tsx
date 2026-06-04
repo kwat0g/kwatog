@@ -51,7 +51,7 @@ export default function CreateLeavePage() {
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      employee_id: (user as any)?.employee?.id ?? '',
+      employee_id: user?.employee?.id ?? '',
     },
   });
 

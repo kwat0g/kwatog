@@ -44,7 +44,7 @@ function formatMinutes(mins: number): string {
   return `${mins}m`;
 }
 
-function StatCard({ label, value, icon: Icon, trend }: { label: string; value: string; icon: any; trend?: 'up' | 'down' | 'neutral' }) {
+function StatCard({ label, value, icon: Icon, trend }: { label: string; value: string; icon: typeof Activity; trend?: 'up' | 'down' | 'neutral' }) {
   return (
     <Panel className="p-4">
       <div className="flex items-start justify-between">

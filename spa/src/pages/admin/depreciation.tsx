@@ -14,6 +14,7 @@ export default function DepreciationRunsPage() {
 
   const run = useMutation({
     mutationFn: () => depreciationApi.runMonth(year, month),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onSuccess: (res: any) => {
       const d = res.data ?? res;
       toast.success(`Posted ${d.posted_count ?? 0} entries totalling ₱${d.total_amount ?? '0.00'}.`);

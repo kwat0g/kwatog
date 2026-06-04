@@ -85,8 +85,8 @@ export default function InvoicesPage() {
             bulkActions={[{
               label: 'Print PDFs',
               icon: <Printer size={14} />,
-              onClick: (rows) => bulkPrint('invoice', rows.map((r: any) => r.id)),
-            } as BulkAction<any>]}
+              onClick: (rows) => bulkPrint('invoice', rows.map((r) => r.id)),
+            } as BulkAction<Invoice>]}
           />
         </div>
       )}

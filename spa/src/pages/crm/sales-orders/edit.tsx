@@ -123,7 +123,7 @@ export default function EditSalesOrderPage() {
     onError: (e: AxiosError<{ message?: string; errors?: Record<string, string[]> }>) => {
       if (e.response?.status === 422 && e.response.data.errors) {
         Object.entries(e.response.data.errors).forEach(([field, msgs]) => {
-          setError(field as any, { type: 'server', message: msgs[0] });
+          setError(field as never, { type: 'server', message: msgs[0] });
         });
         toast.error(e.response?.data?.message || 'Validation failed.');
       } else {

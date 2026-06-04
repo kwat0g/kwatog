@@ -80,7 +80,7 @@ export default function InvoiceDetailPage() {
       toast.success(`Invoice ${inv.invoice_number} finalized.`);
       qc.invalidateQueries({ queryKey: ['accounting', 'invoices'] });
     },
-    onError: (e: any) => toast.error(e.response?.data?.message ?? 'Failed to finalize.'),
+    onError: (e: Error & { response?: { data?: { message?: string } } }) => toast.error(e.response?.data?.message ?? 'Failed to finalize.'),
   });
   const cancelMut = useMutation({
     mutationFn: () => invoicesApi.cancel(id),
@@ -88,7 +88,7 @@ export default function InvoiceDetailPage() {
       toast.success('Invoice cancelled.');
       qc.invalidateQueries({ queryKey: ['accounting', 'invoices'] });
     },
-    onError: (e: any) => toast.error(e.response?.data?.message ?? 'Failed to cancel.'),
+    onError: (e: Error & { response?: { data?: { message?: string } } }) => toast.error(e.response?.data?.message ?? 'Failed to cancel.'),
   });
   const collectMut = useMutation({
     mutationFn: (d: CollectionFormValues) => invoicesApi.recordCollection(id, {
@@ -102,7 +102,7 @@ export default function InvoiceDetailPage() {
       setShowCollect(false);
       reset({ collection_date: new Date().toISOString().slice(0, 10), payment_method: 'bank_transfer', cash_account_id: '', amount: 0, reference_number: '' });
     },
-    onError: (e: any) => toast.error(e.response?.data?.message ?? 'Failed to record collection.'),
+    onError: (e: Error & { response?: { data?: { message?: string } } }) => toast.error(e.response?.data?.message ?? 'Failed to record collection.'),
   });
 
   if (isLoading || (!invoice && !isError)) return <SkeletonDetail />;
@@ -111,7 +111,7 @@ export default function InvoiceDetailPage() {
 
   const isDraft = invoice.status === 'draft';
   const isOpen = invoice.status === 'finalized' || invoice.status === 'partial';
-  const cashAccts = (cashAccounts?.data ?? []).filter((a: any) => a.code.startsWith('10'));
+  const cashAccts = (cashAccounts?.data ?? []).filter((a: { code: string }) => a.code.startsWith('10'));
 
   return (
     <div>
@@ -233,7 +233,7 @@ export default function InvoiceDetailPage() {
         <form onSubmit={handleSubmit((d) => collectMut.mutate(d), onFormInvalid<CollectionFormValues>())} className="space-y-3">
           <Select label="Cash account" required {...register('cash_account_id')} error={errors.cash_account_id?.message}>
             <option value="">— Select —</option>
-            {cashAccts.map((a: any) => <option key={a.id} value={a.id}>{a.code} — {a.name}</option>)}
+            {cashAccts.map((a: { id: string; code: string; name: string }) => <option key={a.id} value={a.id}>{a.code} — {a.name}</option>)}
           </Select>
           <Input label="Collection date" type="date" required {...register('collection_date')} error={errors.collection_date?.message} />
           <Input label={`Amount (max ${formatPeso(invoice.balance)})`} type="number" step="0.01" min="0.01" max={invoice.balance}

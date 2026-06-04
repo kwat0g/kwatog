@@ -8,27 +8,27 @@ import type { ApiValidationError } from '@/types';
  * Handles nested objects (like `items.0.product_id`) and array-level
  * root messages (like `defects.root.message`).
  */
-function collectMessages(errors: Record<string, any>): string[] {
+function collectMessages(errors: Record<string, unknown>): string[] {
   const msgs: string[] = [];
 
   for (const val of Object.values(errors)) {
-    if (!val) continue;
+    if (!val || typeof val !== 'object') continue;
+    const node = val as Record<string, unknown>;
 
     // Leaf error: { message: "..." }
-    if (typeof val.message === 'string' && val.message) {
-      msgs.push(val.message);
+    if (typeof node.message === 'string' && node.message) {
+      msgs.push(node.message);
       continue;
     }
 
     // Array root error: { root: { message: "..." } }
-    if (val.root && typeof val.root.message === 'string' && val.root.message) {
-      msgs.push(val.root.message);
+    const root = node.root as Record<string, unknown> | undefined;
+    if (root && typeof root.message === 'string' && root.message) {
+      msgs.push(root.message);
     }
 
     // Recurse into nested objects / array items
-    if (typeof val === 'object') {
-      msgs.push(...collectMessages(val));
-    }
+    msgs.push(...collectMessages(node));
   }
 
   // Deduplicate
@@ -39,7 +39,7 @@ export function onFormInvalid<T extends FieldValues>(
   _labels?: Partial<Record<keyof T & string, string>>,
 ): (errors: FieldErrors<T>) => void {
   return (errors) => {
-    const messages = collectMessages(errors as Record<string, any>);
+    const messages = collectMessages(errors as Record<string, unknown>);
 
     if (messages.length === 0) {
       toast.error('Please fix the highlighted fields before submitting.', { duration: 5000 });

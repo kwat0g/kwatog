@@ -119,7 +119,7 @@ export default function CreateReturnRequestPage() {
                   onChange={(e) => setForm((f) => ({ ...f, customer_id: e.target.value }))}
                 >
                   <option value="">Select customer</option>
-                  {customers.map((c: any) => (
+                  {customers.map((c: { id: string; name: string }) => (
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
                 </select>
@@ -216,7 +216,7 @@ export default function CreateReturnRequestPage() {
                       onChange={(e) => updateItem(idx, 'product_id', e.target.value)}
                     >
                       <option value="">Select product</option>
-                      {products.map((p: any) => (
+                      {products.map((p: { id: string; part_number: string; name: string }) => (
                         <option key={p.id} value={p.id}>{p.part_number} — {p.name}</option>
                       ))}
                     </select>

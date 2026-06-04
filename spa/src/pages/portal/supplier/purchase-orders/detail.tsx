@@ -110,7 +110,7 @@ export default function SupplierPurchaseOrderDetailPage() {
       setBillRemarks('');
       queryClient.invalidateQueries({ queryKey: ['portal', 'supplier', 'po', id] });
     },
-    onError: (err: any) => {
+    onError: (err: Error & { response?: { data?: { message?: string } } }) => {
       toast.error(err?.response?.data?.message ?? 'Failed to submit invoice.');
     },
   });

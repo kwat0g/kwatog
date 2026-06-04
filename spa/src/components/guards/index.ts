@@ -4,3 +4,4 @@ export { ModuleGuard } from './ModuleGuard';
 export { PermissionGuard } from './PermissionGuard';
 export { CanDo } from './CanDo';
 export type { CanDoProps } from './CanDo';
+export { ErrorBoundary } from './ErrorBoundary';

@@ -1,7 +1,7 @@
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 interface AreaTrendProps {
-  data: Array<Record<string, any>>;
+  data: Array<Record<string, unknown>>;
   dataKey?: string;
   forecastKey?: string;
   xKey?: string;

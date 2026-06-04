@@ -35,7 +35,7 @@ export default function JournalEntryDetailPage() {
       toast.success('Entry posted.');
       qc.invalidateQueries({ queryKey: ['accounting', 'journal-entries'] });
     },
-    onError: (e: any) => toast.error(e.response?.data?.message ?? 'Failed to post.'),
+    onError: (e: Error & { response?: { data?: { message?: string } } }) => toast.error(e.response?.data?.message ?? 'Failed to post.'),
   });
   const reverseMut = useMutation({
     mutationFn: () => journalEntriesApi.reverse(id),
@@ -44,7 +44,7 @@ export default function JournalEntryDetailPage() {
       qc.invalidateQueries({ queryKey: ['accounting', 'journal-entries'] });
       navigate(`/accounting/journal-entries/${rev.id}`);
     },
-    onError: (e: any) => toast.error(e.response?.data?.message ?? 'Failed to reverse.'),
+    onError: (e: Error & { response?: { data?: { message?: string } } }) => toast.error(e.response?.data?.message ?? 'Failed to reverse.'),
   });
   const deleteMut = useMutation({
     mutationFn: () => journalEntriesApi.delete(id),
@@ -53,7 +53,7 @@ export default function JournalEntryDetailPage() {
       qc.invalidateQueries({ queryKey: ['accounting', 'journal-entries'] });
       navigate('/accounting/journal-entries');
     },
-    onError: (e: any) => toast.error(e.response?.data?.message ?? 'Failed to delete.'),
+    onError: (e: Error & { response?: { data?: { message?: string } } }) => toast.error(e.response?.data?.message ?? 'Failed to delete.'),
   });
 
   if (isLoading || (!je && !isError)) return <SkeletonDetail />;

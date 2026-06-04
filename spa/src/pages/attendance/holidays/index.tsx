@@ -226,10 +226,11 @@ function MonthGrid({ year, month, holidays }: { year: number; month: number; hol
   for (let d = 1; d <= days; d++) cells.push(new Date(year, month, d));
 
   const byDay = useMemo(() => {
+    const refDate = new Date(year, month, 1);
     const map = new Map<string, Holiday[]>();
     holidays.forEach((h) => {
       const d = parseISO(h.date);
-      if (isSameMonth(d, ref)) {
+      if (isSameMonth(d, refDate)) {
         const key = format(d, 'yyyy-MM-dd');
         const list = map.get(key) ?? [];
         list.push(h);
@@ -237,7 +238,7 @@ function MonthGrid({ year, month, holidays }: { year: number; month: number; hol
       }
     });
     return map;
-  }, [holidays, ref]);
+  }, [holidays, year, month]);
 
   return (
     <Panel title={format(ref, 'MMMM yyyy')} noPadding>

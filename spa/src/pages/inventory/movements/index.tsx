@@ -22,7 +22,7 @@ const chip = (t: string): 'success' | 'info' | 'warning' | 'danger' | 'neutral' 
 
 export default function StockMovementsPage() {
   const [search] = useSearchParams();
-  const [filters, setFilters] = useState<any>({
+  const [filters, setFilters] = useState<Record<string, unknown>>({
     page: 1, per_page: 50, item_id: search.get('item_id') ?? undefined,
   });
 
@@ -67,14 +67,14 @@ export default function StockMovementsPage() {
       <PageHeader title="Stock movements" backTo="/inventory/items" backLabel="Items" subtitle={data ? `${data.meta.total} movements` : undefined} />
       <FilterBar filters={filterConfig} values={filters}
         onSearch={() => undefined}
-        onFilter={(k, v) => setFilters((f: any) => ({ ...f, [k]: v, page: 1 }))}
+        onFilter={(k, v) => setFilters(f => ({ ...f, [k]: v, page: 1 }))}
         searchPlaceholder="" />
       {isLoading && !data && <SkeletonTable columns={9} rows={10} />}
       {isError && <EmptyState icon="alert-circle" title="Failed to load movements" action={<Button onClick={() => refetch()}>Retry</Button>} />}
       {data && data.data.length === 0 && <EmptyState icon="inbox" title="No movements yet" />}
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
-          <DataTable columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters((f: any) => ({ ...f, page }))} />
+          <DataTable columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters(f => ({ ...f, page }))} />
         </div>
       )}
     </div>

@@ -25,7 +25,7 @@ export default function PrTemplatesListPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { can } = usePermission();
-  const [filters, setFilters] = useState<any>({ page: 1, per_page: 25 });
+  const [filters, setFilters] = useState<Record<string, unknown>>({ page: 1, per_page: 25 });
   const [deleteId, setDeleteId] = useState<number | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
@@ -106,8 +106,8 @@ export default function PrTemplatesListPage() {
           <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/purchasing/pr-templates/create')}>New Template</Button>
         ) : null} />
       <FilterBar filters={filterConfig} values={filters}
-        onSearch={(s) => setFilters((f: any) => ({ ...f, search: s, page: 1 }))}
-        onFilter={(k, v) => setFilters((f: any) => ({ ...f, [k]: v, page: 1 }))}
+        onSearch={(s) => setFilters(f => ({ ...f, search: s, page: 1 }))}
+        onFilter={(k, v) => setFilters(f => ({ ...f, [k]: v, page: 1 }))}
         searchPlaceholder="Search template name…" />
       {isLoading && !data && <SkeletonTable columns={7} rows={6} />}
       {isError && <EmptyState icon="alert-circle" title="Failed to load templates" action={<Button onClick={() => refetch()}>Retry</Button>} />}
@@ -117,7 +117,7 @@ export default function PrTemplatesListPage() {
       )}
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
-          <DataTable columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters((f: any) => ({ ...f, page }))} />
+          <DataTable columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters(f => ({ ...f, page }))} />
         </div>
       )}
 

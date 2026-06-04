@@ -83,7 +83,7 @@ export default function StockCountPage() {
 
   const createSession = useMutation({
     mutationFn: (d: z.infer<typeof sessionSchema>) => {
-      const payload: any = { title: d.title, scope: d.scope };
+      const payload: { title: string; scope: string; warehouse_id?: string; zone_id?: string } = { title: d.title, scope: d.scope };
       if (d.scope === 'warehouse' && d.warehouse_id) payload.warehouse_id = d.warehouse_id;
       if (d.scope === 'zone' && d.zone_id) payload.zone_id = d.zone_id;
       return stockCountApi.create(payload);
@@ -100,7 +100,7 @@ export default function StockCountPage() {
   });
 
   // ── Record count ──
-  const countForm = useForm<z.infer<typeof countSchema>>();
+  const countForm = useForm<z.infer<typeof countSchema>>({ resolver: zodResolver(countSchema) });
   const recordCount = useMutation({
     mutationFn: (d: z.infer<typeof countSchema>) => stockCountApi.recordCount(countModalItem!.id, d),
     onSuccess: () => { toast.success('Count recorded.'); refetchSession(); setCountModalItem(null); countForm.reset(); },

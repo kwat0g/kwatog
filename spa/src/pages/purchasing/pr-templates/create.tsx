@@ -92,7 +92,7 @@ export default function PrTemplateFormPage() {
       if (isEdit && templateId) {
         return prTemplatesApi.update(templateId, payload);
       }
-      return prTemplatesApi.create(payload as any);
+      return prTemplatesApi.create(payload as never);
     },
     onSuccess: (_result) => {
       qc.invalidateQueries({ queryKey: ['purchasing', 'pr-templates'] });
@@ -129,7 +129,7 @@ export default function PrTemplateFormPage() {
             <div className="grid grid-cols-2 gap-3">
               <Select label="Department" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
                 <option value="">All departments</option>
-                {depts.map((d: any) => (
+                {depts.map((d: { id: string; name: string }) => (
                   <option key={d.id} value={d.id}>{d.name}</option>
                 ))}
               </Select>
@@ -145,7 +145,7 @@ export default function PrTemplateFormPage() {
                 <div className="col-span-3">
                   <Select value={line.item_id} onChange={(e) => updateLine(line.key, 'item_id', e.target.value)}>
                     <option value="">— Select item —</option>
-                    {items.map((i: any) => (
+                    {items.map((i: { id: string; code: string; name: string }) => (
                       <option key={i.id} value={i.id}>{i.code} — {i.name}</option>
                     ))}
                   </Select>

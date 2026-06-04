@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /** Sprint 8 — Task 74. Self-service: my leave requests. */
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';

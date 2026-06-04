@@ -12,7 +12,7 @@ import { formatDate } from '@/lib/formatDate';
 import type { MaterialIssueSlip } from '@/types/inventory';
 
 export default function MaterialIssuesListPage() {
-  const [filters, setFilters] = useState<any>({ page: 1, per_page: 25 });
+  const [filters, setFilters] = useState<Record<string, unknown>>({ page: 1, per_page: 25 });
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['inventory', 'material-issues', filters],
     queryFn: () => materialIssuesApi.list(filters),
@@ -42,7 +42,7 @@ export default function MaterialIssuesListPage() {
       )}
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
-          <DataTable columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters((f: any) => ({ ...f, page }))} />
+          <DataTable columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters(f => ({ ...f, page }))} />
         </div>
       )}
     </div>

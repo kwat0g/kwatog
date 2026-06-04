@@ -13,7 +13,7 @@ import type { StockLevel } from '@/types/inventory';
 export default function StockLevelsPage() {
   const [search] = useSearchParams();
   const itemFilter = search.get('item_id') ?? '';
-  const [filters, setFilters] = useState<any>({ page: 1, per_page: 50, item_id: itemFilter || undefined });
+  const [filters, setFilters] = useState<Record<string, unknown>>({ page: 1, per_page: 50, item_id: itemFilter || undefined });
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['inventory', 'stock-levels', filters],
@@ -50,15 +50,15 @@ export default function StockLevelsPage() {
     <div>
       <PageHeader title="Stock levels" backTo="/inventory/items" backLabel="Items" subtitle={data ? `${data.meta.total} entries` : undefined} />
       <FilterBar filters={filterConfig} values={filters}
-        onSearch={(s) => setFilters((f: any) => ({ ...f, search: s, page: 1 }))}
-        onFilter={(k, v) => setFilters((f: any) => ({ ...f, [k]: v, page: 1 }))}
+        onSearch={(s) => setFilters(f => ({ ...f, search: s, page: 1 }))}
+        onFilter={(k, v) => setFilters(f => ({ ...f, [k]: v, page: 1 }))}
         searchPlaceholder="Search by item…" />
       {isLoading && !data && <SkeletonTable columns={7} rows={8} />}
       {isError && <EmptyState icon="alert-circle" title="Failed to load stock" action={<Button onClick={() => refetch()}>Retry</Button>} />}
       {data && data.data.length === 0 && <EmptyState icon="inbox" title="No stock found" />}
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
-          <DataTable columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters((f: any) => ({ ...f, page }))} />
+          <DataTable columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters(f => ({ ...f, page }))} />
         </div>
       )}
     </div>

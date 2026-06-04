@@ -5,6 +5,12 @@
 
 ## Total: ~88 tables across 15 modules
 
+### Migration numbering
+
+Migrations are sequentially numbered `0001_` through `0169_`. The range `0132–0149`
+is intentionally reserved for future Sprint 8+ features (B2B portal tables,
+advanced reporting). This is not a gap or a bug.
+
 ---
 
 ## AUTH & SYSTEM (13 tables)

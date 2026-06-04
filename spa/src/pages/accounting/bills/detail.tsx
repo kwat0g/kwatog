@@ -79,7 +79,7 @@ export default function BillDetailPage() {
       toast.success('Bill cancelled.');
       qc.invalidateQueries({ queryKey: ['accounting', 'bills'] });
     },
-    onError: (e: any) => toast.error(e.response?.data?.message ?? 'Failed to cancel.'),
+    onError: (e: Error & { response?: { data?: { message?: string } } }) => toast.error(e.response?.data?.message ?? 'Failed to cancel.'),
   });
   const payMut = useMutation({
     mutationFn: (d: PaymentFormValues) => billsApi.recordPayment(id, {
@@ -95,7 +95,7 @@ export default function BillDetailPage() {
       setShowPay(false);
       reset({ payment_date: new Date().toISOString().slice(0, 10), payment_method: 'bank_transfer', cash_account_id: '', amount: 0, reference_number: '' });
     },
-    onError: (e: any) => toast.error(e.response?.data?.message ?? 'Failed to record payment.'),
+    onError: (e: Error & { response?: { data?: { message?: string } } }) => toast.error(e.response?.data?.message ?? 'Failed to record payment.'),
   });
 
   if (isLoading || (!bill && !isError)) return <SkeletonDetail />;

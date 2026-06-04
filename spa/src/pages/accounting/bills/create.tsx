@@ -56,7 +56,7 @@ export default function CreateBillPage() {
     queryKey: ['accounting', 'accounts', 'expense'],
     queryFn: () => accountsApi.list({ per_page: 200, type: 'expense', is_active: true }),
   });
-  const vendors = vendorsResp?.data ?? [];
+  const vendors = useMemo(() => vendorsResp?.data ?? [], [vendorsResp]);
   const accounts = accountsResp?.data ?? [];
 
   const { register, control, handleSubmit, watch, setError, setValue, getValues, formState: { errors, isSubmitting } } = useForm<FormValues>({

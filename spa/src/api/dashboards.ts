@@ -4,7 +4,7 @@ import type { ApiSuccess } from '@/types';
 export interface DashboardKpi { label: string; value: string; unit: string; }
 export interface DashboardEnvelope {
   kpis: DashboardKpi[];
-  panels: Record<string, any>;
+  panels: Record<string, unknown>;
 }
 
 export const dashboardsApi = {

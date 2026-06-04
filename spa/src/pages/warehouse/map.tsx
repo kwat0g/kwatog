@@ -28,7 +28,8 @@ export default function WarehouseMapPage() {
   usePermission();
   const [activeWh, setActiveWh] = useState<string | null>(null);
   const [activeZone, setActiveZone] = useState<string | null>(null);
-  const [selectedBin, setSelectedBin] = useState<{ id: string; detail: any } | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+const [selectedBin, setSelectedBin] = useState<{ id: string; detail: any } | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['warehouse', 'map'],
@@ -181,7 +182,7 @@ export default function WarehouseMapPage() {
                           {binDetail.data.stock_levels.length === 0 ? (
                             <div className="text-muted">No stock at this bin.</div>
                           ) : (
-                            binDetail.data.stock_levels.map((sl: any, i: number) => (
+                            binDetail.data.stock_levels.map((sl, i) => (
                               <div key={i} className="text-2xs">
                                 <span className="font-mono">{sl.item_code}</span>
                                 <span className="text-muted ml-1">{Number(sl.quantity).toFixed(3)}</span>

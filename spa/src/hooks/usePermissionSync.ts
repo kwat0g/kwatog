@@ -36,5 +36,6 @@ export function usePermissionSync() {
       echo.leave(`user.${user.id}`);
       echo.leave('settings');
     };
-  }, [user?.id, refresh, queryClient]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-subscribe when user identity changes; refresh/queryClient are stable refs
+  }, [user?.id]);
 }

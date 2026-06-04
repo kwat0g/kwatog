@@ -74,7 +74,7 @@ export default function CreateNcrPage() {
 
   // Pre-fill from template when navigated from NCR template list
   useEffect(() => {
-    const tpl = (location.state as any)?.template as NcrTemplate | undefined;
+    const tpl = (location.state as { template?: NcrTemplate } | null)?.template as NcrTemplate | undefined;
     if (tpl) {
       reset({
         source: (tpl.source === 'inspection_fail' || tpl.source === 'customer_complaint')

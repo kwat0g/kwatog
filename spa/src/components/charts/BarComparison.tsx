@@ -7,7 +7,7 @@ interface BarDef {
 }
 
 interface BarComparisonProps {
-  data: Array<Record<string, any>>;
+  data: Array<Record<string, unknown>>;
   bars: BarDef[];
   xKey?: string;
   height?: number;

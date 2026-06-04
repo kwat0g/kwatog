@@ -13,7 +13,7 @@ export const warehouseMapApi = {
   map: () =>
     client.get<{ data: WarehouseMap[] }>('/inventory/warehouse-map').then((r) => r.data.data),
   binDetail: (id: string) =>
-    client.get<{ data: { location: WarehouseMapLocation; stock_levels: any[]; last_movement: any } }>(`/inventory/warehouse-map/bins/${id}`).then((r) => r.data.data),
+    client.get<{ data: { location: WarehouseMapLocation; stock_levels: Array<{ item_code: string; quantity: string; available: string }>; last_movement: { movement_type: string; created_at: string } | null } }>(`/inventory/warehouse-map/bins/${id}`).then((r) => r.data.data),
 };
 
 export const stockCountApi = {

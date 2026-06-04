@@ -57,7 +57,7 @@ export default function LeaveDetailPage() {
     return <EmptyState icon="alert-circle" title="Leave request not found" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />;
   }
 
-  const isOwner = (user as any)?.employee?.id === req.employee?.id;
+  const isOwner = user?.employee?.id === req.employee?.id;
   const canCancel = isOwner && ['pending_dept', 'pending_hr', 'approved'].includes(req.status);
 
   return (

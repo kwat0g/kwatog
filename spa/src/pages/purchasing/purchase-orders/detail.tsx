@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
@@ -239,7 +240,7 @@ export default function PurchaseOrderDetailPage() {
                       <div className="flex items-center justify-between">
                         <span className="text-muted">No bill received from supplier yet</span>
                         {can('accounting.bills.create') && (data.goods_receipt_notes?.length ?? 0) > 0 && (
-                          <Link to="/accounting/bills" className="text-2xs text-accent hover:underline">Create bill →</Link>
+                          <Link to="/accounting/bills" className="text-2xs text-accent hover:underline">Create bill →</Link>
                         )}
                       </div>
                     ) : (

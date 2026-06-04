@@ -14,7 +14,7 @@ import { onFormInvalid } from '@/lib/formErrors';
 import type { Employee } from '@/types/hr';
 
 // Names: letters, spaces, periods, apostrophes, hyphens. Up to 100 chars.
-const namePattern = /^[\p{L}\s.'\-]+$/u;
+const namePattern = /^[\p{L}\s.'-]+$/u;
 
 const optString = (max: number) =>
   z.string().max(max, `Must be ${max} characters or fewer`).optional().or(z.literal(''));
@@ -38,6 +38,7 @@ const phDigits = (label: string, len: number | [number, number]) =>
 
 const moneyPattern = /^\d+(\.\d{1,2})?$/;
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const employeeSchema = z.object({
   first_name: z.string().min(1, 'Required').max(100).regex(namePattern, 'Letters, spaces, ., \', - only'),
   middle_name: z.string().max(100).regex(namePattern, 'Letters, spaces, ., \', - only').optional().or(z.literal('')),

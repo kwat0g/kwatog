@@ -78,6 +78,7 @@ export default function ComplaintDetailPage() {
       d7_prevention: r.d7_prevention ?? '',
       d8_recognition: r.d8_recognition ?? '',
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- id is a stable sentinel; using the full object would cause infinite loops
   }, [data?.eight_d_report?.id]);
 
   const save8D = useMutation({

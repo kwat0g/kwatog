@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { AuthGuard } from '@/components/guards/AuthGuard';
+import { ErrorBoundary } from '@/components/guards/ErrorBoundary';
 import { AppLayout } from '@/layouts/AppLayout';
 import { FullPageLoader } from '@/components/ui/Spinner';
 
@@ -37,7 +38,9 @@ export default function App() {
         <Route
           element={
             <AuthGuard>
-              <AppLayout />
+              <ErrorBoundary>
+                <AppLayout />
+              </ErrorBoundary>
             </AuthGuard>
           }
         >

@@ -139,7 +139,7 @@ export default function InspectionSpecEditorPage() {
     onError: (e: AxiosError<{ message?: string; errors?: Record<string, string[]> }>) => {
       if (e.response?.status === 422 && e.response.data.errors) {
         Object.entries(e.response.data.errors).forEach(([field, msgs]) => {
-          setError(field as any, { type: 'server', message: msgs[0] });
+          setError(field as never, { type: 'server', message: msgs[0] });
         });
         toast.error(e.response?.data?.message || 'Validation failed.');
       } else {
@@ -149,7 +149,7 @@ export default function InspectionSpecEditorPage() {
   });
 
   const productLabel = useMemo(() => {
-    const p = products.data?.data.find((pp: any) => pp.id === productId);
+    const p = products.data?.data.find((pp: { id: string; part_number: string; name: string }) => pp.id === productId);
     return p ? `${p.part_number} — ${p.name}` : '';
   }, [products.data, productId]);
 
@@ -167,7 +167,7 @@ export default function InspectionSpecEditorPage() {
             onChange={(e) => setPickedProductId(e.target.value)}
           >
             <option value="">Select product…</option>
-            {products.data?.data.map((p: any) => (
+            {products.data?.data.map((p: { id: string; part_number: string; name: string }) => (
               <option key={p.id} value={p.id}>{p.part_number} — {p.name}</option>
             ))}
           </Select>

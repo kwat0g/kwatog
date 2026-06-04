@@ -57,7 +57,7 @@ export default function PickingListPage() {
               <div className="text-2xs uppercase tracking-wider text-muted font-medium px-1 mb-1">
                 Issued slips ({slips.length})
               </div>
-              {slips.map((slip: any) => (
+              {slips.map((slip: { id: string; slip_number?: string; status: string; work_order?: string; issued_date?: string; created_at?: string }) => (
                 <button
                   key={slip.id}
                   type="button"
