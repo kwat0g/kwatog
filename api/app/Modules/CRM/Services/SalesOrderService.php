@@ -15,6 +15,7 @@ use App\Modules\CRM\Models\SalesOrderItem;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
 class SalesOrderService
@@ -36,6 +37,59 @@ class SalesOrderService
     {
         $cls = '\\App\\Modules\\MRP\\Services\\MrpEngineService';
         return class_exists($cls) ? app($cls) : null;
+    }
+
+    /**
+     * Enforce customer credit limit before confirming a sales order.
+     *
+     * Total exposure = AR balance on open invoices (finalized/partial)
+     *                + total_amount of open SOs (confirmed/in_production)
+     *                + this SO's total_amount
+     *
+     * If exposure > credit_limit a ValidationException is thrown (422).
+     * A null or zero credit_limit means no limit is enforced.
+     */
+    private function checkCreditLimit(SalesOrder $so): void
+    {
+        $customer = $so->customer ?? $so->load('customer')->customer;
+        $limit = (string) ($customer->credit_limit ?? '0');
+        if (bccomp($limit, '0', 2) <= 0) {
+            return; // null or 0 = no limit enforced
+        }
+
+        $arBalance = (string) (\App\Modules\Accounting\Models\Invoice::query()
+            ->where('customer_id', $customer->id)
+            ->whereIn('status', ['finalized', 'partial'])
+            ->sum('balance') ?? '0');
+
+        $openSoExposure = (string) (SalesOrder::query()
+            ->where('customer_id', $customer->id)
+            ->whereIn('status', [
+                SalesOrderStatus::Confirmed->value,
+                SalesOrderStatus::InProduction->value,
+            ])
+            ->where('id', '!=', $so->id)
+            ->sum('total_amount') ?? '0');
+
+        $totalExposure = bcadd(
+            bcadd($arBalance, $openSoExposure, 2),
+            (string) $so->total_amount,
+            2
+        );
+
+        if (bccomp($totalExposure, $limit, 2) > 0) {
+            $msg = sprintf(
+                'Credit limit exceeded. Limit: ₱%s, Current exposure: ₱%s (AR ₱%s + open SOs ₱%s + this SO ₱%s).',
+                number_format((float) $limit, 2),
+                number_format((float) $totalExposure, 2),
+                number_format((float) $arBalance, 2),
+                number_format((float) $openSoExposure, 2),
+                number_format((float) $so->total_amount, 2),
+            );
+            throw ValidationException::withMessages([
+                'credit_limit' => [$msg],
+            ]);
+        }
     }
 
     public function list(array $filters): LengthAwarePaginator
@@ -217,6 +271,8 @@ class SalesOrderService
      */
     public function confirm(SalesOrder $so): SalesOrder
     {
+        $this->checkCreditLimit($so);
+
         if ($so->status !== SalesOrderStatus::Draft) {
             throw new RuntimeException('Only draft sales orders can be confirmed.');
         }

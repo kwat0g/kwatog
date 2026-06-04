@@ -13,6 +13,11 @@ class SalesOrderItem extends Model
 {
     use HasFactory, HasHashId;
 
+    protected static function newFactory(): \Database\Factories\SalesOrderItemFactory
+    {
+        return \Database\Factories\SalesOrderItemFactory::new();
+    }
+
     public $timestamps = false;
 
     protected $fillable = [

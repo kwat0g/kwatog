@@ -16,6 +16,11 @@ class Product extends Model
 {
     use HasFactory, HasHashId, HasAuditLog, SoftDeletes;
 
+    protected static function newFactory(): \Database\Factories\ProductFactory
+    {
+        return \Database\Factories\ProductFactory::new();
+    }
+
     protected $fillable = [
         'part_number', 'name', 'description', 'unit_of_measure',
         'standard_cost', 'is_active',
