@@ -1,4 +1,4 @@
-import { client } from '../client';
+import { unwrappingClient as client } from '../client';
 import type { PaginatedResponse, ListParams } from '@/types';
 import type { PurchaseRequest, CreatePurchaseRequestData, PurchaseOrder, PurchaseRequestTemplate } from '@/types/purchasing';
 

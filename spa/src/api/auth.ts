@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { client } from './client';
+import { unwrappingClient as client } from './client';
 
 export interface AuthRole {
   id: string;
