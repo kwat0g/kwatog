@@ -77,7 +77,7 @@ export default function SelfServiceDtrPage() {
     queryKey: ['self-service', 'dtr', from, to],
     queryFn: () =>
       client
-        .get<{ data: AttendanceRow[]; meta: unknown }>('/attendances', {
+        .get<{ data: AttendanceRow[]; meta: unknown }>('/attendance/attendances', {
           params: { per_page: 100, scope: 'self', from, to },
         })
         .then((r) => r.data),

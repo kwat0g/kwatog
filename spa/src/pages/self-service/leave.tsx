@@ -66,7 +66,7 @@ export default function SelfServiceLeavePage() {
   });
 
   const balanceMap = useMemo<Record<string, SelfServiceLeaveBalanceSelf>>(
-    () => Object.fromEntries((balances ?? []).map((b) => [b.leave_type_id, b])),
+    () => Object.fromEntries((balances ?? []).map((b) => [b.leave_type.id, b])),
     [balances],
   );
 
@@ -201,17 +201,17 @@ export default function SelfServiceLeavePage() {
             {selectedBalance && (
               <div className="rounded-md border border-default bg-surface px-3 py-2 text-xs">
                 <div className="flex justify-between text-muted mb-1">
-                  <span>Balance: {selectedBalance.name}</span>
+                  <span>Balance: {selectedBalance.leave_type.name}</span>
                   <span className="font-mono tabular-nums">
-                    {selectedBalance.remaining} / {selectedBalance.total} days remaining
+                    {selectedBalance.remaining} / {selectedBalance.total_credits} days remaining
                   </span>
                 </div>
                 <div className="h-1.5 rounded-full bg-subtle overflow-hidden">
                   <div
                     className="h-full rounded-full bg-accent"
                     style={{
-                      width: `${selectedBalance.total > 0
-                        ? Math.min(100, (selectedBalance.remaining / selectedBalance.total) * 100)
+                      width: `${Number(selectedBalance.total_credits) > 0
+                        ? Math.min(100, (Number(selectedBalance.remaining) / Number(selectedBalance.total_credits)) * 100)
                         : 0}%`,
                     }}
                   />

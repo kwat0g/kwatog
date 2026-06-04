@@ -146,12 +146,16 @@ export interface SelfServiceLeaveType {
 }
 
 export interface SelfServiceLeaveBalanceSelf {
-  leave_type_id: string;
-  code: string;
-  name: string;
-  total: number;
-  used: number;
-  remaining: number;
+  id: string;
+  leave_type: {
+    id: string;
+    code: string;
+    name: string;
+  };
+  year: number;
+  total_credits: string;
+  used: string;
+  remaining: string;
 }
 
 export interface FileLeavePayload {
