@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useDebounce } from '@/hooks/useDebounce';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -191,14 +192,16 @@ function ApplyLoanSheet({
 
   const watchedAmount = watch('amount');
   const watchedPeriods = watch('periods');
+  const debouncedAmount = useDebounce(watchedAmount, 500);
+  const debouncedPeriods = useDebounce(watchedPeriods, 300);
 
   const { data: preview, isFetching: previewLoading } = useQuery({
-    queryKey: ['loan-preview', watchedAmount, watchedPeriods],
+    queryKey: ['loan-preview', debouncedAmount, debouncedPeriods],
     queryFn: () => selfServiceApi.previewLoanAmortization(
-      Number(watchedAmount),
-      Number(watchedPeriods),
+      Number(debouncedAmount),
+      Number(debouncedPeriods),
     ),
-    enabled: Number(watchedAmount) > 0 && Number(watchedPeriods) >= 1,
+    enabled: Number(debouncedAmount) > 0 && Number(debouncedPeriods) >= 1,
     staleTime: 30_000,
   });
 
@@ -287,7 +290,7 @@ function ApplyLoanSheet({
           error={errors.reason?.message}
         />
         <div className="flex justify-end gap-2 pt-2 border-t border-default">
-          <Button type="button" variant="secondary" onClick={onClose} disabled={pending}>
+          <Button type="button" variant="secondary" onClick={() => { reset(); onClose(); }} disabled={pending}>
             Cancel
           </Button>
           <Button type="submit" variant="primary" disabled={pending} loading={pending}>
