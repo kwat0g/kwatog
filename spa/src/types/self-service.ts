@@ -136,3 +136,28 @@ export interface SelfServiceDocumentsResponse {
   current_year: number;
   bir_2316_year: number;
 }
+
+// ─── Leave filing (Task SS-LF) ─────────────────────────────────────
+export interface SelfServiceLeaveType {
+  id: string;
+  code: string;
+  name: string;
+  requires_document: boolean;
+}
+
+export interface SelfServiceLeaveBalanceSelf {
+  leave_type_id: string;
+  code: string;
+  name: string;
+  total: number;
+  used: number;
+  remaining: number;
+}
+
+export interface FileLeavePayload {
+  employee_id: string;
+  leave_type_id: string;
+  start_date: string;
+  end_date: string;
+  reason?: string;
+}

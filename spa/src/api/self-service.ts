@@ -7,6 +7,9 @@ import type {
   SelfServiceOvertimeResponse,
   ApplyOvertimePayload,
   SelfServiceDocumentsResponse,
+  SelfServiceLeaveType,
+  SelfServiceLeaveBalanceSelf,
+  FileLeavePayload,
 } from '@/types/self-service';
 
 /** U3 — Self-service portal endpoints (always scoped to current user). */
@@ -71,4 +74,18 @@ export const selfServiceApi = {
     `/api/v1/hr/self-service/documents/contributions/${type}${year ? `?year=${year}` : ''}`,
   bir2316Url: (year?: number) =>
     `/api/v1/hr/self-service/documents/bir-2316${year ? `?year=${year}` : ''}`,
+
+  // ─── Leave filing (Task SS-LF) ──────────────────────────────────
+  leaveTypes: () =>
+    client.get<{ data: SelfServiceLeaveType[] }>('/leaves/types').then((r) => r.data.data),
+
+  leaveBalancesMe: () =>
+    client
+      .get<{ data: SelfServiceLeaveBalanceSelf[] }>('/leaves/balances/me')
+      .then((r) => r.data.data),
+
+  fileLeaveSelf: (payload: FileLeavePayload) =>
+    client
+      .post<{ message: string; data: { id: string } }>('/leaves/requests', payload)
+      .then((r) => r.data),
 };
