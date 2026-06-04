@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { authApi, type AuthUser, type LoginPayload } from '@/api/auth';
 import { useThemeStore } from './themeStore';
-import { useSidebarStore } from './sidebarStore';
 
 interface AuthState {
   user: AuthUser | null;
@@ -64,6 +63,5 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     });
     // Apply server-side preferences without triggering a reverse PATCH back to the API.
     useThemeStore.getState().init(user.theme_mode);
-    useSidebarStore.getState().init(user.sidebar_collapsed);
   },
 }));

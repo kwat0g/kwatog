@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { Lock } from 'lucide-react';
 import { AxiosError } from 'axios';
 import { useAuthStore } from '@/stores/authStore';
+import { useSidebarStore } from '@/stores/sidebarStore';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Panel } from '@/components/ui/Panel';
@@ -25,6 +26,7 @@ export default function LoginPage() {
 
     try {
       const user = await login({ email, password });
+      useSidebarStore.getState().init(user.sidebar_collapsed);
       const from = (location.state as { from?: string } | null)?.from ?? '/dashboard';
       navigate(user.must_change_password ? '/change-password' : from, { replace: true });
     } catch (err) {

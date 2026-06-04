@@ -1,6 +1,7 @@
 import { useEffect, type ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
+import { useSidebarStore } from '@/stores/sidebarStore';
 import { FullPageLoader } from '@/components/ui/Spinner';
 
 interface AuthGuardProps {
@@ -13,7 +14,12 @@ export function AuthGuard({ children }: AuthGuardProps) {
 
   useEffect(() => {
     if (!isAuthenticated && !user && isLoading) {
-      void bootstrap();
+      void bootstrap().then(() => {
+        const authedUser = useAuthStore.getState().user;
+        if (authedUser) {
+          useSidebarStore.getState().init(authedUser.sidebar_collapsed);
+        }
+      });
     }
   }, [isAuthenticated, user, isLoading, bootstrap]);
 
