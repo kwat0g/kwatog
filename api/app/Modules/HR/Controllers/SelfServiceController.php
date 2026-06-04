@@ -240,7 +240,9 @@ class SelfServiceController
         abort_if(! $ot, 404);
         abort_if($ot->status !== OvertimeStatus::Pending, 422, 'Only pending requests can be cancelled.');
 
-        $ot->update(['status' => OvertimeStatus::Rejected, 'rejection_reason' => 'Cancelled by employee.']);
+        DB::transaction(function () use ($ot): void {
+            $ot->update(['status' => OvertimeStatus::Rejected, 'rejection_reason' => 'Cancelled by employee.']);
+        });
 
         return response()->json(['message' => 'Overtime request cancelled.']);
     }
