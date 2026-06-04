@@ -19,6 +19,7 @@ import { Modal } from '@/components/ui/Modal';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { Badge } from '@/components/ui/Badge';
+import { StatCard } from '@/components/ui/StatCard';
 import { productsApi } from '@/api/crm/products';
 import { customersApi } from '@/api/accounting/customers';
 import { forecastingApi } from '@/api/forecasting';
@@ -43,6 +44,7 @@ export default function DemandForecastingPage() {
   const [manualRow, setManualRow] = useState<DemandForecast | null>(null);
   const [manualQty, setManualQty] = useState<string>('');
   const [manualConf, setManualConf] = useState<string>('');
+  const currentYear = new Date().getFullYear();
 
   const productsQ = useQuery({
     queryKey: ['products', { is_active: true, per_page: 200 }],
@@ -59,6 +61,11 @@ export default function DemandForecastingPage() {
       setProductId(productsQ.data.data[0].id);
     }
   }, [productsQ.data, productId]);
+
+  const accuracyQ = useQuery({
+    queryKey: ['forecasting/accuracy', currentYear],
+    queryFn: () => forecastingApi.accuracy(currentYear),
+  });
 
   const historicalQ = useQuery({
     queryKey: ['forecasting/historical', productId, customerId],
@@ -157,6 +164,27 @@ export default function DemandForecastingPage() {
       />
 
       <div className="p-5 space-y-4">
+        {/* MAPE accuracy stats */}
+        {accuracyQ.data?.data?.mape !== null && accuracyQ.data?.data?.mape !== undefined && (
+          <section className="grid grid-cols-3 gap-2">
+            <StatCard
+              label={`MAPE (${currentYear})`}
+              value={`${accuracyQ.data.data.mape.toFixed(1)}%`}
+              helper="Mean Absolute % Error — lower is better"
+            />
+            <StatCard
+              label="Forecast Bias"
+              value={`${(accuracyQ.data.data.bias ?? 0) > 0 ? '+' : ''}${(accuracyQ.data.data.bias ?? 0).toFixed(1)}%`}
+              helper="Positive = under-forecast; negative = over-forecast"
+            />
+            <StatCard
+              label="Periods Evaluated"
+              value={String(accuracyQ.data.data.periods_evaluated)}
+              helper="Months with actual vs. forecast comparison"
+            />
+          </section>
+        )}
+
         {/* Filters + recompute */}
         <Panel title="Forecast scope" noPadding>
           <div className="p-4 grid grid-cols-1 md:grid-cols-6 gap-3 items-end">

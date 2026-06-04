@@ -50,3 +50,19 @@ export interface StockOutResponse {
   data: StockOutRow[];
   meta: { horizon_days: number; generated_at: string };
 }
+
+export interface ForecastAccuracyMonth {
+  year: number;
+  month: number;
+  forecast: number;
+  actual: number;
+  variance: number;
+  ape: number;
+}
+
+export interface ForecastAccuracy {
+  mape: number | null;
+  bias: number | null;
+  periods_evaluated: number;
+  monthly: ForecastAccuracyMonth[];
+}

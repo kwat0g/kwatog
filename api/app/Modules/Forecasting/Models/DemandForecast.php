@@ -26,6 +26,11 @@ class DemandForecast extends Model
 {
     use HasFactory, HasHashId, HasAuditLog;
 
+    protected static function newFactory(): \Database\Factories\DemandForecastFactory
+    {
+        return \Database\Factories\DemandForecastFactory::new();
+    }
+
     public const METHOD_MOVING_AVG   = 'moving_avg';
     public const METHOD_WEIGHTED_AVG = 'weighted_avg';
     public const METHOD_MANUAL       = 'manual';

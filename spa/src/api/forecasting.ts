@@ -5,6 +5,7 @@ import { client } from './client';
 import type {
   DemandForecast,
   ForecastMethod,
+  ForecastAccuracy,
   HistoricalDemandPoint,
   StockOutResponse,
 } from '@/types/forecasting';
@@ -61,5 +62,10 @@ export const forecastingApi = {
   stockOut: (params?: { horizon_days?: number }) =>
     client
       .get<StockOutResponse>('/forecasting/stock-out', { params })
+      .then((r) => r.data),
+
+  accuracy: (year: number) =>
+    client
+      .get<{ data: ForecastAccuracy }>(`/forecasting/accuracy?year=${year}`)
       .then((r) => r.data),
 };

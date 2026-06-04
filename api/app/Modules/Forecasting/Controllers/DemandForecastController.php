@@ -131,6 +131,17 @@ class DemandForecastController extends Controller
     }
 
     /**
+     * GET /forecasting/accuracy
+     * Returns MAPE, bias, and per-month detail for a given year.
+     */
+    public function accuracy(Request $request): JsonResponse
+    {
+        abort_unless($request->user()?->can('forecasting.view'), 403);
+        $year = (int) $request->query('year', now()->year);
+        return response()->json(['data' => $this->service->accuracy($year)]);
+    }
+
+    /**
      * POST /forecasting/demand-forecasts/manual
      * Operator-entered manual override for one period.
      */

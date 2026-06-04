@@ -27,6 +27,11 @@ Route::middleware(['auth:sanctum'])->prefix('forecasting')->group(function () {
         [DemandForecastController::class, 'storeManual'])
         ->middleware('permission:forecasting.manage');
 
+    /* ─── Forecast accuracy (MAPE) ─── */
+    Route::get('/accuracy',
+        [DemandForecastController::class, 'accuracy'])
+        ->middleware('permission:forecasting.view');
+
     /* ─── Stock-out projection ─── */
     Route::get('/stock-out',
         [StockOutProjectionController::class, 'index'])

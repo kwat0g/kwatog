@@ -274,6 +274,57 @@ class ForecastingService
     }
 
     /**
+     * Compute MAPE (Mean Absolute Percentage Error) and bias from reconciled
+     * actuals for a given year. Only rows where actual_quantity > 0 are used.
+     *
+     * @return array{mape: float|null, bias: float|null, periods_evaluated: int, monthly: array}
+     */
+    public function accuracy(int $year, ?int $productId = null): array
+    {
+        $q = DemandForecast::query()
+            ->where('forecast_year', $year)
+            ->whereNotNull('actual_quantity')
+            ->where('actual_quantity', '>', 0);
+
+        if ($productId) {
+            $q->where('product_id', $productId);
+        }
+
+        $rows = $q->get();
+        if ($rows->isEmpty()) {
+            return ['mape' => null, 'bias' => null, 'periods_evaluated' => 0, 'monthly' => []];
+        }
+
+        $apes    = [];
+        $biases  = [];
+        $monthly = [];
+
+        foreach ($rows as $r) {
+            $actual   = (float) $r->actual_quantity;
+            $forecast = (float) $r->forecasted_quantity;
+            $ape  = abs($actual - $forecast) / $actual * 100;
+            $bias = ($actual - $forecast) / $actual * 100;
+            $apes[]   = $ape;
+            $biases[] = $bias;
+            $monthly[] = [
+                'year'     => $r->forecast_year,
+                'month'    => $r->forecast_month,
+                'forecast' => round($forecast, 2),
+                'actual'   => round($actual, 2),
+                'variance' => round($actual - $forecast, 2),
+                'ape'      => round($ape, 2),
+            ];
+        }
+
+        return [
+            'mape'              => round(array_sum($apes) / count($apes), 2),
+            'bias'              => round(array_sum($biases) / count($biases), 2),
+            'periods_evaluated' => count($rows),
+            'monthly'           => $monthly,
+        ];
+    }
+
+    /**
      * @return array{0: float, 1: float|null}  [qty, confidence%]
      */
     private function applyMethod(array $series, string $method): array
