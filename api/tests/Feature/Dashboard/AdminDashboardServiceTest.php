@@ -21,39 +21,42 @@ class AdminDashboardServiceTest extends TestCase
         $this->assertArrayHasKey('kpis', $result);
         $this->assertArrayHasKey('panels', $result);
         $this->assertCount(4, $result['kpis']);
-        $this->assertArrayHasKey('chain_stages', $result['panels']);
-        $this->assertArrayHasKey('module_activity', $result['panels']);
-        $this->assertArrayHasKey('user_activity', $result['panels']);
-        $this->assertArrayHasKey('pending_approvals', $result['panels']);
-        $this->assertArrayHasKey('recent_audit', $result['panels']);
+        $this->assertArrayHasKey('active_sessions',  $result['panels']);
+        $this->assertArrayHasKey('account_security', $result['panels']);
+        $this->assertArrayHasKey('auth_events',      $result['panels']);
+        $this->assertArrayHasKey('queue_health',     $result['panels']);
+        $this->assertArrayHasKey('recent_audit',     $result['panels']);
+        $this->assertArrayHasKey('open_alerts',      $result['panels']);
     }
 
-    public function test_module_activity_has_all_six_modules(): void
+    public function test_account_security_has_expected_keys(): void
     {
         $user = User::factory()->create();
         $svc  = app(AdminDashboardService::class);
 
-        $result  = $svc->admin($user);
-        $modules = array_column($result['panels']['module_activity'], 'key');
+        $result = $svc->admin($user);
+        $sec    = $result['panels']['account_security'];
 
-        $this->assertContains('hr', $modules);
-        $this->assertContains('payroll', $modules);
-        $this->assertContains('inventory', $modules);
-        $this->assertContains('purchasing', $modules);
-        $this->assertContains('production', $modules);
-        $this->assertContains('quality', $modules);
+        $this->assertArrayHasKey('total',                $sec);
+        $this->assertArrayHasKey('active',               $sec);
+        $this->assertArrayHasKey('inactive',             $sec);
+        $this->assertArrayHasKey('locked',               $sec);
+        $this->assertArrayHasKey('at_risk',              $sec);
+        $this->assertArrayHasKey('must_change_password', $sec);
+        $this->assertArrayHasKey('locked_accounts',      $sec);
     }
 
-    public function test_user_activity_has_login_trend(): void
+    public function test_auth_events_has_24h_trend_with_24_entries(): void
     {
         $user   = User::factory()->create();
         $svc    = app(AdminDashboardService::class);
         $result = $svc->admin($user);
 
-        $ua = $result['panels']['user_activity'];
-        $this->assertArrayHasKey('recent_logins', $ua);
-        $this->assertArrayHasKey('login_trend_7d', $ua);
-        $this->assertCount(7, $ua['login_trend_7d']);
+        $auth = $result['panels']['auth_events'];
+        $this->assertArrayHasKey('breakdown_24h',     $auth);
+        $this->assertArrayHasKey('success_trend_24h', $auth);
+        $this->assertArrayHasKey('recent_failures',   $auth);
+        $this->assertCount(24, $auth['success_trend_24h']);
     }
 
     public function test_admin_endpoint_requires_auth(): void

@@ -7,24 +7,89 @@ export interface DashboardEnvelope {
   panels: Record<string, unknown>;
 }
 
+export interface AdminSession {
+  user: string;
+  role: string;
+  ip: string;
+  device: string;
+  last_activity: string;
+}
+
+export interface AdminLockedAccount {
+  name: string;
+  email: string;
+  role: string;
+  attempts: number;
+  locked_until: string;
+}
+
+export interface AdminFailedLogin {
+  email: string;
+  status: string;
+  reason: string;
+  ip: string;
+  created_at: string;
+}
+
+export interface AdminFailedJob {
+  uuid: string;
+  queue: string;
+  error: string;
+  failed_at: string;
+}
+
+export interface AdminAlert {
+  id: string;
+  type: string;
+  severity: 'critical' | 'warning' | 'info';
+  title: string;
+  message: string;
+  created_at: string;
+}
+
+export interface AdminAuditEvent {
+  user: string;
+  action: string;
+  entity: string;
+  ip: string;
+  created_at: string;
+}
+
 export interface AdminDashboardData {
   kpis: Array<{ label: string; value: string; unit: string }>;
   panels: {
-    chain_stages: Array<{ key: string; label: string; color: string; count: number; percent: number }>;
-    module_activity: Array<{
-      key: string;
-      label: string;
-      href: string;
-      stats: Array<{ label: string; value: string }>;
-    }>;
-    user_activity: {
-      recent_logins: Array<{ name: string; status: string; ip: string; created_at: string }>;
-      login_trend_7d: number[];
-      total_users: number;
-      active_today: number;
+    active_sessions: {
+      sessions: AdminSession[];
+      total: number;
+      unique_users: number;
     };
-    pending_approvals: Array<{ type: string; label: string; count: number; href: string }>;
-    recent_audit: Array<{ user: string; action: string; entity: string; ip: string; created_at: string }>;
+    account_security: {
+      total: number;
+      active: number;
+      inactive: number;
+      locked: number;
+      at_risk: number;
+      must_change_password: number;
+      locked_accounts: AdminLockedAccount[];
+    };
+    auth_events: {
+      breakdown_24h: Record<string, number>;
+      success_trend_24h: number[];
+      recent_failures: AdminFailedLogin[];
+    };
+    queue_health: {
+      pending_jobs: number;
+      failed_jobs: number;
+      recent_failed: AdminFailedJob[];
+      healthy: boolean;
+    };
+    recent_audit: AdminAuditEvent[];
+    open_alerts: {
+      total: number;
+      critical: number;
+      warning: number;
+      items: AdminAlert[];
+    };
   };
 }
 
