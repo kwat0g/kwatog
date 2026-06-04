@@ -67,8 +67,16 @@ client.interceptors.response.use(
     // exceeds the configured `timeout`. Check before the HTTP status switch
     // so timed-out requests get a clear message rather than the generic
     // network-error fallback in the `default` branch.
-    if (axios.isAxiosError(error) && error.code === 'ECONNABORTED') {
-      toast.error('Request timed out. Please try again.', { duration: 5000 });
+    if (error.code === 'ECONNABORTED') {
+      useErrorLogStore.getState().push({
+        method: (error.config?.method ?? 'get').toUpperCase(),
+        url: error.config?.url ?? '(unknown)',
+        status: 0,
+        message: `Timeout after ${error.config?.timeout ?? 30_000}ms`,
+      });
+      if (!skipToast) {
+        toast.error('Request timed out. Please try again.', { duration: 5000 });
+      }
       return Promise.reject(error);
     }
 
@@ -122,7 +130,8 @@ client.interceptors.response.use(
       case 503:
       case 504:
         if (!skipToast) {
-          toast.error(data?.message ?? 'Something went wrong. Please try again.', {
+          const serverMsg = import.meta.env.DEV ? data?.message : null;
+          toast.error(serverMsg ?? 'Something went wrong. Please try again.', {
             duration: 5000,
           });
         }
