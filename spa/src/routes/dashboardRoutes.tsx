@@ -18,6 +18,7 @@ const FinanceDashboardPage      = lazy(() => import('@/pages/dashboard/finance')
 const PurchasingDashboardPage  = lazy(() => import('@/pages/dashboard/purchasing'));
 const WarehouseDashboardPage   = lazy(() => import('@/pages/dashboard/warehouse'));
 const QcDashboardPage          = lazy(() => import('@/pages/dashboard/quality'));
+const AdminDashboardPage       = lazy(() => import('@/pages/dashboard/admin'));
 
 // Cross-module pages (no specific module guard)
 const CalendarPage       = lazy(() => import('@/pages/calendar'));
@@ -58,6 +59,8 @@ export const dashboardRoutes = (
       element={<PermissionGuard permission="dashboard.warehouse.view"><WarehouseDashboardPage /></PermissionGuard>} />
     <Route path="/dashboard/quality"
       element={<PermissionGuard permission="dashboard.quality.view"><QcDashboardPage /></PermissionGuard>} />
+    <Route path="/dashboard/admin"
+      element={<PermissionGuard permission="dashboard.admin.view"><AdminDashboardPage /></PermissionGuard>} />
 
     {/* Series F / Task F1 — Cross-module calendar */}
     <Route

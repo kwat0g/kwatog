@@ -30,6 +30,7 @@ const ROLE_DASHBOARDS: Record<string, { path: string; permission: string }> = {
   purchasing_officer: { path: '/dashboard/purchasing',    permission: 'dashboard.purchasing.view' },
   warehouse_staff:    { path: '/dashboard/warehouse',     permission: 'dashboard.warehouse.view' },
   qc_inspector:       { path: '/dashboard/quality',       permission: 'dashboard.quality.view' },
+  system_admin:       { path: '/dashboard/admin',         permission: 'dashboard.admin.view' },
 };
 
 export default function DashboardPage() {
