@@ -7,6 +7,7 @@ namespace App\Modules\Admin\Services;
 use App\Common\Models\AuditLog;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
+use App\Modules\Auth\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -266,7 +267,7 @@ class RoleService
         abort_if(
             (bool) $role->is_system,
             422,
-            $role->slug === 'system_admin'
+            in_array($role->slug, config('rbac.immutable_roles'), true)
                 ? 'The System Administrator role always has every permission and cannot be edited.'
                 : 'System roles cannot be edited. Clone the role first to create a customizable copy.',
         );
@@ -296,9 +297,12 @@ class RoleService
                 'created_at' => now(),
             ]);
 
-            // Bust cached permission slug list for affected users.
-            // Coarse flush — refine to per-user-with-this-role in a future pass.
-            Cache::flush();
+            // Bust cached permission slug list for every user who holds this role.
+            // Targeted per-user forget instead of a full Cache::flush() so settings
+            // and other cached data are not evicted unnecessarily.
+            $role->users()->select('id')->each(function (User $u) {
+                Cache::forget("auth:permissions:{$u->id}");
+            });
 
             return $role->fresh('permissions');
         });
