@@ -28,6 +28,11 @@ class NonConformanceReport extends Model
 
     protected $table = 'non_conformance_reports';
 
+    protected static function newFactory(): \Database\Factories\NonConformanceReportFactory
+    {
+        return \Database\Factories\NonConformanceReportFactory::new();
+    }
+
     protected $fillable = [
         'ncr_number', 'source', 'severity', 'status',
         'product_id', 'inspection_id', 'complaint_id',

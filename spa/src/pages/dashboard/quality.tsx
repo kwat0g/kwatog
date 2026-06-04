@@ -9,6 +9,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { dashboardsApi } from '@/api/dashboards';
 import { kpiLink } from '@/lib/dashboardLinks';
+import { formatPeso } from '@/lib/formatNumber';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { StatCard } from '@/components/ui/StatCard';
 import { Panel } from '@/components/ui/Panel';
@@ -52,6 +53,22 @@ interface ChainCoverage {
   pct: number;
 }
 
+interface CopqData {
+  internal_failure: {
+    scrap_units: number;
+    rework_units: number;
+    scrap_cost: number;
+    rework_cost: number;
+  };
+  external_failure: {
+    returns: number;
+    complaints: number;
+    return_cost: number;
+  };
+  total: number;
+  period_label: string;
+}
+
 interface QualityDashboardData {
   kpis: Array<{ label: string; value: string; unit: string }>;
   panels: {
@@ -64,6 +81,7 @@ interface QualityDashboardData {
       outgoing: ChainCoverage;
     };
     defect_rate_forecast: import('@/types/forecasting-dashboard').ForecastPanelData;
+    copq?: CopqData;
   };
 }
 
@@ -403,6 +421,54 @@ export default function QcDashboard() {
           formatValue={(v) => `${v.toFixed(1)}%`}
           unitLabel="%"
         />
+
+        {/* ── Row 5: COPQ Breakdown ── */}
+        {panels?.copq && (
+          <Panel title={`Cost of Poor Quality — ${panels.copq.period_label}`} noPadding>
+            <div className="p-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                <StatCard
+                  label="Scrap Units"
+                  value={String(panels.copq.internal_failure.scrap_units)}
+                  helper="Closed NCRs with scrap disposition"
+                />
+                <StatCard
+                  label="Rework Units"
+                  value={String(panels.copq.internal_failure.rework_units)}
+                  helper="Replacement work orders from NCRs"
+                />
+                <StatCard
+                  label="Returns"
+                  value={String(panels.copq.external_failure.returns)}
+                  helper="Completed return requests"
+                />
+                <StatCard
+                  label="Complaints"
+                  value={String(panels.copq.external_failure.complaints)}
+                  helper="Customer complaints this period"
+                />
+              </div>
+              <div className="flex items-center justify-between rounded-md bg-elevated px-4 py-3">
+                <div className="space-y-0.5">
+                  <div className="text-xs text-muted uppercase tracking-wide">Internal failure cost</div>
+                  <div className="font-mono tabular-nums font-medium">
+                    {formatPeso(panels.copq.internal_failure.scrap_cost + panels.copq.internal_failure.rework_cost)}
+                  </div>
+                  <div className="text-xs text-muted">
+                    Scrap {formatPeso(panels.copq.internal_failure.scrap_cost)} + Rework {formatPeso(panels.copq.internal_failure.rework_cost)}
+                  </div>
+                </div>
+                <div className="text-right space-y-0.5">
+                  <div className="text-xs text-muted uppercase tracking-wide">Total COPQ (est.)</div>
+                  <div className="font-mono tabular-nums text-lg font-semibold text-danger">
+                    {formatPeso(panels.copq.total)}
+                  </div>
+                  <div className="text-xs text-muted">Based on average unit cost</div>
+                </div>
+              </div>
+            </div>
+          </Panel>
+        )}
       </div>
     </div>
   );

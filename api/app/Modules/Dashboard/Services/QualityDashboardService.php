@@ -7,6 +7,7 @@ namespace App\Modules\Dashboard\Services;
 use App\Modules\Auth\Models\User;
 use App\Modules\Dashboard\Services\Concerns\DashboardQueries;
 use App\Modules\Dashboard\Services\ForecastingDashboardService;
+use App\Modules\Quality\Services\CopqService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -49,9 +50,15 @@ class QualityDashboardService
                     'ncr_status'        => $this->qualityNcrList(),
                     'qc_chain_coverage' => $this->qualityChainCoverage(),
                     'defect_rate_forecast' => $this->forecastingService->defectRateForecast(),
+                    'copq'              => $this->copq()->compute(now()->startOfMonth(), now()->endOfMonth()),
                 ],
             ];
         });
+    }
+
+    private function copq(): CopqService
+    {
+        return app(CopqService::class);
     }
 
     private function qualityPassRateToday(): string
