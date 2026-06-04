@@ -24,6 +24,7 @@ interface LaravelDebugError {
 export const client = axios.create({
   baseURL: '/api/v1',
   withCredentials: true,
+  timeout: 30_000,
   headers: {
     Accept: 'application/json',
     'X-Requested-With': 'XMLHttpRequest',
@@ -61,6 +62,15 @@ client.interceptors.response.use(
     // axios config to suppress the global 5xx / 403 toast (errors still flow
     // through react-query / axios for inline handling).
     const skipToast = (error.config as { skipErrorToast?: boolean } | undefined)?.skipErrorToast === true;
+
+    // Timeout — axios sets error.code = 'ECONNABORTED' when the request
+    // exceeds the configured `timeout`. Check before the HTTP status switch
+    // so timed-out requests get a clear message rather than the generic
+    // network-error fallback in the `default` branch.
+    if (axios.isAxiosError(error) && error.code === 'ECONNABORTED') {
+      toast.error('Request timed out. Please try again.', { duration: 5000 });
+      return Promise.reject(error);
+    }
 
     switch (status) {
       case 401:
@@ -112,15 +122,8 @@ client.interceptors.response.use(
       case 503:
       case 504:
         if (!skipToast) {
-          // In dev, surface the actual Laravel exception class + message in
-          // the toast so the user doesn't need to open the dev panel for
-          // every error. Production stays generic.
-          const dev = import.meta.env.DEV;
-          const detail = dev && data?.exception
-            ? `${data.exception}: ${data.message ?? ''}`.trim()
-            : null;
-          toast.error(detail ?? data?.message ?? 'Something went wrong. Please try again.', {
-            duration: dev ? 8000 : 4000,
+          toast.error(data?.message ?? 'Something went wrong. Please try again.', {
+            duration: 5000,
           });
         }
         break;
