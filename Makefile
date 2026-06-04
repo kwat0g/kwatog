@@ -1,4 +1,4 @@
-.PHONY: help up down build restart logs ps shell tinker migrate seed fresh test lint analyse spa-shell deploy build-spa prod-up prod-down prod-logs prod-migrate prod-shell
+.PHONY: help up down build restart logs ps shell tinker migrate seed fresh test test-db lint analyse spa-shell deploy build-spa prod-up prod-down prod-logs prod-migrate prod-shell
 
 help:
 	@echo "Ogami ERP — Make targets"
@@ -57,6 +57,9 @@ fresh:
 test:
 	docker compose exec api php artisan test
 	docker compose exec spa npm run test -- --run
+
+test-db:
+	docker compose exec db psql -U ogami -c "CREATE DATABASE ogami_test;" || true
 
 lint:
 	docker compose exec api ./vendor/bin/php-cs-fixer fix --dry-run --diff || true
