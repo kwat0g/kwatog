@@ -28,9 +28,57 @@ export default defineConfig({
       clientPort: Number(process.env.VITE_HMR_PORT) || Number(process.env.NGINX_PORT) || 80,
     },
   },
+  build: {
+    chunkSizeWarningLimit: 600,
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (
+            id.includes('node_modules/react/') ||
+            id.includes('node_modules/react-dom/') ||
+            id.includes('node_modules/react-router-dom/')
+          ) {
+            return 'vendor-react';
+          }
+          if (
+            id.includes('node_modules/@tanstack/react-query') ||
+            id.includes('node_modules/@tanstack/react-table')
+          ) {
+            return 'vendor-query';
+          }
+          if (
+            id.includes('node_modules/react-hook-form/') ||
+            id.includes('node_modules/@hookform/') ||
+            id.includes('node_modules/zod/')
+          ) {
+            return 'vendor-forms';
+          }
+          if (id.includes('node_modules/recharts/')) {
+            return 'vendor-charts';
+          }
+          if (
+            id.includes('node_modules/lucide-react/') ||
+            id.includes('node_modules/date-fns/') ||
+            id.includes('node_modules/clsx/')
+          ) {
+            return 'vendor-ui';
+          }
+          if (
+            id.includes('node_modules/laravel-echo/') ||
+            id.includes('node_modules/pusher-js/')
+          ) {
+            return 'vendor-realtime';
+          }
+        },
+      },
+    },
+  },
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/setupTests.ts'],
     globals: true,
+    exclude: ['**/node_modules/**', '**/e2e/**'],
+    cache: false,
   },
 });
