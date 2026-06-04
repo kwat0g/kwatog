@@ -7,6 +7,7 @@ use App\Common\Middleware\CheckPasswordExpiry;
 use App\Common\Middleware\CheckPermission;
 use App\Common\Middleware\ForceJsonResponse;
 use App\Common\Middleware\SanitizeInput;
+use App\Common\Middleware\LogSlowQueries;
 use App\Common\Middleware\SessionTimeout;
 use App\Providers\ModuleServiceProvider;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -48,6 +49,11 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Trust the reverse proxy (Nginx) for real client IP
         $middleware->trustProxies(at: '*');
+
+        // Dev-only: log queries that exceed 100ms (no-op in non-local envs)
+        $middleware->api(append: [
+            LogSlowQueries::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         // JSON envelope for API errors
