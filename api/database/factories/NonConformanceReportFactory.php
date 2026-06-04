@@ -20,7 +20,7 @@ class NonConformanceReportFactory extends Factory
         return [
             'ncr_number'          => 'NCR-' . now()->format('Ym') . '-' . fake()->unique()->numerify('####'),
             'source'              => 'inspection_fail',
-            'severity'            => 'minor',
+            'severity'            => 'low',
             'status'              => 'open',
             'product_id'          => null,
             'inspection_id'       => null,

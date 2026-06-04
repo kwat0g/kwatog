@@ -43,7 +43,7 @@ class CopqService
             ->whereBetween('created_at', [$fromDate, $toDate])
             ->count();
 
-        $avgCost    = (float) (DB::table('items')->avg('unit_cost') ?? 50.0);
+        $avgCost    = (float) (DB::table('items')->avg('standard_cost') ?? 50.0);
         $scrapCost  = $scrap * $avgCost;
         $reworkCost = $rework * $avgCost * 0.3;
 
