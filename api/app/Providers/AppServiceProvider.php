@@ -6,6 +6,10 @@ namespace App\Providers;
 
 use App\Common\Services\SettingsService;
 use App\Common\Models\ApprovalRecord;
+use App\Modules\Attendance\Events\OvertimeRequestDecided;
+use App\Modules\Attendance\Events\OvertimeRequestSubmitted;
+use App\Modules\Attendance\Listeners\NotifyOnOvertimeDecided;
+use App\Modules\Attendance\Listeners\NotifyOnOvertimeSubmitted;
 use App\Modules\Dashboard\Observers\BadgeInvalidationObserver;
 use App\Modules\HR\Exports\EmployeeMasterExport;
 use App\Modules\Accounting\Models\JournalEntry;
@@ -146,5 +150,9 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(LeaveRequestPendingHR::class, [NotifyOnLeavePendingHR::class, 'handle']);
         Event::listen(LeaveRequestApproved::class, [NotifyOnLeaveApproved::class, 'handle']);
         Event::listen(LeaveRequestRejected::class, [NotifyOnLeaveRejected::class, 'handle']);
+
+        // Overtime lifecycle notifications
+        Event::listen(OvertimeRequestSubmitted::class, [NotifyOnOvertimeSubmitted::class, 'handle']);
+        Event::listen(OvertimeRequestDecided::class,   [NotifyOnOvertimeDecided::class,   'handle']);
     }
 }

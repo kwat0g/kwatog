@@ -9,6 +9,7 @@ use App\Common\Traits\HasHashId;
 use App\Modules\Attendance\Enums\OvertimeStatus;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
+use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -16,6 +17,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class OvertimeRequest extends Model
 {
     use HasFactory, HasHashId, HasAuditLog;
+
+    protected static function newFactory(): Factory
+    {
+        return \Database\Factories\Modules\Attendance\Models\OvertimeRequestFactory::new();
+    }
 
     protected $fillable = [
         'employee_id', 'date', 'hours_requested', 'reason',

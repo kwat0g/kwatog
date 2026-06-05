@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Attendance\Services;
 
 use App\Modules\Attendance\Enums\OvertimeStatus;
+use App\Modules\Attendance\Events\OvertimeRequestDecided;
+use App\Modules\Attendance\Events\OvertimeRequestSubmitted;
 use App\Modules\Attendance\Models\OvertimeRequest;
 use App\Modules\Auth\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -51,13 +53,17 @@ class OvertimeService
 
     public function create(array $data): OvertimeRequest
     {
-        return DB::transaction(fn () => OvertimeRequest::create($data + ['status' => OvertimeStatus::Pending->value])
+        $ot = DB::transaction(fn () => OvertimeRequest::create($data + ['status' => OvertimeStatus::Pending->value])
             ->load('employee'));
+
+        event(new OvertimeRequestSubmitted($ot));
+
+        return $ot;
     }
 
     public function approve(OvertimeRequest $ot, User $approver, ?string $remarks = null): OvertimeRequest
     {
-        return DB::transaction(function () use ($ot, $approver, $remarks) {
+        $result = DB::transaction(function () use ($ot, $approver, $remarks) {
             if ($ot->status !== OvertimeStatus::Pending) {
                 throw new RuntimeException('Only pending overtime requests can be approved.');
             }
@@ -71,11 +77,15 @@ class OvertimeService
             $this->attendance->recomputeForEmployeeOnDate($ot->employee_id, $ot->date->toDateString());
             return $ot->fresh(['employee', 'approver']);
         });
+
+        event(new OvertimeRequestDecided($result->fresh(['employee']), true));
+
+        return $result;
     }
 
     public function reject(OvertimeRequest $ot, User $approver, string $reason): OvertimeRequest
     {
-        return DB::transaction(function () use ($ot, $approver, $reason) {
+        $result = DB::transaction(function () use ($ot, $approver, $reason) {
             if ($ot->status !== OvertimeStatus::Pending) {
                 throw new RuntimeException('Only pending overtime requests can be rejected.');
             }
@@ -87,5 +97,9 @@ class OvertimeService
             ]);
             return $ot->fresh(['employee', 'approver']);
         });
+
+        event(new OvertimeRequestDecided($result->fresh(['employee']), false));
+
+        return $result;
     }
 }
