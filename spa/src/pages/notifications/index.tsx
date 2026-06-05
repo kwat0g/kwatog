@@ -12,13 +12,14 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Check } from 'lucide-react';
+import { Check, Trash2 } from 'lucide-react';
 import { notificationsApi, type NotificationRow } from '@/api/notifications';
 import { Button } from '@/components/ui/Button';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { cn } from '@/lib/cn';
+import toast from 'react-hot-toast';
 import {
   bucketLabel,
   dateBucket,
@@ -57,6 +58,19 @@ export default function NotificationsListPage() {
   const markAll = useMutation({
     mutationFn: () => notificationsApi.markAllRead(),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
+  });
+
+  const deleteOne = useMutation({
+    mutationFn: (id: string) => notificationsApi.delete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
+  });
+
+  const deleteAllReadMutation = useMutation({
+    mutationFn: () => notificationsApi.deleteAllRead(),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['notifications'] });
+      toast.success('All read notifications deleted');
+    },
   });
 
   // Apply group filter client-side (filter chips other than All / Unread).
@@ -106,6 +120,15 @@ export default function NotificationsListPage() {
               disabled={(data?.meta.unread_count ?? 0) === 0}
             >
               Mark all read
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={<Trash2 size={14} />}
+              onClick={() => deleteAllReadMutation.mutate()}
+              loading={deleteAllReadMutation.isPending}
+            >
+              Delete all read
             </Button>
           </div>
         }
@@ -213,6 +236,17 @@ export default function NotificationsListPage() {
                                 {timeAgo(n.created_at)}
                               </span>
                             </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteOne.mutate(n.id);
+                              }}
+                              className="ml-auto shrink-0 p-1 rounded hover:bg-subtle text-muted hover:text-danger transition-colors"
+                              aria-label="Delete notification"
+                            >
+                              <Trash2 size={12} />
+                            </button>
                           </button>
                         </li>
                       );

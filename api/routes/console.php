@@ -112,6 +112,12 @@ Schedule::command('exports:run-due')
     ->withoutOverlapping()
     ->onOneServer();
 
+// Notification prune — delete read notifications older than 90 days.
+Schedule::command('notifications:prune --days=90')
+    ->dailyAt('02:30')
+    ->withoutOverlapping()
+    ->onOneServer();
+
 // Task 7 — Prune audit logs older than 12 months on the 1st at 04:00.
 // Partition-aware: PostgreSQL routes the DELETE to the correct monthly
 // child partitions automatically via the created_at partition key.

@@ -180,10 +180,12 @@ export default function PlantManagerDashboard() {
             </div>
 
             {/* Row 5: Forecasting */}
-            <div className="grid grid-cols-2 gap-3">
-              <StockOutPanel title="Stock-out Risk Forecast" horizonDays={30} hideWhenEmpty />
-              <DemandForecastPanel hideWhenEmpty />
-            </div>
+            {can('forecasting.view') && (
+              <div className="grid grid-cols-2 gap-3">
+                <StockOutPanel title="Stock-out Risk Forecast" horizonDays={30} hideWhenEmpty />
+                <DemandForecastPanel hideWhenEmpty />
+              </div>
+            )}
 
             {/* Bottleneck widget */}
             {can('dashboard.view_bottlenecks') && (

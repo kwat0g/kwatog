@@ -90,4 +90,26 @@ class UserNotificationService
             }
         });
     }
+
+    public function delete(User $user, string $id): void
+    {
+        $deleted = DB::table('notifications')
+            ->where('id', $id)
+            ->where('notifiable_type', User::class)
+            ->where('notifiable_id', $user->id)
+            ->delete();
+
+        if (! $deleted) {
+            abort(404);
+        }
+    }
+
+    public function deleteAllRead(User $user): int
+    {
+        return (int) DB::table('notifications')
+            ->where('notifiable_type', User::class)
+            ->where('notifiable_id', $user->id)
+            ->whereNotNull('read_at')
+            ->delete();
+    }
 }

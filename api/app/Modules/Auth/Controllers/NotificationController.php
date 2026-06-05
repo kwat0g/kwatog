@@ -83,4 +83,16 @@ class NotificationController
         $this->service->updatePreferences($request->user(), $data['preferences']);
         return $this->preferencesIndex($request);
     }
+
+    public function destroy(Request $request, string $id): JsonResponse
+    {
+        $this->service->delete($request->user(), $id);
+        return response()->json(['data' => ['deleted' => true]]);
+    }
+
+    public function destroyAllRead(Request $request): JsonResponse
+    {
+        $count = $this->service->deleteAllRead($request->user());
+        return response()->json(['data' => ['deleted' => $count]]);
+    }
 }

@@ -41,6 +41,10 @@ Route::middleware(['auth:sanctum', 'session.timeout', 'password.expired'])->pref
         ->middleware('permission:notifications.view');
     Route::patch('/read-all',        [NotificationController::class, 'markAllRead'])
         ->middleware('permission:notifications.view');
+    Route::delete('/clear-read',     [NotificationController::class, 'destroyAllRead'])
+        ->middleware('permission:notifications.view');
+    Route::delete('/{id}',           [NotificationController::class, 'destroy'])
+        ->middleware('permission:notifications.view');
 });
 
 Route::middleware(['auth:sanctum', 'session.timeout', 'password.expired',

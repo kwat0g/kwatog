@@ -59,4 +59,10 @@ export const notificationsApi = {
 
   markAllRead: () =>
     client.patch<{ data: { marked_read: number } }>('/notifications/read-all').then((r) => r.data.data),
+
+  delete: (id: string) =>
+    client.delete<{ data: { deleted: boolean } }>(`/notifications/${id}`).then((r) => r.data.data),
+
+  deleteAllRead: () =>
+    client.delete<{ data: { deleted: number } }>('/notifications/clear-read').then((r) => r.data.data),
 };

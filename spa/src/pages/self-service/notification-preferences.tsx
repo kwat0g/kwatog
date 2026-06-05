@@ -15,16 +15,14 @@ import { Switch } from '@/components/ui/Switch';
  */
 
 const NOTIFICATION_TYPES: Array<{ key: string; label: string; description: string }> = [
-  { key: 'leave.submitted',         label: 'Leave submitted',     description: 'A subordinate filed a leave request awaiting your approval.' },
-  { key: 'leave.approved',          label: 'Leave approved',      description: 'Your leave request was approved.' },
-  { key: 'leave.rejected',          label: 'Leave rejected',      description: 'Your leave request was rejected.' },
-  { key: 'payroll.finalized',       label: 'Payroll finalized',   description: 'A payroll period has been finalized.' },
-  { key: 'pr.urgent',               label: 'Urgent purchase request', description: 'Auto-generated PR flagged urgent due to low stock.' },
-  { key: 'wo.completed',            label: 'Work order completed',description: 'A work order you supervise has finished.' },
-  { key: 'machine.breakdown',       label: 'Machine breakdown',   description: 'A machine entered breakdown status.' },
-  { key: 'maintenance.assigned',    label: 'Maintenance assigned',description: 'You were assigned a maintenance work order.' },
-  { key: 'ncr.opened',              label: 'NCR opened',          description: 'A new non-conformance report was opened.' },
-  { key: 'mold.shot_limit',         label: 'Mold shot limit',     description: 'A mold reached its preventive shot threshold.' },
+  { key: 'chain.so_confirmed',          label: 'Sales order confirmed',       description: 'A sales order you manage has been confirmed by the customer.' },
+  { key: 'chain.payslip_ready',         label: 'Payslip ready',               description: 'Your payslip is ready to view.' },
+  { key: 'chain.po_approved',           label: 'Purchase order approved',     description: 'A purchase order has been fully approved and is ready to send.' },
+  { key: 'chain.pr_approved',           label: 'Purchase request approved',   description: 'Your purchase request has been approved.' },
+  { key: 'chain.separation_initiated',  label: 'Separation initiated',        description: 'An employee separation process has started.' },
+  { key: 'auto_invoice_draft',          label: 'Auto-invoice draft ready',    description: 'A delivery has been confirmed and an invoice draft was created.' },
+  { key: 'approval_reminder',           label: 'Approval reminder',           description: 'You have a pending approval that needs action.' },
+  { key: 'approval_escalation',         label: 'Approval escalation',         description: 'An approval you own has been escalated due to timeout.' },
 ];
 
 type Pref = { notification_type: string; channel: 'in_app' | 'email'; enabled: boolean };

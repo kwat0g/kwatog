@@ -17,6 +17,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { StockOutPanel } from '@/components/dashboard/StockOutPanel';
 import { DonutBreakdown } from '@/components/charts';
+import { usePermission } from '@/hooks/usePermission';
 
 /* ───────────────────────── Typed interface ───────────────────────── */
 
@@ -221,6 +222,7 @@ function zonePctClass(pct: number): string {
 /* ───────────────────────── Page component ───────────────────────── */
 
 export default function WarehouseDashboard() {
+  const { can } = usePermission();
   const q = useQuery({
     queryKey: ['dashboard', 'warehouse'],
     queryFn: () => dashboardsApi.warehouse(),
@@ -311,7 +313,7 @@ export default function WarehouseDashboard() {
         </Panel>
 
         {/* ── Row 4: Stock-out forecast ── */}
-        <StockOutPanel horizonDays={30} hideWhenEmpty />
+        {can('forecasting.view') && <StockOutPanel horizonDays={30} hideWhenEmpty />}
       </div>
     </div>
   );

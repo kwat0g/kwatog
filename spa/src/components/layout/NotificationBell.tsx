@@ -20,11 +20,13 @@ import { Tooltip } from '@/components/ui/Tooltip';
 import { cn } from '@/lib/cn';
 import { notificationsApi, type NotificationRow } from '@/api/notifications';
 import { notificationMeta, timeAgo } from '@/lib/notificationMeta';
+import { useNotificationRealtime } from '@/hooks/useNotificationRealtime';
 
 const POLL_MS = 30_000;
 const PEEK_COUNT = 8;
 
 export function NotificationBell() {
+  useNotificationRealtime();
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -39,6 +41,13 @@ export function NotificationBell() {
 
   const markRead = useMutation({
     mutationFn: (id: string) => notificationsApi.markRead(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['notifications'] });
+    },
+  });
+
+  const markAllMutation = useMutation({
+    mutationFn: () => notificationsApi.markAllRead(),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['notifications'] });
     },
@@ -105,7 +114,18 @@ export function NotificationBell() {
         >
           <div className="px-3 py-2 border-b border-default flex items-center justify-between">
             <span className="text-sm font-medium">Notifications</span>
-            <span className="text-xs text-muted font-mono tabular-nums">{unread} unread</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted font-mono tabular-nums">{unread} unread</span>
+              {unread > 0 && (
+                <button
+                  type="button"
+                  onClick={() => { markAllMutation.mutate(); }}
+                  className="text-2xs text-accent hover:underline"
+                >
+                  Mark all read
+                </button>
+              )}
+            </div>
           </div>
 
           {items.length === 0 ? (

@@ -235,7 +235,7 @@ class RolePermissionSeeder extends Seeder
                 // tolerances without authoring them).
                 ['slug' => 'quality.specs.view',           'name' => 'View Inspection Specs'],
                 ['slug' => 'quality.specs.manage',         'name' => 'Manage Inspection Specs'],
-                ['slug' =>                        'quality.ncr.view',             'name' => 'View NCRs'],
+                ['slug' => 'quality.ncr.view',   'name' => 'View NCRs'],
                 ['slug' => 'quality.ncr.manage',           'name' => 'Manage NCRs'],
             ],
 
@@ -338,6 +338,8 @@ class RolePermissionSeeder extends Seeder
                     $this->module('attendance'),
                     $this->module('leave'),
                     $this->module('hr_separation'),
+                    $this->module('loans'),
+                    $this->selfService(),
                     [
                         'payroll.view',
                         'payroll.payslip.view_all',
@@ -346,12 +348,11 @@ class RolePermissionSeeder extends Seeder
                         'payroll.periods.approve',
                         'payroll.adjustments.create',
                         'payroll.thirteenth_month.run',
-                        'payroll.anomalies.review', // Task A9
+                        'payroll.anomalies.review',
                         'dashboard.hr.view',
                         'search.global',
                         'notifications.preferences.manage',
-                        'alerts.view',                                            // Task A2
-                        // U1 — provisioning workflow (covered by $this->module('hr')).
+                        'alerts.view',
                     ],
                 ),
             ],
@@ -364,19 +365,16 @@ class RolePermissionSeeder extends Seeder
                     $this->module('budgeting'),
                     $this->module('loans'),
                     $this->module('assets'),
+                    $this->selfService(),
                     [
                         'admin.gov_tables.manage', 'dashboard.accounting.view',
                         'search.global', 'notifications.preferences.manage',
-                        // Task SS2 — Finance approves employee bank-account changes.
                         'hr.profile_updates.finance_review',
-                        'payroll.anomalies.review',                                // Task A9
-                        'alerts.view', 'alerts.dismiss',                           // Task A2
-                        'dashboard.view_bottlenecks',                              // Series C — Task C5
-                        // Series F — Task F4: read-only insight into supplier health
+                        'payroll.anomalies.review',
+                        'alerts.view', 'alerts.dismiss',
+                        'dashboard.view_bottlenecks',
                         'purchasing.suppliers.performance.view',
-                        // ADV11 — stock-out projection drives cash-flow planning
                         'forecasting.view',
-                        // ADV12 — return management
                         'return_management.view',
                     ],
                 ),
@@ -386,14 +384,19 @@ class RolePermissionSeeder extends Seeder
                 'description' => 'Oversees work orders, output, OEE.',
                 'permissions' => array_merge(
                     $this->module('production'),
-                    ['mrp.view', 'mrp.schedule', 'inventory.view', 'quality.view',
-                     'dashboard.plant_manager.view', 'dashboard.ppc.view',
-                     'maintenance.view', 'assets.view',
-                     'search.global', 'notifications.preferences.manage',
-                     'alerts.view', 'alerts.dismiss',                              // Task A2
-                     'dashboard.view_bottlenecks',                                 // Series C — Task C5
-                     // ADV12 — RMA visibility for production manager
-                     'return_management.view',
+                    $this->selfService(),
+                    [
+                        'mrp.view', 'mrp.schedule',
+                        'inventory.view',
+                        // Quality: view + read sub-resources for quality dashboard / NCR/inspection pages
+                        'quality.view', 'quality.inspections.view', 'quality.ncr.view',
+                        'dashboard.plant_manager.view', 'dashboard.ppc.view',
+                        'maintenance.view', 'assets.view',
+                        'search.global', 'notifications.preferences.manage',
+                        'alerts.view', 'alerts.dismiss',
+                        'dashboard.view_bottlenecks',
+                        'forecasting.view',
+                        'return_management.view',
                     ],
                 ),
             ],
@@ -402,15 +405,16 @@ class RolePermissionSeeder extends Seeder
                 'description' => 'Production Planning & Control — owns the schedule and BOMs.',
                 'permissions' => array_merge(
                     $this->module('mrp'),
-                    $this->module('forecasting'), // ADV11
-                    ['production.view', 'production.work_orders.view', 'production.wo.create', 'production.wo.confirm',
-                     'dashboard.ppc.view', 'maintenance.view', 'assets.view',
-                     'search.global', 'notifications.preferences.manage',
-                     'alerts.view', 'alerts.dismiss',                              // Task A2
-                     'dashboard.view_bottlenecks',                                 // Series C — Task C5
-                     // Task A1 already granted via $this->module('mrp')
-                     // ADV12 — PPC coordinates customer returns
-                     'return_management.view', 'return_management.manage',
+                    $this->module('forecasting'),
+                    $this->selfService(),
+                    [
+                        'production.view', 'production.work_orders.view',
+                        'production.wo.create', 'production.wo.confirm',
+                        'dashboard.ppc.view', 'maintenance.view', 'assets.view',
+                        'search.global', 'notifications.preferences.manage',
+                        'alerts.view', 'alerts.dismiss',
+                        'dashboard.view_bottlenecks',
+                        'return_management.view', 'return_management.manage',
                     ],
                 ),
             ],
@@ -419,15 +423,12 @@ class RolePermissionSeeder extends Seeder
                 'description' => 'Manages PRs, POs, vendor relationships.',
                 'permissions' => array_merge(
                     $this->module('purchasing'),
+                    $this->selfService(),
                     [
                         'inventory.view', 'inventory.grn.create', 'supply_chain.shipments.manage',
-                        // Read-only ledger insight for 3-way matching (Sprint 5).
                         'accounting.vendors.view', 'accounting.bills.view',
-                        // ADV11 — read forecasts to anticipate orders
                         'forecasting.view',
-                        // ADV12 — supplier returns
                         'return_management.view', 'return_management.manage',
-                        // D6 — Purchasing Officer Dashboard
                         'dashboard.purchasing.view',
                     ],
                 ),
@@ -435,31 +436,32 @@ class RolePermissionSeeder extends Seeder
             'warehouse_staff' => [
                 'name' => 'Warehouse Staff',
                 'description' => 'Receives goods, issues materials, counts stock, manages warehouse map.',
-                'permissions' =>                [
-                    'inventory.view',
-                    'inventory.items.manage',
-                    'inventory.warehouse.manage',
-                    'inventory.grn.create',
-                    'inventory.issue.create',
-                    'inventory.adjust',
-                    // ADV8 — WMS
-                    'inventory.stock_count.view',
-                    'inventory.stock_count.manage',
-                    'inventory.picking.view',
-                    // ADV12 — warehouse receives returned goods
-                    'return_management.view',
-                    // D7 — Warehouse Staff Dashboard
-                    'dashboard.warehouse.view',
-                ],
+                'permissions' => array_merge(
+                    $this->selfService(),
+                    [
+                        'inventory.view',
+                        'inventory.items.manage',
+                        'inventory.warehouse.manage',
+                        'inventory.grn.create',
+                        'inventory.issue.create',
+                        'inventory.adjust',
+                        'inventory.stock_count.view',
+                        'inventory.stock_count.manage',
+                        'inventory.picking.view',
+                        'forecasting.view',
+                        'return_management.view',
+                        'dashboard.warehouse.view',
+                    ],
+                ),
             ],
             'qc_inspector' => [
                 'name' => 'QC Inspector',
                 'description' => 'Logs inspection results, raises NCRs, views RMAs.',
                 'permissions' => array_merge(
                     $this->module('quality'),
+                    $this->selfService(),
                     [
                         'return_management.view',
-                        // D8 — QC Inspector Dashboard
                         'dashboard.quality.view',
                     ],
                 ),
@@ -467,40 +469,45 @@ class RolePermissionSeeder extends Seeder
             'maintenance_tech' => [
                 'name' => 'Maintenance Technician',
                 'description' => 'Executes maintenance work orders.',
-                'permissions' => [
-                    'maintenance.view', 'maintenance.wo.create', 'maintenance.wo.complete',
-                    'assets.view',
-                    'search.global', 'notifications.preferences.manage',
-                ],
+                'permissions' => array_merge(
+                    $this->selfService(),
+                    [
+                        'maintenance.view', 'maintenance.wo.create', 'maintenance.wo.complete',
+                        'assets.view',
+                        'search.global', 'notifications.preferences.manage',
+                    ],
+                ),
             ],
             'impex_officer' => [
                 'name' => 'ImpEx Officer',
                 'description' => 'Tracks imported shipments and customs documents.',
-                'permissions' => ['supply_chain.view', 'supply_chain.shipments.manage', 'purchasing.view'],
+                'permissions' => array_merge(
+                    $this->selfService(),
+                    ['supply_chain.view', 'supply_chain.shipments.manage', 'purchasing.view'],
+                ),
             ],
             'department_head' => [
                 'name' => 'Department Head',
                 'description' => 'Approves leaves, OT, PRs for their department.',
-                'permissions' => [
-                    'hr.employees.view',
-                    'attendance.view', 'attendance.ot.create', 'attendance.ot.approve',
-                    'leave.view', 'leave.approve_dept',
-                    'purchasing.view', 'purchasing.pr.approve',
-                    'hr.clearance.sign',
-                    'search.global', 'notifications.preferences.manage',
-                ],
+                'permissions' => array_merge(
+                    $this->selfService(),
+                    [
+                        'hr.employees.view',
+                        'attendance.ot.approve',
+                        'leave.approve_dept',
+                        'purchasing.view', 'purchasing.pr.approve',
+                        'hr.clearance.sign',
+                        'search.global', 'notifications.preferences.manage',
+                    ],
+                ),
             ],
             'employee' => [
                 'name' => 'Employee',
                 'description' => 'Self-service portal access only.',
-                'permissions' => [
-                    'leave.view', 'leave.create',
-                    'attendance.ot.create',
-                    // Self-service: payroll.view is server-scoped to own payrolls
-                    // by PayrollController::index() — employees never see others.
-                    'payroll.view',
-                    'notifications.preferences.manage',
-                ],
+                'permissions' => array_merge(
+                    $this->selfService(),
+                    ['notifications.preferences.manage'],
+                ),
             ],
         ];
     }
@@ -514,6 +521,26 @@ class RolePermissionSeeder extends Seeder
             fn (array $p) => $p['slug'],
             $this->permissionCatalog()[$module] ?? [],
         );
+    }
+
+    /**
+     * Permissions every employee-type user needs for the self-service portal
+     * (/self-service/dtr, /self-service/leaves, /self-service/loans, /self-service/payslips).
+     * Controllers already scope all of these to the authenticated user's employee_id.
+     *
+     * @return array<int, string>
+     */
+    private function selfService(): array
+    {
+        return [
+            'attendance.view',      // DTR page → /attendance/attendances (scoped to self)
+            'attendance.ot.create', // Overtime page
+            'leave.view',           // Leave page
+            'leave.create',         // File leave request
+            'loans.view',           // Loans list → /hr/self-service/loans + /loans (scoped)
+            'loans.create',         // Apply loan + preview amortization
+            'payroll.view',         // Payslips → /payroll (scoped to self)
+        ];
     }
 
     public function run(): void
