@@ -42,8 +42,10 @@ use App\Modules\Leave\Listeners\NotifyOnLeaveSubmitted;
 use App\Modules\MRP\Events\MachineStatusChanged;
 use App\Modules\Payroll\Events\PayrollPeriodFinalized;
 use App\Modules\Payroll\Listeners\NotifyEmployeesOnPayrollFinalized;
+use App\Modules\Production\Events\MachineBreakdownDetected;
 use App\Modules\Production\Events\WorkOrderCompleted;
 use App\Modules\Production\Listeners\HandleMachineBreakdown;
+use App\Modules\Production\Listeners\NotifyOnMachineBreakdown;
 use App\Modules\Production\Listeners\NotifyOnWorkOrderCompleted;
 use App\Modules\Purchasing\Events\PurchaseOrderApproved;
 use App\Modules\Purchasing\Events\PurchaseRequestApproved;
@@ -128,6 +130,9 @@ class AppServiceProvider extends ServiceProvider
 
         // Sprint 6 Task 56: machine breakdown / restoration handling.
         Event::listen(MachineStatusChanged::class, [HandleMachineBreakdown::class, 'handle']);
+
+        // Task 7: notify maintenance techs and production manager on breakdown.
+        Event::listen(MachineBreakdownDetected::class, [NotifyOnMachineBreakdown::class, 'handle']);
 
         // Task A4: Notify Finance when a delivery is confirmed (draft invoice ready).
         Event::listen(DeliveryConfirmed::class, [NotifyFinanceOnDeliveryConfirmed::class, 'handle']);

@@ -7,7 +7,9 @@ namespace App\Modules\MRP\Models;
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\MRP\Enums\MachineStatus;
+use Database\Factories\MachineFactory;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -16,6 +18,11 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class Machine extends Model
 {
     use HasFactory, HasHashId, HasAuditLog, SoftDeletes;
+
+    protected static function newFactory(): Factory
+    {
+        return MachineFactory::new();
+    }
 
     protected $fillable = [
         'machine_code', 'name', 'tonnage', 'machine_type',
