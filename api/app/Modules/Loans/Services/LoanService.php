@@ -147,7 +147,7 @@ class LoanService
 
             $this->approvals->submit($loan, $type->workflowType(), (float) $data['principal']);
 
-            Event::dispatch(new LoanSubmitted($loan));
+            DB::afterCommit(fn () => Event::dispatch(new LoanSubmitted($loan->fresh(['employee']))));
 
             return $loan->load('employee');
         });
@@ -169,7 +169,7 @@ class LoanService
             }
 
             $loan = $loan->fresh(['employee', 'payments']);
-            Event::dispatch(new LoanDecided($loan, true));
+            DB::afterCommit(fn () => Event::dispatch(new LoanDecided($loan->fresh(['employee']), true)));
             return $loan;
         });
     }
@@ -183,7 +183,7 @@ class LoanService
             $this->approvals->reject($loan, $user, $reason);
             $loan->update(['status' => LoanStatus::Rejected->value]);
             $loan = $loan->fresh(['employee']);
-            Event::dispatch(new LoanDecided($loan, false));
+            DB::afterCommit(fn () => Event::dispatch(new LoanDecided($loan->fresh(['employee']), false)));
             return $loan;
         });
     }

@@ -126,7 +126,7 @@ class LeaveRequestService
 
             $this->approvals->submit($req, 'leave_request');
 
-            LeaveRequestSubmitted::dispatch($req->load(['employee', 'leaveType']));
+            DB::afterCommit(fn () => LeaveRequestSubmitted::dispatch($req->fresh(['employee', 'leaveType'])));
 
             return $req->load(['employee', 'leaveType']);
         });
@@ -146,7 +146,7 @@ class LeaveRequestService
                 'dept_approved_at' => now(),
             ]);
 
-            LeaveRequestPendingHR::dispatch($req->fresh(['employee', 'leaveType']));
+            DB::afterCommit(fn () => LeaveRequestPendingHR::dispatch($req->fresh(['employee', 'leaveType'])));
 
             return $req->fresh(['employee', 'leaveType', 'deptApprover']);
         });
@@ -173,7 +173,7 @@ class LeaveRequestService
             // Side effect 2: mark attendance days as on_leave.
             $this->markAttendance($req);
 
-            LeaveRequestApproved::dispatch($req->fresh(['employee', 'leaveType']));
+            DB::afterCommit(fn () => LeaveRequestApproved::dispatch($req->fresh(['employee', 'leaveType'])));
 
             return $req->fresh(['employee', 'leaveType', 'deptApprover', 'hrApprover']);
         });
@@ -191,7 +191,7 @@ class LeaveRequestService
                 'rejection_reason' => $reason,
             ]);
 
-            LeaveRequestRejected::dispatch($req->fresh(['employee', 'leaveType']));
+            DB::afterCommit(fn () => LeaveRequestRejected::dispatch($req->fresh(['employee', 'leaveType'])));
 
             return $req->fresh(['employee', 'leaveType']);
         });

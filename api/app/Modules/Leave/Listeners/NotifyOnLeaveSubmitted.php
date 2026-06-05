@@ -20,7 +20,9 @@ class NotifyOnLeaveSubmitted implements ShouldQueue
             $req = $event->leaveRequest->loadMissing(['employee', 'leaveType']);
             $emp = $req->employee;
 
-            $deptId = $emp?->department_id;
+            if (! $emp) return;
+
+            $deptId = $emp->department_id;
 
             // Only notify the department head(s) of the requester's own department.
             // User→Employee is via the employee_id FK on users; we filter through
