@@ -10,6 +10,10 @@ use App\Modules\Attendance\Events\OvertimeRequestDecided;
 use App\Modules\Attendance\Events\OvertimeRequestSubmitted;
 use App\Modules\Attendance\Listeners\NotifyOnOvertimeDecided;
 use App\Modules\Attendance\Listeners\NotifyOnOvertimeSubmitted;
+use App\Modules\Loans\Events\LoanDecided;
+use App\Modules\Loans\Events\LoanSubmitted;
+use App\Modules\Loans\Listeners\NotifyOnLoanDecided;
+use App\Modules\Loans\Listeners\NotifyOnLoanSubmitted;
 use App\Modules\Dashboard\Observers\BadgeInvalidationObserver;
 use App\Modules\HR\Exports\EmployeeMasterExport;
 use App\Modules\Accounting\Models\JournalEntry;
@@ -154,5 +158,9 @@ class AppServiceProvider extends ServiceProvider
         // Overtime lifecycle notifications
         Event::listen(OvertimeRequestSubmitted::class, [NotifyOnOvertimeSubmitted::class, 'handle']);
         Event::listen(OvertimeRequestDecided::class,   [NotifyOnOvertimeDecided::class,   'handle']);
+
+        // Loan lifecycle notifications
+        Event::listen(LoanSubmitted::class, [NotifyOnLoanSubmitted::class, 'handle']);
+        Event::listen(LoanDecided::class,   [NotifyOnLoanDecided::class,   'handle']);
     }
 }

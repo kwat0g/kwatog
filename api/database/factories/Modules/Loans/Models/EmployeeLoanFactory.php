@@ -37,4 +37,12 @@ class EmployeeLoanFactory extends Factory
             'is_final_pay_deduction' => false,
         ];
     }
+
+    public function pending(): static
+    {
+        return $this->state([
+            'status'              => LoanStatus::Pending->value,
+            'approval_chain_size' => 3,
+        ]);
+    }
 }

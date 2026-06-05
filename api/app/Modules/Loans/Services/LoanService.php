@@ -13,8 +13,11 @@ use App\Modules\Loans\Enums\LoanStatus;
 use App\Modules\Loans\Enums\LoanType;
 use App\Modules\Loans\Models\EmployeeLoan;
 use App\Modules\Loans\Models\LoanPayment;
+use App\Modules\Loans\Events\LoanDecided;
+use App\Modules\Loans\Events\LoanSubmitted;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use RuntimeException;
 
 class LoanService
@@ -144,6 +147,8 @@ class LoanService
 
             $this->approvals->submit($loan, $type->workflowType(), (float) $data['principal']);
 
+            Event::dispatch(new LoanSubmitted($loan));
+
             return $loan->load('employee');
         });
     }
@@ -163,7 +168,9 @@ class LoanService
                 ]);
             }
 
-            return $loan->fresh(['employee', 'payments']);
+            $loan = $loan->fresh(['employee', 'payments']);
+            Event::dispatch(new LoanDecided($loan, true));
+            return $loan;
         });
     }
 
@@ -175,7 +182,9 @@ class LoanService
             }
             $this->approvals->reject($loan, $user, $reason);
             $loan->update(['status' => LoanStatus::Rejected->value]);
-            return $loan->fresh(['employee']);
+            $loan = $loan->fresh(['employee']);
+            Event::dispatch(new LoanDecided($loan, false));
+            return $loan;
         });
     }
 
