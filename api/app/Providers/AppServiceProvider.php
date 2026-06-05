@@ -51,6 +51,7 @@ use App\Modules\Purchasing\Listeners\NotifyOnPurchaseRequestApproved;
 use App\Modules\Quality\Events\InspectionFailed;
 use App\Modules\Quality\Events\InspectionPassed;
 use App\Modules\Quality\Listeners\CreateDeliveryDraftOnQcPass;
+use App\Modules\Quality\Listeners\NotifyOnInspectionFailed;
 use App\Modules\Quality\Listeners\RejectGRNOnQcFail;
 use App\Modules\Quality\Listeners\TriggerIncomingQC;
 use App\Modules\Quality\Listeners\TriggerInProcessQC;
@@ -144,6 +145,7 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(PurchaseRequestApproved::class, [NotifyOnPurchaseRequestApproved::class,  'handle']);
         Event::listen(PurchaseOrderApproved::class,   [NotifyOnPurchaseOrderApproved::class,    'handle']);
         Event::listen(InspectionFailed::class,        [RejectGRNOnQcFail::class,                'handle']);
+        Event::listen(InspectionFailed::class,        [NotifyOnInspectionFailed::class,         'handle']);
 
         // C3 Hire-to-Retire
         Event::listen(EmployeeCreated::class,         [InitializeLeaveBalances::class,             'handle']);
