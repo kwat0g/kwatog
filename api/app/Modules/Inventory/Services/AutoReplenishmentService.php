@@ -8,6 +8,7 @@ use App\Common\Services\DocumentSequenceService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\ReorderMethod;
 use App\Modules\Inventory\Enums\StockMovementType;
+use App\Modules\Inventory\Events\LowStockPrCreated;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Purchasing\Enums\PurchaseRequestPriority;
@@ -74,7 +75,7 @@ class AutoReplenishmentService
         $orderQty = $this->computeOrderQuantity($item);
         $priority = $available <= $safety ? PurchaseRequestPriority::Critical : PurchaseRequestPriority::Urgent;
 
-        return DB::transaction(function () use ($item, $orderQty, $priority, $systemUserId) {
+        $pr = DB::transaction(function () use ($item, $orderQty, $priority, $systemUserId) {
             $pr = PurchaseRequest::create([
                 'pr_number'         => $this->sequences->generate('pr'),
                 'requested_by'      => $systemUserId,
@@ -96,6 +97,10 @@ class AutoReplenishmentService
             ]);
             return $pr;
         });
+
+        event(new LowStockPrCreated($item, $pr));
+
+        return $pr;
     }
 
     /**

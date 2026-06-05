@@ -28,9 +28,11 @@ use App\Modules\HR\Listeners\DeactivateAccountOnClearanceComplete;
 use App\Modules\HR\Listeners\InitializeLeaveBalances;
 use App\Modules\HR\Listeners\NotifyOnSeparationInitiated;
 use App\Modules\Inventory\Events\GoodsReceiptNoteCreated;
+use App\Modules\Inventory\Events\LowStockPrCreated;
 use App\Modules\Inventory\Events\StockMovementCompleted;
 use App\Modules\Inventory\Listeners\CheckReorderPoint;
 use App\Modules\Inventory\Listeners\NotifyOnGrnReceived;
+use App\Modules\Inventory\Listeners\NotifyOnLowStockPrCreated;
 use App\Modules\Leave\Events\LeaveRequestApproved;
 use App\Modules\Leave\Events\LeaveRequestPendingHR;
 use App\Modules\Leave\Events\LeaveRequestRejected;
@@ -127,6 +129,9 @@ class AppServiceProvider extends ServiceProvider
 
         // Sprint 5: low-stock auto-replenishment listener.
         Event::listen(StockMovementCompleted::class, [CheckReorderPoint::class, 'handle']);
+
+        // Task 8: notify purchasing officer and warehouse staff when an auto-PR is created for a low-stock item.
+        Event::listen(LowStockPrCreated::class, [NotifyOnLowStockPrCreated::class, 'handle']);
 
         // Sprint 6 Task 56: machine breakdown / restoration handling.
         Event::listen(MachineStatusChanged::class, [HandleMachineBreakdown::class, 'handle']);
