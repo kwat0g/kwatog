@@ -30,6 +30,7 @@ use App\Modules\HR\Listeners\NotifyOnSeparationInitiated;
 use App\Modules\Inventory\Events\GoodsReceiptNoteCreated;
 use App\Modules\Inventory\Events\StockMovementCompleted;
 use App\Modules\Inventory\Listeners\CheckReorderPoint;
+use App\Modules\Inventory\Listeners\NotifyOnGrnReceived;
 use App\Modules\Leave\Events\LeaveRequestApproved;
 use App\Modules\Leave\Events\LeaveRequestPendingHR;
 use App\Modules\Leave\Events\LeaveRequestRejected;
@@ -142,6 +143,7 @@ class AppServiceProvider extends ServiceProvider
 
         // C2 Procure-to-Pay
         Event::listen(GoodsReceiptNoteCreated::class, [TriggerIncomingQC::class,                'handle']);
+        Event::listen(GoodsReceiptNoteCreated::class, [NotifyOnGrnReceived::class,              'handle']);
         Event::listen(PurchaseRequestApproved::class, [NotifyOnPurchaseRequestApproved::class,  'handle']);
         Event::listen(PurchaseOrderApproved::class,   [NotifyOnPurchaseOrderApproved::class,    'handle']);
         Event::listen(InspectionFailed::class,        [RejectGRNOnQcFail::class,                'handle']);
