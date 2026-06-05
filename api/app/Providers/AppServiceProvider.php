@@ -22,6 +22,13 @@ use App\Modules\HR\Listeners\NotifyOnSeparationInitiated;
 use App\Modules\Inventory\Events\GoodsReceiptNoteCreated;
 use App\Modules\Inventory\Events\StockMovementCompleted;
 use App\Modules\Inventory\Listeners\CheckReorderPoint;
+use App\Modules\Leave\Events\LeaveRequestApproved;
+use App\Modules\Leave\Events\LeaveRequestPendingHR;
+use App\Modules\Leave\Events\LeaveRequestRejected;
+use App\Modules\Leave\Events\LeaveRequestSubmitted;
+use App\Modules\Leave\Listeners\NotifyOnLeaveDecided;
+use App\Modules\Leave\Listeners\NotifyOnLeavePendingHR;
+use App\Modules\Leave\Listeners\NotifyOnLeaveSubmitted;
 use App\Modules\MRP\Events\MachineStatusChanged;
 use App\Modules\Payroll\Events\PayrollPeriodFinalized;
 use App\Modules\Payroll\Listeners\NotifyEmployeesOnPayrollFinalized;
@@ -132,5 +139,11 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(SeparationInitiated::class,     [NotifyOnSeparationInitiated::class,         'handle']);
         Event::listen(ClearanceFullySigned::class,    [DeactivateAccountOnClearanceComplete::class,'handle']);
         Event::listen(PayrollPeriodFinalized::class,  [NotifyEmployeesOnPayrollFinalized::class,   'handle']);
+
+        // Leave lifecycle notifications
+        Event::listen(LeaveRequestSubmitted::class, [NotifyOnLeaveSubmitted::class, 'handle']);
+        Event::listen(LeaveRequestPendingHR::class, [NotifyOnLeavePendingHR::class, 'handle']);
+        Event::listen(LeaveRequestApproved::class,  [NotifyOnLeaveDecided::class,   'handleApproved']);
+        Event::listen(LeaveRequestRejected::class,  [NotifyOnLeaveDecided::class,   'handleRejected']);
     }
 }

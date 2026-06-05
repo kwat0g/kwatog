@@ -10,6 +10,10 @@ use App\Modules\Attendance\Enums\AttendanceStatus;
 use App\Modules\Attendance\Models\Attendance;
 use App\Modules\Auth\Models\User;
 use App\Modules\Leave\Enums\LeaveRequestStatus;
+use App\Modules\Leave\Events\LeaveRequestApproved;
+use App\Modules\Leave\Events\LeaveRequestPendingHR;
+use App\Modules\Leave\Events\LeaveRequestRejected;
+use App\Modules\Leave\Events\LeaveRequestSubmitted;
 use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Leave\Models\LeaveType;
 use Carbon\CarbonImmutable;
@@ -122,6 +126,8 @@ class LeaveRequestService
 
             $this->approvals->submit($req, 'leave_request');
 
+            LeaveRequestSubmitted::dispatch($req->load(['employee', 'leaveType']));
+
             return $req->load(['employee', 'leaveType']);
         });
     }
@@ -139,6 +145,8 @@ class LeaveRequestService
                 'dept_approver_id' => $approver->id,
                 'dept_approved_at' => now(),
             ]);
+
+            LeaveRequestPendingHR::dispatch($req->fresh(['employee', 'leaveType']));
 
             return $req->fresh(['employee', 'leaveType', 'deptApprover']);
         });
@@ -165,6 +173,8 @@ class LeaveRequestService
             // Side effect 2: mark attendance days as on_leave.
             $this->markAttendance($req);
 
+            LeaveRequestApproved::dispatch($req->fresh(['employee', 'leaveType']));
+
             return $req->fresh(['employee', 'leaveType', 'deptApprover', 'hrApprover']);
         });
     }
@@ -180,6 +190,9 @@ class LeaveRequestService
                 'status'           => LeaveRequestStatus::Rejected->value,
                 'rejection_reason' => $reason,
             ]);
+
+            LeaveRequestRejected::dispatch($req->fresh(['employee', 'leaveType']));
+
             return $req->fresh(['employee', 'leaveType']);
         });
     }

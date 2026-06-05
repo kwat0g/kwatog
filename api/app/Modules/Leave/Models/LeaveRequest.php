@@ -10,6 +10,7 @@ use App\Common\Traits\HasHashId;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Leave\Enums\LeaveRequestStatus;
+use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -17,6 +18,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class LeaveRequest extends Model
 {
     use HasFactory, HasHashId, HasAuditLog, HasApprovalWorkflow;
+
+    protected static function newFactory(): Factory
+    {
+        return \Database\Factories\Modules\Leave\Models\LeaveRequestFactory::new();
+    }
 
     protected $fillable = [
         'leave_request_no', 'employee_id', 'leave_type_id',
