@@ -19,14 +19,16 @@ class NotifyOnOvertimeSubmitted implements ShouldQueue
         try {
             $ot  = $event->overtimeRequest->loadMissing('employee');
             $emp = $ot->employee;
+            if (! $emp) return;
 
-            $deptId = $emp?->department_id;
+            $deptId = $emp->department_id;
+            if (! $deptId) return;
 
             // Only notify department head(s) in the requester's own department.
             $audience = User::query()
                 ->whereHas('role', fn ($q) => $q->where('slug', 'department_head'))
                 ->where('is_active', true)
-                ->when($deptId, fn ($q) => $q->whereHas('employee', fn ($eq) => $eq->where('department_id', $deptId)))
+                ->whereHas('employee', fn ($eq) => $eq->where('department_id', $deptId))
                 ->get();
 
             $this->notifications->send($audience, 'attendance.ot_submitted', [

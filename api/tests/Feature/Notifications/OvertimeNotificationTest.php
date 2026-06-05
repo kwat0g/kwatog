@@ -51,16 +51,16 @@ class OvertimeNotificationTest extends TestCase
     {
         Event::fake([OvertimeRequestSubmitted::class]);
 
-        $ot = OvertimeRequest::factory()->pending()->create();
+        $ot = OvertimeRequest::factory()->pending()->make();
 
-        // Dispatch directly — mirrors LeaveNotificationTest pattern where
-        // the service internals are tested separately; here we verify the event contract.
-        OvertimeRequestSubmitted::dispatch($ot);
+        app(OvertimeService::class)->create([
+            'employee_id'     => $ot->employee_id,
+            'date'            => $ot->date->toDateString(),
+            'hours_requested' => $ot->hours_requested,
+            'reason'          => $ot->reason,
+        ]);
 
-        Event::assertDispatched(
-            OvertimeRequestSubmitted::class,
-            fn ($e) => $e->overtimeRequest->is($ot),
-        );
+        Event::assertDispatched(OvertimeRequestSubmitted::class);
     }
 
     /**

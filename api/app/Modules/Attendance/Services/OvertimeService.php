@@ -78,7 +78,7 @@ class OvertimeService
             return $ot->fresh(['employee', 'approver']);
         });
 
-        event(new OvertimeRequestDecided($result->fresh(['employee']), true));
+        event(new OvertimeRequestDecided($result, true));
 
         return $result;
     }
@@ -98,7 +98,7 @@ class OvertimeService
             return $ot->fresh(['employee', 'approver']);
         });
 
-        event(new OvertimeRequestDecided($result->fresh(['employee']), false));
+        event(new OvertimeRequestDecided($result, false));
 
         return $result;
     }
