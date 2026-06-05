@@ -74,6 +74,23 @@ class LowStockNotificationTest extends TestCase
         );
     }
 
+    public function test_listener_does_not_notify_inactive_purchasing_officer(): void
+    {
+        $role = \App\Modules\Auth\Models\Role::where('slug', 'purchasing_officer')->firstOrFail();
+        $inactive = \App\Modules\Auth\Models\User::factory()->create([
+            'role_id'   => $role->id,
+            'is_active' => false,
+        ]);
+        $item = \App\Modules\Inventory\Models\Item::factory()->create(['reorder_point' => 50]);
+        $pr   = \App\Modules\Purchasing\Models\PurchaseRequest::factory()->create();
+        $listener = app(NotifyOnLowStockPrCreated::class);
+        $listener->handle(new LowStockPrCreated($item, $pr));
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $inactive->id,
+            'type'          => 'inventory.low_stock',
+        ]);
+    }
+
     private function userWithRole(string $slug): User
     {
         $role = Role::where('slug', $slug)->firstOrFail();
