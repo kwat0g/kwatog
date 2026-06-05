@@ -20,9 +20,15 @@ class NotifyOnLeaveSubmitted implements ShouldQueue
             $req = $event->leaveRequest->loadMissing(['employee', 'leaveType']);
             $emp = $req->employee;
 
+            $deptId = $emp?->department_id;
+
+            // Only notify the department head(s) of the requester's own department.
+            // User→Employee is via the employee_id FK on users; we filter through
+            // that relationship so a head from Department A never sees Department B's requests.
             $audience = User::query()
                 ->whereHas('role', fn ($q) => $q->where('slug', 'department_head'))
                 ->where('is_active', true)
+                ->when($deptId, fn ($q) => $q->whereHas('employee', fn ($eq) => $eq->where('department_id', $deptId)))
                 ->get();
 
             $this->notifications->send($audience, 'leave.submitted', [

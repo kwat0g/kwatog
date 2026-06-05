@@ -26,8 +26,9 @@ use App\Modules\Leave\Events\LeaveRequestApproved;
 use App\Modules\Leave\Events\LeaveRequestPendingHR;
 use App\Modules\Leave\Events\LeaveRequestRejected;
 use App\Modules\Leave\Events\LeaveRequestSubmitted;
-use App\Modules\Leave\Listeners\NotifyOnLeaveDecided;
+use App\Modules\Leave\Listeners\NotifyOnLeaveApproved;
 use App\Modules\Leave\Listeners\NotifyOnLeavePendingHR;
+use App\Modules\Leave\Listeners\NotifyOnLeaveRejected;
 use App\Modules\Leave\Listeners\NotifyOnLeaveSubmitted;
 use App\Modules\MRP\Events\MachineStatusChanged;
 use App\Modules\Payroll\Events\PayrollPeriodFinalized;
@@ -143,7 +144,7 @@ class AppServiceProvider extends ServiceProvider
         // Leave lifecycle notifications
         Event::listen(LeaveRequestSubmitted::class, [NotifyOnLeaveSubmitted::class, 'handle']);
         Event::listen(LeaveRequestPendingHR::class, [NotifyOnLeavePendingHR::class, 'handle']);
-        Event::listen(LeaveRequestApproved::class,  [NotifyOnLeaveDecided::class,   'handleApproved']);
-        Event::listen(LeaveRequestRejected::class,  [NotifyOnLeaveDecided::class,   'handleRejected']);
+        Event::listen(LeaveRequestApproved::class, [NotifyOnLeaveApproved::class, 'handle']);
+        Event::listen(LeaveRequestRejected::class, [NotifyOnLeaveRejected::class, 'handle']);
     }
 }
