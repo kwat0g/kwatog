@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Database\Factories;
 
 use App\Modules\Auth\Models\User;
+use App\Modules\CRM\Models\Product;
 use App\Modules\Production\Models\WorkOrder;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -22,7 +23,7 @@ class WorkOrderFactory extends Factory
 
         return [
             'wo_number'           => 'WO-' . now()->format('Ym') . '-' . fake()->unique()->numerify('####'),
-            'product_id'          => null,
+            'product_id'          => Product::factory(),
             'sales_order_id'      => null,
             'sales_order_item_id' => null,
             'mrp_plan_id'         => null,
@@ -39,7 +40,7 @@ class WorkOrderFactory extends Factory
             'planned_end'         => $plannedEnd->format('Y-m-d H:i:s'),
             'actual_start'        => null,
             'actual_end'          => null,
-            'status'              => 'draft',
+            'status'              => 'planned',
             'pause_reason'        => null,
             'priority'            => fake()->numberBetween(1, 5),
             'created_by'          => User::factory(),

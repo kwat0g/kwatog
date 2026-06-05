@@ -43,6 +43,7 @@ use App\Modules\Payroll\Events\PayrollPeriodFinalized;
 use App\Modules\Payroll\Listeners\NotifyEmployeesOnPayrollFinalized;
 use App\Modules\Production\Events\WorkOrderCompleted;
 use App\Modules\Production\Listeners\HandleMachineBreakdown;
+use App\Modules\Production\Listeners\NotifyOnWorkOrderCompleted;
 use App\Modules\Purchasing\Events\PurchaseOrderApproved;
 use App\Modules\Purchasing\Events\PurchaseRequestApproved;
 use App\Modules\Purchasing\Listeners\NotifyOnPurchaseOrderApproved;
@@ -135,6 +136,7 @@ class AppServiceProvider extends ServiceProvider
         // ADV7 — auto-trigger in-process QC on WO start.
         Event::listen(WorkOrderStatusChanged::class, [TriggerInProcessQC::class,          'handle']);
         Event::listen(WorkOrderCompleted::class,     [TriggerOutgoingQC::class,           'handle']);
+        Event::listen(WorkOrderCompleted::class,     [NotifyOnWorkOrderCompleted::class,  'handle']);
         Event::listen(InspectionPassed::class,    [CreateDeliveryDraftOnQcPass::class, 'handle']);
 
         // C2 Procure-to-Pay

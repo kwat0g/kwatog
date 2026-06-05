@@ -14,6 +14,7 @@ use App\Modules\MRP\Models\Machine;
 use App\Modules\MRP\Models\Mold;
 use App\Modules\Production\Enums\WorkOrderStatus;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -22,6 +23,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class WorkOrder extends Model
 {
     use HasFactory, HasHashId, HasAuditLog;
+
+    protected static function newFactory(): Factory
+    {
+        return \Database\Factories\WorkOrderFactory::new();
+    }
 
     protected $fillable = [
         'wo_number', 'product_id', 'sales_order_id', 'sales_order_item_id',
