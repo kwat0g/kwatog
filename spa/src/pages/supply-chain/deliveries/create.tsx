@@ -1,8 +1,7 @@
 /** Sprint 7 — Delivery Create Form. Outbound delivery from confirmed sales order. */
-import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useForm, useFieldArray, Controller } from 'react-hook-form';
+import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Plus, X } from 'lucide-react';
@@ -29,7 +28,6 @@ const itemSchema = z.object({
 const schema = z.object({
   sales_order_id: z.string().min(1, 'Sales order is required'),
   vehicle_id: z.string().optional(),
-  driver_id: z.string().optional(),
   scheduled_date: z.string().min(1, 'Scheduled date is required'),
   notes: z.string().max(2000).optional(),
   items: z.array(itemSchema).min(1, 'Add at least one delivery line'),
@@ -70,7 +68,6 @@ export default function CreateDeliveryPage() {
     defaultValues: {
       sales_order_id: '',
       vehicle_id: '',
-      driver_id: '',
       scheduled_date: '',
       notes: '',
       items: [{ sales_order_item_id: '', quantity: 1, inspection_id: '' }],
@@ -83,7 +80,7 @@ export default function CreateDeliveryPage() {
   const selectedSoId = watch('sales_order_id');
 
   // When SO changes, fetch the SO detail to get its line items.
-  const { data: selectedSo } = useQuery({
+  const { data: selectedSo, isLoading: soDetailLoading } = useQuery({
     queryKey: ['crm', 'sales-orders', selectedSoId],
     queryFn: () => salesOrdersApi.show(selectedSoId),
     enabled: Boolean(selectedSoId),
@@ -97,7 +94,6 @@ export default function CreateDeliveryPage() {
       deliveriesApi.create({
         sales_order_id: data.sales_order_id,
         vehicle_id: data.vehicle_id || undefined,
-        driver_id: data.driver_id || undefined,
         scheduled_date: data.scheduled_date,
         notes: data.notes || undefined,
         items: data.items.map((i) => ({
@@ -184,37 +180,26 @@ export default function CreateDeliveryPage() {
           />
         </fieldset>
 
-        {/* ── Fleet ── */}
+        {/* ── Vehicle (optional) ── */}
         <fieldset className="mb-6">
           <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">
-            Fleet (optional)
+            Vehicle (optional)
           </legend>
-          <div className="grid grid-cols-2 gap-3">
-            <Select
-              label="Vehicle"
-              {...register('vehicle_id')}
-              error={errors.vehicle_id?.message}
-              disabled={vehiclesLoading}
-            >
-              <option value="">
-                {vehiclesLoading ? 'Loading vehicles…' : '— No vehicle assigned —'}
+          <Select
+            label="Vehicle"
+            {...register('vehicle_id')}
+            error={errors.vehicle_id?.message}
+            disabled={vehiclesLoading}
+          >
+            <option value="">
+              {vehiclesLoading ? 'Loading vehicles…' : '— No vehicle assigned —'}
+            </option>
+            {vehicleList.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.name} ({v.plate_number})
               </option>
-              {vehicleList.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.name} ({v.plate_number})
-                </option>
-              ))}
-            </Select>
-            {/* driver_id: free-text is not ideal but driver list comes from users.
-                The backend resolves via ResolvesHashIds. We leave this optional
-                and show a plain text input with a note to keep the form simple. */}
-            <Input
-              label="Driver user ID (hash)"
-              {...register('driver_id')}
-              error={errors.driver_id?.message}
-              placeholder="Optional — hash ID of driver user"
-            />
-          </div>
+            ))}
+          </Select>
         </fieldset>
 
         {/* ── Delivery line items ── */}
@@ -246,15 +231,17 @@ export default function CreateDeliveryPage() {
                   </label>
                   <select
                     {...register(`items.${index}.sales_order_item_id`)}
-                    disabled={!selectedSoId || soItems.length === 0}
+                    disabled={!selectedSoId || soDetailLoading}
                     className="w-full text-sm rounded-md border border-default bg-canvas px-2 py-1.5 disabled:opacity-50"
                   >
                     <option value="">
                       {!selectedSoId
                         ? 'Select SO first'
-                        : soItems.length === 0
+                        : soDetailLoading
                         ? 'Loading items…'
-                        : '— Select line —'}
+                        : soItems.length === 0
+                        ? 'No line items on this order'
+                        : '— Select item —'}
                     </option>
                     {soItems.map((item) => (
                       <option key={item.id} value={item.id}>
