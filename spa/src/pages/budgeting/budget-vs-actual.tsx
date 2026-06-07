@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 import { budgetingApi } from '@/api/accounting/budgeting';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Panel } from '@/components/ui/Panel';
@@ -15,6 +16,20 @@ export default function BudgetVsActualPage() {
     queryKey: ['budget-vs-actual'],
     queryFn: () => budgetingApi.budgetVsActual(),
   });
+
+  // Top 10 rows by absolute variance for chart (keep chart readable)
+  const chartData = useMemo(() => {
+    if (!data?.rows) return [];
+    return [...data.rows]
+      .sort((a, b) => Math.abs(b.variance) - Math.abs(a.variance))
+      .slice(0, 10)
+      .map((r) => ({
+        name: r.account_code,
+        budgeted: r.budgeted,
+        actual: r.actual,
+        variance: r.variance,
+      }));
+  }, [data]);
 
   if (isLoading) return <FullPageLoader />;
   if (error) return <div className="p-6 text-red-500">Failed to load budget vs actual data.</div>;
@@ -67,6 +82,36 @@ export default function BudgetVsActualPage() {
             <StatCard label="Total Actual" value={`₱ ${(data.total_actual / 1_000_000).toFixed(2)}M`} />
             <StatCard label="Total Variance" value={`${isFavorable ? '+' : ''}${totalVariancePct.toFixed(1)}%`} />
           </div>
+
+          {/* Variance bar chart — top 10 by absolute variance */}
+          {chartData.length > 0 && (
+            <Panel title="Variance by account" meta="top 10 accounts">
+              <div className="h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle, #e5e7eb)" vertical={false} />
+                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'var(--text-muted, #6b7280)' }} />
+                    <YAxis
+                      tick={{ fontSize: 10, fill: 'var(--text-muted, #6b7280)' }}
+                      tickFormatter={(v: number) => `₱${(v / 1000).toFixed(0)}k`}
+                      width={56}
+                    />
+                    <Tooltip
+                      contentStyle={{ background: 'var(--bg-elevated, #fff)', border: '1px solid var(--border-default, #e5e7eb)', borderRadius: 6, fontSize: 12 }}
+                      formatter={(v: number) => `₱${v.toLocaleString()}`}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <Bar dataKey="budgeted" name="Budgeted" fill="var(--color-info, #3b82f6)" radius={[3, 3, 0, 0]} maxBarSize={32} />
+                    <Bar dataKey="actual" name="Actual" radius={[3, 3, 0, 0]} maxBarSize={32}>
+                      {chartData.map((entry, i) => (
+                        <Cell key={i} fill={entry.actual > entry.budgeted ? 'var(--color-danger, #ef4444)' : 'var(--color-success, #22c55e)'} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </Panel>
+          )}
 
           {/* Grouped Summary */}
           <Panel title="Summary by Group">
