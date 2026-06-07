@@ -1,12 +1,13 @@
 /** Sprint 8 — Task 70. Create asset form. */
 import { useNavigate } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
 import type { AxiosError } from 'axios';
 import { assetsApi } from '@/api/assets';
+import { departmentsApi } from '@/api/hr/departments';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -19,7 +20,8 @@ const schema = z.object({
   name: z.string().min(1, 'Name is required').max(200),
   description: z.string().max(5000).optional().or(z.literal('')),
   category: z.enum(['machine', 'mold', 'vehicle', 'equipment', 'furniture', 'other']),
-  acquisition_date: z.string().min(1),
+  department_id: z.coerce.number().int().optional(),
+  acquisition_date: z.string().min(1, 'Acquisition date required'),
   acquisition_cost: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Enter amount like 100000.00'),
   useful_life_years: z.coerce.number().int().min(1).max(100),
   salvage_value: z.string().regex(/^\d+(\.\d{1,2})?$/).optional().or(z.literal('')),
@@ -35,12 +37,19 @@ export default function CreateAssetPage() {
     defaultValues: { category: 'equipment', useful_life_years: 5, salvage_value: '0' },
   });
 
+  const { data: deptData, isLoading: deptLoading } = useQuery({
+    queryKey: ['hr', 'departments', 'list'],
+    queryFn: () => departmentsApi.list({ per_page: 200 }),
+    staleTime: 300_000,
+  });
+
   const mutation = useMutation({
     mutationFn: (data: FormValues) => assetsApi.create({
       ...data,
       description: data.description || undefined,
       salvage_value: data.salvage_value || '0',
       location: data.location || undefined,
+      department_id: data.department_id || null,
     }),
     onSuccess: (asset) => {
       qc.invalidateQueries({ queryKey: ['assets'] });
@@ -72,6 +81,14 @@ export default function CreateAssetPage() {
               <option value="furniture">Furniture</option>
               <option value="other">Other</option>
             </Select>
+            <Select label="Department" {...register('department_id')} error={errors.department_id?.message} disabled={deptLoading}>
+              <option value="">{deptLoading ? 'Loading…' : '— None —'}</option>
+              {deptData?.data?.map((d) => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+            </Select>
+          </div>
+          <div className="mt-3">
             <Input label="Location" {...register('location')} error={errors.location?.message} placeholder="e.g. Production floor" />
           </div>
           <div className="mt-3">

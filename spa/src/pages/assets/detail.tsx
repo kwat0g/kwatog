@@ -27,6 +27,13 @@ export default function AssetDetailPage() {
     queryFn: () => assetsApi.show(id),
   });
 
+  const { data: qrData } = useQuery({
+    queryKey: ['asset', id, 'qr'],
+    queryFn: () => assetsApi.qr(id),
+    enabled: !!id && !!data,
+    staleTime: Infinity,
+  });
+
   const dispose = useMutation({
     mutationFn: () => assetsApi.dispose(id, { disposal_amount: disposalAmount }),
     onSuccess: () => {
@@ -98,7 +105,7 @@ export default function AssetDetailPage() {
             )}
           </Panel>
         </div>
-        <aside>
+        <aside className="space-y-4">
           <Panel title="Details">
             <dl className="text-sm divide-y divide-subtle">
               <Row label="Category">{data.category}</Row>
@@ -111,6 +118,33 @@ export default function AssetDetailPage() {
               {data.disposal_amount && <Row label="Proceeds"><span className="font-mono">₱{data.disposal_amount}</span></Row>}
             </dl>
           </Panel>
+
+          {/* QR code */}
+          {qrData && (
+            <Panel title="QR code">
+              <div className="flex flex-col items-center gap-3 py-2">
+                {qrData.url ? (
+                  <img src={qrData.url} alt={`QR for ${qrData.asset_code}`} className="w-40 h-40 rounded border border-default" />
+                ) : (
+                  <div className="w-40 h-40 rounded border border-default bg-elevated flex items-center justify-center text-xs text-muted">
+                    No QR image
+                  </div>
+                )}
+                <p className="text-xs font-mono text-muted">{qrData.asset_code}</p>
+                {qrData.url && (
+                  <a
+                    href={qrData.url}
+                    download={`${qrData.asset_code}-qr.png`}
+                    className="text-xs text-accent hover:underline"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Download QR
+                  </a>
+                )}
+              </div>
+            </Panel>
+          )}
         </aside>
       </div>
 
