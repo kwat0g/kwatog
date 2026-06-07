@@ -8,7 +8,9 @@ const ProductsListPage        = lazy(() => import('@/pages/crm/products'));
 const CreateProductPage       = lazy(() => import('@/pages/crm/products/create'));
 const EditProductPage         = lazy(() => import('@/pages/crm/products/edit'));
 const ProductDetailPage       = lazy(() => import('@/pages/crm/products/detail'));
-const PriceAgreementsListPage = lazy(() => import('@/pages/crm/price-agreements'));
+const PriceAgreementsListPage   = lazy(() => import('@/pages/crm/price-agreements'));
+const CreatePriceAgreementPage  = lazy(() => import('@/pages/crm/price-agreements/create'));
+const EditPriceAgreementPage    = lazy(() => import('@/pages/crm/price-agreements/edit'));
 const SalesOrdersListPage     = lazy(() => import('@/pages/crm/sales-orders'));
 const CreateSalesOrderPage    = lazy(() => import('@/pages/crm/sales-orders/create'));
 const EditSalesOrderPage      = lazy(() => import('@/pages/crm/sales-orders/edit'));
@@ -51,6 +53,10 @@ export const crmRoutes = (
 
       <Route path="/crm/price-agreements"
         element={<PermissionGuard permission="crm.price_agreements.view"><PriceAgreementsListPage /></PermissionGuard>} />
+      <Route path="/crm/price-agreements/create"
+        element={<PermissionGuard permission="crm.price_agreements.manage"><CreatePriceAgreementPage /></PermissionGuard>} />
+      <Route path="/crm/price-agreements/:id/edit"
+        element={<PermissionGuard permission="crm.price_agreements.manage"><EditPriceAgreementPage /></PermissionGuard>} />
 
       <Route path="/crm/sales-orders"
         element={<PermissionGuard permission="crm.sales_orders.view"><SalesOrdersListPage /></PermissionGuard>} />

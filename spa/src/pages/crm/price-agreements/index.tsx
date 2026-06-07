@@ -1,5 +1,7 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { Pencil } from 'lucide-react';
 import { priceAgreementsApi, type PriceAgreementListParams } from '@/api/crm/priceAgreements';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -15,6 +17,7 @@ import type { PriceAgreement } from '@/types/crm';
  * pages in a follow-up; this index is the global lookup view.
  */
 export default function PriceAgreementsListPage() {
+  const navigate = useNavigate();
   const [filters, setFilters] = useState<PriceAgreementListParams>({ page: 1, per_page: 25 });
 
   const { data, isLoading, isError, refetch } = useQuery({
@@ -49,6 +52,19 @@ export default function PriceAgreementsListPage() {
         ? <Chip variant="success">Active</Chip>
         : <Chip variant="neutral">Expired</Chip>,
     },
+    {
+      key: 'actions', header: '',
+      cell: (r) => (
+        <button
+          type="button"
+          onClick={() => navigate(`/crm/price-agreements/${r.id}/edit`)}
+          className="p-1 rounded text-muted hover:text-default hover:bg-elevated transition-colors"
+          aria-label="Edit agreement"
+        >
+          <Pencil size={14} />
+        </button>
+      ),
+    },
   ];
 
   return (
@@ -56,6 +72,11 @@ export default function PriceAgreementsListPage() {
       <PageHeader
         title="Price agreements"
         subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'agreement' : 'agreements'}` : undefined}
+        actions={
+          <Button variant="primary" onClick={() => navigate('/crm/price-agreements/create')}>
+            New price agreement
+          </Button>
+        }
       />
       {isLoading && !data && <SkeletonTable columns={6} rows={8} />}
       {isError && (
@@ -69,7 +90,8 @@ export default function PriceAgreementsListPage() {
         <EmptyState
           icon="dollar-sign"
           title="No price agreements yet"
-          description="Open a customer or product to create one."
+          description="Create your first price agreement to set customer-specific pricing."
+          action={<Button variant="primary" onClick={() => navigate('/crm/price-agreements/create')}>New price agreement</Button>}
         />
       )}
       {data && data.data.length > 0 && (
