@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -86,6 +87,15 @@ export default function ApprovedSuppliersPage() {
     ) },
     { key: 'lead', header: 'Lead time', align: 'right', cell: (r) => <NumCell>{r.lead_time_days}d</NumCell> },
     { key: 'price', header: 'Last price', align: 'right', cell: (r) => <NumCell>{r.last_price ? formatPeso(r.last_price) : '—'}</NumCell> },
+    { key: 'perf', header: 'Performance', cell: (r) => (
+      <Link
+        to={`/purchasing/suppliers/${r.vendor.id}/performance`}
+        className="text-xs text-accent hover:underline"
+        onClick={(e) => e.stopPropagation()}
+      >
+        View scorecard
+      </Link>
+    ) },
     ...(canManage ? [{
       key: 'actions',
       header: '',
@@ -114,7 +124,7 @@ export default function ApprovedSuppliersPage() {
           </Button>
         ) : null}
       />
-      {isLoading && !data && <SkeletonTable columns={canManage ? 7 : 6} rows={6} />}
+      {isLoading && !data && <SkeletonTable columns={canManage ? 8 : 7} rows={6} />}
       {isError && <EmptyState icon="alert-circle" title="Failed to load" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />}
       {data && data.data.length === 0 && (
         <EmptyState
