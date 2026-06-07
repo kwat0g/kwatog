@@ -1,5 +1,6 @@
 import { client } from '../client';
 import type { ApiSuccess, PaginatedResponse, ListParams } from '@/types';
+// Customer type lives in accounting — it's shared by AR, CRM, and B2B modules
 import type { Customer, CreateCustomerData, UpdateCustomerData } from '@/types/accounting';
 
 export interface CustomerListParams extends ListParams {

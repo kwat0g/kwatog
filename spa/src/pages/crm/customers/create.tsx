@@ -1,6 +1,5 @@
 import { FormProvider, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { AxiosError } from 'axios';
@@ -10,28 +9,16 @@ import { Button } from '@/components/ui/Button';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { onFormInvalid } from '@/lib/formErrors';
 import type { ApiValidationError } from '@/types';
-import { CustomerForm } from './form';
+import { CustomerForm, customerSchema, type CustomerFormValues } from './form';
 
-const schema = z.object({
-  name:               z.string().min(1, 'Required').max(200),
-  code:               z.string().min(1, 'Required').max(50),
-  contact_person:     z.string().max(100).optional().or(z.literal('')),
-  email:              z.string().email('Invalid email').optional().or(z.literal('')),
-  phone:              z.string().max(20).optional().or(z.literal('')),
-  address:            z.string().max(500).optional().or(z.literal('')),
-  credit_limit:       z.coerce.number().min(0).max(99999999.99).optional().or(z.literal('').transform(() => undefined)),
-  payment_terms_days: z.coerce.number().int().min(0).max(365).default(30),
-  is_active:          z.boolean().default(true),
-});
-
-type FormValues = z.infer<typeof schema>;
+type FormValues = CustomerFormValues;
 
 export default function CrmCustomerCreatePage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
 
   const methods = useForm<FormValues>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(customerSchema),
     defaultValues: {
       name: '',
       code: '',

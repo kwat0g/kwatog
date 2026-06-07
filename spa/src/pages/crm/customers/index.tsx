@@ -141,7 +141,6 @@ export default function CrmCustomersListPage() {
             data={data.data}
             meta={data.meta}
             onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
-            onRowClick={(row) => navigate(`/crm/customers/${row.id}`)}
           />
         </div>
       )}

@@ -1,12 +1,27 @@
 import { useFormContext } from 'react-hook-form';
+import { z } from 'zod';
 import { Input } from '@/components/ui/Input';
 import { Switch } from '@/components/ui/Switch';
 import { Textarea } from '@/components/ui/Textarea';
 import { Panel } from '@/components/ui/Panel';
 import { numberInputProps } from '@/lib/numberInput';
 
+export const customerSchema = z.object({
+  name:               z.string().min(1, 'Required').max(200),
+  code:               z.string().min(1, 'Required').max(50),
+  contact_person:     z.string().max(100).optional().or(z.literal('')),
+  email:              z.string().email('Invalid email').optional().or(z.literal('')),
+  phone:              z.string().max(20).optional().or(z.literal('')),
+  address:            z.string().max(500).optional().or(z.literal('')),
+  credit_limit:       z.coerce.number().min(0).max(99999999.99).optional().or(z.literal('').transform(() => undefined)),
+  payment_terms_days: z.coerce.number().int().min(0).max(365).default(30),
+  is_active:          z.boolean().default(true),
+});
+
+export type CustomerFormValues = z.infer<typeof customerSchema>;
+
 export function CustomerForm() {
-  const { register, formState: { errors } } = useFormContext();
+  const { register, formState: { errors } } = useFormContext<CustomerFormValues>();
 
   return (
     <div className="max-w-3xl mx-auto px-5 py-6 space-y-4">

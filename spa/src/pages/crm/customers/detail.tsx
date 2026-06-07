@@ -11,7 +11,7 @@ import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
-import { SkeletonDetail } from '@/components/ui/Skeleton';
+import { SkeletonDetail, SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
@@ -113,7 +113,7 @@ export default function CrmCustomerDetailPage() {
         ? <Link to={`/crm/products/${r.product.id}`} className="font-mono text-accent hover:underline">{r.product.part_number}</Link>
         : <span className="text-muted">—</span>,
     },
-    { key: 'price', header: 'Price', align: 'right', cell: (r) => <NumCell>₱ {Number(r.price).toFixed(2)}</NumCell> },
+    { key: 'price', header: 'Price', align: 'right', cell: (r) => <NumCell>{formatPeso(r.price)}</NumCell> },
     { key: 'effective_from', header: 'From', align: 'right', cell: (r) => <NumCell>{formatDate(r.effective_from)}</NumCell> },
     { key: 'effective_to', header: 'To', align: 'right', cell: (r) => <NumCell>{formatDate(r.effective_to)}</NumCell> },
     { key: 'status', header: 'Status', cell: (r) => <Chip variant={r.is_currently_active ? 'success' : 'neutral'}>{r.is_currently_active ? 'active' : 'expired'}</Chip> },
@@ -233,7 +233,7 @@ export default function CrmCustomerDetailPage() {
               {!can('crm.sales_orders.view') ? (
                 <EmptyState icon="lock" title="No permission to view sales orders" />
               ) : !ordersData ? (
-                <EmptyState icon="inbox" title="Loading…" />
+                <SkeletonTable columns={5} rows={5} />
               ) : ordersData.data.length === 0 ? (
                 <EmptyState icon="inbox" title="No sales orders" description="No sales orders for this customer yet." />
               ) : (
@@ -252,7 +252,7 @@ export default function CrmCustomerDetailPage() {
               {!can('crm.complaints.manage') ? (
                 <EmptyState icon="lock" title="No permission to view complaints" />
               ) : !complaintsData ? (
-                <EmptyState icon="inbox" title="Loading…" />
+                <SkeletonTable columns={5} rows={5} />
               ) : complaintsData.data.length === 0 ? (
                 <EmptyState icon="inbox" title="No complaints" description="No complaints from this customer yet." />
               ) : (
@@ -272,7 +272,7 @@ export default function CrmCustomerDetailPage() {
               {!can('crm.price_agreements.view') ? (
                 <EmptyState icon="lock" title="No permission to view price agreements" />
               ) : !priceAgreements ? (
-                <EmptyState icon="inbox" title="Loading…" />
+                <SkeletonTable columns={5} rows={5} />
               ) : priceAgreements.length === 0 ? (
                 <EmptyState icon="inbox" title="No price agreements" description="No price agreements configured for this customer." />
               ) : (
