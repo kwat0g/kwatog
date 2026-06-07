@@ -6,13 +6,14 @@
  * overlay implied by the table. Click a bar to drill into the
  * inspections containing that defect.
  */
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { analyticsApi, type ParetoDrillRow } from '@/api/quality/analytics';
 import { ncrsApi } from '@/api/quality/ncrs';
 import { inspectionsApi } from '@/api/quality/inspections';
 import { dashboardsApi } from '@/api/dashboards';
+import { DowntimeParetoChart } from '@/components/charts/DowntimeParetoChart';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -64,7 +65,15 @@ export default function QualityDashboardPage() {
     enabled: Boolean(selectedDefect),
   });
 
-  const maxCount = pareto.data?.rows[0]?.defect_count ?? 1;
+  const paretoChartData = useMemo(
+    () =>
+      (pareto.data?.rows ?? []).map((r) => ({
+        category: r.parameter_name,
+        minutes: r.defect_count,
+        cumulative_pct: r.cumulative_percentage,
+      })),
+    [pareto.data],
+  );
 
   return (
     <div>
@@ -102,35 +111,27 @@ export default function QualityDashboardPage() {
             <EmptyState icon="check-circle" title="No defects in the period" description="All inspections passed in the last 30 days." />
           )}
           {pareto.data && pareto.data.rows.length > 0 && (
-            <div className="space-y-2">
-              {pareto.data.rows.map((row) => (
-                <button
-                  key={row.parameter_name}
-                  onClick={() => setSelectedDefect(row.parameter_name)}
-                  className={`w-full text-left p-2 rounded-md hover:bg-subtle transition-colors ${
-                    selectedDefect === row.parameter_name ? 'bg-subtle' : ''
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-sm truncate">{row.parameter_name}</span>
-                        {row.is_critical && <Chip variant="danger">Critical</Chip>}
-                      </div>
-                      <div className="h-3 bg-subtle rounded-md overflow-hidden">
-                        <div
-                          className="h-full bg-accent transition-all"
-                          style={{ width: `${(row.defect_count / maxCount) * 100}%` }}
-                        />
-                      </div>
-                    </div>
-                    <div className="text-right font-mono tabular-nums text-xs whitespace-nowrap">
-                      <div className="font-medium">{row.defect_count}</div>
-                      <div className="text-muted">{row.percentage.toFixed(1)}% · cum {row.cumulative_percentage.toFixed(1)}%</div>
-                    </div>
-                  </div>
-                </button>
-              ))}
+            <div>
+              <DowntimeParetoChart
+                data={paretoChartData}
+                height={240}
+                valueLabel="Defects"
+              />
+              <div className="mt-3 space-y-1">
+                {pareto.data.rows.map((row) => (
+                  <button
+                    key={row.parameter_name}
+                    onClick={() => setSelectedDefect(row.parameter_name)}
+                    className={`w-full text-left px-2 py-1 rounded-md hover:bg-subtle transition-colors flex items-center gap-2 text-xs ${
+                      selectedDefect === row.parameter_name ? 'bg-subtle' : ''
+                    }`}
+                  >
+                    <span className="flex-1 truncate">{row.parameter_name}</span>
+                    {row.is_critical && <Chip variant="danger">Critical</Chip>}
+                    <span className="font-mono tabular-nums text-muted">{row.defect_count} · {row.percentage.toFixed(1)}%</span>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </Panel>

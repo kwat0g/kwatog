@@ -18,6 +18,7 @@ export interface ParetoEntry {
 interface Props {
   data: ParetoEntry[];
   height?: number;
+  valueLabel?: string;
 }
 
 function formatMinutes(m: number): string {
@@ -25,7 +26,7 @@ function formatMinutes(m: number): string {
   return `${m}m`;
 }
 
-export function DowntimeParetoChart({ data, height = 260 }: Props) {
+export function DowntimeParetoChart({ data, height = 260, valueLabel }: Props) {
   if (data.length === 0) return null;
 
   const label = (cat: string) =>
@@ -47,7 +48,7 @@ export function DowntimeParetoChart({ data, height = 260 }: Props) {
         <YAxis
           yAxisId="left"
           tick={{ fontSize: 11, fill: 'var(--text-muted, #6b7280)' }}
-          tickFormatter={formatMinutes}
+          tickFormatter={valueLabel ? String : formatMinutes}
           width={56}
         />
         <YAxis
