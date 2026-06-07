@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import { customerPortalApi } from '@/api/b2b/customer';
+import { Chip } from '@/components/ui/Chip';
 import { StatCard } from '@/components/ui/StatCard';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
@@ -80,9 +81,7 @@ export default function CustomerDashboardPage() {
                   <td className="py-2 px-3 text-muted">{order.date ?? '—'}</td>
                   <td className="py-2 px-3 text-right font-mono">₱{Number(order.total_amount).toLocaleString()}</td>
                   <td className="py-2 px-3 text-right">
-                    <span className="inline-block px-2 py-0.5 rounded-full text-2xs font-medium bg-subtle text-muted uppercase">
-                      {order.status}
-                    </span>
+                    <Chip variant="neutral">{order.status}</Chip>
                   </td>
                 </tr>
               ))}
@@ -120,13 +119,9 @@ export default function CustomerDashboardPage() {
                   <td className="py-2 px-3 text-muted">{inv.date ?? '—'}</td>
                   <td className="py-2 px-3 text-right font-mono">₱{Number(inv.total_amount).toLocaleString()}</td>
                   <td className="py-2 px-3 text-right">
-                    <span className={`inline-block px-2 py-0.5 rounded-full text-2xs font-medium uppercase ${
-                      inv.status === 'paid' ? 'bg-success/10 text-success' :
-                      inv.status === 'overdue' ? 'bg-danger/10 text-danger' :
-                      'bg-warning/10 text-warning'
-                    }`}>
+                    <Chip variant={inv.status === 'paid' ? 'success' : inv.status === 'overdue' ? 'danger' : 'warning'}>
                       {inv.status}
-                    </span>
+                    </Chip>
                   </td>
                 </tr>
               ))}
