@@ -30,11 +30,15 @@ export default function CreateShipmentPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
 
-  const { data: posData } = useQuery({
+  const { data: posData, isLoading: posLoading, isError: posError } = useQuery({
     queryKey: ['purchasing', 'purchase-orders', 'for-shipment'],
     queryFn: () => purchaseOrdersApi.list({ status: 'sent', per_page: 200 }),
   });
   const poList = posData?.data ?? [];
+
+  if (posError) {
+    toast.error('Failed to load purchase orders');
+  }
 
   const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -90,8 +94,11 @@ export default function CreateShipmentPage() {
             {...register('purchase_order_id')}
             error={errors.purchase_order_id?.message}
             required
+            disabled={posLoading || posError}
           >
-            <option value="">— Select approved PO —</option>
+            <option value="">
+              {posLoading ? 'Loading POs…' : posError ? 'Failed to load POs' : '— Select approved PO —'}
+            </option>
             {poList.map((po) => (
               <option key={po.id} value={po.id}>
                 {po.po_number} — {po.vendor?.name ?? '—'}

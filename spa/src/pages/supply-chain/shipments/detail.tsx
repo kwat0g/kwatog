@@ -10,8 +10,10 @@ import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Panel } from '@/components/ui/Panel';
+import { Select } from '@/components/ui/Select';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
@@ -312,21 +314,19 @@ export default function ShipmentDetailPage() {
             {canManage && data.status !== 'received' && data.status !== 'cancelled' && (
               <div className="border-t border-subtle pt-3">
                 <div className="grid grid-cols-2 gap-2 mb-2">
-                  <select
+                  <Select
                     value={docType}
                     onChange={(e) => setDocType(e.target.value as ShipmentDocumentType)}
-                    className="text-sm rounded-md border border-default bg-canvas px-2 py-1.5"
                   >
                     {(Object.keys(DOC_TYPE_LABEL) as ShipmentDocumentType[]).map((t) => (
                       <option key={t} value={t}>{DOC_TYPE_LABEL[t]}</option>
                     ))}
-                  </select>
-                  <input
+                  </Select>
+                  <Input
                     type="text"
                     value={docNotes}
                     onChange={(e) => setDocNotes(e.target.value)}
                     placeholder="Notes (optional)"
-                    className="text-sm rounded-md border border-default bg-canvas px-2 py-1.5"
                   />
                 </div>
                 <label className="block w-full">
