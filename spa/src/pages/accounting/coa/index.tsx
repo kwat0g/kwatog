@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { accountsApi } from '@/api/accounting/accounts';
@@ -9,9 +10,11 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatPeso } from '@/lib/formatNumber';
 import { cn } from '@/lib/cn';
+import { usePermission } from '@/hooks/usePermission';
 import type { Account } from '@/types/accounting';
 
 export default function ChartOfAccountsPage() {
+  const { can } = usePermission();
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['accounting', 'accounts', 'tree'],
     queryFn: () => accountsApi.tree(),
@@ -52,6 +55,11 @@ export default function ChartOfAccountsPage() {
           <div className="flex gap-1.5">
             <Button variant="secondary" size="sm" onClick={collapseAll}>Collapse all</Button>
             <Button variant="secondary" size="sm" onClick={expandAll}>Expand all</Button>
+            {can('accounting.coa.manage') && (
+              <Button variant="primary" size="sm" onClick={() => window.location.href = '/accounting/coa/create'}>
+                Add account
+              </Button>
+            )}
           </div>
         }
       />
@@ -129,7 +137,13 @@ function TreeRow({
           ) : (
             <span className="w-3" />
           )}
-          <span className={cn(hasChildren && 'font-medium')}>{node.name}</span>
+          <Link
+            to={`/accounting/journal-entries?account_id=${node.id}`}
+            className={cn('hover:text-accent hover:underline truncate', hasChildren && 'font-medium')}
+            title={`View ledger for ${node.name}`}
+          >
+            {node.name}
+          </Link>
           {!node.is_active && <Chip variant="neutral">inactive</Chip>}
         </div>
         <div className="col-span-2 text-sm text-muted capitalize">{node.type} · {node.normal_balance}</div>
