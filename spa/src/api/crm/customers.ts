@@ -8,13 +8,13 @@ export interface CustomerListParams extends ListParams {
 
 export const crmCustomersApi = {
   list: (params?: CustomerListParams) =>
-    client.get<PaginatedResponse<Customer>>('/customers', { params }).then((r) => r.data),
+    client.get<PaginatedResponse<Customer>>('/crm/customers', { params }).then((r) => r.data),
   show: (id: string) =>
-    client.get<ApiSuccess<Customer>>(`/customers/${id}`).then((r) => r.data.data),
+    client.get<ApiSuccess<Customer>>(`/crm/customers/${id}`).then((r) => r.data.data),
   create: (data: CreateCustomerData) =>
-    client.post<ApiSuccess<Customer>>('/customers', data).then((r) => r.data.data),
+    client.post<ApiSuccess<Customer>>('/crm/customers', data).then((r) => r.data.data),
   update: (id: string, data: UpdateCustomerData) =>
-    client.put<ApiSuccess<Customer>>(`/customers/${id}`, data).then((r) => r.data.data),
+    client.put<ApiSuccess<Customer>>(`/crm/customers/${id}`, data).then((r) => r.data.data),
   delete: (id: string) =>
-    client.delete(`/customers/${id}`),
+    client.delete(`/crm/customers/${id}`),
 };

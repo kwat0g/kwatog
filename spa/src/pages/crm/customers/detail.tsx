@@ -125,6 +125,9 @@ export default function CrmCustomerDetailPage() {
         title={
           <div className="flex items-center gap-3">
             <span>{customer.name}</span>
+            {customer.code && (
+              <Chip variant="neutral" className="font-mono">{customer.code}</Chip>
+            )}
             <Chip variant={customer.is_active ? 'success' : 'neutral'}>
               {customer.is_active ? 'active' : 'inactive'}
             </Chip>

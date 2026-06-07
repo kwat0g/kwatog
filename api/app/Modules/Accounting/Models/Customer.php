@@ -22,7 +22,7 @@ class Customer extends Model
     }
 
     protected $fillable = [
-        'name', 'contact_person', 'email', 'phone', 'address',
+        'name', 'code', 'contact_person', 'email', 'phone', 'address',
         'tin', 'credit_limit', 'payment_terms_days', 'is_active',
     ];
 

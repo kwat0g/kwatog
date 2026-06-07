@@ -178,6 +178,7 @@ export interface CreateBillPaymentData {
 export interface Customer {
   id: string;
   name: string;
+  code: string | null;
   contact_person: string | null;
   email: string | null;
   phone: string | null;
@@ -193,6 +194,7 @@ export interface Customer {
 
 export interface CreateCustomerData {
   name: string;
+  code?: string | null;
   contact_person?: string;
   email?: string;
   phone?: string;

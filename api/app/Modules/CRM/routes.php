@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Modules\Accounting\Controllers\CustomerController;
 use App\Modules\CRM\Controllers\ComplaintController;
 use App\Modules\CRM\Controllers\PriceAgreementController;
 use App\Modules\CRM\Controllers\ProductController;
@@ -14,6 +15,13 @@ use Illuminate\Support\Facades\Route;
  */
 
 Route::middleware(['auth:sanctum', 'feature:crm'])->prefix('crm')->group(function () {
+
+    /* ─── Customers (delegated to Accounting CustomerController) ─── */
+    Route::get('/customers',             [CustomerController::class, 'index'])  ->middleware('permission:accounting.customers.view');
+    Route::get('/customers/{customer}',  [CustomerController::class, 'show'])   ->middleware('permission:accounting.customers.view');
+    Route::post('/customers',            [CustomerController::class, 'store'])  ->middleware('permission:accounting.customers.manage');
+    Route::put('/customers/{customer}',  [CustomerController::class, 'update']) ->middleware('permission:accounting.customers.manage');
+    Route::delete('/customers/{customer}', [CustomerController::class, 'destroy'])->middleware('permission:accounting.customers.manage');
 
     /* ─── Products ─── */
     Route::get('/products',           [ProductController::class, 'index']) ->middleware('permission:crm.products.view');
