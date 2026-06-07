@@ -9,7 +9,7 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
-import { Check, Ban, Save } from 'lucide-react';
+import { Check, Ban, Save, FileDown } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { AxiosError } from 'axios';
 import { inspectionsApi } from '@/api/quality/inspections';
@@ -49,6 +49,7 @@ export default function InspectionDetailPage() {
   const [drafts, setDrafts] = useState<Record<string, RowDraft>>({});
   const [confirmComplete, setConfirmComplete] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [cocLoading, setCocLoading] = useState(false);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['quality', 'inspections', id],
@@ -201,6 +202,27 @@ export default function InspectionDetailPage() {
                   Cancel
                 </Button>
               </>
+            )}
+            {/* CoC available for passed outgoing inspections */}
+            {data.stage === 'outgoing' && data.status === 'passed' && (
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<FileDown size={14} />}
+                loading={cocLoading}
+                onClick={async () => {
+                  setCocLoading(true);
+                  try {
+                    await inspectionsApi.generateCoC(id);
+                  } catch {
+                    toast.error('Could not generate CoC — try again.');
+                  } finally {
+                    setCocLoading(false);
+                  }
+                }}
+              >
+                Certificate of Conformance
+              </Button>
             )}
           </div>
         }

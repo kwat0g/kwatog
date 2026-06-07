@@ -39,4 +39,17 @@ export const inspectionsApi = {
     client
       .get<{ data: AqlPlan }>('/quality/inspections/aql-preview', { params: { batch_quantity: batchQuantity } })
       .then((r) => r.data.data),
+
+  generateCoC: (id: string): Promise<void> =>
+    client
+      .get(`/quality/inspections/${id}/coc`, { responseType: 'blob' })
+      .then((r) => {
+        const blob = new Blob([r.data as BlobPart], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `coc-${id}.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }),
 };
