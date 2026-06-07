@@ -4,21 +4,22 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Panel } from '@/components/ui/Panel';
 import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
+import { Chip } from '@/components/ui/Chip';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { returnManagementApi } from '@/api/returnManagement';
 import { usePermission } from '@/hooks/usePermission';
 
-const STATUS_COLORS: Record<string, string> = {
-  draft: 'bg-gray-500/20 text-gray-500 border-gray-500/30',
-  pending_approval: 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30',
-  approved: 'bg-blue-500/20 text-blue-500 border-blue-500/30',
-  received: 'bg-indigo-500/20 text-indigo-500 border-indigo-500/30',
-  inspected: 'bg-purple-500/20 text-purple-500 border-purple-500/30',
-  completed: 'bg-green-500/20 text-green-500 border-green-500/30',
-  rejected: 'bg-red-500/20 text-red-500 border-red-500/30',
-  cancelled: 'bg-gray-500/10 text-gray-400 border-gray-500/20',
+const STATUS_VARIANT: Record<string, 'success' | 'danger' | 'warning' | 'info' | 'neutral' | 'purple'> = {
+  draft: 'neutral',
+  pending_approval: 'warning',
+  approved: 'info',
+  received: 'info',
+  inspected: 'purple',
+  completed: 'success',
+  rejected: 'danger',
+  cancelled: 'neutral',
 };
 
 const CONDITION_LABELS: Record<string, string> = {
@@ -120,9 +121,7 @@ export default function ReturnRequestDetailPage() {
 
   if (!rma) {
     return (
-      <div className="px-4 py-12 text-center text-muted">
-        Return request not found.
-      </div>
+      <EmptyState icon="alert-circle" title="Return request not found" />
     );
   }
 
@@ -134,9 +133,9 @@ export default function ReturnRequestDetailPage() {
         title={rma.rma_number}
         subtitle={
           <div className="flex items-center gap-2">
-            <Badge variant="accent" className={STATUS_COLORS[rma.status] || ''}>
+            <Chip variant={STATUS_VARIANT[rma.status] ?? 'neutral'}>
               {rma.status_label}
-            </Badge>
+            </Chip>
             <span className="text-muted">|</span>
             <span>{rma.type_label}</span>
           </div>
@@ -177,9 +176,7 @@ export default function ReturnRequestDetailPage() {
             </div>
             <div>
               <div className="text-xs text-muted mb-0.5">Status</div>
-              <Badge variant="accent" className={STATUS_COLORS[rma.status] || ''}>
-                {rma.status_label}
-              </Badge>
+              <Chip variant={STATUS_VARIANT[rma.status] ?? 'neutral'}>{rma.status_label}</Chip>
             </div>
             <div>
               <div className="text-xs text-muted mb-0.5">Return Date</div>
