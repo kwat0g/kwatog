@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Pencil } from 'lucide-react';
 import { priceAgreementsApi, type PriceAgreementListParams } from '@/api/crm/priceAgreements';
@@ -55,14 +55,13 @@ export default function PriceAgreementsListPage() {
     {
       key: 'actions', header: '',
       cell: (r) => (
-        <button
-          type="button"
-          onClick={() => navigate(`/crm/price-agreements/${r.id}/edit`)}
-          className="p-1 rounded text-muted hover:text-default hover:bg-elevated transition-colors"
+        <Link
+          to={`/crm/price-agreements/${r.id}/edit`}
+          className="p-1 rounded text-muted hover:text-default hover:bg-elevated transition-colors inline-flex items-center justify-center"
           aria-label="Edit agreement"
         >
           <Pencil size={14} />
-        </button>
+        </Link>
       ),
     },
   ];

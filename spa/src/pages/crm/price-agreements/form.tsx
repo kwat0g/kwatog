@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -9,7 +8,6 @@ import { onFormInvalid, applyServerValidationErrors } from '@/lib/formErrors';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { Textarea } from '@/components/ui/Textarea';
 import { priceAgreementsApi } from '@/api/crm/priceAgreements';
 import { productsApi } from '@/api/crm/products';
 import { crmCustomersApi } from '@/api/crm/customers';
@@ -48,7 +46,7 @@ export function PriceAgreementForm({ initial, mode }: Props) {
   });
 
   const {
-    register, handleSubmit, setError, setValue,
+    register, handleSubmit, setError,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -60,16 +58,6 @@ export function PriceAgreementForm({ initial, mode }: Props) {
       effective_to:   initial?.effective_to ?? '',
     },
   });
-
-  useEffect(() => {
-    if (initial) {
-      setValue('product_id',     initial.product?.id ?? '');
-      setValue('customer_id',    initial.customer?.id ?? '');
-      setValue('price',          initial.price);
-      setValue('effective_from', initial.effective_from);
-      setValue('effective_to',   initial.effective_to);
-    }
-  }, [initial, setValue]);
 
   const mutation = useMutation({
     mutationFn: (values: FormValues) => {

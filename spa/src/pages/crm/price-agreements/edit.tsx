@@ -11,7 +11,7 @@ export default function EditPriceAgreementPage() {
   const { id } = useParams<{ id: string }>();
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['crm', 'price-agreements', 'detail', id],
-    queryFn: () => priceAgreementsApi.show(id!),
+    queryFn: () => priceAgreementsApi.show(id as string),
     enabled: !!id,
   });
 
