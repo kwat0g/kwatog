@@ -13,6 +13,7 @@ import { Check, Ban, Save, FileDown } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { AxiosError } from 'axios';
 import { inspectionsApi } from '@/api/quality/inspections';
+import { analyticsApi, type SpcCapabilityItem } from '@/api/quality/analytics';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -56,6 +57,13 @@ export default function InspectionDetailPage() {
     queryFn: () => inspectionsApi.show(id),
     enabled: Boolean(id),
     placeholderData: (prev) => prev,
+  });
+
+  const spc = useQuery({
+    queryKey: ['quality', 'spc', data?.spec?.id],
+    queryFn: () => analyticsApi.spcForSpec(data!.spec!.id),
+    enabled: Boolean(data?.spec?.id),
+    staleTime: 300_000,
   });
 
   // Seed local drafts whenever the server payload arrives.
@@ -438,6 +446,41 @@ export default function InspectionDetailPage() {
           {data.notes && (
             <Panel title="Notes">
               <p className="whitespace-pre-line text-sm">{data.notes}</p>
+            </Panel>
+          )}
+
+          {/* SPC Capability indices for this spec */}
+          {data.spec && spc.data && Object.keys(spc.data).length > 0 && (
+            <Panel title="SPC capability indices" meta={`${Object.keys(spc.data).length} dimension${Object.keys(spc.data).length === 1 ? '' : 's'}`}>
+              <table className="w-full text-xs mt-2">
+                <thead>
+                  <tr className="border-b border-default text-left text-muted">
+                    <th className="py-1.5 pr-3 font-medium">Dimension</th>
+                    <th className="py-1.5 pr-3 text-right font-medium">Mean</th>
+                    <th className="py-1.5 pr-3 text-right font-medium">Cp</th>
+                    <th className="py-1.5 pr-3 text-right font-medium">Cpk</th>
+                    <th className="py-1.5 pr-3 text-right font-medium">n</th>
+                    <th className="py-1.5 font-medium">Rating</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.values(spc.data).map((item: SpcCapabilityItem) => {
+                    const variant = item.cpk >= 1.67 ? 'success' : item.cpk >= 1.33 ? 'info' : item.cpk >= 1.0 ? 'warning' : 'danger';
+                    const label = item.cpk >= 1.67 ? 'Excellent' : item.cpk >= 1.33 ? 'Capable' : item.cpk >= 1.0 ? 'Marginal' : 'Not capable';
+                    return (
+                      <tr key={item.parameter_name} className="border-b border-subtle">
+                        <td className="py-1.5 pr-3">{item.parameter_name}{item.unit ? ` (${item.unit})` : ''}</td>
+                        <td className="py-1.5 pr-3 text-right font-mono tabular-nums">{item.mean.toFixed(3)}</td>
+                        <td className="py-1.5 pr-3 text-right font-mono tabular-nums">{item.cp.toFixed(2)}</td>
+                        <td className="py-1.5 pr-3 text-right font-mono tabular-nums font-medium">{item.cpk.toFixed(2)}</td>
+                        <td className="py-1.5 pr-3 text-right font-mono tabular-nums text-muted">{item.sample_count}</td>
+                        <td className="py-1.5"><Chip variant={variant}>{label}</Chip></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <p className="text-2xs text-muted mt-2">IATF target: Cpk ≥ 1.33 ongoing · ≥ 1.67 new product launch</p>
             </Panel>
           )}
 

@@ -19,6 +19,20 @@ export interface ParetoDrillRow {
   product: { id: string; part_number: string; name: string } | null;
 }
 
+export interface SpcCapabilityItem {
+  parameter_name: string;
+  unit: string | null;
+  cp: number;
+  cpk: number;
+  cpu: number;
+  cpl: number;
+  mean: number;
+  std_dev: number;
+  sample_count: number;
+  usl: number;
+  lsl: number;
+}
+
 export const analyticsApi = {
   defectPareto: (filters?: ParetoFilters) =>
     client.get<{ data: ParetoResult }>('/quality/analytics/defect-pareto', { params: filters }).then((r) => r.data.data),
@@ -28,4 +42,9 @@ export const analyticsApi = {
         params: { ...filters, parameter_name },
       })
       .then((r) => r.data.data),
+  spcForSpec: (specId: string) =>
+    client
+      .get<{ data: Record<string, SpcCapabilityItem> }>(`/quality/inspection-specs/${specId}/spc`)
+      .then((r) => r.data.data),
 };
+
