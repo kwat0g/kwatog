@@ -8,6 +8,7 @@ const ShipmentsListPage   = lazy(() => import('@/pages/supply-chain/shipments'))
 const ShipmentCreatePage  = lazy(() => import('@/pages/supply-chain/shipments/create'));
 const ShipmentDetailPage  = lazy(() => import('@/pages/supply-chain/shipments/detail'));
 const DeliveriesListPage  = lazy(() => import('@/pages/supply-chain/deliveries'));
+const DeliveryCreatePage  = lazy(() => import('@/pages/supply-chain/deliveries/create'));
 const DeliveryDetailPage  = lazy(() => import('@/pages/supply-chain/deliveries/detail'));
 const FleetPage           = lazy(() => import('@/pages/supply-chain/fleet'));
 
@@ -24,6 +25,8 @@ export const supplyChainRoutes = (
         element={<PermissionGuard permission="supply_chain.view"><ShipmentDetailPage /></PermissionGuard>} />
       <Route path="/supply-chain/deliveries"
         element={<PermissionGuard permission="supply_chain.view"><DeliveriesListPage /></PermissionGuard>} />
+      <Route path="/supply-chain/deliveries/create"
+        element={<PermissionGuard permission="supply_chain.deliveries.create"><DeliveryCreatePage /></PermissionGuard>} />
       <Route path="/supply-chain/deliveries/:id"
         element={<PermissionGuard permission="supply_chain.view"><DeliveryDetailPage /></PermissionGuard>} />
       <Route path="/supply-chain/fleet"

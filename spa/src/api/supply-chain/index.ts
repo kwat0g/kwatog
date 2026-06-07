@@ -56,7 +56,24 @@ export interface DeliveryListParams extends ListParams {
   sales_order_id?: string;
 }
 
+export interface CreateDeliveryItemData {
+  sales_order_item_id: string;
+  quantity: number;
+  inspection_id?: string;
+}
+
+export interface CreateDeliveryData {
+  sales_order_id: string;
+  vehicle_id?: string;
+  driver_id?: string;
+  scheduled_date: string;
+  notes?: string;
+  items: CreateDeliveryItemData[];
+}
+
 export const deliveriesApi = {
+  create: (data: CreateDeliveryData) =>
+    client.post<ApiSuccess<Delivery>>('/supply-chain/deliveries', data).then((r) => r.data.data),
   list: (params?: DeliveryListParams) =>
     client.get<PaginatedResponse<Delivery>>('/supply-chain/deliveries', { params }).then((r) => r.data),
   show: (id: string) =>

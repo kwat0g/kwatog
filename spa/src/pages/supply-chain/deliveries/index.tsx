@@ -1,7 +1,8 @@
 /** Sprint 7 — Task 67 — Deliveries list (outbound). */
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { Plus } from 'lucide-react';
 import { deliveriesApi, type DeliveryListParams } from '@/api/supply-chain';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -10,6 +11,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { usePermission } from '@/hooks/usePermission';
 import type { Delivery, DeliveryStatus } from '@/types/supplyChain';
 
 const STATUS_CHIP: Record<DeliveryStatus, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
@@ -19,6 +21,8 @@ const STATUS_CHIP: Record<DeliveryStatus, 'success' | 'danger' | 'warning' | 'ne
 
 export default function DeliveriesListPage() {
   const [filters, setFilters] = useState<DeliveryListParams>({ page: 1, per_page: 25 });
+  const navigate = useNavigate();
+  const { can } = usePermission();
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['supply-chain', 'deliveries', filters],
     queryFn: () => deliveriesApi.list(filters),
@@ -52,7 +56,20 @@ export default function DeliveriesListPage() {
   return (
     <div>
       <PageHeader title="Outbound deliveries"
-        subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'delivery' : 'deliveries'}` : undefined} />
+        subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'delivery' : 'deliveries'}` : undefined}
+        actions={
+          can('supply_chain.deliveries.create') ? (
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<Plus size={14} />}
+              onClick={() => navigate('/supply-chain/deliveries/create')}
+            >
+              New delivery
+            </Button>
+          ) : undefined
+        }
+      />
       <FilterBar
         filters={filterConfig}
         values={filters}
