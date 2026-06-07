@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { LayoutGrid, List as ListIcon, Search } from 'lucide-react';
+import { GitBranch, LayoutGrid, List as ListIcon, Search } from 'lucide-react';
 import { directoryApi } from '@/api/hr/directory';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
@@ -9,11 +9,12 @@ import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { usePermission } from '@/hooks/usePermission';
 import { cn } from '@/lib/cn';
-import type { DirectoryEmployee } from '@/types/directory';
+import type { DirectoryEmployee, OrgChartGroup } from '@/types/directory';
 
-type ViewMode = 'grid' | 'list';
+type ViewMode = 'grid' | 'list' | 'org';
 
 export default function EmployeeDirectoryPage() {
   const navigate = useNavigate();
@@ -25,6 +26,13 @@ export default function EmployeeDirectoryPage() {
     queryKey: ['hr', 'directory', search],
     queryFn: () => directoryApi.list({ search: search || undefined, per_page: 200 }),
     placeholderData: (prev) => prev,
+  });
+
+  const { data: orgData, isLoading: orgLoading } = useQuery({
+    queryKey: ['hr', 'directory', 'org-chart'],
+    queryFn: () => directoryApi.orgChart(),
+    enabled: view === 'org',
+    staleTime: 60_000,
   });
 
   // Group by department for grid view (visual grouping only).
@@ -68,6 +76,17 @@ export default function EmployeeDirectoryPage() {
               )}
             >
               <ListIcon size={14} />
+            </button>
+            <button
+              type="button"
+              aria-label="Org chart view"
+              onClick={() => setView('org')}
+              className={cn(
+                'p-1.5 rounded-sm',
+                view === 'org' ? 'bg-elevated text-primary' : 'text-muted hover:bg-elevated',
+              )}
+            >
+              <GitBranch size={14} />
             </button>
           </div>
         }
@@ -204,6 +223,70 @@ export default function EmployeeDirectoryPage() {
           </div>
         </div>
       )}
+
+      {view === 'org' && (
+        <div className="px-5 py-4">
+          {orgLoading && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <SkeletonBlock key={i} className="h-40 rounded-md" />
+              ))}
+            </div>
+          )}
+          {!orgLoading && (!orgData || orgData.length === 0) && (
+            <EmptyState icon="git-branch" title="No org chart data" description="Add employees to departments to see the org chart." />
+          )}
+          {orgData && orgData.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {orgData.map((group) => (
+                <OrgDeptCard key={group.department?.id ?? 'unassigned'} group={group} canViewFull={canViewFull} onNavigate={(id) => navigate(`/hr/employees/${id}`)} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function OrgDeptCard({
+  group,
+  canViewFull,
+  onNavigate,
+}: {
+  group: OrgChartGroup;
+  canViewFull: boolean;
+  onNavigate: (id: string) => void;
+}) {
+  return (
+    <div className="border border-default rounded-md overflow-hidden">
+      <div className="px-3 py-2 bg-subtle border-b border-default flex items-center justify-between">
+        <span className="text-sm font-medium">{group.department?.name ?? 'Unassigned'}</span>
+        <span className="text-2xs text-muted font-mono tabular-nums">{group.employees.length}</span>
+      </div>
+      <ul className="divide-y divide-subtle">
+        {group.employees.map((e) => (
+          <li
+            key={e.id}
+            className={cn(
+              'flex items-center gap-2.5 px-3 py-2',
+              canViewFull ? 'hover:bg-elevated cursor-pointer' : '',
+            )}
+            onClick={() => canViewFull && onNavigate(e.id)}
+          >
+            <Avatar name={e.full_name} src={e.photo_path ?? undefined} size="sm" />
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-medium truncate">{e.full_name}</div>
+              <div className="text-2xs text-muted truncate">{e.position?.title ?? '—'}</div>
+            </div>
+            {e.status && (
+              <Chip variant={chipVariantForStatus(e.status)}>
+                {e.status.replace('_', ' ')}
+              </Chip>
+            )}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
