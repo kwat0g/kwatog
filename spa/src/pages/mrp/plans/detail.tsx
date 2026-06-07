@@ -1,4 +1,5 @@
 import { useParams, Link } from 'react-router-dom';
+import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -30,6 +31,16 @@ export default function MrpPlanDetailPage() {
       toast.success(`Re-ran MRP — new version v${plan.version}.`);
     },
   });
+
+  const summary = useMemo(() => {
+    if (!data) return null;
+    const d = data.diagnostics;
+    return {
+      totalDemand: d.reduce((s, r) => s + r.gross, 0),
+      shortageCount: d.filter((r) => r.net > 0).length,
+      autoPrCount: data.auto_pr_count ?? 0,
+    };
+  }, [data]);
 
   if (isLoading) return <div><PageHeader title="MRP plan" backTo="/mrp/plans" backLabel="Plans"
     breadcrumbs={[{ label: 'MRP', href: '/mrp' }, { label: 'Plans', href: '/mrp/plans' }, { label: 'Loading…' }]} /><SkeletonDetail /></div>;
@@ -67,6 +78,28 @@ export default function MrpPlanDetailPage() {
 
       <div className="px-5 py-4 grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-4">
+          {/* Summary cards */}
+          {summary && (
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-md border border-default bg-canvas p-3">
+                <div className="text-2xs uppercase tracking-wider text-muted mb-1">Total demand</div>
+                <div className="text-lg font-mono tabular-nums font-medium">{summary.totalDemand.toFixed(0)}</div>
+                <div className="text-2xs text-muted mt-0.5">units gross</div>
+              </div>
+              <div className={`rounded-md border p-3 ${summary.shortageCount > 0 ? 'border-danger/30 bg-danger/5' : 'border-default bg-canvas'}`}>
+                <div className="text-2xs uppercase tracking-wider text-muted mb-1">Shortages</div>
+                <div className={`text-lg font-mono tabular-nums font-medium ${summary.shortageCount > 0 ? 'text-danger' : ''}`}>
+                  {summary.shortageCount}
+                </div>
+                <div className="text-2xs text-muted mt-0.5">materials short</div>
+              </div>
+              <div className={`rounded-md border p-3 ${summary.autoPrCount > 0 ? 'border-info/30 bg-info/5' : 'border-default bg-canvas'}`}>
+                <div className="text-2xs uppercase tracking-wider text-muted mb-1">Auto PRs</div>
+                <div className="text-lg font-mono tabular-nums font-medium">{summary.autoPrCount}</div>
+                <div className="text-2xs text-muted mt-0.5">generated</div>
+              </div>
+            </div>
+          )}
           <Panel title="Diagnostics" meta={`${data.diagnostics.length} materials`} noPadding>
             {data.diagnostics.length === 0 ? (
               <div className="p-4 text-sm text-muted">No materials evaluated (no active BOM).</div>
