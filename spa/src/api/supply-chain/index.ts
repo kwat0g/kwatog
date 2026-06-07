@@ -1,10 +1,31 @@
 import { client } from '../client';
 import type { ApiSuccess, PaginatedResponse, ListParams } from '@/types';
-import type { Shipment, Delivery, DeliveryProof, DeliveryProofType, Vehicle, ShipmentStatus, DeliveryStatus } from '@/types/supplyChain';
+import type { Shipment, ShipmentDocument, ShipmentDocumentType, Delivery, DeliveryProof, DeliveryProofType, Vehicle, ShipmentStatus, DeliveryStatus } from '@/types/supplyChain';
 
 export interface ShipmentListParams extends ListParams {
   status?: ShipmentStatus;
   purchase_order_id?: string;
+}
+
+export interface CreateShipmentData {
+  purchase_order_id: string;
+  carrier?: string;
+  vessel?: string;
+  container_number?: string;
+  bl_number?: string;
+  etd?: string;
+  eta?: string;
+  notes?: string;
+}
+
+export interface UpdateShipmentMetaData {
+  carrier?: string;
+  vessel?: string;
+  container_number?: string;
+  bl_number?: string;
+  etd?: string;
+  eta?: string;
+  notes?: string;
 }
 
 export const shipmentsApi = {
@@ -12,10 +33,22 @@ export const shipmentsApi = {
     client.get<PaginatedResponse<Shipment>>('/supply-chain/shipments', { params }).then((r) => r.data),
   show: (id: string) =>
     client.get<ApiSuccess<Shipment>>(`/supply-chain/shipments/${id}`).then((r) => r.data.data),
-  create: (data: { purchase_order_id: string; carrier?: string; eta?: string }) =>
+  create: (data: CreateShipmentData) =>
     client.post<ApiSuccess<Shipment>>('/supply-chain/shipments', data).then((r) => r.data.data),
   updateStatus: (id: string, status: ShipmentStatus, note?: string) =>
     client.patch<ApiSuccess<Shipment>>(`/supply-chain/shipments/${id}/status`, { status, note }).then((r) => r.data.data),
+  updateMeta: (id: string, data: UpdateShipmentMetaData) =>
+    client.patch<ApiSuccess<Shipment>>(`/supply-chain/shipments/${id}`, data).then((r) => r.data.data),
+  uploadDocument: (id: string, file: File, document_type: ShipmentDocumentType, notes?: string) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('document_type', document_type);
+    if (notes) fd.append('notes', notes);
+    return client.post<ApiSuccess<ShipmentDocument>>(`/supply-chain/shipments/${id}/documents`, fd)
+      .then((r) => r.data.data);
+  },
+  destroyDocument: (documentId: string) =>
+    client.delete(`/supply-chain/shipment-documents/${documentId}`),
 };
 
 export interface DeliveryListParams extends ListParams {

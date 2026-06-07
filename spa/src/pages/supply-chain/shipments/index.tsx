@@ -1,6 +1,8 @@
 /** Sprint 7 — Task 67 — Shipments list (inbound, imported POs). */
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { Plus } from 'lucide-react';
 import { shipmentsApi, type ShipmentListParams } from '@/api/supply-chain';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -9,6 +11,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { usePermission } from '@/hooks/usePermission';
 import type { Shipment, ShipmentStatus } from '@/types/supplyChain';
 
 const STATUS_CHIP: Record<ShipmentStatus, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
@@ -17,6 +20,8 @@ const STATUS_CHIP: Record<ShipmentStatus, 'success' | 'danger' | 'warning' | 'ne
 };
 
 export default function ShipmentsListPage() {
+  const navigate = useNavigate();
+  const { can } = usePermission();
   const [filters, setFilters] = useState<ShipmentListParams>({ page: 1, per_page: 25 });
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['supply-chain', 'shipments', filters],
@@ -26,7 +31,15 @@ export default function ShipmentsListPage() {
 
   const columns: Column<Shipment>[] = [
     { key: 'shipment_number', header: 'Shipment',
-      cell: (r) => <span className="font-mono text-accent">{r.shipment_number}</span> },
+      cell: (r) => (
+        <button
+          type="button"
+          className="font-mono text-accent hover:underline text-left"
+          onClick={() => navigate(`/supply-chain/shipments/${r.id}`)}
+        >
+          {r.shipment_number}
+        </button>
+      ) },
     { key: 'po', header: 'PO',
       cell: (r) => r.purchase_order ? <span className="font-mono">{r.purchase_order.po_number}</span> : <span className="text-muted">—</span> },
     { key: 'carrier', header: 'Carrier', cell: (r) => r.carrier ?? '—' },
@@ -54,6 +67,18 @@ export default function ShipmentsListPage() {
       <PageHeader
         title="Inbound shipments"
         subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'shipment' : 'shipments'}` : undefined}
+        actions={
+          can('supply_chain.shipments.manage') ? (
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<Plus size={14} />}
+              onClick={() => navigate('/supply-chain/shipments/create')}
+            >
+              New shipment
+            </Button>
+          ) : undefined
+        }
       />
       <FilterBar
         filters={filterConfig}
