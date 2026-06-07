@@ -14,6 +14,12 @@ const CreateSalesOrderPage    = lazy(() => import('@/pages/crm/sales-orders/crea
 const EditSalesOrderPage      = lazy(() => import('@/pages/crm/sales-orders/edit'));
 const SalesOrderDetailPage    = lazy(() => import('@/pages/crm/sales-orders/detail'));
 
+// Task 1 — CRM customer master
+const CrmCustomersListPage   = lazy(() => import('@/pages/crm/customers'));
+const CrmCustomerCreatePage  = lazy(() => import('@/pages/crm/customers/create'));
+const CrmCustomerDetailPage  = lazy(() => import('@/pages/crm/customers/detail'));
+const CrmCustomerEditPage    = lazy(() => import('@/pages/crm/customers/edit'));
+
 // Sprint 7 Task 68 — customer complaints + 8D
 const ComplaintsListPage  = lazy(() => import('@/pages/crm/complaints'));
 const ComplaintDetailPage = lazy(() => import('@/pages/crm/complaints/detail'));
@@ -33,6 +39,15 @@ export const crmRoutes = (
         element={<PermissionGuard permission="crm.products.view"><ProductDetailPage /></PermissionGuard>} />
       <Route path="/crm/products/:id/edit"
         element={<PermissionGuard permission="crm.products.manage"><EditProductPage /></PermissionGuard>} />
+
+      <Route path="/crm/customers"
+        element={<PermissionGuard permission="crm.sales_orders.view"><CrmCustomersListPage /></PermissionGuard>} />
+      <Route path="/crm/customers/create"
+        element={<PermissionGuard permission="accounting.customers.manage"><CrmCustomerCreatePage /></PermissionGuard>} />
+      <Route path="/crm/customers/:id"
+        element={<PermissionGuard permission="crm.sales_orders.view"><CrmCustomerDetailPage /></PermissionGuard>} />
+      <Route path="/crm/customers/:id/edit"
+        element={<PermissionGuard permission="accounting.customers.manage"><CrmCustomerEditPage /></PermissionGuard>} />
 
       <Route path="/crm/price-agreements"
         element={<PermissionGuard permission="crm.price_agreements.view"><PriceAgreementsListPage /></PermissionGuard>} />

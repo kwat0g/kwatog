@@ -73,7 +73,8 @@ const SECTIONS: NavSection[] = [
     label: 'Sales & CRM',
     items: [
       { to: '/crm/sales-orders',     label: 'Sales Orders',  icon: Briefcase, feature: 'crm', permission: 'crm.sales_orders.view', badgeKey: 'pending_so' },
-      { to: '/accounting/customers', label: 'Customers',     icon: Users2,    feature: 'accounting', permission: 'accounting.customers.view' },
+      { to: '/crm/customers',        label: 'Customers',     icon: Users2,    feature: 'crm', permission: 'crm.sales_orders.view' },
+      { to: '/accounting/customers', label: 'AR Customers',  icon: Users,     feature: 'accounting', permission: 'accounting.customers.view' },
     ],
   },
   {
