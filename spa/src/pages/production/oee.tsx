@@ -33,6 +33,7 @@ import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { StatCard } from '@/components/ui/StatCard';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { OeeGauge } from '@/components/production/OeeGauge';
+import { OeeGaugeChart } from '@/components/charts/OeeGaugeChart';
 import { oeeApi } from '@/api/production/oee';
 import { formatDate } from '@/lib/formatDate';
 import type { MachineOeeRow } from '@/types/production';
@@ -200,16 +201,26 @@ export default function OeeReportPage() {
       {/* ─── Data ─── */}
       {data && (
         <div className="px-5 py-4 space-y-4">
-          {/* KPI cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <StatCard
-              label="Overall OEE"
-              value={pct(data.overall.oee)}
-              helper={data.overall.oee >= 0.85 ? 'World-class' : data.overall.oee >= 0.6 ? 'On track' : 'Below benchmark'}
-            />
-            <StatCard label="Availability" value={pct(data.overall.availability)} />
-            <StatCard label="Performance" value={pct(data.overall.performance)} />
-            <StatCard label="Quality" value={pct(data.overall.quality)} />
+          {/* KPI cards + OEE gauge */}
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
+            <div className="lg:col-span-3 grid grid-cols-2 md:grid-cols-4 gap-3">
+              <StatCard
+                label="Overall OEE"
+                value={pct(data.overall.oee)}
+                helper={data.overall.oee >= 0.85 ? 'World-class' : data.overall.oee >= 0.6 ? 'On track' : 'Below benchmark'}
+              />
+              <StatCard label="Availability" value={pct(data.overall.availability)} />
+              <StatCard label="Performance" value={pct(data.overall.performance)} />
+              <StatCard label="Quality" value={pct(data.overall.quality)} />
+            </div>
+            <Panel className="flex items-center justify-center py-4">
+              <OeeGaugeChart
+                oee={data.overall.oee}
+                availability={data.overall.availability}
+                performance={data.overall.performance}
+                quality={data.overall.quality}
+              />
+            </Panel>
           </div>
 
           {/* Trend + downtime */}

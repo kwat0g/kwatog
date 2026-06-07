@@ -1,5 +1,5 @@
 /** ADV8 — Downtime analytics dashboard. */
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Activity, Clock, TrendingDown, TrendingUp, Timer, BarChart3 } from 'lucide-react';
 import { downtimeAnalyticsApi } from '@/api/maintenance/downtimeAnalytics';
@@ -10,6 +10,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { DataTable, type Column } from '@/components/ui/DataTable';
 import { Select } from '@/components/ui/Select';
 import { Panel } from '@/components/ui/Panel';
+import { DowntimeParetoChart, buildParetoData } from '@/components/charts/DowntimeParetoChart';
 import type { TopMachineDowntime, MachineDowntimeSummary } from '@/types/maintenance';
 
 const DAYS_OPTIONS = [
@@ -101,6 +102,11 @@ export default function DowntimeAnalyticsPage() {
   const maxTrendMinutes = trend && trend.length > 0
     ? Math.max(...trend.map((d) => d.total_minutes))
     : 0;
+
+  const paretoData = useMemo(
+    () => buildParetoData(summary?.category_breakdown ?? []),
+    [summary],
+  );
 
   const topColumns: Column<TopMachineDowntime>[] = [
     { key: 'machine_code', header: 'Machine', cell: (r) => <span className="font-mono">{r.machine_code}</span> },
@@ -294,32 +300,16 @@ export default function DowntimeAnalyticsPage() {
         </Panel>
       </div>
 
-      {/* Category breakdown */}
-      {summary && summary.category_breakdown.length > 0 && (
+      {/* Pareto chart — downtime by category */}
+      {(summaryLoading || (summary && summary.category_breakdown.length > 0)) && (
         <div className="px-5 py-4">
           <Panel className="p-4">
-            <h3 className="text-sm font-medium">Downtime by category</h3>
-            <div className="mt-4 space-y-2">
-              {summary.category_breakdown.map((cat) => {
-                const pct = summary.total_downtime_minutes > 0
-                  ? Math.round((cat.minutes / summary.total_downtime_minutes) * 100)
-                  : 0;
-                return (
-                  <div key={cat.category} className="flex items-center gap-3">
-                    <span className="w-28 shrink-0 text-xs capitalize">{cat.category.replace(/_/g, ' ')}</span>
-                    <div className="flex-1 overflow-hidden rounded bg-elevated">
-                      <div
-                        className="h-2 rounded bg-primary"
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                    <span className="w-16 text-right text-2xs text-muted tabular-nums">{pct}%</span>
-                    <span className="w-20 text-right text-xs tabular-nums">{formatMinutes(cat.minutes)}</span>
-                    <span className="w-8 text-right text-2xs text-muted tabular-nums">{cat.count}x</span>
-                  </div>
-                );
-              })}
-            </div>
+            <h3 className="text-sm font-medium mb-4">Downtime Pareto — by category</h3>
+            {summaryLoading ? (
+              <div className="h-64 animate-pulse rounded bg-elevated" />
+            ) : (
+              <DowntimeParetoChart data={paretoData} height={264} />
+            )}
           </Panel>
         </div>
       )}
