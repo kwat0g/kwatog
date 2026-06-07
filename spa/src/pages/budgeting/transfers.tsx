@@ -52,7 +52,7 @@ function TransferFormModal({ open, onClose }: { open: boolean; onClose: () => vo
   });
 
   return (
-    <Modal open={open} onClose={onClose} title="New budget transfer">
+    <Modal isOpen={open} onClose={onClose} title="New budget transfer">
       <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="space-y-4">
         <Input
           label="From budget line ID"

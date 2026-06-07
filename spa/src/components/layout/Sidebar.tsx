@@ -24,6 +24,7 @@ import {
   Inbox,
   AlertTriangle,
   Calendar,
+  ArrowLeftRight,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
@@ -120,6 +121,7 @@ const SECTIONS: NavSection[] = [
       { to: '/accounting/journal-entries', label: 'Journal Entries', icon: BookOpen, feature: 'accounting', permission: 'accounting.journal.view' },
       { to: '/accounting/invoices', label: 'Invoices (AR)',  icon: FileText, feature: 'accounting', permission: 'accounting.invoices.view' },
       { to: '/accounting/bills',    label: 'Bills (AP)',     icon: Receipt,  feature: 'accounting', permission: 'accounting.bills.view' },
+      { to: '/budgeting/transfers', label: 'Budget Transfers', icon: ArrowLeftRight, feature: 'accounting', permission: 'accounting.budget.view' },
     ],
   },
   {
