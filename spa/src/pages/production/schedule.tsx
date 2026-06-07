@@ -4,13 +4,14 @@
  * GET /mrp/scheduler/snapshot fills the chart; POST /mrp/scheduler/run
  * proposes new schedules and POST /mrp/scheduler/confirm persists them.
  */
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AxiosError } from 'axios';
-import { Play, Check, AlertTriangle } from 'lucide-react';
+import { Play, Check, AlertTriangle, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { schedulerApi } from '@/api/mrp/scheduler';
+import { machinesApi } from '@/api/mrp/machines';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -21,6 +22,13 @@ import { GanttChart } from '@/components/production/GanttChart';
 import { usePermission } from '@/hooks/usePermission';
 import type { SchedulerConflict, SchedulerProposalRow } from '@/types/mrp';
 
+/** ISO date string for today and +14 days — default window */
+function isoDate(offset = 0): string {
+  const d = new Date();
+  d.setDate(d.getDate() + offset);
+  return d.toISOString().slice(0, 10);
+}
+
 export default function ProductionSchedulePage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -29,13 +37,24 @@ export default function ProductionSchedulePage() {
   const canConfirm = can('production.schedule.confirm');
 
   const [viewMode, setViewMode] = useState<'Day' | 'Week' | 'Month'>('Week');
+  const [dateFrom, setDateFrom] = useState(isoDate(0));
+  const [dateTo, setDateTo] = useState(isoDate(14));
+  const [machineFilter, setMachineFilter] = useState<string[]>([]);
   const [latestProposal, setLatestProposal] = useState<SchedulerProposalRow[]>([]);
   const [latestConflicts, setLatestConflicts] = useState<SchedulerConflict[]>([]);
 
+  // Fetch machines for filter dropdown
+  const { data: machinesData } = useQuery({
+    queryKey: ['mrp', 'machines', 'all'],
+    queryFn: () => machinesApi.list({ per_page: 200 }),
+    staleTime: 300_000,
+  });
+  const allMachines = machinesData?.data ?? [];
+
   const snapshot = useQuery({
-    queryKey: ['mrp', 'scheduler', 'snapshot'],
-    queryFn: () => schedulerApi.snapshot(),
-    refetchInterval: 60_000, // 60s polling fallback
+    queryKey: ['mrp', 'scheduler', 'snapshot', dateFrom, dateTo, machineFilter],
+    queryFn: () => schedulerApi.snapshot(dateFrom, dateTo),
+    refetchInterval: 60_000,
     placeholderData: (prev) => prev,
   });
 
@@ -62,12 +81,36 @@ export default function ProductionSchedulePage() {
     },
   });
 
+  // Filter rows by selected machines (client-side filter after fetch)
+  const filteredRows = useMemo(() => {
+    const rows = snapshot.data?.rows ?? [];
+    if (machineFilter.length === 0) return rows;
+    return rows.filter((r) => machineFilter.includes(r.machine_id));
+  }, [snapshot.data, machineFilter]);
+
   return (
     <div>
       <PageHeader
         title="Production schedule"
         actions={
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {/* Date range */}
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="h-8 px-2 text-xs rounded-md border border-default bg-canvas font-mono"
+              aria-label="From date"
+            />
+            <span className="text-muted text-xs">→</span>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="h-8 px-2 text-xs rounded-md border border-default bg-canvas font-mono"
+              aria-label="To date"
+            />
+            {/* View mode */}
             <select
               value={viewMode}
               onChange={(e) => setViewMode(e.target.value as 'Day' | 'Week' | 'Month')}
@@ -85,10 +128,16 @@ export default function ProductionSchedulePage() {
               </Button>
             )}
             {canConfirm && latestProposal.length > 0 && (
-              <Button size="sm" variant="primary" icon={<Check size={14} />}
-                onClick={() => confirm.mutate(latestProposal.map((p) => p.id))} loading={confirm.isPending}>
-                Confirm {latestProposal.length} schedule{latestProposal.length === 1 ? '' : 's'}
-              </Button>
+              <>
+                <Button size="sm" variant="primary" icon={<Check size={14} />}
+                  onClick={() => confirm.mutate(latestProposal.map((p) => p.id))} loading={confirm.isPending}>
+                  Confirm {latestProposal.length} schedule{latestProposal.length === 1 ? '' : 's'}
+                </Button>
+                <Button size="sm" variant="ghost" icon={<X size={14} />}
+                  onClick={() => { setLatestProposal([]); setLatestConflicts([]); }}>
+                  Discard
+                </Button>
+              </>
             )}
           </div>
         }
@@ -115,6 +164,40 @@ export default function ProductionSchedulePage() {
           </Panel>
         )}
 
+        {/* Machine filter */}
+        {allMachines.length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-muted">Filter machines:</span>
+            {allMachines.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() =>
+                  setMachineFilter((prev) =>
+                    prev.includes(m.id) ? prev.filter((x) => x !== m.id) : [...prev, m.id],
+                  )
+                }
+                className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${
+                  machineFilter.includes(m.id)
+                    ? 'bg-primary text-primary-fg border-primary'
+                    : 'border-default text-muted hover:border-primary'
+                }`}
+              >
+                {m.machine_code ?? m.name}
+              </button>
+            ))}
+            {machineFilter.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setMachineFilter([])}
+                className="text-xs text-muted hover:text-danger"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        )}
+
         <Panel title="Gantt" noPadding>
           {snapshot.isLoading && !snapshot.data && <SkeletonTable columns={4} rows={6} />}
           {snapshot.isError && (
@@ -123,7 +206,7 @@ export default function ProductionSchedulePage() {
           )}
           {snapshot.data && (
             <GanttChart
-              rows={snapshot.data.rows}
+              rows={filteredRows}
               viewMode={viewMode}
               onBarClick={(woId) => navigate(`/production/work-orders/${woId}`)}
             />
