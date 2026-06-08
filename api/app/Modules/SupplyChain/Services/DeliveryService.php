@@ -485,6 +485,7 @@ class DeliveryService
 
         $orderedByItem = DB::table('sales_order_items')
             ->where('sales_order_id', $salesOrderId)
+            ->where('quantity', '>', 0)
             ->pluck('quantity', 'id');
 
         if ($orderedByItem->isEmpty()) {

@@ -15,6 +15,7 @@ use App\Modules\CRM\Models\SalesOrderItem;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
@@ -544,7 +545,9 @@ class SalesOrderService
             return;
         }
 
-        DB::transaction(function () use ($salesOrderId, $target) {
+        $broadcastFromTo = null;
+
+        DB::transaction(function () use ($salesOrderId, $target, &$broadcastFromTo) {
             $so = SalesOrder::lockForUpdate()->find($salesOrderId);
             if (! $so) {
                 return;
@@ -559,7 +562,7 @@ class SalesOrderService
 
             $allowed = self::ALLOWED_TRANSITIONS[$currentValue ?? ''] ?? [];
             if (! in_array($target->value, $allowed, true)) {
-                \Illuminate\Support\Facades\Log::debug('SalesOrder transition skipped', [
+                Log::debug('SalesOrder transition skipped', [
                     'sales_order_id' => $so->id,
                     'from'           => $currentValue,
                     'to'             => $target->value,
@@ -568,7 +571,15 @@ class SalesOrderService
             }
 
             $so->update(['status' => $target->value]);
+            $broadcastFromTo = [$so->fresh(), $currentValue, $target->value];
         });
+
+        if ($broadcastFromTo !== null) {
+            [$so, $from, $to] = $broadcastFromTo;
+            DB::afterCommit(function () use ($so, $to) {
+                app(\App\Common\Services\ChainBroadcaster::class)->broadcastFor($so, $to);
+            });
+        }
     }
 
     /** Stubbed chain payload — Sprint 6 Tasks 49–58 fill it. */
