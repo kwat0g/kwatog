@@ -40,12 +40,10 @@ export default function CreateAccountPage() {
     staleTime: 60_000,
   });
 
-  const { register, handleSubmit, watch, setValue, setError, formState: { errors } } = useForm<FormValues>({
+  const { register, handleSubmit, setValue, setError, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { type: 'asset', normal_balance: 'debit' },
   });
-
-  const watchType = watch('type') as AccountType | undefined;
 
   const mutation = useMutation({
     mutationFn: (data: FormValues) => accountsApi.create({
