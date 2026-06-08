@@ -6,6 +6,9 @@ namespace App\Modules\SupplyChain\Services;
 
 use App\Common\Support\SearchOperator;
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\NotificationService;
+use App\Common\Services\SettingsService;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
@@ -38,6 +41,8 @@ class DeliveryService
 {
     public function __construct(
         private readonly DocumentSequenceService $sequences,
+        private readonly SettingsService $settings,
+        private readonly NotificationService $notifications,
     ) {}
 
     public function list(array $filters): LengthAwarePaginator
@@ -325,6 +330,18 @@ class DeliveryService
                     'delivery_id' => $locked->id,
                     'error'       => $e->getMessage(),
                 ]);
+
+                // C-1 — surface the failure to AR clerks so manual invoicing can
+                // be triaged. Wrap in its own try/catch so a notification-side
+                // failure cannot bubble up and abort the delivery confirm.
+                try {
+                    $this->notifyAutoInvoiceFailure($locked, $e->getMessage());
+                } catch (\Throwable $notifyError) {
+                    Log::warning('Auto-invoice failure notification dispatch failed', [
+                        'delivery_id' => $locked->id,
+                        'error'       => $notifyError->getMessage(),
+                    ]);
+                }
             }
 
             // Task A4 — fan out a DeliveryConfirmed event after commit so
@@ -348,13 +365,31 @@ class DeliveryService
         $d->loadMissing(['salesOrder.customer', 'items.salesOrderItem.product']);
         if (! $d->salesOrder?->customer) return null;
 
+        // C-1 — Resolve the default revenue account once per call. Falls back
+        // to '4010' (Sales Revenue) if the setting was never seeded.
+        $defaultCode      = (string) $this->settings->get('accounting.default_sales_revenue_account_code', '4010');
+        $defaultAccountId = $defaultCode === ''
+            ? null
+            : Account::query()->where('code', $defaultCode)->value('id');
+
         $customerHashId = app('hashids')->encode($d->salesOrder->customer_id);
-        $items = $d->items->map(fn (DeliveryItem $i) => [
-            'description' => $i->salesOrderItem?->product?->name ?? 'Delivery line',
-            'quantity'    => (string) $i->quantity,
-            'unit_price'  => (string) $i->unit_price,
-            'amount'      => bcmul((string) $i->quantity, (string) $i->unit_price, 2),
-        ])->all();
+        $hashids        = app('hashids');
+
+        $items = $d->items->map(function (DeliveryItem $i) use ($defaultAccountId, $hashids) {
+            $revenueId = $i->salesOrderItem?->product?->revenue_account_id
+                ?? $defaultAccountId;
+
+            if (! $revenueId) {
+                throw new RuntimeException('Default revenue account not configured.');
+            }
+
+            return [
+                'revenue_account_id' => $hashids->encode((int) $revenueId),
+                'description'        => $i->salesOrderItem?->product?->name ?? 'Delivery line',
+                'quantity'           => (string) $i->quantity,
+                'unit_price'         => (string) $i->unit_price,
+            ];
+        })->all();
 
         $invoice = $svc->create([
             'customer_id' => $customerHashId,
@@ -365,6 +400,32 @@ class DeliveryService
         ], $by);
 
         return (int) $invoice->id;
+    }
+
+    /**
+     * C-1 — Notify AR clerks (anyone with accounting.invoices.create) that an
+     * auto-invoice attempt failed so they can triage manual invoicing.
+     */
+    private function notifyAutoInvoiceFailure(Delivery $d, string $errorMessage): void
+    {
+        $recipients = User::query()
+            ->where('is_active', true)
+            ->whereHas('role.permissions', fn ($q) => $q->where('slug', 'accounting.invoices.create'))
+            ->get();
+
+        if ($recipients->isEmpty()) {
+            return;
+        }
+
+        $body = mb_substr($errorMessage, 0, 255);
+
+        $this->notifications->send($recipients, 'invoice.auto_failed', [
+            'title'       => "Auto-invoice failed for delivery {$d->delivery_number}",
+            'message'     => $body,
+            'link_to'     => "/supply-chain/deliveries/{$d->hash_id}",
+            'entity_type' => 'delivery',
+            'entity_id'   => $d->hash_id,
+        ]);
     }
 
     public function delete(Delivery $d): void

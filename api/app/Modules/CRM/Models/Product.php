@@ -6,9 +6,11 @@ namespace App\Modules\CRM\Models;
 
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
+use App\Modules\Accounting\Models\Account;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -23,7 +25,7 @@ class Product extends Model
 
     protected $fillable = [
         'part_number', 'name', 'description', 'unit_of_measure',
-        'standard_cost', 'is_active',
+        'standard_cost', 'revenue_account_id', 'is_active',
     ];
 
     protected $casts = [
@@ -39,6 +41,16 @@ class Product extends Model
     public function salesOrderItems(): HasMany
     {
         return $this->hasMany(SalesOrderItem::class);
+    }
+
+    /**
+     * C-1 — optional override for the GL revenue account used by the delivery
+     * auto-invoice flow. Falls back to the setting
+     * `accounting.default_sales_revenue_account_code` (default '4010') when null.
+     */
+    public function revenueAccount(): BelongsTo
+    {
+        return $this->belongsTo(Account::class, 'revenue_account_id');
     }
 
     public function scopeActive(Builder $q): Builder

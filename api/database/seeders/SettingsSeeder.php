@@ -30,6 +30,13 @@ class SettingsSeeder extends Seeder
         // Approval thresholds
         $settings->set('approval.po.vp_threshold', 50000, 'approval');
 
+        // C-1 — Default revenue account for auto-generated invoices on delivery
+        // confirm. Falls back via SettingsService->get(
+        //   'accounting.default_sales_revenue_account_code', '4010'
+        // ). Code 4010 ('Sales Revenue') exists in ChartOfAccountsSeeder; 4000 is
+        // the parent group ('Revenue') and is not a postable account.
+        $settings->set('accounting.default_sales_revenue_account_code', '4010', 'accounting');
+
         // Sprint 5 — Purchasing tolerances + auto-replenishment.
         $settings->set('purchasing.three_way_tolerance_qty_pct',   5.0, 'purchasing');
         $settings->set('purchasing.three_way_tolerance_price_pct', 5.0, 'purchasing');
