@@ -332,16 +332,19 @@ class DeliveryService
                 ]);
 
                 // C-1 — surface the failure to AR clerks so manual invoicing can
-                // be triaged. Wrap in its own try/catch so a notification-side
-                // failure cannot bubble up and abort the delivery confirm.
-                try {
-                    $this->notifyAutoInvoiceFailure($locked, $e->getMessage());
-                } catch (\Throwable $notifyError) {
-                    Log::warning('Auto-invoice failure notification dispatch failed', [
-                        'delivery_id' => $locked->id,
-                        'error'       => $notifyError->getMessage(),
-                    ]);
-                }
+                // be triaged. Defer past commit so the row lock is released first
+                // and a slow notification path can't extend lock hold time.
+                $deliveryForNotify = $locked;
+                DB::afterCommit(function () use ($deliveryForNotify) {
+                    try {
+                        $this->notifyAutoInvoiceFailure($deliveryForNotify);
+                    } catch (\Throwable $notifyError) {
+                        Log::warning('Auto-invoice failure notification dispatch failed', [
+                            'delivery_id' => $deliveryForNotify->id,
+                            'error'       => $notifyError->getMessage(),
+                        ]);
+                    }
+                });
             }
 
             // Task A4 — fan out a DeliveryConfirmed event after commit so
@@ -404,11 +407,14 @@ class DeliveryService
 
     /**
      * C-1 — Notify AR clerks (anyone with accounting.invoices.create) that an
-     * auto-invoice attempt failed so they can triage manual invoicing.
+     * auto-invoice attempt failed so they can triage manual invoicing. The
+     * exception detail is in Log::error already; the user-visible body is a
+     * generic, non-leaky message.
      */
-    private function notifyAutoInvoiceFailure(Delivery $d, string $errorMessage): void
+    private function notifyAutoInvoiceFailure(Delivery $d): void
     {
         $recipients = User::query()
+            ->whereNull('deleted_at')
             ->where('is_active', true)
             ->whereHas('role.permissions', fn ($q) => $q->where('slug', 'accounting.invoices.create'))
             ->get();
@@ -417,11 +423,9 @@ class DeliveryService
             return;
         }
 
-        $body = mb_substr($errorMessage, 0, 255);
-
         $this->notifications->send($recipients, 'invoice.auto_failed', [
             'title'       => "Auto-invoice failed for delivery {$d->delivery_number}",
-            'message'     => $body,
+            'message'     => 'Auto-invoice could not be created automatically. Please create the invoice manually.',
             'link_to'     => "/supply-chain/deliveries/{$d->hash_id}",
             'entity_type' => 'delivery',
             'entity_id'   => $d->hash_id,
