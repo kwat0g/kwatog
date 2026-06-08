@@ -38,6 +38,13 @@ import {
   MessageSquare,
   ClipboardList,
   GitFork,
+  ListTree,
+  Cpu,
+  Activity,
+  Network,
+  UserMinus,
+  BadgeCheck,
+  SlidersHorizontal,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
@@ -97,9 +104,14 @@ const SECTIONS: NavSection[] = [
   {
     label: 'Production',
     items: [
-      { to: '/production/work-orders', label: 'Work Orders',      icon: FileText,      feature: 'production', permission: 'production.work_orders.view', badgeKey: 'work_orders' },
-      { to: '/mrp/plans',              label: 'MRP Plans',        icon: Layers,        feature: 'mrp', permission: 'mrp.plans.view' },
-      { to: '/production/schedule',    label: 'Schedule (Gantt)', icon: CalendarClock, feature: 'production', permission: 'production.schedule.view' },
+      { to: '/production/dashboard',   label: 'Dashboard',         icon: LayoutDashboard, feature: 'production', permission: 'production.dashboard.view' },
+      { to: '/production/work-orders', label: 'Work Orders',       icon: FileText,        feature: 'production', permission: 'production.work_orders.view', badgeKey: 'work_orders' },
+      { to: '/production/schedule',    label: 'Schedule (Gantt)',  icon: CalendarClock,   feature: 'production', permission: 'production.schedule.view' },
+      { to: '/production/oee',         label: 'OEE Report',        icon: Activity,        feature: 'production', permission: 'production.dashboard.view' },
+      { to: '/mrp/plans',              label: 'MRP Plans',         icon: Layers,          feature: 'mrp', permission: 'mrp.plans.view' },
+      { to: '/mrp/boms',               label: 'Bill of Materials', icon: ListTree,        feature: 'mrp', permission: 'mrp.boms.view' },
+      { to: '/mrp/machines',           label: 'Machines',          icon: Cpu,             feature: 'mrp', permission: 'mrp.machines.view' },
+      { to: '/mrp/molds',              label: 'Molds',             icon: Package,         feature: 'mrp', permission: 'mrp.molds.view' },
     ],
   },
   {
