@@ -8,7 +8,7 @@ use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 
 /**
- * Password policy: min 8 + at least one uppercase + one digit + one special.
+ * Password policy: min 8 + at least one uppercase + one lowercase + one digit + one special.
  */
 class StrongPassword implements ValidationRule
 {
@@ -20,6 +20,10 @@ class StrongPassword implements ValidationRule
         }
         if (! preg_match('/[A-Z]/', $value)) {
             $fail('The :attribute must include at least one uppercase letter.');
+            return;
+        }
+        if (! preg_match('/[a-z]/', $value)) {
+            $fail('The :attribute must include at least one lowercase letter.');
             return;
         }
         if (! preg_match('/[0-9]/', $value)) {

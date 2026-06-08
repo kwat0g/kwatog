@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Common\Services\SettingsService;
+use App\Common\Support\ProductionAssertions;
 use App\Common\Models\ApprovalRecord;
 use App\Modules\Attendance\Events\OvertimeRequestDecided;
 use App\Modules\Attendance\Events\OvertimeRequestSubmitted;
@@ -78,11 +79,11 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        // Fail fast if production is misconfigured with debug on — prevents
-        // leaking stack traces, query bindings, and secrets in error responses.
-        if ($this->app->isProduction() && (bool) config('app.debug') === true) {
-            throw new \RuntimeException('APP_DEBUG must be false in production.');
-        }
+        // Phase 2 Task 12 — fail fast in production if any security-critical
+        // setting is at its dev default (HASHIDS_SALT, APP_DEBUG, APP_KEY).
+        // No-op in non-production environments so tests / local dev are not
+        // affected. See App\Common\Support\ProductionAssertions for the rules.
+        ProductionAssertions::assertSafeOrFail();
 
         // Series E (Task E2) — register exportable columns once per process.
         // ColumnSelectorModal in the SPA reads these from

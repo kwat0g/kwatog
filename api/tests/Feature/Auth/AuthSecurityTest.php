@@ -158,7 +158,7 @@ class AuthSecurityTest extends TestCase
         for ($i = 0; $i < 3; $i++) {
             $this->postJson('/api/v1/auth/login', [
                 'email'    => $user->email,
-                'password' => 'wrong-'.$i,
+                'password' => 'wrong-pwd-'.$i,
             ])->assertStatus(422);
         }
         $this->assertSame(3, (int) $user->fresh()->failed_login_attempts);
@@ -279,7 +279,7 @@ class AuthSecurityTest extends TestCase
         for ($i = 0; $i < 6; $i++) {
             $statuses[] = $this->postJson('/api/v1/auth/login', [
                 'email'    => $user->email,
-                'password' => 'wrong-'.$i,
+                'password' => 'wrong-pwd-'.$i,
             ])->getStatusCode();
         }
 
