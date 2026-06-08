@@ -68,8 +68,9 @@ class CreateDeliveryDraftOnQcPass implements ShouldQueue
                 if ($wo->sales_order_item_id) {
                     // L-7 — inherit unit_price from the parent SO line so the
                     // auto-invoice path (C-1) produces a real-amount invoice.
-                    // Fallback to '0.00' only if the SO item is missing (legacy
-                    // data path) — better than failing the delivery draft.
+                    // SalesOrderItem::find returns null only if the row is hard
+                    // deleted out from under a live WO — defensive only; in
+                    // normal operation the FK guarantees presence.
                     $soItem = SalesOrderItem::find($wo->sales_order_item_id);
                     $unitPrice = $soItem?->unit_price !== null ? (string) $soItem->unit_price : '0.00';
 

@@ -584,7 +584,10 @@ class SalesOrderService
         }
     }
 
-    /** Stubbed chain payload — Sprint 6 Tasks 49–58 fill it. */
+    /**
+     * Chain payload — qc_outgoing derived from real Inspection state (H-4);
+     * other 5 stages still derive from the SO's own status field.
+     */
     public function chain(SalesOrder $so): array
     {
         $confirmedDate = $so->status !== SalesOrderStatus::Draft ? $so->updated_at?->toDateString() : null;
