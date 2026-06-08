@@ -117,8 +117,9 @@ const SECTIONS: NavSection[] = [
   {
     label: 'Procurement',
     items: [
-      { to: '/purchasing/purchase-orders',   label: 'Purchase Orders',   icon: ShoppingCart, feature: 'purchasing', permission: 'purchasing.view', badgeKey: 'purchase_requests' },
-      { to: '/purchasing/purchase-requests', label: 'Purchase Requests', icon: FileText,     feature: 'purchasing', permission: 'purchasing.view' },
+      { to: '/purchasing/purchase-orders',    label: 'Purchase Orders',    icon: ShoppingCart, feature: 'purchasing', permission: 'purchasing.view', badgeKey: 'purchase_requests' },
+      { to: '/purchasing/purchase-requests',  label: 'Purchase Requests',  icon: FileText,     feature: 'purchasing', permission: 'purchasing.view' },
+      { to: '/purchasing/approved-suppliers', label: 'Approved Suppliers', icon: BadgeCheck,   feature: 'purchasing', permission: 'purchasing.view' },
     ],
   },
   {
@@ -166,10 +167,15 @@ const SECTIONS: NavSection[] = [
   {
     label: 'Human Resources',
     items: [
-      { to: '/hr/employees',      label: 'Employees',     icon: Users,        feature: 'hr', permission: 'hr.employees.view', badgeKey: 'profile_requests' },
-      { to: '/hr/attendance',     label: 'Attendance',     icon: Clock4,      feature: 'attendance', permission: 'attendance.view', badgeKey: 'leaves' },
-      { to: '/hr/leaves',         label: 'Leave',         icon: CalendarDays, feature: 'leave', permission: 'leave.view' },
-      { to: '/payroll/periods',   label: 'Payroll',       icon: Wallet,       feature: 'payroll', permission: 'payroll.view', badgeKey: 'payroll' },
+      { to: '/hr/employees',        label: 'Employees',    icon: Users,             feature: 'hr',         permission: 'hr.employees.view', badgeKey: 'profile_requests' },
+      { to: '/hr/departments',      label: 'Departments',  icon: Building2,         feature: 'hr',         permission: 'hr.departments.view' },
+      { to: '/hr/positions',        label: 'Positions',    icon: Briefcase,         feature: 'hr',         permission: 'hr.positions.view' },
+      { to: '/hr/directory',        label: 'Directory',    icon: Network,           feature: 'hr',         permission: 'hr.directory.view' },
+      { to: '/hr/separations',      label: 'Separations',  icon: UserMinus,         feature: 'hr',         permission: 'hr.separation.view' },
+      { to: '/hr/attendance',       label: 'Attendance',   icon: Clock4,            feature: 'attendance', permission: 'attendance.view', badgeKey: 'leaves' },
+      { to: '/hr/leaves',           label: 'Leave',        icon: CalendarDays,      feature: 'leave',      permission: 'leave.view' },
+      { to: '/payroll/periods',     label: 'Payroll',      icon: Wallet,            feature: 'payroll',    permission: 'payroll.view', badgeKey: 'payroll' },
+      { to: '/payroll/adjustments', label: 'Adjustments',  icon: SlidersHorizontal, feature: 'payroll',    permission: 'payroll.view' },
     ],
   },
   {
