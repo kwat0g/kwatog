@@ -6,6 +6,7 @@ namespace App\Modules\Quality\Listeners;
 
 use App\Common\Services\DocumentSequenceService;
 use App\Modules\Auth\Models\User;
+use App\Modules\CRM\Models\SalesOrderItem;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Events\InspectionPassed;
@@ -59,15 +60,25 @@ class CreateDeliveryDraftOnQcPass implements ShouldQueue
                     'status'          => DeliveryStatus::Scheduled->value,
                     'scheduled_date'  => Carbon::now()->addDay()->toDateString(),
                     'notes'           => "Auto-drafted from WO {$wo->wo_number} on outgoing QC pass.",
+                    // System-initiated draft — attribute to the WO creator so
+                    // the NOT NULL constraint on deliveries.created_by holds.
+                    'created_by'      => $wo->created_by,
                 ]);
 
                 if ($wo->sales_order_item_id) {
+                    // L-7 — inherit unit_price from the parent SO line so the
+                    // auto-invoice path (C-1) produces a real-amount invoice.
+                    // Fallback to '0.00' only if the SO item is missing (legacy
+                    // data path) — better than failing the delivery draft.
+                    $soItem = SalesOrderItem::find($wo->sales_order_item_id);
+                    $unitPrice = $soItem?->unit_price !== null ? (string) $soItem->unit_price : '0.00';
+
                     DeliveryItem::create([
                         'delivery_id'         => $delivery->id,
                         'sales_order_item_id' => $wo->sales_order_item_id,
                         'inspection_id'      => $inspection->id,
                         'quantity'           => (string) ($wo->quantity_good ?: $wo->quantity_produced ?: 0),
-                        'unit_price'         => '0.00',
+                        'unit_price'         => $unitPrice,
                     ]);
                 }
             });

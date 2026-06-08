@@ -12,6 +12,8 @@ use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
+use App\Modules\Quality\Enums\InspectionEntityType;
+use App\Modules\Quality\Enums\InspectionStage;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -586,6 +588,7 @@ class SalesOrderService
     public function chain(SalesOrder $so): array
     {
         $confirmedDate = $so->status !== SalesOrderStatus::Draft ? $so->updated_at?->toDateString() : null;
+        $qc = $this->deriveOutgoingQcStage($so);
 
         return [
             ['key' => 'order_entered', 'label' => 'Order Entered',
@@ -597,11 +600,51 @@ class SalesOrderService
             ['key' => 'in_production', 'label' => 'In Production',
              'date' => null,
              'state' => $so->status === SalesOrderStatus::InProduction ? 'active' : 'pending'],
-            ['key' => 'qc_outgoing', 'label' => 'QC Outgoing', 'date' => null, 'state' => 'pending'],
+            ['key' => 'qc_outgoing', 'label' => 'QC Outgoing', 'date' => $qc['date'], 'state' => $qc['state']],
             ['key' => 'delivered', 'label' => 'Delivered', 'date' => null,
              'state' => in_array($so->status, [SalesOrderStatus::Delivered, SalesOrderStatus::Invoiced], true) ? 'done' : 'pending'],
             ['key' => 'invoiced', 'label' => 'Invoiced', 'date' => null,
              'state' => $so->status === SalesOrderStatus::Invoiced ? 'done' : 'pending'],
         ];
+    }
+
+    /**
+     * H-4 — Derive the outgoing-QC chain stage from the latest outgoing
+     * Inspection joined via WO → SO. Single SQL query, no N+1.
+     *
+     * States:
+     *   pending — no outgoing inspection exists for any WO of this SO
+     *   done    — latest outgoing inspection passed; date = completed_at
+     *   failed  — latest outgoing inspection failed; date = completed_at
+     *   active  — latest exists but not yet terminal (draft / in_progress /
+     *             cancelled treated as in-flight); date = started_at
+     *
+     * @return array{state: string, date: ?string}
+     */
+    private function deriveOutgoingQcStage(SalesOrder $so): array
+    {
+        $row = DB::table('inspections as i')
+            ->join('work_orders as w', function ($j) {
+                $j->on('w.id', '=', 'i.entity_id')
+                  ->where('i.entity_type', '=', InspectionEntityType::WorkOrder->value);
+            })
+            ->where('w.sales_order_id', $so->id)
+            ->where('i.stage', InspectionStage::Outgoing->value)
+            ->orderByDesc('i.id')
+            ->select('i.status', 'i.started_at', 'i.completed_at')
+            ->first();
+
+        if ($row === null) {
+            return ['state' => 'pending', 'date' => null];
+        }
+
+        $status = (string) $row->status;
+        if ($status === 'passed') {
+            return ['state' => 'done', 'date' => optional(Carbon::parse($row->completed_at))->toDateString()];
+        }
+        if ($status === 'failed') {
+            return ['state' => 'failed', 'date' => optional(Carbon::parse($row->completed_at))->toDateString()];
+        }
+        return ['state' => 'active', 'date' => optional(Carbon::parse($row->started_at))->toDateString()];
     }
 }
