@@ -182,14 +182,12 @@ class AuthService
 
         // Mirror to audit_logs so the Admin Audit Log UI can surface auth
         // events. Best-effort — never block authentication on a logging
-        // failure. The `action` column is varchar(20), so the one event
-        // name that exceeds that ('login.locked_threshold', 22 chars) is
-        // mapped to a shorter slug. The Log::channel('auth') sink above
-        // keeps the long form for low-level debugging.
+        // failure. action column was widened to varchar(40) in 0176 so the
+        // long-form event name is preserved verbatim alongside the file log.
         try {
             AuditLog::create([
                 'user_id'    => $user->id,
-                'action'     => $this->auditActionFor($event),
+                'action'     => $event,
                 'model_type' => 'auth.event',
                 'model_id'   => $user->id,
                 'old_values' => null,
@@ -205,18 +203,5 @@ class AuthService
                 'error'   => $e->getMessage(),
             ]);
         }
-    }
-
-    /**
-     * Map a long-form auth event name onto something that fits the
-     * varchar(20) `audit_logs.action` column. Today only one event needs
-     * shortening; all others pass through unchanged.
-     */
-    private function auditActionFor(string $event): string
-    {
-        return match ($event) {
-            'login.locked_threshold' => 'login.lockout',
-            default                  => $event,
-        };
     }
 }

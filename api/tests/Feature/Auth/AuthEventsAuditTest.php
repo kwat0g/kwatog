@@ -119,14 +119,13 @@ class AuthEventsAuditTest extends TestCase
             ->count();
         $this->assertSame(5, $failed, 'Each failed attempt writes a login.failed row');
 
-        // The 5th attempt also stamps the threshold-crossed event. The action
-        // is shortened to 'login.lockout' to fit varchar(20); see
-        // AuthService::auditActionFor.
+        // The 5th attempt also stamps the threshold-crossed event. action
+        // column was widened in 0176 so the full event name is preserved.
         $lockout = AuditLog::where('model_type', 'auth.event')
-            ->where('action', 'login.lockout')
+            ->where('action', 'login.locked_threshold')
             ->where('model_id', $user->id)
             ->count();
-        $this->assertSame(1, $lockout, '5th failure writes one login.lockout row');
+        $this->assertSame(1, $lockout, '5th failure writes one login.locked_threshold row');
     }
 
     public function test_logout_writes_audit_row(): void
