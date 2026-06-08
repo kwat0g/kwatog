@@ -8,7 +8,7 @@ export const materialIssuesApi = {
   show: (id: string) =>
     client.get<ApiSuccess<MaterialIssueSlip>>(`/inventory/material-issues/${id}`).then((r) => r.data.data),
   create: (data: {
-    work_order_id?: number | null;
+    work_order_id?: string | number | null;
     issued_date: string;
     reference_text?: string;
     remarks?: string;

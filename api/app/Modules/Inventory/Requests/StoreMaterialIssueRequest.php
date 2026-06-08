@@ -7,6 +7,7 @@ namespace App\Modules\Inventory\Requests;
 use App\Common\Concerns\ResolvesHashIds;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\WarehouseLocation;
+use App\Modules\Production\Models\WorkOrder;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreMaterialIssueRequest extends FormRequest
@@ -21,6 +22,7 @@ class StoreMaterialIssueRequest extends FormRequest
     protected function hashIdFields(): array
     {
         return [
+            'work_order_id'       => WorkOrder::class,
             'items.*.item_id'     => Item::class,
             'items.*.location_id' => WarehouseLocation::class,
         ];

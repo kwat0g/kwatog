@@ -38,7 +38,8 @@ export default function MaterialIssuesListPage() {
       {isError && <EmptyState icon="alert-circle" title="Failed to load" action={<Button onClick={() => refetch()}>Retry</Button>} />}
       {data && data.data.length === 0 && (
         <EmptyState icon="inbox" title="No issuance yet"
-          description="Material issuance is wired in Sprint 6 once work orders exist." />
+          description="Issue materials against a work order or a free-text reference."
+          action={<Link to="/inventory/material-issues/create"><Button>New material issue</Button></Link>} />
       )}
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
