@@ -21,7 +21,7 @@ class NotifyFinanceOnDeliveryConfirmed implements ShouldQueue
             $invoice = $event->invoiceId ? Invoice::find($event->invoiceId) : null;
 
             $message = $invoice
-                ? "Delivery {$event->delivery->delivery_number} confirmed. Draft invoice {$invoice->invoice_number} ready."
+                ? "Delivery {$event->delivery->delivery_number} confirmed. Draft invoice {$invoice->invoice_number ?? '(draft)'} ready."
                 : "Delivery {$event->delivery->delivery_number} confirmed. Manual invoicing required.";
 
             $link = $invoice

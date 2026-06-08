@@ -14,9 +14,7 @@ class InvoiceResource extends JsonResource
     {
         return [
             'id'             => $this->hash_id,
-            'invoice_number' => str_starts_with((string) $this->invoice_number, 'DRAFT-')
-                ? null
-                : $this->invoice_number,
+            'invoice_number' => $this->invoice_number,
             'date'           => optional($this->date)->toDateString(),
             'due_date'       => optional($this->due_date)->toDateString(),
             'is_vatable'     => (bool) $this->is_vatable,

@@ -88,7 +88,7 @@ class InvoiceService
 
             $invoice = Invoice::create([
                 // Number reserved at finalize-time so drafts that get cancelled don't burn numbers.
-                'invoice_number' => 'DRAFT-' . substr(bin2hex(random_bytes(4)), 0, 8),
+                'invoice_number' => null,
                 'customer_id'    => $customer->id,
                 'date'           => $data['date'],
                 'due_date'       => $data['due_date']
