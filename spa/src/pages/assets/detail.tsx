@@ -1,6 +1,6 @@
 /** Sprint 8 — Task 70. Asset detail with depreciation history + dispose modal. */
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { assetsApi } from '@/api/assets';
@@ -12,11 +12,13 @@ import { StatCard } from '@/components/ui/StatCard';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
+import { Pencil } from 'lucide-react';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 
 export default function AssetDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const { can } = usePermission();
   const [disposeOpen, setDisposeOpen] = useState(false);
@@ -64,6 +66,11 @@ export default function AssetDetailPage() {
             <Chip variant={data.status === 'active' ? 'success' : data.status === 'under_maintenance' ? 'warning' : 'neutral'}>
               {data.status.replace('_', ' ')}
             </Chip>
+            {can('assets.create') && (
+              <Button variant="secondary" size="sm" onClick={() => navigate(`/assets/${id}/edit`)}>
+                <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
+              </Button>
+            )}
             {data.status === 'active' && can('assets.dispose') && (
               <Button variant="danger" size="sm" onClick={() => setDisposeOpen(true)}>Dispose</Button>
             )}
