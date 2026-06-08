@@ -22,6 +22,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { itemsApi } from '@/api/inventory/items';
 import { bomsApi } from '@/api/mrp/boms';
 import type { CreateBomData } from '@/api/mrp/boms';
+import type { Path } from 'react-hook-form';
 
 const itemSchema = z.object({
   item_id:           z.string().min(1, 'Item is required'),
@@ -57,7 +58,7 @@ export default function EditBomPage() {
   });
 
   const {
-    register, control, handleSubmit, setError, watch,
+    register, control, handleSubmit, setError, setValue, watch,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -101,7 +102,7 @@ export default function EditBomPage() {
     onError: (e: AxiosError<{ message?: string; errors?: Record<string, string[]> }>) => {
       if (e.response?.status === 422 && e.response.data.errors) {
         Object.entries(e.response.data.errors).forEach(([field, msgs]) => {
-          setError(field as never, { type: 'server', message: msgs[0] });
+          setError(field as Path<FormValues>, { type: 'server', message: msgs[0] });
         });
         toast.error(e.response?.data?.message || 'Validation failed.');
       } else {
@@ -113,9 +114,8 @@ export default function EditBomPage() {
   // Auto-fill UOM when a new item row's item is picked.
   const handleItemPicked = (rowIndex: number, itemId: string) => {
     const picked = items.data?.data.find((it: { id: string; unit_of_measure?: string }) => it.id === itemId);
-    if (picked && watchedItems[rowIndex] && !watchedItems[rowIndex].unit) {
-      const ev = { target: { value: picked.unit_of_measure, name: `items.${rowIndex}.unit` } };
-      register(`items.${rowIndex}.unit`).onChange(ev as never);
+    if (picked?.unit_of_measure && !watchedItems[rowIndex]?.unit) {
+      setValue(`items.${rowIndex}.unit`, picked.unit_of_measure);
     }
   };
 
