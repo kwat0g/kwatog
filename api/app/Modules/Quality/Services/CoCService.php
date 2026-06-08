@@ -37,6 +37,38 @@ class CoCService
     public function generateForInspection(Inspection $inspection, ?string $deliveryNumber = null): Response
     {
         $this->assertEligible($inspection);
+        [$cocNumber, $payload] = $this->buildPayload($inspection, $deliveryNumber);
+
+        return Pdf::loadView('pdf.coc', $payload)
+            ->setPaper('a4')
+            ->stream("CoC-{$cocNumber}.pdf");
+    }
+
+    /**
+     * M-20 — Like generateForInspection but returns the raw PDF bytes + a
+     * deterministic filename, so the caller can persist the PDF (e.g. attach
+     * to a Delivery as a DeliveryProof row).
+     *
+     * @return array{file_name: string, contents: string, coc_number: string}
+     */
+    public function buildBinaryForInspection(Inspection $inspection, ?string $deliveryNumber = null): array
+    {
+        $this->assertEligible($inspection);
+        [$cocNumber, $payload] = $this->buildPayload($inspection, $deliveryNumber);
+
+        $pdf = Pdf::loadView('pdf.coc', $payload)->setPaper('a4');
+        return [
+            'file_name'  => "CoC-{$cocNumber}.pdf",
+            'contents'   => $pdf->output(),
+            'coc_number' => $cocNumber,
+        ];
+    }
+
+    /**
+     * @return array{0: string, 1: array<string, mixed>}
+     */
+    private function buildPayload(Inspection $inspection, ?string $deliveryNumber): array
+    {
         $inspection->loadMissing(['product', 'inspector']);
 
         // ADV3 — IATF 16949 traceability: pull batch / lot / material lot refs.
@@ -66,9 +98,7 @@ class CoCService
             'material_lot_references' => $materialLotRefs,
         ];
 
-        return Pdf::loadView('pdf.coc', $payload)
-            ->setPaper('a4')
-            ->stream("CoC-{$cocNumber}.pdf");
+        return [$cocNumber, $payload];
     }
 
     private function assertEligible(Inspection $inspection): void

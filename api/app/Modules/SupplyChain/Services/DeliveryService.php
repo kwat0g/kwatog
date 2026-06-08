@@ -16,10 +16,12 @@ use App\Modules\Quality\Enums\InspectionEntityType;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Models\Inspection;
+use App\Modules\Quality\Services\CoCService;
 use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use App\Modules\SupplyChain\Events\DeliveryConfirmed;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\DeliveryItem;
+use App\Modules\SupplyChain\Models\DeliveryProof;
 use App\Modules\SupplyChain\Models\Vehicle;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -43,6 +45,7 @@ class DeliveryService
         private readonly DocumentSequenceService $sequences,
         private readonly SettingsService $settings,
         private readonly NotificationService $notifications,
+        private readonly CoCService $coc,
     ) {}
 
     public function list(array $filters): LengthAwarePaginator
@@ -315,6 +318,17 @@ class DeliveryService
             // Keep $d in sync with the locked copy so callers see the new state.
             $d->forceFill($patch);
 
+            // M-20 — Auto-attach CoC for each passed outgoing inspection linked
+            // to this delivery. Best-effort; never blocks confirm.
+            try {
+                $this->attachCertificatesOfConformance($locked, $by);
+            } catch (\Throwable $e) {
+                Log::warning('CoC auto-attach failed on delivery confirm', [
+                    'delivery_id' => $locked->id,
+                    'error'       => $e->getMessage(),
+                ]);
+            }
+
             // C-2 — Promote the parent SO based on delivered coverage. The
             // locked delivery has just been status-flipped inside this txn,
             // so Postgres MVCC sees the in-txn write when we aggregate below.
@@ -373,6 +387,76 @@ class DeliveryService
 
             return $delivery;
         });
+    }
+
+    /**
+     * M-20 — Auto-attach a CoC for each passed outgoing Inspection referenced
+     * by this delivery's items. Idempotent: skips inspections that already
+     * have a CoC attached to this delivery.
+     */
+    private function attachCertificatesOfConformance(Delivery $delivery, User $by): void
+    {
+        $delivery->loadMissing('items');
+
+        $inspectionIds = $delivery->items
+            ->pluck('inspection_id')
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($inspectionIds->isEmpty()) {
+            return;
+        }
+
+        $inspections = Inspection::query()
+            ->whereIn('id', $inspectionIds->all())
+            ->get()
+            ->keyBy('id');
+
+        foreach ($inspectionIds as $inspectionId) {
+            $inspection = $inspections->get($inspectionId);
+            if (! $inspection) {
+                continue;
+            }
+
+            $stage = $inspection->stage instanceof InspectionStage
+                ? $inspection->stage
+                : InspectionStage::from((string) $inspection->stage);
+            $status = $inspection->status instanceof InspectionStatus
+                ? $inspection->status
+                : InspectionStatus::from((string) $inspection->status);
+
+            if ($stage !== InspectionStage::Outgoing || $status !== InspectionStatus::Passed) {
+                continue;
+            }
+
+            $built = $this->coc->buildBinaryForInspection($inspection, $delivery->delivery_number);
+            $cocNumber = $built['coc_number'];
+
+            // Idempotency — file_name is deterministic from coc_number.
+            $alreadyAttached = DeliveryProof::query()
+                ->where('delivery_id', $delivery->id)
+                ->where('proof_type', 'coc')
+                ->where('file_name', 'LIKE', "CoC-{$cocNumber}%")
+                ->exists();
+            if ($alreadyAttached) {
+                continue;
+            }
+
+            $path = "deliveries/{$delivery->id}/proofs/coc-{$cocNumber}.pdf";
+            Storage::disk('local')->put($path, $built['contents']);
+
+            DeliveryProof::create([
+                'delivery_id' => $delivery->id,
+                'proof_type'  => 'coc',
+                'file_name'   => $built['file_name'],
+                'file_path'   => $path,
+                'file_size'   => strlen($built['contents']),
+                'mime_type'   => 'application/pdf',
+                'uploaded_by' => $by->id,
+                'notes'       => "Auto-generated from inspection #{$inspection->inspection_number}",
+            ]);
+        }
     }
 
     private function createDraftInvoice(Delivery $d, User $by): ?int

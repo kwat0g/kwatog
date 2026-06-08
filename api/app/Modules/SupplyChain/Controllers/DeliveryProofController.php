@@ -38,7 +38,7 @@ class DeliveryProofController
     public function store(Request $request, Delivery $delivery): JsonResponse
     {
         $validated = $request->validate([
-            'proof_type' => ['required', 'string', Rule::in(['signed_dr', 'photo', 'customer_po_confirmation', 'other'])],
+            'proof_type' => ['required', 'string', Rule::in(['signed_dr', 'photo', 'customer_po_confirmation', 'coc', 'other'])],
             'file'       => ['required', 'file', 'mimes:pdf,jpg,jpeg,png,heic,webp', 'max:10240'],
             'notes'      => ['nullable', 'string', 'max:500'],
         ]);
