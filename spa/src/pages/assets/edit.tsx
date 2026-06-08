@@ -48,13 +48,6 @@ export default function EditAssetPage() {
     staleTime: 300_000,
   });
 
-  // Resolve the asset's department hash_id to the numeric id used by the select options.
-  // deptData items use the same hash_id string as department.id on the asset.
-  // z.coerce.number() will coerce the string value from the <select> to a number on submit.
-  const resolvedDeptId = data?.department?.id
-    ? (deptData?.data?.find((d) => d.id === data.department!.id)?.id ?? undefined)
-    : undefined;
-
   const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     values: data
@@ -62,7 +55,7 @@ export default function EditAssetPage() {
           name: data.name,
           description: data.description ?? '',
           category: data.category,
-          department_id: resolvedDeptId as unknown as number | undefined,
+          department_id: undefined,
           acquisition_date: data.acquisition_date.slice(0, 10),
           acquisition_cost: data.acquisition_cost,
           useful_life_years: data.useful_life_years,
