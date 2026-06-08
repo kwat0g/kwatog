@@ -51,7 +51,7 @@ class PdfService
             'company' => $this->company(),
             'user'    => optional(request()->user())->name,
         ])->setPaper('a4');
-        $label = $invoice->invoice_number ?? "Draft-{$invoice->id}";
+        $label = $invoice->invoice_number ?? "Draft-{$invoice->hash_id}";
         return $pdf->stream("Invoice-{$label}.pdf");
     }
 

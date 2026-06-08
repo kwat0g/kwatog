@@ -13,6 +13,7 @@ use App\Modules\Auth\Models\User;
 use Database\Seeders\ChartOfAccountsSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -82,7 +83,7 @@ class InvoiceDraftNumberingTest extends TestCase
         $this->assertNull($draft->invoice_number, 'Draft invoices must not carry a placeholder number.');
 
         // Sanity: no DRAFT-* row was persisted.
-        $this->assertDatabaseMissing('invoices', ['id' => $draft->id, 'invoice_number' => 'DRAFT-%']);
+        $this->assertSame(0, DB::table('invoices')->where('invoice_number', 'like', 'DRAFT-%')->count());
         $this->assertSame(null, $draft->fresh()->invoice_number);
     }
 
