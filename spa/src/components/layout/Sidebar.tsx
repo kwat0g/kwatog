@@ -125,9 +125,11 @@ const SECTIONS: NavSection[] = [
   {
     label: 'Warehouse',
     items: [
-      { to: '/inventory/items',            label: 'Items',           icon: Boxes,    feature: 'inventory', permission: 'inventory.view', badgeKey: 'low_stock' },
-      { to: '/inventory/grn',             label: 'Receiving (GRN)', icon: Package,  feature: 'inventory', permission: 'inventory.view' },
-      { to: '/inventory/material-issues', label: 'Issuance',        icon: FileEdit, feature: 'inventory', permission: 'inventory.view' },
+      { to: '/inventory/items',            label: 'Items',           icon: Boxes,          feature: 'inventory', permission: 'inventory.view', badgeKey: 'low_stock' },
+      { to: '/inventory/grn',              label: 'Receiving (GRN)', icon: Package,        feature: 'inventory', permission: 'inventory.view' },
+      { to: '/inventory/material-issues',  label: 'Issuance',        icon: FileEdit,       feature: 'inventory', permission: 'inventory.view' },
+      { to: '/inventory/stock-levels',     label: 'Stock Levels',    icon: BarChart2,      feature: 'inventory', permission: 'inventory.view' },
+      { to: '/inventory/movements',        label: 'Movements',       icon: ArrowLeftRight, feature: 'inventory', permission: 'inventory.view' },
     ],
   },
   {
@@ -135,6 +137,7 @@ const SECTIONS: NavSection[] = [
     items: [
       { to: '/supply-chain/deliveries', label: 'Deliveries', icon: Truck,   feature: 'supply_chain', permission: 'supply_chain.view', badgeKey: 'deliveries' },
       { to: '/supply-chain/shipments',  label: 'Shipments',  icon: Package, feature: 'supply_chain', permission: 'supply_chain.view' },
+      { to: '/supply-chain/fleet',      label: 'Fleet',      icon: Truck,   feature: 'supply_chain', permission: 'supply_chain.view' },
     ],
   },
   {
@@ -181,8 +184,10 @@ const SECTIONS: NavSection[] = [
   {
     label: 'Maintenance',
     items: [
-      { to: '/maintenance/work-orders', label: 'Work Orders', icon: Wrench,   feature: 'maintenance', permission: 'maintenance.view', badgeKey: 'maintenance_wo' },
-      { to: '/maintenance/schedules',   label: 'Schedules',   icon: Calendar, feature: 'maintenance', permission: 'maintenance.view' },
+      { to: '/maintenance/work-orders',    label: 'Work Orders',    icon: Wrench,    feature: 'maintenance', permission: 'maintenance.view', badgeKey: 'maintenance_wo' },
+      { to: '/maintenance/schedules',      label: 'Schedules',      icon: Calendar,  feature: 'maintenance', permission: 'maintenance.view' },
+      { to: '/maintenance/machine-health', label: 'Machine Health', icon: Activity,  feature: 'maintenance', permission: 'maintenance.view' },
+      { to: '/maintenance/downtime',       label: 'Downtime',       icon: BarChart2, feature: 'maintenance', permission: 'maintenance.view' },
     ],
   },
   {
@@ -207,10 +212,11 @@ const SECTIONS: NavSection[] = [
   {
     label: 'Administration',
     items: [
-      { to: '/admin/users',      label: 'Users',      icon: Users2,       permission: 'admin.users.manage' },
-      { to: '/admin/roles',      label: 'Roles',      icon: ShieldCheck,  permission: 'admin.roles.manage' },
-      { to: '/admin/audit-logs', label: 'Audit Logs', icon: FileText,     permission: 'admin.audit_logs.view' },
-      { to: '/admin/settings',   label: 'Settings',   icon: SettingsIcon, permission: 'admin.settings.manage' },
+      { to: '/admin/users',        label: 'Users',        icon: Users2,       permission: 'admin.users.manage' },
+      { to: '/admin/roles',        label: 'Roles',        icon: ShieldCheck,  permission: 'admin.roles.manage' },
+      { to: '/admin/audit-logs',   label: 'Audit Logs',   icon: FileText,     permission: 'admin.audit_logs.view' },
+      { to: '/admin/settings',     label: 'Settings',     icon: SettingsIcon, permission: 'admin.settings.manage' },
+      { to: '/admin/depreciation', label: 'Depreciation', icon: BarChart2,    permission: 'assets.depreciation.view' },
     ],
   },
 ];
