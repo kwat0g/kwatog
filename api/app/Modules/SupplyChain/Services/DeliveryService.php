@@ -315,6 +315,19 @@ class DeliveryService
             // Keep $d in sync with the locked copy so callers see the new state.
             $d->forceFill($patch);
 
+            // C-2 — Promote the parent SO based on delivered coverage. The
+            // locked delivery has just been status-flipped inside this txn,
+            // so Postgres MVCC sees the in-txn write when we aggregate below.
+            if ($locked->sales_order_id) {
+                $coverage = $this->computeSalesOrderDeliveryCoverage((int) $locked->sales_order_id);
+                $soService = app(\App\Modules\CRM\Services\SalesOrderService::class);
+                if ($coverage === 'full') {
+                    $soService->markDelivered((int) $locked->sales_order_id);
+                } elseif ($coverage === 'partial') {
+                    $soService->markPartiallyDelivered((int) $locked->sales_order_id);
+                }
+            }
+
             // Auto-create draft invoice (best-effort — Accounting may be disabled).
             $invoiceId = null;
             try {
@@ -395,11 +408,15 @@ class DeliveryService
         })->all();
 
         $invoice = $svc->create([
-            'customer_id' => $customerHashId,
-            'date'        => now()->toDateString(),
-            'is_vatable'  => true,
-            'items'       => $items,
-            'remarks'     => "Auto-generated from delivery {$d->delivery_number}",
+            'customer_id'    => $customerHashId,
+            'date'           => now()->toDateString(),
+            'is_vatable'     => true,
+            'items'          => $items,
+            'remarks'        => "Auto-generated from delivery {$d->delivery_number}",
+            // C-2 — link the invoice back to the parent SO + this delivery so
+            // InvoiceService::finalize can promote the SO to 'invoiced'.
+            'sales_order_id' => $d->sales_order_id ? app('hashids')->encode((int) $d->sales_order_id) : null,
+            'delivery_id'    => app('hashids')->encode((int) $d->id),
         ], $by);
 
         return (int) $invoice->id;
@@ -442,5 +459,50 @@ class DeliveryService
             if ($d->receipt_photo_path) Storage::disk('local')->delete($d->receipt_photo_path);
             $d->delete();
         });
+    }
+
+    /**
+     * C-2 — Compute whether an SO is fully, partially, or not-yet covered by
+     * confirmed (or about-to-be-confirmed) deliveries.
+     *
+     * Returns 'full' | 'partial' | 'none'.
+     *
+     * The currently-locked delivery is included because we run mid-transaction
+     * after its status has been flipped to Confirmed but before commit.
+     */
+    private function computeSalesOrderDeliveryCoverage(int $salesOrderId): string
+    {
+        $deliveredByItem = DB::table('delivery_items as di')
+            ->join('deliveries as d', 'd.id', '=', 'di.delivery_id')
+            ->where('d.sales_order_id', $salesOrderId)
+            ->whereIn('d.status', [
+                DeliveryStatus::Confirmed->value,
+                DeliveryStatus::Delivered->value,
+            ])
+            ->selectRaw('di.sales_order_item_id, SUM(di.quantity) AS qty')
+            ->groupBy('di.sales_order_item_id')
+            ->pluck('qty', 'sales_order_item_id');
+
+        $orderedByItem = DB::table('sales_order_items')
+            ->where('sales_order_id', $salesOrderId)
+            ->pluck('quantity', 'id');
+
+        if ($orderedByItem->isEmpty()) {
+            return 'none';
+        }
+
+        $allCovered = true;
+        $anyCovered = false;
+        foreach ($orderedByItem as $itemId => $orderedQty) {
+            $deliveredQty = (string) ($deliveredByItem[$itemId] ?? 0);
+            if (bccomp($deliveredQty, '0', 4) > 0) {
+                $anyCovered = true;
+            }
+            if (bccomp($deliveredQty, (string) $orderedQty, 4) < 0) {
+                $allCovered = false;
+            }
+        }
+
+        return $allCovered ? 'full' : ($anyCovered ? 'partial' : 'none');
     }
 }

@@ -23,6 +23,24 @@ class SalesOrderService
     /** Philippines VAT rate. */
     private const VAT_RATE = 0.12;
 
+    /**
+     * C-2 — Allowed SalesOrder status transitions. Each key is a current
+     * status; the array is the list of statuses we permit moving INTO.
+     * Backwards or terminal transitions are absent so transitionTo() can
+     * silently no-op rather than failing upstream operations.
+     *
+     * @var array<string, list<string>>
+     */
+    private const ALLOWED_TRANSITIONS = [
+        'confirmed'           => ['in_production', 'partially_delivered', 'delivered', 'invoiced', 'cancelled'],
+        'in_production'       => ['partially_delivered', 'delivered', 'invoiced', 'cancelled'],
+        'partially_delivered' => ['delivered', 'invoiced'],
+        'delivered'           => ['invoiced'],
+        'invoiced'            => [],
+        'cancelled'           => [],
+        'draft'               => [],
+    ];
+
     public function __construct(
         private readonly DocumentSequenceService $sequences,
         private readonly PriceAgreementService $prices,
@@ -492,6 +510,65 @@ class SalesOrderService
             throw new RuntimeException('Only draft sales orders can be deleted.');
         }
         $so->delete();
+    }
+
+    // ─── C-2: Lifecycle transitions wired from WO / Delivery / Invoice ──────
+    //
+    // These helpers are called from listeners and sibling services that do
+    // NOT own SO state. They must be idempotent, lock-aware, and gated so an
+    // upstream operation never blows up because of a stale/invalid transition.
+
+    public function markInProduction(?int $salesOrderId): void
+    {
+        $this->transitionTo($salesOrderId, SalesOrderStatus::InProduction);
+    }
+
+    public function markPartiallyDelivered(?int $salesOrderId): void
+    {
+        $this->transitionTo($salesOrderId, SalesOrderStatus::PartiallyDelivered);
+    }
+
+    public function markDelivered(?int $salesOrderId): void
+    {
+        $this->transitionTo($salesOrderId, SalesOrderStatus::Delivered);
+    }
+
+    public function markInvoiced(?int $salesOrderId): void
+    {
+        $this->transitionTo($salesOrderId, SalesOrderStatus::Invoiced);
+    }
+
+    private function transitionTo(?int $salesOrderId, SalesOrderStatus $target): void
+    {
+        if ($salesOrderId === null) {
+            return;
+        }
+
+        DB::transaction(function () use ($salesOrderId, $target) {
+            $so = SalesOrder::lockForUpdate()->find($salesOrderId);
+            if (! $so) {
+                return;
+            }
+
+            $currentValue = $so->status?->value;
+
+            // Idempotent: already at the target state.
+            if ($currentValue === $target->value) {
+                return;
+            }
+
+            $allowed = self::ALLOWED_TRANSITIONS[$currentValue ?? ''] ?? [];
+            if (! in_array($target->value, $allowed, true)) {
+                \Illuminate\Support\Facades\Log::debug('SalesOrder transition skipped', [
+                    'sales_order_id' => $so->id,
+                    'from'           => $currentValue,
+                    'to'             => $target->value,
+                ]);
+                return;
+            }
+
+            $so->update(['status' => $target->value]);
+        });
     }
 
     /** Stubbed chain payload — Sprint 6 Tasks 49–58 fill it. */

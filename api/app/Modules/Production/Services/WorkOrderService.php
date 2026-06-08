@@ -290,6 +290,13 @@ class WorkOrderService
             // attribute stays an empty array — the WO still starts cleanly.
             $this->captureMaterialLotReferences($wo);
 
+            // C-2 — Promote the parent SO to in_production. app() lookup avoids
+            // a circular dependency on SalesOrderService at construction time.
+            if ($wo->sales_order_id) {
+                app(\App\Modules\CRM\Services\SalesOrderService::class)
+                    ->markInProduction((int) $wo->sales_order_id);
+            }
+
             return $this->show($wo->fresh());
         });
         $this->broadcastStatusChange($result, $from, WorkOrderStatus::InProgress->value);

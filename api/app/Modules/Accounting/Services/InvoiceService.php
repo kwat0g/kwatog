@@ -90,6 +90,14 @@ class InvoiceService
                 // Number reserved at finalize-time so drafts that get cancelled don't burn numbers.
                 'invoice_number' => null,
                 'customer_id'    => $customer->id,
+                // C-2 — Persist optional SO/Delivery linkage when supplied so
+                // finalize() can promote the parent SO to 'invoiced'.
+                'sales_order_id' => isset($data['sales_order_id'])
+                    ? HashIdFilter::decode($data['sales_order_id'], \App\Modules\CRM\Models\SalesOrder::class)
+                    : null,
+                'delivery_id'    => isset($data['delivery_id'])
+                    ? HashIdFilter::decode($data['delivery_id'], \App\Modules\SupplyChain\Models\Delivery::class)
+                    : null,
                 'date'           => $data['date'],
                 'due_date'       => $data['due_date']
                     ?? Carbon::parse($data['date'])->addDays($customer->payment_terms_days)->toDateString(),
@@ -196,6 +204,14 @@ class InvoiceService
                 'journal_entry_id' => $je->id,
                 'status'           => InvoiceStatus::Finalized,
             ]);
+
+            // C-2 — Promote the parent SO to 'invoiced' once we have a posted
+            // JE and a locked invoice number. No-op if the invoice isn't
+            // linked to an SO or the SO is already at/past invoiced.
+            if ($invoice->sales_order_id) {
+                app(\App\Modules\CRM\Services\SalesOrderService::class)
+                    ->markInvoiced((int) $invoice->sales_order_id);
+            }
 
             return $this->show($invoice->fresh());
         });
