@@ -18,6 +18,7 @@ use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 class GrnService
@@ -25,6 +26,7 @@ class GrnService
     public function __construct(
         private readonly DocumentSequenceService $sequences,
         private readonly StockMovementService $movements,
+        private readonly GrnGlPostingService $gl,
     ) {}
 
     public function list(array $filters): LengthAwarePaginator
@@ -166,6 +168,20 @@ class GrnService
                 'accepted_at' => now(),
             ]);
             $fresh = $grn->fresh();
+
+            // Task 5 — post the inventory receipt to the GL (DR Inventory /
+            // CR GRNI). Flag-gated, idempotent, and non-blocking: a GL post
+            // failure must not abort the GRN acceptance itself.
+            try {
+                $this->gl->post($fresh);
+                $fresh = $fresh->fresh();
+            } catch (\Throwable $e) {
+                Log::error('GrnService::accept — GL post failed; GRN remains accepted', [
+                    'grn_id' => $fresh->id,
+                    'error'  => $e->getMessage(),
+                ]);
+            }
+
             // Series C — Task C4. Real-time chain progress for the GRN
             // detail page on the SPA.
             DB::afterCommit(fn () =>
@@ -215,7 +231,21 @@ class GrnService
                 'accepted_by' => $by->id,
                 'accepted_at' => now(),
             ]);
-            return $grn->fresh();
+            $fresh = $grn->fresh();
+
+            // Task 5 — post the accepted value to the GL. Same try/catch
+            // guard as accept(): GL failures must not abort the GRN.
+            try {
+                $this->gl->post($fresh);
+                $fresh = $fresh->fresh();
+            } catch (\Throwable $e) {
+                Log::error('GrnService::partialAccept — GL post failed; GRN remains accepted', [
+                    'grn_id' => $fresh->id,
+                    'error'  => $e->getMessage(),
+                ]);
+            }
+
+            return $fresh;
         });
     }
 

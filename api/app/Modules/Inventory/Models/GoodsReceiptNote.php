@@ -30,7 +30,7 @@ class GoodsReceiptNote extends Model
         'grn_number', 'purchase_order_id', 'vendor_id',
         'received_date', 'received_by', 'status',
         'qc_inspection_id', 'accepted_by', 'accepted_at',
-        'rejected_reason', 'remarks',
+        'rejected_reason', 'remarks', 'journal_entry_id',
     ];
 
     protected $casts = [

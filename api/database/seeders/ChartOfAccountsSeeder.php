@@ -56,6 +56,7 @@ class ChartOfAccountsSeeder extends Seeder
 
             // ─── Liabilities ───────────────────────────────
             ['2010', 'Accounts Payable',             'liability', 'credit', '2000'],
+            ['2110', 'Goods Received Not Invoiced',  'liability', 'credit', '2000'],
             ['2020', 'SSS Payable',                  'liability', 'credit', '2000'],
             ['2030', 'PhilHealth Payable',           'liability', 'credit', '2000'],
             ['2040', 'Pag-IBIG Payable',             'liability', 'credit', '2000'],
