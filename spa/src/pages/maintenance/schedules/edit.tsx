@@ -19,7 +19,7 @@ const schema = z.object({
   description: z.string().min(1).max(200),
   interval_type: z.enum(['hours', 'days', 'shots']),
   interval_value: z.coerce.number().int().min(1),
-  is_active: z.coerce.boolean(),
+  is_active: z.string(),
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -40,12 +40,15 @@ export default function EditMaintenanceSchedulePage() {
       description: data.description,
       interval_type: data.interval_type,
       interval_value: data.interval_value,
-      is_active: data.is_active,
+      is_active: data.is_active ? 'true' : 'false',
     } : undefined,
   });
 
   const mutation = useMutation({
-    mutationFn: (values: FormValues) => schedulesApi.update(id, values),
+    mutationFn: (values: FormValues) => schedulesApi.update(id, {
+      ...values,
+      is_active: values.is_active === 'true',
+    }),
     onSuccess: (schedule) => {
       qc.invalidateQueries({ queryKey: ['maintenance', 'schedules'] });
       toast.success('Schedule updated.');
