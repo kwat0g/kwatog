@@ -10,6 +10,8 @@ const CreateMaintenanceWorkOrderPage = lazy(() => import('@/pages/maintenance/wo
 const MaintenanceWorkOrderDetailPage = lazy(() => import('@/pages/maintenance/work-orders/detail'));
 const MaintenanceSchedulesListPage  = lazy(() => import('@/pages/maintenance/schedules'));
 const CreateMaintenanceSchedulePage = lazy(() => import('@/pages/maintenance/schedules/create'));
+const MaintenanceScheduleDetailPage = lazy(() => import('@/pages/maintenance/schedules/detail'));
+const EditMaintenanceSchedulePage   = lazy(() => import('@/pages/maintenance/schedules/edit'));
 // ADV8 — Predictive maintenance & downtime analytics
 const MachineHealthPage     = lazy(() => import('@/pages/maintenance/machine-health'));
 const DowntimeAnalyticsPage = lazy(() => import('@/pages/maintenance/downtime'));
@@ -34,6 +36,10 @@ export const maintenanceRoutes = (
         element={<PermissionGuard permission="maintenance.view"><MaintenanceSchedulesListPage /></PermissionGuard>} />
       <Route path="/maintenance/schedules/create"
         element={<PermissionGuard permission="maintenance.schedules.manage"><CreateMaintenanceSchedulePage /></PermissionGuard>} />
+      <Route path="/maintenance/schedules/:id"
+        element={<PermissionGuard permission="maintenance.view"><MaintenanceScheduleDetailPage /></PermissionGuard>} />
+      <Route path="/maintenance/schedules/:id/edit"
+        element={<PermissionGuard permission="maintenance.schedules.manage"><EditMaintenanceSchedulePage /></PermissionGuard>} />
     </Route>
   </>
 );

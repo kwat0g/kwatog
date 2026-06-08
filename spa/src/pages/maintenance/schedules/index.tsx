@@ -1,8 +1,9 @@
 /** Sprint 8 — Task 69. Maintenance schedules list. */
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import { Pencil, Plus, Trash2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { schedulesApi, type ScheduleListParams } from '@/api/maintenance/schedules';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -18,7 +19,19 @@ import type { MaintenanceSchedule } from '@/types/maintenance';
 export default function MaintenanceSchedulesListPage() {
   const navigate = useNavigate();
   const { can } = usePermission();
+  const qc = useQueryClient();
   const [filters, setFilters] = useState<ScheduleListParams>({ page: 1, per_page: 25 });
+
+  const handleDelete = async (scheduleId: string) => {
+    if (!confirm('Delete this schedule? This cannot be undone.')) return;
+    try {
+      await schedulesApi.destroy(scheduleId);
+      qc.invalidateQueries({ queryKey: ['maintenance', 'schedules'] });
+      toast.success('Schedule deleted.');
+    } catch {
+      toast.error('Failed to delete schedule.');
+    }
+  };
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['maintenance', 'schedules', filters],
@@ -63,6 +76,29 @@ export default function MaintenanceSchedulesListPage() {
       header: 'Active',
       cell: (r) => <Chip variant={r.is_active ? 'success' : 'neutral'}>{r.is_active ? 'Active' : 'Disabled'}</Chip>,
     },
+    ...(can('maintenance.schedules.manage') ? [{
+      key: 'actions' as const,
+      header: '',
+      align: 'right' as const,
+      cell: (r: MaintenanceSchedule) => (
+        <div className="flex justify-end gap-1">
+          <button
+            onClick={(e) => { e.stopPropagation(); navigate(`/maintenance/schedules/${r.id}/edit`); }}
+            className="p-1.5 text-muted hover:text-text hover:bg-elevated rounded-sm"
+            aria-label="Edit"
+          >
+            <Pencil size={13} />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); handleDelete(r.id); }}
+            className="p-1.5 text-muted hover:text-danger hover:bg-elevated rounded-sm"
+            aria-label="Delete"
+          >
+            <Trash2 size={13} />
+          </button>
+        </div>
+      ),
+    }] : []),
   ];
 
   const filterConfig: FilterConfig[] = [
@@ -117,7 +153,8 @@ export default function MaintenanceSchedulesListPage() {
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
           <DataTable columns={columns} data={data.data} meta={data.meta}
-            onPageChange={(page) => setFilters((f) => ({ ...f, page }))} />
+            onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+            onRowClick={(r) => navigate(`/maintenance/schedules/${r.id}`)} />
         </div>
       )}
     </div>
