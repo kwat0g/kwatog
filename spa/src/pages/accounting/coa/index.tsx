@@ -56,9 +56,9 @@ export default function ChartOfAccountsPage() {
             <Button variant="secondary" size="sm" onClick={collapseAll}>Collapse all</Button>
             <Button variant="secondary" size="sm" onClick={expandAll}>Expand all</Button>
             {can('accounting.coa.manage') && (
-              <Button variant="primary" size="sm" onClick={() => window.location.href = '/accounting/coa/create'}>
-                Add account
-              </Button>
+              <Link to="/accounting/coa/create">
+                <Button variant="primary" size="sm">Add account</Button>
+              </Link>
             )}
           </div>
         }
@@ -91,7 +91,7 @@ export default function ChartOfAccountsPage() {
             </div>
             <div>
               {data.map((root) => (
-                <TreeRow key={root.id} node={root} depth={0} expanded={expanded} onToggle={toggle} />
+                <TreeRow key={root.id} node={root} depth={0} expanded={expanded} onToggle={toggle} canManage={can('accounting.coa.manage')} />
               ))}
             </div>
           </div>
@@ -120,14 +120,14 @@ function collectIds(nodes: Account[]): string[] {
 }
 
 function TreeRow({
-  node, depth, expanded, onToggle,
-}: { node: Account; depth: number; expanded: Set<string>; onToggle: (id: string) => void }) {
+  node, depth, expanded, onToggle, canManage,
+}: { node: Account; depth: number; expanded: Set<string>; onToggle: (id: string) => void; canManage: boolean }) {
   const hasChildren = (node.children?.length ?? 0) > 0;
   const isOpen = expanded.has(node.id);
 
   return (
     <>
-      <div className={cn('grid grid-cols-12 h-8 px-2.5 items-center border-b border-subtle hover:bg-subtle text-sm', !node.is_active && 'opacity-60')}>
+      <div className={cn('group grid grid-cols-12 h-8 px-2.5 items-center border-b border-subtle hover:bg-subtle text-sm', !node.is_active && 'opacity-60')}>
         <div className="col-span-1 font-mono tabular-nums text-muted">{node.code}</div>
         <div className="col-span-5 flex items-center gap-1.5" style={{ paddingLeft: `${depth * 14}px` }}>
           {hasChildren ? (
@@ -144,6 +144,15 @@ function TreeRow({
           >
             {node.name}
           </Link>
+          {canManage && (
+            <Link
+              to={`/accounting/coa/${node.id}/edit`}
+              onClick={(e) => e.stopPropagation()}
+              className="ml-1 text-xs text-muted hover:text-accent opacity-0 group-hover:opacity-100 transition-opacity"
+            >
+              Edit
+            </Link>
+          )}
           {!node.is_active && <Chip variant="neutral">inactive</Chip>}
         </div>
         <div className="col-span-2 text-sm text-muted capitalize">{node.type} · {node.normal_balance}</div>
@@ -151,7 +160,7 @@ function TreeRow({
         <div className="col-span-2 text-right font-mono tabular-nums font-medium">{formatPeso(node.current_balance, '—')}</div>
       </div>
       {isOpen && hasChildren && node.children!.map((c) => (
-        <TreeRow key={c.id} node={c} depth={depth + 1} expanded={expanded} onToggle={onToggle} />
+        <TreeRow key={c.id} node={c} depth={depth + 1} expanded={expanded} onToggle={onToggle} canManage={canManage} />
       ))}
     </>
   );
