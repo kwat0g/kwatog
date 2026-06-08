@@ -1,4 +1,4 @@
-.PHONY: help up down build restart logs ps shell tinker migrate seed fresh test test-db lint analyse spa-shell deploy build-spa prod-up prod-down prod-logs prod-migrate prod-shell
+.PHONY: help up down build restart logs ps shell tinker migrate seed fresh test test-db lint analyse spa-shell deploy build-spa prod-up prod-down prod-logs prod-migrate prod-shell backup restore prod-backup prod-restore
 
 help:
 	@echo "Ogami ERP — Make targets"
@@ -17,6 +17,8 @@ help:
 	@echo "  make test        — phpunit + vitest"
 	@echo "  make lint        — eslint + php-cs-fixer (dry-run)"
 	@echo "  make analyse     — larastan + tsc --noEmit"
+	@echo "  make backup      — dump dev DB to ./backups/ogami-<ts>.sql.gz"
+	@echo "  make restore FILE=path/to/dump.sql.gz — restore dev DB (destructive)"
 
 up:
 	docker compose up -d
@@ -68,6 +70,38 @@ lint:
 analyse:
 	docker compose exec api ./vendor/bin/phpstan analyse --memory-limit=1G || true
 	docker compose exec spa npx tsc --noEmit || true
+
+# ─── Backup / Restore ──────────────────────────────────────────────────
+# Dev: dumps to ./backups on the HOST (the db container has /backups
+# mounted via the script's BACKUP_DIR env). Production targets below use
+# the same scripts but against docker-compose.prod.yml.
+
+backup:
+	@mkdir -p backups
+	@docker cp scripts/db-backup.sh ogami-db:/tmp/db-backup.sh
+	@docker compose exec -T \
+		-e BACKUP_DIR=/backups \
+		-e DB_HOST=localhost \
+		-e DB_PORT=5432 \
+		-e DB_USERNAME=$${DB_USERNAME:-ogami} \
+		-e DB_PASSWORD=$${DB_PASSWORD:-ogami_dev_pw} \
+		-e DB_DATABASE=$${DB_DATABASE:-ogami} \
+		db sh -c 'mkdir -p /backups && bash /tmp/db-backup.sh'
+	@docker cp ogami-db:/backups/. ./backups/ 2>/dev/null || true
+	@echo "→ backups available in ./backups/"
+
+restore:
+	@if [ -z "$(FILE)" ]; then echo "Usage: make restore FILE=backups/ogami-<ts>.sql.gz"; exit 2; fi
+	@if [ ! -f "$(FILE)" ]; then echo "ERROR: $(FILE) not found"; exit 2; fi
+	@docker cp "$(FILE)" ogami-db:/tmp/restore.sql.gz
+	@docker cp scripts/db-restore.sh ogami-db:/tmp/db-restore.sh
+	@docker compose exec -T \
+		-e DB_HOST=localhost \
+		-e DB_PORT=5432 \
+		-e DB_USERNAME=$${DB_USERNAME:-ogami} \
+		-e DB_PASSWORD=$${DB_PASSWORD:-ogami_dev_pw} \
+		-e DB_DATABASE=$${DB_DATABASE:-ogami} \
+		db bash /tmp/db-restore.sh --yes /tmp/restore.sql.gz
 
 # ─── Production (Sprint 4 Task 38) ─────────────────────────────────────
 # These targets target docker-compose.prod.yml and assume:
