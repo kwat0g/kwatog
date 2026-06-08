@@ -34,6 +34,10 @@ import {
   Store,
   Scale,
   Target,
+  Tag,
+  MessageSquare,
+  ClipboardList,
+  GitFork,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
@@ -82,9 +86,12 @@ const SECTIONS: NavSection[] = [
   {
     label: 'Sales & CRM',
     items: [
-      { to: '/crm/sales-orders',     label: 'Sales Orders',  icon: Briefcase, feature: 'crm', permission: 'crm.sales_orders.view', badgeKey: 'pending_so' },
-      { to: '/crm/customers',        label: 'Customers',     icon: Users2,    feature: 'crm', permission: 'crm.sales_orders.view' },
-      { to: '/accounting/customers', label: 'AR Customers',  icon: Users,     feature: 'accounting', permission: 'accounting.customers.view' },
+      { to: '/crm/sales-orders',     label: 'Sales Orders',     icon: Briefcase,     feature: 'crm', permission: 'crm.sales_orders.view', badgeKey: 'pending_so' },
+      { to: '/crm/customers',        label: 'CRM Customers',    icon: Users2,        feature: 'crm', permission: 'crm.sales_orders.view' },
+      { to: '/crm/products',         label: 'Products',         icon: Tag,           feature: 'crm', permission: 'crm.products.view' },
+      { to: '/crm/price-agreements', label: 'Price Agreements', icon: FileText,      feature: 'crm', permission: 'crm.price_agreements.view' },
+      { to: '/crm/complaints',       label: 'Complaints',       icon: MessageSquare, feature: 'crm', permission: 'crm.complaints.manage' },
+      { to: '/accounting/customers', label: 'AR Customers',     icon: Users,         feature: 'accounting', permission: 'accounting.customers.view' },
     ],
   },
   {
@@ -120,8 +127,12 @@ const SECTIONS: NavSection[] = [
   {
     label: 'Quality',
     items: [
-      { to: '/quality/inspections', label: 'Inspections', icon: ShieldCheck, feature: 'quality', permission: 'quality.view' },
-      { to: '/quality/ncrs',        label: 'NCRs',        icon: AlertTriangle, feature: 'quality', permission: 'quality.view', badgeKey: 'ncrs' },
+      { to: '/quality/dashboard',        label: 'Quality Dashboard', icon: LayoutDashboard, feature: 'quality', permission: 'quality.view' },
+      { to: '/quality/inspection-specs', label: 'Inspection Specs',  icon: ClipboardList,   feature: 'quality', permission: 'quality.specs.view' },
+      { to: '/quality/inspections',      label: 'Inspections',       icon: ShieldCheck,     feature: 'quality', permission: 'quality.view' },
+      { to: '/quality/ncrs',             label: 'NCRs',              icon: AlertTriangle,   feature: 'quality', permission: 'quality.view', badgeKey: 'ncrs' },
+      { to: '/quality/ncr-templates',    label: 'NCR Templates',     icon: FileText,        feature: 'quality', permission: 'quality.ncr.manage' },
+      { to: '/quality/traceability',     label: 'Traceability',      icon: GitFork,         feature: 'quality', permission: 'quality.inspections.view' },
     ],
   },
   {
