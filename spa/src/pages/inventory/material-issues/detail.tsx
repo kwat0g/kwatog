@@ -10,6 +10,13 @@ import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
+import type { MaterialIssueStatus } from '@/types/inventory';
+
+const statusVariant = (s: MaterialIssueStatus) => {
+  if (s === 'issued')    return 'info' as const;
+  if (s === 'cancelled') return 'neutral' as const;
+  return 'warning' as const;
+};
 
 export default function MaterialIssueDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
@@ -25,12 +32,6 @@ export default function MaterialIssueDetailPage() {
     <EmptyState icon="alert-circle" title="Failed to load material issue slip"
       action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />
   );
-
-  const statusVariant = (s: string) => {
-    if (s === 'issued')    return 'info' as const;
-    if (s === 'cancelled') return 'neutral' as const;
-    return 'warning' as const;
-  };
 
   return (
     <div>
@@ -50,7 +51,7 @@ export default function MaterialIssueDetailPage() {
         <StatCard label="Total value"   value={formatPeso(data.total_value)} />
         <StatCard label="Issued date"   value={formatDate(data.issued_date)} />
         <StatCard label="Issued by"     value={data.issuer?.name ?? '—'} />
-        <StatCard label="Work order"    value={data.work_order_id ? `WO #${data.work_order_id}` : (data.reference_text ?? '—')} />
+        <StatCard label="Work order"    value={data.reference_text ?? '—'} />
       </div>
 
       <div className="px-5 pb-4 space-y-4">
@@ -70,7 +71,7 @@ export default function MaterialIssueDetailPage() {
                 <tr key={line.id} className="border-t border-subtle hover:bg-subtle">
                   <td className="px-2.5 py-2">
                     <div className="font-mono">{line.item?.code ?? '—'}</div>
-                    <div className="text-muted">{line.item?.name}</div>
+                    <div className="text-muted">{line.item?.name ?? '—'}</div>
                   </td>
                   <td className="px-2.5 py-2 font-mono">{line.location?.code ?? '—'}</td>
                   <td className="px-2.5 py-2 text-right font-mono tabular-nums">
