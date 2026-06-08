@@ -32,6 +32,8 @@ import {
   PieChart,
   Landmark,
   Store,
+  Scale,
+  Target,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
@@ -132,10 +134,10 @@ const SECTIONS: NavSection[] = [
       { to: '/accounting/vendors',          label: 'Vendors',           icon: Store,          feature: 'accounting', permission: 'accounting.vendors.view' },
       { to: '/accounting/trial-balance',    label: 'Trial Balance',     icon: BarChart2,      feature: 'accounting', permission: 'accounting.statements.view' },
       { to: '/accounting/income-statement', label: 'Income Statement',  icon: TrendingUp,     feature: 'accounting', permission: 'accounting.statements.view' },
-      { to: '/accounting/balance-sheet',    label: 'Balance Sheet',     icon: BarChart2,      feature: 'accounting', permission: 'accounting.statements.view' },
+      { to: '/accounting/balance-sheet',    label: 'Balance Sheet',     icon: Scale,          feature: 'accounting', permission: 'accounting.statements.view' },
       { to: '/budgeting',                   label: 'Budgets',           icon: PieChart,       permission: 'budgeting.view' },
-      { to: '/budgeting/budget-vs-actual',  label: 'Budget vs Actual',  icon: BarChart2,      permission: 'budgeting.view' },
-      { to: '/budgeting/transfers',         label: 'Budget Transfers',  icon: ArrowLeftRight, feature: 'accounting', permission: 'accounting.budget.view' },
+      { to: '/budgeting/budget-vs-actual',  label: 'Budget vs Actual',  icon: Target,         permission: 'budgeting.view' },
+      { to: '/budgeting/transfers',         label: 'Budget Transfers',  icon: ArrowLeftRight, permission: 'budgeting.view' },
     ],
   },
   {
