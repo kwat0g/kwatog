@@ -25,6 +25,9 @@ import {
   AlertTriangle,
   Calendar,
   ArrowLeftRight,
+  TrendingUp,
+  RotateCcw,
+  Building2,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
@@ -138,6 +141,25 @@ const SECTIONS: NavSection[] = [
     items: [
       { to: '/maintenance/work-orders', label: 'Work Orders', icon: Wrench,   feature: 'maintenance', permission: 'maintenance.view', badgeKey: 'maintenance_wo' },
       { to: '/maintenance/schedules',   label: 'Schedules',   icon: Calendar, feature: 'maintenance', permission: 'maintenance.view' },
+    ],
+  },
+  {
+    label: 'Assets',
+    items: [
+      { to: '/assets', label: 'Fixed Assets', icon: Building2, feature: 'assets', permission: 'assets.view' },
+    ],
+  },
+  {
+    label: 'Forecasting',
+    items: [
+      { to: '/forecasting/demand',    label: 'Demand Forecast',      icon: TrendingUp,    feature: 'forecasting', permission: 'forecasting.view' },
+      { to: '/forecasting/stock-out', label: 'Stock-Out Projection', icon: AlertTriangle, feature: 'forecasting', permission: 'forecasting.view' },
+    ],
+  },
+  {
+    label: 'Return Management',
+    items: [
+      { to: '/return-management', label: 'Returns (RMA)', icon: RotateCcw, feature: 'return_management', permission: 'return_management.view' },
     ],
   },
   {
