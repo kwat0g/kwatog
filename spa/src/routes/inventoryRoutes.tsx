@@ -20,6 +20,7 @@ const CreateGrnPage             = lazy(() => import('@/pages/inventory/grn/creat
 const GrnDetailPage             = lazy(() => import('@/pages/inventory/grn/detail'));
 const MaterialIssuesListPage    = lazy(() => import('@/pages/inventory/material-issues'));
 const CreateMaterialIssuePage   = lazy(() => import('@/pages/inventory/material-issues/create'));
+const MaterialIssueDetailPage   = lazy(() => import('@/pages/inventory/material-issues/detail'));
 
 // Series F / Task F3 — per-item stock card
 const StockCardPage = lazy(() => import('@/pages/inventory/items/stock-card'));
@@ -85,6 +86,8 @@ export const inventoryRoutes = (
         element={<PermissionGuard permission="inventory.view"><MaterialIssuesListPage /></PermissionGuard>} />
       <Route path="/inventory/material-issues/create"
         element={<PermissionGuard permission="inventory.issue.create"><CreateMaterialIssuePage /></PermissionGuard>} />
+      <Route path="/inventory/material-issues/:id"
+        element={<PermissionGuard permission="inventory.view"><MaterialIssueDetailPage /></PermissionGuard>} />
     </Route>
   </>
 );
