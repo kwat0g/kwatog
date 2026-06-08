@@ -437,7 +437,7 @@ class DeliveryService
             $alreadyAttached = DeliveryProof::query()
                 ->where('delivery_id', $delivery->id)
                 ->where('proof_type', 'coc')
-                ->where('file_name', 'LIKE', "CoC-{$cocNumber}%")
+                ->where('file_name', $built['file_name'])
                 ->exists();
             if ($alreadyAttached) {
                 continue;
