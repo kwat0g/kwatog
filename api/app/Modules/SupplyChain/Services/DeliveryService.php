@@ -22,6 +22,7 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 
@@ -316,8 +317,14 @@ class DeliveryService
                 if ($invoiceId) {
                     $locked->forceFill(['invoice_id' => $invoiceId])->save();
                 }
-            } catch (\Throwable) {
-                // Skip silently — manual invoicing remains possible.
+            } catch (\Throwable $e) {
+                // Draft-invoice creation is best-effort (Accounting may be disabled
+                // or misconfigured) — never block the delivery confirm. Log so the
+                // failure is visible and manual invoicing can be triaged.
+                Log::error('Draft invoice creation failed on delivery confirm', [
+                    'delivery_id' => $locked->id,
+                    'error'       => $e->getMessage(),
+                ]);
             }
 
             // Task A4 — fan out a DeliveryConfirmed event after commit so
