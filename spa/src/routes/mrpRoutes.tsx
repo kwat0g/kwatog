@@ -7,6 +7,7 @@ import { PermissionGuard } from '@/components/guards/PermissionGuard';
 const BomsListPage     = lazy(() => import('@/pages/mrp/boms'));
 const CreateBomPage    = lazy(() => import('@/pages/mrp/boms/create'));
 const BomDetailPage    = lazy(() => import('@/pages/mrp/boms/detail'));
+const EditBomPage      = lazy(() => import('@/pages/mrp/boms/edit'));
 const MachinesListPage = lazy(() => import('@/pages/mrp/machines'));
 const MachineDetailPage = lazy(() => import('@/pages/mrp/machines/detail'));
 const MoldsListPage    = lazy(() => import('@/pages/mrp/molds'));
@@ -26,6 +27,8 @@ export const mrpRoutes = (
         element={<PermissionGuard permission="mrp.boms.manage"><CreateBomPage /></PermissionGuard>} />
       <Route path="/mrp/boms/:id"
         element={<PermissionGuard permission="mrp.boms.view"><BomDetailPage /></PermissionGuard>} />
+      <Route path="/mrp/boms/:id/edit"
+        element={<PermissionGuard permission="mrp.boms.manage"><EditBomPage /></PermissionGuard>} />
 
       <Route path="/mrp/machines"
         element={<PermissionGuard permission="mrp.machines.view"><MachinesListPage /></PermissionGuard>} />
