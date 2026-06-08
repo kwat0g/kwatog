@@ -120,6 +120,42 @@ class PermissionCacheFreshnessTest extends TestCase
         $this->assertFalse(Cache::has("auth:role_perms:{$user->role_id}"));
     }
 
+    public function test_role_perm_edit_invalidates_cache_for_all_members(): void
+    {
+        $user1 = $this->userWithRole('hr_officer');
+        $user2 = $this->userWithRole('hr_officer');
+        $user1->permission_slugs; // prime role cache
+        $this->assertTrue(Cache::has("auth:role_perms:{$user1->role_id}"));
+
+        // Simulate a role permissions sync forgetting the role-keyed cache.
+        Cache::forget("auth:role_perms:{$user1->role_id}");
+        $this->assertFalse(Cache::has("auth:role_perms:{$user2->role_id}"));
+    }
+
+    public function test_request_scoped_memo_avoids_repeat_override_queries(): void
+    {
+        $user = $this->userWithRole('hr_officer');
+        // First call hydrates memo.
+        $first = $user->permission_slugs;
+        // Insert a new override AFTER hydration.
+        $extraPerm = \App\Modules\Auth\Models\Permission::query()->firstOrCreate(
+            ['slug' => 'memo.test.grant'],
+            ['name' => 'Memo Test', 'module' => 'admin', 'description' => 'Memo test'],
+        );
+        \App\Modules\Admin\Models\UserPermissionOverride::create([
+            'user_id'       => $user->id,
+            'permission_id' => $extraPerm->id,
+            'type'          => 'grant',
+            'granted_by'    => $user->id,
+            'reason'        => 'memo test',
+        ]);
+        // Memo means we still see the original set on the same instance.
+        $this->assertSame($first, $user->permission_slugs);
+        // After flush, the new grant becomes visible.
+        $user->flushPermissionsCache();
+        $this->assertContains('memo.test.grant', $user->permission_slugs);
+    }
+
     private function userWithRole(string $slug): User
     {
         return User::factory()->create([

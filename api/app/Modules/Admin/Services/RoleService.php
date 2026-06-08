@@ -7,7 +7,6 @@ namespace App\Modules\Admin\Services;
 use App\Common\Models\AuditLog;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
-use App\Modules\Auth\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -297,12 +296,10 @@ class RoleService
                 'created_at' => now(),
             ]);
 
-            // Bust cached permission slug list for every user who holds this role.
-            // Targeted per-user forget instead of a full Cache::flush() so settings
-            // and other cached data are not evicted unnecessarily.
-            $role->users()->select('id')->each(function (User $u) {
-                Cache::forget("auth:permissions:{$u->id}");
-            });
+            // H-9 — Bust the role-permission cache key directly. One forget
+            // serves every user of this role (cache is keyed by role_id, not
+            // user_id, since H-9 split the cache).
+            Cache::forget("auth:role_perms:{$role->id}");
 
             return $role->fresh('permissions');
         });

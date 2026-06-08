@@ -98,10 +98,18 @@ class User extends Authenticatable
      * are intentionally NOT applied to system_admin so the role remains a
      * hard escape hatch (deliberate policy; documented on the PR).
      */
+    /** Request-scoped memo of resolved slugs. Avoids re-querying overrides on
+     *  every hasPermission() call within one request. Cleared by flushPermissionsCache. */
+    private ?array $resolvedPermissionSlugs = null;
+
     public function getPermissionSlugsAttribute(): array
     {
+        if ($this->resolvedPermissionSlugs !== null) {
+            return $this->resolvedPermissionSlugs;
+        }
+
         if (! $this->role) {
-            return [];
+            return $this->resolvedPermissionSlugs = [];
         }
 
         /** @var array<int, string> $rolePerms */
@@ -135,7 +143,7 @@ class User extends Authenticatable
             }
         }
 
-        return array_values($rolePerms);
+        return $this->resolvedPermissionSlugs = array_values($rolePerms);
     }
 
     public function hasPermission(string $slug): bool
@@ -148,6 +156,7 @@ class User extends Authenticatable
 
     public function flushPermissionsCache(): void
     {
+        $this->resolvedPermissionSlugs = null;
         // Legacy per-user key — kept until all callers/deployments roll over.
         Cache::forget("auth:permissions:{$this->id}");
         if ($this->role_id) {
