@@ -65,9 +65,9 @@ class LoginRequestValidationTest extends TestCase
             $errors = $response->json('errors') ?? [];
             $this->assertArrayNotHasKey('password', $errors,
                 'min:8 should accept exactly 8 chars; password should not appear in validation errors.');
-        } else {
-            $this->assertTrue(true);
+            return;
         }
+        $this->expectNotToPerformAssertions();
     }
 
     public function test_real_login_succeeds_with_valid_eight_plus_password(): void
