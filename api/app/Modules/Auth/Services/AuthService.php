@@ -34,69 +34,81 @@ class AuthService
      */
     public function login(string $email, string $password, Request $request): User
     {
-        return DB::transaction(function () use ($email, $password, $request) {
-            /** @var User|null $user */
-            $user = User::where('email', $email)->first();
+        // NOTE: do NOT wrap the entire login flow in DB::transaction. Failed-
+        // path mutations (the failed_login_attempts counter, locked_until
+        // stamp, and login_history audit rows) MUST survive the
+        // ValidationException throws below — otherwise a rolling-back
+        // transaction silently disables the 5-strikes lockout. Each path
+        // commits independently. The success path uses a small inner
+        // transaction for the counter reset + last_activity update.
 
-            if (! $user) {
-                $this->loginHistory->record(null, $email, $request, LoginHistoryService::STATUS_FAILED_CREDENTIALS, 'unknown_email');
-                throw ValidationException::withMessages(['email' => 'Invalid credentials.']);
+        /** @var User|null $user */
+        $user = User::where('email', $email)->first();
+
+        if (! $user) {
+            $this->loginHistory->record(null, $email, $request, LoginHistoryService::STATUS_FAILED_CREDENTIALS, 'unknown_email');
+            throw ValidationException::withMessages(['email' => 'Invalid credentials.']);
+        }
+
+        if (! $user->is_active) {
+            $this->loginHistory->record($user, $email, $request, LoginHistoryService::STATUS_FAILED_INACTIVE, 'account_inactive');
+            throw ValidationException::withMessages(['email' => 'Invalid credentials.']);
+        }
+
+        if ($user->isLocked()) {
+            $remaining = (int) max(now()->diffInMinutes($user->locked_until, false), 0);
+            $this->logAuthEvent('login.locked', $user, $request);
+            $this->loginHistory->record($user, $email, $request, LoginHistoryService::STATUS_FAILED_LOCKED, 'account_locked');
+            abort(423, "Account locked. Try again in {$remaining} minutes.");
+        }
+
+        if (! Hash::check($password, $user->password)) {
+            $user->failed_login_attempts++;
+            $crossedThreshold = false;
+            if ($user->failed_login_attempts >= self::MAX_ATTEMPTS) {
+                $user->locked_until = now()->addMinutes(self::LOCK_MINUTES);
+                $crossedThreshold = true;
             }
-
-            if (! $user->is_active) {
-                $this->loginHistory->record($user, $email, $request, LoginHistoryService::STATUS_FAILED_INACTIVE, 'account_inactive');
-                throw ValidationException::withMessages(['email' => 'Invalid credentials.']);
+            $user->save();
+            $this->logAuthEvent('login.failed', $user, $request);
+            if ($crossedThreshold) {
+                $this->logAuthEvent('login.locked_threshold', $user, $request);
             }
+            $this->loginHistory->record($user, $email, $request, LoginHistoryService::STATUS_FAILED_CREDENTIALS, 'invalid_password');
+            throw ValidationException::withMessages(['email' => 'Invalid credentials.']);
+        }
 
-            if ($user->isLocked()) {
-                $remaining = (int) max(now()->diffInMinutes($user->locked_until, false), 0);
-                $this->logAuthEvent('login.locked', $user, $request);
-                $this->loginHistory->record($user, $email, $request, LoginHistoryService::STATUS_FAILED_LOCKED, 'account_locked');
-                abort(423, "Account locked. Try again in {$remaining} minutes.");
-            }
-
-            if (! Hash::check($password, $user->password)) {
-                $user->failed_login_attempts++;
-                if ($user->failed_login_attempts >= self::MAX_ATTEMPTS) {
-                    $user->locked_until = now()->addMinutes(self::LOCK_MINUTES);
-                    $this->logAuthEvent('login.locked_threshold', $user, $request);
-                }
-                $user->save();
-                $this->logAuthEvent('login.failed', $user, $request);
-                $this->loginHistory->record($user, $email, $request, LoginHistoryService::STATUS_FAILED_CREDENTIALS, 'invalid_password');
-                throw ValidationException::withMessages(['email' => 'Invalid credentials.']);
-            }
-
+        DB::transaction(function () use ($user) {
             $user->forceFill([
                 'failed_login_attempts' => 0,
                 'locked_until'          => null,
                 'last_activity'         => now(),
             ])->save();
-
-            Auth::login($user);
-            $request->session()->regenerate();
-
-            $this->logAuthEvent('login.success', $user, $request);
-            $this->loginHistory->record($user, $email, $request, LoginHistoryService::STATUS_SUCCESS);
-
-            // Series R — Task R4: clone the role's default dashboard layout
-            // to the user the first time they log in. Idempotent: subsequent
-            // logins are no-ops because user-owned rows already exist.
-            // Skipped silently for system_admin (sees every widget anyway).
-            if ($user->role?->slug !== 'system_admin') {
-                try {
-                    $this->dashboardLayouts->cloneRoleDefaultToUser($user);
-                } catch (\Throwable $e) {
-                    // Never block login on a dashboard hiccup — log and proceed.
-                    Log::channel('auth')->warning('dashboard.clone_failed', [
-                        'user_id' => $user->id,
-                        'message' => $e->getMessage(),
-                    ]);
-                }
-            }
-
-            return $user->fresh(['role.permissions']);
         });
+
+        Auth::login($user);
+        $request->session()->regenerate();
+
+        $this->logAuthEvent('login.success', $user, $request);
+        $this->loginHistory->record($user, $email, $request, LoginHistoryService::STATUS_SUCCESS);
+
+        // Series R — Task R4: clone the role's default dashboard layout
+        // to the user the first time they log in. Idempotent: subsequent
+        // logins are no-ops because user-owned rows already exist.
+        // Skipped silently for system_admin (sees every widget anyway).
+        if ($user->role?->slug !== 'system_admin') {
+            try {
+                $this->dashboardLayouts->cloneRoleDefaultToUser($user);
+            } catch (\Throwable $e) {
+                // Never block login on a dashboard hiccup — log and proceed.
+                Log::channel('auth')->warning('dashboard.clone_failed', [
+                    'user_id' => $user->id,
+                    'message' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return $user->fresh(['role.permissions']);
     }
 
     public function logout(Request $request): void
