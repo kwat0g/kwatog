@@ -43,6 +43,7 @@ use App\Modules\Leave\Listeners\NotifyOnLeaveRejected;
 use App\Modules\Leave\Listeners\NotifyOnLeaveSubmitted;
 use App\Modules\MRP\Events\MachineStatusChanged;
 use App\Modules\Payroll\Events\PayrollPeriodFinalized;
+use App\Modules\Payroll\Listeners\GenerateBankFileOnPayrollFinalized;
 use App\Modules\Payroll\Listeners\NotifyEmployeesOnPayrollFinalized;
 use App\Modules\Production\Events\MachineBreakdownDetected;
 use App\Modules\Production\Events\WorkOrderCompleted;
@@ -164,6 +165,7 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(SeparationInitiated::class,     [NotifyOnSeparationInitiated::class,         'handle']);
         Event::listen(ClearanceFullySigned::class,    [DeactivateAccountOnClearanceComplete::class,'handle']);
         Event::listen(PayrollPeriodFinalized::class,  [NotifyEmployeesOnPayrollFinalized::class,   'handle']);
+        Event::listen(PayrollPeriodFinalized::class,  [GenerateBankFileOnPayrollFinalized::class,  'handle']);
 
         // Leave lifecycle notifications
         Event::listen(LeaveRequestSubmitted::class, [NotifyOnLeaveSubmitted::class, 'handle']);
