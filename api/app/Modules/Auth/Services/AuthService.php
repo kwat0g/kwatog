@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Auth\Services;
 
+use App\Common\Models\AuditLog;
 use App\Modules\Admin\Services\LoginHistoryService;
 use App\Modules\Auth\Models\PasswordHistory;
 use App\Modules\Auth\Models\User;
@@ -46,6 +47,8 @@ class AuthService
         $user = User::where('email', $email)->first();
 
         if (! $user) {
+            // Unknown-email attempts are tracked via LoginHistory; no audit_logs
+            // row (which requires a real user_id at model_id for filterability).
             $this->loginHistory->record(null, $email, $request, LoginHistoryService::STATUS_FAILED_CREDENTIALS, 'unknown_email');
             throw ValidationException::withMessages(['email' => 'Invalid credentials.']);
         }
@@ -176,5 +179,44 @@ class AuthService
             'ip'         => $request->ip(),
             'user_agent' => $request->userAgent(),
         ]);
+
+        // Mirror to audit_logs so the Admin Audit Log UI can surface auth
+        // events. Best-effort — never block authentication on a logging
+        // failure. The `action` column is varchar(20), so the one event
+        // name that exceeds that ('login.locked_threshold', 22 chars) is
+        // mapped to a shorter slug. The Log::channel('auth') sink above
+        // keeps the long form for low-level debugging.
+        try {
+            AuditLog::create([
+                'user_id'    => $user->id,
+                'action'     => $this->auditActionFor($event),
+                'model_type' => 'auth.event',
+                'model_id'   => $user->id,
+                'old_values' => null,
+                'new_values' => ['email' => $user->email],
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'created_at' => now(),
+            ]);
+        } catch (\Throwable $e) {
+            Log::channel('auth')->warning('audit_log_mirror_failed', [
+                'event'   => $event,
+                'user_id' => $user->id,
+                'error'   => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Map a long-form auth event name onto something that fits the
+     * varchar(20) `audit_logs.action` column. Today only one event needs
+     * shortening; all others pass through unchanged.
+     */
+    private function auditActionFor(string $event): string
+    {
+        return match ($event) {
+            'login.locked_threshold' => 'login.lockout',
+            default                  => $event,
+        };
     }
 }
