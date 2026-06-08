@@ -28,6 +28,10 @@ import {
   TrendingUp,
   RotateCcw,
   Building2,
+  BarChart2,
+  PieChart,
+  Landmark,
+  Store,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
@@ -121,10 +125,17 @@ const SECTIONS: NavSection[] = [
   {
     label: 'Finance',
     items: [
-      { to: '/accounting/journal-entries', label: 'Journal Entries', icon: BookOpen, feature: 'accounting', permission: 'accounting.journal.view' },
-      { to: '/accounting/invoices', label: 'Invoices (AR)',  icon: FileText, feature: 'accounting', permission: 'accounting.invoices.view' },
-      { to: '/accounting/bills',    label: 'Bills (AP)',     icon: Receipt,  feature: 'accounting', permission: 'accounting.bills.view' },
-      { to: '/budgeting/transfers', label: 'Budget Transfers', icon: ArrowLeftRight, feature: 'accounting', permission: 'accounting.budget.view' },
+      { to: '/accounting/coa',              label: 'Chart of Accounts', icon: Landmark,       feature: 'accounting', permission: 'accounting.coa.view' },
+      { to: '/accounting/journal-entries',  label: 'Journal Entries',   icon: BookOpen,       feature: 'accounting', permission: 'accounting.journal.view' },
+      { to: '/accounting/invoices',         label: 'Invoices (AR)',     icon: FileText,       feature: 'accounting', permission: 'accounting.invoices.view' },
+      { to: '/accounting/bills',            label: 'Bills (AP)',        icon: Receipt,        feature: 'accounting', permission: 'accounting.bills.view' },
+      { to: '/accounting/vendors',          label: 'Vendors',           icon: Store,          feature: 'accounting', permission: 'accounting.vendors.view' },
+      { to: '/accounting/trial-balance',    label: 'Trial Balance',     icon: BarChart2,      feature: 'accounting', permission: 'accounting.statements.view' },
+      { to: '/accounting/income-statement', label: 'Income Statement',  icon: TrendingUp,     feature: 'accounting', permission: 'accounting.statements.view' },
+      { to: '/accounting/balance-sheet',    label: 'Balance Sheet',     icon: BarChart2,      feature: 'accounting', permission: 'accounting.statements.view' },
+      { to: '/budgeting',                   label: 'Budgets',           icon: PieChart,       permission: 'budgeting.view' },
+      { to: '/budgeting/budget-vs-actual',  label: 'Budget vs Actual',  icon: BarChart2,      permission: 'budgeting.view' },
+      { to: '/budgeting/transfers',         label: 'Budget Transfers',  icon: ArrowLeftRight, feature: 'accounting', permission: 'accounting.budget.view' },
     ],
   },
   {
