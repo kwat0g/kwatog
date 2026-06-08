@@ -52,6 +52,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Dev-only: log queries that exceed 100ms (no-op in non-local envs)
         $middleware->api(append: [
+            \Illuminate\Routing\Middleware\ThrottleRequests::class.':api',
             LogSlowQueries::class,
         ]);
     })
