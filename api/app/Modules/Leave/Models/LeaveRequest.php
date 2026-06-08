@@ -59,4 +59,14 @@ class LeaveRequest extends Model
     {
         return $this->belongsTo(User::class, 'hr_approver_id');
     }
+
+    /**
+     * ApprovalService hook — the submitter is the employee's user account,
+     * not the employee_id column itself.
+     */
+    public function approvalSubmitterId(): ?int
+    {
+        $userId = $this->employee()->value('user_id');
+        return $userId !== null ? (int) $userId : null;
+    }
 }

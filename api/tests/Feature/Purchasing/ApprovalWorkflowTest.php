@@ -129,8 +129,9 @@ class ApprovalWorkflowTest extends TestCase
         $this->assertSame(1, $nextStep->step_order);
         $this->assertSame('department_head', $nextStep->role_slug);
 
-        // Approve step 1 (system_admin can approve any step)
-        $approver = $this->makeUser('system_admin');
+        // Approve step 1 with the department_head role (system_admin bypass
+        // was removed in Task 2 — only the exact step role may approve).
+        $approver = $this->makeUser('department_head');
         $approvals->approve($submitted, $approver, 'Looks good');
 
         // Next step should now be step 2 (production_manager)
@@ -162,29 +163,28 @@ class ApprovalWorkflowTest extends TestCase
         $approvals = app(ApprovalService::class);
 
         // The PR total is 25000 (< 50000 threshold), so step 4 is skipped.
-        // We need to approve steps 1, 2, and 3.
-        $approver = $this->makeUser('system_admin');
+        // We need to approve steps 1, 2, and 3 — each by the matching role.
+        $deptHead       = $this->makeUser('department_head');
+        $productionMgr  = $this->makeUser('production_manager');
+        $purchasingOff  = $this->makeUser('purchasing_officer');
 
-        // Before approval chain, entity is not fully approved
         $this->assertFalse($approvals->isFullyApproved($submitted));
 
-        // Approve step 1 (department_head)
-        $result = $svc->approve($submitted, $approver, 'Step 1 approved');
+        // Step 1: department_head
+        $result = $svc->approve($submitted, $deptHead, 'Step 1 approved');
         $this->assertSame(PurchaseRequestStatus::Pending, $result->status);
 
-        // Approve step 2 (production_manager)
-        $result = $svc->approve($result, $approver, 'Step 2 approved');
+        // Step 2: production_manager
+        $result = $svc->approve($result, $productionMgr, 'Step 2 approved');
         $this->assertSame(PurchaseRequestStatus::Pending, $result->status);
 
-        // Approve step 3 (purchasing_officer) — this should complete the chain
-        $result = $svc->approve($result, $approver, 'Step 3 approved');
+        // Step 3: purchasing_officer — completes the chain
+        $result = $svc->approve($result, $purchasingOff, 'Step 3 approved');
 
-        // Entity should now be fully approved
         $this->assertSame(PurchaseRequestStatus::Approved, $result->status);
         $this->assertNotNull($result->approved_at);
         $this->assertTrue($approvals->isFullyApproved($result));
 
-        // All non-skipped records should be 'approved'
         $records = $approvals->chain($result);
         foreach ($records as $record) {
             $this->assertContains($record->action, ['approved', 'skipped']);
@@ -203,21 +203,19 @@ class ApprovalWorkflowTest extends TestCase
         /** @var ApprovalService $approvals */
         $approvals = app(ApprovalService::class);
 
-        $approver = $this->makeUser('system_admin');
+        // Step 1 is approved by department_head, step 2 is rejected by production_manager.
+        $deptHead      = $this->makeUser('department_head');
+        $productionMgr = $this->makeUser('production_manager');
 
-        // Approve step 1
-        $svc->approve($submitted, $approver, 'Step 1 OK');
+        $svc->approve($submitted, $deptHead, 'Step 1 OK');
         $fresh = $submitted->fresh();
 
-        // Reject at step 2
-        $rejected = $svc->reject($fresh, $approver, 'Budget not available');
+        $rejected = $svc->reject($fresh, $productionMgr, 'Budget not available');
 
-        // Entity status should be rejected
         $this->assertSame(PurchaseRequestStatus::Rejected, $rejected->status);
         $this->assertTrue($approvals->isRejected($rejected));
         $this->assertFalse($approvals->isFullyApproved($rejected));
 
-        // Step 2 should be 'rejected'
         $step2 = ApprovalRecord::where('approvable_type', $rejected->getMorphClass())
             ->where('approvable_id', $rejected->id)
             ->where('step_order', 2)
@@ -225,14 +223,12 @@ class ApprovalWorkflowTest extends TestCase
         $this->assertSame('rejected', $step2->action);
         $this->assertSame('Budget not available', $step2->remarks);
 
-        // Step 3 should be 'skipped' (subsequent steps after rejection)
         $step3 = ApprovalRecord::where('approvable_type', $rejected->getMorphClass())
             ->where('approvable_id', $rejected->id)
             ->where('step_order', 3)
             ->first();
         $this->assertSame('skipped', $step3->action);
 
-        // No more steps to approve
         $this->assertNull($approvals->nextStep($rejected));
     }
 

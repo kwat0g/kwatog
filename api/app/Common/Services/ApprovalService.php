@@ -25,9 +25,14 @@ class ApprovalService
         DB::transaction(function () use ($approvable, $workflowType, $amount) {
             $workflow = WorkflowDefinition::where('workflow_type', $workflowType)->firstOrFail();
 
-            // Wipe any prior records for this approvable (resubmission).
+            // Resubmission: keep approved/rejected rows as audit history. Pending and
+            // skipped rows are cleared so the new attempt starts clean. This may yield
+            // multiple rows at the same step_order (one historical, one current);
+            // callers reading the chain should treat the latest non-terminal record
+            // per step_order as authoritative.
             ApprovalRecord::where('approvable_type', $approvable->getMorphClass())
                 ->where('approvable_id', $approvable->getKey())
+                ->whereIn('action', ['pending', 'skipped'])
                 ->delete();
 
             foreach ($workflow->steps as $step) {
@@ -55,6 +60,10 @@ class ApprovalService
             if (! $next) {
                 throw new RuntimeException('Nothing pending to approve.');
             }
+            $submitterId = $this->resolveSubmitterUserId($approvable);
+            if ($submitterId !== null && $submitterId === $user->id) {
+                abort(403, 'You cannot act on a record you submitted.');
+            }
             if (! $this->userMayActFor($user, $next->role_slug)) {
                 abort(403, "Only users with role '{$next->role_slug}' can approve this step.");
             }
@@ -74,6 +83,10 @@ class ApprovalService
             $next = $this->nextStep($approvable);
             if (! $next) {
                 throw new RuntimeException('Nothing pending to reject.');
+            }
+            $submitterId = $this->resolveSubmitterUserId($approvable);
+            if ($submitterId !== null && $submitterId === $user->id) {
+                abort(403, 'You cannot act on a record you submitted.');
             }
             if (! $this->userMayActFor($user, $next->role_slug)) {
                 abort(403, "Only users with role '{$next->role_slug}' can reject this step.");
@@ -126,6 +139,26 @@ class ApprovalService
 
     private function userMayActFor(User $user, string $roleSlug): bool
     {
-        return $user->role?->slug === $roleSlug || $user->role?->slug === 'system_admin';
+        return $user->role?->slug === $roleSlug;
+    }
+
+    /**
+     * Resolve the user id of whoever submitted this approvable, so approve()
+     * and reject() can refuse self-action. Returns null if the submitter cannot
+     * be determined (in which case the self-approval guard does not fire).
+     */
+    private function resolveSubmitterUserId(Model $approvable): ?int
+    {
+        // Hook: model may implement approvalSubmitterId(): ?int
+        if (method_exists($approvable, 'approvalSubmitterId')) {
+            $id = $approvable->approvalSubmitterId();
+            return $id !== null ? (int) $id : null;
+        }
+        foreach (['created_by', 'requested_by', 'submitted_by'] as $col) {
+            if (isset($approvable->{$col}) && $approvable->{$col} !== null) {
+                return (int) $approvable->{$col};
+            }
+        }
+        return null; // unknown — guard cannot fire
     }
 }

@@ -54,4 +54,14 @@ class EmployeeLoan extends Model
     {
         return $this->hasMany(LoanPayment::class, 'loan_id')->orderByDesc('payment_date');
     }
+
+    /**
+     * ApprovalService hook — the submitter is the employee's user account,
+     * not the employee_id column itself.
+     */
+    public function approvalSubmitterId(): ?int
+    {
+        $userId = $this->employee()->value('user_id');
+        return $userId !== null ? (int) $userId : null;
+    }
 }

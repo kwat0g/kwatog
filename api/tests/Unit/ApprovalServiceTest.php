@@ -8,6 +8,7 @@ use App\Common\Models\WorkflowDefinition;
 use App\Common\Services\ApprovalService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\Purchasing\Models\PurchaseOrder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -273,6 +274,180 @@ class ApprovalServiceTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // Task 2 — hardening: audit preservation, no admin bypass, no self-approval
+    // -------------------------------------------------------------------------
+
+    public function test_resubmit_preserves_acted_records(): void
+    {
+        WorkflowDefinition::create([
+            'workflow_type' => 't2_resubmit_keeps_approved',
+            'name'          => 'KeepApproved',
+            'steps'         => [
+                ['order' => 1, 'role' => 'purchasing_officer'],
+                ['order' => 2, 'role' => 'finance_officer'],
+            ],
+        ]);
+
+        $approver1 = User::factory()->create([
+            'role_id' => Role::firstOrCreate(['slug' => 'purchasing_officer'], ['name' => 'Purchasing Officer'])->id,
+        ]);
+
+        $po = $this->makePurchaseOrder();
+        $svc = app(ApprovalService::class);
+        $svc->submit($po, 't2_resubmit_keeps_approved');
+        $svc->approve($po, $approver1, 'looks good');
+
+        $approvedBefore = $svc->records($po)->where('action', 'approved')->count();
+        $this->assertSame(1, $approvedBefore);
+
+        $svc->submit($po, 't2_resubmit_keeps_approved');
+
+        $approvedAfter = $svc->records($po)->where('action', 'approved')->count();
+        $this->assertGreaterThanOrEqual(1, $approvedAfter, 'Approved audit row must survive resubmit');
+
+        // After resubmit, the new attempt restarts from step 1: nextStep must
+        // return a pending row at step_order = 1 (the surviving approved row
+        // from the prior attempt is audit history and must be ignored).
+        $next = $svc->nextStep($po);
+        $this->assertNotNull($next, 'Resubmit must produce a fresh pending row');
+        $this->assertSame('pending', $next->action);
+        $this->assertSame(1, (int) $next->step_order);
+
+        // The chain intentionally contains BOTH an approved row at step_order=1
+        // (historical) AND a pending row at step_order=1 (current). Callers
+        // reading the chain treat the latest non-terminal record per
+        // step_order as authoritative; see ApprovalService::submit() comment.
+        $chain = $svc->chain($po);
+        $atStepOne = $chain->where('step_order', 1);
+        $this->assertTrue(
+            $atStepOne->contains(fn ($r) => $r->action === 'approved'),
+            'Chain must retain approved audit row at step_order=1'
+        );
+        $this->assertTrue(
+            $atStepOne->contains(fn ($r) => $r->action === 'pending'),
+            'Chain must contain new pending row at step_order=1 after resubmit'
+        );
+    }
+
+    public function test_resubmit_clears_pending_rows(): void
+    {
+        WorkflowDefinition::create([
+            'workflow_type' => 't2_resubmit_pending',
+            'name'          => 'ResubmitPending',
+            'steps'         => [
+                ['order' => 1, 'role' => 'purchasing_officer'],
+                ['order' => 2, 'role' => 'finance_officer'],
+            ],
+        ]);
+
+        $po = $this->makePurchaseOrder();
+        $svc = app(ApprovalService::class);
+        $svc->submit($po, 't2_resubmit_pending');
+        $svc->submit($po, 't2_resubmit_pending');
+
+        $pendingCount = $svc->records($po)->where('action', 'pending')->count();
+        $this->assertSame(2, $pendingCount, 'Resubmit must not duplicate pending rows');
+    }
+
+    public function test_system_admin_cannot_approve_when_role_mismatches(): void
+    {
+        WorkflowDefinition::create([
+            'workflow_type' => 't2_admin_bypass',
+            'name'          => 'AdminBypass',
+            'steps'         => [
+                ['order' => 1, 'role' => 'department_head'],
+            ],
+        ]);
+
+        $admin = User::factory()->create([
+            'role_id' => Role::firstOrCreate(['slug' => 'system_admin'], ['name' => 'System Admin'])->id,
+        ]);
+
+        $po = $this->makePurchaseOrder();
+        $svc = app(ApprovalService::class);
+        $svc->submit($po, 't2_admin_bypass');
+
+        $this->expectException(HttpException::class);
+        $svc->approve($po, $admin);
+    }
+
+    public function test_matching_role_user_can_still_approve(): void
+    {
+        WorkflowDefinition::create([
+            'workflow_type' => 't2_matching_role',
+            'name'          => 'MatchingRole',
+            'steps'         => [
+                ['order' => 1, 'role' => 'department_head'],
+            ],
+        ]);
+
+        $dh = User::factory()->create([
+            'role_id' => Role::firstOrCreate(['slug' => 'department_head'], ['name' => 'Department Head'])->id,
+        ]);
+
+        $po = $this->makePurchaseOrder();
+        $svc = app(ApprovalService::class);
+        $svc->submit($po, 't2_matching_role');
+        $svc->approve($po, $dh, 'ok');
+
+        $this->assertSame('approved', $svc->records($po)->first()->action);
+    }
+
+    public function test_submitter_cannot_approve_own_record(): void
+    {
+        WorkflowDefinition::create([
+            'workflow_type' => 't2_self_approve',
+            'name'          => 'SelfApprove',
+            'steps'         => [
+                ['order' => 1, 'role' => 'department_head'],
+            ],
+        ]);
+
+        $submitter = User::factory()->create([
+            'role_id' => Role::firstOrCreate(['slug' => 'department_head'], ['name' => 'Department Head'])->id,
+        ]);
+
+        $po = $this->makePurchaseOrder(['created_by' => $submitter->id]);
+        $svc = app(ApprovalService::class);
+        $svc->submit($po, 't2_self_approve');
+
+        try {
+            $svc->approve($po, $submitter);
+            $this->fail('Submitter should not be able to approve own record');
+        } catch (HttpException $e) {
+            $this->assertSame(403, $e->getStatusCode());
+            $this->assertStringContainsStringIgnoringCase('cannot act', $e->getMessage());
+        }
+    }
+
+    public function test_submitter_cannot_reject_own_record(): void
+    {
+        WorkflowDefinition::create([
+            'workflow_type' => 't2_self_reject',
+            'name'          => 'SelfReject',
+            'steps'         => [
+                ['order' => 1, 'role' => 'department_head'],
+            ],
+        ]);
+
+        $submitter = User::factory()->create([
+            'role_id' => Role::firstOrCreate(['slug' => 'department_head'], ['name' => 'Department Head'])->id,
+        ]);
+
+        $po = $this->makePurchaseOrder(['created_by' => $submitter->id]);
+        $svc = app(ApprovalService::class);
+        $svc->submit($po, 't2_self_reject');
+
+        try {
+            $svc->reject($po, $submitter, 'no');
+            $this->fail('Submitter should not be able to reject own record');
+        } catch (HttpException $e) {
+            $this->assertSame(403, $e->getStatusCode());
+            $this->assertStringContainsStringIgnoringCase('cannot act', $e->getMessage());
+        }
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
 
@@ -294,5 +469,14 @@ class ApprovalServiceTest extends TestCase
             public function getKey() { return $this->fakeId; }
             public function getMorphClass(): string { return 'fake_approvable'; }
         };
+    }
+
+    /**
+     * Build a real PurchaseOrder row for the resubmit / self-approval tests.
+     * Goes through factories so vendor + creator FKs are satisfied.
+     */
+    private function makePurchaseOrder(array $overrides = []): PurchaseOrder
+    {
+        return PurchaseOrder::factory()->create($overrides);
     }
 }
