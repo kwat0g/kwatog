@@ -112,24 +112,27 @@ class InvoiceDraftNumberingTest extends TestCase
         $customer = Customer::create(['name' => 'Honda PH', 'payment_terms_days' => 30]);
         $svc      = app(InvoiceService::class);
 
-        // Draft #1 — will be cancelled before finalize.
+        // Draft #1 — first finalized invoice in this period must get -0001.
+        $first = $svc->finalize($this->makeDraft($svc, $user, $customer), $user);
+        $this->assertMatchesRegularExpression(
+            '/^INV-\d{6}-0001$/',
+            $first->invoice_number,
+            'First finalized invoice in the period must be sequence 0001.',
+        );
+
+        // Draft #2 — created and cancelled before finalize. Must NOT consume a number.
         $cancelled = $this->makeDraft($svc, $user, $customer);
         $this->assertNull($cancelled->invoice_number);
         $svc->cancel($cancelled, $user);
         $this->assertNull($cancelled->fresh()->invoice_number,
             'Cancelled drafts must remain NULL — they should not get a number stamped on cancel.');
 
-        // Draft #2 — first invoice ever finalized in this period.
-        $first = $svc->finalize($this->makeDraft($svc, $user, $customer), $user);
-
-        // Draft #3 — second invoice finalized.
+        // Draft #3 — must be -0002, not -0003. If cancel ever reserves a sequence,
+        // this assertion fails immediately.
         $second = $svc->finalize($this->makeDraft($svc, $user, $customer), $user);
-
-        // Numbers must be sequential — cancelled draft did not consume a slot.
-        $extractSeq = fn (string $no): int => (int) substr($no, -4);
-        $this->assertSame(
-            $extractSeq($first->invoice_number) + 1,
-            $extractSeq($second->invoice_number),
+        $this->assertMatchesRegularExpression(
+            '/^INV-\d{6}-0002$/',
+            $second->invoice_number,
             'Cancelled drafts must not leave gaps in the sequence.',
         );
     }
