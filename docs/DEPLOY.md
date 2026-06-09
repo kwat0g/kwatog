@@ -192,26 +192,59 @@ Run [SSL Labs](https://www.ssllabs.com/ssltest/) against the domain — target g
 
 ## 9. Daily backups
 
+The repo ships `scripts/db-backup.sh` which handles dump, retention,
+and optional off-site upload to S3 in one script. Cron entry on the
+host runs it via `docker compose exec`:
+
 ```bash
 sudo tee /etc/cron.daily/ogami-pgdump <<'EOF'
 #!/bin/sh
 set -eu
-BACKUP_DIR=/var/backups/ogami
-mkdir -p "$BACKUP_DIR"
-DATE=$(date +%Y%m%d-%H%M)
-docker compose -f /opt/ogami-erp/docker-compose.prod.yml exec -T db \
-    pg_dump -U "$(grep ^DB_USERNAME /opt/ogami-erp/.env | cut -d= -f2)" \
-            -d "$(grep ^DB_DATABASE /opt/ogami-erp/.env | cut -d= -f2)" \
-    | gzip > "$BACKUP_DIR/ogami-$DATE.sql.gz"
-# Prune anything older than 30 days.
-find "$BACKUP_DIR" -name 'ogami-*.sql.gz' -mtime +30 -delete
+cd /opt/ogami-erp
+# Source env so BACKUP_S3_BUCKET / AWS_* (if configured) reach the script.
+set -a; . ./.env; set +a
+docker compose -f docker-compose.prod.yml exec -T \
+    -e DB_HOST -e DB_PORT \
+    -e DB_USERNAME -e DB_PASSWORD -e DB_DATABASE \
+    -e BACKUP_DIR=/var/backups/ogami \
+    -e BACKUP_KEEP=30 \
+    -e BACKUP_S3_BUCKET -e BACKUP_S3_PREFIX \
+    -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_DEFAULT_REGION \
+    db /opt/scripts/db-backup.sh
 EOF
 sudo chmod +x /etc/cron.daily/ogami-pgdump
 sudo /etc/cron.daily/ogami-pgdump   # test once
 ```
 
-For off-site backups, configure rclone or `aws s3 cp` in the same script and
-upload to a private bucket.
+The script mounts at `/opt/scripts/db-backup.sh` inside the db container
+(add `- ./scripts:/opt/scripts:ro` to the `db` service volumes in
+`docker-compose.prod.yml` if not already there).
+
+### Off-site (S3) replication
+
+Daily backups live on the same droplet by default. To replicate off-site:
+
+1. Provision an S3 (or S3-compatible) bucket with versioning + lifecycle
+   rules — never reuse the prod AWS account/key for anything else.
+2. Set in `.env`:
+   ```
+   BACKUP_S3_BUCKET=s3://ogami-backups
+   BACKUP_S3_PREFIX=postgres/
+   AWS_ACCESS_KEY_ID=AKIA...
+   AWS_SECRET_ACCESS_KEY=...
+   AWS_DEFAULT_REGION=ap-southeast-1
+   ```
+3. The db container needs the AWS CLI. Either bake it into a custom
+   Dockerfile or install at runtime:
+   ```bash
+   docker compose -f docker-compose.prod.yml exec db \
+     apk add --no-cache aws-cli
+   ```
+4. Re-run the cron entry; you should see `uploading to s3://...` in the
+   stderr stream and the bucket should pick up the gzipped dump.
+
+When BACKUP_S3_BUCKET is unset (default), the script is local-only — no
+errors, no warnings.
 
 ## 10. Subsequent deploys
 

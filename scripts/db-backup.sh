@@ -48,6 +48,31 @@ fi
 SIZE="$(du -h "${OUT}" | cut -f1)"
 echo "backup written: ${OUT} (${SIZE})"
 
+# Phase 5b — optional off-site upload.
+#
+# If BACKUP_S3_BUCKET is set (e.g. 's3://ogami-backups') the dump is also
+# uploaded with `aws s3 cp`. The script silently no-ops the upload when:
+#   - BACKUP_S3_BUCKET is unset (local-only mode)
+#   - the aws CLI is not installed
+#   - the upload fails (logged + reported via exit code)
+#
+# Use AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_DEFAULT_REGION env
+# vars (already set via .env on the prod box) for authentication.
+if [ -n "${BACKUP_S3_BUCKET:-}" ]; then
+    if ! command -v aws >/dev/null 2>&1; then
+        echo "WARN: BACKUP_S3_BUCKET set but 'aws' CLI not installed; skipping upload" >&2
+    else
+        REMOTE="${BACKUP_S3_BUCKET%/}/${BACKUP_S3_PREFIX:-}$(basename "${OUT}")"
+        echo "uploading to ${REMOTE}"
+        if aws s3 cp "${OUT}" "${REMOTE}" --only-show-errors; then
+            echo "off-site copy ok"
+        else
+            echo "ERROR: off-site upload failed for ${OUT}" >&2
+            exit 2
+        fi
+    fi
+fi
+
 # Retention: list backups newest-first, skip the first BACKUP_KEEP, delete the rest.
 if [ "${BACKUP_KEEP}" -gt 0 ]; then
     # shellcheck disable=SC2012  # ls is fine for predictable filenames
