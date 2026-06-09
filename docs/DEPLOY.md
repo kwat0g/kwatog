@@ -268,7 +268,50 @@ docker compose -f docker-compose.prod.yml exec api php artisan queue:restart
 
 # Cache flush (admin escape hatch)
 docker compose -f docker-compose.prod.yml exec api php artisan cache:clear
+
+# Healthcheck (Phase 4 deep probe — db + redis + queue depth)
+curl -sS https://$SERVER_NAME/api/v1/health | jq
+
+# Slow-query log (Phase 5b)
+docker compose -f docker-compose.prod.yml exec api \
+  tail -f storage/logs/slow-queries-$(date +%F).log
 ```
+
+### Sentry / error tracking (optional)
+
+Phase 5b ships error-tracking *hooks* but does not bundle the SDK. To
+enable Sentry on a deployment:
+
+1. SSH into the droplet:
+   ```bash
+   cd /opt/ogami-erp
+   docker compose -f docker-compose.prod.yml exec api \
+     composer require sentry/sentry-laravel
+   ```
+2. Publish + edit config:
+   ```bash
+   docker compose -f docker-compose.prod.yml exec api \
+     php artisan sentry:publish --dsn=https://<your-public-key>@<your-org>.ingest.sentry.io/<project-id>
+   ```
+3. In `.env`, add:
+   ```
+   SENTRY_LARAVEL_DSN=https://...
+   SENTRY_TRACES_SAMPLE_RATE=0.1
+   SENTRY_PROFILES_SAMPLE_RATE=0.1
+   SENTRY_RELEASE=
+   ```
+4. Verify capture:
+   ```bash
+   docker compose -f docker-compose.prod.yml exec api \
+     php artisan sentry:test
+   ```
+
+The Phase 4 `X-Request-ID` middleware is already in place, so Sentry
+events carry the request-correlation id automatically via the log
+context (Sentry's Laravel integration picks up `Log::shareContext`).
+
+To leave Sentry disabled, do nothing — the absence of
+`SENTRY_LARAVEL_DSN` is a no-op.
 
 ---
 
