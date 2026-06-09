@@ -32,7 +32,7 @@ class LeaveRequestService
     public function list(array $filters, ?User $user = null): LengthAwarePaginator
     {
         $q = LeaveRequest::query()
-            ->with(['employee:id,employee_no,first_name,middle_name,last_name,suffix,department_id', 'leaveType', 'deptApprover:id,name', 'hrApprover:id,name']);
+            ->with(['employee:id,employee_no,first_name,middle_name,last_name,suffix,department_id', 'employee.department:id,name', 'leaveType', 'deptApprover:id,name', 'hrApprover:id,name']);
 
         if (!empty($filters['employee_id'])) {
             $empId = \App\Common\Support\HashIdFilter::decode(
@@ -80,22 +80,43 @@ class LeaveRequestService
                 throw new \InvalidArgumentException('End date must be on or after start date.');
             }
 
-            $days = $this->businessDaysInclusive($start, $end);
+            // M-18 — half-day leave. Must be a single-date request.
+            $halfDayPeriod = $data['half_day_period'] ?? null;
+            if ($halfDayPeriod !== null) {
+                if (! in_array($halfDayPeriod, ['am', 'pm'], true)) {
+                    throw new \InvalidArgumentException('half_day_period must be "am" or "pm".');
+                }
+                if (! $start->isSameDay($end)) {
+                    throw new \InvalidArgumentException('Half-day leave must start and end on the same date.');
+                }
+            }
+
+            $days = $halfDayPeriod !== null
+                ? 0.5
+                : $this->businessDaysInclusive($start, $end);
             $year = $start->year;
 
             $type = LeaveType::findOrFail($data['leave_type_id']);
 
-            // Balance check
+            // Balance check — locked inside the transaction so concurrent
+            // requests see the updated balance of whichever commits first.
             $bal = \App\Modules\Leave\Models\EmployeeLeaveBalance::query()
                 ->where('employee_id', $employeeId)
                 ->where('leave_type_id', $type->id)
                 ->where('year', $year)
+                ->lockForUpdate()
                 ->first();
             if ($bal && (float) $bal->remaining < $days) {
                 throw new RuntimeException("Insufficient leave balance ({$bal->remaining} remaining; {$days} requested).");
             }
 
-            // Overlap check
+            // Overlap check — lock overlapping rows to prevent concurrent
+            // insertions of overlapping leave requests.
+            //
+            // M-18 — half-day awareness. The base date-range query stays the
+            // same; we add a closure that excludes opposite-half collisions
+            // on a single-date request. An AM and a PM request on the same
+            // day do not collide. Any full-day on the same date does collide.
             $overlap = LeaveRequest::query()
                 ->where('employee_id', $employeeId)
                 ->whereIn('status', [LeaveRequestStatus::PendingDept->value, LeaveRequestStatus::PendingHr->value, LeaveRequestStatus::Approved->value])
@@ -107,6 +128,15 @@ class LeaveRequestService
                              ->where('end_date', '>=', $end->toDateString());
                       });
                 })
+                ->when($halfDayPeriod !== null, function ($q) use ($halfDayPeriod) {
+                    // Single-day half-day request: collides ONLY with rows that
+                    // are full-day (half_day_period IS NULL) OR same half.
+                    $q->where(function ($qq) use ($halfDayPeriod) {
+                        $qq->whereNull('half_day_period')
+                           ->orWhere('half_day_period', $halfDayPeriod);
+                    });
+                })
+                ->lockForUpdate()
                 ->exists();
             if ($overlap) {
                 throw new RuntimeException('You already have a leave request for these dates.');
@@ -119,6 +149,7 @@ class LeaveRequestService
                 'start_date'       => $start->toDateString(),
                 'end_date'         => $end->toDateString(),
                 'days'             => $days,
+                'half_day_period'  => $halfDayPeriod,
                 'reason'           => $data['reason'] ?? null,
                 'document_path'    => $data['document_path'] ?? null,
                 'status'           => LeaveRequestStatus::PendingDept->value,
@@ -126,9 +157,9 @@ class LeaveRequestService
 
             $this->approvals->submit($req, 'leave_request');
 
-            DB::afterCommit(fn () => LeaveRequestSubmitted::dispatch($req->fresh(['employee', 'leaveType'])));
+            DB::afterCommit(fn () => LeaveRequestSubmitted::dispatch($req->fresh(['employee', 'employee.department', 'leaveType'])));
 
-            return $req->load(['employee', 'leaveType']);
+            return $req->load(['employee', 'employee.department', 'leaveType']);
         });
     }
 
@@ -146,9 +177,9 @@ class LeaveRequestService
                 'dept_approved_at' => now(),
             ]);
 
-            DB::afterCommit(fn () => LeaveRequestPendingHR::dispatch($req->fresh(['employee', 'leaveType'])));
+            DB::afterCommit(fn () => LeaveRequestPendingHR::dispatch($req->fresh(['employee', 'employee.department', 'leaveType'])));
 
-            return $req->fresh(['employee', 'leaveType', 'deptApprover']);
+            return $req->fresh(['employee', 'employee.department', 'leaveType', 'deptApprover']);
         });
     }
 
@@ -173,9 +204,9 @@ class LeaveRequestService
             // Side effect 2: mark attendance days as on_leave.
             $this->markAttendance($req);
 
-            DB::afterCommit(fn () => LeaveRequestApproved::dispatch($req->fresh(['employee', 'leaveType'])));
+            DB::afterCommit(fn () => LeaveRequestApproved::dispatch($req->fresh(['employee', 'employee.department', 'leaveType'])));
 
-            return $req->fresh(['employee', 'leaveType', 'deptApprover', 'hrApprover']);
+            return $req->fresh(['employee', 'employee.department', 'leaveType', 'deptApprover', 'hrApprover']);
         });
     }
 
@@ -191,9 +222,9 @@ class LeaveRequestService
                 'rejection_reason' => $reason,
             ]);
 
-            DB::afterCommit(fn () => LeaveRequestRejected::dispatch($req->fresh(['employee', 'leaveType'])));
+            DB::afterCommit(fn () => LeaveRequestRejected::dispatch($req->fresh(['employee', 'employee.department', 'leaveType'])));
 
-            return $req->fresh(['employee', 'leaveType']);
+            return $req->fresh(['employee', 'employee.department', 'leaveType']);
         });
     }
 
@@ -212,7 +243,7 @@ class LeaveRequestService
                 $this->unmarkAttendance($req);
             }
 
-            return $req->fresh(['employee', 'leaveType']);
+            return $req->fresh(['employee', 'employee.department', 'leaveType']);
         });
     }
 

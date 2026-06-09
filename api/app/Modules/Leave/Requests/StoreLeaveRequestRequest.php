@@ -29,8 +29,10 @@ class StoreLeaveRequestRequest extends FormRequest
             'leave_type_id' => ['required', 'string'],
             'start_date'    => ['required', 'date', 'after_or_equal:'.now()->subDays(30)->toDateString(), 'before_or_equal:'.now()->addYears(1)->toDateString()],
             'end_date'      => ['required', 'date', 'after_or_equal:start_date', 'before_or_equal:'.now()->addYears(1)->toDateString()],
-            'reason'        => ['nullable', 'string', 'max:2000'],
-            'document_path' => ['nullable', 'string', 'max:500'],
+            // M-18 half-day leave: nullable enum 'am'|'pm'.
+            'half_day_period' => ['nullable', 'in:am,pm'],
+            'reason'          => ['nullable', 'string', 'max:2000'],
+            'document_path'   => ['nullable', 'string', 'max:500'],
         ];
     }
 
