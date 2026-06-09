@@ -215,6 +215,99 @@ class BudgetController extends Controller
     }
 
     /**
+     * L-26 — List revisions for a budget.
+     */
+    public function listRevisions(Budget $budget): JsonResponse
+    {
+        $revisions = $budget->revisions()
+            ->with(['submittedBy:id,name', 'approvedBy:id,name'])
+            ->orderByDesc('revision_number')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data'    => \App\Modules\Accounting\Resources\BudgetRevisionResource::collection($revisions),
+            'error'   => null,
+            'meta'    => null,
+        ]);
+    }
+
+    /**
+     * L-26 — Create a revision request for an approved budget. The change set
+     * is captured as JSON; an approver acts on it via approveRevision below.
+     */
+    public function storeRevision(Request $request, Budget $budget): JsonResponse
+    {
+        $validated = $request->validate([
+            'changes'   => ['required', 'array', 'min:1'],
+            'reason'    => ['required', 'string', 'max:1000'],
+        ]);
+
+        if (! in_array($budget->status, ['approved', 'active'], true)) {
+            return response()->json([
+                'success' => false,
+                'data'    => null,
+                'error'   => 'Only approved/active budgets can be revised.',
+                'meta'    => null,
+            ], 422);
+        }
+
+        $next = (int) $budget->revisions()->max('revision_number') + 1;
+
+        $revision = $budget->revisions()->create([
+            'revision_number' => $next,
+            'changes'         => $validated['changes'],
+            'reason'          => $validated['reason'],
+            'submitted_by'    => $request->user()->id,
+            'status'          => 'pending',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'data'    => new \App\Modules\Accounting\Resources\BudgetRevisionResource(
+                $revision->load(['submittedBy:id,name'])
+            ),
+            'error'   => null,
+            'meta'    => null,
+        ], 201);
+    }
+
+    /**
+     * L-26 — Approve a pending revision. Stamps approver + status only;
+     * applying the changes to the budget itself is left to whichever
+     * downstream service knows the field semantics (handled via the
+     * existing budget update flow if/when the operator chooses to).
+     */
+    public function approveRevision(Request $request, Budget $budget, \App\Modules\Accounting\Models\BudgetRevision $revision): JsonResponse
+    {
+        if ($revision->budget_id !== $budget->id) {
+            abort(404);
+        }
+        if ($revision->status !== 'pending') {
+            return response()->json([
+                'success' => false,
+                'data'    => null,
+                'error'   => 'Only pending revisions can be approved.',
+                'meta'    => null,
+            ], 422);
+        }
+
+        $revision->update([
+            'status'      => 'approved',
+            'approved_by' => $request->user()->id,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'data'    => new \App\Modules\Accounting\Resources\BudgetRevisionResource(
+                $revision->fresh(['submittedBy:id,name', 'approvedBy:id,name'])
+            ),
+            'error'   => null,
+            'meta'    => null,
+        ]);
+    }
+
+    /**
      * Budget overview (department summary).
      */
     public function overview(Request $request): JsonResponse

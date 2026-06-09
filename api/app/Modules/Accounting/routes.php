@@ -101,6 +101,10 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
         Route::post('/{budget}/submit',               [BudgetController::class, 'submit'])       ->middleware('permission:budgeting.manage');
         Route::post('/{budget}/approve',              [BudgetController::class, 'approve'])      ->middleware('permission:budgeting.approve');
         Route::post('/{budget}/close',                [BudgetController::class, 'close'])        ->middleware('permission:budgeting.manage');
+        // L-26 Budget revisions.
+        Route::get('/{budget}/revisions',                       [BudgetController::class, 'listRevisions'])    ->middleware('permission:budgeting.view');
+        Route::post('/{budget}/revisions',                      [BudgetController::class, 'storeRevision'])    ->middleware('permission:budgeting.manage');
+        Route::post('/{budget}/revisions/{revision}/approve',   [BudgetController::class, 'approveRevision'])  ->middleware('permission:budgeting.approve');
     });
 
     Route::prefix('budget-transfers')->group(function () {
