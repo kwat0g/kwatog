@@ -177,4 +177,67 @@ class DowntimeAnalyticsService
             ];
         })->toArray();
     }
+
+    /**
+     * L-39 — Pareto of downtime by category. Sorted DESC by minutes with
+     * a running cumulative percentage so the SPA can render the classic
+     * Pareto bar+line chart (top categories vs cumulative contribution).
+     *
+     * @return array<int, array{
+     *   category: string, label: string, minutes: int, count: int,
+     *   percent: float, cumulative_percent: float
+     * }>
+     */
+    public function categoryPareto(?int $machineId = null, int $days = 30): array
+    {
+        $from = now()->subDays($days)->startOfDay();
+        $to   = now()->endOfDay();
+
+        $rows = MachineDowntime::query()
+            ->whereBetween('start_time', [$from, $to])
+            ->when($machineId, fn ($q) => $q->where('machine_id', $machineId))
+            ->select('category',
+                DB::raw('COALESCE(SUM(duration_minutes),0) as minutes'),
+                DB::raw('COUNT(*) as cnt')
+            )
+            ->groupBy('category')
+            ->orderByDesc('minutes')
+            ->get();
+
+        $totalMinutes = (int) $rows->sum('minutes');
+        if ($totalMinutes === 0) {
+            return [];
+        }
+
+        $running = 0;
+        return $rows->map(function ($row) use ($totalMinutes, &$running) {
+            $minutes = (int) $row->minutes;
+            $running += $minutes;
+
+            $category = $row->category instanceof MachineDowntimeCategory
+                ? $row->category->value
+                : (string) $row->category;
+
+            return [
+                'category'           => $category,
+                'label'              => $this->labelFor($category),
+                'minutes'            => $minutes,
+                'count'              => (int) $row->cnt,
+                'percent'            => round($minutes / $totalMinutes * 100, 2),
+                'cumulative_percent' => round($running / $totalMinutes * 100, 2),
+            ];
+        })->toArray();
+    }
+
+    private function labelFor(string $category): string
+    {
+        return match ($category) {
+            'breakdown'           => 'Breakdown',
+            'changeover'          => 'Changeover',
+            'material_shortage'   => 'Material Shortage',
+            'no_order'            => 'No Order',
+            'planned_maintenance' => 'Planned Maintenance',
+            default               => ucwords(str_replace('_', ' ', $category)),
+        };
+    }
 }

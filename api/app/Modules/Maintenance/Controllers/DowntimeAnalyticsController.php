@@ -79,4 +79,22 @@ class DowntimeAnalyticsController
 
         return response()->json(['data' => $data]);
     }
+
+    /**
+     * L-39 — GET /maintenance/downtime-analytics/pareto
+     */
+    public function pareto(Request $request): JsonResponse
+    {
+        $request->validate([
+            'machine_id' => ['nullable', 'integer', 'exists:machines,id'],
+            'days'       => ['nullable', 'integer', 'min:1', 'max:365'],
+        ]);
+
+        $data = $this->analytics->categoryPareto(
+            $request->filled('machine_id') ? (int) $request->input('machine_id') : null,
+            (int) $request->input('days', 30),
+        );
+
+        return response()->json(['data' => $data]);
+    }
 }

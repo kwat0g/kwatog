@@ -69,4 +69,7 @@ Route::middleware(['auth:sanctum', 'feature:maintenance'])->prefix('maintenance'
         ->middleware('permission:maintenance.view');
     Route::get('/downtime-analytics/all-machines', [DowntimeAnalyticsController::class, 'allMachines'])
         ->middleware('permission:maintenance.view');
+    // L-39 Pareto.
+    Route::get('/downtime-analytics/pareto', [DowntimeAnalyticsController::class, 'pareto'])
+        ->middleware('permission:maintenance.view');
 });
