@@ -38,11 +38,46 @@ Route::match(['get', 'post'], '/broadcasting/auth', [BroadcastController::class,
 |
 */
 
-Route::get('/health', fn () => response()->json([
-    'status'   => 'ok',
-    'service'  => 'ogami-api',
-    'time'     => now()->toIso8601String(),
-]));
+Route::get('/health', function () {
+    // Phase 4 — deep healthcheck. Reports component-by-component so a load
+    // balancer can route around partial failures and uptime monitors get
+    // useful telemetry instead of a flat 200.
+    $checks = [
+        'app'   => true,
+        'time'  => now()->toIso8601String(),
+        'db'    => false,
+        'redis' => false,
+        'queue' => null,
+    ];
+
+    try {
+        \Illuminate\Support\Facades\DB::connection()->getPdo();
+        $checks['db'] = true;
+    } catch (\Throwable $e) {
+        // db stays false
+    }
+
+    try {
+        if (\Illuminate\Support\Facades\Redis::connection()->ping()) {
+            $checks['redis'] = true;
+        }
+    } catch (\Throwable $e) {
+        // redis stays false
+    }
+
+    try {
+        $checks['queue'] = \Illuminate\Support\Facades\Queue::size('default');
+    } catch (\Throwable $e) {
+        // queue stays null
+    }
+
+    $healthy = $checks['app'] && $checks['db'] && $checks['redis'];
+    return response()->json([
+        'status'  => $healthy ? 'ok' : 'degraded',
+        'service' => 'ogami-api',
+        'checks'  => $checks,
+    ], $healthy ? 200 : 503);
+});
 
 /* ─── Alerts (Task A2) — cross-module so registered here ─────────── */
 Route::middleware(['auth:sanctum'])->prefix('alerts')->group(function () {
