@@ -35,6 +35,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Global API middleware additions — every API request gets these.
         $middleware->api(prepend: [
+            \App\Common\Middleware\RequestId::class,
             ForceJsonResponse::class,
             SanitizeInput::class,
         ]);
