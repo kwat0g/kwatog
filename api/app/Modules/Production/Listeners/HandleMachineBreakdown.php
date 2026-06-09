@@ -20,9 +20,9 @@ use Illuminate\Support\Facades\DB;
  * On from!=breakdown → to=breakdown:
  *  - Pause the running WO (if any) via WorkOrderService::pause; this opens
  *    a MachineDowntime row tagged Breakdown.
- *  - Notification + alternative-machine suggestion list is left as a TODO
- *    for a follow-up PR (the data is queryable today via the snapshot
- *    endpoint and the mold-machine compatibility join).
+ *  - Notification fan-out + alternative-machine list are handled downstream
+ *    by NotifyOnMachineBreakdown; this listener only handles the WO pause
+ *    and machine-downtime row lifecycle.
  *
  * On from IN (breakdown, maintenance) → to IN (idle, running):
  *  - Close any open machine_downtimes row for the machine (sets end_time

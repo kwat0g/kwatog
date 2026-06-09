@@ -83,13 +83,26 @@ class MrpEngineService
             $grossPerItem = []; // [item_id => float]
             $earliestNeedPerItem = []; // [item_id => Carbon]
             $linesPerItem = []; // [item_id => array of so_line_id]
+            // L-32 — warnings collected during the explode pass are carried
+            // into the diagnostics array built below.
+            $diagnostics = [];
 
             foreach ($lines as $line) {
                 $exploded = collect();
                 try {
                     $exploded = $this->boms->explode((int) $line->product_id, (float) $line->quantity);
                 } catch (\Throwable $e) {
-                    // No BOM — skip; the work-order side will still be created.
+                    // L-32 — No active BOM. Skip the demand explosion (the WO
+                    // side still produces a planned WO so PPC can act), but
+                    // record a warning row so the plan detail page surfaces
+                    // the gap instead of failing silently.
+                    $diagnostics[] = [
+                        'kind'             => 'warning',
+                        'type'             => 'missing_bom',
+                        'product_id'       => (int) $line->product_id,
+                        'sales_order_line_id' => (int) $line->id,
+                        'message'          => 'No active BOM found for this product; demand explosion skipped.',
+                    ];
                     continue;
                 }
                 foreach ($exploded as $row) {
@@ -118,7 +131,7 @@ class MrpEngineService
             ]);
 
             // Calculate net requirements per material.
-            $diagnostics = [];
+            // Note: $diagnostics may already contain BOM-missing warnings from above.
             $shortages = []; // [item_id => ['net' => float, 'order_by' => Carbon, 'priority' => string, 'unit' => string]]
 
             foreach ($grossPerItem as $itemId => $gross) {

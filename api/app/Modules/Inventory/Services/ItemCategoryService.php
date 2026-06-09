@@ -13,19 +13,23 @@ class ItemCategoryService
 {
     public function tree(): Collection
     {
-        return ItemCategory::query()
-            ->with([
-                'parent',
-                'children' => fn ($q) => $q->orderBy('name'),
-                'children.parent',
-                'children.children' => fn ($q) => $q->orderBy('name'),
-                'children.children.parent',
-                'children.children.children' => fn ($q) => $q->orderBy('name'),
-                'children.children.children.parent',
-            ])
-            ->whereNull('parent_id')
-            ->orderBy('name')
-            ->get();
+        // M-27 — load all rows in one query, then build any-depth tree in PHP.
+        $all = ItemCategory::query()->orderBy('name')->get();
+        $byParent = $all->groupBy('parent_id');
+
+        $build = function (ItemCategory $node) use (&$build, $byParent) {
+            $children = ($byParent[$node->id] ?? collect())
+                ->map(fn (ItemCategory $child) => $build($child))
+                ->values();
+            $node->setRelation('children', $children);
+            return $node;
+        };
+
+        $roots = ($byParent->get(null) ?? collect())
+            ->map(fn (ItemCategory $root) => $build($root))
+            ->values();
+
+        return new Collection($roots->all());
     }
 
     public function list(): Collection
@@ -35,14 +39,14 @@ class ItemCategoryService
 
     public function create(array $data): ItemCategory
     {
-        return DB::transaction(fn () => ItemCategory::create($data));
+        return DB::transaction(fn () => ItemCategory::create($data)->load('parent'));
     }
 
     public function update(ItemCategory $cat, array $data): ItemCategory
     {
         return DB::transaction(function () use ($cat, $data) {
             $cat->update($data);
-            return $cat->fresh();
+            return $cat->fresh(['parent']);
         });
     }
 

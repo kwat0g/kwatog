@@ -40,11 +40,10 @@ class DemandForecastController extends Controller
             $q->where('method', $method);
         }
 
-        $rows = $q->orderBy('forecast_year')->orderBy('forecast_month')->limit(500)->get();
+        $perPage = min(max((int) $request->query('per_page', 100), 1), 500);
+        $paginated = $q->orderBy('forecast_year')->orderBy('forecast_month')->paginate($perPage);
 
-        return response()->json([
-            'data' => DemandForecastResource::collection($rows),
-        ]);
+        return DemandForecastResource::collection($paginated)->response();
     }
 
     /**
@@ -68,7 +67,7 @@ class DemandForecastController extends Controller
         }
 
         $now    = Carbon::now();
-        $months = (int) ($data['months_back'] ?? 12);
+        $months = (int) ($data['months_back'] ?: 12);
 
         $series = $this->service->historicalDemand(
             $productId,

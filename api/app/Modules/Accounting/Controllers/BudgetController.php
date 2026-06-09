@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Controllers;
 
+use App\Common\Support\HashIdFilter;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Budget;
 use App\Modules\Accounting\Models\FiscalYear;
 use App\Modules\Accounting\Resources\BudgetResource;
 use App\Modules\Accounting\Resources\FiscalYearResource;
 use App\Modules\Accounting\Services\BudgetEnforcementService;
 use App\Modules\Accounting\Services\BudgetService;
+use App\Modules\HR\Models\Department;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -22,10 +25,51 @@ class BudgetController extends Controller
     ) {}
 
     /**
+     * Decode HashID values on the incoming request so the rest of the
+     * controller can stay numeric. Skips values that already look like
+     * integers (Artisan, tests) or are missing.
+     */
+    private function decodeHashIds(Request $request): void
+    {
+        $merge = [];
+
+        $fiscalYearId = $request->input('fiscal_year_id');
+        if (is_string($fiscalYearId) && $fiscalYearId !== '' && ! ctype_digit($fiscalYearId)) {
+            $merge['fiscal_year_id'] = HashIdFilter::decode($fiscalYearId, FiscalYear::class);
+        }
+
+        $departmentId = $request->input('department_id');
+        if (is_string($departmentId) && $departmentId !== '' && ! ctype_digit($departmentId)) {
+            $merge['department_id'] = HashIdFilter::decode($departmentId, Department::class);
+        }
+
+        $items = $request->input('line_items');
+        if (is_array($items)) {
+            $changed = false;
+            foreach ($items as $idx => $line) {
+                $acctId = $line['account_id'] ?? null;
+                if (is_string($acctId) && $acctId !== '' && ! ctype_digit($acctId)) {
+                    $items[$idx]['account_id'] = HashIdFilter::decode($acctId, Account::class);
+                    $changed = true;
+                }
+            }
+            if ($changed) {
+                $merge['line_items'] = $items;
+            }
+        }
+
+        if (! empty($merge)) {
+            $request->merge($merge);
+        }
+    }
+
+    /**
      * List budgets.
      */
     public function index(Request $request): JsonResponse
     {
+        $this->decodeHashIds($request);
+
         $query = Budget::with(['fiscalYear', 'department']);
 
         if ($request->filled('fiscal_year_id')) {
@@ -73,6 +117,8 @@ class BudgetController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        $this->decodeHashIds($request);
+
         $validated = $request->validate([
             'fiscal_year_id' => 'required|exists:fiscal_years,id',
             'department_id'  => 'nullable|exists:departments,id',
@@ -112,6 +158,8 @@ class BudgetController extends Controller
      */
     public function update(Request $request, Budget $budget): JsonResponse
     {
+        $this->decodeHashIds($request);
+
         if ($budget->status !== 'draft') {
             return response()->json([
                 'success' => false,
@@ -171,14 +219,16 @@ class BudgetController extends Controller
      */
     public function overview(Request $request): JsonResponse
     {
+        $this->decodeHashIds($request);
+
         $fiscalYearId = (int) $request->input('fiscal_year_id', $this->budgetService->getCurrentFiscalYear()?->id);
         if (! $fiscalYearId) {
             return response()->json([
-                'success' => false,
-                'data'    => null,
-                'error'   => 'No active fiscal year found.',
-                'meta'    => null,
-            ], 404);
+                'success' => true,
+                'data'    => [],
+                'error'   => null,
+                'meta'    => ['no_fiscal_year' => true],
+            ]);
         }
 
         return response()->json([
@@ -194,14 +244,16 @@ class BudgetController extends Controller
      */
     public function budgetVsActual(Request $request): JsonResponse
     {
+        $this->decodeHashIds($request);
+
         $fiscalYearId = (int) $request->input('fiscal_year_id', $this->budgetService->getCurrentFiscalYear()?->id);
         if (! $fiscalYearId) {
             return response()->json([
-                'success' => false,
-                'data'    => null,
-                'error'   => 'No active fiscal year found.',
-                'meta'    => null,
-            ], 404);
+                'success' => true,
+                'data'    => ['rows' => [], 'total_budgeted' => 0, 'total_actual' => 0, 'total_variance' => 0],
+                'error'   => null,
+                'meta'    => ['no_fiscal_year' => true],
+            ]);
         }
 
         return response()->json([
@@ -217,6 +269,8 @@ class BudgetController extends Controller
      */
     public function checkAvailability(Request $request): JsonResponse
     {
+        $this->decodeHashIds($request);
+
         $validated = $request->validate([
             'department_id' => 'required|exists:departments,id',
             'amount'        => 'required|numeric|min:0',
