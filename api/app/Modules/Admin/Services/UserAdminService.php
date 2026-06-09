@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace App\Modules\Admin\Services;
 
+use App\Common\Models\AuditLog;
 use App\Modules\Admin\Models\LoginHistory;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Services\UserProvisioningService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Auth;
+
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
@@ -83,7 +86,7 @@ class UserAdminService
         return $user->load(['role', 'employee.department', 'employee.position']);
     }
 
-    public function createStandalone(array $data): User
+    public function createStandalone(array $data): \App\Modules\Admin\Support\CreatedUser
     {
         return DB::transaction(function () use ($data) {
             $tempPassword = $data['temp_password'] ?? \Illuminate\Support\Str::password(12, true, true, true, false);
@@ -106,11 +109,10 @@ class UserAdminService
                 'created_at'    => now(),
             ]);
 
-            return tap($user->fresh(['role']), function () use ($tempPassword) {
-                // The controller stashes $tempPassword separately to return ONCE
-                // in the response (so admin can copy it to the user out-of-band).
-                request()->attributes->set('temp_password', $tempPassword);
-            });
+            return new \App\Modules\Admin\Support\CreatedUser(
+                user: $user->fresh(['role']),
+                tempPassword: (string) $tempPassword,
+            );
         });
     }
 
@@ -149,6 +151,59 @@ class UserAdminService
             $user->flushPermissionsCache();
         });
         return $user->fresh(['role']);
+    }
+
+    /**
+     * Bulk update user roles in a transaction.
+     *
+     * @param  int[]  $userIds
+     * @param  int  $roleId
+     * @param  string  $reason
+     * @return int Count of updated users
+     */
+    public function bulkChangeRole(array $userIds, int $roleId, string $reason = ''): int
+    {
+        return DB::transaction(function () use ($userIds, $roleId, $reason) {
+            $users = User::query()
+                ->whereIn('id', $userIds)
+                ->get(['id', 'name', 'role_id']);
+
+            $count = $users->count();
+
+            // Capture old role IDs before update.
+            $oldRoleIds = $users->pluck('role_id', 'id')->all();
+
+            User::query()
+                ->whereIn('id', $userIds)
+                ->update(['role_id' => $roleId]);
+
+            // Flush permissions cache for each affected user.
+            foreach ($users as $u) {
+                $u->flushPermissionsCache();
+            }
+
+            // Write audit log entry for the bulk action.
+            AuditLog::create([
+                'user_id'    => Auth::id(),
+                'action'     => 'bulk_role_change',
+                'model_type' => 'App\Modules\Auth\Models\User',
+                'model_id'   => null, // Null for bulk actions.
+                'old_values' => [
+                    'user_ids' => $userIds,
+                    'old_role_ids' => $oldRoleIds,
+                ],
+                'new_values' => [
+                    'user_ids' => $userIds,
+                    'new_role_id' => $roleId,
+                    'reason' => $reason,
+                ],
+                'ip_address' => request()?->ip(),
+                'user_agent' => request()?->userAgent(),
+                'created_at' => now(),
+            ]);
+
+            return $count;
+        });
     }
 
     public function resetPassword(User $user): string

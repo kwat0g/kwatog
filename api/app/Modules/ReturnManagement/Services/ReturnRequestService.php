@@ -152,6 +152,12 @@ class ReturnRequestService
     {
         $this->ensureStatus($rma, ReturnRequestStatus::Inspected);
 
+        // M-36 — refuse the arbitrary first-location fallback. The caller
+        // must declare which warehouse the stock movement lands in.
+        if (! $locationId) {
+            throw new \RuntimeException('A warehouse location is required to complete a return.');
+        }
+
         DB::transaction(function () use ($rma, $by, $locationId) {
             $rma->update([
                 'status'       => ReturnRequestStatus::Completed,
@@ -159,11 +165,7 @@ class ReturnRequestService
                 'completed_at' => now(),
             ]);
 
-            // Stock impact
-            $defaultLocation = WarehouseLocation::query()->first();
-            $locationId ??= $defaultLocation?->id;
-
-            if ($locationId && $rma->items->isNotEmpty()) {
+            if ($rma->items->isNotEmpty()) {
                 $totalMovedQty = '0';
 
                 foreach ($rma->items as $line) {

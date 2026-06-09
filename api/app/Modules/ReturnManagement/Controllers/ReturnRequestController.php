@@ -170,10 +170,10 @@ class ReturnRequestController extends Controller
     public function complete(Request $request, ReturnRequest $returnRequest): ReturnRequestResource
     {
         $validated = $request->validate([
-            'location_id' => ['nullable', 'exists:warehouse_locations,id'],
+            'location_id' => ['required', 'exists:warehouse_locations,id'],
         ]);
 
-        $rma = $this->service->complete($returnRequest, $request->user(), $validated['location_id'] ?? null);
+        $rma = $this->service->complete($returnRequest, $request->user(), (int) $validated['location_id']);
         return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor', 'stockMovement']));
     }
 

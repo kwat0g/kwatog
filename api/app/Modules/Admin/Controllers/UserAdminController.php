@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Admin\Controllers;
 
+use App\Modules\Admin\Requests\BulkChangeUserRoleRequest;
 use App\Modules\Admin\Requests\ChangeUserRoleRequest;
 use App\Modules\Admin\Requests\CreateUserRequest;
 use App\Modules\Admin\Requests\ListUsersRequest;
@@ -36,26 +37,24 @@ class UserAdminController
     public function store(CreateUserRequest $request): JsonResponse
     {
         $payload = $request->payload();
-        $user = $this->service->createStandalone([
+        $created = $this->service->createStandalone([
             'name'    => $payload['name'],
             'email'   => $payload['email'],
             'role_id' => $payload['role_id'],
         ]);
 
-        $tempPassword = (string) request()->attributes->get('temp_password', '');
-
-        if ($payload['send_welcome'] && $tempPassword !== '') {
-            $user->notify(new WelcomeNotification($tempPassword));
+        if ($payload['send_welcome'] && $created->tempPassword !== '') {
+            $created->user->notify(new WelcomeNotification($created->tempPassword));
         }
 
         return response()->json([
             'message' => 'User created.',
             'data' => [
-                'id'    => $user->hash_id,
-                'email' => $user->email,
-                'name'  => $user->name,
+                'id'    => $created->user->hash_id,
+                'email' => $created->user->email,
+                'name'  => $created->user->name,
                 // Returned ONCE so admin can copy if email delivery is unavailable.
-                'temp_password' => $tempPassword !== '' ? $tempPassword : null,
+                'temp_password' => $created->tempPassword !== '' ? $created->tempPassword : null,
             ],
         ], 201);
     }
@@ -98,5 +97,23 @@ class UserAdminController
         return LoginHistoryResource::collection(
             $this->service->loginHistory($user, 50),
         );
+    }
+
+    public function bulkChangeRole(BulkChangeUserRoleRequest $request): JsonResponse
+    {
+        $decoded = $request->decodedUserIds();
+        $updated = $this->service->bulkChangeRole(
+            $decoded['ids'],
+            $request->decodedRoleId(),
+            $request->reason(),
+        );
+
+        return response()->json([
+            'message' => 'Roles updated.',
+            'data' => [
+                'updated' => $updated,
+                'invalid_ids' => $decoded['invalid'],
+            ],
+        ]);
     }
 }
