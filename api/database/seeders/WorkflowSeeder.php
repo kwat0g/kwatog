@@ -150,6 +150,16 @@ class WorkflowSeeder extends Seeder
                     ['order' => 2, 'role' => 'system_admin', 'label' => 'Approved by'],
                 ],
             ],
+            // L-37 — Return Management approval. Dept head reviews, manager
+            // approves; mirrors the OT approval shape (lightweight).
+            [
+                'workflow_type' => 'return_request',
+                'name'          => 'Return Request Approval',
+                'steps' => [
+                    ['order' => 1, 'role' => 'department_head',    'label' => 'Reviewed by'],
+                    ['order' => 2, 'role' => 'production_manager', 'label' => 'Approved by'],
+                ],
+            ],
         ];
 
         foreach ($workflows as $w) {

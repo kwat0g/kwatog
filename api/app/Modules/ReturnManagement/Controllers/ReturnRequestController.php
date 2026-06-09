@@ -133,7 +133,10 @@ class ReturnRequestController extends Controller
      */
     public function approve(ReturnRequest $returnRequest, Request $request): ReturnRequestResource
     {
-        $rma = $this->service->approve($returnRequest, $request->user());
+        $validated = $request->validate([
+            'remarks' => ['nullable', 'string', 'max:500'],
+        ]);
+        $rma = $this->service->approve($returnRequest, $request->user(), $validated['remarks'] ?? null);
         return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor']));
     }
 

@@ -12,6 +12,7 @@ use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
 use App\Modules\ReturnManagement\Enums\ReturnRequestType;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\ReturnManagement\Models\ReturnRequestItem;
+use App\Common\Services\ApprovalService;
 use App\Common\Services\DocumentSequenceService;
 use Illuminate\Support\Facades\DB;
 
@@ -20,6 +21,7 @@ class ReturnRequestService
     public function __construct(
         private readonly DocumentSequenceService $sequences,
         private readonly \App\Modules\Inventory\Services\StockMovementService $stockMovements,
+        private readonly ApprovalService $approvals,
     ) {}
 
     /**
@@ -81,26 +83,64 @@ class ReturnRequestService
 
     /**
      * Submit for approval (draft → pending_approval).
+     *
+     * L-37 — Also opens an approval-records chain via ApprovalService so
+     * the Admin / approval-board UIs can show the same review structure
+     * used by PR / Leave / OT.
      */
     public function submit(ReturnRequest $rma): ReturnRequest
     {
         $this->ensureStatus($rma, ReturnRequestStatus::Draft);
-        $rma->update(['status' => ReturnRequestStatus::PendingApproval]);
-        return $rma->fresh();
+
+        return DB::transaction(function () use ($rma) {
+            $rma->update(['status' => ReturnRequestStatus::PendingApproval]);
+            try {
+                $this->approvals->submit($rma, 'return_request');
+            } catch (\Throwable $e) {
+                // L-37 — Best-effort: if the return_request workflow is
+                // missing (deploy not seeded yet), don't block submission.
+                \Illuminate\Support\Facades\Log::warning('return_request approval submit failed', [
+                    'rma_id' => $rma->id,
+                    'error'  => $e->getMessage(),
+                ]);
+            }
+            return $rma->fresh();
+        });
     }
 
     /**
      * Approve (pending_approval → approved).
+     *
+     * L-37 — Records each approver step on the approval-records ledger.
+     * Status flips to Approved only when all chain steps are complete;
+     * partial approval keeps the row at PendingApproval.
      */
-    public function approve(ReturnRequest $rma, User $by): ReturnRequest
+    public function approve(ReturnRequest $rma, User $by, ?string $remarks = null): ReturnRequest
     {
         $this->ensureStatus($rma, ReturnRequestStatus::PendingApproval);
-        $rma->update([
-            'status'      => ReturnRequestStatus::Approved,
-            'approved_by' => $by->id,
-            'approved_at' => now(),
-        ]);
-        return $rma->fresh();
+
+        return DB::transaction(function () use ($rma, $by, $remarks) {
+            try {
+                $this->approvals->approve($rma, $by, $remarks);
+            } catch (\Throwable $e) {
+                // If approval-records aren't wired (legacy data path), fall
+                // through to the direct flip below.
+                \Illuminate\Support\Facades\Log::warning('return_request approval approve failed', [
+                    'rma_id' => $rma->id,
+                    'error'  => $e->getMessage(),
+                ]);
+            }
+
+            if ($this->approvals->isFullyApproved($rma)) {
+                $rma->update([
+                    'status'      => ReturnRequestStatus::Approved,
+                    'approved_by' => $by->id,
+                    'approved_at' => now(),
+                ]);
+            }
+
+            return $rma->fresh();
+        });
     }
 
     /**
