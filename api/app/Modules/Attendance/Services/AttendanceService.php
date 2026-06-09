@@ -82,7 +82,7 @@ class AttendanceService
             $a = Attendance::create($data + ['is_manual_entry' => true]);
             $a = $this->dtr->computeForRecord($a);
             $a->save();
-            return $a->load(['employee', 'shift']);
+            return $a->load(['employee', 'employee.department', 'shift']);
         });
     }
 
@@ -92,7 +92,7 @@ class AttendanceService
             $a->update($data);
             $a = $this->dtr->computeForRecord($a);
             $a->save();
-            return $a->fresh(['employee', 'shift']);
+            return $a->fresh(['employee', 'employee.department', 'shift']);
         });
     }
 

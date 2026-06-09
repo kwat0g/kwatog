@@ -45,4 +45,37 @@ class OvertimeController
         $ot = $this->service->reject($overtime, $request->user(), $request->input('reason'));
         return new OvertimeRequestResource($ot);
     }
+
+    /**
+     * L-23 — Bulk approve. Body: { ids: ["hash1", "hash2", ...], remarks?: string }.
+     * Returns 200 with summary {approved_count, failed} so the SPA can surface
+     * partial successes; per-row failures don't abort the batch.
+     */
+    public function bulkApprove(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'ids'     => ['required', 'array', 'min:1', 'max:100'],
+            'ids.*'   => ['required', 'string'],
+            'remarks' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $decoded = collect($validated['ids'])
+            ->map(fn (string $hash) => \App\Common\Support\HashIdFilter::decode($hash, OvertimeRequest::class))
+            ->filter()
+            ->values()
+            ->all();
+
+        $result = $this->service->bulkApprove(
+            $decoded,
+            $request->user(),
+            $validated['remarks'] ?? null,
+        );
+
+        return response()->json([
+            'message'        => sprintf('%d approved, %d failed.', count($result['approved']), count($result['failed'])),
+            'approved_count' => count($result['approved']),
+            'failed'         => $result['failed'],
+            'data'           => OvertimeRequestResource::collection($result['approved']),
+        ]);
+    }
 }

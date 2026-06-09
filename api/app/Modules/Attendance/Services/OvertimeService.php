@@ -83,6 +83,34 @@ class OvertimeService
         return $result;
     }
 
+    /**
+     * L-23 — Bulk approve. Returns ['approved' => OT[], 'failed' => [['id'=>X, 'reason'=>...]]].
+     * Per-row try/catch so one bad row doesn't abort the batch.
+     *
+     * @param array<int, int> $otIds raw integer IDs (post HashID decode)
+     * @return array{approved: array<int, OvertimeRequest>, failed: array<int, array{id:int, reason:string}>}
+     */
+    public function bulkApprove(array $otIds, User $approver, ?string $remarks = null): array
+    {
+        $approved = [];
+        $failed   = [];
+
+        foreach ($otIds as $id) {
+            try {
+                $ot = OvertimeRequest::query()->find($id);
+                if (! $ot) {
+                    $failed[] = ['id' => $id, 'reason' => 'Not found.'];
+                    continue;
+                }
+                $approved[] = $this->approve($ot, $approver, $remarks);
+            } catch (\Throwable $e) {
+                $failed[] = ['id' => $id, 'reason' => $e->getMessage()];
+            }
+        }
+
+        return ['approved' => $approved, 'failed' => $failed];
+    }
+
     public function reject(OvertimeRequest $ot, User $approver, string $reason): OvertimeRequest
     {
         $result = DB::transaction(function () use ($ot, $approver, $reason) {
