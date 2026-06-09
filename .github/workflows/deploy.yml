@@ -1,8 +1,25 @@
 name: Deploy to VPS
 
-# Sprint 8 — Task 81. Manual deploy trigger. Runs on workflow_dispatch only.
-# Requires repository secrets:
+# Phase 5b — atomic deploy.
+#
+# Each deploy checks out the chosen ref into a timestamped release dir
+# under <DEPLOY_PATH>/releases/<TS>, then symlinks <DEPLOY_PATH>/current
+# to it before bringing containers up. The shared mutable state lives
+# at <DEPLOY_PATH>/shared (.env, storage/, spa/dist) and is symlinked
+# into every release so secrets, logs, and uploaded files survive
+# rollbacks.
+#
+# Rollback: SSH in, point `current` back to the prior release directory,
+# and re-run `docker compose -f current/docker-compose.prod.yml up -d`.
+#
+# Required repo secrets:
 #   DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY, DEPLOY_PATH
+#
+# First-time prep on the box (one-off):
+#   mkdir -p $DEPLOY_PATH/{releases,shared/storage}
+#   cp <existing-.env> $DEPLOY_PATH/shared/.env
+#   ln -s $DEPLOY_PATH/releases/<initial> $DEPLOY_PATH/current
+# After that the workflow is fully managed.
 
 on:
   workflow_dispatch:
@@ -22,7 +39,7 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     environment: production
 
     steps:
@@ -40,22 +57,82 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
 
-      - name: Pull latest on VPS
+      - name: Build SPA artifact
         run: |
-          ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
-            "cd ${{ secrets.DEPLOY_PATH }} && git fetch --all && git checkout ${{ inputs.ref }} && git pull --ff-only"
+          cd spa
+          # Use whatever node version the SPA expects; nvm is not assumed in CI.
+          # Re-install instead of cache because deploy is rare and predictable >
+          # cache freshness.
+          npm ci --no-audit --no-fund
+          npm run build
 
-      - name: Rebuild containers
+      - name: Package release tarball
+        id: pkg
+        run: |
+          TS="$(date -u +%Y%m%d-%H%M%S)"
+          SHA="${GITHUB_SHA:0:7}"
+          RELEASE="release-${TS}-${SHA}"
+          echo "release=${RELEASE}" >> "$GITHUB_OUTPUT"
+          # Keep the tarball lean: source + built SPA. Exclude node_modules
+          # and any vendor/ that may have leaked in.
+          tar --exclude='.git' \
+              --exclude='node_modules' \
+              --exclude='api/vendor' \
+              --exclude='spa/node_modules' \
+              -czf "/tmp/${RELEASE}.tar.gz" .
+
+      - name: Ship tarball to VPS
+        run: |
+          scp "/tmp/${{ steps.pkg.outputs.release }}.tar.gz" \
+              "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ secrets.DEPLOY_PATH }}/releases/"
+
+      - name: Extract + symlink shared state + swap current
+        run: |
+          ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" bash -se <<'EOF'
+            set -euo pipefail
+            ROOT="${{ secrets.DEPLOY_PATH }}"
+            REL="${{ steps.pkg.outputs.release }}"
+            cd "$ROOT/releases"
+            mkdir -p "$REL"
+            tar -xzf "${REL}.tar.gz" -C "$REL"
+            rm -f "${REL}.tar.gz"
+
+            # Symlink shared mutable state into the release.
+            ln -sfn "$ROOT/shared/.env"            "$ROOT/releases/$REL/.env"
+            ln -sfn "$ROOT/shared/storage"        "$ROOT/releases/$REL/api/storage"
+
+            # Atomic swap.
+            ln -sfn "$ROOT/releases/$REL" "$ROOT/current.new"
+            mv -Tf "$ROOT/current.new" "$ROOT/current"
+
+            # Prune to 5 most recent releases (keeps rollback targets bounded).
+            ls -1dt "$ROOT/releases"/release-* 2>/dev/null \
+              | tail -n +6 \
+              | xargs -r rm -rf --
+          EOF
+
+      - name: Bring containers up against new release
         run: |
           ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
-            "cd ${{ secrets.DEPLOY_PATH }} && docker compose -f docker-compose.prod.yml up -d --build"
+            "cd ${{ secrets.DEPLOY_PATH }}/current && docker compose -f docker-compose.prod.yml up -d --build"
 
       - name: Run migrations
         run: |
           ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
-            "cd ${{ secrets.DEPLOY_PATH }} && docker compose -f docker-compose.prod.yml exec -T api php artisan migrate --force"
+            "cd ${{ secrets.DEPLOY_PATH }}/current && docker compose -f docker-compose.prod.yml exec -T api php artisan migrate --force"
 
       - name: Cache config + routes
         run: |
           ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
-            "cd ${{ secrets.DEPLOY_PATH }} && docker compose -f docker-compose.prod.yml exec -T api php artisan config:cache && docker compose -f docker-compose.prod.yml exec -T api php artisan route:cache"
+            "cd ${{ secrets.DEPLOY_PATH }}/current && docker compose -f docker-compose.prod.yml exec -T api php artisan config:cache && docker compose -f docker-compose.prod.yml exec -T api php artisan route:cache"
+
+      - name: Smoke test /api/v1/health
+        run: |
+          ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" \
+            "set -e; for i in 1 2 3 4 5; do
+               STATUS=\$(curl -ks -o /dev/null -w '%{http_code}' http://localhost/api/v1/health || true)
+               echo \"healthcheck attempt \$i: \$STATUS\"
+               [ \"\$STATUS\" = \"200\" ] && exit 0
+               sleep 5
+             done
+             echo 'healthcheck never returned 200 — investigate'; exit 1"

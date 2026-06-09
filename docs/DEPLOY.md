@@ -271,19 +271,40 @@ cd spa && docker run --rm -v "$PWD:/app" -w /app node:20-alpine sh -c \
 docker compose -f /opt/ogami-erp/docker-compose.prod.yml exec nginx nginx -s reload
 ```
 
-## 11. Rollback
+## 11. Rollback (atomic deploy)
 
-If a deploy goes wrong:
+Phase 5b switched the GitHub Actions deploy to atomic releases: each
+deploy extracts a tarball into `$DEPLOY_PATH/releases/release-<ts>-<sha>/`
+and atomically retargets `$DEPLOY_PATH/current` to it. The last 5
+releases are retained on disk so rollback is a one-command operation.
 
 ```bash
 cd /opt/ogami-erp
-git checkout <previous-tag>
-docker compose -f docker-compose.prod.yml build --pull
-docker compose -f docker-compose.prod.yml up -d
-# Migrations should be backwards-compatible; if not, restore from latest pg_dump.
+ls -1dt releases/release-* | head -n 5
+PREV=releases/release-20260605-101212-abc1234     # whichever you want
+ln -sfn $PREV current.new && mv -Tf current.new current
+docker compose -f current/docker-compose.prod.yml up -d
+# Migrations should be backwards-compatible. If not, restore from backup:
 gunzip -c /var/backups/ogami/ogami-YYYYMMDD-HHMM.sql.gz | \
-    docker compose -f docker-compose.prod.yml exec -T db \
+    docker compose -f current/docker-compose.prod.yml exec -T db \
     psql -U "$DB_USERNAME" -d "$DB_DATABASE"
+```
+
+The `current/.env` and `current/api/storage/` symlinks point at the
+shared mutable state under `shared/`, so rolling back the release does
+NOT lose uploaded files or env config.
+
+**First-time prep (one-off, only required when migrating from the old
+in-place deploy):**
+
+```bash
+mkdir -p /opt/ogami-erp/{releases,shared/storage}
+mv /opt/ogami-erp/.env /opt/ogami-erp/shared/.env
+mv /opt/ogami-erp/api/storage/* /opt/ogami-erp/shared/storage/
+# Seed an initial release that points at the old checkout if you want a
+# rollback target before the next deploy:
+ln -s /opt/ogami-erp /opt/ogami-erp/releases/release-genesis
+ln -s /opt/ogami-erp/releases/release-genesis /opt/ogami-erp/current
 ```
 
 ## 12. Monitoring & ops cheatsheet
