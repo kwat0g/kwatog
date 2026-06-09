@@ -17,6 +17,7 @@ use App\Modules\Accounting\Models\BillItem;
 use App\Modules\Accounting\Models\BillPayment;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\User;
+use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Exceptions\ThreeWayMatchException;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Services\ThreeWayMatchService;
@@ -132,17 +133,21 @@ class BillService
                 if ($this->threeWayMatch && $poId) {
                     $po = PurchaseOrder::query()->with(['items.item'])->findOrFail($poId);
                     [$itemsForMatch] = $this->normalizeItems($data['items'] ?? []);
-                    // Reshape lines for three-way matcher.
+                    // H-7: Align bill lines to PO lines by item_id FK, not by index.
+                    // A skipped or reordered bill line no longer silently corrupts
+                    // the variance check. matchForPo() keys results by item_id, so a
+                    // missing bill line for a PO line surfaces as billQty=0 / 100%
+                    // variance — exactly the right behavior.
                     $billLines = [];
-                    foreach ($po->items as $idx => $poi) {
-                        $li = $itemsForMatch[$idx] ?? null;
-                        if (! $li) continue;
-                        $billLines[(string) $poi->item_id] = [
-                            'item_id'     => null,
-                            'description' => $li['description'],
-                            'quantity'    => $li['quantity'] ?? '0',
-                            'unit_price'  => $li['unit_price'] ?? '0',
-                        ];
+                    foreach ($itemsForMatch as $li) {
+                        if (! empty($li['item_id'])) {
+                            $billLines[(string) $li['item_id']] = [
+                                'item_id'     => $li['item_id'],
+                                'description' => $li['description'],
+                                'quantity'    => $li['quantity'] ?? '0',
+                                'unit_price'  => $li['unit_price'] ?? '0',
+                            ];
+                        }
                     }
                     $result = $this->threeWayMatch->matchForPo($po, array_values($billLines));
                     $allowOverride = (bool) ($data['allow_override'] ?? false);
@@ -368,7 +373,7 @@ class BillService
     }
 
     /**
-     * @return array{0: array<int, array{expense_account_id:int, description:string, quantity:string, unit:?string, unit_price:string, total:string}>, 1: string}
+     * @return array{0: array<int, array{expense_account_id:int, item_id:?int, description:string, quantity:string, unit:?string, unit_price:string, total:string}>, 1: string}
      */
     private function normalizeItems(array $rawItems): array
     {
@@ -383,6 +388,8 @@ class BillService
                 throw new RuntimeException('Invalid expense account selected on bill item.');
             }
 
+            $itemId = HashIdFilter::decode($raw['item_id'] ?? null, Item::class);
+
             $qty   = Money::round2((string) $raw['quantity']);
             $price = Money::round2((string) $raw['unit_price']);
             $total = Money::round2(bcmul($qty, $price, 4));
@@ -393,6 +400,7 @@ class BillService
 
             $rows[] = [
                 'expense_account_id' => $accountId,
+                'item_id'            => $itemId,
                 'description'        => (string) $raw['description'],
                 'quantity'           => $qty,
                 'unit'               => $raw['unit'] ?? null,

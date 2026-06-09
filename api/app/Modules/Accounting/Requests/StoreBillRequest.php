@@ -27,6 +27,7 @@ class StoreBillRequest extends FormRequest
             'remarks'                      => ['nullable', 'string', 'max:1000'],
             'items'                        => ['required', 'array', 'min:1'],
             'items.*.expense_account_id'   => ['required', 'string'],
+            'items.*.item_id'              => ['nullable', 'string'],
             'items.*.description'          => ['required', 'string', 'max:200'],
             'items.*.quantity'             => ['required', 'numeric', 'min:0.01'],
             'items.*.unit'                 => ['nullable', 'string', 'max:20'],

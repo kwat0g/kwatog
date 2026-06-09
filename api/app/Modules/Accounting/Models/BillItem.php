@@ -16,7 +16,7 @@ class BillItem extends Model
     public $timestamps = false;
 
     protected $fillable = [
-        'bill_id', 'expense_account_id', 'description',
+        'bill_id', 'expense_account_id', 'item_id', 'description',
         'quantity', 'unit', 'unit_price', 'total',
     ];
 
@@ -34,5 +34,10 @@ class BillItem extends Model
     public function expenseAccount(): BelongsTo
     {
         return $this->belongsTo(Account::class, 'expense_account_id');
+    }
+
+    public function item(): BelongsTo
+    {
+        return $this->belongsTo(\App\Modules\Inventory\Models\Item::class);
     }
 }
