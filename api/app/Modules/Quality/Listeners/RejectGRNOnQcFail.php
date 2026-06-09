@@ -55,11 +55,25 @@ class RejectGRNOnQcFail implements ShouldQueue
 
             // Use a system user attribution — the inspection has the actual
             // inspector; we route the GRN reject through GrnService to keep
-            // the audit trail consistent.
+            // the audit trail consistent. If the inspection has no inspector
+            // (auto-created or imported), fall back to a system_admin actor
+            // so the failed GRN doesn't sit at pending_qc forever.
             $by = $inspection->inspector_id
                 ? User::find($inspection->inspector_id)
                 : null;
-            if (! $by) return; // can't reject without an actor
+            if (! $by) {
+                $by = User::query()
+                    ->whereHas('role', fn ($q) => $q->where('slug', 'system_admin'))
+                    ->where('is_active', true)
+                    ->first();
+            }
+            if (! $by) {
+                Log::warning('RejectGRNOnQcFail: no actor available, GRN remains pending_qc', [
+                    'grn_id'        => $grn->id,
+                    'inspection_id' => $inspection->id,
+                ]);
+                return;
+            }
 
             DB::transaction(function () use ($grn, $inspection, $by) {
                 $reason = "Auto-rejected: incoming inspection {$inspection->inspection_number} failed.";

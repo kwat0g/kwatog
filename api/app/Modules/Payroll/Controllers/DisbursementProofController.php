@@ -10,12 +10,13 @@ use App\Modules\Payroll\Resources\DisbursementProofResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
-class DisbursementProofController
+class DisbursementProofController extends Controller
 {
     /**
      * List all disbursement proofs for a period.
@@ -95,12 +96,16 @@ class DisbursementProofController
             throw new RuntimeException('Proof file not found on disk.');
         }
 
-        $contents = $disk->get($proof->file_path);
         $mime = $disk->mimeType($proof->file_path) ?? 'application/octet-stream';
         $isImage = str_starts_with($mime, 'image/');
 
         return response()->stream(
-            fn () => print $contents,
+            function () use ($disk, $proof) {
+                $stream = $disk->readStream($proof->file_path);
+                if (! $stream) abort(404);
+                fpassthru($stream);
+                if (is_resource($stream)) fclose($stream);
+            },
             200,
             [
                 'Content-Type'        => $mime,

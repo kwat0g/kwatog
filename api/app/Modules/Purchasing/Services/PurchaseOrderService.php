@@ -43,7 +43,8 @@ class PurchaseOrderService
                 ? $data['purchase_request_id']
                 : HashIdFilter::decode($data['purchase_request_id'], PurchaseRequest::class);
             if ($prId) {
-                return (int) PurchaseRequest::find($prId)?->department_id;
+                $deptId = PurchaseRequest::find($prId)?->department_id;
+                return $deptId !== null ? (int) $deptId : null;
             }
         }
         return null;
@@ -235,7 +236,7 @@ class PurchaseOrderService
                     'approved_at' => now(),
                 ]);
                 // Update last_price on approved_suppliers per line.
-                foreach ($po->items as $line) {
+                foreach ($po->items()->get() as $line) {
                     ApprovedSupplier::query()->updateOrCreate(
                         ['item_id' => $line->item_id, 'vendor_id' => $po->vendor_id],
                         ['last_price' => $line->unit_price, 'last_price_at' => now()]
@@ -289,11 +290,17 @@ class PurchaseOrderService
         if ($po->goodsReceiptNotes()->exists()) {
             throw new RuntimeException('Cannot cancel a PO with GRNs.');
         }
-        $po->update([
-            'status'  => PurchaseOrderStatus::Cancelled,
-            'remarks' => trim(($po->remarks ? $po->remarks."\n" : '').'Cancelled: '.$reason),
-        ]);
-        $fresh = $po->fresh();
+        $fresh = DB::transaction(function () use ($po, $reason) {
+            $po->update([
+                'status'  => PurchaseOrderStatus::Cancelled,
+                'remarks' => trim(($po->remarks ? $po->remarks."\n" : '').'Cancelled: '.$reason),
+            ]);
+            $fresh = $po->fresh();
+            DB::afterCommit(fn () =>
+                event(new \App\Modules\Purchasing\Events\PurchaseOrderCancelled($fresh))
+            );
+            return $fresh;
+        });
         $this->broadcastChain($fresh, null);
         return $fresh;
     }

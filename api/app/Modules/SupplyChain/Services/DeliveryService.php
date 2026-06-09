@@ -535,6 +535,9 @@ class DeliveryService
 
     public function delete(Delivery $d): void
     {
+        if ($d->invoice_id !== null) {
+            throw new RuntimeException('Cannot delete a delivery with a linked invoice. Cancel the invoice first.');
+        }
         $current = $d->status instanceof DeliveryStatus ? $d->status : DeliveryStatus::from((string) $d->status);
         if ($current === DeliveryStatus::Confirmed) {
             throw new RuntimeException('Cannot delete a confirmed delivery (an invoice may be attached).');
