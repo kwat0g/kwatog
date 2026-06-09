@@ -115,6 +115,32 @@ class PayrollPeriodController
         return new PayrollPeriodResource($this->service->markDisbursed($period, $user));
     }
 
+    /**
+     * H-8 — POST /payroll-periods/{period}/force-unlock
+     *
+     * Admin escape hatch for periods stuck at Processing because the payroll
+     * job worker crashed before its finally block ran (OOM, SIGKILL, host
+     * reboot). Resets status to Draft and writes an audit log row. Service
+     * rejects every other status so finalized payroll cannot be demoted.
+     */
+    public function forceUnlock(Request $request, PayrollPeriod $period): JsonResponse
+    {
+        $data = $request->validate([
+            'reason' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        try {
+            $updated = $this->service->forceUnlock($period, $request->user(), $data['reason'] ?? null);
+        } catch (RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'data'    => (new PayrollPeriodResource($updated))->resolve(),
+            'message' => 'Period unlocked. You can re-run compute.',
+        ]);
+    }
+
     public function bankFile(PayrollPeriod $period, Request $request)
     {
         if (! class_exists(\App\Modules\Payroll\Services\BankFileService::class)) {

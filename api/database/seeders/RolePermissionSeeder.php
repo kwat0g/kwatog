@@ -87,6 +87,9 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'payroll.periods.compute',     'name' => 'Compute Payroll'],
                 ['slug' => 'payroll.periods.approve',     'name' => 'Approve Payroll'],
                 ['slug' => 'payroll.periods.finalize',    'name' => 'Finalize Payroll'],
+                // H-8 — admin escape hatch for periods stuck at Processing because
+                // the payroll job worker crashed before its finally block ran.
+                ['slug' => 'payroll.periods.force_unlock', 'name' => 'Force-unlock Payroll Period'],
                 ['slug' => 'payroll.adjustments.create',  'name' => 'Create Payroll Adjustment'],
                 ['slug' => 'payroll.payslip.view_all',    'name' => 'View Any Payslip'],
                 ['slug' => 'payroll.thirteenth_month.run', 'name' => 'Run 13th Month Pay'],

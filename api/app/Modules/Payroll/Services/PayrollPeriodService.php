@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Payroll\Services;
 
+use App\Common\Models\AuditLog;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Enums\EmployeeStatus;
 use App\Modules\HR\Models\Employee;
@@ -390,5 +391,41 @@ class PayrollPeriodService
         event(new PayrollPeriodFinalized($fresh));
 
         return $fresh;
+    }
+
+    /**
+     * H-8 — Admin escape hatch for periods stuck in Processing because the
+     * payroll job worker crashed (OOM, SIGKILL, host reboot). The job's
+     * normal finally block resets status; this method covers the case where
+     * finally never ran.
+     *
+     * Refuses to operate on any status other than Processing (cannot demote
+     * Approved/Finalized/Disbursed).
+     */
+    public function forceUnlock(PayrollPeriod $period, User $actor, ?string $reason = null): PayrollPeriod
+    {
+        if ($period->status !== PayrollPeriodStatus::Processing) {
+            throw new RuntimeException('Only periods stuck at Processing can be force-unlocked.');
+        }
+
+        return DB::transaction(function () use ($period, $actor, $reason) {
+            $previous = $period->status?->value;
+            $period->status = PayrollPeriodStatus::Draft;
+            $period->save();
+
+            AuditLog::create([
+                'user_id'    => $actor->id,
+                'action'     => 'payroll.period.force_unlock',
+                'model_type' => PayrollPeriod::class,
+                'model_id'   => $period->id,
+                'old_values' => ['status' => $previous],
+                'new_values' => ['status' => PayrollPeriodStatus::Draft->value, 'reason' => $reason],
+                'ip_address' => request()?->ip(),
+                'user_agent' => request()?->userAgent(),
+                'created_at' => now(),
+            ]);
+
+            return $period->fresh();
+        });
     }
 }

@@ -48,6 +48,11 @@ if (class_exists(PayrollPeriodController::class)) {
             Route::get('/{period}/variance',      [PayrollPeriodController::class, 'variance'])->middleware('permission:payroll.view');
             // ADV1 — Disbursement proof (salary deposit slip / bank confirmation).
             Route::patch('/{period}/mark-disbursed', [PayrollPeriodController::class, 'markDisbursed'])->middleware('permission:payroll.periods.finalize');
+            // H-8 — Admin escape hatch for periods stuck at Processing because
+            // the payroll job worker crashed before its finally block could
+            // reset status. POST (not PATCH) — recovery action with side
+            // effects (audit log row).
+            Route::post('/{period}/force-unlock',    [PayrollPeriodController::class, 'forceUnlock'])->middleware('permission:payroll.periods.force_unlock');
         });
 
         // ADV1 — Disbursement proof CRUD (linked to a period).
