@@ -69,6 +69,10 @@ services:
     image: redis:7-alpine
     container_name: ogami-redis
     restart: unless-stopped
+    # Phase 4 — AOF persistence so a Redis crash doesn't wipe sessions,
+    # cache (incl. permission/role keys), or queued jobs. Snapshots still
+    # run by default; appendonly is the bounded-loss layer on top.
+    command: redis-server --appendonly yes --appendfsync everysec
     volumes:
       - redisdata:/data
     networks: [ogami-net]
@@ -107,6 +111,27 @@ services:
     working_dir: /var/www
     env_file: .env
     command: php artisan queue:work --tries=3 --timeout=120 --sleep=3
+    depends_on:
+      - api
+      - redis
+    networks: [ogami-net]
+
+  # Phase 4 — Scheduler. routes/console.php registers daily/hourly jobs
+  # (mrp:run-daily, alerts:run, payroll:auto-create-period,
+  # maintenance:generate-preventive, etc.). Without this container, none
+  # of those cron-style tasks ever fire in production.
+  scheduler:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile.prod
+    container_name: ogami-scheduler
+    restart: unless-stopped
+    working_dir: /var/www
+    env_file: .env
+    # Run schedule:run every 60s in a loop. schedule:work would also work
+    # on Laravel 11 but the explicit loop is portable across PHP base images
+    # and keeps process restarts cheap.
+    command: sh -c 'while true; do php artisan schedule:run --no-interaction; sleep 60; done'
     depends_on:
       - api
       - redis
