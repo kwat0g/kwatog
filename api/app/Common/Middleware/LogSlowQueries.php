@@ -10,27 +10,53 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 
+/**
+ * Phase 5b — Slow-query telemetry. Logs any query whose execution time
+ * exceeds LOG_SLOW_QUERIES_MS (default 250ms in production, 100ms in
+ * local) to the 'slow' channel. Set LOG_SLOW_QUERIES=false to disable.
+ *
+ * The SQL string is logged; bindings are intentionally excluded to
+ * avoid leaking PII (passwords, encrypted casts, etc.) into the log.
+ */
 class LogSlowQueries
 {
-    private const THRESHOLD_MS = 100;
-
     public function handle(Request $request, Closure $next): Response
     {
-        if (!app()->isLocal()) {
+        if (! $this->enabled()) {
             return $next($request);
         }
 
-        DB::listen(function ($query) use ($request) {
-            if ($query->time >= self::THRESHOLD_MS) {
-                Log::channel('stderr')->warning('Slow query', [
-                    'ms'      => $query->time,
-                    'sql'     => $query->sql,
-                    'method'  => $request->method(),
-                    'url'     => $request->path(),
+        $threshold = $this->thresholdMs();
+        $channel   = app()->isLocal() ? 'stderr' : 'slow';
+
+        DB::listen(function ($query) use ($request, $threshold, $channel) {
+            if ($query->time >= $threshold) {
+                Log::channel($channel)->warning('Slow query', [
+                    'ms'         => $query->time,
+                    'sql'        => $query->sql,
+                    'method'     => $request->method(),
+                    'url'        => $request->path(),
+                    'request_id' => $request->attributes->get('request_id'),
                 ]);
             }
         });
 
         return $next($request);
+    }
+
+    private function enabled(): bool
+    {
+        // Default: on in local + production; off in testing.
+        $default = ! app()->environment('testing');
+        return (bool) env('LOG_SLOW_QUERIES', $default);
+    }
+
+    private function thresholdMs(): int
+    {
+        $configured = (int) env('LOG_SLOW_QUERIES_MS', 0);
+        if ($configured > 0) {
+            return $configured;
+        }
+        return app()->isLocal() ? 100 : 250;
     }
 }

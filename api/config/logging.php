@@ -36,6 +36,16 @@ return [
             'days' => 90,
             'replace_placeholders' => true,
         ],
+        // Phase 5b — dedicated slow-query channel. LogSlowQueries middleware
+        // writes here in production; LOG_SLOW_QUERIES_MS env var sets the
+        // threshold (default 250ms). Daily rotation, 30-day retention.
+        'slow' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/slow-queries.log'),
+            'level' => 'warning',
+            'days' => 30,
+            'replace_placeholders' => true,
+        ],
         'financial' => [
             'driver' => 'daily',
             'path' => storage_path('logs/financial.log'),
