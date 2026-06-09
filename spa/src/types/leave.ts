@@ -52,6 +52,8 @@ export interface CreateLeaveRequestData {
   leave_type_id: string;
   start_date: string;
   end_date: string;
+  /** M-18 — 'am' / 'pm' for half-day; omit for full-day. */
+  half_day_period?: 'am' | 'pm';
   reason?: string;
   document_path?: string;
 }

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Play, CheckCircle2, Lock, Download, AlertCircle, Upload, Eye, Trash2, Banknote } from 'lucide-react';
+import { Play, CheckCircle2, Lock, LockOpen, Download, AlertCircle, Upload, Eye, Trash2, Banknote } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { periodsApi } from '@/api/payroll/periods';
 import { payrollsApi, type PayrollListParams } from '@/api/payroll/payrolls';
@@ -109,6 +109,17 @@ export default function PayrollPeriodDetailPage() {
       toast.error(err.response?.data?.message ?? 'Failed to mark period as disbursed.'),
   });
 
+  // H-8 — Force-unlock for periods stuck at Processing because the worker crashed.
+  const forceUnlockMutation = useMutation({
+    mutationFn: (reason: string) => periodsApi.forceUnlock(id!, reason),
+    onSuccess: () => {
+      toast.success('Period unlocked — you can re-run compute.');
+      qc.invalidateQueries({ queryKey: ['payroll-period', id] });
+    },
+    onError: (err: { response?: { data?: { message?: string } } }) =>
+      toast.error(err.response?.data?.message ?? 'Failed to unlock period.'),
+  });
+
   // Force refetch when computation finishes (status flips back to draft).
   useEffect(() => {
     if (period && period.status !== 'processing') qc.invalidateQueries({ queryKey: ['payrolls', payrollFilters] });
@@ -152,6 +163,8 @@ export default function PayrollPeriodDetailPage() {
   const canBankFile   = can('payroll.periods.finalize') && (period.status === 'finalized' || period.status === 'disbursed');
   const canDisburse   = can('payroll.periods.finalize') && period.status === 'finalized';
   const canUploadProof = can('payroll.periods.finalize') && (period.status === 'finalized' || period.status === 'disbursed');
+  // H-8 — Force-unlock only surfaces when the period is stuck at Processing.
+  const canForceUnlock = can('payroll.periods.force_unlock') && period.status === 'processing';
   const isProc = period.status === 'processing';
 
   const columns: Column<Payroll>[] = [
@@ -213,6 +226,22 @@ export default function PayrollPeriodDetailPage() {
               <span className="inline-flex items-center gap-2 text-xs text-muted">
                 <Spinner /> Processing…
               </span>
+            )}
+            {canForceUnlock && (
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<LockOpen size={14} />}
+                onClick={() => {
+                  const reason = window.prompt('Reason for force-unlock (audit trail):', 'Worker crashed; rerunning compute.');
+                  if (reason === null) return;
+                  forceUnlockMutation.mutate(reason);
+                }}
+                disabled={forceUnlockMutation.isPending}
+                loading={forceUnlockMutation.isPending}
+              >
+                Force unlock
+              </Button>
             )}
             {canApprove && (
               <Button variant="primary" size="sm" icon={<CheckCircle2 size={14} />}

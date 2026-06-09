@@ -23,9 +23,13 @@ const schema = z.object({
   leave_type_id: z.string().min(1, 'Leave type is required'),
   start_date: z.string().min(1, 'Start date is required'),
   end_date: z.string().min(1, 'End date is required'),
+  // M-18 — half-day support. 'none' = full-day request.
+  half_day_period: z.enum(['none', 'am', 'pm']).default('none'),
   reason: z.string().max(2000, 'Max 2000 characters').optional().or(z.literal('')),
 }).refine((d) => !d.start_date || !d.end_date || new Date(d.end_date) >= new Date(d.start_date),
-  { message: 'End date must be on or after start date', path: ['end_date'] });
+  { message: 'End date must be on or after start date', path: ['end_date'] })
+  .refine((d) => d.half_day_period === 'none' || d.start_date === d.end_date,
+    { message: 'Half-day leave must start and end on the same date.', path: ['half_day_period'] });
 type FormValues = z.infer<typeof schema>;
 
 export default function CreateLeavePage() {
@@ -70,9 +74,13 @@ export default function CreateLeavePage() {
 
   const selectedBalance = balances.find((b) => b.leave_type.id === leaveTypeId);
 
-  // Auto-compute estimated days (excluding Sundays).
+  const halfDay = watch('half_day_period');
+
+  // Auto-compute estimated days (excluding Sundays). M-18 — half-day = 0.5.
   let estimatedDays = 0;
-  if (startDate && endDate) {
+  if (halfDay === 'am' || halfDay === 'pm') {
+    estimatedDays = 0.5;
+  } else if (startDate && endDate) {
     const a = new Date(startDate); const b = new Date(endDate);
     if (b >= a) {
       for (let d = new Date(a); d <= b; d.setDate(d.getDate() + 1)) {
@@ -87,6 +95,7 @@ export default function CreateLeavePage() {
       leave_type_id: d.leave_type_id,
       start_date: d.start_date,
       end_date: d.end_date,
+      half_day_period: d.half_day_period === 'none' ? undefined : d.half_day_period,
       reason: d.reason || undefined,
     }),
     onSuccess: (req) => {
@@ -129,6 +138,11 @@ export default function CreateLeavePage() {
             </Select>
             <Input label="Start date" type="date" required {...register('start_date')} error={errors.start_date?.message} />
             <Input label="End date" type="date" required {...register('end_date')} error={errors.end_date?.message} />
+            <Select label="Half-day" {...register('half_day_period')} error={errors.half_day_period?.message}>
+              <option value="none">Full day</option>
+              <option value="am">Morning (AM half-day)</option>
+              <option value="pm">Afternoon (PM half-day)</option>
+            </Select>
           </div>
           <div className="mt-3">
             <Textarea label="Reason" {...register('reason')} error={errors.reason?.message} rows={3} />

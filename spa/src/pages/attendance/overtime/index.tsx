@@ -53,6 +53,18 @@ export default function OvertimeListPage() {
     onError: () => toast.error('Failed to reject.'),
   });
 
+  // L-23 — bulk approve every visible pending request in one click.
+  const bulkApproveMutation = useMutation({
+    mutationFn: (ids: string[]) => overtimeApi.bulkApprove(ids),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['attendance', 'overtime'] });
+      const failed = res.failed.length;
+      if (failed === 0) toast.success(`Approved ${res.approved_count} request${res.approved_count === 1 ? '' : 's'}.`);
+      else toast.success(`Approved ${res.approved_count}; ${failed} failed (see notifications).`);
+    },
+    onError: () => toast.error('Bulk approve failed.'),
+  });
+
   const all = data?.data ?? [];
   const grouped = {
     pending: all.filter((o) => o.status === 'pending'),
@@ -88,6 +100,22 @@ export default function OvertimeListPage() {
         backLabel="Attendance"
         actions={
           <>
+            {can('attendance.ot.approve') && grouped.pending.length > 0 && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  const ids = grouped.pending.slice(0, 100).map((o) => o.id);
+                  if (ids.length === 0) return;
+                  const ok = window.confirm(`Approve ${ids.length} pending overtime request${ids.length === 1 ? '' : 's'}?`);
+                  if (!ok) return;
+                  bulkApproveMutation.mutate(ids);
+                }}
+                disabled={bulkApproveMutation.isPending}
+              >
+                Bulk approve ({Math.min(grouped.pending.length, 100)})
+              </Button>
+            )}
             <Button variant="secondary" size="sm" onClick={() => setView(view === 'list' ? 'kanban' : 'list')}>
               {view === 'list' ? 'Kanban view' : 'List view'}
             </Button>

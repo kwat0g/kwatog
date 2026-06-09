@@ -29,4 +29,13 @@ export const overtimeApi = {
   reject: (id: string, reason: string) =>
     client.patch<ApiSuccess<OvertimeRequest>>(`/attendance/overtime-requests/${id}/reject`, { reason })
       .then((r) => r.data.data),
+  /** L-23 — bulk approve up to 100 pending requests. Server reports partial successes. */
+  bulkApprove: (ids: string[], remarks?: string) =>
+    client.post<{
+      message: string;
+      approved_count: number;
+      failed: Array<{ id: number; reason: string }>;
+      data: OvertimeRequest[];
+    }>('/attendance/overtime-requests/bulk-approve', { ids, remarks })
+      .then((r) => r.data),
 };

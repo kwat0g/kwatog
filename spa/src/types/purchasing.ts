@@ -205,8 +205,11 @@ export interface ThreeWayMatchResult {
     bill_total: string;
     quantity_variance_pct: number;
     price_variance_pct: number;
-    status: 'matched' | 'qty_variance' | 'price_variance' | 'both';
+    // H-6 added 'grn_short' to flag a bill line that exceeds accepted GRN qty.
+    status: 'matched' | 'qty_variance' | 'price_variance' | 'both' | 'grn_short';
     severity: 'ok' | 'block';
+    // H-6 — present from the API when the GRN gate fired.
+    grn_status?: 'ok' | 'short';
   }>;
   overall_status: 'matched' | 'has_variances' | 'blocked';
   tolerances: { qty_pct: number; price_pct: number };

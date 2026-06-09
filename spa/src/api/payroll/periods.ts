@@ -33,6 +33,10 @@ export const periodsApi = {
     client.patch<ApiSuccess<PayrollPeriod>>(`/payroll-periods/${id}/finalize`).then((r) => r.data.data),
   markDisbursed: (id: string) =>
     client.patch<ApiSuccess<PayrollPeriod>>(`/payroll-periods/${id}/mark-disbursed`).then((r) => r.data.data),
+  forceUnlock: (id: string, reason?: string) =>
+    client
+      .post<ApiSuccess<PayrollPeriod>>(`/payroll-periods/${id}/force-unlock`, { reason: reason ?? '' })
+      .then((r) => r.data.data),
   bankFileUrl: (id: string) => `/api/v1/payroll-periods/${id}/bank-file`,
   runThirteenthMonth: (year: number, payroll_date?: string) =>
     client

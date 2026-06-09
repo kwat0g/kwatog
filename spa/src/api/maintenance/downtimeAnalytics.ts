@@ -19,4 +19,15 @@ export const downtimeAnalyticsApi = {
 
   allMachines: (params?: { days?: number }) =>
     client.get<ApiSuccess<MachineDowntimeSummary[]>>('/maintenance/downtime-analytics/all-machines', { params }).then(r => r.data.data),
+
+  /** L-39 — Pareto of downtime by category. */
+  pareto: (params?: { machine_id?: number; days?: number }) =>
+    client.get<ApiSuccess<Array<{
+      category: string;
+      label: string;
+      minutes: number;
+      count: number;
+      percent: number;
+      cumulative_percent: number;
+    }>>>('/maintenance/downtime-analytics/pareto', { params }).then(r => r.data.data),
 };
