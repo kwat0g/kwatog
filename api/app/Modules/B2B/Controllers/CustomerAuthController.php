@@ -5,50 +5,49 @@ declare(strict_types=1);
 namespace App\Modules\B2B\Controllers;
 
 use App\Modules\B2B\Models\CustomerPortalUser;
+use App\Modules\B2B\Services\B2bAuthService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\ValidationException;
 
+// TODO: replace inline abort_if(...) tenancy guards in CustomerPortalController
+// with a Vendor/Customer model scope (Phase 2 follow-up). Existing 50+ inline
+// checks have been visually audited; a model-scope refactor narrows the blast
+// radius if a future controller forgets the guard.
 class CustomerAuthController
 {
+    public function __construct(private readonly B2bAuthService $auth) {}
+
     /**
      * POST /api/v1/b2b/customer/login
      * Authenticate customer portal user and return a Sanctum API token.
      */
     public function login(Request $request): JsonResponse
     {
-        $request->validate([
+        $data = $request->validate([
             'email'    => ['required', 'email'],
             'password' => ['required', 'string'],
         ]);
 
-        $user = CustomerPortalUser::query()
-            ->where('email', $request->input('email'))
-            ->where('is_active', true)
-            ->first();
+        $result = $this->auth->login(
+            CustomerPortalUser::class,
+            $data['email'],
+            $data['password'],
+            $request,
+            'customer-portal',
+            'customer',
+        );
 
-        if (! $user || ! Hash::check($request->input('password'), $user->password)) {
-            throw ValidationException::withMessages([
-                'email' => ['The provided credentials are incorrect.'],
-            ]);
-        }
-
-        // Revoke old tokens
-        $user->tokens()->delete();
-
-        $token = $user->createToken('customer-portal')->plainTextToken;
-
-        $user->update(['last_login_at' => now()]);
+        /** @var CustomerPortalUser $user */
+        $user = $result['user'];
 
         return response()->json([
             'data' => [
-                'token'      => $token,
-                'user'       => [
-                    'id'          => $user->id,
+                'token' => $result['token'],
+                'user'  => [
+                    'id'          => $user->hash_id,
                     'name'        => $user->name,
                     'email'       => $user->email,
-                    'customer_id' => $user->customer_id,
+                    'customer_id' => app('hashids')->encode((int) $user->customer_id),
                 ],
             ],
         ]);
@@ -62,6 +61,7 @@ class CustomerAuthController
         /** @var \App\Modules\B2B\Models\CustomerPortalUser $user */
         $user = $request->user('customer_portal');
         $user?->currentAccessToken()?->delete();
+
         return response()->json(['message' => 'Logged out successfully.']);
     }
 
@@ -75,10 +75,10 @@ class CustomerAuthController
 
         return response()->json([
             'data' => [
-                'id'            => $user->id,
+                'id'            => $user->hash_id,
                 'name'          => $user->name,
                 'email'         => $user->email,
-                'customer_id'   => $user->customer_id,
+                'customer_id'   => app('hashids')->encode((int) $user->customer_id),
                 'customer_name' => $user->customer?->name,
             ],
         ]);

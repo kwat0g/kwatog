@@ -16,9 +16,10 @@ use Illuminate\Support\Facades\Route;
 
 /* ─── Supplier Portal ─────────────────────────────────────────── */
 Route::prefix('b2b/supplier')->group(function () {
-    // Public
-    Route::post('login',  [SupplierAuthController::class, 'login']);
-    Route::post('logout', [SupplierAuthController::class, 'logout']);
+    // Public — throttle:auth (5/min/ip|email) protects against credential
+    // spraying. Logout shares the limiter to bound DoS on the token-revoke path.
+    Route::post('login',  [SupplierAuthController::class, 'login'])->middleware('throttle:auth');
+    Route::post('logout', [SupplierAuthController::class, 'logout'])->middleware('throttle:auth');
 
     // Authenticated
     Route::middleware('auth:supplier_portal')->group(function () {
@@ -45,9 +46,10 @@ Route::prefix('b2b/supplier')->group(function () {
 
 /* ─── Customer Portal ─────────────────────────────────────────── */
 Route::prefix('b2b/customer')->group(function () {
-    // Public
-    Route::post('login',  [CustomerAuthController::class, 'login']);
-    Route::post('logout', [CustomerAuthController::class, 'logout']);
+    // Public — throttle:auth (5/min/ip|email) protects against credential
+    // spraying. Logout shares the limiter to bound DoS on the token-revoke path.
+    Route::post('login',  [CustomerAuthController::class, 'login'])->middleware('throttle:auth');
+    Route::post('logout', [CustomerAuthController::class, 'logout'])->middleware('throttle:auth');
 
     // Authenticated
     Route::middleware('auth:customer_portal')->group(function () {

@@ -5,50 +5,49 @@ declare(strict_types=1);
 namespace App\Modules\B2B\Controllers;
 
 use App\Modules\B2B\Models\SupplierPortalUser;
+use App\Modules\B2B\Services\B2bAuthService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\ValidationException;
 
+// TODO: replace inline abort_if(...) tenancy guards in SupplierPortalController
+// with a Vendor/Customer model scope (Phase 2 follow-up). Existing 50+ inline
+// checks have been visually audited; a model-scope refactor narrows the blast
+// radius if a future controller forgets the guard.
 class SupplierAuthController
 {
+    public function __construct(private readonly B2bAuthService $auth) {}
+
     /**
      * POST /api/v1/b2b/supplier/login
      * Authenticate supplier portal user and return a Sanctum API token.
      */
     public function login(Request $request): JsonResponse
     {
-        $request->validate([
+        $data = $request->validate([
             'email'    => ['required', 'email'],
             'password' => ['required', 'string'],
         ]);
 
-        $user = SupplierPortalUser::query()
-            ->where('email', $request->input('email'))
-            ->where('is_active', true)
-            ->first();
+        $result = $this->auth->login(
+            SupplierPortalUser::class,
+            $data['email'],
+            $data['password'],
+            $request,
+            'supplier-portal',
+            'supplier',
+        );
 
-        if (! $user || ! Hash::check($request->input('password'), $user->password)) {
-            throw ValidationException::withMessages([
-                'email' => ['The provided credentials are incorrect.'],
-            ]);
-        }
-
-        // Revoke old tokens so each login generates a fresh one
-        $user->tokens()->delete();
-
-        $token = $user->createToken('supplier-portal')->plainTextToken;
-
-        $user->update(['last_login_at' => now()]);
+        /** @var SupplierPortalUser $user */
+        $user = $result['user'];
 
         return response()->json([
             'data' => [
-                'token'      => $token,
-                'user'       => [
-                    'id'        => $user->id,
+                'token' => $result['token'],
+                'user'  => [
+                    'id'        => $user->hash_id,
                     'name'      => $user->name,
                     'email'     => $user->email,
-                    'vendor_id' => $user->vendor_id,
+                    'vendor_id' => app('hashids')->encode((int) $user->vendor_id),
                 ],
             ],
         ]);
@@ -78,10 +77,10 @@ class SupplierAuthController
 
         return response()->json([
             'data' => [
-                'id'          => $user->id,
+                'id'          => $user->hash_id,
                 'name'        => $user->name,
                 'email'       => $user->email,
-                'vendor_id'   => $user->vendor_id,
+                'vendor_id'   => app('hashids')->encode((int) $user->vendor_id),
                 'vendor_name' => $user->vendor?->name,
             ],
         ]);
