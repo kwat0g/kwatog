@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 import { customerPortalApi } from '@/api/b2b/customer';
+import { queryClient } from '@/lib/queryClient';
 import type { CustomerPortalUser } from '@/types/b2b';
 import PortalLayout from './PortalLayout';
 import { FullPageLoader } from '@/components/ui/Spinner';
@@ -20,7 +21,7 @@ export default function CustomerPortalLayout() {
   }, [navigate]);
 
   const handleLogout = useCallback(async () => {
-    try { await customerPortalApi.logout(); } finally { navigate('/portal/customer/login', { replace: true }); }
+    try { await customerPortalApi.logout(); } finally { queryClient.clear(); navigate('/portal/customer/login', { replace: true }); }
   }, [navigate]);
 
   if (isLoading) return <FullPageLoader />;

@@ -100,7 +100,7 @@ describe('stores/authStore', () => {
     expect(s.permissions.size).toBe(0);
   });
 
-  it('logout clears the query cache after clearing auth state', async () => {
+  it('logout clears the query cache', async () => {
     useAuthStore.getState().applyUser(fakeUser);
     vi.mocked(authApi.logout).mockResolvedValueOnce(undefined);
     await useAuthStore.getState().logout();
@@ -113,5 +113,15 @@ describe('stores/authStore', () => {
     vi.mocked(authApi.logout).mockRejectedValueOnce(new Error('boom'));
     await expect(useAuthStore.getState().logout()).rejects.toThrow('boom');
     expect(queryClient.clear).toHaveBeenCalledTimes(1);
+  });
+
+  it('login clears the query cache before authenticating', async () => {
+    vi.mocked(authApi.login).mockResolvedValueOnce(fakeUser);
+    await useAuthStore.getState().login({ email: 'u@t.test', password: 'x' });
+    expect(queryClient.clear).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(queryClient.clear).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(authApi.login).mock.invocationCallOrder[0],
+    );
+    expect(useAuthStore.getState().isAuthenticated).toBe(true);
   });
 });
