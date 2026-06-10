@@ -39,6 +39,9 @@ services:
       - "443:443"
     volumes:
       - ./docker/nginx/prod.conf:/etc/nginx/conf.d/default.conf:ro
+      # Outside conf.d/ on purpose: nginx.conf wildcard-includes conf.d/*.conf
+      # at http level, which would apply these headers twice.
+      - ./docker/nginx/security-headers-prod.conf:/etc/nginx/security-headers-prod.conf:ro
       # SPA static build (produced by `make build-spa` / Makefile target).
       - ./spa/dist:/var/www/spa:ro
       # Let's Encrypt certs — provisioned on the host with certbot.
