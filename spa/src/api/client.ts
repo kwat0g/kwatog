@@ -1,5 +1,6 @@
 import axios, { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
+import { queryClient } from '@/lib/queryClient';
 import { useErrorLogStore } from '@/stores/errorLogStore';
 
 interface LaravelDebugError {
@@ -87,6 +88,10 @@ const handleResponseError = (error: AxiosError<LaravelDebugError>) => {
       //   • the bootstrap call from AuthGuard (AuthGuard handles routing)
       if (!isLoginAttempt && !isBootstrap) {
         if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+          // Defense in depth: the hard navigation below normally wipes
+          // in-memory state, but clearing the query cache here guarantees no
+          // stale cross-user data survives (e.g. a future soft-nav refactor).
+          queryClient.clear();
           window.location.href = '/login';
         }
       }

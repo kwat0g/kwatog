@@ -18,8 +18,16 @@ vi.mock('@/stores/themeStore', () => ({
     getState: () => ({ init: vi.fn() }),
   },
 }));
+// Shared query client — logout must wipe the cache so the next user on a
+// shared terminal never sees the previous user's cached data.
+vi.mock('@/lib/queryClient', () => ({
+  queryClient: {
+    clear: vi.fn(),
+  },
+}));
 
 import { authApi } from '@/api/auth';
+import { queryClient } from '@/lib/queryClient';
 
 const fakeUser = {
   id: 'h_abc',
@@ -29,10 +37,11 @@ const fakeUser = {
   permissions: ['hr.employees.view', 'admin.users.manage'],
   features: ['hr', 'production'],
   theme_mode: 'light',
-} as unknown as Parameters<ReturnType<typeof useAuthStore>['applyUser']>[0];
+} as unknown as Parameters<ReturnType<typeof useAuthStore.getState>['applyUser']>[0];
 
 describe('stores/authStore', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     useAuthStore.setState({
       user: null,
       permissions: new Set(),
@@ -89,5 +98,20 @@ describe('stores/authStore', () => {
     expect(s.user).toBeNull();
     expect(s.isAuthenticated).toBe(false);
     expect(s.permissions.size).toBe(0);
+  });
+
+  it('logout clears the query cache after clearing auth state', async () => {
+    useAuthStore.getState().applyUser(fakeUser);
+    vi.mocked(authApi.logout).mockResolvedValueOnce(undefined);
+    await useAuthStore.getState().logout();
+    expect(queryClient.clear).toHaveBeenCalledTimes(1);
+    expect(useAuthStore.getState().isAuthenticated).toBe(false);
+  });
+
+  it('logout clears the query cache even if the network call fails', async () => {
+    useAuthStore.getState().applyUser(fakeUser);
+    vi.mocked(authApi.logout).mockRejectedValueOnce(new Error('boom'));
+    await expect(useAuthStore.getState().logout()).rejects.toThrow('boom');
+    expect(queryClient.clear).toHaveBeenCalledTimes(1);
   });
 });

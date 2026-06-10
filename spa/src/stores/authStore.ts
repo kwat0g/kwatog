@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { authApi, type AuthUser, type LoginPayload } from '@/api/auth';
+import { queryClient } from '@/lib/queryClient';
 import { useThemeStore } from './themeStore';
 
 interface AuthState {
@@ -45,6 +46,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await authApi.logout();
     } finally {
       set({ user: null, permissions: new Set(), features: new Set(), isAuthenticated: false });
+      // Wipe all cached query data so the next user on this terminal can
+      // never see the previous user's lists (payroll, employees, etc.).
+      queryClient.clear();
     }
   },
 
