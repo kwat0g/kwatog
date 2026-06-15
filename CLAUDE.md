@@ -533,3 +533,77 @@ PATTERNS.md contains exact, copy-paste code templates for every page type, every
 ### Final checklist (run mentally before finishing any task):
 
 See the complete checklist at the bottom of `docs/PATTERNS.md`. Every checkbox must pass.
+
+## SESSION-LEARNED PATTERNS (recurring gotchas)
+
+### Test environment
+- PHP mem default 128M OOMs full suite. Bump: `docker compose exec -T -u root api bash -c "echo 'memory_limit = 512M' > /usr/local/etc/php/conf.d/zz-mem.ini"`
+- TEST seeds: column varchars are mostly 20 chars. Use `'XX-T-'.substr(uniqid(), -5)` (10 chars). NEVER `'XX-TEST-'.uniqid()` (21 chars → truncation).
+- User+role seed: `User::factory()->create(['role_id' => Role::query()->where('slug', X)->value('id')])`. NEVER `assignRole()` (Spatie API not used here).
+- `Storage::fake('local')` for delivery photos / SOP files (NOT `'public'`).
+- SQLite-only `PRAGMA foreign_keys = ON` is removed — PG enforces FKs natively.
+
+### Mass-assignment hardening (WIP convention)
+- Many models removed `status` from `$fillable` (Loan, LeaveRequest, PR, PO, PayrollPeriod, NCR, EmployeeTraining, etc.). Service writes use `$m->forceFill(['status' => X])->save()`. Tests passing `status` to `::create([…])` get `MassAssignmentException`.
+- Audit-row hygiene: prefer `$m->fill([…]); $m->status = E::Foo; $m->save();` (single save → one audit row) over `update() + forceFill()->save()` (two rows for one logical action).
+
+### HasAuditLog + custom guards
+Under non-web guards (e.g. `auth:edge_device`, `auth:supplier_portal`), `Auth::id()` returns the non-User PK → `audit_logs` FK violation. Wrap writes via `App\Modules\Edge\Services\EdgeSystemUserResolver::impersonate(callable)` which pins `Auth::shouldUse('web')` + `onceUsingId($systemUserId)` for the call.
+
+### Model namespace gotchas
+- `Customer` → `App\Modules\Accounting\Models\Customer` (NOT CRM)
+- `Machine` → `App\Modules\MRP\Models\Machine` (NOT Production)
+- `Product` → `App\Modules\CRM\Models\Product` (finished goods); raw materials = `App\Modules\Inventory\Models\Item`
+- `MaintenanceWorkOrder` is polymorphic via `maintainable_type/_id`, NOT a direct `machine_id` FK.
+
+### Enum value gotchas
+- `InspectionParameterType` = Dimensional | Visual | Functional (no Numeric — Dimensional IS the numeric/tolerance path)
+- `NcrSource` = inspection_fail | customer_complaint
+- `NcrDisposition` = scrap | rework | use_as_is | return_to_supplier
+- `GrnStatus` = pending_qc | accepted | partial_accepted | rejected (no `draft`)
+
+### Seeded roles (slugs)
+system_admin, hr_officer, finance_officer, production_manager, ppc_head, purchasing_officer, warehouse_staff, qc_inspector, maintenance_tech, impex_officer, department_head, employee, driver. **NO plant_manager** — use production_manager.
+
+### Routing + middleware
+- Literal route segments declared BEFORE `{model}` bindings (e.g. `/vendors/ranking` before `/vendors/{vendor}/performance`) else they get param-bound.
+- Schedule entries → `api/routes/console.php` (Laravel 11). `Console\Kernel` does NOT exist.
+- Sanctum 4 abilities: `'ability' => \Laravel\Sanctum\Http\Middleware\CheckAbilities::class` registered in `bootstrap/app.php` aliases.
+- Module routes auto-mount under `/api/v1` via `App\Providers\ModuleServiceProvider`.
+- Frontend: NEVER set `'Content-Type': 'multipart/form-data'` on axios FormData requests — strips boundary. Let browser auto-set.
+
+### Event/listener wiring
+Explicit `Event::listen($EventClass, [$ListenerClass, 'handle'])` in `AppServiceProvider::boot()`. No auto-discovery. Listeners default to `ShouldQueue` w/ try/catch + `Log::warning` so a failure never blocks the dispatcher.
+
+### NCR.actions() / GROUP BY trap
+`NonConformanceReport::actions()` defines a default `orderBy('performed_at')`. Aggregate queries (`->selectRaw(... GROUP BY ...)`) must call `->reorder()` inside the closure or PG throws `SQLSTATE[42803]`.
+
+### Shared helpers — REUSE before reinventing
+- `App\Modules\Edge\Services\EdgeSystemUserResolver` — guard impersonation (T2.x ingest paths).
+- `App\Modules\Production\Services\WorkOrderOutputService::record()` — idempotent output recording (mold shots + scrap rate + event). Reuse from any new output path.
+- `App\Modules\Maintenance\Services\PredictiveMaintenanceService::recordAndEvaluate()` — condition reading + breach gate + corrective MWO.
+- `App\Modules\Quality\Services\InspectionService::recordMeasurements()` — tolerance auto-eval + status transition + defect counting.
+- `App\Common\Services\NotificationService::send($recipients, string $type, array $data)` — single notification entry point. Recipients = `User|Collection|array`.
+
+### Cron inventory (post-Track-3)
+```
+mrp:run-daily                            (06:00)
+alerts:run                               (every 15m)
+payroll:auto-create-period               (14th + last-day @ 23:00)
+approvals:run-escalations                (every 6h)
+purchasing:recompute-supplier-performance
+maintenance:generate-preventive          (02:00)
+assets:run-monthly-depreciation          (1st @ 03:00)
+ncr:escalate                             (every 15m)
+training:check-expiries                  (06:30)
+copq:snap-monthly                        (1st @ 02:30)
+complaints:check-8d-slas                 (every 15m)
+docs:check-reviews                       (06:45)
+```
+
+### Migration numbering
+Recent additions use 4-digit numbered (`0186_*`, `0187_*`, …, `0197_*`). Highest as of 2026-06-15 = **0197**. New migrations use highest+1. Mixed timestamp-style migrations (`2026_06_09_*`) coexist for older HR/Payroll changes — don't introduce more.
+
+### Test runner + suite size
+Full suite as of 2026-06-15: **746 tests / 0 fail / ~4 min runtime**. Use `--filter='Foo|Bar'` for tight loops. Re-run full suite only at end of feature.
+
