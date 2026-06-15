@@ -173,3 +173,11 @@ Schedule::command('copq:snap-monthly')
     ->monthlyOn(1, '02:30')
     ->withoutOverlapping()
     ->onOneServer();
+
+// T3.5.D — Daily controlled-document review reminders at 06:45.
+// Idempotent — re-fires only after `last_review_alert_at` is older than 7 days
+// or the doc has been re-reviewed (clears the alert stamp).
+Schedule::command('docs:check-reviews')
+    ->dailyAt('06:45')
+    ->withoutOverlapping()
+    ->onOneServer();
