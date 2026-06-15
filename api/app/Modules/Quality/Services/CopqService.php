@@ -26,48 +26,25 @@ class CopqService
 {
     public function compute(CarbonInterface $from, CarbonInterface $to): array
     {
-        $fromDate = $from->toDateString();
-        $toDate   = $to->toDateString();
+        if ($this->isFullCalendarMonth($from, $to)) {
+            $snap = $this->snapshot($from->year, $from->month);
 
-        $scrap = (int) (DB::table('non_conformance_reports')
-            ->where('status', 'closed')
-            ->where('disposition', 'scrap')
-            ->whereBetween('closed_at', [$fromDate, $toDate])
-            ->sum('affected_quantity') ?? 0);
+            // Legacy contract: same array shape the dashboard + CopqServiceTest expect.
+            $b = $snap->breakdown ?? [];
+            return [
+                'internal_failure' => $b['internal_failure'] ?? [
+                    'scrap_units' => 0, 'rework_units' => 0,
+                    'scrap_cost' => 0.0, 'rework_cost' => 0.0,
+                ],
+                'external_failure' => $b['external_failure'] ?? [
+                    'returns' => 0, 'complaints' => 0, 'return_cost' => 0.0,
+                ],
+                'total'        => (float) ($b['total'] ?? 0),
+                'period_label' => $from->format('M Y') . ' – ' . $to->format('M Y'),
+            ];
+        }
 
-        $rework = (int) (DB::table('work_orders')
-            ->whereNotNull('parent_ncr_id')
-            ->whereBetween('created_at', [$fromDate, $toDate])
-            ->sum('quantity_target') ?? 0);
-
-        $returns = DB::table('return_requests')
-            ->where('status', 'completed')
-            ->whereBetween('updated_at', [$fromDate, $toDate])
-            ->count();
-
-        $complaints = DB::table('customer_complaints')
-            ->whereBetween('created_at', [$fromDate, $toDate])
-            ->count();
-
-        $avgCost    = (float) (DB::table('items')->avg('standard_cost') ?? 50.0);
-        $scrapCost  = $scrap * $avgCost;
-        $reworkCost = $rework * $avgCost * 0.3;
-
-        return [
-            'internal_failure' => [
-                'scrap_units'  => $scrap,
-                'rework_units' => $rework,
-                'scrap_cost'   => round($scrapCost, 2),
-                'rework_cost'  => round($reworkCost, 2),
-            ],
-            'external_failure' => [
-                'returns'     => $returns,
-                'complaints'  => $complaints,
-                'return_cost' => 0.0,
-            ],
-            'total'        => round($scrapCost + $reworkCost, 2),
-            'period_label' => $from->format('M Y') . ' – ' . $to->format('M Y'),
-        ];
+        return $this->computeAdHoc($from, $to);
     }
 
     /**
