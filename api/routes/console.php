@@ -73,6 +73,12 @@ Schedule::command('ncr:escalate')
     ->withoutOverlapping(10)
     ->onOneServer();
 
+// T3.2.B — 8D SLA escalation (D3 / D4 / finalize) every 15 minutes.
+Schedule::command('complaints:check-8d-slas')
+    ->everyFifteenMinutes()
+    ->withoutOverlapping(10)
+    ->onOneServer();
+
 // Series F / Task F4 — Monthly supplier performance recompute on the 1st at 02:00.
 Schedule::command('purchasing:recompute-supplier-performance')
     ->monthlyOn(1, '02:00')
