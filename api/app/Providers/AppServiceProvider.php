@@ -55,6 +55,8 @@ use App\Modules\Production\Listeners\NotifyOnMachineBreakdown;
 use App\Modules\Production\Listeners\NotifyOnWorkOrderCompleted;
 use App\Modules\Purchasing\Events\PurchaseOrderApproved;
 use App\Modules\Purchasing\Events\PurchaseRequestApproved;
+use App\Modules\Purchasing\Events\SupplierPerformanceComputed;
+use App\Modules\Purchasing\Listeners\AlertOnSupplierDeterioration;
 use App\Modules\Purchasing\Listeners\NotifyOnPurchaseOrderApproved;
 use App\Modules\Purchasing\Listeners\NotifyOnPurchaseRequestApproved;
 use App\Modules\Quality\Events\InspectionFailed;
@@ -160,6 +162,8 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(GoodsReceiptNoteCreated::class, [NotifyOnGrnReceived::class,              'handle']);
         Event::listen(PurchaseRequestApproved::class, [NotifyOnPurchaseRequestApproved::class,  'handle']);
         Event::listen(PurchaseOrderApproved::class,   [NotifyOnPurchaseOrderApproved::class,    'handle']);
+        // T3.3.C — Supplier deterioration alert (score drop >= 20 vs prior month).
+        Event::listen(SupplierPerformanceComputed::class, [AlertOnSupplierDeterioration::class, 'handle']);
         Event::listen(InspectionFailed::class,        [RejectGRNOnQcFail::class,                'handle']);
         Event::listen(InspectionFailed::class,        [NotifyOnInspectionFailed::class,         'handle']);
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Purchasing\Services;
 
 use App\Modules\Accounting\Models\Vendor;
+use App\Modules\Purchasing\Events\SupplierPerformanceComputed;
 use App\Modules\Purchasing\Models\SupplierPerformanceSnapshot;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -35,7 +36,7 @@ class SupplierPerformanceService
 
     public function compute(Vendor $vendor, int $year, int $month): SupplierPerformanceSnapshot
     {
-        return DB::transaction(function () use ($vendor, $year, $month) {
+        $snapshot = DB::transaction(function () use ($vendor, $year, $month) {
             $start = Carbon::create($year, $month, 1)->startOfDay();
             $end   = $start->copy()->endOfMonth()->endOfDay();
 
@@ -82,6 +83,16 @@ class SupplierPerformanceService
                 ],
             );
         });
+
+        // T3.3.C — Dispatch afterCommit so listeners (e.g. deterioration alert)
+        // observe the persisted row. In nested-transaction tests the outer
+        // RefreshDatabase rollback still allows the event to fire because the
+        // inner transaction has already committed by this point.
+        DB::afterCommit(function () use ($snapshot) {
+            event(new SupplierPerformanceComputed($snapshot));
+        });
+
+        return $snapshot;
     }
 
     /**
