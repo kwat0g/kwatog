@@ -228,6 +228,19 @@ class NcrService
             throw new RuntimeException('Cannot close NCR without a disposition.');
         }
 
+        $counts = $ncr->actions()
+            ->reorder()
+            ->selectRaw('action_type, COUNT(*) as c')
+            ->groupBy('action_type')
+            ->pluck('c', 'action_type');
+
+        if (((int) ($counts[NcrActionType::Corrective->value] ?? 0)) < 1) {
+            throw new RuntimeException('Cannot close NCR without at least one Corrective action.');
+        }
+        if (((int) ($counts[NcrActionType::Preventive->value] ?? 0)) < 1) {
+            throw new RuntimeException('Cannot close NCR without at least one Preventive action.');
+        }
+
         return DB::transaction(function () use ($ncr, $by) {
             $ncr->forceFill([
                 'status'    => NcrStatus::Closed->value,
