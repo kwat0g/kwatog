@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Modules\Quality\Controllers\AnalyticsController;
+use App\Modules\Quality\Controllers\CopqController;
 use App\Modules\Quality\Controllers\InspectionController;
 use App\Modules\Quality\Controllers\InspectionSpecController;
 use App\Modules\Quality\Controllers\NcrController;
@@ -91,6 +92,10 @@ Route::middleware(['auth:sanctum', 'feature:quality'])->prefix('quality')->group
         ->middleware('permission:quality.view');
     Route::get('/analytics/defect-pareto/drill',                [AnalyticsController::class, 'paretoDrillDown'])
         ->middleware('permission:quality.view');
+
+    /* ─── T3.6.B — COPQ rollup trend ─── */
+    Route::get('/copq/trend',                                   [CopqController::class, 'trend'])
+        ->middleware('permission:quality.copq.view');
 
     /* ─── ADV3 — IATF 16949 traceability (batch + lot search, shipment lots) ─── */
     Route::get('/traceability/search', [TraceabilityController::class, 'search'])

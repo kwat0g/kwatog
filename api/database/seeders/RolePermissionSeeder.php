@@ -250,6 +250,8 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'quality.specs.manage',         'name' => 'Manage Inspection Specs'],
                 ['slug' => 'quality.ncr.view',   'name' => 'View NCRs'],
                 ['slug' => 'quality.ncr.manage',           'name' => 'Manage NCRs'],
+                // T3.6 — COPQ rollup trend (snapshot history).
+                ['slug' => 'quality.copq.view',            'name' => 'View COPQ Trends'],
             ],
 
             // Maintenance
@@ -390,6 +392,7 @@ class RolePermissionSeeder extends Seeder
                         'purchasing.suppliers.performance.view',
                         'forecasting.view',
                         'return_management.view',
+                        'quality.copq.view',
                     ],
                 ),
             ],
@@ -404,6 +407,7 @@ class RolePermissionSeeder extends Seeder
                         'inventory.view',
                         // Quality: view + read sub-resources for quality dashboard / NCR/inspection pages
                         'quality.view', 'quality.inspections.view', 'quality.ncr.view',
+                        'quality.copq.view',
                         'dashboard.plant_manager.view', 'dashboard.ppc.view',
                         'maintenance.view', 'assets.view',
                         'search.global', 'notifications.preferences.manage',
