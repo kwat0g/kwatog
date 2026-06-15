@@ -137,6 +137,18 @@ class ComplaintService
     {
         $report = $c->eightDReport ?? throw new RuntimeException('No 8D report exists for this complaint.');
         if ($report->finalized_at) return $report;
+
+        // T3.2.A — every D must be populated (non-empty after trim).
+        $required = [
+            'd1_team', 'd2_problem', 'd3_containment', 'd4_root_cause',
+            'd5_corrective_action', 'd6_verification', 'd7_prevention', 'd8_recognition',
+        ];
+        foreach ($required as $field) {
+            if (trim((string) $report->{$field}) === '') {
+                throw new RuntimeException("Cannot finalize 8D: {$field} is required.");
+            }
+        }
+
         $report->update([
             'finalized_at' => now(),
             'finalized_by' => $by->id,
