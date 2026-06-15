@@ -73,6 +73,20 @@ Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function 
             ->middleware('permission:hr.separation.initiate');
     });
 
+    // T3.4.A — Training catalog (admin CRUD).
+    Route::prefix('trainings')->group(function () {
+        Route::get('/',              [\App\Modules\HR\Controllers\TrainingController::class, 'index'])
+            ->middleware('permission:hr.trainings.view');
+        Route::post('/',             [\App\Modules\HR\Controllers\TrainingController::class, 'store'])
+            ->middleware('permission:hr.trainings.manage');
+        Route::get('/{training}',    [\App\Modules\HR\Controllers\TrainingController::class, 'show'])
+            ->middleware('permission:hr.trainings.view');
+        Route::patch('/{training}',  [\App\Modules\HR\Controllers\TrainingController::class, 'update'])
+            ->middleware('permission:hr.trainings.manage');
+        Route::delete('/{training}', [\App\Modules\HR\Controllers\TrainingController::class, 'destroy'])
+            ->middleware('permission:hr.trainings.manage');
+    });
+
     // U3 (HR side) — review queue for profile-update requests.
     Route::prefix('profile-update-requests')->group(function () {
         Route::get('/', [ProfileUpdateReviewController::class, 'index'])
