@@ -128,6 +128,9 @@ Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function 
         Route::get('/documents/employment-certificate',       [SelfServiceController::class, 'employmentCertificate']);
         Route::get('/documents/contributions/{type}',         [SelfServiceController::class, 'contributionCertificate']);
         Route::get('/documents/bir-2316',                     [SelfServiceController::class, 'bir2316']);
+
+        // T3.4.A — read-only training records for the session employee.
+        Route::get('/trainings', [SelfServiceController::class, 'trainings']);
     });
 
     // Sprint 8 — Task 71: clearance lifecycle

@@ -8,6 +8,8 @@ use App\Modules\Attendance\Enums\OvertimeStatus;
 use App\Modules\Attendance\Models\OvertimeRequest;
 use App\Modules\Attendance\Services\OvertimeService;
 use App\Modules\HR\Models\Employee;
+use App\Modules\HR\Models\EmployeeTraining;
+use App\Modules\HR\Resources\EmployeeTrainingResource;
 use App\Modules\HR\Services\ProfileUpdateRequestService;
 use App\Modules\HR\Services\SelfServiceDocumentService;
 use App\Modules\HR\Services\SelfServiceHomeService;
@@ -382,6 +384,26 @@ class SelfServiceController
         $employee = $this->currentEmployee($request);
         $year = (int) ($request->integer('year') ?: ((int) now()->format('Y') - 1));
         return $this->documents->bir2316($employee, $year, $request->user());
+    }
+
+    /**
+     * T3.4.A — read-only list of the session employee's training records.
+     * Always scoped to the session employee — never accepts an employee_id.
+     */
+    public function trainings(Request $request): JsonResponse
+    {
+        $employee = $this->currentEmployee($request);
+
+        $rows = EmployeeTraining::query()
+            ->with('training')
+            ->where('employee_id', $employee->id)
+            ->orderByDesc('scheduled_for')
+            ->orderByDesc('id')
+            ->get();
+
+        return response()->json([
+            'data' => EmployeeTrainingResource::collection($rows)->resolve(),
+        ]);
     }
 
     private function greeting(): string
