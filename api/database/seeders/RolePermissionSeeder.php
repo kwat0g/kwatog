@@ -252,6 +252,10 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'quality.ncr.manage',           'name' => 'Manage NCRs'],
                 // T3.6 — COPQ rollup trend (snapshot history).
                 ['slug' => 'quality.copq.view',            'name' => 'View COPQ Trends'],
+                // T3.5 — IATF document control. `view` = self-service ack list + read.
+                // `manage` = catalog CRUD + publish revisions + mark-reviewed.
+                ['slug' => 'quality.documents.view',       'name' => 'View Controlled Documents'],
+                ['slug' => 'quality.documents.manage',     'name' => 'Manage Controlled Documents'],
             ],
 
             // Maintenance
@@ -567,6 +571,8 @@ class RolePermissionSeeder extends Seeder
             'loans.view',           // Loans list → /hr/self-service/loans + /loans (scoped)
             'loans.create',         // Apply loan + preview amortization
             'payroll.view',         // Payslips → /payroll (scoped to self)
+            // T3.5 — every employee can see their pending document acknowledgments.
+            'quality.documents.view',
         ];
     }
 
