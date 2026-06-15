@@ -73,6 +73,16 @@ Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function 
             ->middleware('permission:hr.separation.initiate');
     });
 
+    // T3.4.A — Employee training records (admin assign / complete / cancel).
+    Route::get('/employees/{employee}/trainings',  [\App\Modules\HR\Controllers\EmployeeTrainingController::class, 'index'])
+        ->middleware('permission:hr.employees.trainings.view');
+    Route::post('/employees/{employee}/trainings', [\App\Modules\HR\Controllers\EmployeeTrainingController::class, 'store'])
+        ->middleware('permission:hr.employees.trainings.manage');
+    Route::patch('/employee-trainings/{record}/complete', [\App\Modules\HR\Controllers\EmployeeTrainingController::class, 'complete'])
+        ->middleware('permission:hr.employees.trainings.manage');
+    Route::patch('/employee-trainings/{record}/cancel',   [\App\Modules\HR\Controllers\EmployeeTrainingController::class, 'cancel'])
+        ->middleware('permission:hr.employees.trainings.manage');
+
     // T3.4.A — Training catalog (admin CRUD).
     Route::prefix('trainings')->group(function () {
         Route::get('/',              [\App\Modules\HR\Controllers\TrainingController::class, 'index'])
