@@ -25,10 +25,9 @@ class NcrEscalationTest extends TestCase
     {
         parent::setUp();
         $this->seed(RolePermissionSeeder::class);
-        // Ensure recipient pools exist for each tier. `plant_manager` is
-        // referenced across Quality listeners but not seeded as a row in
-        // RolePermissionSeeder, so create-or-fetch it here.
-        foreach (['qc_inspector', 'plant_manager', 'system_admin'] as $slug) {
+        // Ensure recipient pools exist for each tier. All three slugs are
+        // seeded by RolePermissionSeeder; firstOrCreate is defensive.
+        foreach (['qc_inspector', 'production_manager', 'system_admin'] as $slug) {
             $role = Role::firstOrCreate(
                 ['slug' => $slug],
                 ['name' => $slug, 'description' => $slug, 'is_system' => true],

@@ -51,7 +51,7 @@ class NcrRecurrenceDetector
             $ncr->forceFill(['recurrence_of_ncr_id' => $prior->id])->save();
 
             $recipients = User::query()
-                ->whereHas('role', fn ($q) => $q->whereIn('slug', ['qc_inspector', 'plant_manager']))
+                ->whereHas('role', fn ($q) => $q->whereIn('slug', ['qc_inspector', 'production_manager']))
                 ->where('is_active', true)
                 ->get();
             foreach ($recipients as $user) {

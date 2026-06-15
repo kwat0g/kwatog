@@ -30,7 +30,7 @@ class NcrEscalationService
 
     private const TIERS = [
         1 => ['role' => 'qc_inspector',  'subject' => 'NCR awaiting corrective'],
-        2 => ['role' => 'plant_manager', 'subject' => 'NCR overdue — manager attention'],
+        2 => ['role' => 'production_manager', 'subject' => 'NCR overdue — manager attention'],
         3 => ['role' => 'system_admin',  'subject' => 'NCR critical overdue — exec escalation'],
     ];
 
