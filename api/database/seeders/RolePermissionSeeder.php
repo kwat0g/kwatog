@@ -32,6 +32,8 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'admin.scheduled_exports.view', 'name' => 'View Scheduled Exports'],
                 // Series F — Task F7: company-wide activity feed.
                 ['slug' => 'admin.activity.view',          'name' => 'View System Activity Feed'],
+                // T2.0 — Edge module: manage factory-floor devices and tokens.
+                ['slug' => 'admin.edge_devices.manage',    'name' => 'Manage Edge Devices'],
             ],
 
             // HR
@@ -93,6 +95,8 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'payroll.adjustments.create',  'name' => 'Create Payroll Adjustment'],
                 ['slug' => 'payroll.payslip.view_all',    'name' => 'View Any Payslip'],
                 ['slug' => 'payroll.thirteenth_month.run', 'name' => 'Run 13th Month Pay'],
+                // T1.8 — CSV import of SSS / PhilHealth / Pag-IBIG / BIR brackets.
+                ['slug' => 'payroll.gov_tables.manage',   'name' => 'Import Government Contribution Tables (CSV)'],
             ],
 
             // Loans
@@ -169,6 +173,7 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'supply_chain.fleet.manage',         'name' => 'Manage Vehicles'],
                 ['slug' => 'supply_chain.deliveries.create',    'name' => 'Create Deliveries'],
                 ['slug' => 'supply_chain.deliveries.confirm',   'name' => 'Confirm Customer Delivery'],
+                ['slug' => 'supply_chain.driver.access',        'name' => 'Access Driver PWA'],
             ],
 
             // Production — Sprint 6 Tasks 51, 55–58
@@ -352,6 +357,7 @@ class RolePermissionSeeder extends Seeder
                         'payroll.adjustments.create',
                         'payroll.thirteenth_month.run',
                         'payroll.anomalies.review',
+                        'payroll.gov_tables.manage',
                         'dashboard.hr.view',
                         'search.global',
                         'notifications.preferences.manage',
@@ -510,6 +516,14 @@ class RolePermissionSeeder extends Seeder
                 'permissions' => array_merge(
                     $this->selfService(),
                     ['notifications.preferences.manage'],
+                ),
+            ],
+            'driver' => [
+                'name' => 'Driver',
+                'description' => 'Delivery driver (self-scoped delivery view). Driver routes scope by driver_id FK — no module permissions required.',
+                'permissions' => array_merge(
+                    $this->selfService(),
+                    ['supply_chain.driver.access'],
                 ),
             ],
         ];

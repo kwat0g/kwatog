@@ -19,12 +19,15 @@ class ApprovalRecord extends Model
         'approver_id', 'action', 'remarks', 'acted_at', 'created_at',
         // Task A7
         'reminder_sent_at', 'escalated_at', 'escalated_to_user_id',
+        // T1.6
+        'auto_resolved_at',
     ];
     protected $casts = [
         'acted_at'         => 'datetime',
         'created_at'       => 'datetime',
         'reminder_sent_at' => 'datetime',
         'escalated_at'     => 'datetime',
+        'auto_resolved_at' => 'datetime',
     ];
 
     public function getIsOverdueAttribute(): bool

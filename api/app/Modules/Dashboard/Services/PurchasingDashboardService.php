@@ -59,8 +59,8 @@ class PurchasingDashboardService
         return DB::table('purchase_requests as pr')
             ->leftJoin('departments as d', 'd.id', '=', 'pr.department_id')
             ->where('pr.status', 'pending')
-            ->select('pr.id', 'pr.pr_number', 'd.name as department_name', 'pr.total_estimated_amount', 'pr.urgency', 'pr.created_at')
-            ->orderBy('pr.urgency')
+            ->select('pr.id', 'pr.pr_number', 'd.name as department_name', 'pr.priority', 'pr.created_at')
+            ->orderBy('pr.priority')
             ->orderBy('pr.created_at')
             ->limit(10)
             ->get()
@@ -69,8 +69,8 @@ class PurchasingDashboardService
                 'pr_number'       => $r->pr_number,
                 'department'      => $r->department_name ?? '—',
                 'items_count'     => $this->prItemCount((int) $r->id),
-                'estimated_total' => number_format((float) ($r->total_estimated_amount ?? 0), 2, '.', ''),
-                'urgency'         => $r->urgency ?? 'normal',
+                'estimated_total' => '0.00',
+                'urgency'         => $r->priority ?? 'normal',
                 'days_waiting'    => $r->created_at ? (int) Carbon::parse((string) $r->created_at)->diffInDays(now()) : 0,
             ])
             ->all();

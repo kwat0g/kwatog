@@ -80,15 +80,16 @@ class PayrollCalculatorServiceTest extends TestCase
         $start = $start ?? '2026-04-01';
         $end   = $end   ?? '2026-04-15';
 
-        return PayrollPeriod::create([
+        $period = PayrollPeriod::create([
             'period_start'  => $start,
             'period_end'    => $end,
             'payroll_date'  => $end,
             'is_first_half' => $firstHalf,
             'is_thirteenth_month' => false,
-            'status'        => PayrollPeriodStatus::Draft->value,
             'created_by'    => $userId,
         ]);
+        $period->forceFill(['status' => PayrollPeriodStatus::Draft->value])->save();
+        return $period;
     }
 
     private function attendanceFor(Employee $emp, string $start, string $end, float $hoursPerDay = 8.0): void
@@ -202,9 +203,9 @@ class PayrollCalculatorServiceTest extends TestCase
             'balance'              => '6000.00',
             'pay_periods_total'    => 12,
             'pay_periods_remaining' => 12,
-            'status'               => LoanStatus::Active->value,
             'start_date'           => '2026-04-01',
         ]);
+        $loan->forceFill(['status' => LoanStatus::Active->value])->save();
 
         $payroll = $this->calc->computeForEmployee($period, $emp);
 
@@ -234,7 +235,7 @@ class PayrollCalculatorServiceTest extends TestCase
     {
         $emp = $this->makeEmployee();
         $period = $this->makePeriod(true, '2026-04-01', '2026-04-15');
-        $period->update(['status' => PayrollPeriodStatus::Finalized->value]);
+        $period->forceFill(['status' => PayrollPeriodStatus::Finalized->value])->save();
 
         $this->expectException(\RuntimeException::class);
         $this->calc->computeForEmployee($period, $emp);
@@ -268,14 +269,15 @@ class PayrollCalculatorServiceTest extends TestCase
         $period = $this->makePeriod(true, '2026-04-01', '2026-04-15');
         $this->attendanceFor($emp, '2026-04-01', '2026-04-15');
 
-        EmployeeLoan::create([
+        $caLoan = EmployeeLoan::create([
             'loan_no' => 'LN-X', 'employee_id' => $emp->id,
             'loan_type' => LoanType::CashAdvance->value,
             'principal' => '5000.00', 'monthly_amortization' => '5000.00',
             'total_paid' => '0.00', 'balance' => '5000.00',
             'pay_periods_total' => 1, 'pay_periods_remaining' => 1,
-            'status' => LoanStatus::Active->value, 'start_date' => '2026-04-01',
+            'start_date' => '2026-04-01',
         ]);
+        $caLoan->forceFill(['status' => LoanStatus::Active->value])->save();
 
         $payroll = $this->calc->computeForEmployee($period, $emp);
 
@@ -456,8 +458,8 @@ class PayrollCalculatorServiceTest extends TestCase
             'type'                => PayrollAdjustmentType::Underpayment->value,
             'amount'              => '500.00',
             'reason'              => 'Missed allowance',
-            'status'              => PayrollAdjustmentStatus::Approved->value,
         ]);
+        $underpay->forceFill(['status' => PayrollAdjustmentStatus::Approved->value])->save();
 
         $overpay = PayrollAdjustment::create([
             'payroll_period_id'   => $period1->id,
@@ -466,8 +468,8 @@ class PayrollCalculatorServiceTest extends TestCase
             'type'                => PayrollAdjustmentType::Overpayment->value,
             'amount'              => '300.00',
             'reason'              => 'Extra paid last period',
-            'status'              => PayrollAdjustmentStatus::Approved->value,
         ]);
+        $overpay->forceFill(['status' => PayrollAdjustmentStatus::Approved->value])->save();
 
         // (A)+(B)+(C): Compute period2 — both adjustments should apply.
         $payroll2 = $this->calc->computeForEmployee($period2, $emp);

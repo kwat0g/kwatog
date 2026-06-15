@@ -63,9 +63,9 @@ class PayrollGlPostingTest extends TestCase
             'period_start' => '2026-04-01', 'period_end' => '2026-04-15',
             'payroll_date' => '2026-04-15', 'is_first_half' => true,
             'is_thirteenth_month' => false,
-            'status' => PayrollPeriodStatus::Draft->value,
             'created_by' => $user->id,
         ]);
+        $period->forceFill(['status' => PayrollPeriodStatus::Draft->value])->save();
 
         // Single attendance row, 8h regular work day for simplicity.
         \App\Modules\Attendance\Models\Attendance::create([
@@ -77,8 +77,8 @@ class PayrollGlPostingTest extends TestCase
         ]);
 
         app(PayrollCalculatorService::class)->computeForEmployee($period, $emp);
-        $period->update(['status' => PayrollPeriodStatus::Approved->value]);
-        $period->update(['status' => PayrollPeriodStatus::Finalized->value]);
+        $period->forceFill(['status' => PayrollPeriodStatus::Approved->value])->save();
+        $period->forceFill(['status' => PayrollPeriodStatus::Finalized->value])->save();
 
         return [$user, $period];
     }
@@ -142,9 +142,9 @@ class PayrollGlPostingTest extends TestCase
         $period = PayrollPeriod::create([
             'period_start' => '2026-04-01', 'period_end' => '2026-04-15',
             'payroll_date' => '2026-04-15', 'is_first_half' => true,
-            'status' => PayrollPeriodStatus::Draft->value,
             'created_by' => $user->id,
         ]);
+        $period->forceFill(['status' => PayrollPeriodStatus::Draft->value])->save();
 
         $this->expectException(\RuntimeException::class);
         app(PayrollGlPostingService::class)->post($period);

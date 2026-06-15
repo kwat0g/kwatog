@@ -40,6 +40,8 @@ class ItemResource extends JsonResource
             'reorder_method'         => (string) $this->reorder_method?->value,
             'reorder_point'          => (string) $this->reorder_point,
             'safety_stock'           => (string) $this->safety_stock,
+            'safety_stock_locked'        => (bool) $this->safety_stock_locked,
+            'safety_stock_recomputed_at' => optional($this->safety_stock_recomputed_at)->toIso8601String(),
             'minimum_order_quantity' => (string) $this->minimum_order_quantity,
             'lead_time_days'         => (int) $this->lead_time_days,
             'is_critical'            => (bool) $this->is_critical,

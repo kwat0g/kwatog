@@ -30,6 +30,12 @@ Route::middleware('auth:sanctum')->prefix('admin/gov-tables')->group(function ()
         ->middleware('permission:admin.gov_tables.manage');
 });
 
+// T1.8 — CSV import endpoint for HR / payroll users (separate gate from admin CRUD).
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('gov-tables/{agency}/import', [GovernmentTableController::class, 'import'])
+        ->middleware('permission:payroll.gov_tables.manage');
+});
+
 // ─── Payroll periods + payrolls + adjustments + bank files ─────
 // Each controller is registered conditionally so this file remains valid as
 // the sprint is built up incrementally (Tasks 25/26/27).

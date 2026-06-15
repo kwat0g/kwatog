@@ -58,7 +58,7 @@ class UserPermissionOverrideService
             ->where('permission_id', $permission->id)
             ->first();
 
-        $override = DB::transaction(function () use ($user, $actor, $permission, $type, $reason, $expiresAt) {
+        $override = DB::transaction(function () use ($user, $actor, $permission, $type, $reason, $expiresAt, $existing) {
             $override = UserPermissionOverride::updateOrCreate(
                 [
                     'user_id'       => $user->id,

@@ -31,8 +31,7 @@ class PurchaseOrder extends Model
         'po_number', 'vendor_id', 'purchase_request_id',
         'date', 'expected_delivery_date',
         'subtotal', 'vat_amount', 'total_amount', 'is_vatable',
-        'status', 'requires_vp_approval', 'current_approval_step',
-        'approved_by', 'approved_at', 'sent_to_supplier_at',
+        'requires_vp_approval',
         'created_by', 'remarks',
         'is_auto_generated',
     ];

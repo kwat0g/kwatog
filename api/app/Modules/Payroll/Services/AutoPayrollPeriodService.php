@@ -57,11 +57,11 @@ class AutoPayrollPeriodService
                 'payroll_date'        => $payDate->toDateString(),
                 'is_first_half'       => $isFirstHalf,
                 'is_thirteenth_month' => false,
-                'status'              => PayrollPeriodStatus::Draft->value,
                 'created_by'          => null,
                 'is_auto_created'     => true,
                 'auto_created_at'     => now(),
             ]);
+            $period->forceFill(['status' => PayrollPeriodStatus::Draft->value])->save();
 
             // Queue payroll computation. The job notifies HR on completion.
             DB::afterCommit(fn () => ProcessPayrollJob::dispatch($period, null));

@@ -64,15 +64,10 @@ class OnboardingTest extends TestCase
         $svc = app(EmployeeService::class);
         $emp = $svc->create($this->basePayload());
 
+        // T1.3 — auto-provision listener fires on EmployeeCreated, so the
+        // account_provisioned step should already be complete.
         /** @var OnboardingService $ob */
         $ob = app(OnboardingService::class);
-        $status = $ob->status($emp);
-        $accountStep = collect($status['steps'])->firstWhere('key', 'account_provisioned');
-        $this->assertNull($accountStep['completed_at']);
-
-        // Provision the account
-        app(UserProvisioningService::class)->provisionForEmployee($emp->fresh(), ['send_welcome' => false]);
-
         $status = $ob->status($emp->fresh());
         $accountStep = collect($status['steps'])->firstWhere('key', 'account_provisioned');
         $this->assertNotNull($accountStep['completed_at']);
@@ -95,7 +90,8 @@ class OnboardingTest extends TestCase
         $ob = app(OnboardingService::class);
         $ob->markStep($emp->fresh(), 'shift_assigned');
         $ob->markStep($emp->fresh(), 'dept_team_notified');
-        app(UserProvisioningService::class)->provisionForEmployee($emp->fresh(), ['send_welcome' => false]);
+        // T1.3 — manual provisionForEmployee removed; auto-provision listener
+        // already created the user during EmployeeService::create above.
         $ob->recompute($emp->fresh());
 
         $status = $ob->status($emp->fresh());

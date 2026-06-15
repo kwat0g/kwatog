@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Admin;
 
 use App\Common\Enums\PermissionOverrideType;
+use App\Common\Models\AuditLog;
 use App\Modules\Admin\Models\UserPermissionOverride;
 use App\Modules\Admin\Services\UserPermissionOverrideService;
 use App\Modules\Auth\Models\Permission;
@@ -171,6 +172,154 @@ class UserPermissionOverrideTest extends TestCase
             ->assertStatus(201);
 
         $this->assertSame(1, UserPermissionOverride::where('user_id', $target->id)->count());
+    }
+
+    public function test_audit_log_created_on_override_grant(): void
+    {
+        $admin = $this->seedAdmin();
+        $target = $this->seedUserWithRole('employee');
+
+        $this->actingAs($admin)
+            ->postJson("/api/v1/admin/users/{$target->hash_id}/overrides", [
+                'permission_slug' => 'hr.employees.view',
+                'type'            => 'grant',
+                'reason'          => 'Grant override for audit test',
+            ])
+            ->assertStatus(201);
+
+        $override = UserPermissionOverride::where('user_id', $target->id)->firstOrFail();
+
+        $this->assertDatabaseHas('audit_logs', [
+            'action'     => 'created',
+            'model_type' => $override->getMorphClass(),
+            'model_id'   => $override->id,
+        ]);
+
+        $audit = AuditLog::where('model_type', $override->getMorphClass())
+            ->where('model_id', $override->id)
+            ->where('action', 'created')
+            ->whereNotNull('new_values->permission_slug')
+            ->first();
+
+        $this->assertNotNull($audit);
+        $this->assertEquals('hr.employees.view', $audit->new_values['permission_slug']);
+        $this->assertEquals('grant', $audit->new_values['type']);
+    }
+
+    public function test_audit_log_created_on_override_revoke(): void
+    {
+        $admin = $this->seedAdmin();
+        $target = $this->seedUserWithRole('hr_officer');
+
+        $this->actingAs($admin)
+            ->postJson("/api/v1/admin/users/{$target->hash_id}/overrides", [
+                'permission_slug' => 'hr.employees.view',
+                'type'            => 'revoke',
+                'reason'          => 'Revoke override for audit test',
+            ])
+            ->assertStatus(201);
+
+        $override = UserPermissionOverride::where('user_id', $target->id)->firstOrFail();
+
+        $this->assertDatabaseHas('audit_logs', [
+            'action'     => 'created',
+            'model_type' => $override->getMorphClass(),
+            'model_id'   => $override->id,
+        ]);
+
+        $audit = AuditLog::where('model_type', $override->getMorphClass())
+            ->where('model_id', $override->id)
+            ->where('action', 'created')
+            ->whereNotNull('new_values->permission_slug')
+            ->first();
+
+        $this->assertNotNull($audit);
+        $this->assertEquals('hr.employees.view', $audit->new_values['permission_slug']);
+        $this->assertEquals('revoke', $audit->new_values['type']);
+    }
+
+    public function test_audit_log_created_on_override_deletion(): void
+    {
+        $admin = $this->seedAdmin();
+        $target = $this->seedUserWithRole('employee');
+
+        // Create an override first
+        $this->actingAs($admin)
+            ->postJson("/api/v1/admin/users/{$target->hash_id}/overrides", [
+                'permission_slug' => 'hr.employees.view',
+                'type'            => 'grant',
+                'reason'          => 'Override to be deleted',
+            ])
+            ->assertStatus(201);
+
+        $override = UserPermissionOverride::where('user_id', $target->id)->firstOrFail();
+
+        $this->actingAs($admin)
+            ->deleteJson("/api/v1/admin/users/{$target->hash_id}/overrides/{$override->hash_id}")
+            ->assertNoContent();
+
+        $this->assertDatabaseHas('audit_logs', [
+            'action'     => 'deleted',
+            'model_type' => $override->getMorphClass(),
+            'model_id'   => $override->id,
+        ]);
+
+        $audit = AuditLog::where('model_type', $override->getMorphClass())
+            ->where('model_id', $override->id)
+            ->where('action', 'deleted')
+            ->first();
+
+        $this->assertNotNull($audit);
+        $this->assertEquals('hr.employees.view', $audit->old_values['permission_slug']);
+        $this->assertEquals('grant', $audit->old_values['type']);
+    }
+
+    public function test_system_admin_bypasses_all_permission_checks(): void
+    {
+        $admin = $this->seedAdmin();
+        $target = $this->seedUserWithRole('employee');
+
+        // system_admin can access all endpoints without explicit permissions
+        $this->actingAs($admin)
+            ->getJson("/api/v1/admin/users/{$target->hash_id}/overrides")
+            ->assertOk();
+
+        $this->actingAs($admin)
+            ->postJson("/api/v1/admin/users/{$target->hash_id}/overrides", [
+                'permission_slug' => 'hr.employees.view',
+                'type'            => 'grant',
+                'reason'          => 'System admin bypass test',
+            ])
+            ->assertStatus(201);
+
+        $override = UserPermissionOverride::where('user_id', $target->id)->firstOrFail();
+
+        $this->actingAs($admin)
+            ->deleteJson("/api/v1/admin/users/{$target->hash_id}/overrides/{$override->hash_id}")
+            ->assertNoContent();
+    }
+
+    public function test_delete_endpoint_requires_admin_users_manage_permissions(): void
+    {
+        // A user with admin.users.manage but NOT admin.users.manage_permissions must be 403 on DELETE.
+        $weakAdmin = $this->seedUserWithCustomPerms(['admin.users.manage']);
+        $admin = $this->seedAdmin();
+        $target = $this->seedUserWithRole('employee');
+
+        // First create an override as a proper admin
+        $this->actingAs($admin)
+            ->postJson("/api/v1/admin/users/{$target->hash_id}/overrides", [
+                'permission_slug' => 'hr.employees.view',
+                'type'            => 'grant',
+                'reason'          => 'Delete permission test',
+            ])
+            ->assertStatus(201);
+
+        $overrideModel = UserPermissionOverride::where('user_id', $target->id)->firstOrFail();
+
+        $this->actingAs($weakAdmin)
+            ->deleteJson("/api/v1/admin/users/{$target->hash_id}/overrides/{$overrideModel->hash_id}")
+            ->assertForbidden();
     }
 
     private function seedAdmin(): User

@@ -21,6 +21,7 @@ class BankFileRecord extends Model
         'total_amount',
         'generated_by',
         'generated_at',
+        'created_at',
     ];
 
     protected $casts = [

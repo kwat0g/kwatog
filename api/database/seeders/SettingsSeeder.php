@@ -26,6 +26,7 @@ class SettingsSeeder extends Seeder
         $settings->set('payroll.schedule',           'semi_monthly', 'payroll');
         $settings->set('payroll.cutoff.first_half',  15,             'payroll');
         $settings->set('payroll.cutoff.second_half', 31,             'payroll');
+        $settings->set('payroll.payslip_email.enabled', true, 'payroll');
 
         // Approval thresholds
         $settings->set('approval.po.vp_threshold', 50000, 'approval');
@@ -37,10 +38,32 @@ class SettingsSeeder extends Seeder
         // the parent group ('Revenue') and is not a postable account.
         $settings->set('accounting.default_sales_revenue_account_code', '4010', 'accounting');
 
+        // T1.1 — Auto-detect OT from biometric punches.
+        $settings->set('attendance.auto_ot_detect.enabled',           true, 'attendance');
+        $settings->set('attendance.auto_ot_detect.threshold_minutes', 30,   'attendance');
+
+        // T1.3 — Auto-provision User account on Employee hire.
+        $settings->set('hr.auto_provision_user.enabled', true, 'hr');
+
         // Sprint 5 — Purchasing tolerances + auto-replenishment.
         $settings->set('purchasing.three_way_tolerance_qty_pct',   5.0, 'purchasing');
         $settings->set('purchasing.three_way_tolerance_price_pct', 5.0, 'purchasing');
         $settings->set('inventory.allow_negative', false, 'inventory');
+
+        // T1.4 — Demand-driven safety-stock auto-recompute.
+        $settings->set('inventory.safety_stock.enabled',          true, 'inventory');
+        $settings->set('inventory.safety_stock.service_level_z',  1.65, 'inventory');
+        $settings->set('inventory.safety_stock.history_days',     90,   'inventory');
+        $settings->set('inventory.safety_stock.min_demand_days',  14,   'inventory');
+
+        // T1.5 — AR dunning auto-emails.
+        $settings->set('accounting.ar_dunning.enabled',       true,     'accounting');
+        $settings->set('accounting.ar_dunning.tier_days_csv', '7,15,30','accounting');
+
+        // T1.6 — Approval SLA auto-resolve.
+        $settings->set('approvals.auto_resolve.enabled',        false,    'approvals');
+        $settings->set('approvals.auto_resolve.default_hours',  72,       'approvals');
+        $settings->set('approvals.auto_resolve.default_action', 'reject', 'approvals');
 
         // Module feature toggles — Sprint 6 enables CRM + MRP + Production
         // (Order-to-Cash chain: sales orders → MRP plans → work orders → output → OEE).

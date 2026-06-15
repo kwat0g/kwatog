@@ -28,10 +28,9 @@ class PurchaseRequest extends Model
 
     protected $fillable = [
         'pr_number', 'requested_by', 'department_id', 'mrp_plan_id',
-        'template_id', 'date', 'reason', 'priority', 'status',
+        'template_id', 'date', 'reason', 'priority',
         'is_auto_generated', 'auto_generated_reason',
         'is_urgent', 'urgency_reason',
-        'current_approval_step', 'submitted_at', 'approved_at',
     ];
 
     protected $casts = [

@@ -27,20 +27,23 @@ class Item extends Model
     protected $fillable = [
         'code', 'name', 'description', 'category_id', 'item_type',
         'unit_of_measure', 'standard_cost', 'reorder_method',
-        'reorder_point', 'safety_stock', 'minimum_order_quantity',
+        'reorder_point', 'safety_stock', 'safety_stock_locked',
+        'safety_stock_recomputed_at', 'minimum_order_quantity',
         'lead_time_days', 'is_critical', 'is_active',
     ];
 
     protected $casts = [
-        'item_type'              => ItemType::class,
-        'reorder_method'         => ReorderMethod::class,
-        'standard_cost'          => 'decimal:4',
-        'reorder_point'          => 'decimal:3',
-        'safety_stock'           => 'decimal:3',
-        'minimum_order_quantity' => 'decimal:3',
-        'lead_time_days'         => 'integer',
-        'is_critical'            => 'boolean',
-        'is_active'              => 'boolean',
+        'item_type'                  => ItemType::class,
+        'reorder_method'             => ReorderMethod::class,
+        'standard_cost'              => 'decimal:4',
+        'reorder_point'              => 'decimal:3',
+        'safety_stock'               => 'decimal:3',
+        'safety_stock_locked'        => 'boolean',
+        'safety_stock_recomputed_at' => 'datetime',
+        'minimum_order_quantity'     => 'decimal:3',
+        'lead_time_days'             => 'integer',
+        'is_critical'                => 'boolean',
+        'is_active'                  => 'boolean',
     ];
 
     public function category(): BelongsTo

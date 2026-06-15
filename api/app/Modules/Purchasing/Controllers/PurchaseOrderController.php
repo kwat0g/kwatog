@@ -26,7 +26,7 @@ class PurchaseOrderController
 
     public function index(Request $request): AnonymousResourceCollection
     {
-        return PurchaseOrderResource::collection($this->service->list($request->query()));
+        return PurchaseOrderResource::collection($this->service->list($request->query(), $request->user()));
     }
 
     public function show(PurchaseOrder $purchaseOrder): PurchaseOrderResource

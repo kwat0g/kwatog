@@ -15,6 +15,7 @@ class DTRImportService
 {
     public function __construct(
         private readonly DTRComputationService $dtr,
+        private readonly OvertimeService $overtime,
     ) {}
 
     /** @return array{total:int, imported:int, skipped:int, errors:array<int, array{row:int, message:string}>} */
@@ -85,6 +86,7 @@ class DTRImportService
                     $a->is_manual_entry = false;
                     $a = $this->dtr->computeForRecord($a);
                     $a->save();
+                    $this->overtime->autoDetectFromAttendance($a);
                 });
                 $imported++;
             } catch (Throwable $e) {

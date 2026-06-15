@@ -15,6 +15,15 @@ class AttendanceService
         private readonly DTRComputationService $dtr,
     ) {}
 
+    /**
+     * Lazily resolved to avoid the AttendanceService <-> OvertimeService
+     * circular dependency at container construction time.
+     */
+    private function overtime(): OvertimeService
+    {
+        return app(OvertimeService::class);
+    }
+
     public function list(array $filters, ?User $user = null): LengthAwarePaginator
     {
         $q = Attendance::query()->with(['employee:id,employee_no,first_name,middle_name,last_name,suffix,department_id', 'employee.department', 'shift']);
@@ -82,6 +91,7 @@ class AttendanceService
             $a = Attendance::create($data + ['is_manual_entry' => true]);
             $a = $this->dtr->computeForRecord($a);
             $a->save();
+            $this->overtime()->autoDetectFromAttendance($a);
             return $a->load(['employee', 'employee.department', 'shift']);
         });
     }
@@ -92,6 +102,7 @@ class AttendanceService
             $a->update($data);
             $a = $this->dtr->computeForRecord($a);
             $a->save();
+            $this->overtime()->autoDetectFromAttendance($a);
             return $a->fresh(['employee', 'employee.department', 'shift']);
         });
     }
@@ -107,6 +118,7 @@ class AttendanceService
         if (! $a) return null;
         $a = $this->dtr->computeForRecord($a);
         $a->save();
+        $this->overtime()->autoDetectFromAttendance($a);
         return $a;
     }
 }

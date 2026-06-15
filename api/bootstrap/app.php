@@ -46,6 +46,9 @@ return Application::configure(basePath: dirname(__DIR__))
             'feature'           => CheckFeature::class,
             'session.timeout'   => SessionTimeout::class,
             'password.expired'  => CheckPasswordExpiry::class,
+            // Sanctum token-ability gate (T2.1 — Edge devices).
+            'ability'           => \Laravel\Sanctum\Http\Middleware\CheckAbilities::class,
+            'abilities'         => \Laravel\Sanctum\Http\Middleware\CheckForAnyAbility::class,
         ]);
 
         // Trust the reverse proxy (Nginx) for real client IP

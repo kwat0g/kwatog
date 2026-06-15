@@ -26,13 +26,15 @@ class OvertimeRequest extends Model
     protected $fillable = [
         'employee_id', 'date', 'hours_requested', 'reason',
         'status', 'approved_by', 'approved_at', 'rejection_reason',
+        'is_auto_detected',
     ];
 
     protected $casts = [
-        'date'            => 'date',
-        'hours_requested' => 'decimal:1',
-        'status'          => OvertimeStatus::class,
-        'approved_at'     => 'datetime',
+        'date'             => 'date',
+        'hours_requested'  => 'decimal:1',
+        'status'           => OvertimeStatus::class,
+        'approved_at'      => 'datetime',
+        'is_auto_detected' => 'boolean',
     ];
 
     public function employee(): BelongsTo

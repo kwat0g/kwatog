@@ -56,7 +56,10 @@ class ApprovalService
     public function approve(Model $approvable, User $user, ?string $remarks = null): void
     {
         DB::transaction(function () use ($approvable, $user, $remarks) {
-            $next = $this->nextStep($approvable);
+            $next = $this->records($approvable)
+                ->where('action', 'pending')
+                ->lockForUpdate()
+                ->first();
             if (! $next) {
                 throw new RuntimeException('Nothing pending to approve.');
             }
@@ -80,7 +83,10 @@ class ApprovalService
     public function reject(Model $approvable, User $user, string $remarks): void
     {
         DB::transaction(function () use ($approvable, $user, $remarks) {
-            $next = $this->nextStep($approvable);
+            $next = $this->records($approvable)
+                ->where('action', 'pending')
+                ->lockForUpdate()
+                ->first();
             if (! $next) {
                 throw new RuntimeException('Nothing pending to reject.');
             }

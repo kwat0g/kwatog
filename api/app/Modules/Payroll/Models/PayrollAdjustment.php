@@ -21,9 +21,7 @@ class PayrollAdjustment extends Model
 
     protected $fillable = [
         'payroll_period_id', 'employee_id', 'original_payroll_id',
-        'type', 'amount', 'reason',
-        'approved_by', 'status',
-        'applied_at', 'applied_to_payroll_id',
+        'type', 'amount', 'reason', 'created_by',
     ];
 
     protected $casts = [

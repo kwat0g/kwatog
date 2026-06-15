@@ -56,15 +56,18 @@ class PayrollAdjustmentService
                 throw new RuntimeException('Adjustments can only be raised against finalized payroll periods.');
             }
 
-            return PayrollAdjustment::create([
+            $adj = PayrollAdjustment::create([
                 'payroll_period_id'   => $period->id,
                 'employee_id'         => $original->employee_id,
                 'original_payroll_id' => $original->id,
                 'type'                => $data['type'],
                 'amount'              => $data['amount'],
                 'reason'              => $data['reason'],
-                'status'              => PayrollAdjustmentStatus::Pending->value,
+                'created_by'          => $user->id,
             ]);
+            // status non-fillable; service-only.
+            $adj->forceFill(['status' => PayrollAdjustmentStatus::Pending->value])->save();
+            return $adj;
         });
     }
 
@@ -72,6 +75,9 @@ class PayrollAdjustmentService
     {
         if ($adjustment->status !== PayrollAdjustmentStatus::Pending) {
             throw new RuntimeException('Only pending adjustments can be approved.');
+        }
+        if ((int) $adjustment->created_by === (int) $user->id) {
+            throw new RuntimeException('You cannot approve your own payroll adjustment.');
         }
         $adjustment->status      = PayrollAdjustmentStatus::Approved;
         $adjustment->approved_by = $user->id;

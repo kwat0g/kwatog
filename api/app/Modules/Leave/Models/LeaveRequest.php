@@ -28,8 +28,6 @@ class LeaveRequest extends Model
         'leave_request_no', 'employee_id', 'leave_type_id',
         'start_date', 'end_date', 'days', 'half_day_period',
         'reason', 'document_path',
-        'status', 'dept_approver_id', 'dept_approved_at',
-        'hr_approver_id', 'hr_approved_at', 'rejection_reason',
     ];
 
     protected $casts = [
@@ -67,7 +65,10 @@ class LeaveRequest extends Model
      */
     public function approvalSubmitterId(): ?int
     {
-        $userId = $this->employee()->value('user_id');
+        // Link is on users.employee_id (HasOne from Employee), not on employees.
+        $userId = \App\Modules\Auth\Models\User::query()
+            ->where('employee_id', $this->employee_id)
+            ->value('id');
         return $userId !== null ? (int) $userId : null;
     }
 }

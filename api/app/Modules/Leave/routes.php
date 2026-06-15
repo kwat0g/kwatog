@@ -25,6 +25,10 @@ Route::middleware(['auth:sanctum', 'feature:leave'])->prefix('leaves')->group(fu
     Route::get('/requests/{leaveRequest}',                       [LeaveRequestController::class, 'show'])->middleware('permission:leave.view');
     Route::patch('/requests/{leaveRequest}/approve-dept',        [LeaveRequestController::class, 'approveDept'])->middleware('permission:leave.approve_dept');
     Route::patch('/requests/{leaveRequest}/approve-hr',          [LeaveRequestController::class, 'approveHR'])->middleware('permission:leave.approve_hr');
+    Route::post('/requests/bulk-approve-dept', [LeaveRequestController::class, 'bulkApproveDept'])
+        ->middleware('permission:leave.approve_dept');
+    Route::post('/requests/bulk-approve-hr',   [LeaveRequestController::class, 'bulkApproveHR'])
+        ->middleware('permission:leave.approve_hr');
     Route::patch('/requests/{leaveRequest}/reject',              [LeaveRequestController::class, 'reject'])->middleware('permission:leave.approve_dept');
     Route::patch('/requests/{leaveRequest}/cancel',              [LeaveRequestController::class, 'cancel'])->middleware('permission:leave.create');
 });

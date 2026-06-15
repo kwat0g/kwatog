@@ -46,6 +46,10 @@ class DeliveryResource extends JsonResource
             'sales_order'         => $this->whenLoaded('salesOrder', fn () => $this->salesOrder ? [
                 'id'        => $this->salesOrder->hash_id,
                 'so_number' => $this->salesOrder->so_number,
+                'customer'  => $this->salesOrder->relationLoaded('customer') && $this->salesOrder->customer ? [
+                    'id'   => $this->salesOrder->customer->hash_id,
+                    'name' => $this->salesOrder->customer->name,
+                ] : null,
             ] : null),
             'vehicle'             => $this->whenLoaded('vehicle', fn () => $this->vehicle ? [
                 'id'           => $this->vehicle->hash_id,

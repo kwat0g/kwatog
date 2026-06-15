@@ -27,8 +27,20 @@ class PayrollPeriodFactory extends Factory
             'payroll_date'         => $pay->format('Y-m-d'),
             'is_first_half'        => true,
             'is_thirteenth_month'  => false,
-            'status'               => 'draft',
             'created_by'           => User::factory(),
         ];
+    }
+
+    /**
+     * status / disbursement_status / disbursed_at / disbursed_by /
+     * journal_entry_id are non-fillable. Factory rows write via forceFill.
+     */
+    public function configure(): static
+    {
+        return $this->afterMaking(function (PayrollPeriod $period) {
+            if (! $period->status) {
+                $period->forceFill(['status' => 'draft']);
+            }
+        });
     }
 }

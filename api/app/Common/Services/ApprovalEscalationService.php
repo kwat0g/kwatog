@@ -6,14 +6,20 @@ namespace App\Common\Services;
 
 use App\Common\Models\ApprovalRecord;
 use App\Modules\Auth\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class ApprovalEscalationService
 {
     private const REMINDER_HOURS = 24;
     private const ESCALATE_HOURS = 48;
+    private const DEFAULT_AUTO_RESOLVE_HOURS  = 72;
+    private const DEFAULT_AUTO_RESOLVE_ACTION = 'reject';
 
-    public function __construct(private readonly NotificationService $notifications) {}
+    public function __construct(
+        private readonly NotificationService $notifications,
+        private readonly \App\Common\Services\SettingsService $settings,
+    ) {}
 
     public function runReminders(): int
     {
@@ -86,6 +92,118 @@ class ApprovalEscalationService
             }
         }
         return $count;
+    }
+
+    /**
+     * T1.6 — Auto-resolve approval records that have been escalated for too long.
+     * Returns the count of records auto-resolved.
+     */
+    public function runAutoResolve(): int
+    {
+        if (! (bool) $this->settings->get('approvals.auto_resolve.enabled', false)) {
+            return 0;
+        }
+
+        $defaultHours  = (int) $this->settings->get('approvals.auto_resolve.default_hours', self::DEFAULT_AUTO_RESOLVE_HOURS);
+        $defaultAction = (string) $this->settings->get('approvals.auto_resolve.default_action', self::DEFAULT_AUTO_RESOLVE_ACTION);
+
+        $count = 0;
+        $stale = ApprovalRecord::query()
+            ->where('action', 'pending')
+            ->whereNotNull('escalated_at')
+            ->whereNull('auto_resolved_at')
+            ->get();
+
+        foreach ($stale as $rec) {
+            try {
+                [$hours, $action] = $this->resolvePolicyForRecord($rec, $defaultHours, $defaultAction);
+                if ($hours <= 0) continue;
+                // Carbon 2: parsing the past instant and diffing to now() returns
+                // a positive hour count when escalated_at is in the past.
+                $elapsed = \Carbon\Carbon::parse($rec->escalated_at)->diffInHours(now());
+                if ($elapsed < $hours) {
+                    continue;
+                }
+                $this->autoResolveRecord($rec, $action);
+                $count++;
+            } catch (\Throwable $e) {
+                Log::warning('ApprovalEscalationService::autoResolve failed', [
+                    'record_id' => $rec->id,
+                    'error'     => $e->getMessage(),
+                ]);
+            }
+        }
+        return $count;
+    }
+
+    /**
+     * Find the workflow step matching this record and read its
+     * `auto_resolve_after_hours` and `auto_resolve_action`. Falls back to
+     * the supplied defaults.
+     *
+     * @return array{0:int, 1:string} [hours, action]
+     */
+    private function resolvePolicyForRecord(ApprovalRecord $rec, int $defaultHours, string $defaultAction): array
+    {
+        $hours  = $defaultHours;
+        $action = $defaultAction;
+
+        // Resolve the workflow_type by walking back to ApprovalService::submit's
+        // contract: each approval_records row carries (approvable_type, role_slug,
+        // step_order). We re-derive the workflow definition by matching role_slug
+        // + step_order against any WorkflowDefinition. This is best-effort —
+        // multiple workflow_types may share a role slug; in that case the first
+        // matching workflow's policy wins. Acceptable for thesis scope; future
+        // schema can stamp workflow_definition_id on the record.
+        $defs = \App\Common\Models\WorkflowDefinition::query()->get();
+        foreach ($defs as $def) {
+            foreach (($def->steps ?? []) as $step) {
+                if ((int) ($step['order'] ?? 0) === (int) $rec->step_order
+                    && (string) ($step['role'] ?? '') === (string) $rec->role_slug
+                ) {
+                    if (isset($step['auto_resolve_after_hours'])) {
+                        $hours = (int) $step['auto_resolve_after_hours'];
+                    }
+                    if (isset($step['auto_resolve_action'])) {
+                        $action = (string) $step['auto_resolve_action'];
+                    }
+                    break 2;
+                }
+            }
+        }
+
+        if (! in_array($action, ['approve', 'reject'], true)) {
+            $action = $defaultAction;
+        }
+        return [$hours, $action];
+    }
+
+    private function autoResolveRecord(ApprovalRecord $rec, string $action): void
+    {
+        $systemUser = User::query()
+            ->whereHas('role', fn ($q) => $q->where('slug', 'system_admin'))
+            ->where('is_active', true)
+            ->orderBy('id')
+            ->first();
+
+        DB::transaction(function () use ($rec, $action, $systemUser) {
+            $rec->update([
+                'approver_id'      => $systemUser?->id,
+                'action'           => $action === 'approve' ? 'approved' : 'rejected',
+                'remarks'          => 'Auto-resolved by SLA policy.',
+                'acted_at'         => now(),
+                'auto_resolved_at' => now(),
+            ]);
+
+            if ($action === 'reject') {
+                ApprovalRecord::query()
+                    ->where('approvable_type', $rec->approvable_type)
+                    ->where('approvable_id', $rec->approvable_id)
+                    ->where('step_order', '>', $rec->step_order)
+                    ->where('action', 'pending')
+                    ->update(['action' => 'skipped', 'acted_at' => now()]);
+            }
+        });
     }
 
     private function linkFor(ApprovalRecord $rec): string

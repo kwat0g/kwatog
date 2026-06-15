@@ -152,8 +152,9 @@ class LeaveRequestService
                 'half_day_period'  => $halfDayPeriod,
                 'reason'           => $data['reason'] ?? null,
                 'document_path'    => $data['document_path'] ?? null,
-                'status'           => LeaveRequestStatus::PendingDept->value,
             ]);
+            // status + approval fields are non-fillable; service-only writes.
+            $req->forceFill(['status' => LeaveRequestStatus::PendingDept->value])->save();
 
             $this->approvals->submit($req, 'leave_request');
 
@@ -171,11 +172,11 @@ class LeaveRequestService
             }
             $this->approvals->approve($req, $approver, $remarks);
 
-            $req->update([
+            $req->forceFill([
                 'status'           => LeaveRequestStatus::PendingHr->value,
                 'dept_approver_id' => $approver->id,
                 'dept_approved_at' => now(),
-            ]);
+            ])->save();
 
             DB::afterCommit(fn () => LeaveRequestPendingHR::dispatch($req->fresh(['employee', 'employee.department', 'leaveType'])));
 
@@ -191,11 +192,11 @@ class LeaveRequestService
             }
             $this->approvals->approve($req, $approver, $remarks);
 
-            $req->update([
+            $req->forceFill([
                 'status'         => LeaveRequestStatus::Approved->value,
                 'hr_approver_id' => $approver->id,
                 'hr_approved_at' => now(),
-            ]);
+            ])->save();
 
             // Side effect 1: deduct leave balance.
             $year = (int) $req->start_date->format('Y');
@@ -210,6 +211,60 @@ class LeaveRequestService
         });
     }
 
+    /**
+     * T1.7 — Bulk approve LeaveRequests at the department-head stage.
+     * Per-row try/catch so one bad row doesn't abort the batch.
+     *
+     * @param array<int, int> $ids raw integer IDs (post HashID decode)
+     * @return array{approved: array<int, LeaveRequest>, failed: array<int, array{id:int, reason:string}>}
+     */
+    public function bulkApproveDept(array $ids, User $approver, ?string $remarks = null): array
+    {
+        $approved = [];
+        $failed   = [];
+
+        foreach ($ids as $id) {
+            try {
+                $req = LeaveRequest::query()->find($id);
+                if (! $req) {
+                    $failed[] = ['id' => $id, 'reason' => 'Not found.'];
+                    continue;
+                }
+                $approved[] = $this->approveDept($req, $approver, $remarks);
+            } catch (\Throwable $e) {
+                $failed[] = ['id' => $id, 'reason' => $e->getMessage()];
+            }
+        }
+        return ['approved' => $approved, 'failed' => $failed];
+    }
+
+    /**
+     * T1.7 — Bulk approve LeaveRequests at the HR-officer stage.
+     * Per-row try/catch so one bad row doesn't abort the batch.
+     *
+     * @param array<int, int> $ids
+     * @return array{approved: array<int, LeaveRequest>, failed: array<int, array{id:int, reason:string}>}
+     */
+    public function bulkApproveHR(array $ids, User $approver, ?string $remarks = null): array
+    {
+        $approved = [];
+        $failed   = [];
+
+        foreach ($ids as $id) {
+            try {
+                $req = LeaveRequest::query()->find($id);
+                if (! $req) {
+                    $failed[] = ['id' => $id, 'reason' => 'Not found.'];
+                    continue;
+                }
+                $approved[] = $this->approveHR($req, $approver, $remarks);
+            } catch (\Throwable $e) {
+                $failed[] = ['id' => $id, 'reason' => $e->getMessage()];
+            }
+        }
+        return ['approved' => $approved, 'failed' => $failed];
+    }
+
     public function reject(LeaveRequest $req, User $approver, string $reason): LeaveRequest
     {
         return DB::transaction(function () use ($req, $approver, $reason) {
@@ -217,10 +272,10 @@ class LeaveRequestService
                 throw new RuntimeException('Only pending requests can be rejected.');
             }
             $this->approvals->reject($req, $approver, $reason);
-            $req->update([
+            $req->forceFill([
                 'status'           => LeaveRequestStatus::Rejected->value,
                 'rejection_reason' => $reason,
-            ]);
+            ])->save();
 
             DB::afterCommit(fn () => LeaveRequestRejected::dispatch($req->fresh(['employee', 'employee.department', 'leaveType'])));
 
@@ -235,7 +290,7 @@ class LeaveRequestService
                 throw new RuntimeException('Already finalized.');
             }
             $wasApproved = $req->status === LeaveRequestStatus::Approved;
-            $req->update(['status' => LeaveRequestStatus::Cancelled->value]);
+            $req->forceFill(['status' => LeaveRequestStatus::Cancelled->value])->save();
 
             if ($wasApproved) {
                 $year = (int) $req->start_date->format('Y');

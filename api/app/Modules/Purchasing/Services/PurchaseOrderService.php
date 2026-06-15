@@ -50,7 +50,7 @@ class PurchaseOrderService
         return null;
     }
 
-    public function list(array $filters): LengthAwarePaginator
+    public function list(array $filters, ?User $user = null): LengthAwarePaginator
     {
         $q = PurchaseOrder::query()->with([
             'vendor:id,name', 'creator:id,name,role_id',
@@ -70,6 +70,32 @@ class PurchaseOrderService
         if (! empty($filters['search'])) {
             $q->where('po_number', 'ilike', '%'.$filters['search'].'%');
         }
+
+        // Row-level filtering. Admin and Purchasing approvers see everything.
+        // Department Head sees POs for their department via the linked PR.
+        // Everyone else sees only POs they created.
+        if ($user) {
+            $roleSlug = $user->role?->slug;
+            $isAdmin = $roleSlug === 'system_admin';
+            $canApprove = $user->hasPermission('purchasing.po.approve');
+            if (! $isAdmin && ! $canApprove) {
+                $creatorId = $user->id;
+                if ($roleSlug === 'department_head') {
+                    $deptId = \App\Modules\HR\Models\Employee::query()
+                        ->whereKey($user->employee_id)
+                        ->value('department_id');
+                    $q->where(function ($qq) use ($creatorId, $deptId) {
+                        $qq->where('created_by', $creatorId);
+                        if ($deptId) {
+                            $qq->orWhereHas('purchaseRequest', fn ($pr) => $pr->where('department_id', $deptId));
+                        }
+                    });
+                } else {
+                    $q->where('created_by', $creatorId);
+                }
+            }
+        }
+
         return $q->orderByDesc('date')->orderByDesc('id')
             ->paginate(min((int) ($filters['per_page'] ?? 25), 100));
     }
@@ -121,11 +147,12 @@ class PurchaseOrderService
                 'vat_amount'           => $vat,
                 'total_amount'         => $total,
                 'is_vatable'           => $isVatable,
-                'status'               => PurchaseOrderStatus::Draft,
                 'requires_vp_approval' => (float) $total >= $threshold,
                 'created_by'           => $by->id,
                 'remarks'              => $data['remarks'] ?? null,
             ]);
+            // status is non-fillable; service-only.
+            $po->forceFill(['status' => PurchaseOrderStatus::Draft])->save();
             foreach ($lines as $row) {
                 PurchaseOrderItem::create(array_merge($row, ['purchase_order_id' => $po->id]));
             }
@@ -216,7 +243,7 @@ class PurchaseOrderService
         }
         return DB::transaction(function () use ($po) {
             $this->approvals->submit($po, 'purchase_order', (float) $po->total_amount);
-            $po->update(['status' => PurchaseOrderStatus::PendingApproval]);
+            $po->forceFill(['status' => PurchaseOrderStatus::PendingApproval])->save();
             return $po->fresh();
         });
     }
@@ -230,11 +257,11 @@ class PurchaseOrderService
             $this->approvals->approve($po, $by, $remarks);
             $becameApproved = false;
             if ($this->approvals->isFullyApproved($po)) {
-                $po->update([
+                $po->forceFill([
                     'status'      => PurchaseOrderStatus::Approved,
                     'approved_by' => $by->id,
                     'approved_at' => now(),
-                ]);
+                ])->save();
                 // Update last_price on approved_suppliers per line.
                 foreach ($po->items()->get() as $line) {
                     ApprovedSupplier::query()->updateOrCreate(
@@ -276,7 +303,7 @@ class PurchaseOrderService
         if ($po->status !== PurchaseOrderStatus::Approved) {
             throw new RuntimeException('Only approved POs can be marked as sent.');
         }
-        $po->update(['status' => PurchaseOrderStatus::Sent, 'sent_to_supplier_at' => now()]);
+        $po->forceFill(['status' => PurchaseOrderStatus::Sent, 'sent_to_supplier_at' => now()])->save();
         $fresh = $po->fresh();
         $this->broadcastChain($fresh, null);
         return $fresh;
@@ -291,10 +318,8 @@ class PurchaseOrderService
             throw new RuntimeException('Cannot cancel a PO with GRNs.');
         }
         $fresh = DB::transaction(function () use ($po, $reason) {
-            $po->update([
-                'status'  => PurchaseOrderStatus::Cancelled,
-                'remarks' => trim(($po->remarks ? $po->remarks."\n" : '').'Cancelled: '.$reason),
-            ]);
+            $po->update(['remarks' => trim(($po->remarks ? $po->remarks."\n" : '').'Cancelled: '.$reason)]);
+            $po->forceFill(['status' => PurchaseOrderStatus::Cancelled])->save();
             $fresh = $po->fresh();
             DB::afterCommit(fn () =>
                 event(new \App\Modules\Purchasing\Events\PurchaseOrderCancelled($fresh))
@@ -310,7 +335,7 @@ class PurchaseOrderService
         if ($po->status !== PurchaseOrderStatus::Received) {
             throw new RuntimeException('Only fully received POs can be closed.');
         }
-        $po->update(['status' => PurchaseOrderStatus::Closed]);
+        $po->forceFill(['status' => PurchaseOrderStatus::Closed])->save();
         $fresh = $po->fresh();
         $this->broadcastChain($fresh, null);
         return $fresh;

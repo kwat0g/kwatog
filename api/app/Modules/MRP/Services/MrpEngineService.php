@@ -198,9 +198,10 @@ class MrpEngineService
                     'date'              => Carbon::today(),
                     'reason'            => "Auto-generated from MRP plan {$plan->mrp_plan_no} for SO {$so->so_number}.",
                     'priority'          => collect($shortages)->contains(fn ($s) => $s['priority'] === 'urgent') ? 'urgent' : 'normal',
-                    'status'            => 'draft',
                     'is_auto_generated' => true,
                 ]);
+                // status non-fillable; service-only.
+                $pr->forceFill(['status' => 'draft'])->save();
 
                 foreach ($shortages as $itemId => $s) {
                     PurchaseRequestItem::create([

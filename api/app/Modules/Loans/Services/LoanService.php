@@ -60,8 +60,8 @@ class LoanService
             $isFinance = $user->hasPermission('loans.approve');
             if (! $isAdmin && ! $isFinance) {
                 $employeeId = $user->employee_id;
-                if ($user->hasPermission('attendance.ot.approve') /* loose proxy for dept_head */
-                    || $roleSlug === 'department_head') {
+                $isDeptHead = $roleSlug === 'department_head';
+                if ($isDeptHead) {
                     $deptId = \App\Modules\HR\Models\Employee::query()->whereKey($employeeId)->value('department_id');
                     $q->where(function ($qq) use ($employeeId, $deptId) {
                         $qq->where('employee_id', $employeeId);
@@ -142,8 +142,9 @@ class LoanService
                 'pay_periods_remaining'  => $periods,
                 'approval_chain_size'    => $chainSize,
                 'purpose'                => $data['purpose'] ?? null,
-                'status'                 => LoanStatus::Pending->value,
             ]);
+            // status is non-fillable (service-only mutation); forceFill + save.
+            $loan->forceFill(['status' => LoanStatus::Pending->value])->save();
 
             $this->approvals->submit($loan, $type->workflowType(), (float) $data['principal']);
 
@@ -162,16 +163,40 @@ class LoanService
             $this->approvals->approve($loan, $user, $remarks);
 
             if ($this->approvals->isFullyApproved($loan)) {
-                $loan->update([
-                    'status'     => LoanStatus::Active->value,
-                    'start_date' => now()->toDateString(),
-                ]);
+                $loan->update(['start_date' => now()->toDateString()]);
+                $loan->forceFill(['status' => LoanStatus::Active->value])->save();
             }
 
             $loan = $loan->fresh(['employee', 'payments']);
             DB::afterCommit(fn () => Event::dispatch(new LoanDecided($loan->fresh(['employee']), true)));
             return $loan;
         });
+    }
+
+    /**
+     * T1.7 — Bulk approve loan applications. Per-row try/catch.
+     *
+     * @param array<int, int> $ids
+     * @return array{approved: array<int, EmployeeLoan>, failed: array<int, array{id:int, reason:string}>}
+     */
+    public function bulkApprove(array $ids, User $approver, ?string $remarks = null): array
+    {
+        $approved = [];
+        $failed   = [];
+
+        foreach ($ids as $id) {
+            try {
+                $loan = EmployeeLoan::query()->find($id);
+                if (! $loan) {
+                    $failed[] = ['id' => $id, 'reason' => 'Not found.'];
+                    continue;
+                }
+                $approved[] = $this->approve($loan, $approver, $remarks);
+            } catch (\Throwable $e) {
+                $failed[] = ['id' => $id, 'reason' => $e->getMessage()];
+            }
+        }
+        return ['approved' => $approved, 'failed' => $failed];
     }
 
     public function reject(EmployeeLoan $loan, User $user, string $reason): EmployeeLoan
@@ -181,7 +206,7 @@ class LoanService
                 throw new RuntimeException('Only pending loans can be rejected.');
             }
             $this->approvals->reject($loan, $user, $reason);
-            $loan->update(['status' => LoanStatus::Rejected->value]);
+            $loan->forceFill(['status' => LoanStatus::Rejected->value])->save();
             $loan = $loan->fresh(['employee']);
             DB::afterCommit(fn () => Event::dispatch(new LoanDecided($loan->fresh(['employee']), false)));
             return $loan;
@@ -194,7 +219,7 @@ class LoanService
             if (! in_array($loan->status, [LoanStatus::Pending, LoanStatus::Active], true)) {
                 throw new RuntimeException('Cannot cancel a finalized loan.');
             }
-            $loan->update(['status' => LoanStatus::Cancelled->value]);
+            $loan->forceFill(['status' => LoanStatus::Cancelled->value])->save();
             return $loan->fresh(['employee', 'payments']);
         });
     }
@@ -226,11 +251,13 @@ class LoanService
                 'total_paid'             => $newPaid,
                 'balance'                => $newBalance,
                 'pay_periods_remaining'  => max(0, ((int) $loan->pay_periods_remaining) - 1),
-                'status'                 => bccomp($newBalance, '0', 2) <= 0
-                    ? LoanStatus::Paid->value
-                    : LoanStatus::Active->value,
                 'end_date'               => bccomp($newBalance, '0', 2) <= 0 ? now()->toDateString() : null,
             ]);
+            $loan->forceFill([
+                'status' => bccomp($newBalance, '0', 2) <= 0
+                    ? LoanStatus::Paid->value
+                    : LoanStatus::Active->value,
+            ])->save();
 
             return $payment;
         });

@@ -118,11 +118,30 @@ Schedule::command('notifications:prune --days=90')
     ->withoutOverlapping()
     ->onOneServer();
 
+// Prune expired permission overrides weekly on Sundays.
+Schedule::command('overrides:prune-expired')
+    ->sundays()
+    ->at('02:45')
+    ->withoutOverlapping()
+    ->onOneServer();
+
 // Task 7 — Prune audit logs older than 12 months on the 1st at 04:00.
 // Partition-aware: PostgreSQL routes the DELETE to the correct monthly
 // child partitions automatically via the created_at partition key.
 Schedule::command('audit:prune --months=12')
     ->monthlyOn(1, '04:00')
     ->runInBackground()
+    ->withoutOverlapping()
+    ->onOneServer();
+
+// T1.4 — Demand-driven safety stock recompute, nightly at 02:15.
+Schedule::command('inventory:recompute-safety-stock')
+    ->dailyAt('02:15')
+    ->withoutOverlapping()
+    ->onOneServer();
+
+// T1.5 — AR dunning emails. Daily at 07:00 (after overnight batch jobs).
+Schedule::command('ar:run-dunning')
+    ->dailyAt('07:00')
     ->withoutOverlapping()
     ->onOneServer();

@@ -263,7 +263,7 @@ class ThirteenthMonthTest extends TestCase
 
         // First run then manually finalize the period
         $period = $this->svc->computeAndPay(2025, $this->adminUser);
-        $period->update(['status' => PayrollPeriodStatus::Finalized->value]);
+        $period->forceFill(['status' => PayrollPeriodStatus::Finalized->value])->save();
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('already finalized');

@@ -23,8 +23,8 @@ class WarehouseMapResource extends JsonResource
                     'name'      => $zone->name,
                     'zone_type' => $zone->zone_type?->value,
                     'type_label' => $zone->zone_type?->label(),
-                    'locations' => $zone->whenLoaded('locations', fn () =>
-                        $zone->locations->map(fn ($loc) => [
+                    'locations' => $zone->relationLoaded('locations')
+                        ? $zone->locations->map(fn ($loc) => [
                             'id'              => $loc->hash_id,
                             'code'            => $loc->code,
                             'full_code'       => $loc->full_code,
@@ -43,8 +43,8 @@ class WarehouseMapResource extends JsonResource
                             'stock_status'        => $this->getStockStatus($loc),
                             'stock_quantity'      => $this->getStockQuantity($loc),
                             'last_movement_at'    => $loc->last_movement_at,
-                        ])
-                    ),
+                        ])->values()
+                        : [],
                 ])
             ),
         ];

@@ -33,16 +33,31 @@ class EmployeeLoanFactory extends Factory
             'pay_periods_total'      => 10,
             'pay_periods_remaining'  => 10,
             'approval_chain_size'    => 0,
-            'status'                 => LoanStatus::Active->value,
             'is_final_pay_deduction' => false,
         ];
     }
 
+    /**
+     * `status` is non-fillable on the model (service-only mutation), so
+     * factory rows write it via forceFill after creation. Tests can still
+     * pass `'status' => '...'` to factory()->create() — the override is
+     * captured here via the model's pre-save attributes.
+     */
+    public function configure(): static
+    {
+        return $this->afterMaking(function (EmployeeLoan $loan) {
+            if (! $loan->status) {
+                $loan->forceFill(['status' => LoanStatus::Active->value]);
+            }
+        });
+    }
+
     public function pending(): static
     {
-        return $this->state([
-            'status'              => LoanStatus::Pending->value,
-            'approval_chain_size' => 3,
-        ]);
+        return $this
+            ->state(['approval_chain_size' => 3])
+            ->afterMaking(fn (EmployeeLoan $loan) =>
+                $loan->forceFill(['status' => LoanStatus::Pending->value])
+            );
     }
 }

@@ -22,6 +22,21 @@ class SessionTimeout
             return $next($request);
         }
 
+        // Block all activity if password is expired, except change-password
+        if ($user->must_change_password) {
+            $allowedPaths = [
+                'api/v1/auth/change-password',
+                'api/v1/auth/user',
+            ];
+            $path = $request->path();
+            if (! in_array($path, $allowedPaths, true)) {
+                return response()->json([
+                    'message' => 'Your password has expired. Please change it before proceeding.',
+                    'code'    => 'password_expired',
+                ], 403);
+            }
+        }
+
         $isEmployee = ($user->role?->slug ?? null) === 'employee';
         $minutes = $isEmployee ? 15 : 30;
         $lastActivity = $user->last_activity ? Carbon::parse($user->last_activity) : null;

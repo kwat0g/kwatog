@@ -247,28 +247,30 @@ class DocumentAccessTest extends TestCase
     private function seedSalesOrder(User $user): SalesOrder
     {
         $customer = $this->seedCustomer();
-        return SalesOrder::create([
-            'so_number'    => 'SO-TEST-' . uniqid(),
+        $so = SalesOrder::create([
+            'so_number'    => 'SO-T-' . substr(uniqid(), -5),
             'customer_id'  => $customer->id,
             'date'         => now()->toDateString(),
             'subtotal'     => '10000.00',
             'vat_amount'   => '1200.00',
             'total_amount' => '11200.00',
-            'status'       => 'confirmed',
             'created_by'   => $user->id,
         ]);
+        $so->forceFill(['status' => 'confirmed'])->save();
+        return $so;
     }
 
     private function seedDelivery(User $user, string $status = 'scheduled'): Delivery
     {
         $so = $this->seedSalesOrder($user);
-        return Delivery::create([
-            'delivery_number' => 'DEL-TEST-' . uniqid(),
+        $delivery = Delivery::create([
+            'delivery_number' => 'DEL-T-' . substr(uniqid(), -5),
             'sales_order_id'  => $so->id,
-            'status'          => $status,
             'scheduled_date'  => now()->toDateString(),
             'created_by'      => $user->id,
         ]);
+        $delivery->forceFill(['status' => $status])->save();
+        return $delivery;
     }
 
     private function seedShipment(User $user): Shipment
@@ -279,20 +281,21 @@ class DocumentAccessTest extends TestCase
             'is_active' => true,
         ]);
         $po = PurchaseOrder::create([
-            'po_number'    => 'PO-TEST-' . uniqid(),
+            'po_number'    => 'PO-T-' . substr(uniqid(), -5),
             'vendor_id'    => $vendor->id,
-            'status'       => 'approved',
             'date'         => now()->toDateString(),
             'subtotal'     => '5000.00',
             'vat_amount'   => '600.00',
             'total_amount' => '5600.00',
             'created_by'   => $user->id,
         ]);
-        return Shipment::create([
-            'shipment_number'   => 'SHP-TEST-' . uniqid(),
+        $po->forceFill(['status' => 'approved'])->save();
+        $shipment = Shipment::create([
+            'shipment_number'   => 'SHP-T-' . substr(uniqid(), -5),
             'purchase_order_id' => $po->id,
-            'status'            => 'ordered',
             'created_by'        => $user->id,
         ]);
+        $shipment->forceFill(['status' => 'ordered'])->save();
+        return $shipment;
     }
 }

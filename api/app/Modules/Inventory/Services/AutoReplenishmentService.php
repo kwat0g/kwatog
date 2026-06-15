@@ -83,9 +83,10 @@ class AutoReplenishmentService
                 'date'              => now()->toDateString(),
                 'reason'            => "Auto-generated: {$item->code} below reorder point.",
                 'priority'          => $priority,
-                'status'            => PurchaseRequestStatus::Draft,
                 'is_auto_generated' => true,
             ]);
+            // status non-fillable; service-only.
+            $pr->forceFill(['status' => PurchaseRequestStatus::Draft])->save();
             PurchaseRequestItem::create([
                 'purchase_request_id'  => $pr->id,
                 'item_id'              => $item->id,

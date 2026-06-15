@@ -90,7 +90,7 @@ class DeliveryUploadTest extends TestCase
         // Delete the delivery from DB so the FK on delivery_proofs.delivery_id
         // fails — but keep the model in memory so the status guard passes and
         // the file store (outside the transaction) runs first.
-        \Illuminate\Support\Facades\DB::statement('PRAGMA foreign_keys = ON');
+        // PG enforces FKs by default; no PRAGMA needed (was SQLite-only).
         Delivery::withoutGlobalScopes()->where('id', $delivery->id)->delete();
 
         $caughtException = null;
@@ -141,16 +141,17 @@ class DeliveryUploadTest extends TestCase
     private function seedSalesOrder(User $user): SalesOrder
     {
         $customer = $this->seedCustomer();
-        return SalesOrder::create([
-            'so_number'    => 'SO-TEST-' . uniqid(),
+        $so = SalesOrder::create([
+            'so_number'    => 'SO-T-' . substr(uniqid(), -5),
             'customer_id'  => $customer->id,
             'date'         => now()->toDateString(),
             'subtotal'     => '10000.00',
             'vat_amount'   => '1200.00',
             'total_amount' => '11200.00',
-            'status'       => 'confirmed',
             'created_by'   => $user->id,
         ]);
+        $so->forceFill(['status' => 'confirmed'])->save();
+        return $so;
     }
 
     private function seedDelivery(User $user, string $status = 'delivered'): Delivery

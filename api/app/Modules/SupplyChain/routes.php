@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Modules\SupplyChain\Controllers\DeliveryController;
 use App\Modules\SupplyChain\Controllers\DeliveryProofController;
+use App\Modules\SupplyChain\Controllers\DriverDeliveryController;
 use App\Modules\SupplyChain\Controllers\ShipmentController;
 use App\Modules\SupplyChain\Controllers\VehicleController;
 use Illuminate\Support\Facades\Route;
@@ -75,3 +76,13 @@ Route::middleware(['auth:sanctum', 'feature:supply_chain'])->prefix('supply-chai
     Route::delete('/deliveries/{delivery}/proofs/{proof}',            [DeliveryProofController::class, 'destroy'])
         ->middleware('permission:supply_chain.deliveries.create');
 });
+
+/* ─── Driver self-service surface (T2.5) ──────────────────────── */
+Route::prefix('driver')
+    ->middleware(['auth:sanctum', 'session.timeout'])
+    ->group(function (): void {
+        Route::get('/deliveries',                       [DriverDeliveryController::class, 'index']);
+        Route::get('/deliveries/{delivery}',            [DriverDeliveryController::class, 'show']);
+        Route::patch('/deliveries/{delivery}/status',   [DriverDeliveryController::class, 'updateStatus']);
+        Route::post('/deliveries/{delivery}/receipt',   [DriverDeliveryController::class, 'uploadReceipt']);
+    });

@@ -25,7 +25,7 @@ class PurchaseRequestService
         private readonly ApprovalService $approvals,
     ) {}
 
-    public function list(array $filters): LengthAwarePaginator
+    public function list(array $filters, ?User $user = null): LengthAwarePaginator
     {
         $q = PurchaseRequest::query()->with([
             'requester:id,name,role_id',
@@ -47,6 +47,31 @@ class PurchaseRequestService
         if (! empty($filters['search'])) {
             $q->where('pr_number', 'ilike', '%'.$filters['search'].'%');
         }
+
+        // Row-level filtering. Admin and Purchasing approvers see everything.
+        // Department Head sees own department's PRs. Everyone else sees only their own.
+        if ($user) {
+            $roleSlug = $user->role?->slug;
+            $isAdmin = $roleSlug === 'system_admin';
+            $canApprove = $user->hasPermission('purchasing.pr.approve');
+            if (! $isAdmin && ! $canApprove) {
+                $requesterId = $user->id;
+                if ($roleSlug === 'department_head') {
+                    $deptId = \App\Modules\HR\Models\Employee::query()
+                        ->whereKey($user->employee_id)
+                        ->value('department_id');
+                    $q->where(function ($qq) use ($requesterId, $deptId) {
+                        $qq->where('requested_by', $requesterId);
+                        if ($deptId) {
+                            $qq->orWhere('department_id', $deptId);
+                        }
+                    });
+                } else {
+                    $q->where('requested_by', $requesterId);
+                }
+            }
+        }
+
         return $q->orderByDesc('date')->orderByDesc('id')
             ->paginate(min((int) ($filters['per_page'] ?? 25), 100));
     }
@@ -80,12 +105,13 @@ class PurchaseRequestService
                 'date'                 => $data['date'] ?? now()->toDateString(),
                 'reason'               => $data['reason'] ?? null,
                 'priority'             => $data['priority'] ?? PurchaseRequestPriority::Normal->value,
-                'status'               => PurchaseRequestStatus::Draft,
                 'is_auto_generated'    => $isAuto,
                 'auto_generated_reason'=> $data['auto_generated_reason'] ?? null,
                 'is_urgent'            => (bool) ($data['is_urgent'] ?? false),
                 'urgency_reason'       => $data['urgency_reason'] ?? null,
             ]);
+            // status is non-fillable; service-only.
+            $pr->forceFill(['status' => PurchaseRequestStatus::Draft])->save();
 
             foreach (($data['items'] ?? []) as $row) {
                 $itemId = ! empty($row['item_id'])
@@ -179,10 +205,10 @@ class PurchaseRequestService
                 $this->approvals->submit($pr, 'purchase_request', $total);
             }
 
-            $pr->update([
+            $pr->forceFill([
                 'status'       => PurchaseRequestStatus::Pending,
                 'submitted_at' => now(),
-            ]);
+            ])->save();
 
             $fresh = $pr->fresh();
 
@@ -196,10 +222,10 @@ class PurchaseRequestService
                     $this->approvals->approve($fresh, $requester, 'Auto-approved: amount below ₱5,000 threshold.');
                 }
                 if ($this->approvals->isFullyApproved($fresh)) {
-                    $fresh->update([
+                    $fresh->forceFill([
                         'status'      => PurchaseRequestStatus::Approved,
                         'approved_at' => now(),
-                    ]);
+                    ])->save();
                     $fresh = $fresh->fresh();
                     DB::afterCommit(fn () =>
                         event(new \App\Modules\Purchasing\Events\PurchaseRequestApproved($fresh))
@@ -266,10 +292,10 @@ class PurchaseRequestService
             $this->approvals->approve($pr, $by, $remarks);
             $becameApproved = false;
             if ($this->approvals->isFullyApproved($pr)) {
-                $pr->update([
+                $pr->forceFill([
                     'status'      => PurchaseRequestStatus::Approved,
                     'approved_at' => now(),
-                ]);
+                ])->save();
                 $becameApproved = true;
             }
             $fresh = $pr->fresh();
@@ -316,7 +342,7 @@ class PurchaseRequestService
         }
         return DB::transaction(function () use ($pr, $by, $reason) {
             $this->approvals->reject($pr, $by, $reason);
-            $pr->update(['status' => PurchaseRequestStatus::Rejected]);
+            $pr->forceFill(['status' => PurchaseRequestStatus::Rejected])->save();
             return $pr->fresh();
         });
     }
@@ -326,7 +352,7 @@ class PurchaseRequestService
         if (! in_array($pr->status, [PurchaseRequestStatus::Draft, PurchaseRequestStatus::Pending], true)) {
             throw new RuntimeException('Cannot cancel a PR in this status.');
         }
-        $pr->update(['status' => PurchaseRequestStatus::Cancelled]);
+        $pr->forceFill(['status' => PurchaseRequestStatus::Cancelled])->save();
         return $pr->fresh();
     }
 

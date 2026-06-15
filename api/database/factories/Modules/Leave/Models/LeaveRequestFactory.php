@@ -38,27 +38,47 @@ class LeaveRequestFactory extends Factory
             'end_date'   => $end->format('Y-m-d'),
             'days'       => 3.0,
             'reason'     => fake()->sentence(),
-            'status'     => LeaveRequestStatus::PendingDept->value,
         ];
+    }
+
+    /**
+     * `status` + approver fields are non-fillable (service-only writes).
+     * Honor any explicit override; otherwise default to PendingDept.
+     */
+    public function configure(): static
+    {
+        return $this->afterMaking(function (LeaveRequest $req) {
+            if (! $req->status) {
+                $req->forceFill(['status' => LeaveRequestStatus::PendingDept->value]);
+            }
+        });
     }
 
     public function pendingDept(): static
     {
-        return $this->state(['status' => LeaveRequestStatus::PendingDept->value]);
+        return $this->afterMaking(fn (LeaveRequest $r) =>
+            $r->forceFill(['status' => LeaveRequestStatus::PendingDept->value])
+        );
     }
 
     public function pendingHR(): static
     {
-        return $this->state(['status' => LeaveRequestStatus::PendingHr->value]);
+        return $this->afterMaking(fn (LeaveRequest $r) =>
+            $r->forceFill(['status' => LeaveRequestStatus::PendingHr->value])
+        );
     }
 
     public function approved(): static
     {
-        return $this->state(['status' => LeaveRequestStatus::Approved->value]);
+        return $this->afterMaking(fn (LeaveRequest $r) =>
+            $r->forceFill(['status' => LeaveRequestStatus::Approved->value])
+        );
     }
 
     public function rejected(): static
     {
-        return $this->state(['status' => LeaveRequestStatus::Rejected->value]);
+        return $this->afterMaking(fn (LeaveRequest $r) =>
+            $r->forceFill(['status' => LeaveRequestStatus::Rejected->value])
+        );
     }
 }

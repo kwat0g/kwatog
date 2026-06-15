@@ -181,15 +181,17 @@ class PayrollPeriodService
                 throw new RuntimeException('A payroll period overlapping these dates already exists.');
             }
 
-            return PayrollPeriod::create([
+            $period = PayrollPeriod::create([
                 'period_start'        => $start->toDateString(),
                 'period_end'          => $end->toDateString(),
                 'payroll_date'        => $data['payroll_date'],
                 'is_first_half'       => (bool) ($data['is_first_half'] ?? true),
                 'is_thirteenth_month' => (bool) ($data['is_thirteenth_month'] ?? false),
-                'status'              => PayrollPeriodStatus::Draft->value,
                 'created_by'          => $user->id,
             ]);
+            // status non-fillable; service-only.
+            $period->forceFill(['status' => PayrollPeriodStatus::Draft->value])->save();
+            return $period;
         });
     }
 

@@ -23,8 +23,8 @@ class NotifyEmployeesOnPayrollFinalized implements ShouldQueue
             $userIds = DB::table('payrolls')
                 ->where('payroll_period_id', $period->id)
                 ->join('employees', 'payrolls.employee_id', '=', 'employees.id')
-                ->whereNotNull('employees.user_id')
-                ->pluck('employees.user_id');
+                ->join('users', 'users.employee_id', '=', 'employees.id')
+                ->pluck('users.id');
 
             if ($userIds->isEmpty()) return;
 

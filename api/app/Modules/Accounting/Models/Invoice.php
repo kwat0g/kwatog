@@ -28,6 +28,7 @@ class Invoice extends Model
         'date', 'due_date', 'is_vatable',
         'subtotal', 'vat_amount', 'total_amount', 'amount_paid', 'balance',
         'status', 'journal_entry_id', 'created_by', 'remarks',
+        'last_dunning_tier', 'last_dunning_at',
     ];
 
     protected $casts = [
@@ -40,6 +41,8 @@ class Invoice extends Model
         'amount_paid'  => 'decimal:2',
         'balance'      => 'decimal:2',
         'status'       => InvoiceStatus::class,
+        'last_dunning_tier' => 'integer',
+        'last_dunning_at'   => 'datetime',
     ];
 
     public function customer(): BelongsTo

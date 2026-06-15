@@ -27,14 +27,28 @@ class PurchaseRequestFactory extends Factory
             'date'                   => fake()->date(),
             'reason'                 => fake()->sentence(),
             'priority'               => 'normal',
-            'status'                 => 'draft',
             'is_auto_generated'      => false,
             'auto_generated_reason'  => null,
             'is_urgent'              => false,
             'urgency_reason'         => null,
-            'current_approval_step'  => 0,
-            'submitted_at'           => null,
-            'approved_at'            => null,
         ];
+    }
+
+    /**
+     * status / current_approval_step / submitted_at / approved_at are
+     * non-fillable on the model. Factory rows write them via forceFill.
+     */
+    public function configure(): static
+    {
+        return $this->afterMaking(function (PurchaseRequest $pr) {
+            if (! $pr->status) {
+                $pr->forceFill([
+                    'status'                => 'draft',
+                    'current_approval_step' => 0,
+                    'submitted_at'          => null,
+                    'approved_at'           => null,
+                ]);
+            }
+        });
     }
 }

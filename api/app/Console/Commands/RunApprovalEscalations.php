@@ -20,8 +20,12 @@ class RunApprovalEscalations extends Command
     {
         $reminders   = $svc->runReminders();
         $escalations = $svc->runEscalations();
+        $autoResolved = $svc->runAutoResolve();
 
-        $this->info("Approval escalation completed: {$reminders} reminders, {$escalations} escalations.");
+        $this->info(sprintf(
+            'Approval escalation completed: %d reminders, %d escalations, %d auto-resolved.',
+            $reminders, $escalations, $autoResolved,
+        ));
         return self::SUCCESS;
     }
 }

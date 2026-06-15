@@ -25,6 +25,7 @@ use App\Modules\CRM\Listeners\NotifyOnSalesOrderConfirmed;
 use App\Modules\HR\Events\ClearanceFullySigned;
 use App\Modules\HR\Events\EmployeeCreated;
 use App\Modules\HR\Events\SeparationInitiated;
+use App\Modules\HR\Listeners\AutoProvisionUserOnEmployeeHire;
 use App\Modules\HR\Listeners\DeactivateAccountOnClearanceComplete;
 use App\Modules\HR\Listeners\InitializeLeaveBalances;
 use App\Modules\HR\Listeners\NotifyOnSeparationInitiated;
@@ -44,6 +45,7 @@ use App\Modules\Leave\Listeners\NotifyOnLeaveRejected;
 use App\Modules\Leave\Listeners\NotifyOnLeaveSubmitted;
 use App\Modules\MRP\Events\MachineStatusChanged;
 use App\Modules\Payroll\Events\PayrollPeriodFinalized;
+use App\Modules\Payroll\Listeners\EmailPayslipPdfOnPayrollFinalized;
 use App\Modules\Payroll\Listeners\GenerateBankFileOnPayrollFinalized;
 use App\Modules\Payroll\Listeners\NotifyEmployeesOnPayrollFinalized;
 use App\Modules\Production\Events\MachineBreakdownDetected;
@@ -163,10 +165,12 @@ class AppServiceProvider extends ServiceProvider
 
         // C3 Hire-to-Retire
         Event::listen(EmployeeCreated::class,         [InitializeLeaveBalances::class,             'handle']);
+        Event::listen(EmployeeCreated::class,         [AutoProvisionUserOnEmployeeHire::class,     'handle']);
         Event::listen(SeparationInitiated::class,     [NotifyOnSeparationInitiated::class,         'handle']);
         Event::listen(ClearanceFullySigned::class,    [DeactivateAccountOnClearanceComplete::class,'handle']);
         Event::listen(PayrollPeriodFinalized::class,  [NotifyEmployeesOnPayrollFinalized::class,   'handle']);
         Event::listen(PayrollPeriodFinalized::class,  [GenerateBankFileOnPayrollFinalized::class,  'handle']);
+        Event::listen(PayrollPeriodFinalized::class,  [EmailPayslipPdfOnPayrollFinalized::class,   'handle']);
 
         // Leave lifecycle notifications
         Event::listen(LeaveRequestSubmitted::class, [NotifyOnLeaveSubmitted::class, 'handle']);

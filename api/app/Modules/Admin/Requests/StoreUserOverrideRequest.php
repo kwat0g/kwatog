@@ -20,7 +20,9 @@ class StoreUserOverrideRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('admin.users.manage_permissions') ?? false;
+        // Permission overrides are a privileged escalation mechanism.
+        // Only system_admin may grant or revoke overrides.
+        return $this->user()?->role?->slug === 'system_admin';
     }
 
     public function rules(): array

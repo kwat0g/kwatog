@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Loans\Controllers;
 
+use App\Common\Support\HashIdFilter;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Loans\Enums\LoanType;
 use App\Modules\Loans\Models\EmployeeLoan;
@@ -16,6 +17,7 @@ use App\Modules\Loans\Services\LoanService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\Validator;
 
 class LoanController
 {
@@ -44,8 +46,26 @@ class LoanController
         return (new EmployeeLoanResource($loan))->response()->setStatusCode(201);
     }
 
-    public function show(EmployeeLoan $loan): EmployeeLoanResource
+    public function show(EmployeeLoan $loan, Request $request): EmployeeLoanResource
     {
+        $user = $request->user();
+        $isAdmin = $user?->role?->slug === 'system_admin';
+        $canApprove = $user?->hasPermission('loans.approve') ?? false;
+
+        if (! $isAdmin && ! $canApprove) {
+            $isOwn = (int) $loan->employee?->user_id === (int) $user?->id;
+            $isDeptMember = false;
+            $isDeptHead = $user?->role?->slug === 'department_head';
+            if ($isDeptHead && $user?->employee_id) {
+                $deptId = \App\Modules\HR\Models\Employee::query()
+                    ->whereKey($user->employee_id)->value('department_id');
+                $isDeptMember = (int) $loan->employee?->department_id === (int) $deptId;
+            }
+            if (! $isOwn && ! $isDeptMember) {
+                abort(403, 'You do not have permission to view this loan.');
+            }
+        }
+
         return new EmployeeLoanResource($this->service->show($loan));
     }
 
@@ -97,6 +117,36 @@ class LoanController
         ]);
         return response()->json([
             'data' => $this->amortization->generate((string) $data['principal'], (int) $data['pay_periods']),
+        ]);
+    }
+
+    /**
+     * T1.7 — Bulk approve loan applications.
+     * Body: { ids: ["hashId1", ...], remarks?: string }
+     */
+    public function bulkApprove(Request $request): JsonResponse
+    {
+        $validated = Validator::make($request->all(), [
+            'ids'     => 'required|array|min:1',
+            'ids.*'   => 'string',
+            'remarks' => 'nullable|string|max:500',
+        ])->validate();
+
+        $ids = array_filter(array_map(
+            fn ($hash) => HashIdFilter::decode($hash, EmployeeLoan::class),
+            $validated['ids'],
+        ));
+        if (empty($ids)) {
+            return response()->json(['message' => 'No valid loan IDs provided.'], 422);
+        }
+
+        $results = $this->service->bulkApprove($ids, $request->user(), $validated['remarks'] ?? null);
+
+        return response()->json([
+            'data' => [
+                'approved' => array_map(fn ($r) => (new EmployeeLoanResource($r))->toArray($request), $results['approved']),
+                'failed'   => $results['failed'],
+            ],
         ]);
     }
 }

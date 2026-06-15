@@ -102,15 +102,20 @@ class ThirteenthMonthService
                 throw new RuntimeException("13th-month period for {$year} is already finalized.");
             }
 
-            $period = $existing ?? PayrollPeriod::create([
-                'period_start'        => "{$year}-12-01",
-                'period_end'          => "{$year}-12-31",
-                'payroll_date'        => $payDate->toDateString(),
-                'is_first_half'       => false,
-                'is_thirteenth_month' => true,
-                'status'              => PayrollPeriodStatus::Draft->value,
-                'created_by'          => $triggeredBy->id,
-            ]);
+            if ($existing) {
+                $period = $existing;
+            } else {
+                $period = PayrollPeriod::create([
+                    'period_start'        => "{$year}-12-01",
+                    'period_end'          => "{$year}-12-31",
+                    'payroll_date'        => $payDate->toDateString(),
+                    'is_first_half'       => false,
+                    'is_thirteenth_month' => true,
+                    'created_by'          => $triggeredBy->id,
+                ]);
+                // status non-fillable; service-only.
+                $period->forceFill(['status' => PayrollPeriodStatus::Draft->value])->save();
+            }
 
             // Wipe any partial run so this is idempotent.
             $oldPayrollIds = Payroll::where('payroll_period_id', $period->id)->pluck('id');

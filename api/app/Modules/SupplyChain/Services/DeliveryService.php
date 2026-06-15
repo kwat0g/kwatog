@@ -69,6 +69,7 @@ class DeliveryService
     {
         $d = $d->load([
             'salesOrder:id,so_number,customer_id',
+            'salesOrder.customer:id,name',
             'vehicle:id,plate_number,name,vehicle_type',
             'driver:id,name,role_id',
             'confirmer:id,name,role_id',

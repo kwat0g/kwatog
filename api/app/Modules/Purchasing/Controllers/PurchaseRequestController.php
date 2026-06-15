@@ -39,7 +39,7 @@ class PurchaseRequestController
 
     public function index(Request $request): AnonymousResourceCollection
     {
-        return PurchaseRequestResource::collection($this->service->list($request->query()));
+        return PurchaseRequestResource::collection($this->service->list($request->query(), $request->user()));
     }
 
     public function show(PurchaseRequest $purchaseRequest): PurchaseRequestResource
@@ -141,7 +141,7 @@ class PurchaseRequestController
         $count = \App\Common\Models\ApprovalRecord::where('approvable_type', (new PurchaseRequest)->getMorphClass())
             ->where('action', 'pending')
             ->where('role_slug', $roleSlug)
-            ->whereHas('approvable', fn ($q) => $q->where('status', PurchaseRequestStatus::Pending))
+            ->whereHas('approvable', fn ($q) => $q->where('status', PurchaseRequestStatus::Pending->value))
             ->count();
 
         return response()->json(['data' => ['count' => $count]]);

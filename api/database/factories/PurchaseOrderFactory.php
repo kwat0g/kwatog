@@ -27,10 +27,24 @@ class PurchaseOrderFactory extends Factory
             'vat_amount'              => 0,
             'total_amount'            => 0,
             'is_vatable'              => true,
-            'status'                  => 'draft',
             'requires_vp_approval'    => false,
-            'current_approval_step'   => 0,
             'created_by'              => User::factory(),
         ];
+    }
+
+    /**
+     * `status`, `current_approval_step`, and approval timestamps are
+     * non-fillable on the model. Factory rows write them via forceFill.
+     */
+    public function configure(): static
+    {
+        return $this->afterMaking(function (PurchaseOrder $po) {
+            if (! $po->status) {
+                $po->forceFill([
+                    'status'                => 'draft',
+                    'current_approval_step' => 0,
+                ]);
+            }
+        });
     }
 }

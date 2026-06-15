@@ -75,13 +75,16 @@ class AutoPurchaseOrderService
                 'vat_amount'            => $vat,
                 'total_amount'          => $sub + $vat,
                 'is_vatable'            => true,
-                'status'                => 'pending_vp',
                 'requires_vp_approval'  => true,
-                'current_approval_step' => 1,
                 'created_by'            => null,
                 'remarks'               => "Auto-generated for critical stock alert on {$item->code}.",
                 'is_auto_generated'     => true,
             ]);
+            // status + current_approval_step are non-fillable.
+            $po->forceFill([
+                'status'                => 'pending_vp',
+                'current_approval_step' => 1,
+            ])->save();
 
             PurchaseOrderItem::create([
                 'purchase_order_id' => $po->id,

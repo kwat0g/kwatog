@@ -8,6 +8,15 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class RejectLeaveRequest extends FormRequest
 {
-    public function authorize(): bool { return (bool) $this->user(); }
-    public function rules(): array { return ['reason' => ['required', 'string', 'max:1000']]; }
+    public function authorize(): bool
+    {
+        // Rejection is allowed by anyone with dept or HR approval permission.
+        // The route middleware enforces the specific permission gate.
+        return (bool) $this->user();
+    }
+
+    public function rules(): array
+    {
+        return ['reason' => ['required', 'string', 'max:1000']];
+    }
 }

@@ -6,8 +6,10 @@ namespace App\Modules\Payroll\Controllers;
 
 use App\Modules\Payroll\Enums\ContributionAgency;
 use App\Modules\Payroll\Models\GovernmentContributionTable;
+use App\Modules\Payroll\Requests\ImportGovTableRequest;
 use App\Modules\Payroll\Requests\UpdateGovTableBracketRequest;
 use App\Modules\Payroll\Resources\GovernmentTableResource;
+use App\Modules\Payroll\Services\GovernmentContributionTableImportService;
 use App\Modules\Payroll\Services\GovernmentContributionTableService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -48,5 +50,26 @@ class GovernmentTableController
         // Hard delete only allowed for unused rows (defensive — check audit log usage in service later if needed).
         $govTable->delete();
         return response()->json(null, 204);
+    }
+
+    /**
+     * T1.8 — Upload + import a contribution table CSV.
+     */
+    public function import(
+        ImportGovTableRequest $request,
+        string $agency,
+        GovernmentContributionTableImportService $importer,
+    ): JsonResponse {
+        $enum = ContributionAgency::tryFrom($agency);
+        if (! $enum) {
+            return response()->json(['message' => 'Unknown agency.'], 422);
+        }
+
+        $path = $request->file('csv')->getRealPath();
+        $deactivatePrior = (bool) $request->input('deactivate_prior', true);
+
+        $result = $importer->importFromPath($enum, $path, $deactivatePrior);
+
+        return response()->json(['data' => $result]);
     }
 }

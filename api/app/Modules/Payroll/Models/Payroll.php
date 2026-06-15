@@ -54,6 +54,7 @@ class Payroll extends Model
         'total_deductions'  => 'decimal:2',
         'net_pay'           => 'decimal:2',
         'computed_at'       => 'datetime',
+        'payslip_emailed_at' => 'datetime',
     ];
 
     public function period(): BelongsTo

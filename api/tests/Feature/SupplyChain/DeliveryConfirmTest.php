@@ -197,27 +197,29 @@ class DeliveryConfirmTest extends TestCase
     private function seedSalesOrder(User $user): SalesOrder
     {
         $customer = $this->seedCustomer();
-        return SalesOrder::create([
-            'so_number'    => 'SO-TEST-' . uniqid(),
+        $so = SalesOrder::create([
+            'so_number'    => 'SO-T-' . substr(uniqid(), -5),
             'customer_id'  => $customer->id,
             'date'         => now()->toDateString(),
             'subtotal'     => '10000.00',
             'vat_amount'   => '1200.00',
             'total_amount' => '11200.00',
-            'status'       => 'confirmed',
             'created_by'   => $user->id,
         ]);
+        $so->forceFill(['status' => 'confirmed'])->save();
+        return $so;
     }
 
     private function seedDelivery(User $user, string $status = 'delivered'): Delivery
     {
         $so = $this->seedSalesOrder($user);
-        return Delivery::create([
-            'delivery_number' => 'DEL-TEST-' . uniqid(),
+        $delivery = Delivery::create([
+            'delivery_number' => 'DL-T-' . substr(uniqid(), -5),
             'sales_order_id'  => $so->id,
-            'status'          => $status,
             'scheduled_date'  => now()->toDateString(),
             'created_by'      => $user->id,
         ]);
+        $delivery->forceFill(['status' => $status])->save();
+        return $delivery;
     }
 }

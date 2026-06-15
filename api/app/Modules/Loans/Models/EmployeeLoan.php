@@ -26,7 +26,7 @@ class EmployeeLoan extends Model
         'start_date', 'end_date',
         'pay_periods_total', 'pay_periods_remaining',
         'approval_chain_size', 'purpose',
-        'status', 'is_final_pay_deduction',
+        'is_final_pay_deduction',
     ];
 
     protected $casts = [
@@ -61,7 +61,10 @@ class EmployeeLoan extends Model
      */
     public function approvalSubmitterId(): ?int
     {
-        $userId = $this->employee()->value('user_id');
+        // users.employee_id (HasOne from Employee), not employees.user_id.
+        $userId = \App\Modules\Auth\Models\User::query()
+            ->where('employee_id', $this->employee_id)
+            ->value('id');
         return $userId !== null ? (int) $userId : null;
     }
 }
