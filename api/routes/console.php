@@ -159,3 +159,11 @@ Schedule::command('training:check-expiries')
     ->dailyAt('06:30')
     ->withoutOverlapping()
     ->onOneServer();
+
+// T3.6.C — Monthly COPQ rollup snapshot on the 1st at 02:30. Snaps the
+// PRIOR calendar month via CopqService::snapshot(). Idempotent
+// (updateOrCreate keyed by period_year+period_month).
+Schedule::command('copq:snap-monthly')
+    ->monthlyOn(1, '02:30')
+    ->withoutOverlapping()
+    ->onOneServer();

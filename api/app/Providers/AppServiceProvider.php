@@ -59,8 +59,10 @@ use App\Modules\Purchasing\Events\SupplierPerformanceComputed;
 use App\Modules\Purchasing\Listeners\AlertOnSupplierDeterioration;
 use App\Modules\Purchasing\Listeners\NotifyOnPurchaseOrderApproved;
 use App\Modules\Purchasing\Listeners\NotifyOnPurchaseRequestApproved;
+use App\Modules\Quality\Events\CopqSnapshotComputed;
 use App\Modules\Quality\Events\InspectionFailed;
 use App\Modules\Quality\Events\InspectionPassed;
+use App\Modules\Quality\Listeners\AlertOnCopqSpike;
 use App\Modules\Quality\Listeners\CreateDeliveryDraftOnQcPass;
 use App\Modules\Quality\Listeners\NotifyOnInspectionFailed;
 use App\Modules\Quality\Listeners\RejectGRNOnQcFail;
@@ -166,6 +168,9 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(SupplierPerformanceComputed::class, [AlertOnSupplierDeterioration::class, 'handle']);
         Event::listen(InspectionFailed::class,        [RejectGRNOnQcFail::class,                'handle']);
         Event::listen(InspectionFailed::class,        [NotifyOnInspectionFailed::class,         'handle']);
+
+        // T3.6.C — COPQ MoM spike alert (≥ +25% vs prior persisted snapshot).
+        Event::listen(CopqSnapshotComputed::class,    [AlertOnCopqSpike::class,                 'handle']);
 
         // C3 Hire-to-Retire
         Event::listen(EmployeeCreated::class,         [InitializeLeaveBalances::class,             'handle']);
