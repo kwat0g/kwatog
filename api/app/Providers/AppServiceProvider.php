@@ -22,6 +22,7 @@ use App\Modules\Accounting\Observers\JournalEntryObserver;
 use App\Modules\Accounting\Listeners\NotifyFinanceOnDeliveryConfirmed;
 use App\Modules\CRM\Events\SalesOrderConfirmed;
 use App\Modules\CRM\Listeners\NotifyOnSalesOrderConfirmed;
+use App\Modules\CRM\Listeners\AutoSpawn8DOnNcrRecurrence;
 use App\Modules\HR\Events\ClearanceFullySigned;
 use App\Modules\HR\Events\EmployeeCreated;
 use App\Modules\HR\Events\SeparationInitiated;
@@ -62,6 +63,7 @@ use App\Modules\Purchasing\Listeners\NotifyOnPurchaseRequestApproved;
 use App\Modules\Quality\Events\CopqSnapshotComputed;
 use App\Modules\Quality\Events\InspectionFailed;
 use App\Modules\Quality\Events\InspectionPassed;
+use App\Modules\Quality\Events\NcrRecurrenceLinked;
 use App\Modules\Quality\Listeners\AlertOnCopqSpike;
 use App\Modules\Quality\Listeners\CreateDeliveryDraftOnQcPass;
 use App\Modules\Quality\Listeners\NotifyOnInspectionFailed;
@@ -171,6 +173,9 @@ class AppServiceProvider extends ServiceProvider
 
         // T3.6.C — COPQ MoM spike alert (≥ +25% vs prior persisted snapshot).
         Event::listen(CopqSnapshotComputed::class,    [AlertOnCopqSpike::class,                 'handle']);
+
+        // T3.2.C — Auto-spawn 8D shell when a customer-complaint NCR recurs.
+        Event::listen(NcrRecurrenceLinked::class,     [AutoSpawn8DOnNcrRecurrence::class,       'handle']);
 
         // C3 Hire-to-Retire
         Event::listen(EmployeeCreated::class,         [InitializeLeaveBalances::class,             'handle']);

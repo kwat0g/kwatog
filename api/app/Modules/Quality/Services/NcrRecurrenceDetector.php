@@ -6,6 +6,7 @@ namespace App\Modules\Quality\Services;
 
 use App\Common\Services\NotificationService;
 use App\Modules\Auth\Models\User;
+use App\Modules\Quality\Events\NcrRecurrenceLinked;
 use App\Modules\Quality\Models\NonConformanceReport;
 use Illuminate\Support\Facades\Log;
 
@@ -49,6 +50,17 @@ class NcrRecurrenceDetector
             }
 
             $ncr->forceFill(['recurrence_of_ncr_id' => $prior->id])->save();
+
+            // T3.2.C — Notify listeners (e.g. AutoSpawn8DOnNcrRecurrence). Wrapped in
+            // its own try/catch so a listener failure cannot abort the recurrence link.
+            try {
+                NcrRecurrenceLinked::dispatch($ncr->fresh());
+            } catch (\Throwable $e) {
+                Log::warning('NcrRecurrenceDetector: NcrRecurrenceLinked dispatch failed', [
+                    'ncr_id' => $ncr->id,
+                    'error'  => $e->getMessage(),
+                ]);
+            }
 
             $recipients = User::query()
                 ->whereHas('role', fn ($q) => $q->whereIn('slug', ['qc_inspector', 'production_manager']))
