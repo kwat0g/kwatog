@@ -318,8 +318,10 @@ class PurchaseOrderService
             throw new RuntimeException('Cannot cancel a PO with GRNs.');
         }
         $fresh = DB::transaction(function () use ($po, $reason) {
-            $po->update(['remarks' => trim(($po->remarks ? $po->remarks."\n" : '').'Cancelled: '.$reason)]);
-            $po->forceFill(['status' => PurchaseOrderStatus::Cancelled])->save();
+            // Single save → single audit row for one logical action.
+            $po->fill(['remarks' => trim(($po->remarks ? $po->remarks."\n" : '').'Cancelled: '.$reason)]);
+            $po->status = PurchaseOrderStatus::Cancelled;
+            $po->save();
             $fresh = $po->fresh();
             DB::afterCommit(fn () =>
                 event(new \App\Modules\Purchasing\Events\PurchaseOrderCancelled($fresh))

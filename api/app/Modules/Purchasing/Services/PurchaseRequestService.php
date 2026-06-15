@@ -48,27 +48,15 @@ class PurchaseRequestService
             $q->where('pr_number', 'ilike', '%'.$filters['search'].'%');
         }
 
-        // Row-level filtering. Admin and Purchasing approvers see everything.
-        // Department Head sees own department's PRs. Everyone else sees only their own.
+        // Row-level filtering. Admin and any user with purchasing.pr.approve
+        // (e.g. department_head, purchasing_officer) see all PRs so their
+        // approval queue is complete. Everyone else sees only their own.
         if ($user) {
             $roleSlug = $user->role?->slug;
             $isAdmin = $roleSlug === 'system_admin';
             $canApprove = $user->hasPermission('purchasing.pr.approve');
             if (! $isAdmin && ! $canApprove) {
-                $requesterId = $user->id;
-                if ($roleSlug === 'department_head') {
-                    $deptId = \App\Modules\HR\Models\Employee::query()
-                        ->whereKey($user->employee_id)
-                        ->value('department_id');
-                    $q->where(function ($qq) use ($requesterId, $deptId) {
-                        $qq->where('requested_by', $requesterId);
-                        if ($deptId) {
-                            $qq->orWhere('department_id', $deptId);
-                        }
-                    });
-                } else {
-                    $q->where('requested_by', $requesterId);
-                }
+                $q->where('requested_by', $user->id);
             }
         }
 

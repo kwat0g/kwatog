@@ -163,8 +163,10 @@ class LoanService
             $this->approvals->approve($loan, $user, $remarks);
 
             if ($this->approvals->isFullyApproved($loan)) {
-                $loan->update(['start_date' => now()->toDateString()]);
-                $loan->forceFill(['status' => LoanStatus::Active->value])->save();
+                // Single save → single audit row for one logical action.
+                $loan->fill(['start_date' => now()->toDateString()]);
+                $loan->status = LoanStatus::Active;
+                $loan->save();
             }
 
             $loan = $loan->fresh(['employee', 'payments']);
@@ -247,17 +249,17 @@ class LoanService
 
             $newPaid    = bcadd((string) $loan->total_paid, $amount, 2);
             $newBalance = bcsub((string) $loan->principal, $newPaid, 2);
-            $loan->update([
+            // Single save → single audit row.
+            $loan->fill([
                 'total_paid'             => $newPaid,
                 'balance'                => $newBalance,
                 'pay_periods_remaining'  => max(0, ((int) $loan->pay_periods_remaining) - 1),
                 'end_date'               => bccomp($newBalance, '0', 2) <= 0 ? now()->toDateString() : null,
             ]);
-            $loan->forceFill([
-                'status' => bccomp($newBalance, '0', 2) <= 0
-                    ? LoanStatus::Paid->value
-                    : LoanStatus::Active->value,
-            ])->save();
+            $loan->status = bccomp($newBalance, '0', 2) <= 0
+                ? LoanStatus::Paid
+                : LoanStatus::Active;
+            $loan->save();
 
             return $payment;
         });
