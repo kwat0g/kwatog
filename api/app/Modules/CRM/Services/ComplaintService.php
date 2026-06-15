@@ -91,6 +91,10 @@ class ComplaintService
                 'affected_quantity' => (int) ($data['affected_quantity'] ?? 0),
                 'created_by'        => $by->id,
                 'assigned_to'       => $data['assigned_to'] ?? null,
+                'd3_due_at'         => now()->addHours(48),
+                'd4_due_at'         => now()->addDays(7),
+                'finalize_due_at'   => now()->addDays(30),
+                'sla_alert_levels'  => [],
             ]);
 
             // Seed an empty 8D report so the editor has something to upsert.
