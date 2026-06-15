@@ -57,6 +57,7 @@ class SupplierPerformanceService
                 ->count();
 
             $overall = $this->compositeScore($onTime, $quality, $ncrRate, $price, $leadTime);
+            $tier    = $this->tierFromScore($overall);
 
             return SupplierPerformanceSnapshot::updateOrCreate(
                 [
@@ -74,12 +75,28 @@ class SupplierPerformanceService
                     'price_variance_pct'      => $price,
                     'lead_time_variance_days' => $leadTime,
                     'overall_score'           => $overall,
+                    'tier'                    => $tier,
                     'po_count'                => $poCount,
                     'grn_count'               => $grnCount,
                     'computed_at'             => now(),
                 ],
             );
         });
+    }
+
+    /**
+     * T3.3.A — Map overall_score to a tier letter.
+     *
+     * Boundaries (inclusive lower bounds): A >= 90, B >= 75, C >= 60, D < 60.
+     * NULL score → NULL tier (vendors with no data don't get a synthetic letter).
+     */
+    private function tierFromScore(?float $score): ?string
+    {
+        if ($score === null) return null;
+        if ($score >= 90) return 'A';
+        if ($score >= 75) return 'B';
+        if ($score >= 60) return 'C';
+        return 'D';
     }
 
     /**
