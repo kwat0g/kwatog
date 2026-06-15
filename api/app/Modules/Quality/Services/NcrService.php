@@ -270,6 +270,29 @@ class NcrService
                 }
             }
 
+            // T3.1.B — Rework disposition mirrors Scrap branch but creates a
+            // rework WO on a tighter timeline (3 days, priority 7).
+            if ($ncr->disposition === NcrDisposition::Rework
+                && $ncr->inspection_id
+                && $ncr->product_id
+                && $ncr->affected_quantity > 0) {
+                $insp = Inspection::find($ncr->inspection_id);
+                if ($insp && $insp->stage === InspectionStage::Outgoing) {
+                    $wo = $this->workOrderService()?->createDraft([
+                        'product_id'      => $ncr->product_id,
+                        'quantity_target' => (int) $ncr->affected_quantity,
+                        'planned_start'   => now()->addDay()->toDateString(),
+                        'planned_end'     => now()->addDays(3)->toDateString(),
+                        'priority'        => 7,
+                        'parent_ncr_id'   => $ncr->id,
+                        'created_by'      => $by->id,
+                    ]);
+                    if ($wo) {
+                        $ncr->forceFill(['rework_work_order_id' => $wo->id])->save();
+                    }
+                }
+            }
+
             // Return to supplier → notify Purchasing officers.
             if ($ncr->disposition === NcrDisposition::ReturnToSupplier) {
                 $this->notifyPurchasing($ncr);
