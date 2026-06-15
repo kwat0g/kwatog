@@ -81,4 +81,54 @@ class SupplierPerformanceController
             ],
         ]);
     }
+
+    /**
+     * T3.3.B — GET /api/v1/purchasing/vendors/ranking
+     *
+     * Cross-vendor ranking for a given period. Defaults to the previous
+     * calendar month. Optional ?tier=A|B|C|D filter, ?limit clamped to 100.
+     */
+    public function ranking(Request $request): JsonResponse
+    {
+        $now = Carbon::now();
+        // Default to the previous calendar month.
+        $defaultPeriod = $now->copy()->subMonthNoOverflow();
+        $year  = (int) $request->query('period_year',  (string) $defaultPeriod->year);
+        $month = (int) $request->query('period_month', (string) $defaultPeriod->month);
+
+        $tier  = $request->query('tier');
+        if ($tier !== null) {
+            $tier = strtoupper((string) $tier);
+            if (! in_array($tier, ['A', 'B', 'C', 'D'], true)) {
+                $tier = null;
+            }
+        }
+
+        $limit = (int) $request->query('limit', '50');
+
+        $rows = $this->service->ranking($year, $month, $tier, $limit);
+
+        return response()->json([
+            'data' => $rows->map(fn ($s) => [
+                'vendor' => [
+                    'id'   => $s->vendor?->hash_id,
+                    'name' => $s->vendor?->name,
+                ],
+                'tier'                  => $s->tier,
+                'overall_score'         => $s->overall_score,
+                'on_time_delivery_rate' => $s->on_time_delivery_rate,
+                'quality_pass_rate'     => $s->quality_pass_rate,
+                'ncr_rate'              => $s->ncr_rate,
+                'po_count'              => (int) $s->po_count,
+                'grn_count'             => (int) $s->grn_count,
+                'computed_at'           => $s->computed_at?->toIso8601String(),
+            ])->values(),
+            'meta' => [
+                'period_year'  => $year,
+                'period_month' => $month,
+                'tier'         => $tier,
+                'limit'        => max(1, min($limit, 100)),
+            ],
+        ]);
+    }
 }

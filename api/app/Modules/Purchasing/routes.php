@@ -67,6 +67,11 @@ Route::middleware(['auth:sanctum', 'feature:purchasing'])->prefix('purchasing')-
     Route::get('/three-way-match/{bill}',   [ThreeWayMatchController::class, 'show'])->middleware('permission:accounting.bills.view');
 
     /* ─── Series F / Task F4 — Supplier performance dashboard ─── */
+    // T3.3.B — Cross-vendor ranking. Declared BEFORE {vendor} routes so the
+    // literal `ranking` segment does not match the vendor route binding.
+    Route::get('/vendors/ranking',
+        [SupplierPerformanceController::class, 'ranking'])
+        ->middleware('permission:purchasing.suppliers.performance.view');
     Route::get('/vendors/{vendor}/performance',
         [SupplierPerformanceController::class, 'show'])
         ->middleware('permission:purchasing.suppliers.performance.view');

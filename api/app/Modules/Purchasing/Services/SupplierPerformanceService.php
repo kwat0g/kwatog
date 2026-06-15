@@ -143,6 +143,34 @@ class SupplierPerformanceService
         return $count;
     }
 
+    /**
+     * T3.3.B — Cross-vendor ranking for a given period.
+     *
+     * Returns supplier_performance_snapshots rows joined to their vendor,
+     * ordered by overall_score desc. Optional tier filter (A|B|C|D) and
+     * server-side limit (clamped to 100).
+     *
+     * @return Collection<int, SupplierPerformanceSnapshot>
+     */
+    public function ranking(int $year, int $month, ?string $tier = null, int $limit = 50): Collection
+    {
+        $clampedLimit = max(1, min($limit, 100));
+
+        $q = SupplierPerformanceSnapshot::query()
+            ->with('vendor:id,name')
+            ->where('period_year', $year)
+            ->where('period_month', $month);
+
+        if ($tier !== null && in_array($tier, ['A', 'B', 'C', 'D'], true)) {
+            $q->where('tier', $tier);
+        }
+
+        return $q->orderByDesc('overall_score')
+            ->orderBy('vendor_id')
+            ->limit($clampedLimit)
+            ->get();
+    }
+
     private function onTimeDeliveryRate(int $vendorId, Carbon $start, Carbon $end): ?float
     {
         $rows = DB::table('goods_receipt_notes as g')
