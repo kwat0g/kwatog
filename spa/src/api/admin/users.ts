@@ -50,4 +50,13 @@ export const adminUsersApi = {
     client
       .get<{ data: LoginEvent[] }>(`/admin/users/${id}/login-history`)
       .then((r) => r.data.data),
+
+  bulkChangeRole: (userIds: string[], roleId: string, reason: string) =>
+    client
+      .patch<{ updated: number; invalid_ids: string[] }>(`/admin/users/bulk-role`, {
+        user_ids: userIds,
+        role_id: roleId,
+        reason,
+      })
+      .then((r) => r.data),
 };

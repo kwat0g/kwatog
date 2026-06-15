@@ -77,7 +77,12 @@ export default function OvertimeListPage() {
     { key: 'employee', header: 'Employee', cell: (r) => <StackedCell primary={r.employee?.full_name ?? '—'} secondary={<span className="font-mono">{r.employee?.employee_no}</span>} /> },
     { key: 'hours_requested', header: 'Hours', align: 'right', cell: (r) => <NumCell>{r.hours_requested}</NumCell> },
     { key: 'reason', header: 'Reason', cell: (r) => <span className="text-muted truncate block max-w-md" title={r.reason}>{r.reason}</span> },
-    { key: 'status', header: 'Status', cell: (r) => <Chip variant={chipVariantForStatus(r.status)}>{r.status}</Chip> },
+    { key: 'status', header: 'Status', cell: (r) => (
+      <div className="flex items-center gap-1.5">
+        <Chip variant={chipVariantForStatus(r.status)}>{r.status}</Chip>
+        {r.is_auto_detected && <Chip variant="info">Auto</Chip>}
+      </div>
+    ) },
     ...(can('attendance.ot.approve') ? [{
       key: 'actions',
       header: '',

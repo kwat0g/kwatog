@@ -6,11 +6,12 @@ import { ChainHeader } from '@/components/chain/ChainHeader';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Button } from '@/components/ui/Button';
 
 export default function CustomerOrderDetailPage() {
   const { id } = useParams<{ id: string }>();
 
-  const { data: order, isLoading } = useQuery({
+  const { data: order, isLoading, isError, refetch } = useQuery({
     queryKey: ['portal', 'customer', 'order', id],
     queryFn: () => customerPortalApi.getOrder(id!),
     enabled: !!id,
@@ -23,6 +24,7 @@ export default function CustomerOrderDetailPage() {
   });
 
   if (isLoading) return <SkeletonBlock className="h-96 rounded-lg" />;
+  if (isError) return <EmptyState icon="alert-circle" title="Failed to load order" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />;
   if (!order) return <EmptyState icon="file-question" title="Order not found" />;
 
   return (

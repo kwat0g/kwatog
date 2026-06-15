@@ -2,13 +2,16 @@ import { create } from 'zustand';
 
 interface SidebarState {
   collapsed: boolean;
+  mobileOpen: boolean;
   toggle: () => void;
   setCollapsed: (collapsed: boolean) => void;
+  setMobileOpen: (open: boolean) => void;
   init: (initial?: boolean) => void;
 }
 
 export const useSidebarStore = create<SidebarState>((set, get) => ({
   collapsed: false,
+  mobileOpen: false,
 
   toggle: () => {
     const next = !get().collapsed;
@@ -24,6 +27,7 @@ export const useSidebarStore = create<SidebarState>((set, get) => ({
   },
 
   setCollapsed: (collapsed) => set({ collapsed }),
+  setMobileOpen: (open) => set({ mobileOpen: open }),
 
   init: (initial = false) => {
     set({ collapsed: initial });

@@ -86,6 +86,7 @@ export interface OvertimeRequest {
   status: 'pending' | 'approved' | 'rejected';
   approver: { id: string; name: string } | null;
   rejection_reason: string | null;
+  is_auto_detected: boolean;
   created_at: string;
   updated_at: string;
 }

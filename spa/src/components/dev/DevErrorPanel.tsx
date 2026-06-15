@@ -10,11 +10,7 @@ import { cn } from '@/lib/cn';
  * user doesn't have to open `storage/logs/laravel.log` to diagnose 500s.
  */
 
-const showDevPanel =
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (import.meta as any).env?.DEV ||
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (import.meta as any).env?.VITE_SHOW_DEV_ERRORS === '1';
+const showDevPanel = import.meta.env.DEV;
 
 export function DevErrorPanel() {
   const entries = useErrorLogStore((s) => s.entries);

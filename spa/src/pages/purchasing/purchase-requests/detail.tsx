@@ -44,28 +44,34 @@ export default function PurchaseRequestDetailPage() {
     enabled: !!id,
   });
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['purchasing', 'purchase-requests', id] });
+  const detailKey = ['purchasing', 'purchase-requests', id];
 
-  const submit = useMutation({
-    mutationFn: () => purchaseRequestsApi.submit(id),
-    onSuccess: () => { invalidate(); toast.success('Submitted for approval.'); setConfirm(null); },
-    onError: (e) => toast.error(errMsg(e, 'Failed to submit.')),
-  });
-  const approve = useMutation({
-    mutationFn: () => purchaseRequestsApi.approve(id),
-    onSuccess: () => { invalidate(); toast.success('Purchase request approved.'); setConfirm(null); },
-    onError: (e) => toast.error(errMsg(e, 'Failed to approve.')),
-  });
-  const reject = useMutation({
-    mutationFn: (reason: string) => purchaseRequestsApi.reject(id, reason),
-    onSuccess: () => { invalidate(); toast.success('Purchase request rejected.'); setRejectOpen(false); },
-    onError: (e) => toast.error(errMsg(e, 'Failed to reject.')),
-  });
-  const cancel = useMutation({
-    mutationFn: () => purchaseRequestsApi.cancel(id),
-    onSuccess: () => { invalidate(); toast.success('Purchase request cancelled.'); setConfirm(null); },
-    onError: (e) => toast.error(errMsg(e, 'Failed to cancel.')),
-  });
+  function useOptimisticAction<TVar = void>(
+    fn: (v: TVar) => Promise<unknown>,
+    nextStatus: string,
+    opts: { successMsg: string; errorMsg: string; afterSuccess?: () => void },
+  ) {
+    return useMutation<unknown, unknown, TVar, { prev?: unknown }>({
+      mutationFn: fn,
+      onMutate: async () => {
+        await qc.cancelQueries({ queryKey: detailKey });
+        const prev = qc.getQueryData(detailKey);
+        qc.setQueryData(detailKey, (old: typeof data) => old ? { ...old, status: nextStatus } : old);
+        return { prev };
+      },
+      onError: (e, _v, ctx) => {
+        if (ctx?.prev) qc.setQueryData(detailKey, ctx.prev);
+        toast.error(errMsg(e, opts.errorMsg));
+      },
+      onSuccess: () => { toast.success(opts.successMsg); opts.afterSuccess?.(); },
+      onSettled: () => { qc.invalidateQueries({ queryKey: detailKey }); },
+    });
+  }
+
+  const submit = useOptimisticAction(() => purchaseRequestsApi.submit(id), 'pending', { successMsg: 'Submitted for approval.', errorMsg: 'Failed to submit.', afterSuccess: () => setConfirm(null) });
+  const approve = useOptimisticAction(() => purchaseRequestsApi.approve(id), 'approved', { successMsg: 'Purchase request approved.', errorMsg: 'Failed to approve.', afterSuccess: () => setConfirm(null) });
+  const reject = useOptimisticAction<string>((reason) => purchaseRequestsApi.reject(id, reason), 'rejected', { successMsg: 'Purchase request rejected.', errorMsg: 'Failed to reject.', afterSuccess: () => setRejectOpen(false) });
+  const cancel = useOptimisticAction(() => purchaseRequestsApi.cancel(id), 'cancelled', { successMsg: 'Purchase request cancelled.', errorMsg: 'Failed to cancel.', afterSuccess: () => setConfirm(null) });
 
   if (isLoading) return <SkeletonTable rows={6} columns={5} />;
   if (isError || !data) return (

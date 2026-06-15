@@ -93,6 +93,7 @@ export function Modal({
   className,
 }: ModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
 
   // Focus trap — keeps Tab cycling within the modal while open.
   useFocusTrap(dialogRef, isOpen);
@@ -141,6 +142,7 @@ export function Modal({
       className="fixed inset-0 z-50 flex items-center justify-center px-4"
       role="dialog"
       aria-modal="true"
+      aria-labelledby={title ? titleId : undefined}
       onMouseDown={(e) => {
         if (closeOnOverlayClick && e.target === e.currentTarget) onClose();
       }}
@@ -156,7 +158,7 @@ export function Modal({
       >
         {title && (
           <div className="px-4 py-3 border-b border-default">
-            <h2 className="text-md font-medium text-primary">{title}</h2>
+            <h2 id={titleId} className="text-md font-medium text-primary">{title}</h2>
           </div>
         )}
         <div className="px-4">{children}</div>

@@ -7,9 +7,10 @@ import { StatCard } from '@/components/ui/StatCard';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Button } from '@/components/ui/Button';
 
 export default function SupplierDashboardPage() {
-  const { data: dashboard, isLoading } = useQuery({
+  const { data: dashboard, isLoading, isError, refetch } = useQuery({
     queryKey: ['portal', 'supplier', 'dashboard'],
     queryFn: () => supplierPortalApi.dashboard(),
   });
@@ -27,6 +28,8 @@ export default function SupplierDashboardPage() {
       </div>
     );
   }
+
+  if (isError) return <EmptyState icon="alert-circle" title="Failed to load dashboard" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />;
 
   return (
     <div className="space-y-4 max-w-5xl">

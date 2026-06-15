@@ -8,6 +8,7 @@ import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Spinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Button } from '@/components/ui/Button';
 
 export default function PermissionSearchPage() {
   const [search, setSearch] = useState('');
@@ -53,6 +54,8 @@ export default function PermissionSearchPage() {
   }, [filtered, roles.data]);
 
   const isLoading = matrix.isLoading || roles.isLoading;
+  const isError = matrix.isError || roles.isError;
+  const refetchAll = () => { matrix.refetch(); roles.refetch(); };
 
   return (
     <div>
@@ -83,7 +86,11 @@ export default function PermissionSearchPage() {
           </div>
         )}
 
-        {!isLoading && filtered.length === 0 && (
+        {isError && (
+          <EmptyState icon="alert-circle" title="Failed to load permissions" action={<Button variant="secondary" onClick={refetchAll}>Retry</Button>} />
+        )}
+
+        {!isLoading && !isError && filtered.length === 0 && (
           <EmptyState icon="search" title="No permissions found" description="Try a different search term." />
         )}
 

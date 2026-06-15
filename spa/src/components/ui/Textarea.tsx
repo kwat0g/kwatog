@@ -56,6 +56,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           ref={ref}
           id={taId}
           aria-invalid={!!error}
+          aria-describedby={error ? `${taId}-error` : helper ? `${taId}-helper` : undefined}
           maxLength={maxLength}
           defaultValue={defaultValue}
           value={value}
@@ -74,9 +75,9 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
         />
         <div className="flex items-center justify-between">
           {error ? (
-            <span className="text-xs text-danger">{error}</span>
+            <span id={`${taId}-error`} className="text-xs text-danger">{error}</span>
           ) : helper ? (
-            <span className="text-xs text-muted">{helper}</span>
+            <span id={`${taId}-helper`} className="text-xs text-muted">{helper}</span>
           ) : (
             <span />
           )}

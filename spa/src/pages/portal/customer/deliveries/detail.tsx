@@ -5,17 +5,19 @@ import { customerPortalApi } from '@/api/b2b/customer';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Button } from '@/components/ui/Button';
 
 export default function CustomerDeliveryDetailPage() {
   const { id } = useParams<{ id: string }>();
 
-  const { data: delivery, isLoading } = useQuery({
+  const { data: delivery, isLoading, isError, refetch } = useQuery({
     queryKey: ['portal', 'customer', 'delivery', id],
     queryFn: () => customerPortalApi.getDelivery(id!),
     enabled: !!id,
   });
 
   if (isLoading) return <SkeletonBlock className="h-64 rounded-lg" />;
+  if (isError) return <EmptyState icon="alert-circle" title="Failed to load delivery" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />;
   if (!delivery) return <EmptyState icon="file-x" title="Delivery not found" />;
 
   return (

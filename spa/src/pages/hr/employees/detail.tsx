@@ -18,7 +18,7 @@ import { Panel } from '@/components/ui/Panel';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
-import { SkeletonDetail } from '@/components/ui/Skeleton';
+import { SkeletonDetail, SkeletonPanel } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { OnboardingStepper } from '@/components/hr/OnboardingStepper';
 import { SystemAccountSection } from '@/components/hr/SystemAccountSection';
@@ -367,7 +367,7 @@ function AttendanceTab({ employeeId }: { employeeId: string }) {
       return attendancesApi.list({ employee_id: employeeId, per_page: 14 });
     },
   });
-  if (isLoading) return <SkeletonDetail />;
+  if (isLoading) return <SkeletonPanel />;
   if (isError) return <EmptyState icon="alert-circle" title="Failed to load attendance" />;
   const rows = data?.data ?? [];
   if (rows.length === 0) return <EmptyState icon="inbox" title="No attendance records yet" />;
@@ -411,7 +411,7 @@ function LeavesTab({ employeeId }: { employeeId: string }) {
       return leaveRequestsApi.list({ employee_id: employeeId, per_page: 25 });
     },
   });
-  if (isLoading) return <SkeletonDetail />;
+  if (isLoading) return <SkeletonPanel />;
   if (isError) return <EmptyState icon="alert-circle" title="Failed to load leaves" />;
   const rows = data?.data ?? [];
   if (rows.length === 0) return <EmptyState icon="inbox" title="No leave requests yet" />;
@@ -453,7 +453,7 @@ function LoansTab({ employeeId }: { employeeId: string }) {
       return loansApi.list({ employee_id: employeeId, per_page: 25 });
     },
   });
-  if (isLoading) return <SkeletonDetail />;
+  if (isLoading) return <SkeletonPanel />;
   if (isError) return <EmptyState icon="alert-circle" title="Failed to load loans" />;
   const rows = data?.data ?? [];
   if (rows.length === 0) return <EmptyState icon="inbox" title="No loans yet" />;

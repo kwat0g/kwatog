@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { FinanceSection } from '@/components/dashboard/FinanceSection';
 import { getWidgetComponent } from '@/components/dashboard/registry';
+import { WidgetErrorBoundary } from '@/components/ui/WidgetErrorBoundary';
 import { dashboardLayoutApi } from '@/api/dashboard-layout';
 import { useAuthStore } from '@/stores/authStore';
 import { usePermission } from '@/hooks/usePermission';
@@ -112,7 +113,9 @@ export default function DashboardDefaultPage() {
               return (
                 <div key={item.key} className="min-h-[120px]">
                   {Component ? (
-                    <Component />
+                    <WidgetErrorBoundary>
+                      <Component />
+                    </WidgetErrorBoundary>
                   ) : (
                     <Panel title={item.name}>
                       <p className="text-sm text-muted">

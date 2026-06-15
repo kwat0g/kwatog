@@ -136,6 +136,10 @@ const config: Config = {
           '0%, 100%': { boxShadow: '0 0 0 0 rgba(79,70,229,0.55)' },
           '50%':      { boxShadow: '0 0 0 6px rgba(79,70,229,0)' },
         },
+        'slide-right': {
+          '0%': { opacity: '0', transform: 'translateX(-100%)' },
+          '100%': { opacity: '1', transform: 'translateX(0)' },
+        },
       },
 
       animation: {
@@ -143,6 +147,7 @@ const config: Config = {
         'fade-in': 'fade-in var(--duration-slow) var(--ease-default)',
         'slide-up': 'slide-up var(--duration-slow) var(--ease-default)',
         'approval-pulse': 'approval-pulse 1.5s ease-in-out infinite',
+        'slide-right': 'slide-right 200ms var(--ease-default)',
       },
     },
   },

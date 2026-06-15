@@ -195,6 +195,17 @@ export default function FinanceDashboardPage() {
             {can('dashboard.view_bottlenecks') && (
               <ChainBottleneckWidget audience="finance_officer" hideWhenEmpty />
             )}
+
+            {/* Financial statements — accessible here, not via sidebar. */}
+            {can('accounting.statements.view') && (
+              <Panel title="Financial Statements">
+                <div className="flex flex-wrap gap-4">
+                  <Link to="/accounting/trial-balance" className="text-sm text-link hover:underline">Trial Balance →</Link>
+                  <Link to="/accounting/income-statement" className="text-sm text-link hover:underline">Income Statement →</Link>
+                  <Link to="/accounting/balance-sheet" className="text-sm text-link hover:underline">Balance Sheet →</Link>
+                </div>
+              </Panel>
+            )}
           </>
         )}
       </div>

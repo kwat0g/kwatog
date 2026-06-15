@@ -6,6 +6,8 @@ import { Panel } from '@/components/ui/Panel';
 import { StatCard } from '@/components/ui/StatCard';
 import { Badge } from '@/components/ui/Badge';
 import { FullPageLoader } from '@/components/ui/Spinner';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Button } from '@/components/ui/Button';
 import { ArrowLeft, Building2 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import type { Budget } from '@/types/budgeting';
@@ -16,7 +18,7 @@ export default function DepartmentBudgetDetailPage() {
   const { id } = useParams<{ id: string }>();
   const departmentName = id ? decodeURIComponent(id) : '';
 
-  const { data: budgets, isLoading } = useQuery<Budget[]>({
+  const { data: budgets, isLoading, isError, refetch } = useQuery<Budget[]>({
     queryKey: ['budgets', 'department', departmentName],
     queryFn: async () => {
       const res = await budgetingApi.list({ per_page: 100 });
@@ -27,6 +29,7 @@ export default function DepartmentBudgetDetailPage() {
   });
 
   if (isLoading) return <FullPageLoader />;
+  if (isError) return <EmptyState icon="alert-circle" title="Failed to load budgets" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />;
 
   const totalAllocated = budgets?.reduce((s, b) => s + b.total_allocated, 0) ?? 0;
   const totalSpent = budgets?.reduce((s, b) => s + b.total_spent, 0) ?? 0;

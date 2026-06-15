@@ -11,6 +11,8 @@ import { departmentsApi } from '@/api/hr/departments';
 import { positionsApi } from '@/api/hr/positions';
 import { digitsOnly } from '@/lib/phFormat';
 import { onFormInvalid } from '@/lib/formErrors';
+import { actionLabel } from '@/lib/labels';
+import { FormErrorSummary } from '@/components/ui/FormErrorSummary';
 import type { Employee } from '@/types/hr';
 
 // Names: letters, spaces, periods, apostrophes, hyphens. Up to 100 chars.
@@ -226,6 +228,7 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isPending, register
 
   return (
     <form onSubmit={handleSubmit(onSubmit, onFormInvalid<EmployeeFormValues>(FIELD_LABELS))} className="max-w-4xl mx-auto px-5 py-6 space-y-8">
+      <FormErrorSummary errors={errors} />
       <Section title="Personal information">
         <div className="grid grid-cols-2 gap-3">
           <Input label="First name" required maxLength={100} autoComplete="given-name" {...register('first_name')} error={errors.first_name?.message} />
@@ -380,7 +383,7 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isPending, register
       <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
         <Button type="button" variant="secondary" onClick={onCancel} disabled={isSubmitting || isPending}>Cancel</Button>
         <Button type="submit" variant="primary" disabled={isSubmitting || isPending} loading={isPending}>
-          {isPending ? 'Saving…' : submitLabel}
+          {actionLabel(submitLabel, isPending)}
         </Button>
       </div>
     </form>

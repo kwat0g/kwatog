@@ -6,7 +6,8 @@
 // session state from DataTable's existing useState.
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware';
+import { z } from 'zod';
 
 export type TableDensity = 'compact' | 'default' | 'spacious';
 
@@ -21,6 +22,37 @@ interface TablePrefsState {
   setHiddenColumns: (tableKey: string, hidden: string[]) => void;
   reset: (tableKey: string) => void;
 }
+
+/** Validates the raw JSON pulled from localStorage. Corrupted / tampered state is discarded. */
+const persistedSchema = z.object({
+  byTable: z.record(
+    z.object({
+      density: z.enum(['compact', 'default', 'spacious']).optional(),
+      hiddenColumns: z.array(z.string()).optional(),
+    }).optional(),
+  ),
+});
+
+const safeStorage: StateStorage = {
+  getItem: (name) => {
+    const raw = localStorage.getItem(name);
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw);
+      const result = persistedSchema.safeParse(parsed);
+      if (result.success) return raw;
+      // eslint-disable-next-line no-console
+      console.warn(`[tablePrefsStore] Invalid persisted state for "${name}", resetting.`, result.error.flatten());
+      localStorage.removeItem(name);
+      return null;
+    } catch {
+      localStorage.removeItem(name);
+      return null;
+    }
+  },
+  setItem: (name, value) => localStorage.setItem(name, value),
+  removeItem: (name) => localStorage.removeItem(name),
+};
 
 export const useTablePrefsStore = create<TablePrefsState>()(
   persist(
@@ -47,6 +79,6 @@ export const useTablePrefsStore = create<TablePrefsState>()(
           return { byTable: next };
         }),
     }),
-    { name: 'ogami:table-prefs', version: 1 },
+    { name: 'ogami:table-prefs', version: 1, storage: createJSONStorage(() => safeStorage) },
   ),
 );

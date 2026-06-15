@@ -130,7 +130,7 @@ export default function MachineHealthPage() {
 
   const machineId = selectedMachine ? Number(selectedMachine) : undefined;
 
-  const { data: healthSnapshot, isLoading: healthLoading } = useQuery({
+  const { data: healthSnapshot, isLoading: healthLoading, isError: healthError, refetch: healthRefetch } = useQuery({
     queryKey: ['machine-health', 'snapshot', machineId],
     queryFn: () => machineId ? conditionReadingsApi.healthSnapshot({ machine_id: machineId }) : Promise.resolve([]),
     enabled: !!machineId,
@@ -177,6 +177,11 @@ export default function MachineHealthPage() {
 
       {machineId && (
         <>
+          {healthError && (
+            <div className="px-5 py-4">
+              <EmptyState icon="alert-circle" title="Failed to load health data" action={<Button variant="secondary" onClick={() => healthRefetch()}>Retry</Button>} />
+            </div>
+          )}
           {/* Health gauges */}
           <div className="grid grid-cols-1 gap-3 px-5 py-4 sm:grid-cols-2 lg:grid-cols-5">
             {healthLoading

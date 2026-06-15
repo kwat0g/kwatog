@@ -30,6 +30,29 @@ const applyToDocument = (theme: 'light' | 'dark') => {
   }
 };
 
+// ─── Media-query listener bookkeeping (module-level, outside Zustand state) ───
+let mediaQuery: MediaQueryList | null = null;
+let mediaHandler: (() => void) | null = null;
+
+function detachSystemListener() {
+  if (mediaQuery && mediaHandler) {
+    mediaQuery.removeEventListener('change', mediaHandler);
+    mediaQuery = null;
+    mediaHandler = null;
+  }
+}
+
+function attachSystemListener(callback: () => void) {
+  detachSystemListener();
+  if (typeof window !== 'undefined') {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const handler = () => callback();
+    mq.addEventListener('change', handler);
+    mediaQuery = mq;
+    mediaHandler = handler;
+  }
+}
+
 export const useThemeStore = create<ThemeState>((set, get) => ({
   mode: 'system',
   resolvedTheme: typeof window === 'undefined' ? 'light' : resolveTheme('system'),
@@ -38,6 +61,12 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     const resolvedTheme = resolveTheme(mode);
     applyToDocument(resolvedTheme);
     set({ mode, resolvedTheme });
+
+    if (mode === 'system') {
+      attachSystemListener(() => get().apply());
+    } else {
+      detachSystemListener();
+    }
 
     // Server-side persistence is wired in Task 9 once auth lands —
     // we fire-and-forget to avoid coupling the theme to the auth boot.
@@ -56,10 +85,10 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     applyToDocument(resolvedTheme);
     set({ mode, resolvedTheme });
 
-    if (typeof window !== 'undefined' && mode === 'system') {
-      const mq = window.matchMedia('(prefers-color-scheme: dark)');
-      const onChange = () => get().apply();
-      mq.addEventListener('change', onChange);
+    if (mode === 'system') {
+      attachSystemListener(() => get().apply());
+    } else {
+      detachSystemListener();
     }
   },
 

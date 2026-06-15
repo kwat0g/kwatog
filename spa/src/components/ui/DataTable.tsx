@@ -1,22 +1,12 @@
-import { Fragment, useMemo, useState, type ReactNode } from 'react';
-import {
-  ArrowDown,
-  ArrowUp,
-  ChevronLeft,
-  ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
-  ChevronDown,
-  Rows3,
-  Rows2,
-  Rows4,
-  Settings2,
-} from 'lucide-react';
+import { Fragment, useCallback, useRef, useMemo, useState, type ReactNode, type KeyboardEvent } from 'react';
+import { ArrowDown, ArrowUp, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { Button } from './Button';
 import { Checkbox } from './Checkbox';
 import { RowContextMenu, type RowContextMenuItem } from './RowContextMenu';
 import { useTablePrefsStore, type TableDensity } from '@/stores/tablePrefsStore';
+import { DataTableToolbar } from './DataTableToolbar';
+import { DataTablePagination } from './DataTablePagination';
 import type { PaginationMeta } from '@/types';
 
 // ─── Public types ──────────────────────────────────────────────
@@ -150,9 +140,7 @@ export function DataTable<T>({
     [prefs?.hiddenColumns, columns],
   );
 
-  // ─── Column visibility menu ───────────────────────────────
-  const [visMenuOpen, setVisMenuOpen] = useState(false);
-  const showVisibilityToggle = enableColumnVisibilityToggle ?? !!tableKey;
+  // ─── Column visibility is handled inside DataTableToolbar ──
 
   const handleDensityChange = (d: TableDensity) => {
     onDensityChange?.(d);
@@ -253,8 +241,38 @@ export function DataTable<T>({
   const totalCols =
     visibleColumns.length + (selectable ? 1 : 0) + (renderExpanded ? 1 : 0);
 
+  const tbodyRef = useRef<HTMLTableSectionElement>(null);
+
+  const onRowKeyDown = useCallback((e: KeyboardEvent<HTMLTableSectionElement>) => {
+    if (!onRowClick) return;
+    const target = e.target as HTMLElement;
+    if (target.tagName !== 'TR') return;
+
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const rows = tbodyRef.current?.querySelectorAll<HTMLElement>('tr[tabindex]');
+      if (!rows) return;
+      const arr = Array.from(rows);
+      const idx = arr.indexOf(target);
+      const next = e.key === 'ArrowDown' ? idx + 1 : idx - 1;
+      if (next >= 0 && next < arr.length) arr[next].focus();
+    }
+
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      target.click();
+    }
+  }, [onRowClick]);
+
   return (
     <div className={cn('flex flex-col', className)}>
+      {/* Screen reader announcement for result count changes */}
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {meta
+          ? `Showing ${data.length} of ${meta.total} results, page ${meta.current_page}`
+          : `${data.length} ${data.length === 1 ? 'result' : 'results'}`}
+      </div>
+
       {/* Bulk action bar */}
       {selectable && selectedRows.length > 0 && (
         <div className="flex items-center justify-between px-3 py-2 bg-info-bg border border-default rounded-md mb-2">
@@ -280,65 +298,15 @@ export function DataTable<T>({
         </div>
       )}
 
-      {/* Toolbar */}
-      {(onDensityChange || tableKey || showVisibilityToggle) && (
-        <div className="flex justify-end mb-2 gap-1 relative">
-          {showVisibilityToggle && (
-            <>
-              <button
-                type="button"
-                title="Customize columns"
-                aria-label="Customize columns"
-                onClick={() => setVisMenuOpen((v) => !v)}
-                className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-default text-muted hover:bg-elevated transition-colors duration-fast cursor-pointer"
-              >
-                <Settings2 size={14} />
-              </button>
-              {visMenuOpen && (
-                <div
-                  className="absolute right-0 top-8 z-30 w-56 bg-elevated border border-default rounded-md shadow-menu py-2"
-                  onMouseLeave={() => setVisMenuOpen(false)}
-                >
-                  <div className="px-2.5 pb-1.5 text-2xs uppercase tracking-wider text-muted font-medium">
-                    Columns
-                  </div>
-                  {columns
-                    .filter((c) => c.togglable !== false)
-                    .map((c) => (
-                      <label
-                        key={c.key}
-                        className="flex items-center gap-2 px-2.5 h-7 text-xs cursor-pointer hover:bg-subtle"
-                      >
-                        <Checkbox
-                          checked={!hiddenColumnKeys.has(c.key)}
-                          onChange={() => toggleColumnVisibility(c.key)}
-                        />
-                        <span className="text-primary">{typeof c.header === 'string' ? c.header : c.key}</span>
-                      </label>
-                    ))}
-                </div>
-              )}
-            </>
-          )}
-          {(onDensityChange || tableKey) &&
-            (['compact', 'default', 'spacious'] as TableDensity[]).map((d) => {
-              const Icon = d === 'compact' ? Rows4 : d === 'spacious' ? Rows2 : Rows3;
-              return (
-                <button
-                  key={d}
-                  title={`${d} rows`}
-                  onClick={() => handleDensityChange(d)}
-                  className={cn(
-                    'h-7 w-7 inline-flex items-center justify-center rounded-md border border-default transition-colors duration-fast cursor-pointer',
-                    density === d ? 'bg-elevated text-primary' : 'text-muted hover:bg-elevated',
-                  )}
-                >
-                  <Icon size={14} />
-                </button>
-              );
-            })}
-        </div>
-      )}
+      <DataTableToolbar<T>
+        columns={columns}
+        density={density}
+        onDensityChange={handleDensityChange}
+        tableKey={tableKey}
+        enableColumnVisibilityToggle={enableColumnVisibilityToggle}
+        hiddenColumnKeys={hiddenColumnKeys}
+        toggleColumnVisibility={toggleColumnVisibility}
+      />
 
       <div
         className={cn(
@@ -351,6 +319,7 @@ export function DataTable<T>({
             <tr className="border-b border-default bg-canvas">
               {selectable && (
                 <th
+                  scope="col"
                   className={cn(
                     'px-2.5 w-8 bg-canvas',
                     rowHeight.default,
@@ -366,6 +335,7 @@ export function DataTable<T>({
               )}
               {renderExpanded && (
                 <th
+                  scope="col"
                   className={cn(
                     'px-1 w-7 bg-canvas',
                     rowHeight.default,
@@ -379,6 +349,7 @@ export function DataTable<T>({
                 return (
                   <th
                     key={col.key}
+                    scope="col"
                     style={isPinned ? { left: pinnedOffsets[col.key] } : undefined}                      className={cn(
                         'px-2.5 text-2xs uppercase tracking-wider text-muted font-medium select-none bg-canvas',
                         rowHeight.default,
@@ -399,7 +370,10 @@ export function DataTable<T>({
               })}
             </tr>
           </thead>
-          <tbody>
+          <tbody
+            ref={tbodyRef}
+            onKeyDown={onRowKeyDown}
+          >
             {data.map((row, i) => {
               const rid = idOf(row);
               const isSelected = selected.has(rid);
@@ -407,9 +381,11 @@ export function DataTable<T>({
               return (
                 <Fragment key={rid || i}>
                   <tr
+                    tabIndex={onRowClick ? 0 : undefined}
                     className={cn(
                       'border-b border-subtle transition-colors duration-fast',
                       onRowClick && 'cursor-pointer hover:bg-subtle active:bg-elevated',
+                      onRowClick && 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset',
                       isSelected && 'bg-info-bg',
                       highlightedRowId && rid === highlightedRowId && 'bg-elevated',
                       rowHeight[density],
@@ -487,22 +463,8 @@ export function DataTable<T>({
         </table>
       </div>
 
-      {/* Pagination */}
       {meta && onPageChange && (
-        <div className="flex items-center justify-between mt-3">
-          <div className="text-xs text-muted font-mono tabular-nums">
-            {meta.from ?? 0}–{meta.to ?? 0} of {meta.total}
-          </div>
-          <div className="flex items-center gap-1">
-            <button type="button" disabled={meta.current_page <= 1} onClick={() => onPageChange(1)} aria-label="First page" className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted hover:bg-elevated hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors duration-fast active:scale-[0.95]"><ChevronsLeft size={14} /></button>
-            <button type="button" disabled={meta.current_page <= 1} onClick={() => onPageChange(meta.current_page - 1)} aria-label="Previous page" className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted hover:bg-elevated hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors duration-fast active:scale-[0.95]"><ChevronLeft size={14} /></button>
-            <span className="text-xs font-mono tabular-nums px-2 text-muted">
-              Page {meta.current_page} of {meta.last_page}
-            </span>
-            <button type="button" disabled={meta.current_page >= meta.last_page} onClick={() => onPageChange(meta.current_page + 1)} aria-label="Next page" className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted hover:bg-elevated hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors duration-fast active:scale-[0.95]"><ChevronRight size={14} /></button>
-            <button type="button" disabled={meta.current_page >= meta.last_page} onClick={() => onPageChange(meta.last_page)} aria-label="Last page" className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted hover:bg-elevated hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors duration-fast active:scale-[0.95]"><ChevronsRight size={14} /></button>
-          </div>
-        </div>
+        <DataTablePagination meta={meta} onPageChange={onPageChange} />
       )}
 
       <RowContextMenu

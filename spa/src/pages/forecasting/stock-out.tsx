@@ -48,6 +48,8 @@ export default function StockOutProjectionPage() {
     queryFn: () => forecastingApi.stockOut({ horizon_days: horizon }),
   });
 
+  if (q.isError) return <EmptyState icon="alert-circle" title="Failed to load projections" action={<Button variant="secondary" onClick={() => q.refetch()}>Retry</Button>} />;
+
   const rows = q.data?.data ?? [];
   const generatedAt = q.data?.meta.generated_at;
 

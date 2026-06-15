@@ -48,6 +48,11 @@ export interface UseFormDraftAutosaveOptions {
   enabled?: boolean;
   /** Extra field names to blocklist on top of the default sensitive patterns. */
   blocklist?: string[];
+  /**
+   * Authenticated user id. When provided, the storage key is scoped to this
+   * user so drafts never leak across accounts on shared terminals.
+   */
+  userId?: string;
 }
 
 interface DraftPayload {
@@ -124,27 +129,29 @@ export function useFormDraftAutosave({
   setValues,
   enabled = true,
   blocklist = [],
+  userId,
 }: UseFormDraftAutosaveOptions): UseFormDraftAutosaveResult {
-  const initialDraftRef = useRef<DraftPayload | null>(readDraft(formKey));
+  const scopedKey = userId ? `${userId}:${formKey}` : formKey;
+  const initialDraftRef = useRef<DraftPayload | null>(readDraft(scopedKey));
   const [hasDraft, setHasDraft] = useState<boolean>(initialDraftRef.current !== null);
   const draftAge = initialDraftRef.current ? Date.now() - initialDraftRef.current.ts : null;
 
   const saveNow = useCallback(() => {
     if (!enabled) return;
     const values = stripSensitive(getValues(), blocklist);
-    writeDraft(formKey, { ts: Date.now(), values });
-  }, [enabled, formKey, getValues, blocklist]);
+    writeDraft(scopedKey, { ts: Date.now(), values });
+  }, [enabled, scopedKey, getValues, blocklist]);
 
   const restore = useCallback(() => {
-    const draft = readDraft(formKey);
+    const draft = readDraft(scopedKey);
     if (draft) setValues(draft.values);
     setHasDraft(false);
-  }, [formKey, setValues]);
+  }, [scopedKey, setValues]);
 
   const discard = useCallback(() => {
-    deleteDraft(formKey);
+    deleteDraft(scopedKey);
     setHasDraft(false);
-  }, [formKey]);
+  }, [scopedKey]);
 
   // Periodic auto-save while enabled.
   useEffect(() => {

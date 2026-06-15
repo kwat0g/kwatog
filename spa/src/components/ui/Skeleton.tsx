@@ -69,3 +69,13 @@ export function SkeletonForm() {
     </div>
   );
 }
+
+/** Panel-sized skeleton for tab panels (no outer page padding). */
+export function SkeletonPanel() {
+  return (
+    <div className="space-y-3">
+      <SkeletonBlock className="h-4 w-40" />
+      <SkeletonTable columns={6} rows={5} />
+    </div>
+  );
+}

@@ -53,6 +53,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Wipe all cached query data so the next user on this terminal can
       // never see the previous user's lists (payroll, employees, etc.).
       queryClient.clear();
+      // Clear form drafts from localStorage to prevent data leaking to next user.
+      Object.keys(localStorage)
+        .filter(k => k.startsWith('ogami:formdraft:'))
+        .forEach(k => localStorage.removeItem(k));
     }
   },
 

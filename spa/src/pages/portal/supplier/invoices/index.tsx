@@ -4,14 +4,16 @@ import { supplierPortalApi } from '@/api/b2b/supplier';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Button } from '@/components/ui/Button';
 
 export default function SupplierInvoicesPage() {
-  const { data: invoices, isLoading } = useQuery({
+  const { data: invoices, isLoading, isError, refetch } = useQuery({
     queryKey: ['portal', 'supplier', 'invoices'],
     queryFn: () => supplierPortalApi.listInvoices(),
   });
 
   if (isLoading) return <SkeletonBlock className="h-64 rounded-lg" />;
+  if (isError) return <EmptyState icon="alert-circle" title="Failed to load invoices" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />;
 
   return (
     <Panel title="Invoices">

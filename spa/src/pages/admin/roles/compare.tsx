@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeftRight } from 'lucide-react';
+import { ArrowLeftRight, Download } from 'lucide-react';
 import { rolesApi, type RoleCompareResult, type RolePermissionRow } from '@/api/admin/roles';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -59,6 +59,44 @@ export default function CompareRolesPage() {
     ? compare.data.only_in_a.length + compare.data.only_in_b.length
     : 0;
 
+  const escapeCsv = (value: string): string => {
+    if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+      return `"${value.replace(/"/g, '""')}"`;
+    }
+    return value;
+  };
+
+  const exportCsv = () => {
+    if (!compare.data) return;
+    const rows: string[] = [];
+    rows.push('Section,Permission Slug,Permission Name,Module');
+    for (const p of compare.data.only_in_a) {
+      rows.push(`"Only in ${compare.data.role_a.name}","${escapeCsv(p.slug)}","${escapeCsv(p.name)}","${escapeCsv(p.module)}"`);
+    }
+    rows.push('');
+    rows.push('Section,Permission Slug,Permission Name,Module');
+    for (const p of compare.data.common) {
+      rows.push('"Common to Both","' + escapeCsv(p.slug) + '","' + escapeCsv(p.name) + '","' + escapeCsv(p.module) + '"');
+    }
+    rows.push('');
+    rows.push('Section,Permission Slug,Permission Name,Module');
+    for (const p of compare.data.only_in_b) {
+      rows.push(`"Only in ${compare.data.role_b.name}","${escapeCsv(p.slug)}","${escapeCsv(p.name)}","${escapeCsv(p.module)}"`);
+    }
+    const csvContent = rows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const safeNameA = compare.data.role_a.name.toLowerCase().replace(/\s+/g, '-');
+    const safeNameB = compare.data.role_b.name.toLowerCase().replace(/\s+/g, '-');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `role-compare-${safeNameA}-vs-${safeNameB}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div>
       <PageHeader
@@ -71,8 +109,18 @@ export default function CompareRolesPage() {
           { label: 'Roles', href: '/admin/roles' },
           { label: 'Compare' },
         ]}
+        actions={
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<Download size={14} />}
+            onClick={exportCsv}
+            disabled={!compare.data}
+          >
+            Export
+          </Button>
+        }
       />
-
       <div className="px-5 py-4">
         {/* Pickers */}
         <Panel title="Roles to compare" className="mb-4">

@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { Plus } from 'lucide-react';
 import { returnManagementApi } from '@/api/returnManagement';
 import { usePermission } from '@/hooks/usePermission';
@@ -47,7 +48,7 @@ export default function ReturnManagementListPage() {
   const [page, setPage] = useState(1);
   const { can } = usePermission();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['return-requests', typeFilter, statusFilter, page],
     queryFn: () =>
       returnManagementApi.list({
@@ -108,7 +109,9 @@ export default function ReturnManagementListPage() {
 
       {/* Table */}
       <div className="px-4">
-        {isLoading ? (
+        {isError ? (
+          <EmptyState icon="alert-circle" title="Failed to load return requests" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />
+        ) : isLoading ? (
           <div className="text-center text-muted py-12">Loading…</div>
         ) : items.length === 0 ? (
           <div className="text-center text-muted py-12">No return requests found.</div>

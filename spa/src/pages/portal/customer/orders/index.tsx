@@ -4,14 +4,16 @@ import { customerPortalApi } from '@/api/b2b/customer';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Button } from '@/components/ui/Button';
 
 export default function CustomerOrdersPage() {
-  const { data: orders, isLoading } = useQuery({
+  const { data: orders, isLoading, isError, refetch } = useQuery({
     queryKey: ['portal', 'customer', 'orders'],
     queryFn: () => customerPortalApi.listOrders(),
   });
 
   if (isLoading) return <SkeletonBlock className="h-64 rounded-lg" />;
+  if (isError) return <EmptyState icon="alert-circle" title="Failed to load orders" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />;
 
   return (
     <Panel title="My Orders">

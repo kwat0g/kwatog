@@ -163,6 +163,16 @@ export default function DemandForecastingPage() {
         subtitle="Project future demand using sales history. Recompute monthly or override per period."
       />
 
+      {(forecastsQ.isError || historicalQ.isError) && (
+        <div className="px-5 pt-4">
+          <EmptyState
+            icon="alert-circle"
+            title="Failed to load forecast data"
+            action={<Button variant="secondary" onClick={() => { forecastsQ.refetch(); historicalQ.refetch(); }}>Retry</Button>}
+          />
+        </div>
+      )}
+
       <div className="p-5 space-y-4">
         {/* MAPE accuracy stats */}
         {accuracyQ.data?.data?.mape !== null && accuracyQ.data?.data?.mape !== undefined && (

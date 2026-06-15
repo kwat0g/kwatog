@@ -4,14 +4,16 @@ import { supplierPortalApi } from '@/api/b2b/supplier';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Button } from '@/components/ui/Button';
 
 export default function SupplierPurchaseOrdersPage() {
-  const { data: pos, isLoading } = useQuery({
+  const { data: pos, isLoading, isError, refetch } = useQuery({
     queryKey: ['portal', 'supplier', 'pos'],
     queryFn: () => supplierPortalApi.listPos(),
   });
 
   if (isLoading) return <SkeletonBlock className="h-64 rounded-lg" />;
+  if (isError) return <EmptyState icon="alert-circle" title="Failed to load purchase orders" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />;
 
   return (
     <Panel title="Purchase Orders">

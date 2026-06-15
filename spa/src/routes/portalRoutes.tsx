@@ -2,6 +2,10 @@ import { lazy } from 'react';
 import { Route } from 'react-router-dom';
 
 // ADV10 — B2B Portals (Supplier + Customer)
+// SECURITY CONTRACT: All protected portal pages MUST be nested inside their
+// respective layout route (<SupplierPortalLayout /> or <CustomerPortalLayout />).
+// Those layouts perform their own auth bootstrap and redirect to login on failure.
+// Login pages are intentionally OUTSIDE the layout so they remain reachable.
 const SupplierPortalLayout            = lazy(() => import('@/layouts/SupplierPortalLayout'));
 const SupplierPortalLoginPage         = lazy(() => import('@/pages/portal/supplier/login'));
 const SupplierPortalDashboardPage     = lazy(() => import('@/pages/portal/supplier/dashboard'));

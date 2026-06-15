@@ -31,26 +31,34 @@ export default function LeaveDetailPage() {
     queryFn: () => leaveRequestsApi.show(id),
   });
 
-  const approveDept = useMutation({
-    mutationFn: () => leaveRequestsApi.approveDept(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['leaves'] }); toast.success('Approved.'); },
-    onError: () => toast.error('Failed to approve.'),
-  });
-  const approveHR = useMutation({
-    mutationFn: () => leaveRequestsApi.approveHR(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['leaves'] }); toast.success('Approved.'); },
-    onError: () => toast.error('Failed to approve.'),
-  });
-  const rejectMut = useMutation({
-    mutationFn: () => leaveRequestsApi.reject(id, reason),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['leaves'] }); toast.success('Rejected.'); setReject(false); setReason(''); },
-    onError: () => toast.error('Failed to reject.'),
-  });
-  const cancelMut = useMutation({
-    mutationFn: () => leaveRequestsApi.cancel(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['leaves'] }); toast.success('Cancelled.'); },
-    onError: () => toast.error('Failed to cancel.'),
-  });
+  const detailKey = ['leaves', 'request', id];
+
+  function useApprovalMutation<TVar = void>(
+    fn: (v: TVar) => Promise<unknown>,
+    nextStatus: string,
+    opts: { successMsg: string; errorMsg: string; afterSuccess?: () => void },
+  ) {
+    return useMutation<unknown, unknown, TVar, { prev?: unknown }>({
+      mutationFn: fn,
+      onMutate: async () => {
+        await qc.cancelQueries({ queryKey: detailKey });
+        const prev = qc.getQueryData(detailKey);
+        qc.setQueryData(detailKey, (old: typeof req) => old ? { ...old, status: nextStatus } : old);
+        return { prev };
+      },
+      onError: (_e, _v, ctx) => {
+        if (ctx?.prev) qc.setQueryData(detailKey, ctx.prev);
+        toast.error(opts.errorMsg);
+      },
+      onSuccess: () => { toast.success(opts.successMsg); opts.afterSuccess?.(); },
+      onSettled: () => { qc.invalidateQueries({ queryKey: ['leaves'] }); },
+    });
+  }
+
+  const approveDept = useApprovalMutation(() => leaveRequestsApi.approveDept(id), 'pending_hr', { successMsg: 'Approved.', errorMsg: 'Failed to approve.' });
+  const approveHR = useApprovalMutation(() => leaveRequestsApi.approveHR(id), 'approved', { successMsg: 'Approved.', errorMsg: 'Failed to approve.' });
+  const rejectMut = useApprovalMutation(() => leaveRequestsApi.reject(id, reason), 'rejected', { successMsg: 'Rejected.', errorMsg: 'Failed to reject.', afterSuccess: () => { setReject(false); setReason(''); } });
+  const cancelMut = useApprovalMutation(() => leaveRequestsApi.cancel(id), 'cancelled', { successMsg: 'Cancelled.', errorMsg: 'Failed to cancel.' });
 
   if (isLoading) return <SkeletonDetail />;
   if (isError || !req) {

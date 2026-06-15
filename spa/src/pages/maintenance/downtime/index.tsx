@@ -7,6 +7,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Chip } from '@/components/ui/Chip';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Button } from '@/components/ui/Button';
 import { DataTable, type Column } from '@/components/ui/DataTable';
 import { Select } from '@/components/ui/Select';
 import { Panel } from '@/components/ui/Panel';
@@ -79,7 +80,7 @@ function StatCard({ label, value, icon: Icon, trend }: { label: string; value: s
 export default function DowntimeAnalyticsPage() {
   const [days, setDays] = useState(30);
 
-  const { data: summary, isLoading: summaryLoading } = useQuery({
+  const { data: summary, isLoading: summaryLoading, isError: summaryError, refetch: summaryRefetch } = useQuery({
     queryKey: ['downtime-analytics', 'summary', days],
     queryFn: () => downtimeAnalyticsApi.summary({ days }),
   });
@@ -200,6 +201,12 @@ export default function DowntimeAnalyticsPage() {
           </div>
         }
       />
+
+      {summaryError && (
+        <div className="px-5 py-4">
+          <EmptyState icon="alert-circle" title="Failed to load downtime data" action={<Button variant="secondary" onClick={() => summaryRefetch()}>Retry</Button>} />
+        </div>
+      )}
 
       {/* Summary stats */}
       <div className="grid grid-cols-1 gap-3 px-5 py-4 sm:grid-cols-2 lg:grid-cols-4">

@@ -56,7 +56,7 @@ export default function ReturnRequestDetailPage() {
   const [rejectReason, setRejectReason] = useState('');
   const [locationId, setLocationId] = useState('');
 
-  const { data: rma, isLoading } = useQuery({
+  const { data: rma, isLoading, isError, refetch } = useQuery({
     queryKey: ['return-request', id],
     queryFn: () => returnManagementApi.get(id!),
     enabled: !!id,
@@ -117,6 +117,10 @@ export default function ReturnRequestDetailPage() {
         <SkeletonBlock className="h-32 w-full mb-4" />
       </div>
     );
+  }
+
+  if (isError) {
+    return <EmptyState icon="alert-circle" title="Failed to load return request" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />;
   }
 
   if (!rma) {

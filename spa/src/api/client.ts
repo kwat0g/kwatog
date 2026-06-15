@@ -1,4 +1,4 @@
-import axios, { AxiosError } from 'axios';
+import axios, { AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios';
 import toast from 'react-hot-toast';
 import { queryClient } from '@/lib/queryClient';
 import { useErrorLogStore } from '@/stores/errorLogStore';

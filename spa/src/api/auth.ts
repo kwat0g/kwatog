@@ -19,6 +19,7 @@ export interface AuthUser {
   name: string;
   email: string;
   is_active: boolean;
+  is_superuser?: boolean;
   must_change_password: boolean;
   theme_mode: 'light' | 'dark' | 'system';
   sidebar_collapsed: boolean;

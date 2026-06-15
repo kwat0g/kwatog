@@ -1,8 +1,11 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Menu, Moon, Sun, Search } from 'lucide-react';
 import { Tooltip } from '@/components/ui/Tooltip';
-import { CommandPalette } from '@/components/ui/CommandPalette';
+
+const CommandPalette = lazy(() =>
+  import('@/components/ui/CommandPalette').then((m) => ({ default: m.CommandPalette })),
+);
 import { Breadcrumbs } from './Breadcrumbs';
 import { NotificationBell } from './NotificationBell';
 import { ProfileDropdown } from './ProfileDropdown';
@@ -18,8 +21,18 @@ interface TopbarProps {
 
 export function Topbar({ user, onLogout, rightExtras }: TopbarProps) {
   const toggleSidebar = useSidebarStore((s) => s.toggle);
+  const setMobileOpen = useSidebarStore((s) => s.setMobileOpen);
+  const mobileOpen = useSidebarStore((s) => s.mobileOpen);
   const { resolvedTheme, toggle } = useTheme();
   const [paletteOpen, setPaletteOpen] = useState(false);
+
+  const handleMenuClick = () => {
+    if (window.innerWidth < 768) {
+      setMobileOpen(!mobileOpen);
+    } else {
+      toggleSidebar();
+    }
+  };
 
   // Sprint 8 — Task 75: ⌘K / Ctrl+K opens the command palette globally.
   useEffect(() => {
@@ -37,7 +50,7 @@ export function Topbar({ user, onLogout, rightExtras }: TopbarProps) {
     <header className="sticky top-0 z-40 h-12 bg-canvas border-b border-default flex items-center px-3 gap-3">
       <button
         type="button"
-        onClick={toggleSidebar}
+        onClick={handleMenuClick}
         aria-label="Toggle sidebar"
         className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted hover:bg-elevated hover:text-primary"
       >
@@ -85,7 +98,9 @@ export function Topbar({ user, onLogout, rightExtras }: TopbarProps) {
 
       {user && <ProfileDropdown user={user} onLogout={onLogout} />}
 
-      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      <Suspense fallback={null}>
+        <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      </Suspense>
     </header>
   );
 }
