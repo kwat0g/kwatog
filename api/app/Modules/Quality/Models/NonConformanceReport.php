@@ -41,6 +41,8 @@ class NonConformanceReport extends Model
         'created_by', 'assigned_to', 'closed_by', 'closed_at',
         'replacement_work_order_id',
         'is_auto_generated',
+        'escalation_level', 'last_escalated_at', 'recurrence_of_ncr_id',
+        'rework_work_order_id',
     ];
 
     protected $casts = [
@@ -51,6 +53,7 @@ class NonConformanceReport extends Model
         'affected_quantity' => 'integer',
         'closed_at'         => 'datetime',
         'is_auto_generated' => 'boolean',
+        'last_escalated_at' => 'datetime',
     ];
 
     public function product(): BelongsTo
@@ -86,6 +89,16 @@ class NonConformanceReport extends Model
     public function replacementWorkOrder(): BelongsTo
     {
         return $this->belongsTo(WorkOrder::class, 'replacement_work_order_id');
+    }
+
+    public function recurrenceOf(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'recurrence_of_ncr_id');
+    }
+
+    public function reworkWorkOrder(): BelongsTo
+    {
+        return $this->belongsTo(WorkOrder::class, 'rework_work_order_id');
     }
 
     public function scopeStatus(Builder $q, NcrStatus|string $status): Builder

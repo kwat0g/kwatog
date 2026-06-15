@@ -18,11 +18,14 @@ class NcrAction extends Model
 
     protected $fillable = [
         'ncr_id', 'action_type', 'description', 'performed_by', 'performed_at',
+        'due_date', 'owner_id', 'verified_at', 'verified_by',
     ];
 
     protected $casts = [
         'action_type'  => NcrActionType::class,
         'performed_at' => 'datetime',
+        'due_date'     => 'date',
+        'verified_at'  => 'datetime',
     ];
 
     public function ncr(): BelongsTo
