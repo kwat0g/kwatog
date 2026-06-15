@@ -29,6 +29,7 @@ class SupplierPerformanceSnapshot extends Model
         'price_variance_pct',
         'lead_time_variance_days',
         'overall_score',
+        'tier',
         'po_count', 'grn_count',
         'computed_at',
     ];
@@ -45,6 +46,7 @@ class SupplierPerformanceSnapshot extends Model
         'price_variance_pct'       => 'decimal:2',
         'lead_time_variance_days'  => 'decimal:2',
         'overall_score'            => 'decimal:2',
+        'tier'                     => 'string',
         'po_count'                 => 'integer',
         'grn_count'                => 'integer',
         'computed_at'              => 'datetime',
