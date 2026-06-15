@@ -92,7 +92,7 @@ class NcrService
      */
     public function create(array $data, User $by): NonConformanceReport
     {
-        return DB::transaction(function () use ($data, $by) {
+        $ncr = DB::transaction(function () use ($data, $by) {
             $ncr = NonConformanceReport::create([
                 'ncr_number'        => $this->sequences->generate('ncr'),
                 'source'            => NcrSource::from((string) $data['source'])->value,
@@ -109,6 +109,12 @@ class NcrService
             ]);
             return $this->show($ncr);
         });
+
+        \Illuminate\Support\Facades\DB::afterCommit(function () use ($ncr) {
+            app(NcrRecurrenceDetector::class)->scan($ncr->fresh());
+        });
+
+        return $ncr;
     }
 
     /**
