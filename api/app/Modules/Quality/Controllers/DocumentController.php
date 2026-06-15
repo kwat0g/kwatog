@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Modules\Quality\Controllers;
 
 use App\Modules\Quality\Models\ControlledDocument;
+use App\Modules\Quality\Requests\PublishDocumentRevisionRequest;
 use App\Modules\Quality\Requests\StoreControlledDocumentRequest;
 use App\Modules\Quality\Requests\UpdateControlledDocumentRequest;
 use App\Modules\Quality\Resources\ControlledDocumentResource;
+use App\Modules\Quality\Resources\DocumentRevisionResource;
 use App\Modules\Quality\Services\DocumentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -44,10 +46,18 @@ class DocumentController
     }
 
     /**
-     * Task 5 lands here — multipart upload + auto-spawn ack rows.
+     * T3.5.B — Publish a new revision: multipart upload + auto-spawn ack rows.
      */
-    public function publishRevision(Request $request, ControlledDocument $document): JsonResponse
-    {
-        return response()->json(['message' => 'Not Implemented'], 501);
+    public function publishRevision(
+        PublishDocumentRevisionRequest $request,
+        ControlledDocument $document,
+    ): JsonResponse {
+        $rev = $this->service->publishRevision(
+            $document,
+            $request->validated(),
+            $request->file('file'),
+            $request->user(),
+        );
+        return (new DocumentRevisionResource($rev))->response()->setStatusCode(201);
     }
 }

@@ -32,6 +32,7 @@ class DocumentRevision extends Model
         'mime_type',
         'published_at',
         'published_by',
+        'is_current',
     ];
 
     protected $casts = [
