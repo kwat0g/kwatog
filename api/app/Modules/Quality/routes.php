@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Modules\Quality\Controllers\AnalyticsController;
 use App\Modules\Quality\Controllers\CopqController;
+use App\Modules\Quality\Controllers\DocumentController;
 use App\Modules\Quality\Controllers\InspectionController;
 use App\Modules\Quality\Controllers\InspectionSpecController;
 use App\Modules\Quality\Controllers\NcrController;
@@ -110,4 +111,18 @@ Route::middleware(['auth:sanctum', 'feature:quality'])->prefix('quality')->group
     Route::get('/traceability/shipment-lots/{shipmentLot}',
         [ShipmentLotController::class, 'show'])
         ->middleware('permission:quality.inspections.view');
+
+    /* ─── T3.5 — Controlled documents (admin) ─── */
+    Route::get('/documents',                                  [DocumentController::class, 'index'])
+        ->middleware('permission:quality.documents.view');
+    Route::post('/documents',                                 [DocumentController::class, 'store'])
+        ->middleware('permission:quality.documents.manage');
+    Route::get('/documents/{document}',                       [DocumentController::class, 'show'])
+        ->middleware('permission:quality.documents.view');
+    Route::patch('/documents/{document}',                     [DocumentController::class, 'update'])
+        ->middleware('permission:quality.documents.manage');
+    Route::post('/documents/{document}/revisions',            [DocumentController::class, 'publishRevision'])
+        ->middleware('permission:quality.documents.manage');
+    Route::post('/documents/{document}/mark-reviewed',        [DocumentController::class, 'markReviewed'])
+        ->middleware('permission:quality.documents.manage');
 });
