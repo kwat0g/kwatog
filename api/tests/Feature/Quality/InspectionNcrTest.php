@@ -15,8 +15,10 @@ use App\Modules\Quality\Enums\NcrSource;
 use App\Modules\Quality\Enums\NcrStatus;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\InspectionMeasurement;
+use App\Modules\Quality\Enums\NcrActionType;
 use App\Modules\Quality\Models\InspectionSpec;
 use App\Modules\Quality\Models\InspectionSpecItem;
+use App\Modules\Quality\Models\NcrAction;
 use App\Modules\Quality\Models\NonConformanceReport;
 use App\Modules\Quality\Services\InspectionService;
 use App\Modules\Quality\Services\NcrService;
@@ -526,16 +528,38 @@ class InspectionNcrTest extends TestCase
      * automation. Only NcrDisposition::Scrap triggers replacement WO creation
      * (and only when the linked inspection is outgoing-stage).
      *
-     * This pins that close() with rework on an outgoing NCR leaves
-     * replacement_work_order_id = null.
+     * T3.1.B note (2026-06): outgoing-stage Rework now auto-creates a *rework*
+     * WO via `rework_work_order_id` (separate column from `replacement_work_order_id`).
+     * To preserve this test's original intent — "Rework on a non-outgoing stage
+     * does NOT auto-create any WO" — we use InProcess stage. The outgoing-Rework
+     * branch is covered by `Tests\Feature\Quality\NcrAutoReworkWoTest`.
+     *
+     * This pins that close() with rework on a non-outgoing NCR leaves
+     * both replacement_work_order_id and rework_work_order_id = null.
      */
     public function test_rework_disposition_does_not_auto_create_work_order(): void
     {
-        $insp = $this->makeFailedInspection(stage: InspectionStage::Outgoing);
+        $insp = $this->makeFailedInspection(stage: InspectionStage::InProcess);
         $ncr  = $this->ncrSvc->openFromInspectionFailure($insp, $this->user);
 
         // Set disposition to rework.
         $this->ncrSvc->setDisposition($ncr, NcrDisposition::Rework->value, 'Tool wear', 'Regrind tool');
+
+        // T3.1.A — close() requires both Corrective + Preventive actions.
+        NcrAction::create([
+            'ncr_id'       => $ncr->id,
+            'action_type'  => NcrActionType::Corrective->value,
+            'description'  => 'auto-corrective for test',
+            'performed_by' => $this->user->id,
+            'performed_at' => now(),
+        ]);
+        NcrAction::create([
+            'ncr_id'       => $ncr->id,
+            'action_type'  => NcrActionType::Preventive->value,
+            'description'  => 'auto-preventive for test',
+            'performed_by' => $this->user->id,
+            'performed_at' => now(),
+        ]);
 
         // Close the NCR.
         $ncr->refresh();
@@ -550,6 +574,11 @@ class InspectionNcrTest extends TestCase
         $this->assertNull(
             $closed->replacement_work_order_id,
             'Rework disposition must NOT auto-create a replacement Work Order',
+        );
+
+        $this->assertNull(
+            $closed->rework_work_order_id,
+            'Rework disposition on non-outgoing stage must NOT auto-create a rework Work Order',
         );
     }
 
@@ -579,6 +608,22 @@ class InspectionNcrTest extends TestCase
         $ncr  = $this->ncrSvc->openFromInspectionFailure($insp, $this->user);
 
         $this->ncrSvc->setDisposition($ncr, NcrDisposition::Scrap->value, 'Over-shrinkage', 'Adjust mold temp');
+
+        // T3.1.A — close() requires both Corrective + Preventive actions.
+        NcrAction::create([
+            'ncr_id'       => $ncr->id,
+            'action_type'  => NcrActionType::Corrective->value,
+            'description'  => 'auto-corrective for test',
+            'performed_by' => $this->user->id,
+            'performed_at' => now(),
+        ]);
+        NcrAction::create([
+            'ncr_id'       => $ncr->id,
+            'action_type'  => NcrActionType::Preventive->value,
+            'description'  => 'auto-preventive for test',
+            'performed_by' => $this->user->id,
+            'performed_at' => now(),
+        ]);
 
         $ncr->refresh();
         $closed = $this->ncrSvc->close($ncr, $this->user);
