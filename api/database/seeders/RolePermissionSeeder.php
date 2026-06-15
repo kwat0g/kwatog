@@ -60,6 +60,11 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'hr.directory.view',               'name' => 'View Employee Directory'],
                 // Task SS2 — Finance leg of employee bank-account change approval.
                 ['slug' => 'hr.profile_updates.finance_review', 'name' => 'Approve Employee Bank-Account Changes (Finance)'],
+                // T3.4 — Training matrix + certification expiry alerts.
+                ['slug' => 'hr.trainings.view',              'name' => 'View Training Catalog'],
+                ['slug' => 'hr.trainings.manage',            'name' => 'Manage Training Catalog'],
+                ['slug' => 'hr.employees.trainings.view',    'name' => 'View Employee Training Records'],
+                ['slug' => 'hr.employees.trainings.manage',  'name' => 'Manage Employee Training Records'],
             ],
 
             // Attendance
@@ -502,6 +507,7 @@ class RolePermissionSeeder extends Seeder
                     $this->selfService(),
                     [
                         'hr.employees.view',
+                        'hr.employees.trainings.view',
                         'attendance.ot.approve',
                         'leave.approve_dept',
                         'purchasing.view', 'purchasing.pr.approve',
