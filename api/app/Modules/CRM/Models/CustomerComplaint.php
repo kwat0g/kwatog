@@ -29,6 +29,7 @@ class CustomerComplaint extends Model
         'affected_quantity', 'ncr_id', 'replacement_work_order_id',
         'credit_memo_id', 'created_by', 'assigned_to',
         'resolved_at', 'closed_at',
+        'd3_due_at', 'd4_due_at', 'finalize_due_at', 'sla_alert_levels',
     ];
 
     protected $casts = [
@@ -38,6 +39,10 @@ class CustomerComplaint extends Model
         'affected_quantity' => 'integer',
         'resolved_at'       => 'datetime',
         'closed_at'         => 'datetime',
+        'd3_due_at'         => 'datetime',
+        'd4_due_at'         => 'datetime',
+        'finalize_due_at'   => 'datetime',
+        'sla_alert_levels'  => 'array',
     ];
 
     public function customer(): BelongsTo
