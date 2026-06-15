@@ -67,6 +67,12 @@ Schedule::command('approvals:run-escalations')
     ->withoutOverlapping()
     ->onOneServer();
 
+// T3.1.C — NCR SLA escalation every 15 minutes.
+Schedule::command('ncr:escalate')
+    ->everyFifteenMinutes()
+    ->withoutOverlapping(10)
+    ->onOneServer();
+
 // Series F / Task F4 — Monthly supplier performance recompute on the 1st at 02:00.
 Schedule::command('purchasing:recompute-supplier-performance')
     ->monthlyOn(1, '02:00')
