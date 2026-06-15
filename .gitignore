@@ -23,6 +23,8 @@ api/storage/framework/testing/*
 api/bootstrap/cache/*
 !api/bootstrap/cache/.gitkeep
 api/storage/app/admin-credentials.txt
+api/storage/app/bank-files/*
+!api/storage/app/bank-files/.gitkeep
 
 # Build artifacts
 spa/dist/
