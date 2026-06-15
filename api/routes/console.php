@@ -151,3 +151,11 @@ Schedule::command('ar:run-dunning')
     ->dailyAt('07:00')
     ->withoutOverlapping()
     ->onOneServer();
+
+// T3.4.C — Daily training expiry alerts at 06:30 (30/14/7/expired tiers).
+// Idempotent within the same day — `alreadyFired()` short-circuits via
+// `last_alert_level` so re-runs are safe.
+Schedule::command('training:check-expiries')
+    ->dailyAt('06:30')
+    ->withoutOverlapping()
+    ->onOneServer();
