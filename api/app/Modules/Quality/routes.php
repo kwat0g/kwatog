@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Modules\Quality\Controllers\AnalyticsController;
 use App\Modules\Quality\Controllers\CopqController;
+use App\Modules\Quality\Controllers\DocumentAcknowledgmentController;
 use App\Modules\Quality\Controllers\DocumentController;
 use App\Modules\Quality\Controllers\InspectionController;
 use App\Modules\Quality\Controllers\InspectionSpecController;
@@ -125,4 +126,10 @@ Route::middleware(['auth:sanctum', 'feature:quality'])->prefix('quality')->group
         ->middleware('permission:quality.documents.manage');
     Route::post('/documents/{document}/mark-reviewed',        [DocumentController::class, 'markReviewed'])
         ->middleware('permission:quality.documents.manage');
+});
+
+/* ─── T3.5.C — Self-service document acknowledgments ─── */
+Route::middleware(['auth:sanctum'])->prefix('self-service/documents')->group(function () {
+    Route::get('/pending',                  [DocumentAcknowledgmentController::class, 'pending']);
+    Route::post('/{revision}/acknowledge',  [DocumentAcknowledgmentController::class, 'acknowledge']);
 });
