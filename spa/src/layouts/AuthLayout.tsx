@@ -19,7 +19,7 @@ import { ArrowLeft } from 'lucide-react';
 // pages share the marketing site's display typeface for brand continuity.
 import '@fontsource-variable/bricolage-grotesque/wght.css';
 
-import { DatumMark } from '@/pages/landing/components/DatumMark';
+import { BrandLogo } from '@/components/brand/BrandLogo';
 import { PartBlueprint } from '@/pages/landing/components/PartBlueprint';
 import { HeroCanvas } from '@/pages/landing/components/HeroCanvas';
 
@@ -53,12 +53,9 @@ export function AuthLayout() {
         {/* brand */}
         <Link
           to="/"
-          className="relative flex items-center gap-2.5 self-start rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-surface"
+          className="relative flex items-center gap-3 self-start rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-surface"
         >
-          <DatumMark size={26} className="text-landing-accent" />
-          <span className="font-display text-[19px] font-bold tracking-tight text-landing-text">
-            OGAMI
-          </span>
+          <BrandLogo alt="Ogami" className="h-10" />
           <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-landing-muted">
             Philippines
           </span>
@@ -93,11 +90,8 @@ export function AuthLayout() {
       {/* ── Form area ─────────────────────────────────────────────── */}
       <main className="relative flex flex-col items-center justify-center px-5 py-12 sm:px-8">
         {/* compact brand for mobile (brand panel hidden) */}
-        <Link to="/" className="mb-10 flex items-center gap-2 rounded-md lg:hidden">
-          <DatumMark size={24} className="text-landing-accent" />
-          <span className="font-display text-lg font-bold tracking-tight text-landing-text">
-            OGAMI
-          </span>
+        <Link to="/" className="mb-10 flex items-center rounded-md lg:hidden">
+          <BrandLogo alt="Ogami" className="h-10" />
         </Link>
 
         <div className="w-full max-w-sm">

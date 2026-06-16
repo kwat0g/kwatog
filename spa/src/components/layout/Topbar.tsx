@@ -9,6 +9,7 @@ const CommandPalette = lazy(() =>
 import { Breadcrumbs } from './Breadcrumbs';
 import { NotificationBell } from './NotificationBell';
 import { ProfileDropdown } from './ProfileDropdown';
+import { BrandLogo } from '@/components/brand/BrandLogo';
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { useTheme } from '@/hooks/useTheme';
 
@@ -58,9 +59,7 @@ export function Topbar({ user, onLogout, rightExtras }: TopbarProps) {
       </button>
 
       <Link to="/dashboard" className="flex items-center gap-2 shrink-0">
-        <span className="h-[22px] w-[22px] rounded-md bg-primary text-canvas inline-flex items-center justify-center font-medium text-sm">
-          O
-        </span>
+        <BrandLogo invertOnDark alt="" className="h-7" />
         <span className="text-sm font-medium text-primary hidden sm:inline">Ogami ERP</span>
       </Link>
 

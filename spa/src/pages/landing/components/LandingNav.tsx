@@ -16,7 +16,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Menu, X, LogIn } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import { DatumMark } from './DatumMark';
+import { BrandLogo } from '@/components/brand/BrandLogo';
 import { NAV_LINKS } from '../data';
 
 interface LandingNavProps {
@@ -104,15 +104,9 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
         {/* Brand */}
         <a
           href="#top"
-          className="group flex items-center gap-2.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas"
+          className="group flex items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas"
         >
-          <DatumMark
-            size={24}
-            className="text-landing-accent transition-transform duration-500 group-hover:rotate-90"
-          />
-          <span className="font-display text-[19px] font-bold leading-none tracking-tight text-landing-text">
-            OGAMI
-          </span>
+          <BrandLogo alt="Ogami" className="h-9 transition-transform duration-500 group-hover:scale-105" />
           <span className="hidden font-mono text-[10px] uppercase tracking-[0.22em] text-landing-muted sm:inline">
             Philippines
           </span>

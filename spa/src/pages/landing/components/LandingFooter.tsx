@@ -7,7 +7,7 @@
  */
 
 import { Link } from 'react-router-dom';
-import { DatumMark } from './DatumMark';
+import { BrandLogo } from '@/components/brand/BrandLogo';
 import { COMPANY, NAV_LINKS } from '../data';
 
 export function LandingFooter() {
@@ -19,12 +19,7 @@ export function LandingFooter() {
         <div className="grid gap-12 md:grid-cols-[1.4fr_1fr_1fr]">
           {/* Brand + address */}
           <div>
-            <div className="flex items-center gap-2.5">
-              <DatumMark size={26} className="text-landing-accent" />
-              <span className="font-display text-xl font-bold tracking-tight text-landing-text">
-                OGAMI
-              </span>
-            </div>
+            <BrandLogo alt="Ogami" className="h-11" />
             <p className="mt-4 max-w-xs font-sans text-[13px] leading-relaxed text-landing-muted">
               {COMPANY.legalName} — precision plastic injection molding, proudly
               engineered in the Philippines.
