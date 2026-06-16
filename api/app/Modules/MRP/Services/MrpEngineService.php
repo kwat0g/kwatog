@@ -279,6 +279,8 @@ class MrpEngineService
 
         $run = MrpRun::create([
             'run_at'               => now(),
+            'started_at'           => now(),
+            'heartbeat_at'         => now(),
             'triggered_by'         => $trigger->value,
             'triggered_by_user_id' => $userId,
             'status'               => MrpRunStatus::Running->value,

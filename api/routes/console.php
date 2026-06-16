@@ -38,6 +38,14 @@ Schedule::command('mrp:run-daily')
     ->withoutOverlapping()
     ->onOneServer();
 
+// OGAMI-015 — Hourly reaper for hung Running MRP runs. Marks runs whose
+// started_at is older than 2h as Failed and cancels their orphan draft
+// auto-PRs. Idempotent, so re-runs are safe no-ops.
+Schedule::command('mrp:reap-stale-runs')
+    ->hourly()
+    ->withoutOverlapping()
+    ->onOneServer();
+
 // A2 — Alert engine every 15 minutes
 Schedule::command('alerts:run')
     ->everyFifteenMinutes()
@@ -191,5 +199,17 @@ Schedule::command('copq:snap-monthly')
 // or the doc has been re-reviewed (clears the alert stamp).
 Schedule::command('docs:check-reviews')
     ->dailyAt('06:45')
+    ->withoutOverlapping()
+    ->onOneServer();
+
+// OGAMI-016 — recompute calibration due/overdue statuses daily at 06:50.
+Schedule::command('calibration:check-due')
+    ->dailyAt('06:50')
+    ->withoutOverlapping()
+    ->onOneServer();
+
+// OGAMI-016 — batch unread notifications into a per-user email digest at 07:05.
+Schedule::command('notifications:send-digest')
+    ->dailyAt('07:05')
     ->withoutOverlapping()
     ->onOneServer();

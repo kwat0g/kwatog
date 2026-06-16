@@ -11,6 +11,7 @@ use App\Common\Support\HashIdFilter;
 use App\Common\Support\Money;
 use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Enums\JournalEntryStatus;
+use App\Modules\Accounting\Enums\VatClassification;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Collection as InvoiceCollection;
 use App\Modules\Accounting\Models\Customer;
@@ -27,6 +28,11 @@ class InvoiceService
     private const VAT_RATE   = '0.12';
     private const AR_CODE    = '1100';
     private const VAT_OUTPUT = '2060';
+    // OGAMI-008 — contra-revenue account debited for Senior/PWD discounts.
+    // No dedicated COA row is seeded, so we debit Sales Revenue (4010) by
+    // default; override via the 'accounting.sales_discount_account_code'
+    // setting if a dedicated contra-revenue account is later added.
+    private const DISCOUNT_CODE = '4010';
 
     public function __construct(
         private readonly DocumentSequenceService $sequences,
@@ -82,10 +88,11 @@ class InvoiceService
             $customer = Customer::findOrFail(
                 HashIdFilter::decode($data['customer_id'], Customer::class),
             );
-            $isVatable = (bool) ($data['is_vatable'] ?? true);
+            $classification = $this->resolveClassification($data);
+            $isVatable = $classification === VatClassification::Vatable;
             [$items, $subtotal] = $this->normalizeItems($data['items'] ?? []);
-            $vat = $isVatable ? Money::mul($subtotal, self::VAT_RATE) : Money::zero();
-            $total = Money::add($subtotal, $vat);
+            $discount = $this->normalizeDiscount($data['senior_pwd_discount'] ?? null, $subtotal);
+            [$vat, $total] = $this->computeTotals($classification, $subtotal, $discount);
 
             $invoice = Invoice::create([
                 // Number reserved at finalize-time so drafts that get cancelled don't burn numbers.
@@ -103,8 +110,14 @@ class InvoiceService
                 'due_date'       => $data['due_date']
                     ?? Carbon::parse($data['date'])->addDays($customer->payment_terms_days)->toDateString(),
                 'is_vatable'     => $isVatable,
+                'vat_classification' => $classification,
                 'subtotal'       => $subtotal,
                 'vat_amount'     => $vat,
+                'senior_pwd_discount' => $discount,
+                'buyer_tin'      => $data['buyer_tin'] ?? null,
+                'atp_number'     => $data['atp_number'] ?? null,
+                'serial_range'   => $data['serial_range'] ?? null,
+                'is_original'    => array_key_exists('is_original', $data) ? (bool) $data['is_original'] : true,
                 'total_amount'   => $total,
                 'amount_paid'    => Money::zero(),
                 'balance'        => $total,
@@ -128,17 +141,27 @@ class InvoiceService
         }
 
         return DB::transaction(function () use ($invoice, $data) {
-            $isVatable = (bool) ($data['is_vatable'] ?? $invoice->is_vatable);
+            $classification = $this->resolveClassification($data, $invoice);
+            $isVatable = $classification === VatClassification::Vatable;
             [$items, $subtotal] = $this->normalizeItems($data['items'] ?? []);
-            $vat = $isVatable ? Money::mul($subtotal, self::VAT_RATE) : Money::zero();
-            $total = Money::add($subtotal, $vat);
+            $discount = $this->normalizeDiscount(
+                $data['senior_pwd_discount'] ?? (string) $invoice->senior_pwd_discount,
+                $subtotal,
+            );
+            [$vat, $total] = $this->computeTotals($classification, $subtotal, $discount);
 
             $invoice->update([
                 'date'         => $data['date']     ?? $invoice->date,
                 'due_date'     => $data['due_date'] ?? $invoice->due_date,
                 'is_vatable'   => $isVatable,
+                'vat_classification'  => $classification,
                 'subtotal'     => $subtotal,
                 'vat_amount'   => $vat,
+                'senior_pwd_discount' => $discount,
+                'buyer_tin'    => $data['buyer_tin']    ?? $invoice->buyer_tin,
+                'atp_number'   => $data['atp_number']   ?? $invoice->atp_number,
+                'serial_range' => $data['serial_range'] ?? $invoice->serial_range,
+                'is_original'  => array_key_exists('is_original', $data) ? (bool) $data['is_original'] : $invoice->is_original,
                 'total_amount' => $total,
                 'balance'      => $total, // no payments yet on a draft
                 'remarks'      => $data['remarks'] ?? $invoice->remarks,
@@ -181,6 +204,16 @@ class InvoiceService
                     'debit'      => '0.00',
                     'credit'     => (string) $item->total,
                     'description'=> $item->description,
+                ];
+            }
+            // OGAMI-008 — Senior/PWD discount: contra-revenue debit keeps the JE
+            // balanced (AR is net of discount while revenue is booked gross).
+            if (Money::gt((string) $invoice->senior_pwd_discount, '0')) {
+                $lines[] = [
+                    'account_id' => $this->discountAccountId(),
+                    'debit'      => (string) $invoice->senior_pwd_discount,
+                    'credit'     => '0.00',
+                    'description'=> 'Senior/PWD discount',
                 ];
             }
             if ($invoice->is_vatable && Money::gt((string) $invoice->vat_amount, '0')) {
@@ -382,5 +415,67 @@ class InvoiceService
             throw new RuntimeException("Required account {$code} not found in COA.");
         }
         return (int) $id;
+    }
+
+    /**
+     * OGAMI-008 — Resolve the VAT classification from request data, honoring an
+     * explicit `vat_classification` when present, otherwise falling back to the
+     * legacy `is_vatable` boolean (delivery → invoice path) and finally the
+     * existing invoice (on update). Default is 'vatable' to preserve behavior.
+     */
+    private function resolveClassification(array $data, ?Invoice $existing = null): VatClassification
+    {
+        if (! empty($data['vat_classification'])) {
+            return $data['vat_classification'] instanceof VatClassification
+                ? $data['vat_classification']
+                : VatClassification::from((string) $data['vat_classification']);
+        }
+        if (array_key_exists('is_vatable', $data)) {
+            return $data['is_vatable'] ? VatClassification::Vatable : VatClassification::VatExempt;
+        }
+        if ($existing) {
+            return $existing->vat_classification
+                ?? ($existing->is_vatable ? VatClassification::Vatable : VatClassification::VatExempt);
+        }
+        return VatClassification::Vatable;
+    }
+
+    /** Clamp the Senior/PWD discount to [0, subtotal]. */
+    private function normalizeDiscount(string|float|int|null $raw, string $subtotal): string
+    {
+        if ($raw === null || $raw === '') {
+            return Money::zero();
+        }
+        $discount = Money::round2((string) $raw);
+        if (Money::lt($discount, '0')) {
+            throw new RuntimeException('Senior/PWD discount must be ≥ 0.');
+        }
+        if (Money::gt($discount, $subtotal)) {
+            throw new RuntimeException('Senior/PWD discount cannot exceed the subtotal.');
+        }
+        return $discount;
+    }
+
+    /**
+     * OGAMI-008 — Compute [vat_amount, total_amount] from the classification.
+     * VAT is charged only for 'vatable'; the Senior/PWD discount reduces the
+     * VATable base before the 12% is applied and is deducted from the total.
+     *
+     * @return array{0: string, 1: string}
+     */
+    private function computeTotals(VatClassification $classification, string $subtotal, string $discount): array
+    {
+        $netBase = Money::sub($subtotal, $discount);
+        $vat = $classification->chargesVat() ? Money::mul($netBase, self::VAT_RATE) : Money::zero();
+        $total = Money::add($netBase, $vat);
+        return [$vat, $total];
+    }
+
+    /** OGAMI-008 — account debited for the Senior/PWD discount contra-revenue line. */
+    private function discountAccountId(): int
+    {
+        $code = (string) app(\App\Common\Services\SettingsService::class)
+            ->get('accounting.sales_discount_account_code', self::DISCOUNT_CODE);
+        return $this->accountId($code !== '' ? $code : self::DISCOUNT_CODE);
     }
 }

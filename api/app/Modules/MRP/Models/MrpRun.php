@@ -20,7 +20,7 @@ class MrpRun extends Model
     use HasFactory, HasHashId;
 
     protected $fillable = [
-        'run_at', 'triggered_by', 'triggered_by_user_id',
+        'run_at', 'started_at', 'heartbeat_at', 'triggered_by', 'triggered_by_user_id',
         'sales_orders_evaluated', 'shortages_found', 'prs_created',
         'prs_updated', 'plans_generated', 'duration_ms',
         'status', 'error_message', 'summary',
@@ -28,6 +28,8 @@ class MrpRun extends Model
 
     protected $casts = [
         'run_at'                 => 'datetime',
+        'started_at'             => 'datetime',
+        'heartbeat_at'           => 'datetime',
         'triggered_by'           => MrpRunTrigger::class,
         'status'                 => MrpRunStatus::class,
         'summary'                => 'array',

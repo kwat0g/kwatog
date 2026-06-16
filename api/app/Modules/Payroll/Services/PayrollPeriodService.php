@@ -5,12 +5,16 @@ declare(strict_types=1);
 namespace App\Modules\Payroll\Services;
 
 use App\Common\Models\AuditLog;
+use App\Modules\Accounting\Enums\JournalEntryStatus;
+use App\Modules\Accounting\Models\JournalEntry;
+use App\Modules\Accounting\Services\JournalEntryService;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Enums\EmployeeStatus;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Payroll\Enums\PayrollPeriodStatus;
 use App\Modules\Payroll\Events\PayrollPeriodDisbursed;
 use App\Modules\Payroll\Events\PayrollPeriodFinalized;
+use App\Modules\Payroll\Events\PayrollPeriodVoided;
 use App\Modules\Payroll\Models\DisbursementProof;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use Carbon\CarbonImmutable;
@@ -429,5 +433,72 @@ class PayrollPeriodService
 
             return $period->fresh();
         });
+    }
+
+    /**
+     * OGAMI-011 — void a finalized payroll period.
+     *
+     * Only a Finalized period can be voided. If the period was posted to the
+     * GL (journal_entry_id set), its journal entry is reversed via the
+     * Accounting module's public JournalEntryService::reverse() — a balanced
+     * mirror entry that keeps the ledger auditable (never deletes money rows).
+     *
+     * After voiding the period transitions to Voided. From there the period
+     * can be recomputed/re-finalized (see allowedToRecompute) or a fresh
+     * replacement period created. Wrapped in a transaction so a failed GL
+     * reversal rolls the whole void back.
+     */
+    public function void(PayrollPeriod $period, User $actor, string $reason): PayrollPeriod
+    {
+        if ($period->status !== PayrollPeriodStatus::Finalized) {
+            throw new RuntimeException('Only finalized periods can be voided.');
+        }
+        if (trim($reason) === '') {
+            throw new RuntimeException('A void reason is required.');
+        }
+
+        [$fresh, $reversalId] = DB::transaction(function () use ($period, $actor, $reason) {
+            $previousStatus = $period->status?->value;
+            $reversalId = null;
+
+            // Reverse the GL posting if one exists and the accounting tables
+            // are present. JournalEntryService::reverse() posts a balanced
+            // mirror entry and flags the original as reversed.
+            if ($period->journal_entry_id
+                && \Illuminate\Support\Facades\Schema::hasTable('journal_entries')) {
+                $je = JournalEntry::find($period->journal_entry_id);
+                if ($je && $je->status === JournalEntryStatus::Posted && $je->reversed_by_entry_id === null) {
+                    $reversal = app(JournalEntryService::class)->reverse($je, $actor);
+                    $reversalId = $reversal->id;
+                }
+                // If the JE is already reversed/missing we leave it — idempotent.
+            }
+
+            $period->forceFill([
+                'status'      => PayrollPeriodStatus::Voided->value,
+                'voided_at'   => now(),
+                'voided_by'   => $actor->id,
+                'void_reason' => $reason,
+            ])->save();
+
+            AuditLog::create([
+                'user_id'    => $actor->id,
+                'action'     => 'payroll.period.void',
+                'model_type' => PayrollPeriod::class,
+                'model_id'   => $period->id,
+                'old_values' => ['status' => $previousStatus, 'journal_entry_id' => $period->journal_entry_id],
+                'new_values' => ['status' => PayrollPeriodStatus::Voided->value, 'reason' => $reason, 'reversal_journal_entry_id' => $reversalId],
+                'ip_address' => request()?->ip(),
+                'user_agent' => request()?->userAgent(),
+                'created_at' => now(),
+            ]);
+
+            return [$period->fresh(), $reversalId];
+        });
+
+        // Fire AFTER commit so listeners see persisted state.
+        event(new PayrollPeriodVoided($fresh, $reversalId));
+
+        return $fresh;
     }
 }

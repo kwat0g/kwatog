@@ -69,11 +69,43 @@ class CoCService
      */
     private function buildPayload(Inspection $inspection, ?string $deliveryNumber): array
     {
-        $inspection->loadMissing(['product', 'inspector']);
+        $inspection->loadMissing(['product', 'inspector', 'measurements']);
 
         // ADV3 — IATF 16949 traceability: pull batch / lot / material lot refs.
         [$batchNumber, $materialLotRefs] = $this->traceFromInspection($inspection);
         $lotNumber = $this->lotNumberForDelivery($deliveryNumber);
+
+        // OGAMI-008 — real inspection result (no longer hard-coded "PASSED" in
+        // the blade) + the critical-dimension measurement table automotive
+        // customers (PPAP) expect on a CoC. We summarise per critical parameter:
+        // nominal, tolerance window, the actual measured value(s), and pass/fail.
+        $status = $inspection->status instanceof InspectionStatus
+            ? $inspection->status
+            : InspectionStatus::from((string) $inspection->status);
+        $resultLabel = strtoupper($status->value);
+
+        $criticalMeasurements = $inspection->measurements
+            ->where('is_critical', true)
+            ->groupBy('parameter_name')
+            ->map(function ($rows) {
+                $first = $rows->first();
+                $values = $rows->pluck('measured_value')->filter(fn ($v) => $v !== null);
+                $allPass = $rows->every(fn ($m) => $m->is_pass !== false);
+
+                return [
+                    'parameter'  => $first->parameter_name,
+                    'unit'       => $first->unit_of_measure,
+                    'nominal'    => $first->nominal_value,
+                    'tol_min'    => $first->tolerance_min,
+                    'tol_max'    => $first->tolerance_max,
+                    'min_actual' => $values->min(),
+                    'max_actual' => $values->max(),
+                    'sample_n'   => $rows->count(),
+                    'pass'       => $allPass,
+                ];
+            })
+            ->values()
+            ->all();
 
         $cocNumber = $this->cocNumber($inspection);
         $payload = [
@@ -92,6 +124,10 @@ class CoCService
             'accept_count'            => (int) $inspection->accept_count,
             'inspector_name'          => $inspection->inspector?->name,
             'delivery_number'         => $deliveryNumber,
+            // OGAMI-008 — data-driven result + measurement table.
+            'inspection_result'       => $resultLabel,
+            'inspection_passed'       => $status === InspectionStatus::Passed,
+            'critical_measurements'   => $criticalMeasurements,
             // ADV3 traceability fields (rendered conditionally by the blade).
             'batch_number'            => $batchNumber,
             'lot_number'              => $lotNumber,

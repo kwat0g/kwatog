@@ -7,6 +7,7 @@ namespace App\Modules\Accounting\Models;
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\Accounting\Enums\InvoiceStatus;
+use App\Modules\Accounting\Enums\VatClassification;
 use App\Modules\Auth\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -25,8 +26,9 @@ class Invoice extends Model
 
     protected $fillable = [
         'invoice_number', 'customer_id', 'sales_order_id', 'delivery_id',
-        'date', 'due_date', 'is_vatable',
-        'subtotal', 'vat_amount', 'total_amount', 'amount_paid', 'balance',
+        'date', 'due_date', 'is_vatable', 'vat_classification',
+        'subtotal', 'vat_amount', 'senior_pwd_discount', 'total_amount', 'amount_paid', 'balance',
+        'buyer_tin', 'atp_number', 'serial_range', 'is_original',
         'status', 'journal_entry_id', 'created_by', 'remarks',
         'last_dunning_tier', 'last_dunning_at',
     ];
@@ -35,8 +37,11 @@ class Invoice extends Model
         'date'         => 'date',
         'due_date'     => 'date',
         'is_vatable'   => 'boolean',
+        'vat_classification'  => VatClassification::class,
+        'is_original'  => 'boolean',
         'subtotal'     => 'decimal:2',
         'vat_amount'   => 'decimal:2',
+        'senior_pwd_discount' => 'decimal:2',
         'total_amount' => 'decimal:2',
         'amount_paid'  => 'decimal:2',
         'balance'      => 'decimal:2',

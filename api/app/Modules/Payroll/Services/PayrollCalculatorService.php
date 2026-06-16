@@ -302,7 +302,13 @@ class PayrollCalculatorService
     }
 
     /**
-     * Basic pay calculation — handles monthly vs daily, mid-period hire pro-ration.
+     * Basic pay calculation — handles monthly vs daily, mid-period hire pro-ration,
+     * and mid-cycle salary changes (OGAMI-011).
+     *
+     * Compatibility contract: when an employee has NO employee_salary_history
+     * rows, this behaves EXACTLY as the legacy implementation (uses
+     * $monthlySalary / $dailyRate verbatim). Proration only kicks in when a
+     * salary change's effective_date falls strictly inside the period.
      */
     private function computeBasicPay(
         Employee $employee,
@@ -313,6 +319,15 @@ class PayrollCalculatorService
     ): string {
         $payType = $employee->pay_type instanceof \BackedEnum ? $employee->pay_type->value : (string) $employee->pay_type;
 
+        // ─── Mid-cycle salary change proration (OGAMI-011) ───────
+        // Only engages when there is at least one salary-history row whose
+        // effective_date lands strictly inside (period_start, period_end].
+        $segments = $this->salarySegments($employee, $period, $monthlySalary, $dailyRate);
+        if ($segments !== null) {
+            return $this->basicPayFromSegments($payType, $period, $daysWorked, $segments);
+        }
+
+        // ─── Legacy path (no history) — unchanged ────────────────
         if ($payType === PayType::Daily->value) {
             return Money::mul($daysWorked, $dailyRate);
         }
@@ -330,6 +345,140 @@ class PayrollCalculatorService
         }
 
         return Money::round2($halfBasic);
+    }
+
+    /**
+     * Resolve effective salary segments across the period.
+     *
+     * Returns null when there is no mid-period salary change to honor — the
+     * caller then runs the legacy code path verbatim (the compatibility
+     * guarantee). When a change DOES land inside the period, returns an ordered
+     * list of day-spans each tagged with the monthly + daily rate in force for
+     * that span.
+     *
+     * @return array<int, array{days:int, monthly:string, daily:string}>|null
+     */
+    private function salarySegments(
+        Employee $employee,
+        PayrollPeriod $period,
+        string $monthlySalary,
+        string $dailyRate,
+    ): ?array {
+        // Cheap existence guard first — keeps the no-history path allocation-free.
+        $history = \App\Modules\HR\Models\EmployeeSalaryHistory::query()
+            ->where('employee_id', $employee->id)
+            ->whereDate('effective_date', '<=', $period->period_end)
+            ->orderBy('effective_date')
+            ->orderBy('id')
+            ->get();
+
+        if ($history->isEmpty()) {
+            return null;
+        }
+
+        // Does any change take effect strictly AFTER period_start and on/before
+        // period_end? If not, the current salary already reflects everything and
+        // we defer to the legacy path (no proration needed).
+        $changesInside = $history->first(function ($h) use ($period) {
+            $eff = \Illuminate\Support\Carbon::parse($h->effective_date);
+            return $eff->gt($period->period_start) && $eff->lte($period->period_end);
+        });
+        if ($changesInside === null) {
+            return null;
+        }
+
+        $payType = $employee->pay_type instanceof \BackedEnum ? $employee->pay_type->value : (string) $employee->pay_type;
+
+        // Salary in force at period_start = latest history row effective on or
+        // before period_start, else the employee's current values (the row set
+        // may only describe the raise, not the starting salary).
+        $startRow = $history->last(function ($h) use ($period) {
+            return \Illuminate\Support\Carbon::parse($h->effective_date)->lte($period->period_start);
+        });
+        $curMonthly = $startRow ? (string) $startRow->basic_monthly_salary : $monthlySalary;
+        $curDaily   = $startRow && $startRow->daily_rate !== null
+            ? (string) $startRow->daily_rate
+            : ($payType === PayType::Daily->value
+                ? $dailyRate
+                : Money::div($curMonthly, self::DAYS_PER_MONTH, 4));
+
+        // Build day-by-day cursor, switching rates as effective dates pass.
+        $insideChanges = $history
+            ->filter(function ($h) use ($period) {
+                $eff = \Illuminate\Support\Carbon::parse($h->effective_date);
+                return $eff->gt($period->period_start) && $eff->lte($period->period_end);
+            })
+            ->values();
+
+        $segments = [];
+        $cursor   = \Illuminate\Support\Carbon::parse($period->period_start)->startOfDay();
+        $end      = \Illuminate\Support\Carbon::parse($period->period_end)->startOfDay();
+        $changeIdx = 0;
+        $spanDays  = 0;
+
+        for ($day = $cursor->copy(); $day->lte($end); $day->addDay()) {
+            // Apply any change effective on this day before counting it.
+            while ($changeIdx < $insideChanges->count()
+                && \Illuminate\Support\Carbon::parse($insideChanges[$changeIdx]->effective_date)->startOfDay()->eq($day)) {
+                if ($spanDays > 0) {
+                    $segments[] = ['days' => $spanDays, 'monthly' => $curMonthly, 'daily' => $curDaily];
+                    $spanDays = 0;
+                }
+                $row = $insideChanges[$changeIdx];
+                $curMonthly = (string) $row->basic_monthly_salary;
+                $curDaily   = $row->daily_rate !== null
+                    ? (string) $row->daily_rate
+                    : ($payType === PayType::Daily->value
+                        ? $curDaily
+                        : Money::div($curMonthly, self::DAYS_PER_MONTH, 4));
+                $changeIdx++;
+            }
+            $spanDays++;
+        }
+        if ($spanDays > 0) {
+            $segments[] = ['days' => $spanDays, 'monthly' => $curMonthly, 'daily' => $curDaily];
+        }
+
+        return $segments;
+    }
+
+    /**
+     * Compute basic pay from ordered salary segments.
+     *
+     * Monthly: each segment earns (half-month-basic at that salary) × (segment
+     * days ÷ total period days). Daily: segment-local day rate × days worked,
+     * apportioned to each segment by its share of calendar days.
+     *
+     * @param  array<int, array{days:int, monthly:string, daily:string}>  $segments
+     */
+    private function basicPayFromSegments(string $payType, PayrollPeriod $period, string $daysWorked, array $segments): string
+    {
+        $totalDays = 0;
+        foreach ($segments as $s) {
+            $totalDays += $s['days'];
+        }
+        $totalDays = max(1, $totalDays);
+
+        if ($payType === PayType::Daily->value) {
+            // Apportion the actual worked-day count across segments by calendar
+            // share, paying each portion at its in-force daily rate.
+            $total = Money::zero();
+            foreach ($segments as $s) {
+                $share = bcdiv((string) $s['days'], (string) $totalDays, 6);
+                $segDays = Money::mul($daysWorked, $share);
+                $total = Money::add($total, Money::mul($segDays, $s['daily']));
+            }
+            return Money::round2($total);
+        }
+
+        // Monthly: blended half-month basic weighted by calendar-day share.
+        $total = Money::zero();
+        foreach ($segments as $s) {
+            $halfBasic = Money::div($s['monthly'], '2', 4);
+            $factor = bcdiv((string) $s['days'], (string) $totalDays, 6);
+            $total = Money::add($total, Money::mul($halfBasic, $factor));
+        }
+        return Money::round2($total);
     }
 
     /**

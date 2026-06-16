@@ -45,6 +45,7 @@ class PayrollPeriod extends Model
         'disbursed_at'        => 'datetime',
         'is_auto_created'     => 'boolean',
         'auto_created_at'     => 'datetime',
+        'voided_at'           => 'datetime',
     ];
 
     public function payrolls(): HasMany
@@ -75,6 +76,11 @@ class PayrollPeriod extends Model
     public function disburser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'disbursed_by');
+    }
+
+    public function voider(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'voided_by');
     }
 
     public function scopeNotFinalized(Builder $q): Builder

@@ -37,6 +37,7 @@ class DocumentSequenceService
         'pr'            => ['prefix' => 'PR',   'reset' => 'monthly', 'pad' => 4],
         'delivery'      => ['prefix' => 'DR',   'reset' => 'monthly', 'pad' => 4],
         'bill'          => ['prefix' => 'BILL', 'reset' => 'monthly', 'pad' => 4],
+        'official_receipt' => ['prefix' => 'OR', 'reset' => 'monthly', 'pad' => 4],
         'bank_payment'  => ['prefix' => 'BPAY', 'reset' => 'monthly', 'pad' => 4],
         'loan'          => ['prefix' => 'LN',   'reset' => 'monthly', 'pad' => 4],
         'cash_advance'  => ['prefix' => 'CA',   'reset' => 'monthly', 'pad' => 4],

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Modules\Quality\Controllers\AnalyticsController;
+use App\Modules\Quality\Controllers\CalibrationController;
 use App\Modules\Quality\Controllers\CopqController;
 use App\Modules\Quality\Controllers\DocumentAcknowledgmentController;
 use App\Modules\Quality\Controllers\DocumentController;
@@ -20,6 +21,18 @@ use Illuminate\Support\Facades\Route;
  */
 
 Route::middleware(['auth:sanctum', 'feature:quality'])->prefix('quality')->group(function () {
+
+    /* ─── OGAMI-016 — IATF calibration register ─── */
+    Route::get('/calibration',                          [CalibrationController::class, 'index'])
+        ->middleware('permission:quality.calibration.view');
+    Route::post('/calibration',                         [CalibrationController::class, 'store'])
+        ->middleware('permission:quality.calibration.manage');
+    Route::get('/calibration/{calibrationRecord}',      [CalibrationController::class, 'show'])
+        ->middleware('permission:quality.calibration.view');
+    Route::patch('/calibration/{calibrationRecord}',    [CalibrationController::class, 'update'])
+        ->middleware('permission:quality.calibration.manage');
+    Route::post('/calibration/{calibrationRecord}/record', [CalibrationController::class, 'recordCalibration'])
+        ->middleware('permission:quality.calibration.manage');
 
     /* ─── Inspection specs (Task 59) ─── */
     Route::get('/inspection-specs',                       [InspectionSpecController::class, 'index'])

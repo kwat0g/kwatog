@@ -11,6 +11,7 @@ enum PayrollPeriodStatus: string
     case Approved   = 'approved';
     case Finalized  = 'finalized';
     case Disbursed  = 'disbursed';
+    case Voided     = 'voided';
 
     public function label(): string
     {
@@ -20,6 +21,7 @@ enum PayrollPeriodStatus: string
             self::Approved   => 'Approved',
             self::Finalized  => 'Finalized',
             self::Disbursed  => 'Disbursed',
+            self::Voided     => 'Voided',
         };
     }
 

@@ -23,6 +23,7 @@ use App\Modules\Production\Enums\MachineDowntimeCategory;
 use App\Modules\Production\Enums\WorkOrderStatus;
 use App\Modules\Production\Exceptions\IllegalLifecycleTransitionException;
 use App\Modules\Production\Models\MachineDowntime;
+use App\Modules\Production\Models\ProductionSchedule;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Models\WorkOrderMaterial;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -194,6 +195,13 @@ class WorkOrderService
             if (! $wo->machine_id || ! $wo->mold_id) {
                 throw new RuntimeException('Confirming a work order requires both a machine and a mold.');
             }
+
+            // OGAMI-015 — machine double-booking guard. A machine already
+            // committed to another Confirmed/InProgress work order cannot also
+            // take this one. When both this WO and the incumbent carry schedule
+            // rows, the conflict is restricted to overlapping time windows;
+            // otherwise any other active WO on the same machine blocks confirm.
+            $this->assertMachineAvailable($wo);
 
             $this->reserveMaterialsFor($wo);
 
@@ -502,6 +510,72 @@ class WorkOrderService
             $to,
             auth()->user(),
         );
+    }
+
+    /**
+     * OGAMI-015 — block confirming a work order onto a machine that is already
+     * committed to another active (Confirmed or InProgress) work order.
+     *
+     * Resolution strategy:
+     *   - If this WO has schedule rows for the machine AND a candidate
+     *     conflicting WO also has schedule rows, the two are only in conflict
+     *     when their [scheduled_start, scheduled_end) windows overlap.
+     *   - Otherwise (either side lacks schedule rows), any other active WO
+     *     bound to the same machine is treated as a conflict.
+     *
+     * @throws RuntimeException when the machine is already committed.
+     */
+    private function assertMachineAvailable(WorkOrder $wo): void
+    {
+        if (! $wo->machine_id) {
+            return;
+        }
+
+        $candidates = WorkOrder::query()
+            ->where('machine_id', $wo->machine_id)
+            ->where('id', '!=', $wo->id)
+            ->whereIn('status', [
+                WorkOrderStatus::Confirmed->value,
+                WorkOrderStatus::InProgress->value,
+            ])
+            ->get();
+
+        if ($candidates->isEmpty()) {
+            return;
+        }
+
+        // Schedule windows for THIS WO on the target machine (if any).
+        $ownWindows = ProductionSchedule::where('work_order_id', $wo->id)
+            ->where('machine_id', $wo->machine_id)
+            ->get(['scheduled_start', 'scheduled_end']);
+
+        foreach ($candidates as $other) {
+            $otherWindows = ProductionSchedule::where('work_order_id', $other->id)
+                ->where('machine_id', $wo->machine_id)
+                ->get(['scheduled_start', 'scheduled_end']);
+
+            // Only do the precise time-window comparison when BOTH sides have
+            // schedule rows. Otherwise fall back to a blanket conflict.
+            if ($ownWindows->isNotEmpty() && $otherWindows->isNotEmpty()) {
+                foreach ($ownWindows as $own) {
+                    foreach ($otherWindows as $cand) {
+                        if ($own->scheduled_start < $cand->scheduled_end
+                            && $cand->scheduled_start < $own->scheduled_end) {
+                            throw new RuntimeException(
+                                "Machine is already committed to work order {$other->wo_number} "
+                                . 'over an overlapping schedule window.'
+                            );
+                        }
+                    }
+                }
+                // No overlap with this candidate — keep checking others.
+                continue;
+            }
+
+            throw new RuntimeException(
+                "Machine is already committed to active work order {$other->wo_number}."
+            );
+        }
     }
 
     /**

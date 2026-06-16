@@ -47,7 +47,10 @@
     </tr>
     <tr>
       <td><strong>Inspection Result</strong></td>
-      <td><span class="chip" style="background:#DCFCE7; color:#166534;">PASSED</span></td>
+      <td>
+        @php($__pass = !empty($inspection_passed))
+        <span class="chip" style="background: {{ $__pass ? '#DCFCE7' : '#FEE2E2' }}; color: {{ $__pass ? '#166534' : '#991B1B' }};">{{ $inspection_result ?? ($__pass ? 'PASSED' : 'FAILED') }}</span>
+      </td>
     </tr>
     @if (!empty($delivery_number))
       <tr>
@@ -85,6 +88,36 @@
     @endif
   </tbody>
 </table>
+
+@if (!empty($critical_measurements) && is_array($critical_measurements))
+  <h3 style="font-size:12px; margin:16px 0 6px;">Critical Dimension Measurements</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Characteristic</th>
+        <th class="r">Nominal</th>
+        <th class="r">Tolerance</th>
+        <th class="r">Measured (min–max)</th>
+        <th class="r">n</th>
+        <th>Result</th>
+      </tr>
+    </thead>
+    <tbody>
+      @foreach ($critical_measurements as $m)
+        <tr>
+          <td>{{ $m['parameter'] }}@if (!empty($m['unit'])) <span style="color:#888;">({{ $m['unit'] }})</span>@endif</td>
+          <td class="r" style="font-family:'DejaVuSansMono',monospace;">{{ $m['nominal'] ?? '—' }}</td>
+          <td class="r" style="font-family:'DejaVuSansMono',monospace;">{{ $m['tol_min'] ?? '—' }} … {{ $m['tol_max'] ?? '—' }}</td>
+          <td class="r" style="font-family:'DejaVuSansMono',monospace;">{{ $m['min_actual'] ?? '—' }} … {{ $m['max_actual'] ?? '—' }}</td>
+          <td class="r">{{ $m['sample_n'] }}</td>
+          <td>
+            <span class="chip" style="background: {{ $m['pass'] ? '#DCFCE7' : '#FEE2E2' }}; color: {{ $m['pass'] ? '#166534' : '#991B1B' }};">{{ $m['pass'] ? 'PASS' : 'FAIL' }}</span>
+          </td>
+        </tr>
+      @endforeach
+    </tbody>
+  </table>
+@endif
 
 <p style="font-size:11px; line-height:1.6; margin: 16px 0;">
   This certifies that the parts described above have been manufactured and

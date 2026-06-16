@@ -258,6 +258,9 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'quality.ncr.manage',           'name' => 'Manage NCRs'],
                 // T3.6 — COPQ rollup trend (snapshot history).
                 ['slug' => 'quality.copq.view',            'name' => 'View COPQ Trends'],
+                // OGAMI-016 — IATF calibration register.
+                ['slug' => 'quality.calibration.view',     'name' => 'View Calibration Register'],
+                ['slug' => 'quality.calibration.manage',   'name' => 'Manage Calibration Register'],
                 // T3.5 — IATF document control. `view` = self-service ack list + read.
                 // `manage` = catalog CRUD + publish revisions + mark-reviewed.
                 ['slug' => 'quality.documents.view',       'name' => 'View Controlled Documents'],

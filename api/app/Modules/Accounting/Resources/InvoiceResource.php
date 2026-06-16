@@ -18,11 +18,18 @@ class InvoiceResource extends JsonResource
             'date'           => optional($this->date)->toDateString(),
             'due_date'       => optional($this->due_date)->toDateString(),
             'is_vatable'     => (bool) $this->is_vatable,
+            'vat_classification' => $this->vat_classification?->value,
+            'vat_classification_label' => $this->vat_classification?->label(),
             'subtotal'       => (string) $this->subtotal,
             'vat_amount'     => (string) $this->vat_amount,
+            'senior_pwd_discount' => (string) $this->senior_pwd_discount,
             'total_amount'   => (string) $this->total_amount,
             'amount_paid'    => (string) $this->amount_paid,
             'balance'        => (string) $this->balance,
+            'buyer_tin'      => $this->buyer_tin,
+            'atp_number'     => $this->atp_number,
+            'serial_range'   => $this->serial_range,
+            'is_original'    => (bool) $this->is_original,
             'status'         => $this->status?->value,
             // Display-friendly status: surface "unpaid" alias when finalized + zero collected
             'display_status' => $this->status === InvoiceStatus::Finalized && (string) $this->amount_paid === '0.00'

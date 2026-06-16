@@ -95,9 +95,22 @@ class BomService
         $bom->delete();
     }
 
+    /** @var int OGAMI-015 — hard cap on BOM nesting depth (cycle / runaway guard). */
+    private const MAX_EXPLODE_DEPTH = 10;
+
     /**
      * Public method used by MRP engine (Task 52): expand a finished-good qty
      * into the required raw-material quantities (gross, including waste).
+     *
+     * OGAMI-015 — multi-level explosion. When a BOM line's component item is
+     * itself a manufactured product (i.e. a CRM Product whose part_number
+     * equals the item code AND which carries its own active BOM), the line is
+     * recursively exploded down to raw materials. Each level multiplies the
+     * running quantity and applies that level's waste factor (already folded
+     * into BomItem::effective_quantity). Leaf raw materials are aggregated so
+     * the same raw material reached through different sub-assemblies collapses
+     * into a single requirement row. Single-level BOMs behave identically to
+     * the previous implementation.
      *
      * @return Collection<int, array{item_id: int, item_code: string, item_name: string, gross_quantity: string}>
      */
@@ -107,18 +120,46 @@ class BomService
         if (! $bom) {
             throw new RuntimeException('No active BOM exists for the requested product.');
         }
-        return $bom->items->map(function ($row) use ($finishedQuantity) {
-            $effective = (float) $row->effective_quantity;
-            $gross = $effective * $finishedQuantity;
 
-            // OGAMI-004 — BOM line quantities are authored per the line `unit`.
-            // If that unit differs from the item base uom AND a conversion row
-            // is configured, convert the gross requirement to BASE so MRP nets
-            // it against base-uom stock. Identity when the line `unit` is null
-            // or equals the item base uom. To guarantee no regression for
-            // legacy BOMs whose line unit differs from base but have no
-            // conversion configured, a missing conversion falls back to the
-            // authored quantity (treated as already base) rather than throwing.
+        // [item_id => ['item_id' => int, 'item_code' => string, 'item_name' => string, 'qty' => float]]
+        $accumulator = [];
+        $this->explodeInto($bom, $finishedQuantity, $accumulator, [$productId], 0);
+
+        return collect(array_values($accumulator))->map(fn (array $row) => [
+            'item_id'        => $row['item_id'],
+            'item_code'      => $row['item_code'],
+            'item_name'      => $row['item_name'],
+            'gross_quantity' => number_format($row['qty'], 3, '.', ''),
+        ]);
+    }
+
+    /**
+     * Recursive worker. Walks every line of $bom, multiplying $multiplier by
+     * each line's effective (waste-inclusive, unit-converted) quantity. A line
+     * whose component item maps to a manufactured product with its own active
+     * BOM recurses; otherwise it is treated as a raw-material leaf and added to
+     * $accumulator.
+     *
+     * @param array<int, array{item_id:int,item_code:string,item_name:string,qty:float}> $accumulator (by reference)
+     * @param list<int> $productPath chain of product ids currently being expanded (cycle detection)
+     */
+    private function explodeInto(Bom $bom, float $multiplier, array &$accumulator, array $productPath, int $depth): void
+    {
+        if ($depth > self::MAX_EXPLODE_DEPTH) {
+            throw new RuntimeException(
+                'BOM explosion exceeded the maximum nesting depth of '
+                . self::MAX_EXPLODE_DEPTH . ' — check for a circular bill of materials.'
+            );
+        }
+
+        foreach ($bom->items as $row) {
+            $effective = (float) $row->effective_quantity;
+            $gross = $effective * $multiplier;
+
+            // OGAMI-004 — convert the line quantity to the item base uom when a
+            // conversion row is configured. Identity otherwise (missing
+            // conversion falls back to the authored quantity rather than
+            // throwing, preserving legacy-BOM behaviour).
             $grossStr = number_format($gross, 6, '.', '');
             if ($row->item && ! empty($row->unit)) {
                 try {
@@ -127,13 +168,72 @@ class BomService
                     // No conversion configured — leave authored quantity as-is.
                 }
             }
+            $grossFloat = (float) $grossStr;
 
-            return [
-                'item_id'        => (int) $row->item_id,
-                'item_code'      => (string) $row->item?->code,
-                'item_name'      => (string) $row->item?->name,
-                'gross_quantity' => number_format((float) $grossStr, 3, '.', ''),
-            ];
-        });
+            // OGAMI-015 — does this component item resolve to a manufactured
+            // sub-assembly with its own active BOM? Convention: the CRM Product
+            // whose part_number matches the item code is the manufactured form.
+            $subBom = $this->subAssemblyBomFor($row->item?->code);
+
+            if ($subBom !== null) {
+                if (in_array($subBom->product_id, $productPath, true)) {
+                    throw new RuntimeException(
+                        'Circular bill of materials detected while exploding product '
+                        . $subBom->product_id . ' (item ' . ($row->item?->code ?? '?') . ').'
+                    );
+                }
+                $this->explodeInto(
+                    $subBom,
+                    $grossFloat,
+                    $accumulator,
+                    array_merge($productPath, [$subBom->product_id]),
+                    $depth + 1,
+                );
+                continue;
+            }
+
+            // Raw-material leaf — aggregate by item_id.
+            $iid = (int) $row->item_id;
+            if (! isset($accumulator[$iid])) {
+                $accumulator[$iid] = [
+                    'item_id'   => $iid,
+                    'item_code' => (string) $row->item?->code,
+                    'item_name' => (string) $row->item?->name,
+                    'qty'       => 0.0,
+                ];
+            }
+            $accumulator[$iid]['qty'] += $grossFloat;
+        }
+    }
+
+    /**
+     * OGAMI-015 — resolve the active BOM for a sub-assembly identified by the
+     * component item code. Returns null when no manufactured product matches
+     * the code or the matched product has no active BOM (i.e. a pure raw
+     * material). Results memoised per request to avoid repeated lookups when
+     * the same sub-assembly appears across many lines.
+     *
+     * @var array<string, Bom|null>
+     */
+    private array $subAssemblyCache = [];
+
+    private function subAssemblyBomFor(?string $itemCode): ?Bom
+    {
+        if ($itemCode === null || $itemCode === '') {
+            return null;
+        }
+        if (array_key_exists($itemCode, $this->subAssemblyCache)) {
+            return $this->subAssemblyCache[$itemCode];
+        }
+
+        $product = Product::where('part_number', $itemCode)->first();
+        $bom = $product
+            ? Bom::with(['items.item:id,code,name,unit_of_measure,item_type'])
+                ->where('product_id', $product->id)
+                ->active()
+                ->first()
+            : null;
+
+        return $this->subAssemblyCache[$itemCode] = $bom;
     }
 }
