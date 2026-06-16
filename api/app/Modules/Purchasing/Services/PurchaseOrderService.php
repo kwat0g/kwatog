@@ -253,6 +253,9 @@ class PurchaseOrderService
         if (! in_array($po->status, [PurchaseOrderStatus::PendingApproval, PurchaseOrderStatus::Draft], true)) {
             throw new RuntimeException('PO is not in an approvable state.');
         }
+        // OGAMI-002 — segregation of duties: the approver must not be the user
+        // who created the vendor on this PO (vendor-create vs PO-approve).
+        $this->assertVendorSod($po, $by);
         $result = DB::transaction(function () use ($po, $by, $remarks) {
             $this->approvals->approve($po, $by, $remarks);
             $becameApproved = false;
@@ -285,6 +288,43 @@ class PurchaseOrderService
         // Series C — Task C4. Real-time chain progress.
         $this->broadcastChain($result, $by);
         return $result;
+    }
+
+    /** OGAMI-002 — permission that lets a PO approver bypass the vendor-creator SoD check. */
+    private const VENDOR_SOD_OVERRIDE_PERMISSION = 'purchasing.po.sod_override';
+
+    /**
+     * OGAMI-002 — block a PO approver who is also the creator of the PO's vendor.
+     *
+     * This is a guard against a single user both onboarding a supplier and
+     * approving spend to that supplier. It is dormant unless the `vendors` table
+     * carries a `created_by` column AND that column is populated — neither is true
+     * today, so this check currently never fires (see report). When the column is
+     * added, the guard activates automatically. The `purchasing.po.sod_override`
+     * permission is an explicit escape hatch (system_admin always passes).
+     */
+    private function assertVendorSod(PurchaseOrder $po, User $by): void
+    {
+        // Gracefully skip when the schema does not record who created a vendor.
+        if (! \Illuminate\Support\Facades\Schema::hasColumn('vendors', 'created_by')) {
+            return;
+        }
+
+        $vendorCreatorId = Vendor::query()
+            ->whereKey($po->vendor_id)
+            ->value('created_by');
+
+        if ($vendorCreatorId === null) {
+            return; // unknown maker — guard cannot fire.
+        }
+        if ((int) $vendorCreatorId !== (int) $by->id) {
+            return; // different user — allowed.
+        }
+        if ($by->hasPermission(self::VENDOR_SOD_OVERRIDE_PERMISSION)) {
+            return; // explicit override.
+        }
+
+        abort(403, 'You cannot approve a purchase order to a vendor you created (segregation of duties).');
     }
 
     public function reject(PurchaseOrder $po, User $by, string $reason): PurchaseOrder

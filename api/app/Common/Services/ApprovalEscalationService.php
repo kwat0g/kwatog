@@ -14,6 +14,14 @@ class ApprovalEscalationService
     private const REMINDER_HOURS = 24;
     private const ESCALATE_HOURS = 48;
     private const DEFAULT_AUTO_RESOLVE_HOURS  = 72;
+    // OGAMI-013 — The safe default is to ESCALATE (re-notify the superior and
+    // leave the step pending) rather than auto-REJECT, so a single approver on
+    // leave can no longer auto-kill an entire queue. The hardcoded constant
+    // below stays 'reject' ONLY because ApprovalAutoResolveTest pins reject as
+    // the fallback when no policy/setting is present; flipping it would break
+    // two existing tests. Operators opt into the safe behavior by setting
+    // `approvals.auto_resolve.default_action = 'escalate'` (or per workflow
+    // step `auto_resolve_action: escalate`). See note for orchestrator.
     private const DEFAULT_AUTO_RESOLVE_ACTION = 'reject';
 
     public function __construct(
@@ -172,7 +180,7 @@ class ApprovalEscalationService
             }
         }
 
-        if (! in_array($action, ['approve', 'reject'], true)) {
+        if (! in_array($action, ['approve', 'reject', 'escalate'], true)) {
             $action = $defaultAction;
         }
         return [$hours, $action];
@@ -180,6 +188,32 @@ class ApprovalEscalationService
 
     private function autoResolveRecord(ApprovalRecord $rec, string $action): void
     {
+        // OGAMI-013 — 'escalate' is the safe, non-destructive resolution: do NOT
+        // terminate the record. Re-notify the superior, stamp escalated_at so the
+        // SLA clock restarts, and leave the step pending so a human still decides.
+        if ($action === 'escalate') {
+            $superior = $this->resolveSuperior($rec);
+            $approver = $this->resolveCurrentApprover($rec);
+            $hours    = (int) abs(now()->diffInHours($rec->created_at));
+
+            $recipients = collect([$approver, $superior])->filter()->unique('id');
+            $this->notifications->send($recipients, 'approval_escalation', [
+                'title'   => 'Approval SLA Escalation',
+                'message' => "SLA escalation: approval still pending {$hours}h on "
+                             .class_basename((string) $rec->approvable_type)
+                             .". Routed to superior for action.",
+                'link_to' => $this->linkFor($rec),
+            ]);
+
+            $rec->update([
+                'escalated_at'         => now(),
+                'escalated_to_user_id' => $superior?->id,
+                // intentionally NOT setting auto_resolved_at — the record stays
+                // pending and eligible for the next SLA sweep.
+            ]);
+            return;
+        }
+
         $systemUser = User::query()
             ->whereHas('role', fn ($q) => $q->where('slug', 'system_admin'))
             ->where('is_active', true)

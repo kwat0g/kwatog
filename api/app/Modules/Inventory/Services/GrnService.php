@@ -139,6 +139,12 @@ class GrnService
                     'quantity_accepted'      => 0,
                     'unit_cost'              => $row['unit_cost'] ?? $poi->unit_price,
                     'remarks'                => $row['remarks'] ?? null,
+                    // OGAMI-012 — optional lot capture per received line. The
+                    // existing ADV3 `material_lot_number` column is the lot of
+                    // record; we also persist an optional expiry. Both null-safe.
+                    'material_lot_number'    => $row['lot_number'] ?? ($row['material_lot_number'] ?? null),
+                    'supplier_lot_reference' => $row['supplier_lot_reference'] ?? null,
+                    'expiry_date'            => $row['expiry_date'] ?? null,
                 ]);
 
                 // Update PO line running total of received quantity (base uom).
@@ -169,7 +175,7 @@ class GrnService
             foreach ($grn->items as $row) {
                 $row->quantity_accepted = $row->quantity_received;
                 $row->save();
-                $this->movements->move(new StockMovementInput(
+                $mvmt = $this->movements->move(new StockMovementInput(
                     type: StockMovementType::GrnReceipt,
                     itemId: $row->item_id,
                     fromLocationId: null,
@@ -181,6 +187,12 @@ class GrnService
                     remarks: "GRN {$grn->grn_number}",
                     createdBy: $by->id,
                 ));
+                // OGAMI-012 — propagate the captured lot/expiry onto the ledger.
+                $this->movements->stampLot(
+                    $mvmt,
+                    $row->material_lot_number,
+                    $row->expiry_date?->toDateString(),
+                );
             }
             $grn->update([
                 'status'      => GrnStatus::Accepted,
@@ -232,7 +244,7 @@ class GrnService
                 $row->quantity_accepted = $accepted;
                 $row->save();
                 if (bccomp($accepted, '0', 3) > 0) {
-                    $this->movements->move(new StockMovementInput(
+                    $mvmt = $this->movements->move(new StockMovementInput(
                         type: StockMovementType::GrnReceipt,
                         itemId: $row->item_id,
                         fromLocationId: null,
@@ -244,6 +256,11 @@ class GrnService
                         remarks: "GRN {$grn->grn_number} (partial)",
                         createdBy: $by->id,
                     ));
+                    $this->movements->stampLot(
+                        $mvmt,
+                        $row->material_lot_number,
+                        $row->expiry_date?->toDateString(),
+                    );
                 }
             }
             $grn->update([
@@ -430,7 +447,7 @@ class GrnService
         foreach ($grn->items as $row) {
             $row->quantity_accepted = $row->quantity_received;
             $row->save();
-            $this->movements->move(new StockMovementInput(
+            $mvmt = $this->movements->move(new StockMovementInput(
                 type: StockMovementType::GrnReceipt,
                 itemId: $row->item_id,
                 fromLocationId: null,
@@ -442,6 +459,11 @@ class GrnService
                 remarks: "GRN {$grn->grn_number}",
                 createdBy: $by->id,
             ));
+            $this->movements->stampLot(
+                $mvmt,
+                $row->material_lot_number,
+                $row->expiry_date?->toDateString(),
+            );
         }
         $grn->update([
             'status'      => GrnStatus::Accepted,

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Inventory\Requests;
 
 use App\Common\Concerns\ResolvesHashIds;
+use App\Modules\Inventory\Enums\StockAdjustmentReason;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use Illuminate\Foundation\Http\FormRequest;
@@ -36,6 +37,8 @@ class StoreStockAdjustmentRequest extends FormRequest
             'quantity'    => ['required', 'decimal:0,3', 'min:0.001'],
             'unit_cost'   => ['nullable', 'decimal:0,4', 'min:0'],
             'reason'      => ['required', 'string', 'min:10', 'max:500'],
+            // OGAMI-012 — optional structured reason code (enum-backed).
+            'reason_code' => ['nullable', Rule::in(StockAdjustmentReason::values())],
         ];
     }
 

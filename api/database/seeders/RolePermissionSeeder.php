@@ -125,6 +125,7 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'accounting.journal.create',       'name' => 'Create Journal Entries'],
                 ['slug' => 'accounting.journal.post',         'name' => 'Post Journal Entries'],
                 ['slug' => 'accounting.journal.reverse',      'name' => 'Reverse Posted Journal Entries'],
+                ['slug' => 'accounting.journal.self_post_override', 'name' => 'Self-Post Journal Entries (SoD override)'],
                 // Period close (OGAMI-001)
                 ['slug' => 'accounting.periods.view',         'name' => 'View Accounting Periods'],
                 ['slug' => 'accounting.periods.manage',       'name' => 'Close / Reopen Accounting Periods'],
@@ -155,6 +156,7 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'inventory.grn.create',          'name' => 'Create / Accept GRN'],
                 ['slug' => 'inventory.issue.create',        'name' => 'Issue Materials'],
                 ['slug' => 'inventory.adjust',              'name' => 'Adjust / Transfer Stock'],
+                ['slug' => 'inventory.adjust.approve',      'name' => 'Approve High-Value Stock Adjustments'],
                 // ADV8 — WMS
                 ['slug' => 'inventory.stock_count.view',    'name' => 'View Stock Count Sessions'],
                 ['slug' => 'inventory.stock_count.manage',  'name' => 'Create / Complete Stock Count Sessions'],
@@ -168,6 +170,7 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'purchasing.pr.approve',   'name' => 'Approve Purchase Request'],
                 ['slug' => 'purchasing.po.create',    'name' => 'Create Purchase Order'],
                 ['slug' => 'purchasing.po.approve',   'name' => 'Approve Purchase Order'],
+                ['slug' => 'purchasing.po.sod_override', 'name' => 'Approve PO to Self-Created Vendor (SoD override)'],
                 ['slug' => 'purchasing.po.send',      'name' => 'Send PO to Supplier'],
                 // Series F — Task F4: supplier performance dashboard.
                 ['slug' => 'purchasing.suppliers.performance.view',     'name' => 'View Supplier Performance'],
@@ -384,7 +387,7 @@ class RolePermissionSeeder extends Seeder
                 'description' => 'Manages payroll finalization, accounting, vendor & customer ledgers.',
                 'permissions' => array_merge(
                     $this->module('payroll'),
-                    $this->module('accounting'),
+                    $this->module('accounting', except: ['accounting.journal.self_post_override']),
                     $this->module('budgeting'),
                     $this->module('loans'),
                     $this->module('assets'),
@@ -447,7 +450,7 @@ class RolePermissionSeeder extends Seeder
                 'name' => 'Purchasing Officer',
                 'description' => 'Manages PRs, POs, vendor relationships.',
                 'permissions' => array_merge(
-                    $this->module('purchasing'),
+                    $this->module('purchasing', except: ['purchasing.po.sod_override']),
                     $this->selfService(),
                     [
                         'inventory.view', 'inventory.grn.create', 'supply_chain.shipments.manage',
@@ -549,12 +552,15 @@ class RolePermissionSeeder extends Seeder
     /**
      * @return array<int, string>
      */
-    private function module(string $module): array
+    private function module(string $module, array $except = []): array
     {
-        return array_map(
-            fn (array $p) => $p['slug'],
-            $this->permissionCatalog()[$module] ?? [],
-        );
+        return array_values(array_filter(
+            array_map(
+                fn (array $p) => $p['slug'],
+                $this->permissionCatalog()[$module] ?? [],
+            ),
+            fn (string $slug) => ! in_array($slug, $except, true),
+        ));
     }
 
     /**

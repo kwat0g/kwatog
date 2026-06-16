@@ -228,14 +228,28 @@ class PurchaseRequestService
     /**
      * Submit an urgent PR — skip the first workflow step (Department Head)
      * so it goes directly to later approvers.
+     *
+     * OGAMI-013 — The Dept Head skip is now gated behind a value cap
+     * (config('purchasing.urgent_skip_limit')). A high-value "urgent" PR can no
+     * longer bypass its department head with only a free-text reason; over the
+     * cap, the full chain applies. A '0' cap disables skipping entirely. When a
+     * skip IS performed, the urgency_reason is stamped onto the skipped record
+     * for the audit trail.
      */
     private function submitUrgent(PurchaseRequest $pr, float $total): void
     {
-        // We create approval records but mark the first step as skipped
-        // for urgent PRs. We do this via the ApprovalService by passing a
-        // threshold of 0 for the first step, then re-creating with the
-        // first step set to skipped.
         $this->approvals->submit($pr, 'purchase_request', $total);
+
+        // Resolve the cap. '0' disables skipping; any positive value is the
+        // inclusive ceiling under which the Dept Head step may be skipped.
+        $limit = (float) config('purchasing.urgent_skip_limit', '0');
+        $maySkip = $limit > 0 && $total <= $limit;
+
+        if (! $maySkip) {
+            // Over the cap (or skipping disabled): keep the full chain. The PR
+            // is still flagged urgent for prioritization, but no step is removed.
+            return;
+        }
 
         // Find the first pending step and skip it (Dept Head role).
         $first = $this->approvals->records($pr)
@@ -244,9 +258,13 @@ class PurchaseRequestService
             ->first();
 
         if ($first && $first->role_slug === 'department_head') {
+            $reason = trim((string) ($pr->urgency_reason ?? ''));
+            $note = 'Skipped — urgent PR escalation'
+                . ($reason !== '' ? " (reason: {$reason})" : '');
+
             $first->update([
                 'action'   => 'skipped',
-                'remarks'  => 'Skipped — urgent PR escalation',
+                'remarks'  => $note,
                 'acted_at' => now(),
             ]);
         }

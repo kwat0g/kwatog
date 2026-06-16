@@ -108,6 +108,14 @@ class MaterialIssueService
                     createdBy: $by->id,
                 ));
 
+                // OGAMI-012 — optional lot stamp so an issued lot is traceable
+                // back to the GRN lot it came from. Null-safe; existing callers
+                // omit `lot_number` and the movement stays unstamped.
+                $this->movements->stampLot(
+                    $mvmt,
+                    isset($row['lot_number']) ? (string) $row['lot_number'] : null,
+                );
+
                 MaterialIssueSlipItem::create([
                     'material_issue_slip_id'  => $slip->id,
                     'item_id'                 => $itemId,

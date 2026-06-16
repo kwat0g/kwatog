@@ -22,6 +22,9 @@ use RuntimeException;
 
 class JournalEntryService
 {
+    /** OGAMI-002 — permission that lets a maker also post (checker) their own JE. */
+    private const SELF_POST_OVERRIDE_PERMISSION = 'accounting.journal.self_post_override';
+
     public function __construct(
         private readonly DocumentSequenceService $sequences,
         private readonly AccountingPeriodService $periods,
@@ -190,6 +193,17 @@ class JournalEntryService
                 throw new UnbalancedJournalEntryException($td, $tc);
             }
 
+            // OGAMI-002 — maker-checker / segregation of duties.
+            // The user who created a draft JE may not also post it. A different
+            // user must act as checker. Two escape hatches:
+            //   1. `accounting.journal.self_post_override` permission (system_admin
+            //      always has it, since hasPermission() short-circuits for admin).
+            //   2. A configurable self-post limit: entries whose total is strictly
+            //      below `accounting.je_self_post_limit` may be self-posted. A limit
+            //      of 0 (the default) means maker !== checker is ALWAYS required.
+            // Mirrors the abort(403, ...) self-action pattern in ApprovalService.
+            $this->assertNotSelfPosting($je, $by, $td);
+
             $je->update([
                 'status'      => JournalEntryStatus::Posted,
                 'posted_by'   => $by->id,
@@ -200,6 +214,36 @@ class JournalEntryService
 
             return $je->fresh(['lines.account']);
         });
+    }
+
+    /**
+     * OGAMI-002 — enforce maker-checker on posting.
+     *
+     * Blocks the JE creator from posting their own draft unless:
+     *   - they hold `accounting.journal.self_post_override`, OR
+     *   - the entry total is strictly below the configured self-post limit.
+     *
+     * A null `created_by` (legacy / system-generated drafts) cannot trigger the
+     * guard, so those post freely.
+     */
+    private function assertNotSelfPosting(JournalEntry $je, User $by, string $total): void
+    {
+        $creatorId = $je->created_by !== null ? (int) $je->created_by : null;
+        if ($creatorId === null || $creatorId !== (int) $by->id) {
+            return; // different checker, or unknown maker — allowed.
+        }
+
+        if ($by->hasPermission(self::SELF_POST_OVERRIDE_PERMISSION)) {
+            return; // explicit override.
+        }
+
+        // Threshold escape hatch. Default '0' => always require maker !== checker.
+        $limit = (string) config('accounting.je_self_post_limit', '0');
+        if (Money::gt($limit, '0') && Money::lt($total, $limit)) {
+            return; // below self-post limit — permitted.
+        }
+
+        abort(403, 'You cannot post a journal entry you created. A different user must post it (segregation of duties).');
     }
 
     /**

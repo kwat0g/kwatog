@@ -145,7 +145,18 @@ class ApprovalService
 
     private function userMayActFor(User $user, string $roleSlug): bool
     {
-        return $user->role?->slug === $roleSlug;
+        // Direct role match — the original authority path.
+        if ($user->role?->slug === $roleSlug) {
+            return true;
+        }
+
+        // OGAMI-013 — delegation: allow when an active delegation (whose
+        // [starts_at, ends_at] window covers now) grants this user the role.
+        // The self-approval guard in approve()/reject() runs BEFORE this check,
+        // so a delegate still cannot act on a record the delegator submitted.
+        $delegates = \App\Common\Models\ApprovalDelegation::activeDelegatesFor($roleSlug, now());
+
+        return in_array($user->id, $delegates, true);
     }
 
     /**

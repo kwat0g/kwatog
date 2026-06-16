@@ -209,4 +209,44 @@ class StockMovementService
         $r = bcadd($abs, '0.00005', 4);
         return $isNeg ? '-'.$r : $r;
     }
+
+    /**
+     * OGAMI-012 — stamp lot/expiry metadata onto a just-created movement.
+     *
+     * Kept separate from move() (whose input DTO is owned elsewhere) so lot
+     * capture is fully OPTIONAL and null-safe: callers that have a lot pass it
+     * here right after move(); everyone else is untouched. No-ops when both
+     * values are null.
+     */
+    public function stampLot(StockMovement $movement, ?string $lotNumber, ?string $expiryDate = null): StockMovement
+    {
+        if (($lotNumber === null || $lotNumber === '') && ($expiryDate === null || $expiryDate === '')) {
+            return $movement;
+        }
+        if ($lotNumber !== null && $lotNumber !== '') {
+            $movement->lot_number = $lotNumber;
+        }
+        if ($expiryDate !== null && $expiryDate !== '') {
+            $movement->expiry_date = $expiryDate;
+        }
+        $movement->save();
+
+        return $movement;
+    }
+
+    /**
+     * OGAMI-012 — lot ledger: every movement carrying a given lot for an item,
+     * oldest first. Lets a supplier lot be traced GRN-receipt → material-issue.
+     *
+     * @return \Illuminate\Support\Collection<int, StockMovement>
+     */
+    public function lotHistory(int $itemId, string $lotNumber): \Illuminate\Support\Collection
+    {
+        return StockMovement::query()
+            ->where('item_id', $itemId)
+            ->where('lot_number', $lotNumber)
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get();
+    }
 }

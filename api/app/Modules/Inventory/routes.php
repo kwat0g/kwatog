@@ -71,6 +71,7 @@ Route::middleware(['auth:sanctum', 'feature:inventory'])->prefix('inventory')->g
     Route::get('/stock-levels',     [StockLevelController::class, 'index'])->middleware('permission:inventory.view');
     Route::get('/stock-movements',  [StockMovementController::class, 'index'])->middleware('permission:inventory.view');
     Route::post('/stock-adjustments', [StockAdjustmentController::class, 'store'])->middleware('permission:inventory.adjust');
+    Route::patch('/stock-adjustments/{stockAdjustment}/approve', [StockAdjustmentController::class, 'approve'])->middleware('permission:inventory.adjust.approve');
     Route::post('/stock-transfers',   [StockTransferController::class, 'store'])->middleware('permission:inventory.adjust');
 
     /* ─── ADV8 — WMS: Warehouse Map ─── */

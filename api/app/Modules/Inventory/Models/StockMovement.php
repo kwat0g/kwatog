@@ -21,6 +21,8 @@ class StockMovement extends Model
         'item_id', 'from_location_id', 'to_location_id',
         'movement_type', 'quantity', 'unit_cost', 'total_cost',
         'reference_type', 'reference_id', 'remarks', 'created_by', 'created_at',
+        // OGAMI-012 — lot/batch traceability (null-safe; optional).
+        'lot_number', 'expiry_date',
     ];
 
     protected $casts = [
@@ -30,6 +32,7 @@ class StockMovement extends Model
         'movement_type' => StockMovementType::class,
         'reference_id'  => 'integer',
         'created_at'    => 'datetime',
+        'expiry_date'   => 'date',
     ];
 
     public function item(): BelongsTo

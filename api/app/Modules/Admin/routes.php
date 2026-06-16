@@ -8,7 +8,6 @@ use App\Modules\Admin\Controllers\RoleController;
 use App\Modules\Admin\Controllers\UserAdminController;
 use App\Modules\Admin\Controllers\UserPermissionOverrideController;
 use Illuminate\Support\Facades\Route;
-
 Route::prefix('admin')
     ->middleware(['auth:sanctum', 'session.timeout', 'password.expired'])
     ->group(function (): void {
@@ -148,4 +147,20 @@ Route::middleware([
         Route::get('{scheduledExport}',       [\App\Common\Controllers\ScheduledExportController::class, 'show']);
         Route::put('{scheduledExport}',       [\App\Common\Controllers\ScheduledExportController::class, 'update']);
         Route::delete('{scheduledExport}',    [\App\Common\Controllers\ScheduledExportController::class, 'destroy']);
+    });
+
+/*
+ * OGAMI-013 — Approval delegation (self-service "who covers for me").
+ * Any authenticated user manages delegations where they are the delegator;
+ * system_admin manages anyone's. Per-row ownership is enforced inside
+ * ApprovalDelegationService (delegator pinning + revoke ownership check), so
+ * no blanket permission slug is required beyond authentication — mirroring the
+ * scheduled-exports / documents self-service pattern above.
+ */
+Route::middleware(['auth:sanctum', 'session.timeout', 'password.expired'])
+    ->prefix('approval-delegations')
+    ->group(function (): void {
+        Route::get('/',             [\App\Modules\Admin\Controllers\ApprovalDelegationController::class, 'index']);
+        Route::post('/',            [\App\Modules\Admin\Controllers\ApprovalDelegationController::class, 'store']);
+        Route::delete('{delegation}', [\App\Modules\Admin\Controllers\ApprovalDelegationController::class, 'destroy']);
     });

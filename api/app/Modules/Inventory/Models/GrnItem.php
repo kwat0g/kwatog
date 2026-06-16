@@ -22,12 +22,15 @@ class GrnItem extends Model
         'unit_cost', 'remarks',
         // ADV3 — IATF 16949 incoming material lot tracking (line-level).
         'material_lot_number', 'supplier_lot_reference',
+        // OGAMI-012 — lot expiry capture (null-safe; optional).
+        'expiry_date',
     ];
 
     protected $casts = [
         'quantity_received' => 'decimal:3',
         'quantity_accepted' => 'decimal:3',
         'unit_cost'         => 'decimal:4',
+        'expiry_date'       => 'date',
     ];
 
     public function grn(): BelongsTo
