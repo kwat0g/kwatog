@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
+  Workflow,
   Users,
   Clock4,
   CalendarDays,
@@ -94,6 +95,7 @@ const SECTIONS: NavSection[] = [
     label: 'Overview',
     items: [
       { to: '/dashboard',     label: 'Dashboard',     icon: LayoutDashboard },
+      { to: '/chains',        label: 'Chain Tracker', icon: Workflow, permission: 'crm.sales_orders.view' },
       { to: '/approvals',     label: 'Approvals',     icon: Inbox,  permission: 'approvals.board.view', badgeKey: 'approvals' },
       { to: '/notifications', label: 'Notifications', icon: Bell,   badgeKey: 'unread' },
     ],

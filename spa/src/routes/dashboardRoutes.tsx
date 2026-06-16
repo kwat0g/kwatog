@@ -23,6 +23,7 @@ const AdminDashboardPage       = lazy(() => import('@/pages/dashboard/admin'));
 // Cross-module pages (no specific module guard)
 const CalendarPage       = lazy(() => import('@/pages/calendar'));
 const ApprovalsBoardPage = lazy(() => import('@/pages/approvals'));
+const ChainTrackerPage   = lazy(() => import('@/pages/chains'));
 const NotificationsListPage = lazy(() => import('@/pages/notifications'));
 
 const AdminUsersRolesHubPage = lazy(() => import('@/pages/admin/users-roles'));
@@ -71,6 +72,12 @@ export const dashboardRoutes = (
     <Route
       path="/approvals"
       element={<PermissionGuard permission="approvals.board.view"><ApprovalsBoardPage /></PermissionGuard>}
+    />
+
+    {/* Chain Tracker — cross-module order-to-cash journey view */}
+    <Route
+      path="/chains"
+      element={<PermissionGuard permission="crm.sales_orders.view"><ChainTrackerPage /></PermissionGuard>}
     />
 
     {/* Series F / Task F7 — System activity feed */}
