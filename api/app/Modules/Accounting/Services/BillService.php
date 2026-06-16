@@ -20,6 +20,7 @@ use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Exceptions\ThreeWayMatchException;
 use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Services\ThreeWayMatchService;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -134,6 +135,23 @@ class BillService
             if (! empty($data['purchase_order_id'])) {
                 $poId = HashIdFilter::decode($data['purchase_order_id'], PurchaseOrder::class)
                     ?? (int) $data['purchase_order_id'];
+
+                // OGAMI-006 — never bill against a cancelled/closed PO. A supplier
+                // invoice for a PO that was cancelled (or already closed) must not
+                // silently post to AP + GL. Guard regardless of 3-way-match config.
+                if ($poId) {
+                    $poStatus = PurchaseOrder::query()->whereKey($poId)->value('status');
+                    $poStatusValue = $poStatus instanceof \BackedEnum ? $poStatus->value : (string) $poStatus;
+                    if (in_array($poStatusValue, [
+                        PurchaseOrderStatus::Cancelled->value,
+                        PurchaseOrderStatus::Closed->value,
+                    ], true)) {
+                        throw ValidationException::withMessages([
+                            'purchase_order_id' => ["Cannot bill against a {$poStatusValue} purchase order."],
+                        ]);
+                    }
+                }
+
                 if ($this->threeWayMatch && $poId) {
                     $po = PurchaseOrder::query()->with(['items.item'])->findOrFail($poId);
                     [$itemsForMatch] = $this->normalizeItems($data['items'] ?? []);

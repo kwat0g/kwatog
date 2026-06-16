@@ -119,4 +119,37 @@ class BillServiceTest extends TestCase
             'payment_method'  => PaymentMethod::Cash->value,
         ], $user);
     }
+
+    public function test_cannot_bill_against_cancelled_po(): void
+    {
+        $user = $this->newUser();
+        $vendor = Vendor::create(['name' => 'Cancelled PO Vendor', 'payment_terms_days' => 30]);
+        $expenseId = Account::query()->where('code', '5010')->firstOrFail()->hash_id;
+
+        $po = \App\Modules\Purchasing\Models\PurchaseOrder::create([
+            'po_number'    => 'PO-202604-9999',
+            'vendor_id'    => $vendor->id,
+            'date'         => '2026-04-01',
+            'subtotal'     => '1000.00',
+            'vat_amount'   => '0.00',
+            'total_amount' => '1000.00',
+            'is_vatable'   => false,
+            'created_by'   => $user->id,
+        ]);
+        $po->forceFill(['status' => \App\Modules\Purchasing\Enums\PurchaseOrderStatus::Cancelled->value])->save();
+
+        $svc = app(BillService::class);
+
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $svc->create([
+            'bill_number'       => 'INV-CANCEL-1',
+            'vendor_id'         => $vendor->hash_id,
+            'purchase_order_id' => $po->hash_id,
+            'date'              => '2026-04-10',
+            'is_vatable'        => false,
+            'items'             => [
+                ['expense_account_id' => $expenseId, 'description' => 'Resin', 'quantity' => '1', 'unit_price' => '1000.00'],
+            ],
+        ], $user);
+    }
 }
