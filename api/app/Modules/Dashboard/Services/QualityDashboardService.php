@@ -66,7 +66,7 @@ class QualityDashboardService
         if (! Schema::hasTable('inspections')) return '0.0';
         $total = (int) DB::table('inspections')->whereDate('created_at', today())->count();
         if ($total === 0) return '0.0';
-        $passed = (int) DB::table('inspections')->whereDate('created_at', today())->where('result', 'pass')->count();
+        $passed = (int) DB::table('inspections')->whereDate('created_at', today())->where('status', 'passed')->count();
         return number_format(($passed * 100.0) / $total, 1, '.', '');
     }
 
@@ -75,11 +75,14 @@ class QualityDashboardService
      */
     private function qualityInspectionQueue(): array
     {
-        if (! Schema::hasTable('inspections') || ! Schema::hasTable('items')) return [];
+        // Inspections reference CRM products (not inventory items); the table
+        // has no batch_no/qty — it carries batch_quantity. Join products and map
+        // the queue card from the real columns.
+        if (! Schema::hasTable('inspections') || ! Schema::hasTable('products')) return [];
         return DB::table('inspections as i')
-            ->leftJoin('items as it', 'it.id', '=', 'i.product_id')
+            ->leftJoin('products as p', 'p.id', '=', 'i.product_id')
             ->where('i.status', 'in_progress')
-            ->select('i.id', 'i.inspection_number', 'i.stage', 'it.name as product_name', 'i.batch_no', 'i.qty', 'i.created_at')
+            ->select('i.id', 'i.inspection_number', 'i.stage', 'p.name as product_name', 'i.batch_quantity', 'i.created_at')
             ->orderByRaw("CASE i.stage WHEN 'outgoing' THEN 0 WHEN 'in_process' THEN 1 WHEN 'incoming' THEN 2 END")
             ->orderBy('i.created_at')
             ->limit(10)
@@ -89,8 +92,8 @@ class QualityDashboardService
                 'inspection_number' => $r->inspection_number,
                 'stage'             => $r->stage,
                 'product'           => $r->product_name ?? '—',
-                'batch_no'          => $r->batch_no,
-                'qty'               => (string) ($r->qty ?? '0'),
+                'batch_no'          => null,
+                'qty'               => (string) ($r->batch_quantity ?? '0'),
                 'waiting_since'     => $r->created_at ? Carbon::parse((string) $r->created_at)->diffForHumans() : '—',
             ])
             ->all();
@@ -102,10 +105,14 @@ class QualityDashboardService
     private function qualityNcrList(): array
     {
         if (! Schema::hasTable('non_conformance_reports')) return [];
+        // NCRs link to a product (and optionally an inspection/complaint), not a
+        // customer column, and carry defect_description (no defect_code). Map the
+        // product name into the "customer/source" slot and the description into
+        // the defect slot to satisfy the dashboard card contract.
         return DB::table('non_conformance_reports as ncr')
-            ->leftJoin('customers as c', 'c.id', '=', 'ncr.customer_id')
+            ->leftJoin('products as p', 'p.id', '=', 'ncr.product_id')
             ->whereIn('ncr.status', ['open', 'in_progress'])
-            ->select('ncr.id', 'ncr.ncr_number', 'ncr.severity', 'c.name as customer_name', 'ncr.defect_code', 'ncr.status')
+            ->select('ncr.id', 'ncr.ncr_number', 'ncr.severity', 'p.name as product_name', 'ncr.defect_description', 'ncr.status')
             ->orderByRaw("CASE ncr.severity WHEN 'critical' THEN 0 WHEN 'major' THEN 1 WHEN 'minor' THEN 2 END")
             ->limit(5)
             ->get()
@@ -113,8 +120,8 @@ class QualityDashboardService
                 'id'          => app('hashids')->encode((int) $r->id),
                 'ncr_number'  => $r->ncr_number,
                 'severity'    => $r->severity,
-                'customer'    => $r->customer_name ?? 'Internal',
-                'defect_code' => $r->defect_code ?? '—',
+                'customer'    => $r->product_name ?? 'Internal',
+                'defect_code' => $r->defect_description ?? '—',
                 'status'      => $r->status,
             ])
             ->all();
