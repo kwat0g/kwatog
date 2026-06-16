@@ -77,6 +77,9 @@ $periodLabel = $period->period_start?->format('M j') . ' – ' . $period->period
       </thead>
       <tbody>
         <tr><td>Basic Pay</td><td class="amt mono">{{ $money($payroll->basic_pay) }}</td></tr>
+        @if ((float) $payroll->leave_pay > 0)
+          <tr><td>Leave Pay</td><td class="amt mono">{{ $money($payroll->leave_pay) }}</td></tr>
+        @endif
         @if ((float) $payroll->overtime_pay > 0)
           <tr><td>Overtime Pay</td><td class="amt mono">{{ $money($payroll->overtime_pay) }}</td></tr>
         @endif

@@ -66,6 +66,7 @@ class PayrollGlPostingService
                 ->whereNull('error_message')
                 ->selectRaw('
                     COALESCE(SUM(basic_pay),       0) as basic,
+                    COALESCE(SUM(leave_pay),       0) as leave_pay,
                     COALESCE(SUM(overtime_pay),    0) as overtime,
                     COALESCE(SUM(night_diff_pay),  0) as night_diff,
                     COALESCE(SUM(holiday_pay),     0) as holiday,
@@ -116,7 +117,7 @@ class PayrollGlPostingService
                 $totalCredit = Money::add($totalCredit, $amount);
             };
 
-            $basicLine    = (string) $totals->basic;
+            $basicLine    = Money::add((string) $totals->basic, (string) $totals->leave_pay);
             $otLine       = Money::add((string) $totals->overtime, (string) $totals->night_diff, (string) $totals->holiday);
             $sssEr        = (string) $totals->sss_er;
             $phEr         = (string) $totals->ph_er;

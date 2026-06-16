@@ -25,6 +25,7 @@ class Payroll extends Model
         'payroll_period_id', 'employee_id', 'pay_type',
         'days_worked',
         'basic_pay', 'overtime_pay', 'night_diff_pay', 'holiday_pay', 'gross_pay',
+        'leave_pay',
         'sss_ee', 'sss_er',
         'philhealth_ee', 'philhealth_er',
         'pagibig_ee', 'pagibig_er',
@@ -37,6 +38,7 @@ class Payroll extends Model
     protected $casts = [
         'days_worked'       => 'decimal:1',
         'basic_pay'         => 'decimal:2',
+        'leave_pay'         => 'decimal:2',
         'overtime_pay'      => 'decimal:2',
         'night_diff_pay'    => 'decimal:2',
         'holiday_pay'       => 'decimal:2',

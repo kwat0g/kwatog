@@ -30,6 +30,7 @@ class PayrollFactory extends Factory
             'night_diff_pay'     => 0,
             'holiday_pay'        => 0,
             'gross_pay'          => $basicPay,
+            'leave_pay'          => 0,
             'sss_ee'             => 0,
             'sss_er'             => 0,
             'philhealth_ee'      => 0,

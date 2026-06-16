@@ -118,8 +118,58 @@ class PayrollCalculatorServiceTest extends TestCase
         }
     }
 
-    // ─── Tests ────────────────────────────────────────────────
+    /**
+     * Mark approved leave the way LeaveRequestService does: an OnLeave attendance
+     * row per day with remarks "leave:{leave_request_no}" and zeroed hours.
+     * Returns the leave_request_no token used.
+     */
+    private function markLeave(Employee $emp, string $start, string $end, bool $isPaid): string
+    {
+        $leaveType = \App\Modules\Leave\Models\LeaveType::create([
+            'name'            => $isPaid ? 'Vacation Leave' : 'Leave Without Pay',
+            'code'            => $isPaid ? 'VL-'.substr(uniqid(), -5) : 'LWOP-'.substr(uniqid(), -4),
+            'default_balance' => '5.0',
+            'is_paid'         => $isPaid,
+        ]);
 
+        $leaveNo = 'LR-202604-'.str_pad((string) random_int(1, 9999), 4, '0', STR_PAD_LEFT);
+        $req = \App\Modules\Leave\Models\LeaveRequest::create([
+            'leave_request_no' => $leaveNo,
+            'employee_id'      => $emp->id,
+            'leave_type_id'    => $leaveType->id,
+            'start_date'       => $start,
+            'end_date'         => $end,
+            'days'             => '1.0',
+            'reason'           => 'test',
+        ]);
+        $req->forceFill(['status' => \App\Modules\Leave\Enums\LeaveRequestStatus::Approved->value])->save();
+
+        $cur = \Carbon\Carbon::parse($start);
+        $endC = \Carbon\Carbon::parse($end);
+        while ($cur->lte($endC)) {
+            if ($cur->dayOfWeek !== 0) { // Sundays are not work/leave days
+                Attendance::updateOrCreate(
+                    ['employee_id' => $emp->id, 'date' => $cur->toDateString()],
+                    [
+                        'status'            => \App\Modules\Attendance\Enums\AttendanceStatus::OnLeave->value,
+                        'is_manual_entry'   => false,
+                        'remarks'           => "leave:{$leaveNo}",
+                        'regular_hours'     => 0,
+                        'overtime_hours'    => 0,
+                        'night_diff_hours'  => 0,
+                        'tardiness_minutes' => 0,
+                        'undertime_minutes' => 0,
+                        'day_type_rate'     => 1.00,
+                    ],
+                );
+            }
+            $cur->addDay();
+        }
+
+        return $leaveNo;
+    }
+
+    // ─── Tests ────────────────────────────────────────────────
     public function test_monthly_first_half_full_attendance(): void
     {
         $emp = $this->makeEmployee(); // 20,000 monthly
@@ -504,5 +554,74 @@ class PayrollCalculatorServiceTest extends TestCase
             $recomputed->total_deductions,
         );
         $this->assertSame($expectedNetRecomputed, $recomputed->net_pay);
+    }
+
+    /**
+     * OGAMI-003 — a daily-rated worker on approved PAID leave is paid for those days.
+     *
+     * Setup (600 daily): work Apr 1-3, paid leave Apr 6-8 (Mon-Wed).
+     *   days_worked = 3 (Apr 1,2,3) → basic = 3 × 600 = 1800
+     *   paid leave  = 3 days (Apr 6,7,8) → leave_pay = 3 × 600 = 1800
+     *   gross       = 1800 + 1800 = 3600
+     */
+    public function test_daily_rate_paid_leave_is_compensated(): void
+    {
+        $emp = $this->makeEmployee([
+            'pay_type'             => 'daily',
+            'basic_monthly_salary' => null,
+            'daily_rate'           => '600.00',
+        ]);
+        $period = $this->makePeriod(false, '2026-04-01', '2026-04-15'); // 2nd half-style window, no gov noise
+
+        $this->attendanceFor($emp, '2026-04-01', '2026-04-03'); // 3 worked days
+        $this->markLeave($emp, '2026-04-06', '2026-04-08', isPaid: true); // 3 paid-leave days
+
+        $payroll = $this->calc->computeForEmployee($period, $emp);
+
+        $this->assertSame('3.0', (string) $payroll->days_worked, 'leave days must not count as days_worked');
+        $this->assertSame('1800.00', $payroll->basic_pay);
+        $this->assertSame('1800.00', $payroll->leave_pay);
+        $this->assertSame('3600.00', $payroll->gross_pay);
+    }
+
+    /**
+     * OGAMI-003 — UNPAID leave (LeaveType.is_paid = false) earns nothing.
+     */
+    public function test_daily_rate_unpaid_leave_is_not_compensated(): void
+    {
+        $emp = $this->makeEmployee([
+            'pay_type'             => 'daily',
+            'basic_monthly_salary' => null,
+            'daily_rate'           => '600.00',
+        ]);
+        $period = $this->makePeriod(false, '2026-04-01', '2026-04-15');
+
+        $this->attendanceFor($emp, '2026-04-01', '2026-04-03'); // 3 worked days
+        $this->markLeave($emp, '2026-04-06', '2026-04-08', isPaid: false); // unpaid leave
+
+        $payroll = $this->calc->computeForEmployee($period, $emp);
+
+        $this->assertSame('1800.00', $payroll->basic_pay);
+        $this->assertSame('0.00', $payroll->leave_pay, 'unpaid leave must not be compensated');
+        $this->assertSame('1800.00', $payroll->gross_pay);
+    }
+
+    /**
+     * OGAMI-003 — monthly-salaried staff get a flat half-month basic regardless
+     * of leave, so leave_pay must stay zero (no double-pay).
+     */
+    public function test_monthly_paid_leave_does_not_add_leave_pay(): void
+    {
+        $emp = $this->makeEmployee(); // 20,000 monthly
+        $period = $this->makePeriod(false, '2026-04-16', '2026-04-30'); // 2nd half: no gov deductions
+
+        $this->attendanceFor($emp, '2026-04-16', '2026-04-24');
+        $this->markLeave($emp, '2026-04-27', '2026-04-29', isPaid: true);
+
+        $payroll = $this->calc->computeForEmployee($period, $emp);
+
+        $this->assertSame('0.00', $payroll->leave_pay, 'monthly staff already covered by flat basic');
+        $this->assertSame('10000.00', $payroll->basic_pay);
+        $this->assertSame('10000.00', $payroll->gross_pay);
     }
 }

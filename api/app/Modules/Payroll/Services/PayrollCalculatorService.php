@@ -13,6 +13,7 @@ use App\Modules\Loans\Enums\LoanStatus;
 use App\Modules\Loans\Enums\LoanType;
 use App\Modules\Loans\Models\EmployeeLoan;
 use App\Modules\Loans\Models\LoanPayment;
+use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Payroll\Enums\DeductionType;
 use App\Modules\Payroll\Enums\PayrollAdjustmentStatus;
 use App\Modules\Payroll\Enums\PayrollAdjustmentType;
@@ -125,6 +126,13 @@ class PayrollCalculatorService
                 $employee, $period, $aggregates['days_worked'], $monthlySalary, $dailyRate,
             );
 
+            // ─── Paid-leave pay (OGAMI-003) ──────────────────────
+            // Daily-rated workers earn nothing for days they don't clock in, so
+            // approved PAID leave must be compensated explicitly. Monthly-salaried
+            // staff already receive a flat half-month basic regardless of leave,
+            // so adding leave_pay for them would double-pay — keep it daily-only.
+            $leavePay = $this->computeLeavePay($employee, $attendances, $dailyRate);
+
             // ─── Earnings stack ──────────────────────────────────
             $overtimePay  = $aggregates['ot_pay'];
             $nightDiffPay = $aggregates['nd_pay'];
@@ -132,7 +140,7 @@ class PayrollCalculatorService
             $tardiness    = $aggregates['tardiness_deduction'];
             $undertime    = $aggregates['undertime_deduction'];
 
-            $earnings = Money::add($basicPay, $overtimePay, $nightDiffPay, $holidayPay);
+            $earnings = Money::add($basicPay, $leavePay, $overtimePay, $nightDiffPay, $holidayPay);
             $grossPay = Money::sub(Money::sub($earnings, $tardiness), $undertime);
             if (Money::lt($grossPay, '0')) $grossPay = Money::zero();
 
@@ -161,6 +169,7 @@ class PayrollCalculatorService
                 'pay_type'          => $payType,
                 'days_worked'       => $aggregates['days_worked'],
                 'basic_pay'         => $basicPay,
+                'leave_pay'         => $leavePay,
                 'overtime_pay'      => $overtimePay,
                 'night_diff_pay'    => $nightDiffPay,
                 'holiday_pay'       => $holidayPay,
@@ -321,6 +330,68 @@ class PayrollCalculatorService
         }
 
         return Money::round2($halfBasic);
+    }
+
+    /**
+     * Paid-leave pay for daily-rated employees (OGAMI-003).
+     *
+     * The leave service writes each approved leave day as an OnLeave attendance
+     * row with zeroed hours and remarks "leave:{leave_request_no}". Daily-rated
+     * staff are paid per day worked, so without this they earn ₱0 for leave.
+     * We pay daily_rate per PAID leave day (LeaveType.is_paid = true); unpaid
+     * leave stays at zero. Monthly-salaried staff are excluded — their flat
+     * half-month basic already covers leave, so paying again would double-pay.
+     *
+     * @param  \Illuminate\Support\Collection<int, Attendance>  $attendances
+     */
+    private function computeLeavePay(Employee $employee, $attendances, string $dailyRate): string
+    {
+        $payType = $employee->pay_type instanceof \BackedEnum ? $employee->pay_type->value : (string) $employee->pay_type;
+        if ($payType !== PayType::Daily->value) {
+            return Money::zero();
+        }
+
+        // Collect leave_request_no tokens from OnLeave rows in this period.
+        $leaveNos = [];
+        foreach ($attendances as $att) {
+            if ($att->status !== AttendanceStatus::OnLeave) {
+                continue;
+            }
+            if (is_string($att->remarks) && str_starts_with($att->remarks, 'leave:')) {
+                $leaveNos[] = substr($att->remarks, 6);
+            }
+        }
+
+        if ($leaveNos === []) {
+            return Money::zero();
+        }
+
+        // Which of those leave requests are PAID? (single query, no N+1)
+        $paidLeaveNos = LeaveRequest::query()
+            ->whereIn('leave_request_no', array_unique($leaveNos))
+            ->whereHas('leaveType', fn ($q) => $q->where('is_paid', true))
+            ->pluck('leave_request_no')
+            ->all();
+
+        if ($paidLeaveNos === []) {
+            return Money::zero();
+        }
+
+        $paidLeaveNoSet = array_flip($paidLeaveNos);
+
+        // One day's pay per attendance row whose leave request is paid.
+        $paidDays = '0';
+        foreach ($attendances as $att) {
+            if ($att->status !== AttendanceStatus::OnLeave || ! is_string($att->remarks)) {
+                continue;
+            }
+            $no = str_starts_with($att->remarks, 'leave:') ? substr($att->remarks, 6) : null;
+            if ($no !== null && isset($paidLeaveNoSet[$no])) {
+                $paidDays = bcadd($paidDays, '1', 0);
+            }
+        }
+
+        return Money::mul($paidDays, $dailyRate);
     }
 
     /**

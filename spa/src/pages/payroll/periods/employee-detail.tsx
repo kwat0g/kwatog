@@ -48,6 +48,7 @@ export default function PayrollEmployeeDetailPage() {
   const emp = data.employee;
   const earningRows = [
     { label: 'Basic Pay',           value: data.basic_pay },
+    { label: 'Leave Pay',           value: data.leave_pay },
     { label: 'Overtime Pay',        value: data.overtime_pay },
     { label: 'Night Differential',  value: data.night_diff_pay },
     { label: 'Holiday Premium',     value: data.holiday_pay },

@@ -132,6 +132,7 @@ export interface Payroll {
   pay_type: string;
   days_worked: string | null;
   basic_pay: string;
+  leave_pay: string;
   overtime_pay: string;
   night_diff_pay: string;
   holiday_pay: string;

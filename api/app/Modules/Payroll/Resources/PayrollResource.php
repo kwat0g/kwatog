@@ -31,6 +31,7 @@ class PayrollResource extends JsonResource
             'days_worked'     => $this->days_worked,
 
             'basic_pay'       => $this->basic_pay,
+            'leave_pay'       => $this->leave_pay,
             'overtime_pay'    => $this->overtime_pay,
             'night_diff_pay'  => $this->night_diff_pay,
             'holiday_pay'     => $this->holiday_pay,
