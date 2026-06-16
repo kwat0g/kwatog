@@ -9,13 +9,17 @@
 FROM composer:2 AS deps
 WORKDIR /app
 COPY api/composer.json api/composer.lock ./
+# --ignore-platform-reqs: the composer base image lacks ext-gd/intl/etc; those
+# extensions are present in the php:8.3-fpm runtime stage below, so platform
+# checks here are spurious. Deps are resolved against the committed lock file.
 RUN composer install \
         --no-dev \
         --no-scripts \
         --prefer-dist \
         --no-progress \
         --no-interaction \
-        --optimize-autoloader
+        --optimize-autoloader \
+        --ignore-platform-reqs
 
 # Stage 2: Runtime
 FROM php:8.3-fpm-alpine
