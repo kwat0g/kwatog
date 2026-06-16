@@ -1,0 +1,230 @@
+/**
+ * HeroCanvas — a precision part, drawn.
+ *
+ * A revolved wireframe of an injection-molded bushing/cap (flange → neck →
+ * bore), rotating slowly inside the hero's drawing frame. Rendered as clean ink
+ * lines on the white page with crisp espresso edges, so it
+ * reads like a turning CAD model on a blueprint — directly connected to what
+ * Ogami makes, no decoration.
+ *
+ * Defensive by construction:
+ *   • No WebGL / reduced-motion → renders nothing; the SVG PartBlueprint shows.
+ *   • Mobile / low DPR           → capped pixel ratio, lighter line load.
+ *   • Tab hidden / off-screen    → render loop pauses.
+ *   • Unmount / context loss      → geometry, material, renderer disposed.
+ */
+
+import { useEffect, useRef } from 'react';
+import {
+  Color,
+  Group,
+  LatheGeometry,
+  LineBasicMaterial,
+  LineSegments,
+  EdgesGeometry,
+  WireframeGeometry,
+  PerspectiveCamera,
+  Scene,
+  Vector2,
+  WebGLRenderer,
+  MathUtils,
+} from 'three';
+
+function supportsWebGL(): boolean {
+  try {
+    const canvas = document.createElement('canvas');
+    return !!(
+      window.WebGLRenderingContext &&
+      (canvas.getContext('webgl') || canvas.getContext('experimental-webgl'))
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Half-profile of a molded bushing/cap, revolved around the Y axis.
+ * Points run bottom→top in the X (radius) / Y (height) plane.
+ */
+function partProfile(): Vector2[] {
+  return [
+    new Vector2(0.0, -1.5), // base center
+    new Vector2(1.5, -1.5), // flange outer (bottom)
+    new Vector2(1.5, -1.2), // flange edge
+    new Vector2(1.15, -1.1),
+    new Vector2(1.1, -0.5), // body wall
+    new Vector2(1.0, 0.3),
+    new Vector2(0.98, 0.95),
+    new Vector2(0.8, 1.15), // shoulder chamfer
+    new Vector2(0.8, 1.5), // neck outer
+    new Vector2(0.55, 1.5), // neck top
+    new Vector2(0.55, 0.6), // bore wall (down)
+    new Vector2(0.5, -0.9),
+    new Vector2(0.0, -0.9), // bore floor center
+  ];
+}
+
+export function HeroCanvas() {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduced || !supportsWebGL()) return;
+
+    const isMobile = window.matchMedia('(max-width: 768px)').matches;
+    const pixelRatio = Math.min(window.devicePixelRatio || 1, isMobile ? 1.5 : 1.75);
+
+    // ── Scene & camera ──────────────────────────────────────────────
+    const scene = new Scene();
+    const camera = new PerspectiveCamera(40, 1, 0.1, 100);
+    camera.position.set(0, 1.6, 7.2);
+    camera.lookAt(0, 0, 0);
+
+    // ── Part geometry (revolved profile) ────────────────────────────
+    const segments = isMobile ? 64 : 120;
+    const lathe = new LatheGeometry(partProfile(), segments);
+
+    const group = new Group();
+
+    // Surface wireframe — faint ink mesh.
+    const wire = new WireframeGeometry(lathe);
+    const wireMat = new LineBasicMaterial({
+      color: new Color('#18181b'),
+      transparent: true,
+      opacity: isMobile ? 0.16 : 0.2,
+    });
+    const wireMesh = new LineSegments(wire, wireMat);
+
+    // Feature edges — crisp espresso outline of the silhouette/creases.
+    const edges = new EdgesGeometry(lathe, 22);
+    const edgeMat = new LineBasicMaterial({
+      color: new Color('#1c1917'),
+      transparent: true,
+      opacity: 0.85,
+    });
+    const edgeMesh = new LineSegments(edges, edgeMat);
+
+    group.add(wireMesh);
+    group.add(edgeMesh);
+    group.rotation.x = 0.32;
+    scene.add(group);
+
+    // ── Renderer ────────────────────────────────────────────────────
+    let renderer: WebGLRenderer;
+    try {
+      renderer = new WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+    } catch {
+      lathe.dispose();
+      wire.dispose();
+      edges.dispose();
+      wireMat.dispose();
+      edgeMat.dispose();
+      return;
+    }
+    renderer.setPixelRatio(pixelRatio);
+    renderer.setClearColor(0x000000, 0); // transparent → shows the paper
+    const canvas = renderer.domElement;
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+    canvas.style.display = 'block';
+    container.appendChild(canvas);
+
+    // ── Sizing ──────────────────────────────────────────────────────
+    function resize() {
+      const w = container!.clientWidth || 1;
+      const h = container!.clientHeight || 1;
+      renderer.setSize(w, h, false);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    }
+    resize();
+    const resizeObserver = new ResizeObserver(resize);
+    resizeObserver.observe(container);
+
+    // ── Pointer parallax (gentle tilt) ──────────────────────────────
+    const targetTilt = { x: 0, y: 0 };
+    function onPointerMove(e: PointerEvent) {
+      const r = container!.getBoundingClientRect();
+      targetTilt.y = ((e.clientX - (r.left + r.width / 2)) / r.width) * 0.5;
+      targetTilt.x = ((e.clientY - (r.top + r.height / 2)) / r.height) * 0.3;
+    }
+    window.addEventListener('pointermove', onPointerMove, { passive: true });
+
+    // ── Visibility / in-view gating ─────────────────────────────────
+    let inView = true;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        inView = entry.isIntersecting;
+        if (inView && !rafId) loop(lastTime);
+      },
+      { threshold: 0 },
+    );
+    io.observe(container);
+
+    function onVisibility() {
+      if (document.hidden) stop();
+      else if (inView) loop(lastTime);
+    }
+    document.addEventListener('visibilitychange', onVisibility);
+
+    function onContextLost(e: Event) {
+      e.preventDefault();
+      stop();
+    }
+    canvas.addEventListener('webglcontextlost', onContextLost);
+
+    // ── Animation loop ──────────────────────────────────────────────
+    const start = performance.now();
+    let rafId = 0;
+    let lastTime = start;
+
+    function loop(now: number) {
+      lastTime = now;
+      if (document.hidden || !inView) {
+        rafId = 0;
+        return;
+      }
+      const t = (now - start) / 1000;
+
+      group.rotation.y = t * 0.5; // steady turntable spin
+      group.rotation.x = MathUtils.lerp(group.rotation.x, 0.32 + targetTilt.x, 0.05);
+      group.rotation.z = MathUtils.lerp(group.rotation.z, targetTilt.y * 0.3, 0.05);
+
+      renderer.render(scene, camera);
+      rafId = requestAnimationFrame(loop);
+    }
+    function stop() {
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = 0;
+    }
+    rafId = requestAnimationFrame(loop);
+
+    // ── Teardown ────────────────────────────────────────────────────
+    return () => {
+      stop();
+      resizeObserver.disconnect();
+      io.disconnect();
+      window.removeEventListener('pointermove', onPointerMove);
+      document.removeEventListener('visibilitychange', onVisibility);
+      canvas.removeEventListener('webglcontextlost', onContextLost);
+      lathe.dispose();
+      wire.dispose();
+      edges.dispose();
+      wireMat.dispose();
+      edgeMat.dispose();
+      renderer.dispose();
+      if (canvas.parentNode) canvas.parentNode.removeChild(canvas);
+    };
+  }, []);
+
+  return (
+    <div
+      ref={containerRef}
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 h-full w-full"
+    />
+  );
+}

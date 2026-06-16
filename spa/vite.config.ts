@@ -57,6 +57,17 @@ export default defineConfig({
           if (id.includes('node_modules/recharts/')) {
             return 'vendor-charts';
           }
+          // Landing-only heavy deps — split so they stream in parallel and
+          // only ever load on the lazy `/` route, never in the ERP bundle.
+          if (id.includes('node_modules/three/')) {
+            return 'vendor-three';
+          }
+          if (
+            id.includes('node_modules/gsap/') ||
+            id.includes('node_modules/lenis/')
+          ) {
+            return 'vendor-motion';
+          }
           if (
             id.includes('node_modules/lucide-react/') ||
             id.includes('node_modules/date-fns/') ||

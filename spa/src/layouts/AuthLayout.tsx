@@ -1,17 +1,117 @@
-import { Outlet } from 'react-router-dom';
+/**
+ * AuthLayout — branded split-screen shell for sign-in and change-password.
+ *
+ * Left: a precision "drawing frame" brand panel matching the marketing site —
+ * warm paper, blueprint grid, the rotating part (or its static blueprint under
+ * reduced-motion), a datum-mark wordmark, and a title block. Hidden below lg.
+ * Right: the auth form (the routed Outlet), centered on warm paper.
+ *
+ * The whole shell pins the warm-graphite identity by locally remapping the
+ * accent CSS variables to espresso, so the shared ERP form controls (Button,
+ * Input) render blue-free here without any change to those components.
+ */
+
+import { type CSSProperties } from 'react';
+import { Outlet, Link } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
+
+// Self-hosted display face (Fontsource → same-origin → CSP-safe); the auth
+// pages share the marketing site's display typeface for brand continuity.
+import '@fontsource-variable/bricolage-grotesque/wght.css';
+
+import { DatumMark } from '@/pages/landing/components/DatumMark';
+import { PartBlueprint } from '@/pages/landing/components/PartBlueprint';
+import { HeroCanvas } from '@/pages/landing/components/HeroCanvas';
+
+// Remap the app accent → espresso for the auth surfaces only (cascades into
+// the shared Button/Input via var(--accent) / var(--ring)).
+const WARM_ACCENT = {
+  '--accent': '#1c1917',
+  '--accent-hover': '#0c0a09',
+  '--accent-fg': '#fafaf9',
+  '--ring': '#1c1917',
+  '--shadow-focus': '0 0 0 3px rgba(28,25,23,0.15)',
+} as CSSProperties;
+
+const GRID_BG: CSSProperties = {
+  backgroundImage:
+    'linear-gradient(var(--landing-grid) 1px, transparent 1px),' +
+    'linear-gradient(90deg, var(--landing-grid) 1px, transparent 1px)',
+  backgroundSize: 'var(--landing-grid-size, 32px) var(--landing-grid-size, 32px)',
+};
 
 export function AuthLayout() {
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-canvas px-4 py-10">
-      <div className="w-full max-w-sm">
-        <div className="flex items-center justify-center gap-2 mb-6">
-          <span className="h-8 w-8 rounded-md bg-primary text-canvas inline-flex items-center justify-center font-medium text-base">
-            O
+    <div
+      style={WARM_ACCENT}
+      className="grid min-h-screen w-full bg-landing-canvas font-sans text-landing-text lg:grid-cols-2"
+    >
+      {/* ── Brand panel (lg+) ─────────────────────────────────────── */}
+      <aside className="relative hidden overflow-hidden border-r border-landing-border bg-landing-surface lg:flex lg:flex-col lg:justify-between lg:p-12">
+        <div aria-hidden="true" className="absolute inset-0" style={GRID_BG} />
+
+        {/* brand */}
+        <Link
+          to="/"
+          className="relative flex items-center gap-2.5 self-start rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-surface"
+        >
+          <DatumMark size={26} className="text-landing-accent" />
+          <span className="font-display text-[19px] font-bold tracking-tight text-landing-text">
+            OGAMI
           </span>
-          <span className="text-md font-medium">Ogami ERP</span>
+          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-landing-muted">
+            Philippines
+          </span>
+        </Link>
+
+        {/* rotating part inside a drawing frame */}
+        <div className="relative mx-auto flex w-full max-w-sm items-center justify-center">
+          <figure className="relative aspect-square w-full">
+            <div className="absolute inset-0 flex items-center justify-center p-10">
+              <PartBlueprint className="max-h-[80%] max-w-[80%] opacity-90" />
+            </div>
+            <HeroCanvas />
+            <figcaption className="absolute inset-x-0 bottom-0 flex justify-between font-mono text-[10px] uppercase tracking-[0.16em] text-landing-muted">
+              <span>Wiper bushing</span>
+              <span className="text-landing-accent">Ø 24.0 ±0.02</span>
+            </figcaption>
+          </figure>
         </div>
-        <Outlet />
-      </div>
+
+        {/* tagline */}
+        <div className="relative">
+          <p className="font-display text-2xl font-semibold leading-tight tracking-tight text-landing-text">
+            Precision, molded
+            <br /> in the Philippines.
+          </p>
+          <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.18em] text-landing-subtle-text">
+            IATF 16949 · FCIE, Dasmariñas · Cavite
+          </p>
+        </div>
+      </aside>
+
+      {/* ── Form area ─────────────────────────────────────────────── */}
+      <main className="relative flex flex-col items-center justify-center px-5 py-12 sm:px-8">
+        {/* compact brand for mobile (brand panel hidden) */}
+        <Link to="/" className="mb-10 flex items-center gap-2 rounded-md lg:hidden">
+          <DatumMark size={24} className="text-landing-accent" />
+          <span className="font-display text-lg font-bold tracking-tight text-landing-text">
+            OGAMI
+          </span>
+        </Link>
+
+        <div className="w-full max-w-sm">
+          <Outlet />
+        </div>
+
+        <Link
+          to="/"
+          className="mt-10 inline-flex items-center gap-1.5 rounded-md font-sans text-[13px] text-landing-muted transition-colors hover:text-landing-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas"
+        >
+          <ArrowLeft size={14} />
+          Back to ogami.com.ph
+        </Link>
+      </main>
     </div>
   );
 }

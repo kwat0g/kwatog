@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Panel } from '@/components/ui/Panel';
 import { numberInputProps } from '@/lib/numberInput';
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const customerSchema = z.object({
   name:               z.string().min(1, 'Required').max(200),
   code:               z.string().min(1, 'Required').max(50),

@@ -95,6 +95,7 @@ export function DowntimeParetoChart({ data, height = 260, valueLabel }: Props) {
 }
 
 /** Derive sorted Pareto data from category_breakdown array */
+// eslint-disable-next-line react-refresh/only-export-components
 export function buildParetoData(
   breakdown: Array<{ category: string; minutes: number }>,
 ): ParetoEntry[] {

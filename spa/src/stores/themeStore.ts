@@ -54,8 +54,10 @@ function attachSystemListener(callback: () => void) {
 }
 
 export const useThemeStore = create<ThemeState>((set, get) => ({
-  mode: 'system',
-  resolvedTheme: typeof window === 'undefined' ? 'light' : resolveTheme('system'),
+  // Light is the default for new sessions; an authenticated user's stored
+  // preference (light / dark / system) overrides this via init().
+  mode: 'light',
+  resolvedTheme: 'light',
 
   setMode: (mode) => {
     const resolvedTheme = resolveTheme(mode);
@@ -80,7 +82,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
   },
 
   init: (initialMode) => {
-    const mode = initialMode ?? 'system';
+    const mode = initialMode ?? 'light';
     const resolvedTheme = resolveTheme(mode);
     applyToDocument(resolvedTheme);
     set({ mode, resolvedTheme });

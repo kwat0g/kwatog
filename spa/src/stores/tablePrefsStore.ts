@@ -41,7 +41,6 @@ const safeStorage: StateStorage = {
       const parsed = JSON.parse(raw);
       const result = persistedSchema.safeParse(parsed);
       if (result.success) return raw;
-      // eslint-disable-next-line no-console
       console.warn(`[tablePrefsStore] Invalid persisted state for "${name}", resetting.`, result.error.flatten());
       localStorage.removeItem(name);
       return null;

@@ -68,6 +68,28 @@ const config: Config = {
 
         // Focus ring
         ring: 'var(--ring)',
+
+        // Landing page palette — light monochrome + one indigo accent.
+        landing: {
+          canvas: 'var(--landing-canvas)',
+          surface: 'var(--landing-surface)',
+          elevated: 'var(--landing-elevated)',
+          subtle: 'var(--landing-subtle)',
+          border: 'var(--landing-border)',
+          'border-strong': 'var(--landing-border-strong)',
+          text: 'var(--landing-text)',
+          'text-secondary': 'var(--landing-text-secondary)',
+          muted: 'var(--landing-muted)',
+          'subtle-text': 'var(--landing-subtle-text)',
+          accent: 'var(--landing-accent)',
+          'accent-hover': 'var(--landing-accent-hover)',
+          'accent-soft': 'var(--landing-accent-soft)',
+          'accent-fg': 'var(--landing-accent-fg)',
+          'accent-glow': 'var(--landing-accent-glow)',
+          ink: 'var(--landing-ink)',
+          line: 'var(--landing-line)',
+          grid: 'var(--landing-grid)',
+        },
       },
 
       borderColor: {
@@ -80,6 +102,12 @@ const config: Config = {
       fontFamily: {
         sans: ['Geist', 'system-ui', 'sans-serif'],
         mono: ['Geist Mono', 'SF Mono', 'Menlo', 'monospace'],
+        display: [
+          'Bricolage Grotesque Variable',
+          'Geist',
+          'system-ui',
+          'sans-serif',
+        ],
       },
 
       fontSize: {
@@ -140,6 +168,11 @@ const config: Config = {
           '0%': { opacity: '0', transform: 'translateX(-100%)' },
           '100%': { opacity: '1', transform: 'translateX(0)' },
         },
+        // Landing — seamless logo marquee (track holds two copies, shifts -50%).
+        marquee: {
+          '0%': { transform: 'translateX(0)' },
+          '100%': { transform: 'translateX(-50%)' },
+        },
       },
 
       animation: {
@@ -148,6 +181,7 @@ const config: Config = {
         'slide-up': 'slide-up var(--duration-slow) var(--ease-default)',
         'approval-pulse': 'approval-pulse 1.5s ease-in-out infinite',
         'slide-right': 'slide-right 200ms var(--ease-default)',
+        marquee: 'marquee 36s linear infinite',
       },
     },
   },

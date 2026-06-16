@@ -5,6 +5,7 @@ import { ErrorBoundary } from '@/components/guards/ErrorBoundary';
 import { AppLayout } from '@/layouts/AppLayout';
 import { TopLoadingBar } from '@/components/ui/TopLoadingBar';
 
+import { landingRoutes } from '@/routes/landingRoutes';
 import { authRoutes } from '@/routes/authRoutes';
 import { dashboardRoutes } from '@/routes/dashboardRoutes';
 import { adminRoutes } from '@/routes/adminRoutes';
@@ -32,6 +33,9 @@ export default function App() {
   return (
     <Suspense fallback={<TopLoadingBar />}>
       <Routes>
+        {/* Public landing page */}
+        {landingRoutes}
+
         {/* Auth routes (no AuthGuard) */}
         {authRoutes}
 

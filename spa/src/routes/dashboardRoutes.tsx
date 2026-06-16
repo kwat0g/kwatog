@@ -33,7 +33,6 @@ const AdminActivityFeedPage = lazy(() => import('@/pages/admin/activity'));
 
 export const dashboardRoutes = (
   <>
-    <Route path="/" element={<Navigate to="/dashboard" replace />} />
     {/* Task D1 — `/dashboard` is the role router; `/dashboard/default`
         is the explicit escape hatch to the generic widget-layout page. */}
     <Route path="/dashboard" element={<DashboardPage />} />

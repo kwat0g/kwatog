@@ -39,22 +39,22 @@ export default function DriverPhotoCapture() {
     };
   }, [preview]);
 
-  if (!id) {
-    return <div className="py-12 text-center text-zinc-500">Missing delivery id.</div>;
-  }
-
   const upload = useMutation({
     mutationFn: () => {
-      if (!file) throw new Error('no file');
+      if (!file || !id) throw new Error('no file');
       return driverApi.uploadReceipt(id, file);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['driver'] });
       toast.success('Receipt uploaded.');
-      navigate(`/driver/${id}`);
+      if (id) navigate(`/driver/${id}`);
     },
     onError: (err) => toast.error(describeUploadError(err)),
   });
+
+  if (!id) {
+    return <div className="py-12 text-center text-zinc-500">Missing delivery id.</div>;
+  }
 
   const onPickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];

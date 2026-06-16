@@ -111,6 +111,39 @@
   --duration-normal: 150ms;
   --duration-slow: 200ms;
   --ease-default: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ─── Landing page palette — warm monochrome, espresso ink, no chroma ───
+   * A precision engineering drawing on warm paper: stone-tinted greys and a
+   * near-black espresso ink that doubles as the single action colour. There is
+   * deliberately no chromatic accent — hierarchy comes from weight and contrast. */
+  --landing-canvas: #fafaf9;        /* warm paper (stone-50) */
+  --landing-surface: #f5f4f1;       /* raised panels */
+  --landing-elevated: #efedea;      /* cards */
+  --landing-subtle: #e7e5e1;        /* wells */
+  --landing-border: #e3e0db;        /* warm hairlines */
+  --landing-border-strong: #d6d3cd; /* emphasis rules */
+  --landing-text: #1c1917;          /* espresso ink */
+  --landing-text-secondary: #44403c;
+  --landing-muted: #78716c;
+  --landing-subtle-text: #a8a29e;
+
+  /* Action colour = the ink itself (warm graphite). Used on CTAs, links,
+   * key callouts — espresso fill with cream text, no blue anywhere. */
+  --landing-accent: #1c1917;
+  --landing-accent-hover: #0c0a09;
+  --landing-accent-soft: #efedea;   /* warm tint fills */
+  --landing-accent-fg: #fafaf9;     /* cream text on espresso */
+  --landing-accent-glow: rgba(28, 25, 23, 0.08);
+
+  /* Engineering-drawing primitives (warm). */
+  --landing-ink: #1c1917;                    /* strong drawing stroke */
+  --landing-line: rgba(28, 25, 23, 0.14);    /* blueprint line on paper */
+  --landing-grid: rgba(28, 25, 23, 0.05);    /* faint grid fill */
+  --landing-grid-size: 32px;                 /* shared blueprint pitch */
+
+  /* ─── Landing display typeface (Fontsource, self-hosted → CSP-safe) ─── */
+  --font-display: 'Bricolage Grotesque Variable', 'Geist', -apple-system,
+    BlinkMacSystemFont, system-ui, sans-serif;
 }
 
 [data-theme='dark'] {

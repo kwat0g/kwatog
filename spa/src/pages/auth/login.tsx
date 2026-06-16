@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Lock, Timer } from 'lucide-react';
+import { Lock, Timer, ShieldCheck } from 'lucide-react';
 import { AxiosError } from 'axios';
 import { useAuthStore } from '@/stores/authStore';
 import { useSidebarStore } from '@/stores/sidebarStore';
@@ -101,12 +101,17 @@ export default function LoginPage() {
 
   return (
     <Panel>
-      <div className="flex flex-col items-center mb-4">
-        <span className="h-9 w-9 rounded-full bg-elevated text-muted inline-flex items-center justify-center mb-2">
-          <Lock size={16} />
-        </span>
-        <h1 className="text-lg font-medium">Sign in to Ogami ERP</h1>
-        <p className="text-xs text-muted mt-0.5">Use your work email and password.</p>
+      <div className="mb-6">
+        <p className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.2em] text-landing-muted">
+          <Lock size={12} className="text-landing-accent" />
+          Secure sign-in
+        </p>
+        <h1 className="mt-3 font-display text-3xl font-bold tracking-tight text-landing-text">
+          Welcome back
+        </h1>
+        <p className="mt-1.5 text-[13px] text-landing-muted">
+          Sign in with your work email to access the Ogami ERP.
+        </p>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-3" noValidate>
@@ -132,7 +137,7 @@ export default function LoginPage() {
         <Button
           type="submit"
           variant="primary"
-          size="md"
+          size="lg"
           loading={isSubmitting}
           disabled={isSubmitting || isCooledDown}
           className="mt-2 w-full"
@@ -153,12 +158,20 @@ export default function LoginPage() {
           </div>
         )}
 
-        <div className="text-xs text-muted text-center mt-1">
-          <Link to="#" className="hover:text-primary">
+        <div className="mt-1 text-center text-xs text-landing-muted">
+          <Link
+            to="#"
+            className="underline-offset-2 transition-colors hover:text-landing-text hover:underline"
+          >
             Forgot password?
           </Link>
         </div>
       </form>
+
+      <p className="mt-7 flex items-center justify-center gap-1.5 border-t border-landing-border pt-5 font-mono text-[10px] uppercase tracking-[0.16em] text-landing-subtle-text">
+        <ShieldCheck size={12} />
+        Protected by rate-limiting &amp; account lockout
+      </p>
     </Panel>
   );
 }
