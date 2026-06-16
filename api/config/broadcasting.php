@@ -48,10 +48,16 @@ return [
             'secret'     => env('REVERB_APP_SECRET'),
             'app_id'     => env('REVERB_APP_ID'),
             'options'    => [
-                'host'   => env('REVERB_HOST', 'reverb'),
-                'port'   => (int) env('REVERB_PORT', 8080),
-                'scheme' => env('REVERB_SCHEME', 'http'),
-                'useTLS' => env('REVERB_SCHEME', 'http') === 'https',
+                // Server-side push target. In prod this is the Reverb container
+                // on the internal Docker network (REVERB_SERVER_*), NOT the public
+                // domain — pushing via the public host would hairpin-NAT to the
+                // VM's own external IP, which most clouds drop, and nginx only
+                // proxies the browser WebSocket path anyway. Falls back to the
+                // public REVERB_* vars so dev (single host) is unchanged.
+                'host'   => env('REVERB_SERVER_HOST', env('REVERB_HOST', 'reverb')),
+                'port'   => (int) env('REVERB_SERVER_PORT', (int) env('REVERB_PORT', 8080)),
+                'scheme' => env('REVERB_SERVER_SCHEME', env('REVERB_SCHEME', 'http')),
+                'useTLS' => env('REVERB_SERVER_SCHEME', env('REVERB_SCHEME', 'http')) === 'https',
             ],
             'client_options' => [
                 // Guzzle options for the server-side broadcaster HTTP client.
