@@ -11,9 +11,10 @@
  * Input) render blue-free here without any change to those components.
  */
 
-import { type CSSProperties } from 'react';
+import { useEffect, type CSSProperties } from 'react';
 import { Outlet, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
+import { useThemeStore } from '@/stores/themeStore';
 
 // Self-hosted display face (Fontsource → same-origin → CSP-safe); the auth
 // pages share the marketing site's display typeface for brand continuity.
@@ -23,14 +24,16 @@ import { BrandLogo } from '@/components/brand/BrandLogo';
 import { PartBlueprint } from '@/pages/landing/components/PartBlueprint';
 import { HeroCanvas } from '@/pages/landing/components/HeroCanvas';
 
-// Remap the app accent → espresso for the auth surfaces only (cascades into
-// the shared Button/Input via var(--accent) / var(--ring)).
+// Remap the app accent → the landing-page ink for the auth surfaces only
+// (cascades into the shared Button/Input via var(--accent) / var(--ring)).
+// Using CSS variables means light mode gets espresso-on-paper and dark mode
+// gets cream-on-espresso automatically.
 const WARM_ACCENT = {
-  '--accent': '#1c1917',
-  '--accent-hover': '#0c0a09',
-  '--accent-fg': '#fafaf9',
-  '--ring': '#1c1917',
-  '--shadow-focus': '0 0 0 3px rgba(28,25,23,0.15)',
+  '--accent': 'var(--landing-accent)',
+  '--accent-hover': 'var(--landing-accent-hover)',
+  '--accent-fg': 'var(--landing-accent-fg)',
+  '--ring': 'var(--landing-accent)',
+  '--shadow-focus': '0 0 0 3px var(--landing-accent-glow)',
 } as CSSProperties;
 
 const GRID_BG: CSSProperties = {
@@ -41,6 +44,17 @@ const GRID_BG: CSSProperties = {
 };
 
 export function AuthLayout() {
+  // Before login there is no stored user preference, so respect the system
+  // color scheme. Once the user logs in, authStore.applyUser() will already
+  // have set data-theme, so we leave it alone.
+  const initTheme = useThemeStore((s) => s.init);
+  useEffect(() => {
+    const existing = document.documentElement.getAttribute('data-theme');
+    if (!existing) {
+      initTheme('system');
+    }
+  }, [initTheme]);
+
   return (
     <div
       style={WARM_ACCENT}

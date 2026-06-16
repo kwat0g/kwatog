@@ -4,12 +4,13 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Lock, Timer, ShieldCheck } from 'lucide-react';
+import { Lock, Timer, ShieldCheck, Eye, EyeOff } from 'lucide-react';
 import { AxiosError } from 'axios';
 import { useAuthStore } from '@/stores/authStore';
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Checkbox } from '@/components/ui/Checkbox';
 import { Panel } from '@/components/ui/Panel';
 import { FormErrorSummary } from '@/components/ui/FormErrorSummary';
 import { actionLabel } from '@/lib/labels';
@@ -17,6 +18,7 @@ import { actionLabel } from '@/lib/labels';
 const schema = z.object({
   email: z.string().min(1, 'Email is required').email('Invalid email'),
   password: z.string().min(1, 'Password is required'),
+  remember: z.boolean().optional(),
 });
 
 type LoginForm = z.infer<typeof schema>;
@@ -36,7 +38,10 @@ export default function LoginPage() {
   const login = useAuthStore((s) => s.login);
 
   const [cooldown, setCooldown] = useState(0);
+  const [showPassword, setShowPassword] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const wasRedirected = !!(location.state as { from?: string } | null)?.from;
 
   // Tick the cooldown timer once per second while active.
   useEffect(() => {
@@ -63,11 +68,16 @@ export default function LoginPage() {
     formState: { errors, isSubmitting },
   } = useForm<LoginForm>({
     resolver: zodResolver(schema),
+    defaultValues: { remember: false },
   });
 
   const onSubmit = async (data: LoginForm) => {
     try {
-      const user = await login(data);
+      const user = await login({
+        email: data.email,
+        password: data.password,
+        remember: data.remember,
+      });
       useSidebarStore.getState().init(user.sidebar_collapsed);
       const from = (location.state as { from?: string } | null)?.from ?? '/dashboard';
       navigate(user.must_change_password ? '/change-password' : from, { replace: true });
@@ -114,6 +124,15 @@ export default function LoginPage() {
         </p>
       </div>
 
+      {wasRedirected && (
+        <div
+          role="status"
+          className="mb-5 rounded-lg border border-landing-accent/20 bg-landing-accent-glow px-4 py-3 text-[13px] text-landing-text-secondary"
+        >
+          Your session expired. Please sign in again to continue.
+        </div>
+      )}
+
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-3" noValidate>
         <FormErrorSummary errors={errors} />
         <Input
@@ -126,13 +145,34 @@ export default function LoginPage() {
           error={errors.email?.message}
         />
         <Input
-          type="password"
+          type={showPassword ? 'text' : 'password'}
           label="Password"
           autoComplete="current-password"
           disabled={isCooledDown}
           {...register('password')}
           error={errors.password?.message}
+          suffix={
+            <button
+              type="button"
+              tabIndex={-1}
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              className="flex h-full items-center justify-center px-2 text-landing-muted transition-colors hover:text-landing-text"
+            >
+              {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+            </button>
+          }
         />
+
+        <div className="flex items-center justify-between">
+          <Checkbox label="Remember me" {...register('remember')} />
+          <Link
+            to="/forgot-password"
+            className="text-xs text-landing-muted underline-offset-2 transition-colors hover:text-landing-text hover:underline"
+          >
+            Forgot password?
+          </Link>
+        </div>
 
         <Button
           type="submit"
@@ -151,26 +191,28 @@ export default function LoginPage() {
           <div
             role="status"
             aria-live="polite"
-            className="flex items-center justify-center gap-1.5 text-xs text-warning"
+            className="flex flex-col items-center justify-center gap-1.5 text-xs text-warning"
           >
-            <Timer size={12} />
-            <span>Too many attempts — disabled for {formatCooldown(cooldown)}</span>
+            <div className="flex items-center gap-1.5">
+              <Timer size={12} />
+              <span>Too many attempts — disabled for {formatCooldown(cooldown)}</span>
+            </div>
+            <span className="text-landing-muted">
+              Need access now?{' '}
+              <a
+                href="mailto:it@ogami.com.ph?subject=Account%20locked"
+                className="underline-offset-2 hover:text-landing-text hover:underline"
+              >
+                Contact IT
+              </a>
+            </span>
           </div>
         )}
-
-        <div className="mt-1 text-center text-xs text-landing-muted">
-          <Link
-            to="#"
-            className="underline-offset-2 transition-colors hover:text-landing-text hover:underline"
-          >
-            Forgot password?
-          </Link>
-        </div>
       </form>
 
       <p className="mt-7 flex items-center justify-center gap-1.5 border-t border-landing-border pt-5 font-mono text-[10px] uppercase tracking-[0.16em] text-landing-subtle-text">
         <ShieldCheck size={12} />
-        Protected by rate-limiting &amp; account lockout
+        Your account is protected against unauthorized access
       </p>
     </Panel>
   );

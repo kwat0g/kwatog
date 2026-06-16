@@ -161,7 +161,7 @@ export function HeroSection() {
               data-hero-dim
               className="absolute right-5 top-5 font-mono text-[10px] uppercase tracking-[0.16em] text-landing-accent"
             >
-              Ø 24.0 ±0.02
+              Ø 42.0 ±0.05
             </span>
 
             {/* title block */}
@@ -171,11 +171,11 @@ export function HeroSection() {
             >
               <span className="border-r border-landing-border px-3 py-2">
                 <span className="block text-landing-subtle-text">Part</span>
-                <span className="text-landing-text">Wiper bushing</span>
+                <span className="text-landing-text">Oil filler cap</span>
               </span>
               <span className="border-r border-landing-border px-3 py-2">
                 <span className="block text-landing-subtle-text">Material</span>
-                <span className="text-landing-text">POM resin</span>
+                <span className="text-landing-text">PA66 resin</span>
               </span>
               <span className="px-3 py-2">
                 <span className="block text-landing-subtle-text">Std</span>

@@ -56,6 +56,10 @@ export function useLandingMotion(rootRef: RefObject<HTMLElement>) {
     gsap.ticker.add(ticker);
     gsap.ticker.lagSmoothing(0);
 
+    // Expose Lenis on window so floating UI (back-to-top, quote button) can
+    // reuse the same smooth-scroll instance.
+    (window as unknown as { lenis?: Lenis }).lenis = lenis;
+
     // Make in-page anchor links use Lenis for a smooth glide.
     function onAnchorClick(e: MouseEvent) {
       const link = (e.target as HTMLElement)?.closest('a[href^="#"]');
@@ -99,6 +103,7 @@ export function useLandingMotion(rootRef: RefObject<HTMLElement>) {
       root.removeEventListener('click', onAnchorClick);
       gsap.ticker.remove(ticker);
       lenis.destroy();
+      delete (window as unknown as { lenis?: Lenis }).lenis;
       ctx.revert();
     };
   }, [rootRef]);

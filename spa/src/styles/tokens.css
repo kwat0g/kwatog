@@ -190,6 +190,43 @@
 
   --shadow-focus: 0 0 0 3px rgba(99, 102, 241, 0.25);
   --shadow-menu: 0 4px 12px rgba(0, 0, 0, 0.45);
+
+  /* Landing page — dark blueprint on espresso ink. */
+  --landing-canvas: #1c1917;
+  --landing-surface: #292524;
+  --landing-elevated: #44403c;
+  --landing-subtle: #57534e;
+  --landing-border: #44403c;
+  --landing-border-strong: #57534e;
+  --landing-text: #fafaf9;
+  --landing-text-secondary: #d6d3d1;
+  --landing-muted: #a8a29e;
+  --landing-subtle-text: #78716c;
+  --landing-accent: #fafaf9;
+  --landing-accent-hover: #e7e5e4;
+  --landing-accent-soft: #44403c;
+  --landing-accent-fg: #1c1917;
+  --landing-accent-glow: rgba(250, 250, 249, 0.08);
+  --landing-ink: #fafaf9;
+  --landing-line: rgba(250, 250, 249, 0.14);
+  --landing-grid: rgba(250, 250, 249, 0.06);
+}
+
+/* Override browser autofill colors so saved credentials blend with the
+   warm auth theme instead of showing the default yellow/blue fill. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+select:-webkit-autofill,
+select:-webkit-autofill:hover,
+select:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0px 1000px var(--landing-canvas) inset;
+  -webkit-text-fill-color: var(--landing-text);
+  caret-color: var(--landing-text);
+  transition: background-color 5000s ease-in-out 0s;
 }
 
 /* Hairline border helper — true 0.5px on retina, 1px elsewhere. */

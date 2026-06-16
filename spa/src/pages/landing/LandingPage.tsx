@@ -8,16 +8,21 @@
  * button in the nav (+ a discreet staff link in the footer).
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 
 // Self-hosted display face (Fontsource → same-origin → CSP-safe).
 import '@fontsource-variable/bricolage-grotesque/wght.css';
 
 import { LandingNav } from './components/LandingNav';
 import { LandingFooter } from './components/LandingFooter';
+import { CookieBanner } from './components/CookieBanner';
+import { BackToTop } from './components/BackToTop';
+import { FloatingQuoteButton } from './components/FloatingQuoteButton';
 import { HeroSection } from './sections/HeroSection';
 import { MarqueeSection } from './sections/MarqueeSection';
+import { TrustSection } from './sections/TrustSection';
 import { CapabilitiesSection } from './sections/CapabilitiesSection';
+import { PartsGallerySection } from './sections/PartsGallerySection';
 import { ProcessSection } from './sections/ProcessSection';
 import { StatsSection } from './sections/StatsSection';
 import { QualitySection } from './sections/QualitySection';
@@ -36,6 +41,20 @@ function inertWhen(active: boolean): Record<string, unknown> {
   return active ? { inert: '', 'aria-hidden': true } : {};
 }
 
+/**
+ * Remap the shared ERP accent variables to the landing-page espresso ink so
+ * Button, Input, Checkbox, and other primitives render monochrome/warm here
+ * without any component-level changes.
+ */
+const WARM_ACCENT: CSSProperties = {
+  '--accent': 'var(--landing-accent)',
+  '--accent-hover': 'var(--landing-accent-hover)',
+  '--accent-fg': 'var(--landing-accent-fg)',
+  '--ring': 'var(--landing-accent)',
+  '--ring-offset': 'var(--landing-canvas)',
+  '--shadow-focus': '0 0 0 3px var(--landing-accent-glow)',
+} as CSSProperties;
+
 export default function LandingPage() {
   const rootRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -52,6 +71,7 @@ export default function LandingPage() {
   return (
     <div
       ref={rootRef}
+      style={WARM_ACCENT}
       className="min-h-screen bg-landing-canvas font-sans text-landing-text antialiased"
     >
       <a
@@ -68,7 +88,9 @@ export default function LandingPage() {
       <main {...inertWhen(menuOpen)}>
         <HeroSection />
         <MarqueeSection />
+        <TrustSection />
         <CapabilitiesSection />
+        <PartsGallerySection />
         <ProcessSection />
         <StatsSection />
         <QualitySection />
@@ -79,6 +101,10 @@ export default function LandingPage() {
       <div {...inertWhen(menuOpen)}>
         <LandingFooter />
       </div>
+
+      <CookieBanner />
+      <BackToTop />
+      <FloatingQuoteButton />
     </div>
   );
 }

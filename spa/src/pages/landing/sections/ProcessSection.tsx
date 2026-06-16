@@ -8,6 +8,7 @@
 
 import { useLayoutEffect, useRef } from 'react';
 import gsap from 'gsap';
+import { ArrowRight } from 'lucide-react';
 import { SectionHeading } from '../components/SectionHeading';
 import { PROCESS_STEPS } from '../data';
 import { registerScrollTrigger, reduceMotion } from '../motion';
@@ -81,13 +82,19 @@ export function ProcessSection() {
             intro="Quality is not a final gate — it is built into every stage. Here is exactly how a part is made, checked, and released to you."
           />
 
-          {/* Progress rail (desktop) */}
+          {/* Progress rail + scroll hint (desktop) */}
           {horizontal && (
-            <div className="mt-8 hidden h-px w-full max-w-xs overflow-hidden bg-landing-border lg:block">
-              <div
-                ref={fillRef}
-                className="h-full origin-left scale-x-0 bg-landing-accent"
-              />
+            <div className="mt-8 hidden items-center gap-4 lg:flex">
+              <div className="h-px w-full max-w-xs overflow-hidden bg-landing-border">
+                <div
+                  ref={fillRef}
+                  className="h-full origin-left scale-x-0 bg-landing-accent"
+                />
+              </div>
+              <span className="motion-safe:animate-pulse flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-landing-muted">
+                Scroll to explore
+                <ArrowRight size={12} />
+              </span>
             </div>
           )}
         </div>

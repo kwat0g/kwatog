@@ -1,11 +1,11 @@
 /**
  * HeroCanvas — a precision part, drawn.
  *
- * A revolved wireframe of an injection-molded bushing/cap (flange → neck →
- * bore), rotating slowly inside the hero's drawing frame. Rendered as clean ink
- * lines on the white page with crisp espresso edges, so it
- * reads like a turning CAD model on a blueprint — directly connected to what
- * Ogami makes, no decoration.
+ * A revolved wireframe of an automotive oil filler cap (seal flange → grip
+ * skirt → top deck → hollow bore), rotating slowly inside the hero's drawing
+ * frame. Rendered as clean ink lines on the page with crisp espresso edges, so
+ * it reads like a turning CAD model on a blueprint — directly connected to
+ * what Ogami makes, no decoration.
  *
  * Defensive by construction:
  *   • No WebGL / reduced-motion → renders nothing; the SVG PartBlueprint shows.
@@ -43,24 +43,28 @@ function supportsWebGL(): boolean {
 }
 
 /**
- * Half-profile of a molded bushing/cap, revolved around the Y axis.
- * Points run bottom→top in the X (radius) / Y (height) plane.
+ * Half-profile of an automotive oil filler cap, revolved around the Y axis.
+ *
+ * Profile includes a seal flange at the base, a grip skirt, a radiused top
+ * deck, and a hollow internal bore. Points run bottom→top in the X (radius)
+ * / Y (height) plane.
  */
 function partProfile(): Vector2[] {
   return [
-    new Vector2(0.0, -1.5), // base center
-    new Vector2(1.5, -1.5), // flange outer (bottom)
-    new Vector2(1.5, -1.2), // flange edge
-    new Vector2(1.15, -1.1),
-    new Vector2(1.1, -0.5), // body wall
-    new Vector2(1.0, 0.3),
-    new Vector2(0.98, 0.95),
-    new Vector2(0.8, 1.15), // shoulder chamfer
-    new Vector2(0.8, 1.5), // neck outer
-    new Vector2(0.55, 1.5), // neck top
-    new Vector2(0.55, 0.6), // bore wall (down)
-    new Vector2(0.5, -0.9),
-    new Vector2(0.0, -0.9), // bore floor center
+    new Vector2(0.0, -1.6), // center bottom
+    new Vector2(1.5, -1.6), // flange outer bottom
+    new Vector2(1.5, -1.45), // flange up
+    new Vector2(1.45, -1.4), // flange top outer
+    new Vector2(1.25, -1.35), // transition to skirt
+    new Vector2(1.2, -1.2), // skirt lower
+    new Vector2(1.2, 0.6), // skirt upper
+    new Vector2(1.25, 0.8), // top corner radius
+    new Vector2(1.15, 0.85), // top outer
+    new Vector2(0.25, 0.85), // top deck
+    new Vector2(0.2, 0.8), // inner top corner
+    new Vector2(0.2, 0.0), // inner wall
+    new Vector2(0.25, -1.0), // inner lower
+    new Vector2(0.0, -1.0), // center inner bottom
   ];
 }
 
@@ -80,7 +84,7 @@ export function HeroCanvas() {
     // ── Scene & camera ──────────────────────────────────────────────
     const scene = new Scene();
     const camera = new PerspectiveCamera(40, 1, 0.1, 100);
-    camera.position.set(0, 1.6, 7.2);
+    camera.position.set(0, 0.2, 7.8);
     camera.lookAt(0, 0, 0);
 
     // ── Part geometry (revolved profile) ────────────────────────────
@@ -130,7 +134,15 @@ export function HeroCanvas() {
     canvas.style.width = '100%';
     canvas.style.height = '100%';
     canvas.style.display = 'block';
+    canvas.style.opacity = '0';
+    canvas.style.transition = 'opacity 700ms ease-out';
     container.appendChild(canvas);
+
+    // Fade the WebGL canvas in once the first frame has rendered so the
+    // static PartBlueprint underneath is never exposed as a blank flash.
+    requestAnimationFrame(() => {
+      canvas.style.opacity = '1';
+    });
 
     // ── Sizing ──────────────────────────────────────────────────────
     function resize() {

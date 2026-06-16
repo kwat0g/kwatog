@@ -33,6 +33,7 @@ export interface AuthUser {
 export interface LoginPayload {
   email: string;
   password: string;
+  remember?: boolean;
 }
 
 export interface ChangePasswordPayload {
@@ -71,6 +72,28 @@ export const authApi = {
 
   changePassword: async (payload: ChangePasswordPayload) => {
     const { data } = await client.post<{ message: string }>('/auth/change-password', payload);
+    return data;
+  },
+
+  /**
+   * Request a password reset email.
+   * TODO: backend route POST /api/v1/auth/forgot-password
+   */
+  requestPasswordReset: async (email: string): Promise<{ message: string }> => {
+    const { data } = await client.post<{ message: string }>('/auth/forgot-password', { email });
+    return data;
+  },
+
+  /**
+   * Reset password with a token from the email link.
+   * TODO: backend route POST /api/v1/auth/reset-password
+   */
+  resetPassword: async (payload: {
+    token: string;
+    password: string;
+    password_confirmation: string;
+  }): Promise<{ message: string }> => {
+    const { data } = await client.post<{ message: string }>('/auth/reset-password', payload);
     return data;
   },
 
