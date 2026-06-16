@@ -24,6 +24,8 @@ class GrnItem extends Model
         'material_lot_number', 'supplier_lot_reference',
         // OGAMI-012 — lot expiry capture (null-safe; optional).
         'expiry_date',
+        // OGAMI-005 — IATF incoming resin QC: COA + moisture before acceptance.
+        'moisture_percentage', 'coa_document_path', 'coa_verified',
     ];
 
     protected $casts = [
@@ -31,6 +33,8 @@ class GrnItem extends Model
         'quantity_accepted' => 'decimal:3',
         'unit_cost'         => 'decimal:4',
         'expiry_date'       => 'date',
+        'moisture_percentage' => 'decimal:3',
+        'coa_verified'      => 'boolean',
     ];
 
     public function grn(): BelongsTo

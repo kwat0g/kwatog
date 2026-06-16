@@ -145,6 +145,10 @@ class GrnService
                     'material_lot_number'    => $row['lot_number'] ?? ($row['material_lot_number'] ?? null),
                     'supplier_lot_reference' => $row['supplier_lot_reference'] ?? null,
                     'expiry_date'            => $row['expiry_date'] ?? null,
+                    // OGAMI-005 — IATF incoming resin QC attributes (null-safe).
+                    'moisture_percentage'    => $row['moisture_percentage'] ?? null,
+                    'coa_document_path'      => $row['coa_document_path'] ?? null,
+                    'coa_verified'           => (bool) ($row['coa_verified'] ?? false),
                 ]);
 
                 // Update PO line running total of received quantity (base uom).
