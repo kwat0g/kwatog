@@ -129,14 +129,14 @@ class ComprehensiveDemoSeeder extends Seeder
             'disbursed_by'        => $this->admin->id,
         ]);
 
-        // Current period (open)
+        // Current period (draft — newly created, not yet processed).
         DB::table('payroll_periods')->insert([
             'period_start'        => $now->copy()->startOfMonth()->toDateString(),
             'period_end'          => $now->copy()->startOfMonth()->addDays(14)->toDateString(),
             'payroll_date'        => $now->copy()->startOfMonth()->addDays(20)->toDateString(),
             'is_first_half'       => true,
             'is_thirteenth_month' => false,
-            'status'              => 'open',
+            'status'              => 'draft',
             'created_by'          => $this->admin->id,
             'created_at'          => $now,
             'updated_at'          => $now,

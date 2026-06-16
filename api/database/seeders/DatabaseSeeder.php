@@ -74,6 +74,13 @@ class DatabaseSeeder extends Seeder
             // Comprehensive demo data — fills all 24 modules so every
             // feature page has realistic records to browse and test.
             ComprehensiveDemoSeeder::class,
+
+            // OGAMI-010 — realistic VOLUME on top of the demo scaffold. Runs
+            // LAST: ComprehensiveDemoSeeder truncates payroll/NCR/etc., so this
+            // must follow it to own the demo-critical volume (200 employees,
+            // 12mo attendance, 6 finalized payroll cycles, 45 NCRs, forecasts).
+            // Deterministic + idempotent.
+            RealisticDataSeeder::class,
         ]);
     }
 }
