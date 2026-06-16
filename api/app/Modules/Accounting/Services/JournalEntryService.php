@@ -233,6 +233,15 @@ class JournalEntryService
             return; // different checker, or unknown maker — allowed.
         }
 
+        // System-generated postings (final pay, payroll, invoice, bill, etc.)
+        // carry a reference_type and are created+posted in one automated service
+        // flow — they are not manual maker/checker entries, so maker-checker does
+        // not apply. SoD on those source documents is enforced upstream (e.g. PO
+        // approval, payroll finalize). Only manual, free-form JEs are gated here.
+        if (! empty($je->reference_type)) {
+            return;
+        }
+
         if ($by->hasPermission(self::SELF_POST_OVERRIDE_PERMISSION)) {
             return; // explicit override.
         }
