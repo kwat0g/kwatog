@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, Clock, AlertTriangle } from 'lucide-react';
 import { approvalsApi } from '@/api/approvals';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -32,9 +32,45 @@ const KIND_LABEL: Record<ApprovalKind, string> = {
   payroll: 'Payroll',
 };
 
+/** Per-step approval SLA (matches the backend's 24h overdue rule). */
+const SLA_HOURS = 24;
+
+/** Hours remaining against the SLA for a card, given the current clock. */
+function hoursRemaining(since: string, now: number): number {
+  const elapsedH = (now - new Date(since).getTime()) / 3_600_000;
+  return SLA_HOURS - elapsedH;
+}
+
+function slaTone(remaining: number): 'danger' | 'warning' | 'info' {
+  if (remaining <= 0) return 'danger';
+  if (remaining <= 6) return 'warning';
+  return 'info';
+}
+
+function formatSla(remaining: number): string {
+  if (remaining <= 0) {
+    const over = Math.floor(-remaining);
+    return over < 1 ? 'Overdue' : `Overdue ${over}h`;
+  }
+  const h = Math.floor(remaining);
+  const m = Math.round((remaining - h) * 60);
+  return h >= 1 ? `${h}h ${m}m left` : `${m}m left`;
+}
+
+/** Ticking clock for live countdowns; updates once a minute. */
+function useNow(): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(t);
+  }, []);
+  return now;
+}
+
 export default function ApprovalsBoardPage() {
   const navigate = useNavigate();
   const [kind, setKind] = useState<ApprovalKind | 'all'>('all');
+  const now = useNow();
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['approvals', 'board', kind],
@@ -43,13 +79,21 @@ export default function ApprovalsBoardPage() {
     refetchInterval: 30_000, // light polling — websocket upgrade is a future task
   });
 
+  // Prioritise the inbox: most-overdue (oldest pending) first.
+  const myAction = data
+    ? [...data.my_action].sort(
+        (a, b) => new Date(a.since).getTime() - new Date(b.since).getTime(),
+      )
+    : [];
+  const overdueCount = myAction.filter((c) => hoursRemaining(c.since, now) <= 0).length;
+
   return (
     <div>
       <PageHeader
         title="Approvals"
         subtitle={
           data
-            ? `${data.summary.my_action} requiring my action`
+            ? `${data.summary.my_action} requiring my action${overdueCount > 0 ? ` · ${overdueCount} overdue` : ''}`
             : undefined
         }
       />
@@ -95,13 +139,13 @@ export default function ApprovalsBoardPage() {
           <Column
             title="My action required"
             count={data.summary.my_action}
-            tone="warning"
+            tone={overdueCount > 0 ? 'danger' : 'warning'}
           >
-            {data.my_action.length === 0 ? (
+            {myAction.length === 0 ? (
               <EmptyColumn message="Nothing waiting on you. Nice." />
             ) : (
-              data.my_action.map((c) => (
-                <ActiveCard key={`${c.type}-${c.id}`} card={c} onOpen={() => navigate(c.link)} />
+              myAction.map((c) => (
+                <ActiveCard key={`${c.type}-${c.id}`} card={c} now={now} showSla onOpen={() => navigate(c.link)} />
               ))
             )}
           </Column>
@@ -115,7 +159,7 @@ export default function ApprovalsBoardPage() {
               <EmptyColumn message="No pending approvals." />
             ) : (
               data.awaiting_others.map((c) => (
-                <ActiveCard key={`${c.type}-${c.id}`} card={c} onOpen={() => navigate(c.link)} />
+                <ActiveCard key={`${c.type}-${c.id}`} card={c} now={now} onOpen={() => navigate(c.link)} />
               ))
             )}
           </Column>
@@ -183,9 +227,24 @@ function EmptyColumn({ message }: { message: string }) {
   );
 }
 
-function ActiveCard({ card, onOpen }: { card: ApprovalCardActive; onOpen: () => void }) {
-  const aging = card.age_hours;
-  const tone = aging >= 48 ? 'danger' : aging >= 24 ? 'warning' : 'neutral';
+function ActiveCard({
+  card,
+  now,
+  showSla = false,
+  onOpen,
+}: {
+  card: ApprovalCardActive;
+  now: number;
+  /** Show the live SLA countdown + consumption bar (inbox column only). */
+  showSla?: boolean;
+  onOpen: () => void;
+}) {
+  const remaining = hoursRemaining(card.since, now);
+  const tone = slaTone(remaining);
+  const consumedPct = Math.min(100, Math.max(0, ((SLA_HOURS - remaining) / SLA_HOURS) * 100));
+  const barColor =
+    tone === 'danger' ? 'bg-danger' : tone === 'warning' ? 'bg-warning' : 'bg-accent';
+
   return (
     <button
       type="button"
@@ -196,8 +255,17 @@ function ActiveCard({ card, onOpen }: { card: ApprovalCardActive; onOpen: () => 
         <span className="text-2xs uppercase tracking-wider text-muted font-medium">
           {KIND_LABEL[card.type]}
         </span>
-        <Chip variant={tone}>
-          <span className="font-mono tabular-nums">{aging}h</span>
+        <Chip variant={showSla ? tone : 'neutral'}>
+          <span className="inline-flex items-center gap-1 font-mono tabular-nums">
+            {showSla ? (
+              <>
+                {remaining <= 0 ? <AlertTriangle size={10} /> : <Clock size={10} />}
+                {formatSla(remaining)}
+              </>
+            ) : (
+              `${card.age_hours}h`
+            )}
+          </span>
         </Chip>
       </div>
       <div className="font-mono text-xs text-primary mb-1">{card.number}</div>
@@ -210,6 +278,11 @@ function ActiveCard({ card, onOpen }: { card: ApprovalCardActive; onOpen: () => 
       {card.requester && (
         <div className="text-2xs text-muted mt-1.5">
           requested by <UserBadge name={card.requester.name} role={card.requester.role} />
+        </div>
+      )}
+      {showSla && (
+        <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-subtle" aria-hidden="true">
+          <div className={cn('h-full rounded-full transition-all', barColor)} style={{ width: `${consumedPct}%` }} />
         </div>
       )}
       <div className="text-2xs text-muted mt-1.5 flex items-center gap-1">
