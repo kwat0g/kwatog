@@ -186,4 +186,47 @@ class LotTraceabilityTest extends TestCase
         $this->assertTrue((bool) $line->coa_verified);
         $this->assertSame('RESIN-LOT-77', $line->material_lot_number);
     }
+
+    public function test_over_receipt_blocked_by_default_but_allowed_within_tolerance(): void
+    {
+        $item     = Item::factory()->create(['is_active' => true]);
+        $location = WarehouseLocation::factory()->create();
+
+        $po = PurchaseOrder::factory()->create([
+            'status'     => PurchaseOrderStatus::Approved->value,
+            'created_by' => $this->user->id,
+        ]);
+        $poItem = PurchaseOrderItem::create([
+            'purchase_order_id' => $po->id,
+            'item_id'           => $item->id,
+            'description'       => 'Resin (ordered 1000kg)',
+            'quantity'          => '1000.000',
+            'unit'              => 'kg',
+            'unit_price'        => '80.00',
+            'total'             => '80000.00',
+            'quantity_received' => '0.000',
+        ]);
+
+        $line = [
+            'purchase_order_item_id' => $poItem->id,
+            'item_id'                => $item->id,
+            'location_id'            => $location->id,
+            'quantity_received'      => '1002', // 0.2% over
+            'unit_cost'              => '80.00',
+        ];
+
+        // Default tolerance 0 → hard block.
+        config()->set('inventory.over_receipt_tolerance_pct', '0');
+        try {
+            $this->grnSvc->create($po, [$line], [], $this->user);
+            $this->fail('Over-receipt should be blocked at 0% tolerance.');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('only', $e->getMessage());
+        }
+
+        // 1% tolerance → 1002 (0.2% over) is accepted.
+        config()->set('inventory.over_receipt_tolerance_pct', '1');
+        $grn = $this->grnSvc->create($po, [$line], [], $this->user);
+        $this->assertSame('1002.000', (string) $grn->items->first()->quantity_received);
+    }
 }

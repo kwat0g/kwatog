@@ -125,9 +125,19 @@ class GrnService
 
                 $remaining = bcsub((string) $poi->quantity, (string) $poi->quantity_received, 3);
                 if (bccomp($qtyReceived, $remaining, 3) > 0) {
-                    throw new RuntimeException(
-                        "Cannot receive {$qtyReceived} for PO line {$poi->id}: only {$remaining} remaining."
-                    );
+                    // OGAMI-014 — over-receipt tolerance. Resin sold in full bags/
+                    // drums often lands slightly above the ordered quantity; a
+                    // configurable tolerance (% of the ORDERED line qty, default 0)
+                    // accepts the overage instead of hard-blocking the whole GRN.
+                    $tolerancePct = (string) config('inventory.over_receipt_tolerance_pct', '0');
+                    $allowance = bcmul((string) $poi->quantity, bcdiv($tolerancePct, '100', 6), 3);
+                    $maxReceivable = bcadd($remaining, $allowance, 3);
+                    if (bccomp($qtyReceived, $maxReceivable, 3) > 0) {
+                        throw new RuntimeException(
+                            "Cannot receive {$qtyReceived} for PO line {$poi->id}: only {$remaining} remaining"
+                            .($tolerancePct !== '0' ? " (tolerance {$tolerancePct}% → max {$maxReceivable})" : '').'.'
+                        );
+                    }
                 }
 
                 GrnItem::create([
