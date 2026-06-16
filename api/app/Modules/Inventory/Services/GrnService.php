@@ -98,31 +98,51 @@ class GrnService
                 if ($poi->purchase_order_id !== $po->id) {
                     throw new RuntimeException("PO line {$poi->id} does not belong to PO {$po->id}.");
                 }
-                $remaining = bcsub((string) $poi->quantity, (string) $poi->quantity_received, 3);
-                if (bccomp((string) $row['quantity_received'], $remaining, 3) > 0) {
-                    throw new RuntimeException(
-                        "Cannot receive {$row['quantity_received']} for PO line {$poi->id}: only {$remaining} remaining."
-                    );
-                }
 
                 $locationId = HashIdFilter::decode($row['location_id'], WarehouseLocation::class)
                     ?? (int) $row['location_id'];
                 $itemId = HashIdFilter::decode($row['item_id'], \App\Modules\Inventory\Models\Item::class)
                     ?? (int) $row['item_id'];
 
+                // OGAMI-004 — multi-UOM receiving. If the caller supplies a
+                // `received_uom_code` that differs from the item base uom, the
+                // received quantity is converted to BASE before it touches the
+                // over-receipt check, GrnItem storage, the PO-line running
+                // total, and (later, on accept) the stock movement — preserving
+                // the base-uom storage invariant. Identity when the code is
+                // null or equals the base uom.
+                //
+                // NOTE: PO lines do not yet carry their own purchase-uom column
+                // (owned by the Purchasing module). Capturing the ordered uom on
+                // the PO line — and validating that `received_uom_code` is a
+                // configured conversion for that line — is a follow-up. Until
+                // then the PO quantity is treated as already being in base uom.
+                $qtyReceived = (string) $row['quantity_received'];
+                if (! empty($row['received_uom_code'])) {
+                    $item = \App\Modules\Inventory\Models\Item::query()->findOrFail($itemId);
+                    $qtyReceived = $item->convertToBase($qtyReceived, (string) $row['received_uom_code']);
+                }
+
+                $remaining = bcsub((string) $poi->quantity, (string) $poi->quantity_received, 3);
+                if (bccomp($qtyReceived, $remaining, 3) > 0) {
+                    throw new RuntimeException(
+                        "Cannot receive {$qtyReceived} for PO line {$poi->id}: only {$remaining} remaining."
+                    );
+                }
+
                 GrnItem::create([
                     'goods_receipt_note_id'  => $grn->id,
                     'purchase_order_item_id' => $poi->id,
                     'item_id'                => $itemId,
                     'location_id'            => $locationId,
-                    'quantity_received'      => $row['quantity_received'],
+                    'quantity_received'      => $qtyReceived,
                     'quantity_accepted'      => 0,
                     'unit_cost'              => $row['unit_cost'] ?? $poi->unit_price,
                     'remarks'                => $row['remarks'] ?? null,
                 ]);
 
-                // Update PO line running total of received quantity.
-                $poi->quantity_received = bcadd((string) $poi->quantity_received, (string) $row['quantity_received'], 3);
+                // Update PO line running total of received quantity (base uom).
+                $poi->quantity_received = bcadd((string) $poi->quantity_received, $qtyReceived, 3);
                 $poi->save();
             }
 

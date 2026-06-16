@@ -125,6 +125,9 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'accounting.journal.create',       'name' => 'Create Journal Entries'],
                 ['slug' => 'accounting.journal.post',         'name' => 'Post Journal Entries'],
                 ['slug' => 'accounting.journal.reverse',      'name' => 'Reverse Posted Journal Entries'],
+                // Period close (OGAMI-001)
+                ['slug' => 'accounting.periods.view',         'name' => 'View Accounting Periods'],
+                ['slug' => 'accounting.periods.manage',       'name' => 'Close / Reopen Accounting Periods'],
                 // Vendors & Bills (AP)
                 ['slug' => 'accounting.vendors.view',         'name' => 'View Vendors'],
                 ['slug' => 'accounting.vendors.manage',       'name' => 'Manage Vendors'],

@@ -47,13 +47,14 @@ class LogSlowQueries
     private function enabled(): bool
     {
         // Default: on in local + production; off in testing.
-        $default = ! app()->environment('testing');
-        return (bool) env('LOG_SLOW_QUERIES', $default);
+        // Read via config() so the value survives `config:cache` (env()
+        // returns null once the config is cached in production).
+        return (bool) config('logging.slow_query.enabled', ! app()->environment('testing'));
     }
 
     private function thresholdMs(): int
     {
-        $configured = (int) env('LOG_SLOW_QUERIES_MS', 0);
+        $configured = (int) config('logging.slow_query.threshold_ms', 0);
         if ($configured > 0) {
             return $configured;
         }

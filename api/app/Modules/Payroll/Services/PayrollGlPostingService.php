@@ -7,6 +7,7 @@ namespace App\Modules\Payroll\Services;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\SettingsService;
 use App\Common\Support\Money;
+use App\Modules\Accounting\Services\AccountingPeriodService;
 use App\Modules\Payroll\Enums\PayrollPeriodStatus;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use Illuminate\Support\Facades\DB;
@@ -29,6 +30,7 @@ class PayrollGlPostingService
     public function __construct(
         private readonly DocumentSequenceService $sequences,
         private readonly SettingsService $settings,
+        private readonly AccountingPeriodService $periods,
     ) {}
 
     /**
@@ -58,6 +60,11 @@ class PayrollGlPostingService
             Log::warning('PayrollGlPostingService: journal_entries / accounts table missing; skipping');
             return null;
         }
+
+        // OGAMI-001 — block posting payroll into a closed accounting period.
+        // Guard the payroll_date (the GL date used for the JE below); fall back
+        // to period_end if payroll_date is somehow unset.
+        $this->periods->assertPostingAllowed($period->payroll_date ?? $period->period_end);
 
         return DB::transaction(function () use ($period) {
             // Aggregate totals from payroll rows.

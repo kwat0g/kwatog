@@ -103,6 +103,37 @@ restore:
 		-e DB_DATABASE=$${DB_DATABASE:-ogami} \
 		db bash /tmp/db-restore.sh --yes /tmp/restore.sql.gz
 
+# OGAMI-018 — Production backup/restore. Same scripts, prod compose file.
+# In prod the scheduler ALSO runs `php artisan db:backup` daily (03:17) inside
+# the api container; these targets are the manual / drill entry points.
+# Backups land in ./backups on the host (db container mounts /backups).
+prod-backup:
+	@mkdir -p backups
+	@docker cp scripts/db-backup.sh ogami-db:/tmp/db-backup.sh
+	@$(PROD_COMPOSE) exec -T \
+		-e BACKUP_DIR=/backups \
+		-e DB_HOST=localhost \
+		-e DB_PORT=5432 \
+		-e DB_USERNAME=$${DB_USERNAME:-ogami} \
+		-e DB_PASSWORD=$${DB_PASSWORD:?set DB_PASSWORD} \
+		-e DB_DATABASE=$${DB_DATABASE:-ogami} \
+		db sh -c 'mkdir -p /backups && bash /tmp/db-backup.sh'
+	@docker cp ogami-db:/backups/. ./backups/ 2>/dev/null || true
+	@echo "→ prod backups available in ./backups/"
+
+prod-restore:
+	@if [ -z "$(FILE)" ]; then echo "Usage: make prod-restore FILE=backups/ogami-<ts>.sql.gz"; exit 2; fi
+	@if [ ! -f "$(FILE)" ]; then echo "ERROR: $(FILE) not found"; exit 2; fi
+	@docker cp "$(FILE)" ogami-db:/tmp/restore.sql.gz
+	@docker cp scripts/db-restore.sh ogami-db:/tmp/db-restore.sh
+	@$(PROD_COMPOSE) exec -T \
+		-e DB_HOST=localhost \
+		-e DB_PORT=5432 \
+		-e DB_USERNAME=$${DB_USERNAME:-ogami} \
+		-e DB_PASSWORD=$${DB_PASSWORD:?set DB_PASSWORD} \
+		-e DB_DATABASE=$${DB_DATABASE:-ogami} \
+		db bash /tmp/db-restore.sh --yes /tmp/restore.sql.gz
+
 # ─── Production (Sprint 4 Task 38) ─────────────────────────────────────
 # These targets target docker-compose.prod.yml and assume:
 #   • You're SSH'd into the production VPS at /opt/ogami-erp

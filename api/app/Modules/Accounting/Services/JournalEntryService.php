@@ -24,6 +24,7 @@ class JournalEntryService
 {
     public function __construct(
         private readonly DocumentSequenceService $sequences,
+        private readonly AccountingPeriodService $periods,
     ) {}
 
     /**
@@ -87,6 +88,9 @@ class JournalEntryService
     public function create(array $data, ?User $user = null): JournalEntry
     {
         return DB::transaction(function () use ($data, $user) {
+            // OGAMI-001 — block posting/back-dating into a closed period.
+            $this->periods->assertPostingAllowed($data['date']);
+
             [$lines, $totalDebit, $totalCredit] = $this->buildLines($data['lines'] ?? []);
 
             if (Money::cmp($totalDebit, $totalCredit) !== 0) {
@@ -171,6 +175,10 @@ class JournalEntryService
         }
 
         return DB::transaction(function () use ($je, $by) {
+            // OGAMI-001 — block posting into a closed period (date may have
+            // been back-dated since the draft was created).
+            $this->periods->assertPostingAllowed($je->date);
+
             // Re-validate balance — the lines may have been edited.
             $je->loadMissing('lines');
             $td = Money::zero(); $tc = Money::zero();

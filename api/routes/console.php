@@ -137,12 +137,24 @@ Schedule::command('overrides:prune-expired')
     ->withoutOverlapping()
     ->onOneServer();
 
-// Task 7 — Prune audit logs older than 12 months on the 1st at 04:00.
-// Partition-aware: PostgreSQL routes the DELETE to the correct monthly
-// child partitions automatically via the created_at partition key.
+// OGAMI-018 — Archive audit logs older than 12 months on the 1st at 04:00.
+// ARCHIVE-ONLY: audit_logs is append-only (PostgreSQL BEFORE DELETE trigger
+// from 2026_06_09_100001_add_audit_log_immutability_trigger.php RAISES on any
+// delete). The command exports old rows to gzipped JSON under
+// storage/app/audit-archives/ and never deletes the source rows. Idempotent
+// (one file per closed month), so re-runs are safe no-ops.
 Schedule::command('audit:prune --months=12')
     ->monthlyOn(1, '04:00')
     ->runInBackground()
+    ->withoutOverlapping()
+    ->onOneServer();
+
+// OGAMI-018 — Daily database backup at 03:17 (off-peak, off-:00 to avoid the
+// global cron stampede). Wraps scripts/db-backup.sh (pg_dump + gzip +
+// retention + optional S3). Backups underpin the restore drill documented in
+// docs/RESTORE-DRILL.md.
+Schedule::command('db:backup')
+    ->dailyAt('03:17')
     ->withoutOverlapping()
     ->onOneServer();
 

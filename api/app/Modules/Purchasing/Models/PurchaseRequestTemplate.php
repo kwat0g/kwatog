@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Purchasing\Models;
 
+use App\Common\Traits\HasHashId;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Department;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -12,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class PurchaseRequestTemplate extends Model
 {
-    use HasFactory;
+    use HasFactory, HasHashId;
 
     protected $fillable = [
         'name',

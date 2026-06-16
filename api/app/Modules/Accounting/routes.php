@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Modules\Accounting\Controllers\AccountController;
+use App\Modules\Accounting\Controllers\AccountingPeriodController;
 use App\Modules\Accounting\Controllers\BillController;
 use App\Modules\Accounting\Controllers\BudgetController;
 use App\Modules\Accounting\Controllers\BudgetTransferController;
@@ -25,6 +26,13 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
         Route::post('/',          [AccountController::class, 'store'])     ->middleware('permission:accounting.coa.manage');
         Route::put('/{account}',  [AccountController::class, 'update'])    ->middleware('permission:accounting.coa.manage');
         Route::delete('/{account}',[AccountController::class, 'deactivate'])->middleware('permission:accounting.coa.deactivate');
+    });
+
+    /* ─── Accounting Periods (OGAMI-001 close lock) ──── */
+    Route::prefix('accounting/periods')->group(function () {
+        Route::get('/',         [AccountingPeriodController::class, 'index'])  ->middleware('permission:accounting.periods.view');
+        Route::post('/close',   [AccountingPeriodController::class, 'close'])  ->middleware('permission:accounting.periods.manage');
+        Route::post('/reopen',  [AccountingPeriodController::class, 'reopen']) ->middleware('permission:accounting.periods.manage');
     });
 
     /* ─── Journal Entries ────────────────────────────── */

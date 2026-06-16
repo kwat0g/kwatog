@@ -14,6 +14,7 @@ use App\Modules\Inventory\Controllers\StockLevelController;
 use App\Modules\Inventory\Controllers\StockMovementController;
 use App\Modules\Inventory\Controllers\StockTransferController;
 use App\Modules\Inventory\Controllers\TransferOrderController;
+use App\Modules\Inventory\Controllers\UomController;
 use App\Modules\Inventory\Controllers\WarehouseController;
 use App\Modules\Inventory\Controllers\WarehouseMapController;
 use Illuminate\Support\Facades\Route;
@@ -37,6 +38,19 @@ Route::middleware(['auth:sanctum', 'feature:inventory'])->prefix('inventory')->g
     /* ─── Series F / Task F3 — Stock Card ─── */
     Route::get('/items/{item}/stock-card', [StockCardController::class, 'show'])
         ->middleware('permission:inventory.view');
+
+    /* ─── OGAMI-004 — UOM catalog + per-item conversions ─── */
+    Route::get('/uoms',           [UomController::class, 'index'])  ->middleware('permission:inventory.view');
+    Route::post('/uoms',          [UomController::class, 'store'])  ->middleware('permission:inventory.items.manage');
+    Route::put('/uoms/{uom}',     [UomController::class, 'update']) ->middleware('permission:inventory.items.manage');
+    Route::delete('/uoms/{uom}',  [UomController::class, 'destroy'])->middleware('permission:inventory.items.manage');
+
+    Route::get('/items/{item}/uom-conversions',  [UomController::class, 'conversions'])
+        ->middleware('permission:inventory.view');
+    Route::post('/items/{item}/uom-conversions', [UomController::class, 'storeConversion'])
+        ->middleware('permission:inventory.items.manage');
+    Route::delete('/items/{item}/uom-conversions/{itemUomConversion}', [UomController::class, 'destroyConversion'])
+        ->middleware('permission:inventory.items.manage');
 
     /* ─── Warehouse / Zones / Locations ─── */
     Route::get('/warehouse',                 [WarehouseController::class, 'tree'])->middleware('permission:inventory.view');

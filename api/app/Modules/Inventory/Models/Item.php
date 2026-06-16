@@ -66,6 +66,29 @@ class Item extends Model
         return $this->hasMany(\App\Modules\Purchasing\Models\ApprovedSupplier::class);
     }
 
+    /**
+     * OGAMI-004 — alternate-UOM conversion rows (e.g. BAG → KG) whose base
+     * end matches this item's {@see $unit_of_measure}.
+     */
+    public function uomConversions(): HasMany
+    {
+        return $this->hasMany(ItemUomConversion::class);
+    }
+
+    /**
+     * OGAMI-004 — convert a quantity expressed in $fromUomCode into this item's
+     * base uom (carried by {@see $unit_of_measure}). Thin wrapper over
+     * {@see \App\Modules\Inventory\Services\UomConversionService::toBase()};
+     * identity when $fromUomCode is null or equals the base uom.
+     *
+     * @return string base-uom quantity, 6-decimal BCMath string
+     */
+    public function convertToBase(string $qty, ?string $fromUomCode = null): string
+    {
+        return app(\App\Modules\Inventory\Services\UomConversionService::class)
+            ->toBase($this, $qty, $fromUomCode);
+    }
+
     public function scopeActive(Builder $q): Builder
     {
         return $q->where('is_active', true);

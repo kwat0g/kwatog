@@ -38,6 +38,7 @@ class BillService
 
     public function __construct(
         private readonly JournalEntryService $journals,
+        private readonly AccountingPeriodService $periods,
         private readonly ?ThreeWayMatchService $threeWayMatch = null,
         private readonly ?BudgetEnforcementService $budget = null,
     ) {}
@@ -89,6 +90,9 @@ class BillService
     public function create(array $data, User $by): Bill
     {
         return DB::transaction(function () use ($data, $by) {
+            // OGAMI-001 — block posting/back-dating into a closed period.
+            $this->periods->assertPostingAllowed($data['date']);
+
             $vendor = Vendor::findOrFail(
                 HashIdFilter::decode($data['vendor_id'], Vendor::class)
             );

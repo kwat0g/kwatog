@@ -10,6 +10,16 @@ return [
         'channel' => env('LOG_DEPRECATIONS_CHANNEL', 'null'),
         'trace' => env('LOG_DEPRECATIONS_TRACE', false),
     ],
+    // Phase 5b — slow-query telemetry settings. Read by the LogSlowQueries
+    // middleware via config() so values survive `config:cache` (env() returns
+    // null after caching). 'threshold_ms' = 0 is a sentinel meaning "use the
+    // per-environment default" (100ms local, 250ms otherwise). 'enabled'
+    // defaults to on everywhere except testing.
+    'slow_query' => [
+        'enabled'      => env('LOG_SLOW_QUERIES', ! ((string) env('APP_ENV', 'production') === 'testing')),
+        'threshold_ms' => (int) env('LOG_SLOW_QUERIES_MS', 0),
+    ],
+
     'channels' => [
         'stack' => [
             'driver' => 'stack',

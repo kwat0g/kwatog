@@ -77,6 +77,15 @@ class MaterialIssueService
                 $locId   = HashIdFilter::decode($row['location_id'], WarehouseLocation::class) ?? (int) $row['location_id'];
                 $qty     = (string) $row['quantity_issued'];
 
+                // OGAMI-004 — multi-UOM issuing. If the caller supplies an
+                // `issued_uom_code` different from the item base uom, convert
+                // the issued quantity to BASE before it touches stock — keeping
+                // the base-uom storage invariant. Identity when null/equal.
+                if (! empty($row['issued_uom_code'])) {
+                    $item = Item::query()->findOrFail($itemId);
+                    $qty  = $item->convertToBase($qty, (string) $row['issued_uom_code']);
+                }
+
                 $level = StockLevel::query()
                     ->where('item_id', $itemId)->where('location_id', $locId)
                     ->lockForUpdate()->first();

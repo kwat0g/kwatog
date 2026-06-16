@@ -109,11 +109,30 @@ class BomService
         }
         return $bom->items->map(function ($row) use ($finishedQuantity) {
             $effective = (float) $row->effective_quantity;
+            $gross = $effective * $finishedQuantity;
+
+            // OGAMI-004 — BOM line quantities are authored per the line `unit`.
+            // If that unit differs from the item base uom AND a conversion row
+            // is configured, convert the gross requirement to BASE so MRP nets
+            // it against base-uom stock. Identity when the line `unit` is null
+            // or equals the item base uom. To guarantee no regression for
+            // legacy BOMs whose line unit differs from base but have no
+            // conversion configured, a missing conversion falls back to the
+            // authored quantity (treated as already base) rather than throwing.
+            $grossStr = number_format($gross, 6, '.', '');
+            if ($row->item && ! empty($row->unit)) {
+                try {
+                    $grossStr = $row->item->convertToBase($grossStr, (string) $row->unit);
+                } catch (RuntimeException) {
+                    // No conversion configured — leave authored quantity as-is.
+                }
+            }
+
             return [
                 'item_id'        => (int) $row->item_id,
                 'item_code'      => (string) $row->item?->code,
                 'item_name'      => (string) $row->item?->name,
-                'gross_quantity' => number_format($effective * $finishedQuantity, 3, '.', ''),
+                'gross_quantity' => number_format((float) $grossStr, 3, '.', ''),
             ];
         });
     }

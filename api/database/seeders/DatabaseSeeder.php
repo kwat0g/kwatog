@@ -34,6 +34,7 @@ class DatabaseSeeder extends Seeder
             PayrollChartAccountsSeeder::class, // Task 29 — idempotent upsert; preserved for back-compat.
 
             // Sprint 5 — Procure to Pay (Part 1).
+            UomSeeder::class,                  // OGAMI-004 — UOMs before items/conversions
             InventoryItemSeeder::class,        // Task 39
             WarehouseSeeder::class,            // Task 40
 

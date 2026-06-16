@@ -31,6 +31,7 @@ class InvoiceService
     public function __construct(
         private readonly DocumentSequenceService $sequences,
         private readonly JournalEntryService $journals,
+        private readonly AccountingPeriodService $periods,
     ) {}
 
     public function list(array $filters): LengthAwarePaginator
@@ -159,6 +160,9 @@ class InvoiceService
         }
 
         return DB::transaction(function () use ($invoice, $by) {
+            // OGAMI-001 — block finalizing into a closed period.
+            $this->periods->assertPostingAllowed($invoice->date);
+
             $invoice->loadMissing(['items', 'customer']);
 
             $arId        = $this->accountId(self::AR_CODE);
