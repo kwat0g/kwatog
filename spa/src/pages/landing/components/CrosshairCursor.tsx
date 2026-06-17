@@ -14,7 +14,7 @@
  *   • Listeners are passive/window-scoped and fully torn down on unmount.
  */
 
-import { useLayoutEffect, useRef, type RefObject } from 'react';
+import { useEffect, useRef, type RefObject } from 'react';
 import gsap from 'gsap';
 
 interface CrosshairCursorProps {
@@ -33,7 +33,13 @@ export function CrosshairCursor({ scopeRef }: CrosshairCursorProps) {
   const xRef = useRef<HTMLSpanElement>(null);
   const yRef = useRef<HTMLSpanElement>(null);
 
-  useLayoutEffect(() => {
+  // useEffect, NOT useLayoutEffect: scopeRef points at this component's PARENT
+  // (the LandingPage root that also renders us). React attaches refs bottom-up,
+  // so a layout effect here runs before the parent ref is set — scopeRef.current
+  // would be null and the probe would bail. Passive effects flush after the full
+  // commit, by which point the parent ref is attached. (StrictMode's dev-only
+  // double-invoke hid this in dev; production ran once and stranded the cursor.)
+  useEffect(() => {
     const scope = scopeRef.current;
     const root = rootRef.current;
     const dot = dotRef.current;
