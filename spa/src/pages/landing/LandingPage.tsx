@@ -22,9 +22,7 @@ import { CrosshairCursor } from './components/CrosshairCursor';
 import { ScrollProgress } from './components/ScrollProgress';
 import { HeroSection } from './sections/HeroSection';
 import { MarqueeSection } from './sections/MarqueeSection';
-import { TrustSection } from './sections/TrustSection';
 import { CapabilitiesSection } from './sections/CapabilitiesSection';
-import { PartsGallerySection } from './sections/PartsGallerySection';
 import { PartShowcaseSection } from './sections/PartShowcaseSection';
 import { ProcessSection } from './sections/ProcessSection';
 import { StatsSection } from './sections/StatsSection';
@@ -95,12 +93,10 @@ export default function LandingPage() {
         <HeroSection />
         <MarqueeSection />
         <CapabilitiesSection />
-        <PartsGallerySection />
         <PartShowcaseSection />
         <ProcessSection />
         <QualitySection />
         <StatsSection />
-        <TrustSection />
         <PhilippinesSection />
         <ContactSection />
       </main>

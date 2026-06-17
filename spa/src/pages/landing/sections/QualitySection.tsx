@@ -10,36 +10,22 @@ import { ShieldCheck, Download, Award } from 'lucide-react';
 import { SectionHeading } from '../components/SectionHeading';
 import { QUALITY_PILLARS, QUALITY_METHODS } from '../data';
 import { landingApi } from '@/api/landing';
-import { useTilt } from '../hooks/useTilt';
+import { section, container, cardGap } from '../styles';
 
 type PillarData = (typeof QUALITY_PILLARS)[number];
 
 function PillarCell({ pillar, index }: { pillar: PillarData; index: number }) {
-  const tiltRef = useTilt<HTMLDivElement>({ max: 5, lift: 10 });
   const Icon = pillar.icon;
   return (
     <div
-      ref={tiltRef}
       data-reveal
       data-reveal-delay={(index * 0.08).toFixed(2)}
-      className="group relative flex flex-col bg-landing-surface p-7 transition-colors duration-500 hover:bg-landing-elevated sm:p-8"
+      className="group relative flex flex-col bg-landing-surface p-6 transition-colors duration-500 hover:bg-landing-elevated sm:p-7"
     >
-      <div
-        data-tilt-glow
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300"
-        style={{
-          background:
-            'radial-gradient(220px circle at var(--mx) var(--my), var(--landing-accent-glow), transparent 65%)',
-        }}
-      />
       <span className="font-mono text-[11px] tabular-nums text-landing-subtle-text">
         0{index + 1}
       </span>
-      <div
-        data-tilt-lift
-        className="mt-5 flex h-11 w-11 items-center justify-center rounded-xl border border-landing-border text-landing-accent transition-colors duration-500 group-hover:border-landing-accent/40"
-      >
+      <div className="mt-5 flex h-11 w-11 items-center justify-center rounded-xl border border-landing-border text-landing-accent transition-colors duration-500 group-hover:border-landing-accent/40">
         <Icon size={20} strokeWidth={1.6} />
       </div>
       <h3 className="mt-5 font-display text-lg font-semibold tracking-tight text-landing-text">
@@ -54,8 +40,8 @@ function PillarCell({ pillar, index }: { pillar: PillarData; index: number }) {
 
 export function QualitySection() {
   return (
-    <section id="quality" className="relative bg-landing-canvas px-5 py-24 sm:px-8 sm:py-32">
-      <div className="mx-auto max-w-7xl">
+    <section id="quality" className={section('canvas')}>
+      <div className={container}>
         <div className="flex flex-col gap-10 lg:flex-row lg:items-end lg:justify-between">
           <SectionHeading
             eyebrow="Quality · IATF 16949"
@@ -68,9 +54,7 @@ export function QualitySection() {
             intro="Quality is not a department at Ogami — it is built into the chain. Four checkpoints stand between raw resin and your receiving dock."
           />
 
-          <div
-            className="flex flex-wrap gap-2 lg:max-w-xs lg:justify-end"
-          >
+          <div className="flex flex-wrap gap-2 lg:max-w-xs lg:justify-end">
             {QUALITY_METHODS.map((m, i) => (
               <span
                 key={m}
@@ -84,16 +68,16 @@ export function QualitySection() {
           </div>
         </div>
 
-        <div className="mt-16 grid gap-px overflow-hidden rounded-2xl border border-landing-border bg-landing-border sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-16 grid gap-px overflow-hidden rounded-xl border border-landing-border bg-landing-border sm:grid-cols-2 lg:grid-cols-4">
           {QUALITY_PILLARS.map((pillar, i) => (
             <PillarCell key={pillar.id} pillar={pillar} index={i} />
           ))}
         </div>
 
-        <div className="mt-6 grid gap-5 lg:grid-cols-[1fr_1.4fr]">
+        <div className={`mt-6 grid ${cardGap} lg:grid-cols-[1fr_1.4fr]`}>
           <div
             data-reveal="scale"
-            className="flex flex-col justify-between rounded-2xl border border-landing-border bg-landing-surface p-7"
+            className="flex flex-col justify-between rounded-xl border border-landing-border bg-landing-surface p-6 sm:p-7"
           >
             <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-landing-border text-landing-accent">
               <Award size={22} strokeWidth={1.6} />
@@ -136,7 +120,7 @@ export function QualitySection() {
           <div
             data-reveal="scale"
             data-reveal-delay="0.08"
-            className="flex items-start gap-4 rounded-2xl border border-landing-accent/20 bg-landing-accent-glow px-7 py-6"
+            className="flex items-start gap-4 rounded-xl border border-landing-accent/20 bg-landing-accent-glow p-6 sm:p-7"
           >
             <ShieldCheck size={22} className="mt-0.5 shrink-0 text-landing-accent" strokeWidth={1.7} />
             <p className="font-sans text-[14px] leading-relaxed text-landing-text-secondary">

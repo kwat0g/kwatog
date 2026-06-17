@@ -80,7 +80,7 @@ export function MarqueeSection() {
     >
       <p
         data-reveal
-        className="mb-7 text-center font-mono text-[11px] uppercase tracking-[0.28em] text-landing-subtle-text"
+        className="mb-7 px-5 text-center font-mono text-[11px] uppercase tracking-[0.28em] text-landing-subtle-text sm:px-8"
       >
         Trusted by the world&apos;s leading automakers
       </p>
@@ -106,7 +106,7 @@ export function MarqueeSection() {
 
       <p
         data-reveal
-        className="mt-8 px-5 text-center font-mono text-[11px] uppercase tracking-[0.18em] text-landing-subtle-text"
+        className="mt-8 px-5 text-center font-mono text-[11px] uppercase tracking-[0.18em] text-landing-subtle-text sm:px-8"
       >
         5 global OEMs
         <span className="mx-2.5 text-landing-accent/50">·</span>

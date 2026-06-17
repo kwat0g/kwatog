@@ -121,9 +121,9 @@ export function PhilippinesSection() {
   return (
     <section
       id="filipino-made"
-      className="relative overflow-hidden bg-landing-surface px-5 py-24 sm:px-8 sm:py-32"
+      className="relative overflow-hidden bg-landing-surface px-5 sm:px-8 py-20 sm:py-28"
     >
-      <div className="mx-auto grid max-w-7xl items-center gap-14 lg:grid-cols-2 lg:gap-20">
+      <div className="mx-auto grid max-w-6xl items-center gap-14 lg:grid-cols-2 lg:gap-20">
         {/* Copy */}
         <div data-reveal="left">
           <div data-reveal className="flex items-center gap-3">

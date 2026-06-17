@@ -14,6 +14,7 @@ import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { STATS, type StatItem } from '../data';
 import { registerScrollTrigger, reduceMotion } from '../motion';
+import { section, container } from '../styles';
 
 function formatValue(n: number, stat: StatItem): string {
   const fixed = n.toFixed(stat.decimals ?? 0);
@@ -101,8 +102,8 @@ function Counter({ stat }: { stat: StatItem }) {
 
 export function StatsSection() {
   return (
-    <section className="relative border-y border-landing-border bg-landing-surface px-5 py-20 sm:px-8 sm:py-24">
-      <div className="mx-auto grid max-w-7xl gap-x-6 gap-y-12 sm:grid-cols-2 lg:grid-cols-4">
+    <section className={section('surface')}>
+      <div className={`${container} grid gap-x-6 gap-y-12 sm:grid-cols-2 lg:grid-cols-4`}>
         {STATS.map((stat, i) => (
           <div
             key={stat.id}

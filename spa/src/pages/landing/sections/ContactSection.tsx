@@ -73,9 +73,9 @@ export function ContactSection() {
   };
 
   return (
-    <section id="contact" className="relative bg-landing-canvas px-5 py-24 sm:px-8 sm:py-32">
-      <div className="mx-auto max-w-7xl">
-        <div className="relative overflow-hidden rounded-[2rem] border border-landing-border-strong bg-landing-surface px-7 py-16 sm:px-14 sm:py-20">
+    <section id="contact" className="relative bg-landing-canvas px-5 py-20 sm:px-8 sm:py-28">
+      <div className="mx-auto max-w-6xl">
+        <div className="relative overflow-hidden rounded-2xl border border-landing-border-strong bg-landing-surface px-7 py-16 sm:px-14 sm:py-20">
           {/* atmosphere — soft warm wash + blueprint grid */}
           <div
             aria-hidden="true"

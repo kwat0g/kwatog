@@ -103,7 +103,7 @@ export function ProcessSection() {
         ref={pinRef}
         className={cn(horizontal && 'lg:flex lg:h-screen lg:flex-col lg:justify-center')}
       >
-        <div className="px-5 pt-24 sm:px-8 lg:pt-0">
+        <div className="px-5 sm:px-8 pt-20 sm:pt-28 lg:pt-0">
           <SectionHeading
             eyebrow="The Ogami process"
             title={
@@ -159,7 +159,7 @@ export function ProcessSection() {
                   data-step-index={step.index}
                   data-active="false"
                   className={cn(
-                    'group relative flex flex-col rounded-2xl border border-landing-border bg-landing-elevated p-7 transition-colors duration-500',
+                    'group relative flex flex-col rounded-xl border border-landing-border bg-landing-elevated p-6 sm:p-7 transition-colors duration-500',
                     'hover:border-landing-accent/40',
                     // Active state: top accent rule + stronger border
                     'data-[active=true]:border-landing-accent/60',
@@ -169,7 +169,7 @@ export function ProcessSection() {
                   {/* Top accent rule — only visible when active (reads group's data-active) */}
                   <div
                     aria-hidden="true"
-                    className="pointer-events-none absolute inset-x-0 top-0 h-px origin-left scale-x-0 rounded-t-2xl bg-landing-accent transition-transform duration-500 group-data-[active=true]:scale-x-100"
+                    className="pointer-events-none absolute inset-x-0 top-0 h-px origin-left scale-x-0 rounded-t-xl bg-landing-accent transition-transform duration-500 group-data-[active=true]:scale-x-100"
                     style={{ transitionProperty: 'transform' }}
                   />
 

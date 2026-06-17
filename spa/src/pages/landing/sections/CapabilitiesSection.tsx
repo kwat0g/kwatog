@@ -1,79 +1,50 @@
 /**
  * CapabilitiesSection — what Ogami makes and does.
  *
- * Four capability cards on a light paper grid. Each reveals on scroll
- * (staggered), and lifts with an espresso edge + corner glow on hover. Framed for
- * buyers: what they can source, and why the in-house control matters.
+ * Four capability cards in a calm 2-col grid. Each reveals on scroll
+ * (staggered). No tilt, no glow — just a clean border lift on hover.
  */
 
+declare const __: unique symbol;
+
+import { cn } from '@/lib/cn';
 import { SectionHeading } from '../components/SectionHeading';
 import { CAPABILITIES } from '../data';
 import type { Capability } from '../data';
-import { useTilt } from '../hooks/useTilt';
+import { section, container, card, cardGap, headingGap, monoLabel } from '../styles';
 
 function CapabilityCard({ cap, index }: { cap: Capability; index: number }) {
-  const tiltRef = useTilt<HTMLElement>({ max: 7, lift: 22 });
   const Icon = cap.icon;
 
   return (
     <article
-      ref={tiltRef}
       data-reveal
       data-reveal-delay={(index * 0.08).toFixed(2)}
-      className="group relative overflow-hidden rounded-2xl border border-landing-border bg-landing-surface p-7 transition-colors duration-500 hover:border-landing-accent/40 sm:p-9"
+      className={card('interactive', 'group')}
     >
-      {/* tilt spotlight */}
-      <div
-        data-tilt-glow
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 transition-opacity duration-300"
-        style={{ background: 'radial-gradient(240px circle at var(--mx) var(--my), var(--landing-accent-glow), transparent 65%)' }}
-      />
-
-      {/* corner glow */}
-      <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-landing-accent-glow opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-100" />
-
-      <div
-        data-tilt-lift
-        style={{ transformStyle: 'preserve-3d' }}
-        className="relative"
-      >
-        <div className="flex items-start justify-between">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-landing-border bg-landing-elevated text-landing-accent transition-colors duration-500 group-hover:border-landing-accent/40">
-            <Icon size={22} strokeWidth={1.6} />
-          </div>
-          <span className="rounded-full border border-landing-border px-3 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-landing-muted">
-            {cap.tag}
-          </span>
+      <div className="flex items-start justify-between">
+        <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-landing-border bg-landing-elevated text-landing-accent transition-colors duration-300 group-hover:border-landing-accent/40">
+          <Icon size={20} strokeWidth={1.6} />
         </div>
-
-        <h3 className="mt-7 font-display text-2xl font-semibold tracking-tight text-landing-text">
-          {cap.title}
-        </h3>
-        <p className="mt-3 max-w-md font-sans text-[14px] leading-relaxed text-landing-text-secondary">
-          {cap.blurb}
-        </p>
-
-        <ul className="mt-6 flex flex-wrap gap-2">
-          {cap.points.map((pt) => (
-            <li
-              key={pt}
-              className="flex items-center gap-2 rounded-lg bg-landing-elevated px-3 py-1.5 font-mono text-[11px] text-landing-text-secondary"
-            >
-              <span className="h-1 w-1 rounded-full bg-landing-accent" />
-              {pt}
-            </li>
-          ))}
-        </ul>
+        <span className={cn(monoLabel, 'rounded-full border border-landing-border px-3 py-1')}>
+          {cap.tag}
+        </span>
       </div>
+
+      <h3 className="mt-6 font-display text-xl font-semibold tracking-tight text-landing-text">
+        {cap.title}
+      </h3>
+      <p className="mt-2.5 font-sans text-[14px] leading-relaxed text-landing-text-secondary">
+        {cap.blurb}
+      </p>
     </article>
   );
 }
 
 export function CapabilitiesSection() {
   return (
-    <section id="capabilities" className="relative bg-landing-canvas px-5 py-24 sm:px-8 sm:py-32">
-      <div className="mx-auto max-w-7xl">
+    <section id="capabilities" className={section('canvas')}>
+      <div className={container}>
         <SectionHeading
           eyebrow="Capabilities"
           title={
@@ -82,10 +53,10 @@ export function CapabilitiesSection() {
               <br className="hidden sm:block" /> to finished assembly.
             </>
           }
-          intro="Ogami controls every step of the value chain in-house — so quality, lead time, and tooling stay under one roof, and under your spec."
+          intro="Every step of the value chain — tooling, moulding, and assembly — under one roof, under your spec."
         />
 
-        <div className="mt-16 grid gap-5 md:grid-cols-2">
+        <div className={cn(headingGap, 'grid', cardGap, 'md:grid-cols-2')}>
           {CAPABILITIES.map((cap, i) => (
             <CapabilityCard key={cap.id} cap={cap} index={i} />
           ))}

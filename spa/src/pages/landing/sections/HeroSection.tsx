@@ -100,7 +100,7 @@ export function HeroSection() {
         }}
       />
 
-      <div className="mx-auto grid w-full max-w-7xl items-center gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:gap-10">
+      <div className="mx-auto grid w-full max-w-6xl items-center gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:gap-10">
         {/* ── Text column ───────────────────────────────────────── */}
         <div>
           <p

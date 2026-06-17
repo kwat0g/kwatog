@@ -16,7 +16,6 @@
 
 import { useLayoutEffect, useRef, type RefObject } from 'react';
 import gsap from 'gsap';
-import { reduceMotion } from '../motion';
 
 interface CrosshairCursorProps {
   /** Element whose surface adopts the probe (native cursor hidden within it). */
@@ -41,18 +40,43 @@ export function CrosshairCursor({ scopeRef }: CrosshairCursorProps) {
     const ring = ringRef.current;
     const brackets = bracketsRef.current;
     if (!scope || !root || !dot || !ring || !brackets) return;
-    if (
-      reduceMotion() ||
-      !window.matchMedia('(pointer: fine)').matches ||
-      !window.matchMedia('(hover: hover)').matches ||
-      // The reticle is `display:none` below lg — never hide the native cursor
-      // on smaller viewports or the user would be left with no pointer at all.
-      !window.matchMedia('(min-width: 1024px)').matches
-    ) {
-      return;
+
+    // The reticle requires a fine pointer, real hover, and ≥lg width (it is
+    // `display:none` below lg). These can all change AFTER mount — the window
+    // can be resized across the lg breakpoint, a device can switch between
+    // mouse and touch, or reduce-motion can be toggled. So we watch them with
+    // matchMedia and (de)activate the probe live, instead of deciding once at
+    // mount and stranding the user with a dead cursor.
+    const queries = [
+      window.matchMedia('(pointer: fine)'),
+      window.matchMedia('(hover: hover)'),
+      window.matchMedia('(min-width: 1024px)'),
+      window.matchMedia('(prefers-reduced-motion: reduce)'),
+    ];
+    const gateOpen = () =>
+      queries[0].matches && // pointer: fine
+      queries[1].matches && // hover: hover
+      queries[2].matches && // ≥ lg
+      !queries[3].matches; //  not reduce-motion
+
+    let teardown: (() => void) | null = null;
+
+    function activate() {
+      if (teardown) return; // already live
+      teardown = bindProbe();
+    }
+    function deactivate() {
+      teardown?.();
+      teardown = null;
+    }
+    function sync() {
+      if (gateOpen()) activate();
+      else deactivate();
     }
 
-    scope.style.cursor = 'none';
+    // ── The actual probe wiring — only live while the gate is open. ─────────
+    function bindProbe(): () => void {
+      scope!.style.cursor = 'none';
 
     const dotX = gsap.quickTo(dot, 'x', { duration: 0.08, ease: 'power2.out' });
     const dotY = gsap.quickTo(dot, 'y', { duration: 0.08, ease: 'power2.out' });
@@ -130,17 +154,27 @@ export function CrosshairCursor({ scopeRef }: CrosshairCursorProps) {
     }
 
     gsap.set(root, { autoAlpha: 0 });
-    window.addEventListener('pointermove', onMove, { passive: true });
-    window.addEventListener('pointerdown', onDown, { passive: true });
-    window.addEventListener('pointerup', onUp, { passive: true });
+      window.addEventListener('pointermove', onMove, { passive: true });
+      window.addEventListener('pointerdown', onDown, { passive: true });
+      window.addEventListener('pointerup', onUp, { passive: true });
+
+      return () => {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerdown', onDown);
+        window.removeEventListener('pointerup', onUp);
+        if (readoutRaf) cancelAnimationFrame(readoutRaf);
+        gsap.killTweensOf([dot, ring, root, brackets]);
+        gsap.set(root, { autoAlpha: 0 });
+        scope!.style.cursor = '';
+      };
+    }
+
+    sync();
+    queries.forEach((q) => q.addEventListener('change', sync));
 
     return () => {
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerdown', onDown);
-      window.removeEventListener('pointerup', onUp);
-      if (readoutRaf) cancelAnimationFrame(readoutRaf);
-      gsap.killTweensOf([dot, ring, root, brackets]);
-      scope.style.cursor = '';
+      queries.forEach((q) => q.removeEventListener('change', sync));
+      deactivate();
     };
   }, [scopeRef]);
 
