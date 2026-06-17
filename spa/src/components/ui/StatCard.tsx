@@ -28,7 +28,7 @@ const deltaArrow = { up: '↑', down: '↓', neutral: '·' } as const;
 export function StatCard({ label, value, delta, helper, className, linkTo }: StatCardProps) {
   const inner = (
     <>
-      <div className="text-2xs uppercase tracking-wider text-text-subtle font-medium mb-1.5">
+      <div className="text-2xs uppercase tracking-wider text-text-subtle font-display font-medium mb-1.5">
         {label}
       </div>
       <div className="text-2xl font-medium font-mono tabular-nums text-primary leading-tight">

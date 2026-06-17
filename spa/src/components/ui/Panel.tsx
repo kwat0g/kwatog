@@ -17,7 +17,7 @@ export function Panel({ title, meta, actions, children, className, bodyClassName
       {(title || meta || actions) && (
         <div className="flex items-center justify-between px-4 py-3 border-b border-default">
           <div className="flex items-baseline gap-2">
-            {title && <h3 className="text-md font-medium text-primary">{title}</h3>}
+            {title && <h3 className="text-md font-display font-medium text-primary">{title}</h3>}
             {meta && <span className="text-xs text-muted">{meta}</span>}
           </div>
           {actions && <div className="flex items-center gap-1.5">{actions}</div>}

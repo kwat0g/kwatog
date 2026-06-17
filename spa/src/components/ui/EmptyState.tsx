@@ -1,4 +1,5 @@
 import { type ReactNode } from 'react';
+import { DatumMark } from '@/pages/landing/components/DatumMark';
 import {
   AlertCircle,
   Inbox,
@@ -88,8 +89,18 @@ export function EmptyState({
 
   return (
     <div className={cn('flex flex-col items-center justify-center py-12 px-6 text-center', className)}>
-      <div className="w-10 h-10 rounded-full bg-elevated flex items-center justify-center mb-3 text-muted">
-        <Icon size={20} />
+      {/* Brand motif: faint DatumMark behind the icon cluster */}
+      <div className="relative flex items-center justify-center mb-3">
+        <DatumMark
+          size={72}
+          strokeWidth={0.8}
+          solidCore={false}
+          className="absolute text-border-strong opacity-30 pointer-events-none"
+          aria-hidden
+        />
+        <div className="relative w-10 h-10 rounded-full bg-elevated flex items-center justify-center text-muted">
+          <Icon size={20} />
+        </div>
       </div>
       <h3 className="text-md font-medium text-primary mb-1">{resolvedTitle}</h3>
       {resolvedDescription && (

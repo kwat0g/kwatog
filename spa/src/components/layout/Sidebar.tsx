@@ -341,6 +341,18 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
           collapsed ? 'w-14' : 'w-60',
         )}
       >
+        {/* Blueprint grid texture — decorative, aria-hidden, behind nav content */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 z-0 opacity-[0.35]"
+          style={{
+            backgroundImage:
+              'linear-gradient(var(--border-default) 1px, transparent 1px), linear-gradient(90deg, var(--border-default) 1px, transparent 1px)',
+            backgroundSize: '32px 32px',
+            maskImage: 'linear-gradient(to bottom, transparent 0%, black 20%, black 70%, transparent 100%)',
+            WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 20%, black 70%, transparent 100%)',
+          }}
+        />
         {sidebarContent}
       </aside>
 

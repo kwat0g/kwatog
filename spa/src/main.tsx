@@ -7,6 +7,7 @@ import App from './App';
 import { queryClient } from './lib/queryClient';
 import { useThemeStore } from './stores/themeStore';
 import { applyPlainMode } from './lib/plainMode';
+import '@fontsource-variable/bricolage-grotesque/wght.css';
 import './styles/globals.css';
 
 // Initialize theme before first paint (system preference until auth supplies a saved choice).

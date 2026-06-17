@@ -48,7 +48,7 @@ export function PageHeader({
               {backLabel ?? 'Back'}
             </Link>
           )}
-          <h1 className="text-xl font-medium text-primary truncate">
+          <h1 className="text-xl font-display font-semibold text-primary truncate">
             {title}
             {refreshingQueryKey && <RefreshingIndicator queryKey={refreshingQueryKey} />}
           </h1>

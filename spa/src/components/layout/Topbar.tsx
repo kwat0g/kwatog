@@ -60,7 +60,7 @@ export function Topbar({ user, onLogout, rightExtras }: TopbarProps) {
 
       <Link to="/dashboard" className="flex items-center gap-2 shrink-0">
         <BrandLogo invertOnDark alt="" className="h-7" />
-        <span className="text-sm font-medium text-primary hidden sm:inline">Ogami ERP</span>
+        <span className="text-sm font-display font-medium text-primary hidden sm:inline">Ogami ERP</span>
       </Link>
 
       <div className="hidden md:flex h-full items-center pl-3 ml-1 border-l border-default">
