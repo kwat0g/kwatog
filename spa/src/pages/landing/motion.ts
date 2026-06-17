@@ -3,9 +3,14 @@
  *
  * One place owns the page-level motion lifecycle:
  *   • Lenis smooth scrolling, driven by the GSAP ticker and synced to
- *     ScrollTrigger so pinned sections and reveals stay frame-accurate.
- *   • A declarative reveal system: any element marked `data-reveal` fades/rises
- *     in once as it enters the viewport. `data-reveal-delay="0.1"` staggers it.
+ *     ScrollTrigger so pinned sections and reveals stay frame-accurate. The
+ *     instance (with its live `.velocity`) is published on `window.lenis` for
+ *     floating UI, the scroll-progress bar, and velocity-reactive components.
+ *   • A declarative reveal system: any element marked `data-reveal` animates in
+ *     once as it enters the viewport. The value picks the gesture
+ *     (`""|up|left|right|scale|clip`) and `data-reveal-delay="0.1"` staggers it.
+ *   • A declarative parallax system: `data-parallax="12"` drifts a decorative
+ *     layer ±12% of its height across the scroll for quiet depth.
  *
  * Accessibility contract: when `prefers-reduced-motion: reduce` is set we wire
  * up nothing — content is visible by default in the markup, smooth scroll is
@@ -74,20 +79,62 @@ export function useLandingMotion(rootRef: RefObject<HTMLElement>) {
     root.addEventListener('click', onAnchorClick);
 
     // ── Scroll reveals ───────────────────────────────────────────────
+    // Each variant is the "from" state; the tween always resolves to the
+    // composed/visible value. Keep them gentle — this is precision, not flair.
+    const revealFrom: Record<string, gsap.TweenVars> = {
+      '': { autoAlpha: 0, y: 18 },
+      up: { autoAlpha: 0, y: 18 },
+      left: { autoAlpha: 0, x: -28 },
+      right: { autoAlpha: 0, x: 28 },
+      scale: { autoAlpha: 0, scale: 0.94, y: 14 },
+      clip: { autoAlpha: 0, y: 14, clipPath: 'inset(0 0 100% 0)' },
+    };
+
     const ctx = gsap.context(() => {
       const els = gsap.utils.toArray<HTMLElement>('[data-reveal]');
       els.forEach((el) => {
-        const delay = parseFloat(el.dataset.revealDelay ?? '0') || 0;
+        const variant = el.dataset.reveal || '';
+        const from = revealFrom[variant] ?? revealFrom[''];
+        // Clamp the stagger: a deep grid card (i*0.08) could otherwise wait
+        // ~0.5s on top of the tween, reading as "late to appear" on fast scroll.
+        const delay = Math.min(parseFloat(el.dataset.revealDelay ?? '0') || 0, 0.24);
         gsap.fromTo(
           el,
-          { autoAlpha: 0, y: 30 },
+          from,
           {
             autoAlpha: 1,
+            x: 0,
             y: 0,
-            duration: 0.95,
-            ease: 'power3.out',
+            scale: 1,
+            clipPath: variant === 'clip' ? 'inset(0 0 0% 0)' : undefined,
+            duration: 0.5,
+            ease: 'power2.out',
             delay,
-            scrollTrigger: { trigger: el, start: 'top 86%', once: true },
+            // Fire earlier and let it catch up if scrolled past mid-tween.
+            scrollTrigger: { trigger: el, start: 'top 92%', once: true, fastScrollEnd: true },
+          },
+        );
+      });
+
+      // ── Parallax depth ─────────────────────────────────────────────
+      // Decorative layers only (they own their transform); never combine with
+      // data-reveal/tilt/magnetic on the same node.
+      const parallax = gsap.utils.toArray<HTMLElement>('[data-parallax]');
+      parallax.forEach((el) => {
+        const amount = parseFloat(el.dataset.parallax ?? '10') || 10;
+        gsap.fromTo(
+          el,
+          { yPercent: amount },
+          {
+            yPercent: -amount,
+            ease: 'none',
+            scrollTrigger: {
+              trigger: el.parentElement ?? el,
+              start: 'top bottom',
+              end: 'bottom top',
+              scrub: true,
+              invalidateOnRefresh: true,
+            },
           },
         );
       });

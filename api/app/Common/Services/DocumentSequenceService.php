@@ -49,6 +49,8 @@ class DocumentSequenceService
         // ADV3 — IATF 16949 traceability.
         'production_batch' => ['prefix' => 'BATCH', 'reset' => 'monthly', 'pad' => 4],
         'shipment_lot'     => ['prefix' => 'LOT',   'reset' => 'monthly', 'pad' => 4],
+        // Landing — public quote requests.
+        'quote_request'    => ['prefix' => 'QR',    'reset' => 'monthly', 'pad' => 4],
     ];
 
     /**

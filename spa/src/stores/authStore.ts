@@ -57,6 +57,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       Object.keys(localStorage)
         .filter(k => k.startsWith('ogami:formdraft:'))
         .forEach(k => localStorage.removeItem(k));
+      // Drop the prior user's theme preference. Public/auth pages are light-only,
+      // so reset <html data-theme> to light instead of leaking a dark session.
+      useThemeStore.getState().init('light');
     }
   },
 

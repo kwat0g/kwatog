@@ -6,10 +6,14 @@ import { Toaster } from 'react-hot-toast';
 import App from './App';
 import { queryClient } from './lib/queryClient';
 import { useThemeStore } from './stores/themeStore';
+import { applyPlainMode } from './lib/plainMode';
 import './styles/globals.css';
 
 // Initialize theme before first paint (system preference until auth supplies a saved choice).
 useThemeStore.getState().init();
+
+// TEMPORARY filming aid: `?plain=1` strips all styling (raw HTML). Safe to remove.
+applyPlainMode();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

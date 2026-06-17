@@ -18,6 +18,7 @@ import { Menu, X, LogIn } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { NAV_LINKS } from '../data';
+import { useMagnetic } from '../hooks/useMagnetic';
 
 interface LandingNavProps {
   open: boolean;
@@ -27,14 +28,46 @@ interface LandingNavProps {
 export function LandingNav({ open, onOpenChange }: LandingNavProps) {
   const navigate = useNavigate();
   const [scrolled, setScrolled] = useState(false);
+  const [activeHref, setActiveHref] = useState<string>('');
   const toggleRef = useRef<HTMLButtonElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
+  const loginRef = useMagnetic<HTMLButtonElement>({ strength: 0.28, duration: 0.5 });
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  // Active-section tracking via a single IntersectionObserver.
+  // rootMargin pushes the trigger zone toward the vertical center so the
+  // section that occupies most of the viewport wins.
+  useEffect(() => {
+    const sectionIds = NAV_LINKS.map((l) => l.href.slice(1)); // strip '#'
+    const elements = sectionIds
+      .map((id) => document.getElementById(id))
+      .filter((el): el is HTMLElement => el !== null);
+
+    if (elements.length === 0) return;
+
+    // Track every section's latest state (each callback only carries the
+    // entries that *changed*), then derive the active link from the full set —
+    // the topmost still-intersecting section wins, and we clear when none are.
+    const states = new Map<string, IntersectionObserverEntry>();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => states.set(e.target.id, e));
+        const visible = [...states.values()]
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        setActiveHref(visible.length > 0 ? '#' + visible[0].target.id : '');
+      },
+      { rootMargin: '-20% 0px -60% 0px', threshold: 0 },
+    );
+
+    elements.forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
   }, []);
 
   // Lock body scroll while the mobile sheet is open.
@@ -114,26 +147,38 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
 
         {/* Desktop links */}
         <div className="hidden items-center gap-8 lg:flex">
-          {NAV_LINKS.map((link) => (
-            <a
-              key={link.href}
-              href={link.href}
-              className="relative rounded-sm font-sans text-[13px] text-landing-text-secondary transition-colors after:absolute after:-bottom-1.5 after:left-0 after:h-px after:w-0 after:bg-landing-accent after:transition-all after:duration-300 hover:text-landing-text hover:after:w-full focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-landing-accent focus-visible:ring-offset-4 focus-visible:ring-offset-landing-canvas"
-            >
-              {link.label}
-            </a>
-          ))}
+          {NAV_LINKS.map((link) => {
+            const isActive = activeHref === link.href;
+            return (
+              <a
+                key={link.href}
+                href={link.href}
+                aria-current={isActive ? 'location' : undefined}
+                className={cn(
+                  'relative rounded-sm font-sans text-[13px] transition-colors',
+                  'after:absolute after:-bottom-1.5 after:left-0 after:h-px after:bg-landing-accent after:transition-all after:duration-300',
+                  'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-landing-accent focus-visible:ring-offset-4 focus-visible:ring-offset-landing-canvas',
+                  isActive
+                    ? 'text-landing-text after:w-full'
+                    : 'text-landing-text-secondary after:w-0 hover:text-landing-text hover:after:w-full',
+                )}
+              >
+                {link.label}
+              </a>
+            );
+          })}
         </div>
 
         {/* Actions */}
         <div className="flex items-center gap-2">
           <button
+            ref={loginRef}
             type="button"
             onClick={() => navigate('/login')}
             className={cn(
               'group inline-flex h-10 items-center gap-2 rounded-full border border-landing-accent/40 px-5',
               'font-sans text-[13px] font-medium text-landing-accent',
-              'transition-all duration-300 hover:border-landing-accent hover:bg-landing-accent hover:text-landing-accent-fg',
+              'transition-colors duration-300 hover:border-landing-accent hover:bg-landing-accent hover:text-landing-accent-fg',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas',
             )}
           >

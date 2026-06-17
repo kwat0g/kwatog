@@ -12,6 +12,8 @@
  *   • Mobile / low DPR           → capped pixel ratio, lighter line load.
  *   • Tab hidden / off-screen    → render loop pauses.
  *   • Unmount / context loss      → geometry, material, renderer disposed.
+ *   • Drag-to-rotate              → fine pointer only; inertial spin + decay.
+ *   • Scroll-velocity tint        → reads window.lenis.velocity each frame.
  */
 
 import { useEffect, useRef } from 'react';
@@ -79,6 +81,7 @@ export function HeroCanvas() {
     if (reduced || !supportsWebGL()) return;
 
     const isMobile = window.matchMedia('(max-width: 768px)').matches;
+    const isFinePntr = window.matchMedia('(pointer:fine)').matches;
     const pixelRatio = Math.min(window.devicePixelRatio || 1, isMobile ? 1.5 : 1.75);
 
     // ── Scene & camera ──────────────────────────────────────────────
@@ -114,6 +117,10 @@ export function HeroCanvas() {
     group.add(wireMesh);
     group.add(edgeMesh);
     group.rotation.x = 0.32;
+    // Profile spans Y -1.6 → 0.85 (centroid ≈ -0.375), so the revolved mesh
+    // sits low against a camera that looks at the origin. Lift it so the part
+    // is vertically centered in its frame.
+    group.position.y = 0.375;
     scene.add(group);
 
     // ── Renderer ────────────────────────────────────────────────────
@@ -136,6 +143,8 @@ export function HeroCanvas() {
     canvas.style.display = 'block';
     canvas.style.opacity = '0';
     canvas.style.transition = 'opacity 700ms ease-out';
+    // Enable pointer events for drag; we use pointer capture so scroll isn't blocked.
+    canvas.style.pointerEvents = isFinePntr ? 'auto' : 'none';
     container.appendChild(canvas);
 
     // Fade the WebGL canvas in once the first frame has rendered so the
@@ -159,11 +168,49 @@ export function HeroCanvas() {
     // ── Pointer parallax (gentle tilt) ──────────────────────────────
     const targetTilt = { x: 0, y: 0 };
     function onPointerMove(e: PointerEvent) {
+      if (isDragging) return; // tilt deferred during drag
       const r = container!.getBoundingClientRect();
       targetTilt.y = ((e.clientX - (r.left + r.width / 2)) / r.width) * 0.5;
       targetTilt.x = ((e.clientY - (r.top + r.height / 2)) / r.height) * 0.3;
     }
     window.addEventListener('pointermove', onPointerMove, { passive: true });
+
+    // ── Drag-to-rotate (fine pointer only) ──────────────────────────
+    let isDragging = false;
+    let dragOffsetY = 0; // accumulated manual rotation around Y
+    let spinVelocity = 0; // px/frame, decays after pointerup
+    let lastDragX = 0;
+
+    function onCanvasPointerDown(e: PointerEvent) {
+      if (!isFinePntr) return;
+      isDragging = true;
+      lastDragX = e.clientX;
+      spinVelocity = 0;
+      canvas.setPointerCapture(e.pointerId);
+      e.stopPropagation(); // don't leak to page
+    }
+
+    function onWindowPointerMove(e: PointerEvent) {
+      if (!isDragging) return;
+      const dx = e.clientX - lastDragX;
+      lastDragX = e.clientX;
+      // Scale: 1 full drag width ≈ 2π rotation
+      const rotDelta = (dx / (container!.clientWidth || 1)) * Math.PI * 2.2;
+      dragOffsetY += rotDelta;
+      spinVelocity = rotDelta; // raw per-frame velocity for inertia
+    }
+
+    function onWindowPointerUp() {
+      if (!isDragging) return;
+      isDragging = false;
+    }
+
+    if (isFinePntr) {
+      canvas.addEventListener('pointerdown', onCanvasPointerDown);
+      window.addEventListener('pointermove', onWindowPointerMove, { passive: true });
+      window.addEventListener('pointerup', onWindowPointerUp);
+      window.addEventListener('pointercancel', onWindowPointerUp);
+    }
 
     // ── Visibility / in-view gating ─────────────────────────────────
     let inView = true;
@@ -192,6 +239,8 @@ export function HeroCanvas() {
     const start = performance.now();
     let rafId = 0;
     let lastTime = start;
+    // Turntable base angle (advances each frame from time)
+    let turntableAngle = 0;
 
     function loop(now: number) {
       lastTime = now;
@@ -201,7 +250,22 @@ export function HeroCanvas() {
       }
       const t = (now - start) / 1000;
 
-      group.rotation.y = t * 0.5; // steady turntable spin
+      // Steady turntable contribution (radians/s)
+      turntableAngle = t * 0.5;
+
+      // Scroll-velocity tint — tiny nudge proportional to Lenis scroll speed
+      const lVelocity = (window as unknown as { lenis?: { velocity?: number } }).lenis?.velocity ?? 0;
+      const scrollSpin = lVelocity * 0.0015;
+
+      // Inertial drag spin: decay toward zero, then ease drag offset toward 0
+      if (!isDragging) {
+        spinVelocity *= 0.88; // friction
+        dragOffsetY += spinVelocity;
+        // Slowly recover drag offset back to 0 (gentle "snap back to turntable")
+        dragOffsetY *= 0.985;
+      }
+
+      group.rotation.y = turntableAngle + dragOffsetY + scrollSpin;
       group.rotation.x = MathUtils.lerp(group.rotation.x, 0.32 + targetTilt.x, 0.05);
       group.rotation.z = MathUtils.lerp(group.rotation.z, targetTilt.y * 0.3, 0.05);
 
@@ -222,6 +286,12 @@ export function HeroCanvas() {
       window.removeEventListener('pointermove', onPointerMove);
       document.removeEventListener('visibilitychange', onVisibility);
       canvas.removeEventListener('webglcontextlost', onContextLost);
+      if (isFinePntr) {
+        canvas.removeEventListener('pointerdown', onCanvasPointerDown);
+        window.removeEventListener('pointermove', onWindowPointerMove);
+        window.removeEventListener('pointerup', onWindowPointerUp);
+        window.removeEventListener('pointercancel', onWindowPointerUp);
+      }
       lathe.dispose();
       wire.dispose();
       edges.dispose();
@@ -235,8 +305,9 @@ export function HeroCanvas() {
   return (
     <div
       ref={containerRef}
+      data-cursor-lock
       aria-hidden="true"
-      className="pointer-events-none absolute inset-0 h-full w-full"
+      className="absolute inset-0 h-full w-full"
     />
   );
 }

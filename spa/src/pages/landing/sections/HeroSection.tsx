@@ -15,14 +15,22 @@ import gsap from 'gsap';
 import { ArrowRight } from 'lucide-react';
 import { HeroCanvas } from '../components/HeroCanvas';
 import { PartBlueprint } from '../components/PartBlueprint';
+import { ScrambleText } from '../components/ScrambleText';
 import { COMPANY } from '../data';
 import { reduceMotion } from '../motion';
+import { useMagnetic } from '../hooks/useMagnetic';
 
 const TRUST = ['IATF 16949 Certified', '5 OEM partners', '≤10 PPM defect target'];
 
 export function HeroSection() {
   const rootRef = useRef<HTMLElement>(null);
+  const figureRef = useRef<HTMLElement>(null);
+  const scanLineRef = useRef<HTMLDivElement>(null);
 
+  const quoteRef = useMagnetic<HTMLAnchorElement>();
+  const exploreRef = useMagnetic<HTMLAnchorElement>();
+
+  // Intro timeline
   useLayoutEffect(() => {
     const root = rootRef.current;
     if (!root || reduceMotion()) return;
@@ -41,16 +49,47 @@ export function HeroSection() {
     return () => ctx.revert();
   }, []);
 
+  // Scan-line sweep inside the drawing figure
+  useLayoutEffect(() => {
+    const fig = figureRef.current;
+    const line = scanLineRef.current;
+    if (!fig || !line || reduceMotion()) return;
+
+    const ctx = gsap.context(() => {
+      gsap.fromTo(
+        line,
+        { top: '0%', opacity: 0 },
+        {
+          top: '100%',
+          opacity: 1,
+          duration: 3.5,
+          ease: 'none',
+          repeat: -1,
+          yoyo: false,
+          keyframes: [
+            { top: '0%', opacity: 0, duration: 0 },
+            { top: '8%', opacity: 0.55, duration: 0.3 },
+            { top: '92%', opacity: 0.45, duration: 2.9 },
+            { top: '100%', opacity: 0, duration: 0.3 },
+          ],
+        },
+      );
+    }, fig);
+
+    return () => ctx.revert();
+  }, []);
+
   return (
     <section
       id="top"
       ref={rootRef}
       className="relative isolate overflow-hidden bg-landing-canvas px-5 pb-20 pt-28 sm:px-8 lg:min-h-[100svh] lg:pt-32"
     >
-      {/* Blueprint grid backdrop */}
+      {/* Blueprint grid backdrop — parallax decorative layer */}
       <div
         aria-hidden="true"
-        className="absolute inset-0 -z-10"
+        data-parallax="8"
+        className="absolute left-0 right-0 top-[-12%] -z-10 h-[124%]"
         style={{
           backgroundImage:
             'linear-gradient(var(--landing-grid) 1px, transparent 1px),' +
@@ -69,7 +108,7 @@ export function HeroSection() {
             className="flex items-center gap-2.5 font-mono text-[11px] uppercase tracking-[0.22em] text-landing-muted"
           >
             <span className="h-1.5 w-1.5 rounded-full bg-landing-accent" />
-            {COMPANY.locationLine}
+            <ScrambleText text={COMPANY.locationLine} trigger="mount" />
           </p>
 
           <h1 className="mt-6 font-display text-[clamp(2.5rem,6vw,4.75rem)] font-bold leading-[0.98] tracking-[-0.03em] text-landing-text">
@@ -95,13 +134,15 @@ export function HeroSection() {
 
           <div data-hero="cta" className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
             <a
+              ref={quoteRef}
               href="#contact"
-              className="group inline-flex items-center justify-center gap-2 rounded-full bg-landing-accent px-7 py-4 font-sans text-sm font-semibold text-landing-accent-fg transition-all duration-300 hover:bg-landing-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas"
+              className="group inline-flex items-center justify-center gap-2 rounded-full bg-landing-accent px-7 py-4 font-sans text-sm font-semibold text-landing-accent-fg transition-colors duration-300 hover:bg-landing-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas"
             >
               Request a quote
               <ArrowRight size={16} className="transition-transform duration-300 group-hover:translate-x-1" />
             </a>
             <a
+              ref={exploreRef}
               href="#capabilities"
               className="inline-flex items-center justify-center gap-2 rounded-full border border-landing-border-strong px-7 py-4 font-sans text-sm font-medium text-landing-text transition-colors duration-300 hover:border-landing-text hover:bg-landing-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas"
             >
@@ -127,7 +168,10 @@ export function HeroSection() {
 
         {/* ── Drawing frame ─────────────────────────────────────── */}
         <div data-hero="frame" className="relative">
-          <figure className="relative aspect-square w-full overflow-hidden rounded-xl border border-landing-border-strong bg-landing-surface">
+          <figure
+            ref={figureRef}
+            className="relative aspect-square w-full overflow-hidden rounded-xl border border-landing-border-strong bg-landing-surface"
+          >
             {/* corner registration marks */}
             {[
               'left-3 top-3 border-l border-t',
@@ -149,6 +193,14 @@ export function HeroSection() {
 
             {/* rotating wireframe part */}
             <HeroCanvas />
+
+            {/* Metrology scan-line sweep */}
+            <div
+              ref={scanLineRef}
+              aria-hidden="true"
+              className="pointer-events-none absolute left-0 right-0 h-px bg-landing-accent/40"
+              style={{ top: '0%' }}
+            />
 
             {/* dimension callouts */}
             <span
@@ -185,6 +237,59 @@ export function HeroSection() {
           </figure>
         </div>
       </div>
+
+      {/* Scroll cue */}
+      <div
+        aria-hidden="true"
+        className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1.5"
+      >
+        <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-landing-subtle-text">
+          Scroll
+        </span>
+        <div className="relative h-8 w-px bg-landing-border">
+          <ScrollDot />
+        </div>
+      </div>
     </section>
+  );
+}
+
+/** Animated dot that slides down the scroll cue rule on a loop. */
+function ScrollDot() {
+  const dotRef = useRef<HTMLSpanElement>(null);
+
+  useLayoutEffect(() => {
+    const dot = dotRef.current;
+    if (!dot || reduceMotion()) return;
+
+    const ctx = gsap.context(() => {
+      gsap.fromTo(
+        dot,
+        { top: '0%', opacity: 0 },
+        {
+          top: '100%',
+          opacity: 1,
+          duration: 1.4,
+          ease: 'power1.inOut',
+          repeat: -1,
+          keyframes: [
+            { top: '0%', opacity: 0, duration: 0 },
+            { top: '20%', opacity: 1, duration: 0.25 },
+            { top: '80%', opacity: 1, duration: 0.9 },
+            { top: '100%', opacity: 0, duration: 0.25 },
+          ],
+        },
+      );
+    }, dot);
+
+    return () => ctx.revert();
+  }, []);
+
+  return (
+    <span
+      ref={dotRef}
+      className="absolute left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-landing-accent"
+      style={{ top: '0%' }}
+    />
   );
 }

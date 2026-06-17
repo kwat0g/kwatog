@@ -8,6 +8,67 @@
 
 import { SectionHeading } from '../components/SectionHeading';
 import { CAPABILITIES } from '../data';
+import type { Capability } from '../data';
+import { useTilt } from '../hooks/useTilt';
+
+function CapabilityCard({ cap, index }: { cap: Capability; index: number }) {
+  const tiltRef = useTilt<HTMLElement>({ max: 7, lift: 22 });
+  const Icon = cap.icon;
+
+  return (
+    <article
+      ref={tiltRef}
+      data-reveal
+      data-reveal-delay={(index * 0.08).toFixed(2)}
+      className="group relative overflow-hidden rounded-2xl border border-landing-border bg-landing-surface p-7 transition-colors duration-500 hover:border-landing-accent/40 sm:p-9"
+    >
+      {/* tilt spotlight */}
+      <div
+        data-tilt-glow
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 transition-opacity duration-300"
+        style={{ background: 'radial-gradient(240px circle at var(--mx) var(--my), var(--landing-accent-glow), transparent 65%)' }}
+      />
+
+      {/* corner glow */}
+      <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-landing-accent-glow opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-100" />
+
+      <div
+        data-tilt-lift
+        style={{ transformStyle: 'preserve-3d' }}
+        className="relative"
+      >
+        <div className="flex items-start justify-between">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-landing-border bg-landing-elevated text-landing-accent transition-colors duration-500 group-hover:border-landing-accent/40">
+            <Icon size={22} strokeWidth={1.6} />
+          </div>
+          <span className="rounded-full border border-landing-border px-3 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-landing-muted">
+            {cap.tag}
+          </span>
+        </div>
+
+        <h3 className="mt-7 font-display text-2xl font-semibold tracking-tight text-landing-text">
+          {cap.title}
+        </h3>
+        <p className="mt-3 max-w-md font-sans text-[14px] leading-relaxed text-landing-text-secondary">
+          {cap.blurb}
+        </p>
+
+        <ul className="mt-6 flex flex-wrap gap-2">
+          {cap.points.map((pt) => (
+            <li
+              key={pt}
+              className="flex items-center gap-2 rounded-lg bg-landing-elevated px-3 py-1.5 font-mono text-[11px] text-landing-text-secondary"
+            >
+              <span className="h-1 w-1 rounded-full bg-landing-accent" />
+              {pt}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </article>
+  );
+}
 
 export function CapabilitiesSection() {
   return (
@@ -25,48 +86,9 @@ export function CapabilitiesSection() {
         />
 
         <div className="mt-16 grid gap-5 md:grid-cols-2">
-          {CAPABILITIES.map((cap, i) => {
-            const Icon = cap.icon;
-            return (
-              <article
-                key={cap.id}
-                data-reveal
-                data-reveal-delay={(i * 0.08).toFixed(2)}
-                className="group relative overflow-hidden rounded-2xl border border-landing-border bg-landing-surface p-7 transition-all duration-500 hover:-translate-y-1 hover:border-landing-accent/40 sm:p-9"
-              >
-                {/* corner glow */}
-                <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-landing-accent-glow opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-100" />
-
-                <div className="relative flex items-start justify-between">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-landing-border bg-landing-elevated text-landing-accent transition-colors duration-500 group-hover:border-landing-accent/40">
-                    <Icon size={22} strokeWidth={1.6} />
-                  </div>
-                  <span className="rounded-full border border-landing-border px-3 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-landing-muted">
-                    {cap.tag}
-                  </span>
-                </div>
-
-                <h3 className="relative mt-7 font-display text-2xl font-semibold tracking-tight text-landing-text">
-                  {cap.title}
-                </h3>
-                <p className="relative mt-3 max-w-md font-sans text-[14px] leading-relaxed text-landing-text-secondary">
-                  {cap.blurb}
-                </p>
-
-                <ul className="relative mt-6 flex flex-wrap gap-2">
-                  {cap.points.map((pt) => (
-                    <li
-                      key={pt}
-                      className="flex items-center gap-2 rounded-lg bg-landing-elevated px-3 py-1.5 font-mono text-[11px] text-landing-text-secondary"
-                    >
-                      <span className="h-1 w-1 rounded-full bg-landing-accent" />
-                      {pt}
-                    </li>
-                  ))}
-                </ul>
-              </article>
-            );
-          })}
+          {CAPABILITIES.map((cap, i) => (
+            <CapabilityCard key={cap.id} cap={cap} index={i} />
+          ))}
         </div>
       </div>
     </section>

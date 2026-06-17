@@ -75,5 +75,11 @@ return Application::configure(basePath: dirname(__DIR__))
 
         RateLimiter::for('sensitive', fn (Request $r) => Limit::perMinute(10)
             ->by(optional($r->user())->id ?: $r->ip()));
+
+        // Public, unauthenticated landing endpoints (quote request, newsletter,
+        // quality-policy PDF). Per-IP cap guards against spam and against DoS via
+        // the expensive on-demand PDF render, while staying forgiving for a real
+        // visitor who downloads the policy and submits a form in one session.
+        RateLimiter::for('public-form', fn (Request $r) => Limit::perMinute(10)->by($r->ip()));
     })
     ->create();

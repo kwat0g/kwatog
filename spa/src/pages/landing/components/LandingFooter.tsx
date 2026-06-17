@@ -54,7 +54,7 @@ export function LandingFooter() {
       <div className="mx-auto max-w-7xl">
         <div className="grid gap-12 md:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr_1.2fr]">
           {/* Brand + address */}
-          <div>
+          <div data-reveal data-reveal-delay="0.00">
             <BrandLogo alt="Ogami" className="h-11" />
             <p className="mt-4 max-w-xs font-sans text-[13px] leading-relaxed text-landing-muted">
               {COMPANY.legalName} — precision plastic injection molding, proudly
@@ -70,7 +70,7 @@ export function LandingFooter() {
           </div>
 
           {/* Explore */}
-          <nav aria-label="Footer explore">
+          <nav aria-label="Footer explore" data-reveal data-reveal-delay="0.07">
             <h3 className="font-mono text-[11px] uppercase tracking-[0.2em] text-landing-subtle-text">
               Explore
             </h3>
@@ -79,7 +79,7 @@ export function LandingFooter() {
                 <li key={link.href}>
                   <a
                     href={link.href}
-                    className="font-sans text-[13px] text-landing-text-secondary transition-colors hover:text-landing-accent"
+                    className="relative font-sans text-[13px] text-landing-text-secondary transition-colors hover:text-landing-accent after:absolute after:-bottom-0.5 after:left-0 after:h-px after:w-0 after:bg-landing-accent after:transition-all after:duration-300 hover:after:w-full"
                   >
                     {link.label}
                   </a>
@@ -89,7 +89,7 @@ export function LandingFooter() {
           </nav>
 
           {/* Company */}
-          <nav aria-label="Footer company">
+          <nav aria-label="Footer company" data-reveal data-reveal-delay="0.14">
             <h3 className="font-mono text-[11px] uppercase tracking-[0.2em] text-landing-subtle-text">
               Company
             </h3>
@@ -99,7 +99,7 @@ export function LandingFooter() {
                   <a
                     href={link.href}
                     onClick={(e) => link.href === '#' && e.preventDefault()}
-                    className="font-sans text-[13px] text-landing-text-secondary transition-colors hover:text-landing-accent"
+                    className="relative font-sans text-[13px] text-landing-text-secondary transition-colors hover:text-landing-accent after:absolute after:-bottom-0.5 after:left-0 after:h-px after:w-0 after:bg-landing-accent after:transition-all after:duration-300 hover:after:w-full"
                   >
                     {link.label}
                   </a>
@@ -109,27 +109,55 @@ export function LandingFooter() {
           </nav>
 
           {/* Quality & Certifications */}
-          <nav aria-label="Footer quality">
+          <nav aria-label="Footer quality" data-reveal data-reveal-delay="0.21">
             <h3 className="font-mono text-[11px] uppercase tracking-[0.2em] text-landing-subtle-text">
               Quality
             </h3>
             <ul className="mt-4 space-y-2.5">
-              {FOOTER_LINKS.quality.map((link) => (
-                <li key={link.label}>
-                  <a
-                    href={link.href}
-                    onClick={(e) => link.href === '#' && e.preventDefault()}
-                    className="font-sans text-[13px] text-landing-text-secondary transition-colors hover:text-landing-accent"
-                  >
-                    {link.label}
-                  </a>
-                </li>
-              ))}
+              {FOOTER_LINKS.quality.map((link) =>
+                link.label === 'Quality policy' ? (
+                  <li key={link.label}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        landingApi
+                          .downloadQualityPolicy()
+                          .then((blob) => {
+                            const url = window.URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = 'ogami-quality-policy.pdf';
+                            document.body.appendChild(a);
+                            a.click();
+                            a.remove();
+                            window.URL.revokeObjectURL(url);
+                          })
+                          .catch(() => {
+                            // Error toast handled by the global axios interceptor.
+                          });
+                      }}
+                      className="relative font-sans text-[13px] text-landing-text-secondary transition-colors hover:text-landing-accent after:absolute after:-bottom-0.5 after:left-0 after:h-px after:w-0 after:bg-landing-accent after:transition-all after:duration-300 hover:after:w-full"
+                    >
+                      {link.label}
+                    </button>
+                  </li>
+                ) : (
+                  <li key={link.label}>
+                    <a
+                      href={link.href}
+                      onClick={(e) => link.href === '#' && e.preventDefault()}
+                      className="relative font-sans text-[13px] text-landing-text-secondary transition-colors hover:text-landing-accent after:absolute after:-bottom-0.5 after:left-0 after:h-px after:w-0 after:bg-landing-accent after:transition-all after:duration-300 hover:after:w-full"
+                    >
+                      {link.label}
+                    </a>
+                  </li>
+                ),
+              )}
             </ul>
           </nav>
 
           {/* Newsletter + Contact */}
-          <div>
+          <div data-reveal data-reveal-delay="0.28">
             <h3 className="font-mono text-[11px] uppercase tracking-[0.2em] text-landing-subtle-text">
               Molding insights
             </h3>
@@ -174,7 +202,7 @@ export function LandingFooter() {
               <li>
                 <a
                   href={`mailto:${COMPANY.email}`}
-                  className="font-sans text-[13px] text-landing-text-secondary transition-colors hover:text-landing-accent"
+                  className="relative font-sans text-[13px] text-landing-text-secondary transition-colors hover:text-landing-accent after:absolute after:-bottom-0.5 after:left-0 after:h-px after:w-0 after:bg-landing-accent after:transition-all after:duration-300 hover:after:w-full"
                 >
                   {COMPANY.email}
                 </a>
@@ -204,7 +232,7 @@ export function LandingFooter() {
                 key={link.label}
                 href={link.href}
                 onClick={(e) => e.preventDefault()}
-                className="font-sans text-[12px] text-landing-text-secondary transition-colors hover:text-landing-accent"
+                className="relative font-sans text-[12px] text-landing-text-secondary transition-colors hover:text-landing-accent after:absolute after:-bottom-0.5 after:left-0 after:h-px after:w-0 after:bg-landing-accent after:transition-all after:duration-300 hover:after:w-full"
               >
                 {link.label}
               </a>

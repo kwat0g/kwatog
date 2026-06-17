@@ -7,9 +7,12 @@
  * datum mark at the plant's coordinates, and a precise address readout.
  */
 
+import { useLayoutEffect, useRef } from 'react';
+import gsap from 'gsap';
 import { MapPin } from 'lucide-react';
 import { DatumMark } from '../components/DatumMark';
 import { COMPANY } from '../data';
+import { registerScrollTrigger, reduceMotion } from '../motion';
 
 const POINTS = [
   {
@@ -27,6 +30,94 @@ const POINTS = [
 ];
 
 export function PhilippinesSection() {
+  const figureRef = useRef<HTMLElement>(null);
+  const reticleRef = useRef<SVGCircleElement>(null);
+  const hLineRef = useRef<HTMLDivElement>(null);
+  const vLineRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    if (reduceMotion()) return;
+
+    const figure = figureRef.current;
+    const reticle = reticleRef.current;
+    const hLine = hLineRef.current;
+    const vLine = vLineRef.current;
+    if (!figure || !reticle || !hLine || !vLine) return;
+
+    registerScrollTrigger();
+
+    const ctx = gsap.context(() => {
+      // Slow rotating outer reticle ring — purely decorative
+      gsap.to(reticle, {
+        rotation: 360,
+        transformOrigin: '50% 50%',
+        duration: 28,
+        ease: 'none',
+        repeat: -1,
+      });
+
+      // Crosshair draw-in on scroll reveal (once)
+      gsap.set(hLine, { scaleX: 0 });
+      gsap.set(vLine, { scaleY: 0 });
+      gsap.to([hLine, vLine], {
+        scaleX: 1,
+        scaleY: 1,
+        duration: 0.9,
+        ease: 'power2.out',
+        stagger: 0.1,
+        scrollTrigger: {
+          trigger: figure,
+          start: 'top 80%',
+          once: true,
+        },
+      });
+
+      // Pointer-parallax on the blueprint grid — a few px of depth on mouse
+      // move. Fine pointers only: on touch there is no hover, and the rAF would
+      // otherwise spin forever animating a ~0px translate.
+      const grid = gridRef.current;
+      if (!grid || !window.matchMedia('(pointer: fine)').matches) return;
+
+      let rafId = 0;
+      let targetX = 0;
+      let targetY = 0;
+      let currentX = 0;
+      let currentY = 0;
+      const MAX = 6;
+
+      function onMove(e: PointerEvent) {
+        const r = figure!.getBoundingClientRect();
+        const nx = (e.clientX - r.left) / r.width - 0.5;
+        const ny = (e.clientY - r.top) / r.height - 0.5;
+        targetX = nx * MAX;
+        targetY = ny * MAX;
+      }
+      function onLeave() {
+        targetX = 0;
+        targetY = 0;
+      }
+      function tick() {
+        currentX += (targetX - currentX) * 0.08;
+        currentY += (targetY - currentY) * 0.08;
+        if (grid) grid.style.transform = `translate(${currentX}px, ${currentY}px)`;
+        rafId = requestAnimationFrame(tick);
+      }
+
+      figure.addEventListener('pointermove', onMove, { passive: true });
+      figure.addEventListener('pointerleave', onLeave, { passive: true });
+      rafId = requestAnimationFrame(tick);
+
+      return () => {
+        figure.removeEventListener('pointermove', onMove);
+        figure.removeEventListener('pointerleave', onLeave);
+        cancelAnimationFrame(rafId);
+      };
+    }, figure);
+
+    return () => ctx.revert();
+  }, []);
+
   return (
     <section
       id="filipino-made"
@@ -34,7 +125,7 @@ export function PhilippinesSection() {
     >
       <div className="mx-auto grid max-w-7xl items-center gap-14 lg:grid-cols-2 lg:gap-20">
         {/* Copy */}
-        <div>
+        <div data-reveal="left">
           <div data-reveal className="flex items-center gap-3">
             <span className="h-0.5 w-8 bg-landing-accent" />
             <span className="font-mono text-[11px] uppercase tracking-[0.24em] text-landing-accent">
@@ -82,12 +173,16 @@ export function PhilippinesSection() {
         </div>
 
         {/* Visual — location plate */}
-        <div data-reveal data-reveal-delay="0.1" className="relative">
-          <figure className="relative mx-auto aspect-square w-full max-w-md overflow-hidden rounded-xl border border-landing-border-strong bg-landing-canvas">
-            {/* blueprint grid */}
+        <div data-reveal="right" data-reveal-delay="0.1" className="relative">
+          <figure
+            ref={figureRef}
+            className="relative mx-auto aspect-square w-full max-w-md overflow-hidden rounded-xl border border-landing-border-strong bg-landing-canvas"
+          >
+            {/* blueprint grid — pointer-parallax layer with vertical bleed so edges stay hidden */}
             <div
+              ref={gridRef}
               aria-hidden="true"
-              className="absolute inset-0"
+              className="pointer-events-none absolute top-[-5%] h-[110%] w-full"
               style={{
                 backgroundImage:
                   'linear-gradient(var(--landing-grid) 1px, transparent 1px),' +
@@ -96,16 +191,46 @@ export function PhilippinesSection() {
               }}
             />
 
-            {/* crosshair guides through the datum */}
-            <div aria-hidden="true" className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-landing-line" />
-            <div aria-hidden="true" className="absolute left-0 top-1/2 h-px w-full -translate-y-1/2 bg-landing-line" />
-
-            {/* datum at the plant's position */}
-            <DatumMark
-              size={120}
-              strokeWidth={1.1}
-              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-landing-accent"
+            {/* crosshair guides — draw in on reveal (scale from center) */}
+            <div
+              ref={vLineRef}
+              aria-hidden="true"
+              className="absolute left-1/2 top-0 h-full w-px origin-center -translate-x-1/2 bg-landing-line"
             />
+            <div
+              ref={hLineRef}
+              aria-hidden="true"
+              className="absolute left-0 top-1/2 h-px w-full origin-center -translate-y-1/2 bg-landing-line"
+            />
+
+            {/* datum + outer reticle ring */}
+            <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+              <DatumMark
+                size={120}
+                strokeWidth={1.1}
+                className="text-landing-accent"
+              />
+              {/* Rotating dashed reticle — GSAP-driven, aria-hidden */}
+              <svg
+                aria-hidden="true"
+                className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+                width={150}
+                height={150}
+                viewBox="0 0 150 150"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={0.8}
+              >
+                <circle
+                  ref={reticleRef}
+                  cx="75"
+                  cy="75"
+                  r="68"
+                  className="text-landing-accent/25"
+                  strokeDasharray="5 9"
+                />
+              </svg>
+            </div>
 
             {/* location label */}
             <div className="absolute left-1/2 top-[calc(50%+76px)] -translate-x-1/2 whitespace-nowrap text-center">

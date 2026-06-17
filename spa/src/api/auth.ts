@@ -77,22 +77,22 @@ export const authApi = {
 
   /**
    * Request a password reset email.
-   * TODO: backend route POST /api/v1/auth/forgot-password
    */
   requestPasswordReset: async (email: string): Promise<{ message: string }> => {
+    await getCsrfCookie();
     const { data } = await client.post<{ message: string }>('/auth/forgot-password', { email });
     return data;
   },
 
   /**
    * Reset password with a token from the email link.
-   * TODO: backend route POST /api/v1/auth/reset-password
    */
   resetPassword: async (payload: {
     token: string;
     password: string;
     password_confirmation: string;
   }): Promise<{ message: string }> => {
+    await getCsrfCookie();
     const { data } = await client.post<{ message: string }>('/auth/reset-password', payload);
     return data;
   },

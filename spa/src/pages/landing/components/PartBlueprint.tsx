@@ -5,17 +5,81 @@
  * when WebGL/motion is unavailable. The profile shows a rotationally symmetric
  * cap: seal flange, threaded/grip skirt, top deck, and internal bore — the kind
  * of part Ogami molds for engine covers.
+ *
+ * On mount (when motion is allowed) each stroke self-draws via GSAP dashoffset
+ * animation; hatch fills fade in after. Gated purely on reduceMotion() + its
+ * own mount, so it works identically on the landing page and the auth page.
  */
 
+import { useLayoutEffect, useRef } from 'react';
+import gsap from 'gsap';
 import { cn } from '@/lib/cn';
+import { reduceMotion } from '../motion';
 
 interface PartBlueprintProps {
   className?: string;
 }
 
 export function PartBlueprint({ className }: PartBlueprintProps) {
+  const svgRef = useRef<SVGSVGElement>(null);
+
+  useLayoutEffect(() => {
+    const svg = svgRef.current;
+    if (!svg || reduceMotion()) return;
+
+    const ctx = gsap.context(() => {
+      // Collect all stroked elements that can be path-length animated
+      const stroked = Array.from(
+        svg.querySelectorAll<SVGGeometryElement>('path, line, ellipse'),
+      ).filter((el) => {
+        // Skip hatch-filled paths — those fade in via opacity
+        const fill = el.getAttribute('fill') ?? 'none';
+        return fill === 'none' || fill === '';
+      });
+
+      const hatchPaths = Array.from(
+        svg.querySelectorAll<SVGPathElement>('path[fill="url(#hatch)"]'),
+      );
+
+      // Pre-hide hatch fills
+      gsap.set(hatchPaths, { opacity: 0 });
+
+      // Set dasharray/dashoffset for each stroke element
+      stroked.forEach((el) => {
+        let length = 400; // fallback
+        try {
+          const l = el.getTotalLength?.();
+          if (l && isFinite(l) && l > 0) length = l;
+        } catch {
+          // SVG element doesn't support getTotalLength — use fallback
+        }
+        gsap.set(el, { strokeDasharray: length, strokeDashoffset: length });
+      });
+
+      // Animate strokes drawing in
+      gsap.to(stroked, {
+        strokeDashoffset: 0,
+        duration: 1.1,
+        ease: 'power2.inOut',
+        stagger: 0.04,
+        onComplete() {
+          // After strokes finish, fade in the hatch fills
+          gsap.to(hatchPaths, {
+            opacity: 1,
+            duration: 0.45,
+            ease: 'power1.out',
+            stagger: 0.08,
+          });
+        },
+      });
+    }, svg);
+
+    return () => ctx.revert();
+  }, []);
+
   return (
     <svg
+      ref={svgRef}
       viewBox="0 0 260 240"
       fill="none"
       className={cn('h-full w-full', className)}

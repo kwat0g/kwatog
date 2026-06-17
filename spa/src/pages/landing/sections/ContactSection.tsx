@@ -12,6 +12,7 @@ import { z } from 'zod';
 import { ArrowRight, Mail, Phone, CheckCircle, Upload, FileText } from 'lucide-react';
 import { AxiosError } from 'axios';
 import { DatumMark } from '../components/DatumMark';
+import { ScrambleText } from '../components/ScrambleText';
 import { COMPANY } from '../data';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -19,6 +20,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { FormErrorSummary } from '@/components/ui/FormErrorSummary';
 import { landingApi } from '@/api/landing';
 import { cn } from '@/lib/cn';
+import { useMagnetic } from '../hooks/useMagnetic';
 
 const quoteSchema = z.object({
   full_name: z.string().min(1, 'Full name is required'),
@@ -33,6 +35,7 @@ type QuoteForm = z.infer<typeof quoteSchema>;
 export function ContactSection() {
   const [drawing, setDrawing] = useState<File | null>(null);
   const [submitted, setSubmitted] = useState(false);
+  const submitRef = useMagnetic<HTMLButtonElement>({ strength: 0.22, duration: 0.55 });
 
   const {
     register,
@@ -109,7 +112,11 @@ export function ContactSection() {
                 data-reveal
                 className="font-mono text-[11px] uppercase tracking-[0.24em] text-landing-accent"
               >
-                Let&apos;s build it
+                <ScrambleText
+                  text="Let's build it"
+                  trigger="view"
+                  className="font-mono text-[11px] uppercase tracking-[0.24em] text-landing-accent"
+                />
               </p>
               <h2
                 data-reveal
@@ -256,6 +263,7 @@ export function ContactSection() {
                   </label>
 
                   <Button
+                    ref={submitRef}
                     type="submit"
                     variant="primary"
                     size="lg"

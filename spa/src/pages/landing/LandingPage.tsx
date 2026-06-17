@@ -18,11 +18,14 @@ import { LandingFooter } from './components/LandingFooter';
 import { CookieBanner } from './components/CookieBanner';
 import { BackToTop } from './components/BackToTop';
 import { FloatingQuoteButton } from './components/FloatingQuoteButton';
+import { CrosshairCursor } from './components/CrosshairCursor';
+import { ScrollProgress } from './components/ScrollProgress';
 import { HeroSection } from './sections/HeroSection';
 import { MarqueeSection } from './sections/MarqueeSection';
 import { TrustSection } from './sections/TrustSection';
 import { CapabilitiesSection } from './sections/CapabilitiesSection';
 import { PartsGallerySection } from './sections/PartsGallerySection';
+import { PartShowcaseSection } from './sections/PartShowcaseSection';
 import { ProcessSection } from './sections/ProcessSection';
 import { StatsSection } from './sections/StatsSection';
 import { QualitySection } from './sections/QualitySection';
@@ -71,9 +74,12 @@ export default function LandingPage() {
   return (
     <div
       ref={rootRef}
+      data-crosshair-scope
       style={WARM_ACCENT}
       className="min-h-screen bg-landing-canvas font-sans text-landing-text antialiased"
     >
+      <ScrollProgress />
+      <CrosshairCursor scopeRef={rootRef} />
       <a
         href="#capabilities"
         className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[60] focus:rounded-lg focus:bg-landing-accent focus:px-4 focus:py-2 focus:font-sans focus:text-sm focus:font-semibold focus:text-landing-accent-fg"
@@ -88,12 +94,13 @@ export default function LandingPage() {
       <main {...inertWhen(menuOpen)}>
         <HeroSection />
         <MarqueeSection />
-        <TrustSection />
         <CapabilitiesSection />
         <PartsGallerySection />
+        <PartShowcaseSection />
         <ProcessSection />
-        <StatsSection />
         <QualitySection />
+        <StatsSection />
+        <TrustSection />
         <PhilippinesSection />
         <ContactSection />
       </main>

@@ -6,6 +6,7 @@
 
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/cn';
+import { ScrambleText } from './ScrambleText';
 
 interface SectionHeadingProps {
   eyebrow: string;
@@ -39,9 +40,11 @@ export function SectionHeading({
         )}
       >
         <span className="h-0.5 w-8 bg-landing-accent" />
-        <span className="font-mono text-[11px] uppercase tracking-[0.24em] text-landing-accent">
-          {eyebrow}
-        </span>
+        <ScrambleText
+          text={eyebrow}
+          trigger="view"
+          className="font-mono text-[11px] uppercase tracking-[0.24em] text-landing-accent"
+        />
       </div>
 
       <h2

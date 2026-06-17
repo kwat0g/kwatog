@@ -10,6 +10,47 @@ import { ShieldCheck, Download, Award } from 'lucide-react';
 import { SectionHeading } from '../components/SectionHeading';
 import { QUALITY_PILLARS, QUALITY_METHODS } from '../data';
 import { landingApi } from '@/api/landing';
+import { useTilt } from '../hooks/useTilt';
+
+type PillarData = (typeof QUALITY_PILLARS)[number];
+
+function PillarCell({ pillar, index }: { pillar: PillarData; index: number }) {
+  const tiltRef = useTilt<HTMLDivElement>({ max: 5, lift: 10 });
+  const Icon = pillar.icon;
+  return (
+    <div
+      ref={tiltRef}
+      data-reveal
+      data-reveal-delay={(index * 0.08).toFixed(2)}
+      className="group relative flex flex-col bg-landing-surface p-7 transition-colors duration-500 hover:bg-landing-elevated sm:p-8"
+    >
+      <div
+        data-tilt-glow
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300"
+        style={{
+          background:
+            'radial-gradient(220px circle at var(--mx) var(--my), var(--landing-accent-glow), transparent 65%)',
+        }}
+      />
+      <span className="font-mono text-[11px] tabular-nums text-landing-subtle-text">
+        0{index + 1}
+      </span>
+      <div
+        data-tilt-lift
+        className="mt-5 flex h-11 w-11 items-center justify-center rounded-xl border border-landing-border text-landing-accent transition-colors duration-500 group-hover:border-landing-accent/40"
+      >
+        <Icon size={20} strokeWidth={1.6} />
+      </div>
+      <h3 className="mt-5 font-display text-lg font-semibold tracking-tight text-landing-text">
+        {pillar.title}
+      </h3>
+      <p className="mt-2.5 font-sans text-[13px] leading-relaxed text-landing-text-secondary">
+        {pillar.body}
+      </p>
+    </div>
+  );
+}
 
 export function QualitySection() {
   return (
@@ -28,12 +69,13 @@ export function QualitySection() {
           />
 
           <div
-            data-reveal
             className="flex flex-wrap gap-2 lg:max-w-xs lg:justify-end"
           >
-            {QUALITY_METHODS.map((m) => (
+            {QUALITY_METHODS.map((m, i) => (
               <span
                 key={m}
+                data-reveal
+                data-reveal-delay={(i * 0.07).toFixed(2)}
                 className="rounded-full border border-landing-border bg-landing-surface px-3.5 py-1.5 font-mono text-[11px] uppercase tracking-[0.12em] text-landing-text-secondary"
               >
                 {m}
@@ -43,35 +85,14 @@ export function QualitySection() {
         </div>
 
         <div className="mt-16 grid gap-px overflow-hidden rounded-2xl border border-landing-border bg-landing-border sm:grid-cols-2 lg:grid-cols-4">
-          {QUALITY_PILLARS.map((pillar, i) => {
-            const Icon = pillar.icon;
-            return (
-              <div
-                key={pillar.id}
-                data-reveal
-                data-reveal-delay={(i * 0.08).toFixed(2)}
-                className="group relative flex flex-col bg-landing-surface p-7 transition-colors duration-500 hover:bg-landing-elevated sm:p-8"
-              >
-                <span className="font-mono text-[11px] tabular-nums text-landing-subtle-text">
-                  0{i + 1}
-                </span>
-                <div className="mt-5 flex h-11 w-11 items-center justify-center rounded-xl border border-landing-border text-landing-accent transition-colors duration-500 group-hover:border-landing-accent/40">
-                  <Icon size={20} strokeWidth={1.6} />
-                </div>
-                <h3 className="mt-5 font-display text-lg font-semibold tracking-tight text-landing-text">
-                  {pillar.title}
-                </h3>
-                <p className="mt-2.5 font-sans text-[13px] leading-relaxed text-landing-text-secondary">
-                  {pillar.body}
-                </p>
-              </div>
-            );
-          })}
+          {QUALITY_PILLARS.map((pillar, i) => (
+            <PillarCell key={pillar.id} pillar={pillar} index={i} />
+          ))}
         </div>
 
         <div className="mt-6 grid gap-5 lg:grid-cols-[1fr_1.4fr]">
           <div
-            data-reveal
+            data-reveal="scale"
             className="flex flex-col justify-between rounded-2xl border border-landing-border bg-landing-surface p-7"
           >
             <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-landing-border text-landing-accent">
@@ -113,7 +134,7 @@ export function QualitySection() {
           </div>
 
           <div
-            data-reveal
+            data-reveal="scale"
             data-reveal-delay="0.08"
             className="flex items-start gap-4 rounded-2xl border border-landing-accent/20 bg-landing-accent-glow px-7 py-6"
           >

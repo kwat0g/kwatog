@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -33,6 +33,7 @@ export default function ResetPasswordPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token');
+  const [done, setDone] = useState(false);
 
   useEffect(() => {
     if (!token) {
@@ -45,7 +46,7 @@ export default function ResetPasswordPage() {
     handleSubmit,
     setError,
     watch,
-    formState: { errors, isSubmitSuccessful, isSubmitting },
+    formState: { errors, isSubmitting },
   } = useForm<ResetPasswordForm>({
     resolver: zodResolver(schema),
   });
@@ -60,6 +61,7 @@ export default function ResetPasswordPage() {
         password: data.password,
         password_confirmation: data.password_confirmation,
       });
+      setDone(true);
     } catch (err) {
       const axe = err as AxiosError<{ message?: string; errors?: Record<string, string[]> }>;
       const body = axe.response?.data;
@@ -96,7 +98,7 @@ export default function ResetPasswordPage() {
         </p>
       </div>
 
-      {isSubmitSuccessful && !errors.root ? (
+      {done ? (
         <div
           role="status"
           className="rounded-xl border border-success/30 bg-success/10 p-5 text-center"
