@@ -109,4 +109,30 @@ class StatutoryExportsTest extends TestCase
         $this->assertStringContainsString('250.00', $csv);
         $this->assertStringContainsString('500.00', $csv); // ee + er total
     }
+
+    public function test_pagibig_mcrf_lists_per_employee_shares(): void
+    {
+        $emp = Employee::factory()->create([
+            'last_name' => 'Lim', 'first_name' => 'Bert', 'pagibig_no' => '1234-5678-9012',
+        ]);
+        $period = $this->finalizedPeriod('2025-05-01', '2025-05-15');
+        Payroll::factory()->create([
+            'employee_id' => $emp->id, 'payroll_period_id' => $period->id,
+            'pagibig_ee' => 200.00, 'pagibig_er' => 200.00,
+            'gross_pay' => 20000.00, 'net_pay' => 19600.00, 'error_message' => null,
+        ]);
+
+        $user = \App\Modules\Auth\Models\User::create([
+            'name' => 'T', 'email' => 't_'.uniqid().'@x.test', 'password' => bcrypt('Password1!'),
+            'role_id' => \App\Modules\Auth\Models\Role::query()->orderBy('id')->value('id'),
+        ]);
+
+        $csv = $this->actingAs($user)
+            ->get('/api/v1/payroll/statutory/mcrf?year=2025&month=5')
+            ->assertStatus(200)->getContent();
+
+        $this->assertStringContainsString('LIM', $csv);
+        $this->assertStringContainsString('1234-5678-9012', $csv);
+        $this->assertStringContainsString('400.00', $csv); // total
+    }
 }

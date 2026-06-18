@@ -103,6 +103,7 @@ if (class_exists(PayrollPeriodController::class)) {
         Route::prefix('payroll/statutory')->middleware('permission:payroll.view')->group(function () {
             Route::get('/1601c', [StatutoryExportController::class, 'bir1601c']);
             Route::get('/rf1', [StatutoryExportController::class, 'philhealthRf1']);
+            Route::get('/mcrf', [StatutoryExportController::class, 'pagibigMcrf']);
         });
     });
 }
