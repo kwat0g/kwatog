@@ -149,9 +149,10 @@ class PayrollCalculatorService
             $sssEe = $sssEr = $phEe = $phEr = $pgEe = $pgEr = $wht = '0.00';
 
             if ($period->is_first_half && ! $period->is_thirteenth_month) {
-                $sssR = $this->sss->compute($govBasis);
-                $phR  = $this->philhealth->compute($govBasis);
-                $pgR  = $this->pagibig->compute($govBasis);
+                $effectiveOn = $period->payroll_date;
+                $sssR = $this->sss->compute($govBasis, $effectiveOn);
+                $phR  = $this->philhealth->compute($govBasis, $effectiveOn);
+                $pgR  = $this->pagibig->compute($govBasis, $effectiveOn);
                 $sssEe = $sssR['ee']; $sssEr = $sssR['er'];
                 $phEe  = $phR['ee'];  $phEr  = $phR['er'];
                 $pgEe  = $pgR['ee'];  $pgEr  = $pgR['er'];
@@ -159,7 +160,7 @@ class PayrollCalculatorService
                 // BIR taxable = gross - employee gov contributions
                 $taxable = Money::sub(Money::sub(Money::sub($grossPay, $sssEe), $phEe), $pgEe);
                 if (Money::lt($taxable, '0')) $taxable = Money::zero();
-                $wht = $this->bir->compute($taxable, 'semi_monthly');
+                $wht = $this->bir->compute($taxable, 'semi_monthly', $period->payroll_date);
             }
 
             // ─── Persist payroll row (without deductions yet) ────
