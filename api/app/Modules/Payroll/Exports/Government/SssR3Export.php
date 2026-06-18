@@ -31,8 +31,8 @@ class SssR3Export implements FromCollection, WithHeadings, WithMapping, WithStyl
     {
         return Payroll::query()
             ->with(['employee'])
-            ->where('period_id', $this->period->id)
-            ->where('status', 'finalized')
+            ->where('payroll_period_id', $this->period->id)
+            ->whereNull('error_message')
             ->get();
     }
 
@@ -64,10 +64,10 @@ class SssR3Export implements FromCollection, WithHeadings, WithMapping, WithStyl
 
         // Derive contribution components — uses existing payroll deduction
         // details where available; falls back to flat SSS amount.
-        $eeShare = $row->sss_employee ?? $row->sss ?? 0;
-        $erShare = $row->sss_employer ?? 0;
-        $ecShare = $row->sss_ec ?? 0;
-        $monthly = $row->basic_pay ?? $row->gross_pay ?? 0;
+        $eeShare = (float) ($row->sss_ee ?? 0);
+        $erShare = (float) ($row->sss_er ?? 0);
+        $ecShare = 0.0; // EC is not tracked separately on payrolls; report 0 until modelled.
+        $monthly = (float) ($row->basic_pay ?? $row->gross_pay ?? 0);
 
         return [
             (string) $sss,

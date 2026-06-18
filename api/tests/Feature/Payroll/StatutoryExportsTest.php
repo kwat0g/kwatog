@@ -1,0 +1,54 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Feature\Payroll;
+
+use App\Modules\HR\Models\Employee;
+use App\Modules\Payroll\Exports\Government\SssR3Export;
+use App\Modules\Payroll\Models\Payroll;
+use App\Modules\Payroll\Models\PayrollPeriod;
+use Database\Seeders\RolePermissionSeeder;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+class StatutoryExportsTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->seed(RolePermissionSeeder::class);
+    }
+
+    private function finalizedPeriod(string $start = '2025-01-01', string $end = '2025-01-15'): PayrollPeriod
+    {
+        return PayrollPeriod::factory()->create([
+            'status' => 'finalized', 'period_start' => $start, 'period_end' => $end,
+            'payroll_date' => $end, 'is_first_half' => true, 'is_thirteenth_month' => false,
+        ]);
+    }
+
+    public function test_sss_r3_export_reads_real_columns(): void
+    {
+        $emp = Employee::factory()->create([
+            'last_name' => 'Dela Cruz', 'first_name' => 'Juan', 'sss_no' => '34-1234567-8',
+        ]);
+        $period = $this->finalizedPeriod();
+        Payroll::factory()->create([
+            'employee_id' => $emp->id, 'payroll_period_id' => $period->id,
+            'basic_pay' => 20000.00, 'sss_ee' => 1000.00, 'sss_er' => 2000.00,
+            'gross_pay' => 20000.00, 'net_pay' => 19000.00, 'error_message' => null,
+        ]);
+
+        $rows = (new SssR3Export($period))->collection();
+        $this->assertCount(1, $rows);
+
+        $mapped = (new SssR3Export($period))->map($rows->first());
+        // Headings: [SS No, Last, First, Middle, Monthly, EE, ER, EC, Total, Remarks]
+        $this->assertSame('1000.00', $mapped[5]); // EE share from sss_ee
+        $this->assertSame('2000.00', $mapped[6]); // ER share from sss_er
+        $this->assertSame('3000.00', $mapped[8]); // total EE+ER+EC
+    }
+}
