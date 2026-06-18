@@ -100,4 +100,18 @@ class EffectiveDatedBracketsTest extends TestCase
 
         $this->assertSame('100.00', (string) $payroll->sss_ee);
     }
+
+    public function test_2025_seeder_makes_sss_effective_2025(): void
+    {
+        $this->seed(\Database\Seeders\GovernmentTableSeeder::class);      // 2024
+        $this->seed(\Database\Seeders\GovernmentTable2025Seeder::class);  // 2025
+        Cache::flush();
+
+        $svc = app(\App\Modules\Payroll\Services\Government\SssComputationService::class);
+
+        // MSC 20,000 in 2025 → EE = 20000 * 5% = 1000.00
+        $r = $svc->compute('20000', \Illuminate\Support\Carbon::parse('2025-07-15'));
+        $this->assertSame('1000.00', $r['ee']);
+        $this->assertSame('2000.00', $r['er']); // 20000 * 10%
+    }
 }

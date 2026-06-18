@@ -25,7 +25,8 @@ class DatabaseSeeder extends Seeder
             LeaveTypeSeeder::class,        // Task 20
 
             // Sprint 3 — Hire to Retire (Part 2: Payroll).
-            GovernmentTableSeeder::class,      // Task 23
+            GovernmentTableSeeder::class,      // Task 23 (2024 schedule)
+            GovernmentTable2025Seeder::class,  // OGAMI-101 (2025 schedule)
 
             // Sprint 4 — Lean Accounting.
             // Order matters: full COA first, then the legacy payroll-codes upsert
