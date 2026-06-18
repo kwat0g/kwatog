@@ -6,6 +6,7 @@ namespace App\Modules\Payroll\Services\Government;
 
 use App\Modules\Payroll\Enums\ContributionAgency;
 use App\Modules\Payroll\Services\GovernmentContributionTableService;
+use Illuminate\Support\Carbon;
 
 /**
  * BIR withholding tax (TRAIN Law) computation.
@@ -25,14 +26,14 @@ class BirTaxComputationService
     /**
      * @return string  Tax in pesos, 2 decimals.
      */
-    public function compute(string|float|int $taxablePay, string $periodType = 'semi_monthly'): string
+    public function compute(string|float|int $taxablePay, string $periodType = 'semi_monthly', ?Carbon $effectiveDate = null): string
     {
         $taxable = (string) $taxablePay;
         if (bccomp($taxable, '0', 2) <= 0) {
             return '0.00';
         }
 
-        $brackets = $this->tables->activeBrackets(ContributionAgency::Bir);
+        $brackets = $this->tables->bracketsEffectiveOn(ContributionAgency::Bir, $effectiveDate ?? now());
         foreach ($brackets as $row) {
             $min = (string) $row->bracket_min;
             $max = (string) $row->bracket_max;

@@ -6,6 +6,7 @@ namespace App\Modules\Payroll\Services\Government;
 
 use App\Modules\Payroll\Enums\ContributionAgency;
 use App\Modules\Payroll\Services\GovernmentContributionTableService;
+use Illuminate\Support\Carbon;
 
 /**
  * PhilHealth premium computation.
@@ -27,14 +28,14 @@ class PhilhealthComputationService
      * @param  string|float|int  $monthlySalary
      * @return array{ee: string, er: string}
      */
-    public function compute(string|float|int $monthlySalary): array
+    public function compute(string|float|int $monthlySalary, ?Carbon $effectiveDate = null): array
     {
         $salary = (string) $monthlySalary;
         if (bccomp($salary, '0', 2) <= 0) {
             return ['ee' => '0.00', 'er' => '0.00'];
         }
 
-        $row = $this->tables->activeBrackets(ContributionAgency::Philhealth)->first();
+        $row = $this->tables->bracketsEffectiveOn(ContributionAgency::Philhealth, $effectiveDate ?? now())->first();
         if (! $row) {
             return ['ee' => '0.00', 'er' => '0.00'];
         }

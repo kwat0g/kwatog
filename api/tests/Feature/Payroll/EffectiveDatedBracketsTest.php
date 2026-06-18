@@ -57,4 +57,18 @@ class EffectiveDatedBracketsTest extends TestCase
         $rows = $svc->bracketsEffectiveOn(ContributionAgency::Sss, '2020-01-01');
         $this->assertCount(1, $rows);
     }
+
+    public function test_sss_service_uses_schedule_in_force_on_pay_date(): void
+    {
+        $this->sssRow('2024-01-01', 100.00, 200.00);
+        $this->sssRow('2025-01-01', 150.00, 300.00);
+
+        $svc = app(\App\Modules\Payroll\Services\Government\SssComputationService::class);
+
+        $r2024 = $svc->compute('20000', \Illuminate\Support\Carbon::parse('2024-06-15'));
+        $this->assertSame('100.00', $r2024['ee']);
+
+        $r2025 = $svc->compute('20000', \Illuminate\Support\Carbon::parse('2025-06-15'));
+        $this->assertSame('150.00', $r2025['ee']);
+    }
 }

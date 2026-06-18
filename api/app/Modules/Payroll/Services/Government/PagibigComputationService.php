@@ -6,6 +6,7 @@ namespace App\Modules\Payroll\Services\Government;
 
 use App\Modules\Payroll\Enums\ContributionAgency;
 use App\Modules\Payroll\Services\GovernmentContributionTableService;
+use Illuminate\Support\Carbon;
 
 /**
  * Pag-IBIG (HDMF) Fund contribution.
@@ -25,7 +26,7 @@ class PagibigComputationService
     /**
      * @return array{ee: string, er: string}
      */
-    public function compute(string|float|int $monthlySalary): array
+    public function compute(string|float|int $monthlySalary, ?Carbon $effectiveDate = null): array
     {
         $salary = (string) $monthlySalary;
         if (bccomp($salary, '0', 2) <= 0) {
@@ -35,7 +36,7 @@ class PagibigComputationService
         // Cap salary at the project ceiling.
         $basis = bccomp($salary, self::CEILING, 2) > 0 ? self::CEILING : $salary;
 
-        $brackets = $this->tables->activeBrackets(ContributionAgency::Pagibig);
+        $brackets = $this->tables->bracketsEffectiveOn(ContributionAgency::Pagibig, $effectiveDate ?? now());
         foreach ($brackets as $row) {
             $min = (string) $row->bracket_min;
             $max = (string) $row->bracket_max;
