@@ -82,4 +82,31 @@ class StatutoryExportsTest extends TestCase
     {
         $this->get('/api/v1/payroll/statutory/1601c?year=2025&month=3')->assertStatus(401);
     }
+
+    public function test_philhealth_rf1_lists_per_employee_shares(): void
+    {
+        $emp = Employee::factory()->create([
+            'last_name' => 'Reyes', 'first_name' => 'Ana', 'philhealth_no' => '11-222222222-3',
+        ]);
+        $period = $this->finalizedPeriod('2025-04-01', '2025-04-15');
+        Payroll::factory()->create([
+            'employee_id' => $emp->id, 'payroll_period_id' => $period->id,
+            'philhealth_ee' => 250.00, 'philhealth_er' => 250.00,
+            'gross_pay' => 20000.00, 'net_pay' => 19500.00, 'error_message' => null,
+        ]);
+
+        $user = \App\Modules\Auth\Models\User::create([
+            'name' => 'T', 'email' => 't_'.uniqid().'@x.test', 'password' => bcrypt('Password1!'),
+            'role_id' => \App\Modules\Auth\Models\Role::query()->orderBy('id')->value('id'),
+        ]);
+
+        $csv = $this->actingAs($user)
+            ->get('/api/v1/payroll/statutory/rf1?year=2025&month=4')
+            ->assertStatus(200)->getContent();
+
+        $this->assertStringContainsString('REYES', $csv);
+        $this->assertStringContainsString('11-222222222-3', $csv);
+        $this->assertStringContainsString('250.00', $csv);
+        $this->assertStringContainsString('500.00', $csv); // ee + er total
+    }
 }

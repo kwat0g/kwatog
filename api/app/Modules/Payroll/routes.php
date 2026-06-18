@@ -102,6 +102,7 @@ if (class_exists(PayrollPeriodController::class)) {
         // ─── Statutory remittance exports (OGAMI-102/103) ─────────
         Route::prefix('payroll/statutory')->middleware('permission:payroll.view')->group(function () {
             Route::get('/1601c', [StatutoryExportController::class, 'bir1601c']);
+            Route::get('/rf1', [StatutoryExportController::class, 'philhealthRf1']);
         });
     });
 }
