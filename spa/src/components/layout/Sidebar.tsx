@@ -181,6 +181,7 @@ const SECTIONS: NavSection[] = [
       { to: '/hr/attendance',   label: 'Attendance',  icon: Clock4,      feature: 'attendance', permission: 'attendance.view', badgeKey: 'leaves' },
       { to: '/hr/leaves',       label: 'Leave',       icon: CalendarDays, feature: 'leave',     permission: 'leave.view' },
       { to: '/payroll/periods', label: 'Payroll',     icon: Wallet,      feature: 'payroll',    permission: 'payroll.view', badgeKey: 'payroll' },
+      { to: '/payroll/statutory', label: 'Statutory Exports', icon: FileText, feature: 'payroll', permission: 'payroll.view' },
     ],
   },
   {

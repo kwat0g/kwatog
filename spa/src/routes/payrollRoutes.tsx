@@ -11,6 +11,7 @@ const PayrollEmployeeDetailPage   = lazy(() => import('@/pages/payroll/periods/e
 const PayrollAdjustmentsPage      = lazy(() => import('@/pages/payroll/adjustments'));
 const CreatePayrollAdjustmentPage = lazy(() => import('@/pages/payroll/adjustments/create'));
 const PayrollPipelinePage         = lazy(() => import('@/pages/payroll/pipeline'));
+const StatutoryExportsPage        = lazy(() => import('@/pages/payroll/statutory'));
 
 export const payrollRoutes = (
   <>
@@ -43,6 +44,10 @@ export const payrollRoutes = (
       <Route
         path="/payroll/adjustments/create"
         element={<PermissionGuard permission="payroll.adjustments.create"><CreatePayrollAdjustmentPage /></PermissionGuard>}
+      />
+      <Route
+        path="/payroll/statutory"
+        element={<PermissionGuard permission="payroll.view"><StatutoryExportsPage /></PermissionGuard>}
       />
     </Route>
   </>
