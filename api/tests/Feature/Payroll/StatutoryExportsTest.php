@@ -135,4 +135,30 @@ class StatutoryExportsTest extends TestCase
         $this->assertStringContainsString('1234-5678-9012', $csv);
         $this->assertStringContainsString('400.00', $csv); // total
     }
+
+    public function test_bir_1604cf_aggregates_year_totals(): void
+    {
+        $emp = Employee::factory()->create(['last_name' => 'Cruz']);
+        $p1 = $this->finalizedPeriod('2025-01-01', '2025-01-15');
+        $p2 = $this->finalizedPeriod('2025-02-01', '2025-02-15');
+        foreach ([$p1, $p2] as $period) {
+            Payroll::factory()->create([
+                'employee_id' => $emp->id, 'payroll_period_id' => $period->id,
+                'gross_pay' => 25000.00, 'withholding_tax' => 1000.00,
+                'net_pay' => 24000.00, 'error_message' => null,
+            ]);
+        }
+
+        $user = \App\Modules\Auth\Models\User::create([
+            'name' => 'T', 'email' => 't_'.uniqid().'@x.test', 'password' => bcrypt('Password1!'),
+            'role_id' => \App\Modules\Auth\Models\Role::query()->orderBy('id')->value('id'),
+        ]);
+
+        $csv = $this->actingAs($user)
+            ->get('/api/v1/payroll/statutory/1604cf?year=2025')
+            ->assertStatus(200)->getContent();
+
+        $this->assertStringContainsString('50000.00', $csv); // 2 periods x 25000
+        $this->assertStringContainsString('2000.00', $csv);  // 2 periods x 1000
+    }
 }

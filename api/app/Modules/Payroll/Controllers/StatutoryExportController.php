@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Payroll\Controllers;
 
 use App\Modules\Payroll\Services\Statutory\Bir1601CService;
+use App\Modules\Payroll\Services\Statutory\Bir1604CfService;
 use App\Modules\Payroll\Services\Statutory\PagibigMcrfService;
 use App\Modules\Payroll\Services\Statutory\PhilhealthRf1Service;
 use Illuminate\Http\Request;
@@ -48,5 +49,13 @@ class StatutoryExportController
 
         return $this->csv($service->toCsv($service->generate($year, $month)),
             sprintf('PagIBIG-MCRF-%04d-%02d.csv', $year, $month));
+    }
+
+    public function bir1604cf(Request $request, Bir1604CfService $service): Response
+    {
+        abort_unless($request->user()?->can('payroll.view'), 403);
+        $year = (int) $request->query('year', now()->year);
+
+        return $this->csv($service->toCsv($service->generate($year)), sprintf('BIR-1604-CF-%04d.csv', $year));
     }
 }
