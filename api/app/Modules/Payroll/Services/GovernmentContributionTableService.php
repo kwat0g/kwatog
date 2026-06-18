@@ -6,6 +6,7 @@ namespace App\Modules\Payroll\Services;
 
 use App\Modules\Payroll\Enums\ContributionAgency;
 use App\Modules\Payroll\Models\GovernmentContributionTable;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -33,6 +34,43 @@ class GovernmentContributionTableService
                 ->active()
                 ->orderBy('bracket_min')
                 ->get(),
+        );
+    }
+
+    /**
+     * Brackets in force on a given date: the rows whose effective_date is the
+     * latest <= $date for the agency. Falls back to the active set when no
+     * dated rows are on/before $date (preserves legacy behaviour for agencies
+     * seeded without history).
+     *
+     * @return Collection<int, GovernmentContributionTable>
+     */
+    public function bracketsEffectiveOn(string|ContributionAgency $agency, Carbon|string $date): Collection
+    {
+        $key = $agency instanceof ContributionAgency ? $agency->value : $agency;
+        $on  = $date instanceof Carbon ? $date->toDateString() : (string) $date;
+        $ver = (int) Cache::get("gov_table:{$key}:ver", 1);
+
+        return Cache::remember(
+            "gov_table:{$key}:v{$ver}:eff:{$on}",
+            self::CACHE_TTL,
+            function () use ($key, $on) {
+                $effective = GovernmentContributionTable::query()
+                    ->agency($key)
+                    ->whereDate('effective_date', '<=', $on)
+                    ->max('effective_date');
+
+                if ($effective === null) {
+                    return GovernmentContributionTable::query()
+                        ->agency($key)->active()->orderBy('bracket_min')->get();
+                }
+
+                return GovernmentContributionTable::query()
+                    ->agency($key)
+                    ->whereDate('effective_date', $effective)
+                    ->orderBy('bracket_min')
+                    ->get();
+            },
         );
     }
 
@@ -85,5 +123,6 @@ class GovernmentContributionTableService
         if (! $agency) return;
         $key = $agency instanceof ContributionAgency ? $agency->value : (string) $agency;
         Cache::forget("gov_table:{$key}:active");
+        Cache::put("gov_table:{$key}:ver", ((int) Cache::get("gov_table:{$key}:ver", 1)) + 1, 86400);
     }
 }
