@@ -30,7 +30,12 @@ class GovernmentTable2025Seeder extends Seeder
         // Minimum MSC is ₱5,000 (statutory floor): the lowest bracket covers
         // ₱0 upward so sub-floor earners still contribute at the ₱5,000 MSC.
         for ($msc = 5000.00; $msc <= 35000.00; $msc += 500.00) {
-            $min = $msc <= 5000.00 ? 0.00 : round($msc - 249.99, 2);
+            $min = $msc - 249.99 < 0.00 ? 0.00 : round($msc - 249.99, 2);
+            // The lowest MSC step still covers ₱0 upward (statutory floor): clamp
+            // its lower bound to 0 so sub-floor earners contribute at the floor MSC.
+            if ($msc <= 5000.00) {
+                $min = 0.00;
+            }
             $max = round($msc + 250.00, 2);
             GovernmentContributionTable::updateOrCreate(
                 ['agency' => 'sss', 'bracket_min' => $min, 'effective_date' => self::EFFECTIVE],

@@ -29,6 +29,13 @@ class SssR3Export implements FromCollection, WithHeadings, WithMapping, WithStyl
 
     public function collection(): Collection
     {
+        // Only export from a filed period (finalized/disbursed) — consistent
+        // with the 1601-C / RF-1 / MCRF / 1604-CF exporters. The injected
+        // period may be any status, so guard here rather than trust the caller.
+        if (! in_array((string) $this->period->status->value, ['finalized', 'disbursed'], true)) {
+            return new Collection();
+        }
+
         return Payroll::query()
             ->with(['employee'])
             ->where('payroll_period_id', $this->period->id)

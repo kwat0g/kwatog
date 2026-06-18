@@ -52,6 +52,23 @@ class StatutoryExportsTest extends TestCase
         $this->assertSame('3000.00', $mapped[8]); // total EE+ER+EC
     }
 
+    public function test_sss_r3_export_excludes_non_filed_periods(): void
+    {
+        $emp = Employee::factory()->create(['last_name' => 'Draft', 'sss_no' => '34-9999999-9']);
+        $draft = PayrollPeriod::factory()->create([
+            'status' => 'draft', 'period_start' => '2025-06-01', 'period_end' => '2025-06-15',
+            'payroll_date' => '2025-06-15', 'is_first_half' => true, 'is_thirteenth_month' => false,
+        ]);
+        Payroll::factory()->create([
+            'employee_id' => $emp->id, 'payroll_period_id' => $draft->id,
+            'basic_pay' => 20000.00, 'sss_ee' => 1000.00, 'sss_er' => 2000.00,
+            'gross_pay' => 20000.00, 'net_pay' => 19000.00, 'error_message' => null,
+        ]);
+
+        // A draft period is not a filed period — the export must be empty.
+        $this->assertCount(0, (new SssR3Export($draft))->collection());
+    }
+
     public function test_bir_1601c_aggregates_month_totals(): void
     {
         $emp = Employee::factory()->create(['last_name' => 'Santos']);
