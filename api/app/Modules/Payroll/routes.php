@@ -11,6 +11,7 @@ use App\Modules\Payroll\Controllers\GovernmentTableController;
 use App\Modules\Payroll\Controllers\PayrollAdjustmentController;
 use App\Modules\Payroll\Controllers\PayrollAnomalyController;
 use App\Modules\Payroll\Controllers\PayrollController;
+use App\Modules\Payroll\Controllers\StatutoryExportController;
 use App\Modules\Payroll\Controllers\PayrollPeriodController;
 use Illuminate\Support\Facades\Route;
 
@@ -97,5 +98,10 @@ if (class_exists(PayrollPeriodController::class)) {
         // ─── BIR 2316 Alphalist export (Task 6) ──────────────────
         Route::get('/payroll/bir-alphalist', [BirAlphalistController::class, 'download'])
             ->middleware('permission:payroll.view');
+
+        // ─── Statutory remittance exports (OGAMI-102/103) ─────────
+        Route::prefix('payroll/statutory')->middleware('permission:payroll.view')->group(function () {
+            Route::get('/1601c', [StatutoryExportController::class, 'bir1601c']);
+        });
     });
 }

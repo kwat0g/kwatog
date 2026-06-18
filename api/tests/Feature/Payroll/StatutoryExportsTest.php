@@ -51,4 +51,35 @@ class StatutoryExportsTest extends TestCase
         $this->assertSame('2000.00', $mapped[6]); // ER share from sss_er
         $this->assertSame('3000.00', $mapped[8]); // total EE+ER+EC
     }
+
+    public function test_bir_1601c_aggregates_month_totals(): void
+    {
+        $emp = Employee::factory()->create(['last_name' => 'Santos']);
+        $period = $this->finalizedPeriod('2025-03-01', '2025-03-15');
+        Payroll::factory()->create([
+            'employee_id' => $emp->id, 'payroll_period_id' => $period->id,
+            'gross_pay' => 25000.00, 'withholding_tax' => 1200.00,
+            'net_pay' => 23000.00, 'total_deductions' => 2000.00, 'error_message' => null,
+        ]);
+
+        $user = \App\Modules\Auth\Models\User::create([
+            'name' => 'T', 'email' => 't_'.uniqid().'@x.test',
+            'password' => bcrypt('Password1!'),
+            'role_id'  => \App\Modules\Auth\Models\Role::query()->orderBy('id')->value('id'),
+        ]);
+
+        $csv = $this->actingAs($user)
+            ->get('/api/v1/payroll/statutory/1601c?year=2025&month=3')
+            ->assertStatus(200)
+            ->getContent();
+
+        $this->assertStringContainsString('25000.00', $csv); // total compensation
+        $this->assertStringContainsString('1200.00', $csv);  // total tax withheld
+        $this->assertStringContainsString('2025-03', $csv);  // period label
+    }
+
+    public function test_statutory_export_requires_auth(): void
+    {
+        $this->get('/api/v1/payroll/statutory/1601c?year=2025&month=3')->assertStatus(401);
+    }
 }
