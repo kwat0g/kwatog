@@ -125,6 +125,15 @@ class BudgetService
 
     /**
      * Get budget-vs-actual comparison (P&L style) for a fiscal year.
+     *
+     * NOTE: BudgetLineItem.actual_total is populated by the SyncBudgetActuals
+     * job (dispatched via `php artisan budget:sync-actuals` or the monthly
+     * scheduled task on the 1st at 03:00).  Actuals reflect GL net movement
+     * (SUM debit - SUM credit) from posted JournalEntryLine records for the
+     * same GL account within the fiscal year date range.
+     *
+     * If actual_total appears stale or zero for all line items, run the sync
+     * first: POST /api/v1/budgets/sync-actuals or `php artisan budget:sync-actuals`.
      */
     public function budgetVsActual(int $fiscalYearId): array
     {

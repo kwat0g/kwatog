@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Accounting\Controllers;
 
 use App\Common\Support\HashIdFilter;
+use App\Modules\Accounting\Jobs\SyncBudgetActuals;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Budget;
 use App\Modules\Accounting\Models\FiscalYear;
@@ -401,5 +402,32 @@ class BudgetController extends Controller
             'error'   => null,
             'meta'    => null,
         ]);
+    }
+
+    /**
+     * Dispatch the SyncBudgetActuals job for a given fiscal year.
+     *
+     * POST /api/v1/budgets/sync-actuals
+     * Permission: budgeting.manage
+     */
+    public function syncActuals(Request $request): JsonResponse
+    {
+        $this->decodeHashIds($request);
+
+        $fiscalYearId = $request->input('fiscal_year_id');
+        if (is_string($fiscalYearId) && $fiscalYearId !== '' && ctype_digit($fiscalYearId)) {
+            $fiscalYearId = (int) $fiscalYearId;
+        } elseif ($fiscalYearId !== null) {
+            $fiscalYearId = null;
+        }
+
+        SyncBudgetActuals::dispatch($fiscalYearId);
+
+        return response()->json([
+            'success' => true,
+            'data'    => ['dispatched' => true],
+            'error'   => null,
+            'meta'    => null,
+        ], 202);
     }
 }

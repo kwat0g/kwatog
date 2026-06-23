@@ -103,6 +103,7 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
         Route::get('/overview',                       [BudgetController::class, 'overview'])     ->middleware('permission:budgeting.view');
         Route::get('/budget-vs-actual',               [BudgetController::class, 'budgetVsActual'])->middleware('permission:budgeting.view');
         Route::get('/check-availability',             [BudgetController::class, 'checkAvailability'])->middleware('permission:budgeting.view');
+        Route::post('/sync-actuals',                  [BudgetController::class, 'syncActuals'])  ->middleware('permission:budgeting.manage');
         Route::get('/{budget}',                       [BudgetController::class, 'show'])         ->middleware('permission:budgeting.view');
         Route::post('/',                              [BudgetController::class, 'store'])        ->middleware('permission:budgeting.manage');
         Route::put('/{budget}',                       [BudgetController::class, 'update'])       ->middleware('permission:budgeting.manage');

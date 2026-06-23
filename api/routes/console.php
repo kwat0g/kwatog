@@ -214,10 +214,17 @@ Schedule::command('notifications:send-digest')
     ->withoutOverlapping()
     ->onOneServer();
 
-// OGAMI-104 — Year-end leave forfeiture/conversion. Scheduled Dec 31 at 23:00
-// so it runs just before the year rolls over. Idempotent via
-// processed_year_end_leave_types table, so re-runs are safe no-ops.
-Schedule::command('leave:process-year-end')
-    ->yearlyOn(12, 31, '23:00')
-    ->withoutOverlapping()
-    ->onOneServer();
+	// OGAMI-104 — Year-end leave forfeiture/conversion. Scheduled Dec 31 at 23:00
+	// so it runs just before the year rolls over. Idempotent via
+	// processed_year_end_leave_types table, so re-runs are safe no-ops.
+	Schedule::command('leave:process-year-end')
+	    ->yearlyOn(12, 31, '23:00')
+	    ->withoutOverlapping()
+	    ->onOneServer();
+
+	// Budget-vs-actual GL sync on the 1st at 03:00 (after monthly depreciation).
+	// Idempotent: re-runs overwrite actual_total with current GL balance each time.
+	Schedule::command('budget:sync-actuals')
+	    ->monthlyOn(1, '03:00')
+	    ->withoutOverlapping()
+	    ->onOneServer();
