@@ -271,10 +271,10 @@ Only drivers have a mobile PWA. Production operators, QC inspectors, and mainten
 
 ## Prioritized build backlog (ranked by thesis + business impact)
 
-> **Progress (2026-06-24):** 17 of 32 backlog items SHIPPED. All Tier 1, all
-> Tier 2 except biometric API, plus budget enforcement — merged to main with
-> 857 backend tests green. Sales pipeline (Lead→Opportunity→Quote→SO) verified
-> end-to-end live.
+> **Progress (2026-06-24):** 23 of 32 backlog items SHIPPED. All Tier 1, all
+> Tier 2 except biometric API, 4 of 5 Tier-3 thesis differentiators (CAPA, Mold,
+> PPAP, Forecast→MRP — only Mobile PWA pending), plus budget enforcement and
+> asset depreciation/insurance. Merged to main with 857 backend tests green.
 
 ### TIER 1 — Build immediately (highest impact, lowest effort) — ✅ ALL DONE
 | # | Feature | Module | Effort | Status |
@@ -306,13 +306,13 @@ Only drivers have a mobile PWA. Production operators, QC inspectors, and mainten
 | — | Incoterm support (PO/SO/Shipment) | Supply Chain | ✅ shipped (`dbc6ef5`) |
 
 ### TIER 3 — Thesis differentiators (high impact, higher effort)
-| # | Feature | Module | Effort | Why |
+| # | Feature | Module | Effort | Status |
 |---|---|---|---|---|
-| 16 | PPAP & APQP Tracking | Quality/Vendor | 2 weeks | IATF-specific, no competitor has it |
-| 17 | CAPA Effectiveness Loop | Quality/NCR | 1 week | PDCA in software |
-| 18 | Mold Lifecycle Manager | MRP/Maint | 1 week | Core to injection molding |
-| 19 | Mobile Factory Floor PWA | Production/QC/Maint | 2 weeks | Factory usability |
-| 20 | Forecast→MRP integration | Forecasting/MRP | 1 week | Demand-driven replenishment |
+| 16 | PPAP & APQP Tracking | Quality/Vendor | 2 weeks | ✅ shipped (`6659ec4`/`ccfc17e`/`731c6ce`) |
+| 17 | CAPA Effectiveness Loop | Quality/NCR | 1 week | ✅ shipped (`de39c43`/`40f9f84`/`8077141`) |
+| 18 | Mold Lifecycle Manager | MRP/Maint | 1 week | ✅ shipped (`e61ba9c`) |
+| 19 | Mobile Factory Floor PWA | Production/QC/Maint | 2 weeks | ⬜ pending (pure frontend) |
+| 20 | Forecast→MRP integration | Forecasting/MRP | 1 week | ✅ shipped (forecast MRP projection) |
 
 ### TIER 4 — Nice to have (lower urgency)
 | # | Feature | Module | Effort |
@@ -323,9 +323,9 @@ Only drivers have a mobile PWA. Production operators, QC inspectors, and mainten
 | 24 | Customer statement of account | CRM/Accounting | 3 days |
 | 25 | Interest-bearing loan amortization | Loans | 1 week |
 | 26 | SSS/Pag-IBIG government loans | Loans | 1 week |
-| 27 | Insurance tracking | Assets | 2 days |
+| 27 | Insurance tracking | Assets | 2 days | ✅ shipped (`0241` migration) |
 | 28 | Asset transfer workflow | Assets | 2 days |
-| 29 | Depreciation method selection | Assets | 3 days |
+| 29 | Depreciation method selection | Assets | 3 days | ✅ shipped (straight-line/declining-balance) |
 | 30 | Real-time dashboard (WebSocket) | Dashboard | 1 week |
 | 31 | Budget enforcement at PO level | Budgeting/Purchasing | 2 days | ✅ shipped (`fdbbd76`) |
 | 32 | B2B portal → supplier PPAP view | B2B/Quality | 2 days |
