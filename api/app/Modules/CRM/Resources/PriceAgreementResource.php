@@ -26,6 +26,8 @@ class PriceAgreementResource extends JsonResource
             'price'          => (string) $this->price,
             'effective_from' => optional($this->effective_from)->toDateString(),
             'effective_to'   => optional($this->effective_to)->toDateString(),
+            'pricing_method' => $this->pricing_method?->value ?? 'flat',
+            'tiers'          => $this->tiers,
             'is_currently_active' => (bool) $this->is_currently_active,
             'created_at'     => optional($this->created_at)->toIso8601String(),
             'updated_at'     => optional($this->updated_at)->toIso8601String(),

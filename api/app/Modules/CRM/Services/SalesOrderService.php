@@ -187,7 +187,9 @@ class SalesOrderService
                 } catch (\App\Modules\CRM\Exceptions\NoPriceAgreementException $e) {
                     throw new \App\Modules\CRM\Exceptions\NoPriceAgreementException("items.{$idx}.product_id");
                 }
-                $unitPrice = (float) $agreement->price;
+                // Volume tier resolution: tiered agreements pick the unit price
+                // for this line's quantity; flat agreements return $agreement->price.
+                $unitPrice = $this->prices->resolveUnitPrice($agreement, (int) $qty);
                 $lineTotal = round($qty * $unitPrice, 2);
 
                 $lines[] = [
@@ -250,7 +252,8 @@ class SalesOrderService
                 } catch (\App\Modules\CRM\Exceptions\NoPriceAgreementException $e) {
                     throw new \App\Modules\CRM\Exceptions\NoPriceAgreementException("items.{$idx}.product_id");
                 }
-                $unitPrice = (float) $agreement->price;
+                // Volume tier resolution (see create()).
+                $unitPrice = $this->prices->resolveUnitPrice($agreement, (int) $qty);
                 $lineTotal = round($qty * $unitPrice, 2);
                 $newLines[] = [
                     'product_id'         => $productId,

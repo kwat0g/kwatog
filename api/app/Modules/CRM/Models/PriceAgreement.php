@@ -7,6 +7,7 @@ namespace App\Modules\CRM\Models;
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\Accounting\Models\Customer;
+use App\Modules\CRM\Enums\PricingMethod;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -22,12 +23,15 @@ class PriceAgreement extends Model
     protected $fillable = [
         'product_id', 'customer_id', 'price',
         'effective_from', 'effective_to',
+        'pricing_method', 'tiers',
     ];
 
     protected $casts = [
         'price'          => 'decimal:2',
         'effective_from' => 'date',
         'effective_to'   => 'date',
+        'pricing_method' => PricingMethod::class,
+        'tiers'          => 'array',
     ];
 
     public function product(): BelongsTo

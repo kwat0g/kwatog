@@ -6,6 +6,7 @@ namespace App\Modules\CRM\Requests;
 
 use App\Common\Concerns\ResolvesHashIds;
 use App\Modules\Accounting\Models\Customer;
+use App\Modules\CRM\Enums\PricingMethod;
 use App\Modules\CRM\Models\Product;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -29,11 +30,15 @@ class StorePriceAgreementRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'product_id'     => ['required', 'integer', 'exists:products,id'],
-            'customer_id'    => ['required', 'integer', 'exists:customers,id'],
-            'price'          => ['required', 'decimal:0,2', 'min:0'],
-            'effective_from' => ['required', 'date'],
-            'effective_to'   => ['required', 'date', 'after_or_equal:effective_from'],
+            'product_id'      => ['required', 'integer', 'exists:products,id'],
+            'customer_id'     => ['required', 'integer', 'exists:customers,id'],
+            'price'           => ['required', 'decimal:0,2', 'min:0'],
+            'effective_from'  => ['required', 'date'],
+            'effective_to'    => ['required', 'date', 'after_or_equal:effective_from'],
+            'pricing_method'  => ['nullable', 'string', 'in:' . implode(',', PricingMethod::values())],
+            'tiers'           => ['nullable', 'array', 'min:1'],
+            'tiers.*.min_qty'  => ['required', 'integer', 'min:1'],
+            'tiers.*.unit_price' => ['required', 'numeric', 'min:0'],
         ];
     }
 }

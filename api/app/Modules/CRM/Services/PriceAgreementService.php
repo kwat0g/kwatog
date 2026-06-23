@@ -6,6 +6,7 @@ namespace App\Modules\CRM\Services;
 
 use App\Common\Support\HashIdFilter;
 use App\Modules\Accounting\Models\Customer;
+use App\Modules\CRM\Enums\PricingMethod;
 use App\Modules\CRM\Exceptions\NoPriceAgreementException;
 use App\Modules\CRM\Models\PriceAgreement;
 use App\Modules\CRM\Models\Product;
@@ -90,8 +91,8 @@ class PriceAgreementService
     }
 
     /**
-     * The pricing read path. Returns the price agreement that covers the given
-     * (customer, product) on the specified date — or throws.
+     * Find the PriceAgreement covering the given (customer, product, date).
+     * Throws NoPriceAgreementException if none is found.
      */
     public function resolve(int $customerId, int $productId, CarbonInterface $date): PriceAgreement
     {
@@ -107,6 +108,33 @@ class PriceAgreementService
             throw new NoPriceAgreementException();
         }
         return $found;
+    }
+
+    /**
+     * Resolve the effective unit price for a given PriceAgreement and quantity.
+     *
+     * - If pricing_method = 'tiered' and tiers are defined, the highest tier
+     *   whose min_qty <= quantity is selected.
+     * - If no tier applies (quantity below all min_qty), the first (lowest) tier
+     *   is used as a fallback.
+     * - If pricing_method = 'flat' or tiers is null/empty, the flat price is returned.
+     */
+    public function resolveUnitPrice(PriceAgreement $agreement, int $quantity = 1): float
+    {
+        if ($agreement->pricing_method === PricingMethod::Tiered && is_array($agreement->tiers) && count($agreement->tiers) > 0) {
+            $tiers = collect($agreement->tiers)->sortByDesc('min_qty');
+            $best = $tiers->firstWhere(fn (array $t) => ($t['min_qty'] ?? 0) <= $quantity);
+
+            if ($best !== null) {
+                return (float) ($best['unit_price'] ?? $agreement->price);
+            }
+
+            // Quantity is below the smallest tier's min_qty — use the lowest tier price.
+            $lowest = $tiers->last();
+            return (float) ($lowest['unit_price'] ?? $agreement->price);
+        }
+
+        return (float) $agreement->price;
     }
 
     /**
