@@ -47,7 +47,7 @@ class Shipment extends Model
         'brokerage_fee'            => 'decimal:2',
         'other_charges'            => 'decimal:2',
         'landed_cost_total'        => 'decimal:2',
-        'landed_cost_calculated_at' => 'datetime', (feat(OGAMI-104): Landed cost calculation for inbound shipments)
+        'landed_cost_calculated_at' => 'datetime',
     ];
 
     public function purchaseOrder(): BelongsTo
@@ -73,7 +73,7 @@ class Shipment extends Model
     /** OGAMI-104 — Per-PO-line landed cost allocations. */
     public function landedCosts(): HasMany
     {
-        return $this->hasMany(ShipmentLandedCost::class); (feat(OGAMI-104): Landed cost calculation for inbound shipments)
+        return $this->hasMany(ShipmentLandedCost::class);
     }
 
     public function scopeStatus(Builder $q, ShipmentStatus|string $s): Builder
