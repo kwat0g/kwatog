@@ -25,6 +25,17 @@ class ShipmentResource extends JsonResource
             'eta'                      => optional($this->eta)?->toDateString(),
             'ata'                      => optional($this->ata)?->toDateString(),
             'customs_clearance_date'   => optional($this->customs_clearance_date)?->toDateString(),
+            // OGAMI-104 — landed cost fields.
+            'freight_cost'             => $this->freight_cost,
+            'insurance_cost'           => $this->insurance_cost,
+            'duties_amount'            => $this->duties_amount,
+            'brokerage_fee'            => $this->brokerage_fee,
+            'other_charges'            => $this->other_charges,
+            'landed_cost_total'        => $this->landed_cost_total,
+            'allocation_method'        => $this->allocation_method,
+            'landed_cost_calculated_at' => optional($this->landed_cost_calculated_at)?->toISOString(),
+            'landed_costs'             => $this->whenLoaded('landedCosts', fn () =>
+                ShipmentLandedCostResource::collection($this->landedCosts)->resolve()),
             'notes'                    => $this->notes,
             'purchase_order'           => $this->whenLoaded('purchaseOrder', fn () => $this->purchaseOrder ? [
                 'id'        => $this->purchaseOrder->hash_id,

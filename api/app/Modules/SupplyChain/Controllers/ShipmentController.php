@@ -11,6 +11,7 @@ use App\Modules\SupplyChain\Models\ShipmentDocument;
 use App\Modules\SupplyChain\Requests\CreateShipmentRequest;
 use App\Modules\SupplyChain\Resources\ShipmentDocumentResource;
 use App\Modules\SupplyChain\Resources\ShipmentResource;
+use App\Modules\SupplyChain\Services\LandedCostService;
 use App\Modules\SupplyChain\Services\ShipmentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -22,7 +23,10 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ShipmentController
 {
-    public function __construct(private readonly ShipmentService $service) {}
+    public function __construct(
+        private readonly ShipmentService $service,
+        private readonly LandedCostService $landedCostService,
+    ) {}
 
     public function index(Request $request): AnonymousResourceCollection
     {
@@ -117,6 +121,20 @@ class ShipmentController
     {
         $this->service->deleteDocument($document);
         return response()->json([], 204);
+    }
+
+    /**
+     * OGAMI-104 — Calculate and persist landed cost allocations for a shipment.
+     */
+    public function calculateLandedCost(Request $request, Shipment $shipment): ShipmentResource
+    {
+        $data = $request->validate([
+            'allocation_method' => ['nullable', 'string', Rule::in(['by_value', 'by_weight', 'by_quantity', 'manual'])],
+        ]);
+
+        return new ShipmentResource(
+            $this->landedCostService->calculate($shipment, $data['allocation_method'] ?? null)
+        );
     }
 
     public function destroy(Shipment $shipment): JsonResponse

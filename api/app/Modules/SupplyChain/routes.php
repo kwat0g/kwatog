@@ -30,6 +30,10 @@ Route::middleware(['auth:sanctum', 'feature:supply_chain'])->prefix('supply-chai
     Route::delete('/shipments/{shipment}',                  [ShipmentController::class, 'destroy'])
         ->middleware('permission:supply_chain.shipments.manage');
 
+    /* ─── OGAMI-104 — Landed cost calculation ─── */
+    Route::post('/shipments/{shipment}/calculate-landed-cost', [ShipmentController::class, 'calculateLandedCost'])
+        ->middleware('permission:supply_chain.shipments.manage');
+
     /* ─── Shipment documents ─── */
     Route::post('/shipments/{shipment}/documents',          [ShipmentController::class, 'uploadDocument'])
         ->middleware('permission:supply_chain.shipments.manage');

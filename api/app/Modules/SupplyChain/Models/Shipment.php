@@ -26,6 +26,10 @@ class Shipment extends Model
         'carrier', 'vessel', 'bl_number', 'incoterm',
         'etd', 'atd', 'eta', 'ata', 'customs_clearance_date',
         'notes', 'created_by',
+        // OGAMI-104 — landed cost fields.
+        'freight_cost', 'insurance_cost', 'duties_amount', 'brokerage_fee',
+        'other_charges', 'landed_cost_total', 'allocation_method',
+        'landed_cost_calculated_at',
     ];
 
     protected $casts = [
@@ -36,6 +40,14 @@ class Shipment extends Model
         'ata'                     => 'date',
         'customs_clearance_date'  => 'date',
         'incoterm'                => Incoterm::class,
+        // OGAMI-104 — landed cost fields.
+        'freight_cost'             => 'decimal:2',
+        'insurance_cost'           => 'decimal:2',
+        'duties_amount'            => 'decimal:2',
+        'brokerage_fee'            => 'decimal:2',
+        'other_charges'            => 'decimal:2',
+        'landed_cost_total'        => 'decimal:2',
+        'landed_cost_calculated_at' => 'datetime', (feat(OGAMI-104): Landed cost calculation for inbound shipments)
     ];
 
     public function purchaseOrder(): BelongsTo
@@ -56,6 +68,12 @@ class Shipment extends Model
     public function containers(): HasMany
     {
         return $this->hasMany(Container::class);
+    }
+
+    /** OGAMI-104 — Per-PO-line landed cost allocations. */
+    public function landedCosts(): HasMany
+    {
+        return $this->hasMany(ShipmentLandedCost::class); (feat(OGAMI-104): Landed cost calculation for inbound shipments)
     }
 
     public function scopeStatus(Builder $q, ShipmentStatus|string $s): Builder
