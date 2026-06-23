@@ -197,6 +197,10 @@ class NcrService
                 'description'  => $data['description'],
                 'performed_by' => $by->id,
                 'performed_at' => $data['performed_at'] ?? now(),
+                // CAPA: seed ownership + due date so the effectiveness loop has
+                // an accountable owner once the NCR closes.
+                'owner_id'     => $data['owner_id'] ?? $by->id,
+                'due_date'     => $data['due_date'] ?? now()->addDays(30)->toDateString(),
             ]);
             // Bump status to in_progress on first action.
             if ($ncr->status === NcrStatus::Open) {
@@ -303,6 +307,10 @@ class NcrService
             if ($ncr->disposition === NcrDisposition::ReturnToSupplier) {
                 $this->notifyPurchasing($ncr);
             }
+
+            // CAPA effectiveness loop: schedule 30-day verification checks for
+            // the corrective + preventive actions now that the NCR is closed.
+            app(EffectivenessService::class)->scheduleVerification($ncr);
 
             return $this->show($ncr);
         });
