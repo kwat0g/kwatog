@@ -160,6 +160,14 @@ class PayrollCalculatorService
                 // BIR taxable = gross - employee gov contributions
                 $taxable = Money::sub(Money::sub(Money::sub($grossPay, $sssEe), $phEe), $pgEe);
                 if (Money::lt($taxable, '0')) $taxable = Money::zero();
+
+                // De minimis benefits: the portion ABOVE the statutory limit is
+                // taxable compensation and must be added to the WHT base. The
+                // non-taxable portion is exempt and never touches tax. Guarded so
+                // the calculator works unchanged if the module isn't installed.
+                $taxable = Money::add($taxable, $this->deMinimisTaxableExcess($employee, $period));
+                if (Money::lt($taxable, '0')) $taxable = Money::zero();
+
                 $wht = $this->bir->compute($taxable, 'semi_monthly', $period->payroll_date);
             }
 
@@ -548,6 +556,33 @@ class PayrollCalculatorService
      * Salary basis used for monthly gov contribution calculations.
      * For daily-rated employees we project: daily_rate × 22 (standard PH practice).
      */
+    /**
+     * Taxable-excess de minimis for the employee in this period's month.
+     *
+     * The portion of de minimis benefits above the statutory ceiling is taxable
+     * compensation. Returns '0.00' (and never throws) when the de minimis module
+     * is absent — keeping the calculator backward compatible.
+     */
+    private function deMinimisTaxableExcess(Employee $employee, PayrollPeriod $period): string
+    {
+        if (! class_exists(\App\Modules\Payroll\Services\DeMinimisService::class)) {
+            return '0.00';
+        }
+        try {
+            $year  = (int) $period->payroll_date->format('Y');
+            $month = (int) $period->payroll_date->format('n');
+            return app(\App\Modules\Payroll\Services\DeMinimisService::class)
+                ->getTaxableExcessForEmployee($employee, $year, $month);
+        } catch (\Throwable $e) {
+            Log::warning('De minimis taxable-excess lookup failed; treating as 0', [
+                'employee_id' => $employee->id,
+                'period_id'   => $period->id,
+                'error'       => $e->getMessage(),
+            ]);
+            return '0.00';
+        }
+    }
+
     private function governmentDeductionBasis(Employee $employee, string $monthlySalary, string $dailyRate): string
     {
         $payType = $employee->pay_type instanceof \BackedEnum ? $employee->pay_type->value : (string) $employee->pay_type;

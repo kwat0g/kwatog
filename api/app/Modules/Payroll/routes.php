@@ -6,6 +6,7 @@ declare(strict_types=1);
 // Mounted automatically under /api/v1 by App\Providers\ModuleServiceProvider.
 
 use App\Modules\Payroll\Controllers\BirAlphalistController;
+use App\Modules\Payroll\Controllers\DeMinimisController;
 use App\Modules\Payroll\Controllers\DisbursementProofController;
 use App\Modules\Payroll\Controllers\GovernmentTableController;
 use App\Modules\Payroll\Controllers\PayrollAdjustmentController;
@@ -86,6 +87,14 @@ if (class_exists(PayrollPeriodController::class)) {
             Route::get('/{adjustment}',           [PayrollAdjustmentController::class, 'show'])->middleware('permission:payroll.adjustments.create');
             Route::patch('/{adjustment}/approve', [PayrollAdjustmentController::class, 'approve'])->middleware('permission:payroll.adjustments.create');
             Route::patch('/{adjustment}/reject',  [PayrollAdjustmentController::class, 'reject'])->middleware('permission:payroll.adjustments.create');
+        });
+
+        // ─── De minimis benefits ──────────────────────────────────
+        Route::prefix('de-minimis')->group(function () {
+            Route::get('/',                          [DeMinimisController::class, 'index'])->middleware('permission:payroll.view');
+            Route::post('/',                         [DeMinimisController::class, 'store'])->middleware('permission:payroll.adjustments.create');
+            Route::get('/{deMinimisBenefit}',        [DeMinimisController::class, 'show'])->middleware('permission:payroll.view');
+            Route::delete('/{deMinimisBenefit}',     [DeMinimisController::class, 'destroy'])->middleware('permission:payroll.adjustments.create');
         });
 
         // ─── Payroll anomaly flags (Task A9) ─────────────────────
