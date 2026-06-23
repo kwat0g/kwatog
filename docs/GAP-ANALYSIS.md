@@ -271,28 +271,37 @@ Only drivers have a mobile PWA. Production operators, QC inspectors, and mainten
 
 ## Prioritized build backlog (ranked by thesis + business impact)
 
-### TIER 1 — Build immediately (highest impact, lowest effort)
-| # | Feature | Module | Effort | Why |
+> **Progress (2026-06-23):** 15 of 32 backlog items SHIPPED. All Tier 1 + most
+> of Tier 2 complete and merged to main with 857 backend tests green.
+
+### TIER 1 — Build immediately (highest impact, lowest effort) — ✅ ALL DONE
+| # | Feature | Module | Effort | Status |
 |---|---|---|---|---|
-| 1 | Grace period config | Attendance | 1 day | Legally required, trivial |
-| 2 | FEFO picking | Inventory | 1 day | Resin shelf-life safety |
-| 3 | ABC classification | Inventory | 2 days | Fundamental inventory control |
-| 4 | Budget-vs-actual GL sync | Budgeting | 3 days | Makes budgeting real |
-| 5 | Forced leave forfeiture job | Leave | 3 days | Legal compliance |
-| 6 | Landed cost calculation | Supply Chain | 1 week | Accurate inventory valuation |
-| 7 | Credit note auto-create | Return Mgmt | 2 days | Completes the RMA financial loop |
-| 8 | Return → Quality inspection link | Return Mgmt | 3 days | Quality traceability on returns |
+| 1 | Grace period config | Attendance | 1 day | ✅ shipped (`cf491c0`) |
+| 2 | FEFO picking | Inventory | 1 day | ✅ shipped (`9b54b00`) |
+| 3 | ABC classification | Inventory | 2 days | ✅ shipped (`ff08115`) |
+| 4 | Budget-vs-actual GL sync | Budgeting | 3 days | ✅ shipped (`575c67a`) |
+| 5 | Forced leave forfeiture job | Leave | 3 days | ✅ shipped (`5f98df5`) |
+| 6 | Landed cost calculation | Supply Chain | 1 week | ✅ shipped (`99198d3`) |
+| 7 | Credit note auto-create | Return Mgmt | 2 days | ✅ shipped (`8804245`) |
+| 8 | Return → Quality inspection link | Return Mgmt | 3 days | ✅ shipped (`a912643`) |
 
 ### TIER 2 — Build next (high impact, moderate effort)
-| # | Feature | Module | Effort | Why |
+| # | Feature | Module | Effort | Status |
 |---|---|---|---|---|
-| 9 | Skills matrix | HR | 1 week | IATF operator competence |
-| 10 | Sales pipeline (Lead/Oppty/Quote) | CRM | 2 weeks | Complete sales funnel |
-| 11 | Price tiers / volume discounts | CRM | 3 days | Toyota/Nissan volume pricing |
-| 12 | Container tracking | Supply Chain | 1 week | Multi-container imports |
-| 13 | BI device API integration | Attendance | 1 week | Eliminates manual CSV export |
-| 14 | De minimis benefits tracker | Payroll | 3 days | PH tax compliance edge case |
-| 15 | Multi-format bank file | Payroll | 2 days | Supports major PH banks |
+| 9 | Skills matrix | HR | 1 week | ✅ shipped (`e5fcaa4`) |
+| 10 | Sales pipeline (Lead/Oppty/Quote) | CRM | 2 weeks | ⬜ pending |
+| 11 | Price tiers / volume discounts | CRM | 3 days | ✅ shipped (`aa7b14e`) |
+| 12 | Container tracking | Supply Chain | 1 week | ✅ shipped (`40b4e5c`) |
+| 13 | BI device API integration | Attendance | 1 week | ⬜ pending |
+| 14 | De minimis benefits tracker | Payroll | 3 days | ✅ shipped (`ad5bb7b`) |
+| 15 | Multi-format bank file | Payroll | 2 days | ✅ shipped (`3851737`) |
+
+### Also shipped (from Tier 4)
+| # | Feature | Module | Status |
+|---|---|---|---|
+| 24 | Customer statement of account | CRM/Accounting | ✅ shipped (`260d65b`) |
+| — | Incoterm support (PO/SO/Shipment) | Supply Chain | ✅ shipped (`dbc6ef5`) |
 
 ### TIER 3 — Thesis differentiators (high impact, higher effort)
 | # | Feature | Module | Effort | Why |
