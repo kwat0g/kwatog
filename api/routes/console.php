@@ -213,3 +213,11 @@ Schedule::command('notifications:send-digest')
     ->dailyAt('07:05')
     ->withoutOverlapping()
     ->onOneServer();
+
+// OGAMI-104 — Year-end leave forfeiture/conversion. Scheduled Dec 31 at 23:00
+// so it runs just before the year rolls over. Idempotent via
+// processed_year_end_leave_types table, so re-runs are safe no-ops.
+Schedule::command('leave:process-year-end')
+    ->yearlyOn(12, 31, '23:00')
+    ->withoutOverlapping()
+    ->onOneServer();

@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\Leave\Controllers;
 
+use App\Modules\Leave\Jobs\ProcessYearEndLeave;
 use App\Modules\Leave\Models\LeaveType;
+use App\Modules\Leave\Requests\ProcessYearEndLeaveRequest;
 use App\Modules\Leave\Requests\StoreLeaveTypeRequest;
 use App\Modules\Leave\Requests\UpdateLeaveTypeRequest;
 use App\Modules\Leave\Resources\LeaveTypeResource;
@@ -42,5 +44,20 @@ class LeaveTypeController
     {
         $this->service->delete($leaveType);
         return response()->json(null, 204);
+    }
+
+    /** OGAMI-104 — Manually trigger year-end leave forfeiture/conversion. */
+    public function processYearEnd(ProcessYearEndLeaveRequest $request): JsonResponse
+    {
+        $job = new ProcessYearEndLeave(
+            runBy: $request->user(),
+            year: $request->integer('year') ?: null,
+        );
+
+        dispatch($job);
+
+        return response()->json([
+            'message' => 'Year-end leave processing has been queued.',
+        ]);
     }
 }

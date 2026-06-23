@@ -15,6 +15,9 @@ Route::middleware(['auth:sanctum', 'feature:leave'])->prefix('leaves')->group(fu
     Route::put('/types/{leaveType}',     [LeaveTypeController::class, 'update'])->middleware('permission:leave.types.manage');
     Route::delete('/types/{leaveType}',  [LeaveTypeController::class, 'destroy'])->middleware('permission:leave.types.manage');
 
+    // Year-end processing (OGAMI-104)
+    Route::post('/process-year-end', [LeaveTypeController::class, 'processYearEnd'])->middleware('permission:leave.types.manage');
+
     // Balances
     Route::get('/balances/me',                [LeaveBalanceController::class, 'me'])->middleware('permission:leave.view');
     Route::get('/balances/{employee}',        [LeaveBalanceController::class, 'forEmployee'])->middleware('permission:leave.view');
