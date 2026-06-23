@@ -265,6 +265,21 @@ class PurchaseOrderService
             $this->budget->enforce($deptId, (float) $po->total_amount);
         }
 
+        // PPAP gate (opt-in via quality.ppap_gate_enabled; default off = no-op).
+        // Block approval if any line item's vendor has a registered-but-unapproved
+        // PPAP. Items never put under PPAP control pass through.
+        if (config('quality.ppap_gate_enabled', false)
+            && class_exists(\App\Modules\Quality\Services\PpapService::class)) {
+            $ppap = app(\App\Modules\Quality\Services\PpapService::class);
+            foreach ($po->items()->get() as $line) {
+                if ($line->item_id && ! $ppap->vendorHasActivePpap((int) $po->vendor_id, (int) $line->item_id)) {
+                    throw new RuntimeException(
+                        "Vendor has no approved PPAP for item #{$line->item_id}. Approve the PPAP submission before this PO."
+                    );
+                }
+            }
+        }
+
         $result = DB::transaction(function () use ($po, $by, $remarks) {
             $this->approvals->approve($po, $by, $remarks);
             $becameApproved = false;

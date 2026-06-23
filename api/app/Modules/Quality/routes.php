@@ -12,6 +12,7 @@ use App\Modules\Quality\Controllers\InspectionSpecController;
 use App\Modules\Quality\Controllers\NcrController;
 use App\Modules\Quality\Controllers\EffectivenessController;
 use App\Modules\Quality\Controllers\NcrTemplateController;
+use App\Modules\Quality\Controllers\PpapController;
 use App\Modules\Quality\Controllers\ShipmentLotController;
 use App\Modules\Quality\Controllers\TraceabilityController;
 use Illuminate\Support\Facades\Route;
@@ -147,6 +148,17 @@ Route::middleware(['auth:sanctum', 'feature:quality'])->prefix('quality')->group
         ->middleware('permission:quality.documents.manage');
     Route::post('/documents/{document}/mark-reviewed',        [DocumentController::class, 'markReviewed'])
         ->middleware('permission:quality.documents.manage');
+
+    /* ─── PPAP & APQP tracking (IATF 16949) ─── */
+    Route::get('/ppap',                       [PpapController::class, 'index'])  ->middleware('permission:quality.ppap.view');
+    Route::post('/ppap',                      [PpapController::class, 'store'])  ->middleware('permission:quality.ppap.manage');
+    Route::get('/ppap/{ppap}',                [PpapController::class, 'show'])   ->middleware('permission:quality.ppap.view');
+    Route::put('/ppap/{ppap}',                [PpapController::class, 'update']) ->middleware('permission:quality.ppap.manage');
+    Route::patch('/ppap/{ppap}/submit',       [PpapController::class, 'submit']) ->middleware('permission:quality.ppap.manage');
+    Route::patch('/ppap/{ppap}/review',       [PpapController::class, 'review']) ->middleware('permission:quality.ppap.manage');
+    Route::patch('/ppap/{ppap}/approve',      [PpapController::class, 'approve'])->middleware('permission:quality.ppap.manage');
+    Route::patch('/ppap/{ppap}/reject',       [PpapController::class, 'reject']) ->middleware('permission:quality.ppap.manage');
+    Route::patch('/ppap/{ppap}/elements/{element}', [PpapController::class, 'updateElement'])->middleware('permission:quality.ppap.manage');
 });
 
 /* ─── T3.5.C — Self-service document acknowledgments ─── */

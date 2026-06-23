@@ -26,7 +26,7 @@ class PpapService
 
     public function list(array $filters): LengthAwarePaginator
     {
-        $q = PpapSubmission::query()->with(['vendor:id,name', 'item:id,item_code,name', 'elements']);
+        $q = PpapSubmission::query()->with(['vendor:id,name', 'item:id,code,name', 'elements']);
 
         if (! empty($filters['status'])) {
             $q->where('status', $filters['status']);
@@ -49,7 +49,7 @@ class PpapService
     public function show(PpapSubmission $ppap): PpapSubmission
     {
         return $ppap->load([
-            'vendor:id,name', 'item:id,item_code,name', 'product:id,name',
+            'vendor:id,name', 'item:id,code,name', 'product:id,name',
             'purchaseOrder:id,po_number', 'submitter:id,name', 'reviewer:id,name',
             'approver:id,name', 'elements',
         ]);
