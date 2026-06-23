@@ -17,6 +17,7 @@ class BankFileRecord extends Model
     protected $fillable = [
         'payroll_period_id',
         'file_path',
+        'format',
         'record_count',
         'total_amount',
         'generated_by',
@@ -27,6 +28,7 @@ class BankFileRecord extends Model
     protected $casts = [
         'record_count' => 'integer',
         'total_amount' => 'decimal:2',
+        'format'       => 'string',
         'generated_at' => 'datetime',
         'created_at'   => 'datetime',
     ];

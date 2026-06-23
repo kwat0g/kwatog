@@ -146,9 +146,35 @@ class PayrollPeriodController
         if (! class_exists(\App\Modules\Payroll\Services\BankFileService::class)) {
             return response()->json(['message' => 'Bank file service not yet available.'], 503);
         }
+
+        $validated = $request->validate([
+            'format' => ['sometimes', 'string', 'in:generic,bdo,bpi,metrobank'],
+        ]);
+
         /** @var \App\Modules\Payroll\Services\BankFileService $svc */
         $svc = app(\App\Modules\Payroll\Services\BankFileService::class);
-        return $svc->stream($period, $request->user());
+        return $svc->stream($period, $request->user(), $validated['format'] ?? 'generic');
+    }
+
+    /**
+     * GET /payroll-periods/{period}/bank-file/preview?format=bdo
+     * Returns the first 3 rows of the selected bank file format as JSON.
+     */
+    public function bankFilePreview(PayrollPeriod $period, Request $request): JsonResponse
+    {
+        if (! class_exists(\App\Modules\Payroll\Services\BankFileService::class)) {
+            return response()->json(['message' => 'Bank file service not yet available.'], 503);
+        }
+
+        $validated = $request->validate([
+            'format' => ['sometimes', 'string', 'in:generic,bdo,bpi,metrobank'],
+        ]);
+
+        /** @var \App\Modules\Payroll\Services\BankFileService $svc */
+        $svc = app(\App\Modules\Payroll\Services\BankFileService::class);
+        $preview = $svc->preview($period, $validated['format'] ?? 'generic');
+
+        return response()->json(['data' => $preview]);
     }
 
     public function runThirteenthMonth(RunThirteenthMonthRequest $request): JsonResponse
