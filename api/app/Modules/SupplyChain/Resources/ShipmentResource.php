@@ -19,6 +19,7 @@ class ShipmentResource extends JsonResource
             'vessel'                   => $this->vessel,
             'container_number'         => $this->container_number,
             'bl_number'                => $this->bl_number,
+            'incoterm'                 => $this->incoterm?->value,
             'etd'                      => optional($this->etd)?->toDateString(),
             'atd'                      => optional($this->atd)?->toDateString(),
             'eta'                      => optional($this->eta)?->toDateString(),

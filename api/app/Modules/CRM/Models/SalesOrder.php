@@ -10,6 +10,7 @@ use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Enums\SalesOrderStatus;
+use App\Modules\SupplyChain\Enums\Incoterm;
 use App\Modules\SupplyChain\Models\Delivery;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -29,7 +30,7 @@ class SalesOrder extends Model
     protected $fillable = [
         'so_number', 'customer_id', 'date', 'subtotal', 'vat_amount',
         'total_amount', 'status', 'payment_terms_days', 'delivery_terms',
-        'notes', 'mrp_plan_id', 'created_by',
+        'notes', 'mrp_plan_id', 'created_by', 'incoterm',
     ];
 
     protected $casts = [
@@ -40,6 +41,7 @@ class SalesOrder extends Model
         'status'             => SalesOrderStatus::class,
         'payment_terms_days' => 'integer',
         'mrp_plan_id'        => 'integer',
+        'incoterm'           => Incoterm::class,
     ];
 
     public function customer(): BelongsTo

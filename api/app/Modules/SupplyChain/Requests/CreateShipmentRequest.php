@@ -30,6 +30,7 @@ class CreateShipmentRequest extends FormRequest
             'vessel'            => ['nullable', 'string', 'max:100'],
             'container_number'  => ['nullable', 'string', 'max:32'],
             'bl_number'         => ['nullable', 'string', 'max:32'],
+            'incoterm'          => ['nullable', 'string', 'in:EXW,FCA,FAS,FOB,CFR,CIF,CPT,CIP,DAP,DPU,DDP'],
             'etd'               => ['nullable', 'date'],
             'eta'               => ['nullable', 'date'],
             'notes'             => ['nullable', 'string', 'max:2000'],

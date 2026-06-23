@@ -28,6 +28,7 @@ class UpdatePurchaseOrderRequest extends FormRequest
             'date'                   => ['nullable', 'date'],
             'expected_delivery_date' => ['nullable', 'date'],
             'is_vatable'             => ['nullable', 'boolean'],
+            'incoterm'               => ['nullable', 'string', 'in:EXW,FCA,FAS,FOB,CFR,CIF,CPT,CIP,DAP,DPU,DDP'],
             'remarks'                => ['nullable', 'string', 'max:1000'],
             'items'                  => ['nullable', 'array', 'min:1'],
             'items.*.item_id'        => ['required_with:items', 'integer', 'exists:items,id'],

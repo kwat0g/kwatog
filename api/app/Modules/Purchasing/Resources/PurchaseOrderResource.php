@@ -30,6 +30,7 @@ class PurchaseOrderResource extends JsonResource
             'approved_at'            => optional($this->approved_at)->toIso8601String(),
             'sent_to_supplier_at'    => optional($this->sent_to_supplier_at)->toIso8601String(),
             'remarks'                => $this->remarks,
+            'incoterm'               => $this->incoterm?->value,
             'quantity_received_pct'  => $this->quantity_received_percent,
             'vendor'                 => $this->whenLoaded('vendor', fn () => [
                 'id'             => $this->vendor->hash_id,

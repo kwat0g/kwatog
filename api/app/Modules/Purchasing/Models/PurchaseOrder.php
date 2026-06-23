@@ -12,6 +12,7 @@ use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
+use App\Modules\SupplyChain\Enums\Incoterm;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -32,7 +33,7 @@ class PurchaseOrder extends Model
         'date', 'expected_delivery_date',
         'subtotal', 'vat_amount', 'total_amount', 'is_vatable',
         'requires_vp_approval',
-        'created_by', 'remarks',
+        'created_by', 'remarks', 'incoterm',
         'is_auto_generated',
     ];
 
@@ -49,6 +50,7 @@ class PurchaseOrder extends Model
         'approved_at'            => 'datetime',
         'sent_to_supplier_at'    => 'datetime',
         'is_auto_generated'      => 'boolean',
+        'incoterm'               => Incoterm::class,
     ];
 
     public function vendor(): BelongsTo

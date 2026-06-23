@@ -22,6 +22,7 @@ class SalesOrderResource extends JsonResource
             'status_label'       => $this->status?->label(),
             'payment_terms_days' => (int) $this->payment_terms_days,
             'delivery_terms'     => $this->delivery_terms,
+            'incoterm'           => $this->incoterm?->value,
             'notes'              => $this->notes,
             'is_editable'        => (bool) $this->is_editable,
             'is_cancellable'     => (bool) $this->is_cancellable,

@@ -8,6 +8,7 @@ use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\Auth\Models\User;
 use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\SupplyChain\Enums\Incoterm;
 use App\Modules\SupplyChain\Enums\ShipmentStatus;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -22,7 +23,7 @@ class Shipment extends Model
 
     protected $fillable = [
         'shipment_number', 'purchase_order_id', 'status',
-        'carrier', 'vessel', 'container_number', 'bl_number',
+        'carrier', 'vessel', 'container_number', 'bl_number', 'incoterm',
         'etd', 'atd', 'eta', 'ata', 'customs_clearance_date',
         'notes', 'created_by',
     ];
@@ -34,6 +35,7 @@ class Shipment extends Model
         'eta'                     => 'date',
         'ata'                     => 'date',
         'customs_clearance_date'  => 'date',
+        'incoterm'                => Incoterm::class,
     ];
 
     public function purchaseOrder(): BelongsTo

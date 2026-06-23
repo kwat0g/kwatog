@@ -36,6 +36,7 @@ class StorePurchaseOrderRequest extends FormRequest
             'date'                   => ['nullable', 'date'],
             'expected_delivery_date' => ['nullable', 'date', 'after_or_equal:date'],
             'is_vatable'             => ['nullable', 'boolean'],
+            'incoterm'               => ['nullable', 'string', 'in:EXW,FCA,FAS,FOB,CFR,CIF,CPT,CIP,DAP,DPU,DDP'],
             'remarks'                => ['nullable', 'string', 'max:1000'],
             'items'                  => ['required', 'array', 'min:1'],
             'items.*.item_id'        => ['required', 'integer', 'exists:items,id'],

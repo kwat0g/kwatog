@@ -33,6 +33,7 @@ class UpdateSalesOrderRequest extends FormRequest
             'date'                     => ['sometimes', 'required', 'date'],
             'payment_terms_days'       => ['nullable', 'integer', 'min:0', 'max:365'],
             'delivery_terms'           => ['nullable', 'string', 'max:50'],
+            'incoterm'                 => ['nullable', 'string', 'in:EXW,FCA,FAS,FOB,CFR,CIF,CPT,CIP,DAP,DPU,DDP'],
             'notes'                    => ['nullable', 'string', 'max:2000'],
             'items'                    => ['required', 'array', 'min:1'],
             'items.*.product_id'       => ['required', 'integer', 'exists:products,id'],
