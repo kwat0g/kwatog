@@ -416,7 +416,7 @@ class RolePermissionSeeder extends Seeder
                     $this->module('production'),
                     $this->selfService(),
                     [
-                        'mrp.view', 'mrp.schedule',
+                        'mrp.view', 'mrp.schedule', 'mrp.boms.view',
                         'inventory.view',
                         // Quality: view + read sub-resources for quality dashboard / NCR/inspection pages
                         'quality.view', 'quality.inspections.view', 'quality.ncr.view',
@@ -456,7 +456,7 @@ class RolePermissionSeeder extends Seeder
                     $this->module('purchasing', except: ['purchasing.po.sod_override']),
                     $this->selfService(),
                     [
-                        'inventory.view', 'inventory.grn.create', 'supply_chain.shipments.manage',
+                        'inventory.view', 'inventory.grn.create', 'supply_chain.view', 'supply_chain.shipments.manage',
                         'accounting.vendors.view', 'accounting.bills.view',
                         'forecasting.view',
                         'return_management.view', 'return_management.manage',

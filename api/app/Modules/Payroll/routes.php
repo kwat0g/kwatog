@@ -80,9 +80,9 @@ if (class_exists(PayrollPeriodController::class)) {
         });
 
         Route::prefix('payroll-adjustments')->group(function () {
-            Route::get('/',                       [PayrollAdjustmentController::class, 'index'])->middleware('permission:payroll.view');
+            Route::get('/',                       [PayrollAdjustmentController::class, 'index'])->middleware('permission:payroll.adjustments.create');
             Route::post('/',                      [PayrollAdjustmentController::class, 'store'])->middleware('permission:payroll.adjustments.create');
-            Route::get('/{adjustment}',           [PayrollAdjustmentController::class, 'show'])->middleware('permission:payroll.view');
+            Route::get('/{adjustment}',           [PayrollAdjustmentController::class, 'show'])->middleware('permission:payroll.adjustments.create');
             Route::patch('/{adjustment}/approve', [PayrollAdjustmentController::class, 'approve'])->middleware('permission:payroll.adjustments.create');
             Route::patch('/{adjustment}/reject',  [PayrollAdjustmentController::class, 'reject'])->middleware('permission:payroll.adjustments.create');
         });
