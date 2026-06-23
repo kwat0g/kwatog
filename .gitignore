@@ -41,3 +41,4 @@ api/.phpunit.result.cache
 docker-compose.override.yml
 /backups/
 .claude/worktrees/
+graphify-out/

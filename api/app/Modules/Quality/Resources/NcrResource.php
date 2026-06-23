@@ -54,6 +54,10 @@ class NcrResource extends JsonResource
                 'quantity_target' => (int) $this->replacementWorkOrder->quantity_target,
             ] : null),
             'actions'            => $this->whenLoaded('actions', fn () => NcrActionResource::collection($this->actions)->resolve()),
+            // CAPA effectiveness rollup.
+            'effectiveness_status'       => $this->effectiveness_status instanceof \BackedEnum ? $this->effectiveness_status->value : $this->effectiveness_status,
+            'effectiveness_status_label' => $this->effectiveness_status instanceof \App\Modules\Quality\Enums\EffectivenessStatus ? $this->effectiveness_status->label() : null,
+            'effectiveness_closed_at'    => optional($this->effectiveness_closed_at)?->toISOString(),
             'created_at'         => optional($this->created_at)?->toISOString(),
             'updated_at'         => optional($this->updated_at)?->toISOString(),
         ];

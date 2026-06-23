@@ -228,3 +228,10 @@ Schedule::command('notifications:send-digest')
 	    ->monthlyOn(1, '03:00')
 	    ->withoutOverlapping()
 	    ->onOneServer();
+
+// CAPA effectiveness loop (IATF 16949 §10.2.1) — notify owners of due/overdue
+// verification checks daily at 02:05. Idempotent.
+Schedule::command('ncr:check-effectiveness')
+    ->dailyAt('02:05')
+    ->withoutOverlapping()
+    ->onOneServer();

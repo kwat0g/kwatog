@@ -10,6 +10,7 @@ use App\Modules\Quality\Controllers\DocumentController;
 use App\Modules\Quality\Controllers\InspectionController;
 use App\Modules\Quality\Controllers\InspectionSpecController;
 use App\Modules\Quality\Controllers\NcrController;
+use App\Modules\Quality\Controllers\EffectivenessController;
 use App\Modules\Quality\Controllers\NcrTemplateController;
 use App\Modules\Quality\Controllers\ShipmentLotController;
 use App\Modules\Quality\Controllers\TraceabilityController;
@@ -89,11 +90,18 @@ Route::middleware(['auth:sanctum', 'feature:quality'])->prefix('quality')->group
     Route::post('/ncrs/bulk-close',                             [NcrController::class, 'bulkClose'])
         ->middleware('permission:quality.ncr.manage');
 
+    // CAPA effectiveness — literal segment, must precede /ncrs/{ncr}.
+    Route::get('/ncrs/effectiveness/due',                       [EffectivenessController::class, 'dueIndex'])
+        ->middleware('permission:quality.ncr.view');
+
     Route::get('/ncrs/{ncr}',                                   [NcrController::class, 'show'])
         ->middleware('permission:quality.ncr.view');
     Route::post('/ncrs',                                        [NcrController::class, 'store'])
         ->middleware('permission:quality.ncr.manage');
     Route::post('/ncrs/{ncr}/actions',                          [NcrController::class, 'addAction'])
+        ->middleware('permission:quality.ncr.manage');
+    // CAPA — record an effectiveness verdict on a corrective/preventive action.
+    Route::patch('/ncrs/{ncr}/actions/{action}/verify',        [EffectivenessController::class, 'verify'])
         ->middleware('permission:quality.ncr.manage');
     Route::patch('/ncrs/{ncr}/disposition',                     [NcrController::class, 'setDisposition'])
         ->middleware('permission:quality.ncr.manage');
