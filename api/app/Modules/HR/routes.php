@@ -97,6 +97,41 @@ Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function 
             ->middleware('permission:hr.trainings.manage');
     });
 
+    // Skills Matrix (IATF 16949 operator competence tracking).
+    Route::prefix('skills')->group(function () {
+        // Literal segments BEFORE {skill} binding.
+        Route::get('/matrix',       [\App\Modules\HR\Controllers\EmployeeSkillController::class, 'matrix'])
+            ->middleware('permission:hr.trainings.view');
+        Route::get('/gap-analysis', [\App\Modules\HR\Controllers\EmployeeSkillController::class, 'gapAnalysis'])
+            ->middleware('permission:hr.trainings.view');
+
+        Route::get('/',              [\App\Modules\HR\Controllers\SkillController::class, 'index'])
+            ->middleware('permission:hr.trainings.view');
+        Route::post('/',             [\App\Modules\HR\Controllers\SkillController::class, 'store'])
+            ->middleware('permission:hr.trainings.manage');
+        Route::get('/{skill}',       [\App\Modules\HR\Controllers\SkillController::class, 'show'])
+            ->middleware('permission:hr.trainings.view');
+        Route::patch('/{skill}',     [\App\Modules\HR\Controllers\SkillController::class, 'update'])
+            ->middleware('permission:hr.trainings.manage');
+        Route::patch('/{skill}/deactivate', [\App\Modules\HR\Controllers\SkillController::class, 'deactivate'])
+            ->middleware('permission:hr.trainings.manage');
+    });
+
+    // Employee skill assignments.
+    Route::prefix('employees/{employee}/skills')->group(function () {
+        Route::get('/',  [\App\Modules\HR\Controllers\EmployeeSkillController::class, 'index'])
+            ->middleware('permission:hr.employees.trainings.view');
+        Route::post('/', [\App\Modules\HR\Controllers\EmployeeSkillController::class, 'store'])
+            ->middleware('permission:hr.employees.trainings.manage');
+    });
+
+    Route::prefix('employee-skills')->group(function () {
+        Route::patch('/{employeeSkill}',  [\App\Modules\HR\Controllers\EmployeeSkillController::class, 'update'])
+            ->middleware('permission:hr.employees.trainings.manage');
+        Route::delete('/{employeeSkill}', [\App\Modules\HR\Controllers\EmployeeSkillController::class, 'destroy'])
+            ->middleware('permission:hr.employees.trainings.manage');
+    });
+
     // U3 (HR side) — review queue for profile-update requests.
     Route::prefix('profile-update-requests')->group(function () {
         Route::get('/', [ProfileUpdateReviewController::class, 'index'])

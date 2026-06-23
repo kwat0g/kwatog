@@ -112,6 +112,11 @@ class Employee extends Model
         return $this->hasMany(EmployeeProperty::class)->orderByDesc('date_issued');
     }
 
+    public function skills(): HasMany
+    {
+        return $this->hasMany(EmployeeSkill::class);
+    }
+
     // ─── Scopes ────────────────────────────────────
     public function scopeActive(Builder $q): Builder
     {
