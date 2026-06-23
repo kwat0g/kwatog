@@ -9,13 +9,17 @@ use App\Modules\Accounting\Requests\StoreCustomerRequest;
 use App\Modules\Accounting\Requests\UpdateCustomerRequest;
 use App\Modules\Accounting\Resources\CustomerResource;
 use App\Modules\Accounting\Services\CustomerService;
+use App\Modules\Accounting\Services\StatementOfAccountService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class CustomerController
 {
-    public function __construct(private readonly CustomerService $service) {}
+    public function __construct(
+        private readonly CustomerService $service,
+        private readonly StatementOfAccountService $soa,
+    ) {}
 
     public function index(Request $request): AnonymousResourceCollection
     {
@@ -49,5 +53,18 @@ class CustomerController
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return response()->json(null, 204);
+    }
+
+    /**
+     * GET /api/v1/accounting/customers/{customer}/statement-of-account
+     * Generate a customer statement of account with running balance and aging.
+     */
+    public function statementOfAccount(Customer $customer, Request $request): JsonResponse
+    {
+        $asOf = $request->query('as_of');
+
+        $result = $this->soa->forCustomer($customer, $asOf);
+
+        return response()->json(['data' => $result]);
     }
 }

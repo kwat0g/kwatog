@@ -71,6 +71,8 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
         Route::post('/',          [CustomerController::class, 'store'])  ->middleware('permission:accounting.customers.manage');
         Route::put('/{customer}', [CustomerController::class, 'update']) ->middleware('permission:accounting.customers.manage');
         Route::delete('/{customer}',[CustomerController::class, 'destroy'])->middleware('permission:accounting.customers.manage');
+        Route::get('/{customer}/statement-of-account', [CustomerController::class, 'statementOfAccount'])
+            ->middleware('permission:accounting.invoices.view');
     });
     Route::prefix('invoices')->group(function () {
         Route::get('/',           [InvoiceController::class, 'index']) ->middleware('permission:accounting.invoices.view');
@@ -103,7 +105,6 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
         Route::get('/overview',                       [BudgetController::class, 'overview'])     ->middleware('permission:budgeting.view');
         Route::get('/budget-vs-actual',               [BudgetController::class, 'budgetVsActual'])->middleware('permission:budgeting.view');
         Route::get('/check-availability',             [BudgetController::class, 'checkAvailability'])->middleware('permission:budgeting.view');
-        Route::post('/sync-actuals',                  [BudgetController::class, 'syncActuals'])  ->middleware('permission:budgeting.manage');
         Route::get('/{budget}',                       [BudgetController::class, 'show'])         ->middleware('permission:budgeting.view');
         Route::post('/',                              [BudgetController::class, 'store'])        ->middleware('permission:budgeting.manage');
         Route::put('/{budget}',                       [BudgetController::class, 'update'])       ->middleware('permission:budgeting.manage');

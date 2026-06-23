@@ -7,6 +7,7 @@ namespace App\Modules\B2B\Controllers;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Resources\InvoiceResource;
 use App\Modules\Accounting\Services\PdfService;
+use App\Modules\Accounting\Services\StatementOfAccountService;
 use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\B2B\Models\DeliverySchedule;
 use App\Modules\B2B\Requests\Customer\CreateComplaintRequest;
@@ -27,6 +28,7 @@ class CustomerPortalController extends Controller
     public function __construct(
         private readonly PdfService $pdf,
         private readonly SalesOrderService $salesOrderService,
+        private readonly StatementOfAccountService $soa,
     ) {}
 
     private function user(Request $request): CustomerPortalUser
@@ -57,7 +59,6 @@ class CustomerPortalController extends Controller
             ->whereIn('status', ['sent', 'overdue', 'partial'])->sum('balance');
 
         $recentOrders = SalesOrder::where('customer_id', $customerId)
-            ->withCount('items')
             ->orderByDesc('created_at')->limit(5)->get();
 
         $recentInvoices = Invoice::where('customer_id', $customerId)
@@ -298,47 +299,22 @@ class CustomerPortalController extends Controller
 
     /**
      * GET /api/v1/b2b/customer/statement-of-account
-     * Customer financial summary with aging buckets and open invoices.
+     * Customer statement of account with running balance, transactions, and aging.
      */
     public function statementOfAccount(Request $request): JsonResponse
     {
         $user = $this->user($request);
-        $customerId = $user->customer_id;
 
-        $openInvoices = Invoice::where('customer_id', $customerId)
-            ->whereIn('status', ['sent', 'overdue', 'partial', 'finalized'])
-            ->with(['salesOrder:id,so_number'])
-            ->orderBy('due_date')
-            ->get();
+        $customer = $user->customer;
 
-        $agingBuckets = [
-            'current'  => 0,
-            'd1_30'    => 0,
-            'd31_60'   => 0,
-            'd61_90'   => 0,
-            'd91_plus' => 0,
-        ];
-
-        $totalOutstanding = 0;
-
-        foreach ($openInvoices as $inv) {
-            $balance = (float) $inv->balance;
-            $bucket = $inv->agingBucket();
-            if (isset($agingBuckets[$bucket])) {
-                $agingBuckets[$bucket] += $balance;
-            }
-            $totalOutstanding += $balance;
+        if (! $customer) {
+            return response()->json(['message' => 'Customer not found.'], 404);
         }
 
-        return response()->json([
-            'data' => [
-                'customer_name'    => $user->customer?->name,
-                'total_outstanding'=> number_format($totalOutstanding, 2),
-                'aging_buckets'    => array_map(fn ($v) => number_format($v, 2), $agingBuckets),
-                'open_invoices'    => InvoiceResource::collection($openInvoices),
-                'as_of_date'       => now()->toDateString(),
-            ],
-        ]);
+        $asOf = $request->query('as_of');
+        $result = $this->soa->forCustomer($customer, $asOf);
+
+        return response()->json(['data' => $result]);
     }
 
     /**
