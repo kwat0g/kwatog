@@ -7,14 +7,18 @@ namespace App\Modules\Inventory\Services;
 use App\Modules\Inventory\Models\MaterialIssueSlip;
 use App\Modules\Inventory\Models\MaterialIssueSlipItem;
 use App\Modules\Inventory\Models\StockLevel;
+use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\DB;
 
 class PickingListService
 {
     /**
      * Generate a picking list for a Material Issue Slip.
-     * Suggests optimal bin locations based on FIFO (oldest stock first).
+     * Suggests optimal bin locations based on FEFO (first-expiry-first-out, oldest
+     * expiry date first), falling back to FIFO (oldest stock first) for items
+     * without expiry dates.
      */
     public function generateForMis(int $misId): array
     {
@@ -104,16 +108,35 @@ class PickingListService
     }
 
     /**
-     * Find best locations for picking an item, using FIFO (oldest stock first).
+     * Find best locations for picking an item, using FEFO (first-expiry-first-out).
+     *
+     * Sort order:
+     * 1. Stock WITH an expiry_date first (prioritise expiring stock).
+     * 2. Within expiring stock, earliest expiry_date first.
+     * 3. Non-expiring stock (no expiry_date) last, ordered by created_at (FIFO).
+     *
+     * Fallback: when no stock in the item has any expiry_date, plain FIFO by
+     * created_at is preserved.
      */
     private function findBestLocations(int $itemId, string $requiredQty): array
     {
-        // Get stock levels with available quantity > 0, ordered by oldest stock first (FIFO)
+        $expirySub = $this->buildExpirySubquery($itemId);
+
+        // Get stock levels with available quantity > 0, ordered by expiry then FIFO.
         $stockLevels = StockLevel::query()
             ->where('item_id', $itemId)
             ->whereRaw('(quantity - reserved_quantity) > 0')
             ->with('location.zone.warehouse')
-            ->orderBy('created_at')  // FIFO — oldest stock first
+            ->leftJoinSub($expirySub, 'expiry_info', function ($join) {
+                $join->on('stock_levels.location_id', '=', 'expiry_info.location_id');
+            })
+            ->select([
+                'stock_levels.*',
+                'expiry_info.earliest_expiry_date',
+            ])
+            ->orderByRaw('CASE WHEN expiry_info.earliest_expiry_date IS NULL THEN 1 ELSE 0 END')  // expiring first
+            ->orderBy('expiry_info.earliest_expiry_date')                                          // earliest expiry first
+            ->orderBy('stock_levels.created_at')                                                   // fallback FIFO
             ->get();
 
         $suggestions = [];
@@ -128,7 +151,8 @@ class PickingListService
             if (bccomp($available, '0', 3) <= 0) continue;
 
             $pickQty = bccomp($remaining, $available, 3) <= 0 ? $remaining : $available;
-            $suggestions[] = [
+
+            $suggestion = [
                 'location' => [
                     'id'        => $sl->location->id,
                     'code'      => $sl->location->code,
@@ -143,9 +167,42 @@ class PickingListService
                 'lot_number'         => $sl->location->current_lot_number,
             ];
 
+            // Annotate FEFO info when the stock at this location has an expiry date.
+            if ($sl->earliest_expiry_date) {
+                $suggestion['picking_method'] = 'FEFO';
+                $suggestion['expires_on'] = $sl->earliest_expiry_date;
+            } else {
+                $suggestion['picking_method'] = 'FIFO';
+            }
+
+            $suggestions[] = $suggestion;
+
             $remaining = bcsub((string) $remaining, (string) $pickQty, 3);
         }
 
         return $suggestions;
+    }
+
+    /**
+     * Build a subquery that returns the earliest expiry_date per location
+     * for the given item, based on inbound StockMovement rows.
+     *
+     * When a GRN is accepted, StockMovementService::move() creates a receipt
+     * movement and StockMovementService::stampLot() copies the GrnItem.expiry_date
+     * onto StockMovement.expiry_date. This subquery aggregates those inbound
+     * movements (per item + location) to find the soonest-expiring lot at each
+     * location.
+     */
+    private function buildExpirySubquery(int $itemId): \Illuminate\Database\Query\Builder
+    {
+        return StockMovement::query()
+            ->select([
+                'to_location_id as location_id',
+                DB::raw('MIN(expiry_date) as earliest_expiry_date'),
+            ])
+            ->where('item_id', $itemId)
+            ->whereNotNull('expiry_date')
+            ->whereNotNull('to_location_id')
+            ->groupBy('to_location_id');
     }
 }
