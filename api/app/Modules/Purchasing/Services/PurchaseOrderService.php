@@ -256,6 +256,15 @@ class PurchaseOrderService
         // OGAMI-002 — segregation of duties: the approver must not be the user
         // who created the vendor on this PO (vendor-create vs PO-approve).
         $this->assertVendorSod($po, $by);
+
+        // Budget enforcement (opt-in via budgeting.enforcement_mode; 'off' = no-op).
+        // Resolve the department via the linked PR; skip when there's no link.
+        $deptId = $po->purchaseRequest?->department_id
+            ?? PurchaseRequest::find($po->purchase_request_id)?->department_id;
+        if ($deptId !== null) {
+            $this->budget->enforce($deptId, (float) $po->total_amount);
+        }
+
         $result = DB::transaction(function () use ($po, $by, $remarks) {
             $this->approvals->approve($po, $by, $remarks);
             $becameApproved = false;

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Accounting\Services;
 
 use App\Modules\Accounting\Models\Budget;
+use Illuminate\Support\Facades\Log;
+use RuntimeException;
 
 class BudgetEnforcementService
 {
@@ -62,5 +64,46 @@ class BudgetEnforcementService
         }
 
         return [true, 'ok', "Budget within limits ({$pct}% consumed). ₱" . number_format($available, 2) . " available."];
+    }
+
+    /**
+     * Actively enforce the budget for a spend against a department, driven by the
+     * `budgeting.enforcement_mode` config:
+     *   - 'off'   (default) — no-op. Existing behaviour fully preserved.
+     *   - 'warn'  — logs a warning when at/over the ceiling but allows through.
+     *   - 'block' — throws RuntimeException when the spend hits 'exhausted' or
+     *               'overdrawn' (100%+). Controllers translate this to HTTP 422.
+     *
+     * Graceful by design: when no budget exists for the department/fiscal-year,
+     * checkAvailability() returns canProceed=true and nothing is blocked.
+     */
+    public function enforce(int $departmentId, float $amount, ?int $fiscalYearId = null): void
+    {
+        $mode = (string) config('budgeting.enforcement_mode', 'off');
+        if ($mode === 'off') {
+            return;
+        }
+
+        [$canProceed, $level, $message] = $this->checkAvailability($departmentId, $amount, $fiscalYearId);
+
+        // Only the 100%+ levels are hard limits; warning/critical are advisory.
+        $isOverCeiling = in_array($level, ['exhausted', 'overdrawn'], true);
+        if (! $isOverCeiling) {
+            return;
+        }
+
+        if ($mode === 'warn') {
+            Log::warning('Budget over ceiling (enforcement=warn, allowed)', [
+                'department_id' => $departmentId,
+                'amount'        => $amount,
+                'level'         => $level,
+                'message'       => $message,
+            ]);
+            return;
+        }
+
+        if ($mode === 'block') {
+            throw new RuntimeException($message);
+        }
     }
 }
