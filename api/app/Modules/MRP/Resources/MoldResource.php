@@ -34,6 +34,19 @@ class MoldResource extends JsonResource
             'status'                       => (string) $this->status?->value,
             'status_label'                 => $this->status?->label(),
             'location'                     => $this->location,
+            // Lifecycle manager.
+            'commissioned_at'              => optional($this->commissioned_at)?->toDateString(),
+            'decommissioned_at'            => optional($this->decommissioned_at)?->toDateString(),
+            'last_maintenance_at'          => optional($this->last_maintenance_at)?->toDateString(),
+            'maintenance_count'            => (int) $this->maintenance_count,
+            'total_maintenance_cost'       => (string) $this->total_maintenance_cost,
+            'acquisition_cost'             => (string) $this->acquisition_cost,
+            'estimated_replacement_cost'   => (string) $this->estimated_replacement_cost,
+            'maintenance_frequency_shots'  => $this->maintenance_frequency_shots !== null ? (int) $this->maintenance_frequency_shots : null,
+            'drawing_number'               => $this->drawing_number,
+            'storage_location'             => $this->storage_location,
+            'cost_per_shot'                => (float) $this->cost_per_shot,
+            'shots_remaining'              => (int) $this->shots_remaining,
             'compatible_machines_count'    => (int) ($this->compatible_machines_count ?? 0),
             'compatible_machines'          => $this->whenLoaded('compatibleMachines', fn () =>
                 $this->compatibleMachines->map(fn ($m) => [

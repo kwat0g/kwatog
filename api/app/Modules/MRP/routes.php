@@ -39,10 +39,13 @@ Route::middleware(['auth:sanctum', 'feature:mrp'])->prefix('mrp')->group(functio
     Route::get('/molds',           [MoldController::class, 'index']) ->middleware('permission:mrp.molds.view');
     Route::get('/molds/{mold}',    [MoldController::class, 'show'])  ->middleware('permission:mrp.molds.view');
     Route::get('/molds/{mold}/history',          [MoldController::class, 'history']) ->middleware('permission:mrp.molds.view');
+    Route::get('/molds/{mold}/cost-trend',       [MoldController::class, 'costTrend'])->middleware('permission:mrp.molds.view');
     Route::get('/products/{product}/molds',      [MoldController::class, 'byProduct'])->middleware('permission:mrp.molds.view');
     Route::post('/molds',          [MoldController::class, 'store']) ->middleware('permission:production.molds.manage');
     Route::put('/molds/{mold}',    [MoldController::class, 'update'])->middleware('permission:production.molds.manage');
     Route::delete('/molds/{mold}', [MoldController::class, 'destroy'])->middleware('permission:production.molds.manage');
+    Route::post('/molds/{mold}/commission',   [MoldController::class, 'commission'])  ->middleware('permission:production.molds.manage');
+    Route::post('/molds/{mold}/decommission', [MoldController::class, 'decommission'])->middleware('permission:production.molds.manage');
     Route::post('/molds/{mold}/compatibility', [MoldController::class, 'syncCompatibility'])
         ->middleware('permission:production.molds.manage');
 

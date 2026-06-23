@@ -75,4 +75,34 @@ class MoldController
                 ->get()
         );
     }
+
+    public function commission(Request $request, Mold $mold): MoldResource
+    {
+        return new MoldResource($this->service->commission($mold, $request->user()?->name));
+    }
+
+    public function decommission(Request $request, Mold $mold): MoldResource
+    {
+        $reason = $request->input('reason');
+        return new MoldResource($this->service->decommission($mold, $reason, $request->user()?->name));
+    }
+
+    public function costTrend(Request $request, Mold $mold): JsonResponse
+    {
+        $months = min((int) $request->query('months', 12), 36);
+        return response()->json([
+            'data' => [
+                'mold' => [
+                    'id'                  => $mold->hash_id,
+                    'name'                => $mold->name,
+                    'acquisition_cost'    => (string) $mold->acquisition_cost,
+                    'total_maintenance_cost' => (string) $mold->total_maintenance_cost,
+                    'cost_per_shot'       => $mold->cost_per_shot,
+                    'shots_remaining'     => $mold->shots_remaining,
+                    'maintenance_count'   => $mold->maintenance_count,
+                ],
+                'trend' => $this->service->costTrend($mold, $months),
+            ],
+        ]);
+    }
 }

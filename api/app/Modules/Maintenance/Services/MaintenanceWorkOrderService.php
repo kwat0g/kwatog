@@ -173,12 +173,18 @@ class MaintenanceWorkOrderService
                 'remarks'          => $data['remarks'] ?? $wo->remarks,
             ])->save();
 
-            // Mold: reset shot count, log history
+            // Mold: reset shot count, log history, accumulate lifecycle counters
             if ($wo->maintainable_type === MaintainableType::Mold) {
                 $mold = Mold::find($wo->maintainable_id);
                 if ($mold) {
                     $shotsBefore = (int) $mold->current_shot_count;
-                    $mold->forceFill(['current_shot_count' => 0])->save();
+                    $mold->forceFill([
+                        'current_shot_count'     => 0,
+                        // Lifecycle manager: stamp + accumulate maintenance cost/count.
+                        'last_maintenance_at'    => now()->toDateString(),
+                        'maintenance_count'      => (int) $mold->maintenance_count + 1,
+                        'total_maintenance_cost' => number_format((float) $mold->total_maintenance_cost + (float) $cost, 2, '.', ''),
+                    ])->save();
                     MoldHistory::create([
                         'mold_id'             => $mold->id,
                         'event_type'          => MoldEventType::MaintenanceCompleted->value,

@@ -25,6 +25,11 @@ class Mold extends Model
         'output_rate_per_hour', 'setup_time_minutes', 'current_shot_count',
         'max_shots_before_maintenance', 'lifetime_total_shots',
         'lifetime_max_shots', 'status', 'location', 'asset_id',
+        // Lifecycle manager.
+        'commissioned_at', 'decommissioned_at', 'last_maintenance_at',
+        'maintenance_count', 'total_maintenance_cost', 'acquisition_cost',
+        'estimated_replacement_cost', 'maintenance_frequency_shots',
+        'drawing_number', 'storage_location',
     ];
 
     protected $casts = [
@@ -38,6 +43,15 @@ class Mold extends Model
         'lifetime_total_shots'         => 'integer',
         'lifetime_max_shots'           => 'integer',
         'asset_id'                     => 'integer',
+        // Lifecycle manager.
+        'commissioned_at'              => 'date',
+        'decommissioned_at'            => 'date',
+        'last_maintenance_at'          => 'date',
+        'maintenance_count'            => 'integer',
+        'total_maintenance_cost'       => 'decimal:2',
+        'acquisition_cost'             => 'decimal:2',
+        'estimated_replacement_cost'   => 'decimal:2',
+        'maintenance_frequency_shots'  => 'integer',
     ];
 
     public function product(): BelongsTo
@@ -70,5 +84,20 @@ class Mold extends Model
     public function getNearingLimitAttribute(): bool
     {
         return $this->shot_percentage >= 80.0;
+    }
+
+    /** Lifecycle cost per shot = (acquisition + total maintenance) / lifetime shots. */
+    public function getCostPerShotAttribute(): float
+    {
+        $shots = (int) $this->lifetime_total_shots;
+        if ($shots <= 0) return 0.0;
+        $lifecycle = (float) $this->acquisition_cost + (float) $this->total_maintenance_cost;
+        return round($lifecycle / $shots, 4);
+    }
+
+    /** Estimated shots remaining before the maintenance ceiling. */
+    public function getShotsRemainingAttribute(): int
+    {
+        return max(0, (int) $this->max_shots_before_maintenance - (int) $this->current_shot_count);
     }
 }
