@@ -32,17 +32,23 @@ class Asset extends Model
         'acquisition_date',
         'acquisition_cost',
         'useful_life_years',
+        'depreciation_method',
         'salvage_value',
         'accumulated_depreciation',
         'status',
         'disposed_date',
         'disposal_amount',
         'location',
+        'insurance_policy_no',
+        'insurance_provider',
+        'insurance_expiry',
+        'insured_value',
     ];
 
     protected $casts = [
         'category'                 => AssetCategory::class,
         'status'                   => AssetStatus::class,
+        'depreciation_method'      => \App\Modules\Assets\Enums\DepreciationMethod::class,
         'acquisition_date'         => 'date',
         'disposed_date'            => 'date',
         'acquisition_cost'         => 'decimal:2',
@@ -50,6 +56,8 @@ class Asset extends Model
         'accumulated_depreciation' => 'decimal:2',
         'disposal_amount'          => 'decimal:2',
         'useful_life_years'        => 'integer',
+        'insurance_expiry'         => 'date',
+        'insured_value'            => 'decimal:2',
     ];
 
     public function department(): BelongsTo
@@ -65,7 +73,26 @@ class Asset extends Model
     public function getMonthlyDepreciationAttribute(): string
     {
         $life = max(1, (int) $this->useful_life_years);
-        $depreciable = max(0.0, (float) $this->acquisition_cost - (float) $this->salvage_value);
+        $cost = (float) $this->acquisition_cost;
+        $salvage = (float) $this->salvage_value;
+        $depreciable = max(0.0, $cost - $salvage);
+
+        $method = $this->depreciation_method instanceof \App\Modules\Assets\Enums\DepreciationMethod
+            ? $this->depreciation_method
+            : \App\Modules\Assets\Enums\DepreciationMethod::StraightLine;
+
+        if ($method === \App\Modules\Assets\Enums\DepreciationMethod::DecliningBalance) {
+            // 200% declining balance: annual rate = 2/life applied to the current
+            // book value (cost - accumulated), floored at salvage. Monthly = /12.
+            $bookValue = max(0.0, $cost - (float) $this->accumulated_depreciation);
+            $annualRate = 2.0 / $life;
+            $annual = max(0.0, ($bookValue - $salvage) > 0 ? $bookValue * $annualRate : 0.0);
+            // Never depreciate below salvage in a single year.
+            $annual = min($annual, max(0.0, $bookValue - $salvage));
+            return number_format($annual / 12, 2, '.', '');
+        }
+
+        // Straight line (default).
         return number_format($depreciable / ($life * 12), 2, '.', '');
     }
 

@@ -25,8 +25,13 @@ class StoreAssetRequest extends FormRequest
             'acquisition_date'  => ['required', 'date', 'before_or_equal:today'],
             'acquisition_cost'  => ['required', 'decimal:0,2', 'min:0'],
             'useful_life_years' => ['required', 'integer', 'min:1', 'max:100'],
+            'depreciation_method' => ['nullable', Rule::in(\App\Modules\Assets\Enums\DepreciationMethod::values())],
             'salvage_value'     => ['nullable', 'decimal:0,2', 'min:0'],
             'location'          => ['nullable', 'string', 'max:100'],
+            'insurance_policy_no' => ['nullable', 'string', 'max:100'],
+            'insurance_provider'  => ['nullable', 'string', 'max:150'],
+            'insurance_expiry'    => ['nullable', 'date'],
+            'insured_value'       => ['nullable', 'decimal:0,2', 'min:0'],
         ];
     }
 }

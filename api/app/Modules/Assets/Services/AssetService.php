@@ -58,9 +58,14 @@ class AssetService
                 'acquisition_date'  => $data['acquisition_date'],
                 'acquisition_cost'  => $data['acquisition_cost'],
                 'useful_life_years' => (int) $data['useful_life_years'],
+                'depreciation_method' => $data['depreciation_method'] ?? \App\Modules\Assets\Enums\DepreciationMethod::StraightLine->value,
                 'salvage_value'     => $data['salvage_value'] ?? '0',
                 'status'            => AssetStatus::Active->value,
                 'location'          => $data['location'] ?? null,
+                'insurance_policy_no' => $data['insurance_policy_no'] ?? null,
+                'insurance_provider'  => $data['insurance_provider'] ?? null,
+                'insurance_expiry'    => $data['insurance_expiry'] ?? null,
+                'insured_value'       => $data['insured_value'] ?? null,
             ]);
             return $asset->fresh();
         });
