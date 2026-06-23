@@ -6,7 +6,9 @@ namespace App\Modules\CRM\Controllers;
 
 use App\Modules\CRM\Models\Lead;
 use App\Modules\CRM\Resources\LeadResource;
+use App\Modules\CRM\Resources\OpportunityResource;
 use App\Modules\CRM\Services\LeadService;
+use App\Modules\CRM\Services\OpportunityService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -14,7 +16,10 @@ use RuntimeException;
 
 class LeadController
 {
-    public function __construct(private readonly LeadService $service) {}
+    public function __construct(
+        private readonly LeadService $service,
+        private readonly OpportunityService $opportunityService,
+    ) {}
 
     public function index(Request $request): AnonymousResourceCollection
     {
@@ -88,5 +93,15 @@ class LeadController
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return new LeadResource($lead);
+    }
+
+    public function convert(Lead $lead): OpportunityResource|JsonResponse
+    {
+        try {
+            $opportunity = $this->service->convertToOpportunity($lead, $this->opportunityService);
+        } catch (RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+        return new OpportunityResource($opportunity);
     }
 }
