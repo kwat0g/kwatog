@@ -43,6 +43,8 @@ class NonConformanceReport extends Model
         'is_auto_generated',
         'escalation_level', 'last_escalated_at', 'recurrence_of_ncr_id',
         'rework_work_order_id',
+        // CAPA effectiveness loop.
+        'effectiveness_status', 'effectiveness_closed_at',
     ];
 
     protected $casts = [
@@ -54,6 +56,9 @@ class NonConformanceReport extends Model
         'closed_at'         => 'datetime',
         'is_auto_generated' => 'boolean',
         'last_escalated_at' => 'datetime',
+        // CAPA effectiveness loop.
+        'effectiveness_status'    => \App\Modules\Quality\Enums\EffectivenessStatus::class,
+        'effectiveness_closed_at' => 'datetime',
     ];
 
     public function product(): BelongsTo

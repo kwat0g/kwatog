@@ -6,6 +6,7 @@ namespace App\Modules\Quality\Models;
 
 use App\Common\Traits\HasHashId;
 use App\Modules\Auth\Models\User;
+use App\Modules\Quality\Enums\EffectivenessStatus;
 use App\Modules\Quality\Enums\NcrActionType;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -19,6 +20,9 @@ class NcrAction extends Model
     protected $fillable = [
         'ncr_id', 'action_type', 'description', 'performed_by', 'performed_at',
         'due_date', 'owner_id', 'verified_at', 'verified_by',
+        // CAPA effectiveness loop.
+        'effectiveness_status', 'effectiveness_checked_at', 'effectiveness_notes',
+        'effectiveness_check_count', 'next_effectiveness_check_at',
     ];
 
     protected $casts = [
@@ -26,6 +30,11 @@ class NcrAction extends Model
         'performed_at' => 'datetime',
         'due_date'     => 'date',
         'verified_at'  => 'datetime',
+        // CAPA effectiveness loop.
+        'effectiveness_status'        => EffectivenessStatus::class,
+        'effectiveness_checked_at'    => 'datetime',
+        'effectiveness_check_count'   => 'integer',
+        'next_effectiveness_check_at' => 'date',
     ];
 
     public function ncr(): BelongsTo
@@ -36,5 +45,15 @@ class NcrAction extends Model
     public function performer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'performed_by');
+    }
+
+    public function verifier(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'verified_by');
+    }
+
+    public function owner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'owner_id');
     }
 }
