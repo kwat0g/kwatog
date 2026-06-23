@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 use App\Modules\Accounting\Controllers\CustomerController;
 use App\Modules\CRM\Controllers\ComplaintController;
+use App\Modules\CRM\Controllers\LeadController;
+use App\Modules\CRM\Controllers\OpportunityController;
 use App\Modules\CRM\Controllers\PriceAgreementController;
 use App\Modules\CRM\Controllers\ProductController;
+use App\Modules\CRM\Controllers\QuoteController;
 use App\Modules\CRM\Controllers\SalesOrderController;
 use Illuminate\Support\Facades\Route;
 
@@ -49,6 +52,35 @@ Route::middleware(['auth:sanctum', 'feature:crm'])->prefix('crm')->group(functio
     Route::delete('/sales-orders/{salesOrder}',    [SalesOrderController::class, 'destroy'])->middleware('permission:crm.sales_orders.delete');
     Route::post('/sales-orders/{salesOrder}/confirm', [SalesOrderController::class, 'confirm'])->middleware('permission:crm.sales_orders.confirm');
     Route::post('/sales-orders/{salesOrder}/cancel',  [SalesOrderController::class, 'cancel']) ->middleware('permission:crm.sales_orders.cancel');
+
+    /* ─── Leads (Sales Pipeline) ─── */
+    Route::get('/leads',                          [LeadController::class, 'index'])       ->middleware('permission:crm.leads.view');
+    Route::get('/leads/{lead}',                   [LeadController::class, 'show'])        ->middleware('permission:crm.leads.view');
+    Route::post('/leads',                         [LeadController::class, 'store'])       ->middleware('permission:crm.leads.manage');
+    Route::put('/leads/{lead}',                   [LeadController::class, 'update'])      ->middleware('permission:crm.leads.manage');
+    Route::patch('/leads/{lead}/qualify',         [LeadController::class, 'qualify'])     ->middleware('permission:crm.leads.manage');
+    Route::patch('/leads/{lead}/disqualify',      [LeadController::class, 'disqualify'])  ->middleware('permission:crm.leads.manage');
+    Route::post('/leads/{lead}/convert',          [LeadController::class, 'convert'])     ->middleware('permission:crm.leads.manage');
+
+    /* ─── Opportunities (Sales Pipeline) ─── */
+    Route::get('/opportunities',                                [OpportunityController::class, 'index'])       ->middleware('permission:crm.opportunities.view');
+    Route::get('/opportunities/{opportunity}',                  [OpportunityController::class, 'show'])        ->middleware('permission:crm.opportunities.view');
+    Route::post('/opportunities',                               [OpportunityController::class, 'store'])       ->middleware('permission:crm.opportunities.manage');
+    Route::put('/opportunities/{opportunity}',                  [OpportunityController::class, 'update'])      ->middleware('permission:crm.opportunities.manage');
+    Route::patch('/opportunities/{opportunity}/advance',        [OpportunityController::class, 'advance'])     ->middleware('permission:crm.opportunities.manage');
+    Route::patch('/opportunities/{opportunity}/win',            [OpportunityController::class, 'win'])         ->middleware('permission:crm.opportunities.manage');
+    Route::patch('/opportunities/{opportunity}/lose',           [OpportunityController::class, 'lose'])        ->middleware('permission:crm.opportunities.manage');
+    Route::post('/opportunities/{opportunity}/create-quote',    [OpportunityController::class, 'createQuote']) ->middleware('permission:crm.quotes.manage');
+
+    /* ─── Quotes (Sales Pipeline) ─── */
+    Route::get('/quotes',                     [QuoteController::class, 'index'])       ->middleware('permission:crm.quotes.view');
+    Route::get('/quotes/{quote}',             [QuoteController::class, 'show'])        ->middleware('permission:crm.quotes.view');
+    Route::post('/quotes',                    [QuoteController::class, 'store'])       ->middleware('permission:crm.quotes.manage');
+    Route::put('/quotes/{quote}',             [QuoteController::class, 'update'])      ->middleware('permission:crm.quotes.manage');
+    Route::patch('/quotes/{quote}/send',      [QuoteController::class, 'send'])        ->middleware('permission:crm.quotes.manage');
+    Route::patch('/quotes/{quote}/accept',    [QuoteController::class, 'accept'])      ->middleware('permission:crm.quotes.manage');
+    Route::patch('/quotes/{quote}/reject',    [QuoteController::class, 'reject'])      ->middleware('permission:crm.quotes.manage');
+    Route::post('/quotes/{quote}/convert',    [QuoteController::class, 'convert'])     ->middleware('permission:crm.quotes.manage');
 
     /* ─── Customer complaints + 8D (Task 68) ─── */
     Route::get('/complaints',                              [ComplaintController::class, 'index'])

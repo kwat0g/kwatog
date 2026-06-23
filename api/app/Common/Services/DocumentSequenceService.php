@@ -51,6 +51,10 @@ class DocumentSequenceService
         'shipment_lot'     => ['prefix' => 'LOT',   'reset' => 'monthly', 'pad' => 4],
         // Landing — public quote requests.
         'quote_request'    => ['prefix' => 'QR',    'reset' => 'monthly', 'pad' => 4],
+        // CRM pipeline — Lead → Opportunity → Quote.
+        'lead'             => ['prefix' => 'LEAD',  'reset' => 'monthly', 'pad' => 4],
+        'opportunity'      => ['prefix' => 'OPP',   'reset' => 'monthly', 'pad' => 4],
+        'quote'            => ['prefix' => 'QT',    'reset' => 'monthly', 'pad' => 4],
     ];
 
     /**

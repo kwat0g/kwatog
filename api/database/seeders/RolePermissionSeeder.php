@@ -237,6 +237,13 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'crm.sales_orders.cancel',        'name' => 'Cancel Sales Orders'],
                 ['slug' => 'crm.so.create',                  'name' => 'Create Sales Orders (legacy)'],
                 ['slug' => 'crm.complaints.manage',          'name' => 'Manage Complaints'],
+                // Sales Pipeline — Lead → Opportunity → Quote
+                ['slug' => 'crm.leads.view',                 'name' => 'View Leads'],
+                ['slug' => 'crm.leads.manage',               'name' => 'Manage Leads'],
+                ['slug' => 'crm.opportunities.view',         'name' => 'View Opportunities'],
+                ['slug' => 'crm.opportunities.manage',       'name' => 'Manage Opportunities'],
+                ['slug' => 'crm.quotes.view',                'name' => 'View Quotes'],
+                ['slug' => 'crm.quotes.manage',              'name' => 'Manage Quotes'],
             ],
 
             // Quality
