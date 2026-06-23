@@ -75,6 +75,7 @@ class DTRComputationService
                 'start_time'     => $this->normalizeTime($shift->start_time),
                 'end_time'       => $this->normalizeTime($shift->end_time),
                 'break_minutes'  => (int) $shift->break_minutes,
+                'grace_minutes'  => (int) ($shift->grace_minutes ?? 0),
                 'is_night_shift' => (bool) $shift->is_night_shift,
                 'is_extended'    => (bool) $shift->is_extended,
                 'auto_ot_hours'  => $shift->auto_ot_hours !== null ? (float) $shift->auto_ot_hours : null,
@@ -105,7 +106,7 @@ class DTRComputationService
      *   date: string,
      *   time_in: ?string,
      *   time_out: ?string,
-     *   shift: array{start_time:string,end_time:string,break_minutes:int,is_night_shift:bool,is_extended:bool,auto_ot_hours:?float},
+     *   shift: array{start_time:string,end_time:string,break_minutes:int,grace_minutes:int,is_night_shift:bool,is_extended:bool,auto_ot_hours:?float},
      *   holiday: ?array{type:string},
      *   is_rest_day: bool,
      *   has_approved_ot: bool,
@@ -148,9 +149,13 @@ class DTRComputationService
 
         $timeIn = CarbonImmutable::parse($input['time_in']);
 
+        // Grace period: minutes after shift start that do not count as tardy.
+        $graceMin = max(0, (int) ($shift['grace_minutes'] ?? 0));
+
         // ── No time_out: still on the clock; only tardiness applies.
         if (empty($input['time_out'])) {
-            $tardyMin = $timeIn->gt($shiftStart) ? (int) min(480, $shiftStart->diffInMinutes($timeIn)) : 0;
+            $graceEnd = $shiftStart->addMinutes($graceMin);
+            $tardyMin = $timeIn->gt($graceEnd) ? (int) min(480, $graceEnd->diffInMinutes($timeIn)) : 0;
             return [
                 'regular_hours'      => 0.00,
                 'overtime_hours'     => 0.00,
@@ -178,8 +183,9 @@ class DTRComputationService
         $totalMin  = (int) $timeIn->diffInMinutes($timeOut);
         $workedMin = max(0, $totalMin - (int) $shift['break_minutes']);
 
-        // Tardiness — late arrival vs scheduled start.
-        $tardyMin = $timeIn->gt($shiftStart) ? (int) min(480, $shiftStart->diffInMinutes($timeIn)) : 0;
+        // Tardiness — late arrival vs scheduled start, minus grace period.
+        $graceEnd = $shiftStart->addMinutes($graceMin);
+        $tardyMin = $timeIn->gt($graceEnd) ? (int) min(480, $graceEnd->diffInMinutes($timeIn)) : 0;
 
         // Undertime — left before scheduled end (only when worked < scheduled). Extended OT period
         // does not contribute to undertime (we measure relative to shift_end).
@@ -389,6 +395,7 @@ class DTRComputationService
             'start_time'     => '08:00',
             'end_time'       => '17:00',
             'break_minutes'  => 60,
+            'grace_minutes'  => 0,
             'is_night_shift' => false,
             'is_extended'    => false,
             'auto_ot_hours'  => null,

@@ -17,6 +17,7 @@ class ShiftResource extends JsonResource
             'start_time'     => substr((string) $this->start_time, 0, 5),
             'end_time'       => substr((string) $this->end_time, 0, 5),
             'break_minutes'  => (int) $this->break_minutes,
+            'grace_minutes'  => (int) $this->grace_minutes,
             'is_night_shift' => (bool) $this->is_night_shift,
             'is_extended'    => (bool) $this->is_extended,
             'auto_ot_hours'  => $this->auto_ot_hours !== null ? (string) $this->auto_ot_hours : null,

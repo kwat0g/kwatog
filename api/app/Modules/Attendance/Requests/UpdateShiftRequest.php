@@ -29,6 +29,7 @@ class UpdateShiftRequest extends FormRequest
             'start_time'     => ['sometimes', 'date_format:H:i'],
             'end_time'       => ['sometimes', 'date_format:H:i', 'different:start_time'],
             'break_minutes'  => ['sometimes', 'integer', 'min:0', 'max:240'],
+            'grace_minutes'  => ['sometimes', 'integer', 'min:0', 'max:240'],
             'is_night_shift' => ['sometimes', 'boolean'],
             'is_extended'    => ['sometimes', 'boolean'],
             'auto_ot_hours'  => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:8'],

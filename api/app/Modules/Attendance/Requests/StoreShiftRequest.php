@@ -27,6 +27,7 @@ class StoreShiftRequest extends FormRequest
             'start_time'     => ['required', 'date_format:H:i'],
             'end_time'       => ['required', 'date_format:H:i', 'different:start_time'],
             'break_minutes'  => ['nullable', 'integer', 'min:0', 'max:240'],
+            'grace_minutes'  => ['nullable', 'integer', 'min:0', 'max:240'],
             'is_night_shift' => ['boolean'],
             'is_extended'    => ['boolean'],
             'auto_ot_hours'  => ['nullable', 'numeric', 'min:0', 'max:8'],
