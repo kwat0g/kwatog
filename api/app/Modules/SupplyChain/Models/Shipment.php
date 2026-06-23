@@ -23,7 +23,7 @@ class Shipment extends Model
 
     protected $fillable = [
         'shipment_number', 'purchase_order_id', 'status',
-        'carrier', 'vessel', 'container_number', 'bl_number', 'incoterm',
+        'carrier', 'vessel', 'bl_number', 'incoterm',
         'etd', 'atd', 'eta', 'ata', 'customs_clearance_date',
         'notes', 'created_by',
     ];
@@ -51,6 +51,11 @@ class Shipment extends Model
     public function documents(): HasMany
     {
         return $this->hasMany(ShipmentDocument::class)->orderBy('uploaded_at');
+    }
+
+    public function containers(): HasMany
+    {
+        return $this->hasMany(Container::class);
     }
 
     public function scopeStatus(Builder $q, ShipmentStatus|string $s): Builder

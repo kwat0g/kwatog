@@ -38,6 +38,18 @@ Route::middleware(['auth:sanctum', 'feature:supply_chain'])->prefix('supply-chai
     Route::delete('/shipment-documents/{document}',         [ShipmentController::class, 'destroyDocument'])
         ->middleware('permission:supply_chain.shipments.manage');
 
+    /* ─── Containers (multi-container shipment tracking) ─── */
+    Route::get('/shipments/{shipment}/containers',              [\App\Modules\SupplyChain\Controllers\ContainerController::class, 'index'])
+        ->middleware('permission:supply_chain.view');
+    Route::post('/shipments/{shipment}/containers',             [\App\Modules\SupplyChain\Controllers\ContainerController::class, 'store'])
+        ->middleware('permission:supply_chain.shipments.manage');
+    Route::get('/containers/{container}',                        [\App\Modules\SupplyChain\Controllers\ContainerController::class, 'show'])
+        ->middleware('permission:supply_chain.view');
+    Route::put('/containers/{container}',                        [\App\Modules\SupplyChain\Controllers\ContainerController::class, 'update'])
+        ->middleware('permission:supply_chain.shipments.manage');
+    Route::delete('/containers/{container}',                     [\App\Modules\SupplyChain\Controllers\ContainerController::class, 'destroy'])
+        ->middleware('permission:supply_chain.shipments.manage');
+
     /* ─── Vehicles (Task 66) ─── */
     Route::get('/vehicles',                                 [VehicleController::class, 'index'])
         ->middleware('permission:supply_chain.view');
