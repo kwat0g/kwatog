@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Modules\Forecasting\Controllers\DemandForecastController;
+use App\Modules\Forecasting\Controllers\ForecastMrpController;
 use App\Modules\Forecasting\Controllers\StockOutProjectionController;
 use Illuminate\Support\Facades\Route;
 
@@ -35,5 +36,10 @@ Route::middleware(['auth:sanctum'])->prefix('forecasting')->group(function () {
     /* ─── Stock-out projection ─── */
     Route::get('/stock-out',
         [StockOutProjectionController::class, 'index'])
+        ->middleware('permission:forecasting.view');
+
+    /* ─── Forecast-driven MRP projection (forward material plan) ─── */
+    Route::get('/mrp-projection',
+        [ForecastMrpController::class, 'project'])
         ->middleware('permission:forecasting.view');
 });
