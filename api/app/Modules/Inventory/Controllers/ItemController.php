@@ -8,6 +8,7 @@ use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Requests\StoreItemRequest;
 use App\Modules\Inventory\Requests\UpdateItemRequest;
 use App\Modules\Inventory\Resources\ItemResource;
+use App\Modules\Inventory\Services\AbcClassificationService;
 use App\Modules\Inventory\Services\ItemService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,7 +16,10 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class ItemController
 {
-    public function __construct(private readonly ItemService $service) {}
+    public function __construct(
+        private readonly ItemService $service,
+        private readonly AbcClassificationService $abcService,
+    ) {}
 
     public function index(Request $request): AnonymousResourceCollection
     {
@@ -46,5 +50,14 @@ class ItemController
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return response()->json(null, 204);
+    }
+
+    public function recomputeAbc(): JsonResponse
+    {
+        $result = $this->abcService->compute();
+        return response()->json([
+            'message' => 'ABC classification recomputed successfully.',
+            'data'    => $result,
+        ]);
     }
 }

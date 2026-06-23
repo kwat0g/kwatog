@@ -46,6 +46,7 @@ class ItemResource extends JsonResource
             'lead_time_days'         => (int) $this->lead_time_days,
             'is_critical'            => (bool) $this->is_critical,
             'is_active'              => (bool) $this->is_active,
+            'abc_class'              => $this->abc_class,
             'on_hand_quantity'       => number_format($onHand, 3, '.', ''),
             'reserved_quantity'      => number_format($reserved, 3, '.', ''),
             'available_quantity'     => number_format($available, 3, '.', ''),

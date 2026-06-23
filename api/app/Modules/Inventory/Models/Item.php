@@ -29,7 +29,7 @@ class Item extends Model
         'unit_of_measure', 'standard_cost', 'reorder_method',
         'reorder_point', 'safety_stock', 'safety_stock_locked',
         'safety_stock_recomputed_at', 'minimum_order_quantity',
-        'lead_time_days', 'is_critical', 'is_active',
+        'lead_time_days', 'is_critical', 'is_active', 'abc_class',
     ];
 
     protected $casts = [
@@ -44,6 +44,7 @@ class Item extends Model
         'lead_time_days'             => 'integer',
         'is_critical'                => 'boolean',
         'is_active'                  => 'boolean',
+        'abc_class'                  => 'string',
     ];
 
     public function category(): BelongsTo

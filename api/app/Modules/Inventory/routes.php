@@ -29,6 +29,7 @@ Route::middleware(['auth:sanctum', 'feature:inventory'])->prefix('inventory')->g
     Route::delete('/item-categories/{itemCategory}', [ItemCategoryController::class, 'destroy'])->middleware('permission:inventory.items.manage');
 
     /* ─── Items ─── */
+    Route::post('/items/recompute-abc', [ItemController::class, 'recomputeAbc'])->middleware('permission:inventory.items.manage');
     Route::get('/items',           [ItemController::class, 'index'])->middleware('permission:inventory.view');
     Route::get('/items/{item}',    [ItemController::class, 'show']) ->middleware('permission:inventory.view');
     Route::post('/items',          [ItemController::class, 'store'])->middleware('permission:inventory.items.manage');
