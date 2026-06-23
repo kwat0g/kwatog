@@ -70,6 +70,18 @@ class ReturnRequestResource extends JsonResource
                 'bill_number' => $this->debitNote->bill_number,
             ] : null),
 
+            'inspection'           => $this->whenLoaded('inspection', fn () => $this->inspection ? [
+                'id'                => $this->inspection->hash_id,
+                'inspection_number' => $this->inspection->inspection_number,
+                'status'            => $this->inspection->status?->value,
+            ] : null),
+
+            'ncr'                  => $this->whenLoaded('ncr', fn () => $this->ncr ? [
+                'id'         => $this->ncr->hash_id,
+                'ncr_number' => $this->ncr->ncr_number,
+                'status'     => $this->ncr->status?->value,
+            ] : null),
+
             'items'                => $this->whenLoaded('items', fn () =>
                 ReturnRequestItemResource::collection($this->items)
             ),

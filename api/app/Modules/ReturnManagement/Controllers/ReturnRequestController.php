@@ -163,7 +163,7 @@ class ReturnRequestController extends Controller
             'internal_notes' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        $rma = $this->service->inspect($returnRequest, $validated['internal_notes'] ?? null);
+        $rma = $this->service->inspect($returnRequest, $validated['internal_notes'] ?? null, $request->user());
         return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor']));
     }
 

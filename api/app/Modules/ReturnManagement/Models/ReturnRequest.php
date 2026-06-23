@@ -6,7 +6,6 @@ namespace App\Modules\ReturnManagement\Models;
 
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
-use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\Vendor;
@@ -15,6 +14,8 @@ use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Quality\Models\Inspection;
+use App\Modules\Quality\Models\NonConformanceReport;
 use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
 use App\Modules\ReturnManagement\Enums\ReturnRequestType;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -43,10 +44,11 @@ class ReturnRequest extends Model
         'internal_notes',
         'resolution',
         'credit_note_id',
-        'debit_note_id',
         'replacement_wo_id',
         'refund_amount',
         'stock_movement_id',
+        'inspection_id',
+        'ncr_id',
         'return_date',
         'approved_at',
         'received_at',
@@ -112,18 +114,19 @@ class ReturnRequest extends Model
         return $this->belongsTo(Invoice::class, 'credit_note_id');
     }
 
-    /**
-     * Debit memo issued against a supplier return (references a Bill with
-     * negative total). Populated by ReturnRequestService::complete().
-     */
-    public function debitNote(): BelongsTo
-    {
-        return $this->belongsTo(Bill::class, 'debit_note_id');
-    }
-
     public function stockMovement(): BelongsTo
     {
         return $this->belongsTo(StockMovement::class);
+    }
+
+    public function inspection(): BelongsTo
+    {
+        return $this->belongsTo(Inspection::class);
+    }
+
+    public function ncr(): BelongsTo
+    {
+        return $this->belongsTo(NonConformanceReport::class);
     }
 
     public function creator(): BelongsTo

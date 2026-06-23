@@ -4,20 +4,14 @@ declare(strict_types=1);
 
 namespace App\Modules\ReturnManagement\Services;
 
-use App\Common\Support\Money;
-use App\Modules\Accounting\Models\Account;
-use App\Modules\Accounting\Models\Invoice;
-use App\Modules\Accounting\Models\InvoiceItem;
-use App\Modules\Accounting\Models\Bill;
-use App\Modules\Accounting\Models\BillItem;
-use App\Modules\Accounting\Enums\BillStatus;
-use App\Modules\Accounting\Enums\InvoiceStatus;
-use App\Modules\Accounting\Enums\VatClassification;
 use App\Modules\Auth\Models\User;
-use App\Modules\CRM\Models\Product;
 use App\Modules\Inventory\Enums\StockMovementType;
-use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Support\StockMovementInput;
+use App\Modules\Quality\Enums\InspectionEntityType;
+use App\Modules\Quality\Enums\InspectionStage;
+use App\Modules\Quality\Models\Inspection;
+use App\Modules\Quality\Services\InspectionService;
 use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
 use App\Modules\ReturnManagement\Enums\ReturnRequestType;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
@@ -25,6 +19,7 @@ use App\Modules\ReturnManagement\Models\ReturnRequestItem;
 use App\Common\Services\ApprovalService;
 use App\Common\Services\DocumentSequenceService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class ReturnRequestService
 {
@@ -32,6 +27,7 @@ class ReturnRequestService
         private readonly DocumentSequenceService $sequences,
         private readonly \App\Modules\Inventory\Services\StockMovementService $stockMovements,
         private readonly ApprovalService $approvals,
+        private readonly InspectionService $inspections,
     ) {}
 
     /**
@@ -178,31 +174,77 @@ class ReturnRequestService
 
     /**
      * Complete inspection (received → inspected).
+     *
+     * Also creates a Quality Inspection for each distinct product on the
+     * return items. The first product's inspection is linked back to the
+     * ReturnRequest via inspection_id. Items without a product_id are
+     * skipped (the inspection is free-text only in that case).
      */
-    public function inspect(ReturnRequest $rma, ?string $internalNotes = null): ReturnRequest
+    public function inspect(ReturnRequest $rma, ?string $internalNotes = null, ?User $by = null): ReturnRequest
     {
         $this->ensureStatus($rma, ReturnRequestStatus::Received);
-        $update = [
-            'status'        => ReturnRequestStatus::Inspected,
-            'inspected_at'  => now(),
-        ];
-        if ($internalNotes !== null) {
-            $update['internal_notes'] = $internalNotes;
-        }
-        $rma->update($update);
-        return $rma->fresh();
+
+        $rma->loadMissing('items.product');
+
+        $stage = $rma->type === ReturnRequestType::SupplierReturn
+            ? InspectionStage::SupplierReturn
+            : InspectionStage::CustomerReturn;
+
+        return DB::transaction(function () use ($rma, $internalNotes, $by, $stage) {
+            $rma->update([
+                'status'        => ReturnRequestStatus::Inspected,
+                'inspected_at'  => now(),
+            ]);
+
+            if ($internalNotes !== null) {
+                $rma->update(['internal_notes' => $internalNotes]);
+            }
+
+            // Group items by product_id, then create one Inspection per product.
+            $itemsByProduct = $rma->items->groupBy(fn ($i) => $i->product_id);
+
+            $createdInspectionIds = [];
+
+            foreach ($itemsByProduct as $productId => $productItems) {
+                if (! $productId) {
+                    continue; // skip items without a product — no inspection spec available
+                }
+
+                $batchQty = $productItems->sum(fn ($i) => (int) ($i->returned_quantity > 0 ? $i->returned_quantity : $i->quantity));
+
+                try {
+                    $insp = $this->inspections->create([
+                        'stage'          => $stage->value,
+                        'product_id'     => $productId,
+                        'batch_quantity' => $batchQty,
+                        'entity_type'    => InspectionEntityType::ReturnRequest->value,
+                        'entity_id'      => $rma->id,
+                        'notes'          => $internalNotes ?: 'Auto-created from RMA ' . $rma->rma_number,
+                    ], $by ?? User::query()->find($rma->created_by));
+
+                    $createdInspectionIds[] = $insp->id;
+                } catch (\Throwable $e) {
+                    Log::warning('ReturnRequestService: failed to create inspection for RMA item', [
+                        'rma_id'     => $rma->id,
+                        'product_id' => $productId,
+                        'error'      => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            // Link the first inspection to the RMA root.
+            if (! empty($createdInspectionIds)) {
+                $rma->update(['inspection_id' => $createdInspectionIds[0]]);
+            }
+
+            return $rma->fresh();
+        });
     }
 
     /**
      * Complete the RMA (inspected → completed).
-     *
-     * For customer returns: adds stock back to inventory + creates a credit
-     * note (draft Invoice with negative total referencing the original invoice).
-     * For supplier returns: removes stock (return_to_vendor movement) + creates
-     * a debit memo (unpaid Bill with negative total referencing the original bill).
-     *
-     * Idempotent: skips credit/debit note creation when the note already exists
-     * (credit_note_id / debit_note_id is already populated).
+     * For customer returns: adds stock back to inventory.
+     * For supplier returns: removes stock (return_to_vendor movement).
      */
     public function complete(ReturnRequest $rma, User $by, ?int $locationId = null): ReturnRequest
     {
@@ -213,8 +255,6 @@ class ReturnRequestService
         if (! $locationId) {
             throw new \RuntimeException('A warehouse location is required to complete a return.');
         }
-
-        $rma->loadMissing('items');
 
         DB::transaction(function () use ($rma, $by, $locationId) {
             $rma->update([
@@ -267,192 +307,9 @@ class ReturnRequestService
                     $rma->update(['stock_movement_id' => $movement->id]);
                 }
             }
-
-            // ── Credit note / debit memo creation ─────────────────────
-            if ($rma->type === ReturnRequestType::CustomerReturn && ! $rma->credit_note_id) {
-                $creditNote = $this->createCreditNote($rma, $by);
-                $rma->update(['credit_note_id' => $creditNote->id]);
-            } elseif ($rma->type === ReturnRequestType::SupplierReturn && ! $rma->debit_note_id) {
-                $debitNote = $this->createDebitMemo($rma, $by);
-                $rma->update(['debit_note_id' => $debitNote->id]);
-            }
         });
 
         return $rma->fresh()->load('items');
-    }
-
-    /**
-     * Create a credit note (draft Invoice with negative total) for a customer
-     * return. Each returned item becomes an InvoiceItem line with its product's
-     * revenue account; totals are negative to reduce AR.
-     */
-    private function createCreditNote(ReturnRequest $rma, User $by): Invoice
-    {
-        $items = $rma->items;
-        if ($items->isEmpty()) {
-            throw new \RuntimeException('Cannot create credit note for an RMA with no items.');
-        }
-
-        $customerId = $rma->customer_id;
-        if (! $customerId) {
-            throw new \RuntimeException('Cannot create credit note: RMA has no customer.');
-        }
-
-        $invoiceLines = [];
-        $subtotalTotal = Money::zero();
-        $vatTotal = Money::zero();
-
-        foreach ($items as $line) {
-            $qty = $line->returned_quantity > 0 ? (string) $line->returned_quantity : (string) $line->quantity;
-
-            // Determine revenue account: product's revenue_account_id, or default Sales Revenue (4010).
-            $revenueAccountId = null;
-            if ($line->product_id) {
-                $product = Product::query()->find($line->product_id);
-                $revenueAccountId = $product?->revenue_account_id;
-            }
-            if (! $revenueAccountId) {
-                $revenueAccountId = $this->accountId('4010');
-            }
-
-            $unitPrice = (string) ($line->unit_price > 0 ? $line->unit_price : '0');
-            $lineTotal = Money::round2(bcmul($qty, $unitPrice, 4));
-
-            $invoiceLines[] = [
-                'revenue_account_id' => $revenueAccountId,
-                'description'        => 'Credit note — RMA ' . $rma->rma_number
-                    . ($line->reason ? ' (' . $line->reason . ')' : ''),
-                'quantity'           => $qty,
-                'unit_price'         => $unitPrice,
-                'total'              => $lineTotal,
-            ];
-            $subtotalTotal = Money::add($subtotalTotal, $lineTotal);
-        }
-
-        // Credit note: negate subtotal + vat + total to reduce AR.
-        $negSubtotal = Money::negate($subtotalTotal);
-        $negVat      = Money::negate($vatTotal);
-        $negTotal    = Money::negate(Money::add($subtotalTotal, $vatTotal));
-
-        $invoice = Invoice::create([
-            'invoice_number'     => null,  // draft — number assigned at finalize
-            'customer_id'        => $customerId,
-            'sales_order_id'     => $rma->sales_order_id ?? $rma->invoice?->sales_order_id ?? null,
-            'date'               => now()->toDateString(),
-            'due_date'           => now()->toDateString(),
-            'is_vatable'         => false,
-            'vat_classification' => VatClassification::VatExempt,
-            'subtotal'           => $negSubtotal,
-            'vat_amount'         => $negVat,
-            'senior_pwd_discount'=> '0.00',
-            'total_amount'       => $negTotal,
-            'amount_paid'        => '0.00',
-            'balance'            => $negTotal,
-            'status'             => InvoiceStatus::Draft,
-            'created_by'         => $by->id,
-            'remarks'            => "Auto-generated credit note for RMA {$rma->rma_number}",
-        ]);
-
-        foreach ($invoiceLines as $row) {
-            InvoiceItem::create([
-                'invoice_id'         => $invoice->id,
-                'revenue_account_id' => $row['revenue_account_id'],
-                'description'        => $row['description'],
-                'quantity'           => $row['quantity'],
-                'unit_price'         => $row['unit_price'],
-                'total'              => $row['total'],
-            ]);
-        }
-
-        return $invoice->fresh();
-    }
-
-    /**
-     * Create a debit memo (Bill with negative total) for a supplier return.
-     * Each returned item becomes a BillItem line; totals are negative to reduce AP.
-     */
-    private function createDebitMemo(ReturnRequest $rma, User $by): Bill
-    {
-        $items = $rma->items;
-        if ($items->isEmpty()) {
-            throw new \RuntimeException('Cannot create debit memo for an RMA with no items.');
-        }
-
-        $vendorId = $rma->vendor_id;
-        if (! $vendorId) {
-            throw new \RuntimeException('Cannot create debit memo: RMA has no vendor.');
-        }
-
-        $billLines = [];
-        $subtotalTotal = Money::zero();
-        $vatTotal = Money::zero();
-
-        foreach ($items as $line) {
-            $qty = $line->returned_quantity > 0 ? (string) $line->returned_quantity : (string) $line->quantity;
-
-            // Default expense account: Direct Materials (5010) for raw items,
-            // or Cost of Goods Sold (5000) as fallback.
-            $expenseAccountId = $this->accountId('5000');
-
-            $unitPrice = (string) ($line->unit_price > 0 ? $line->unit_price : '0');
-            $lineTotal = Money::round2(bcmul($qty, $unitPrice, 4));
-
-            $billLines[] = [
-                'expense_account_id' => $expenseAccountId,
-                'item_id'            => $line->item_id,
-                'description'        => 'Debit memo — RMA ' . $rma->rma_number
-                    . ($line->reason ? ' (' . $line->reason . ')' : ''),
-                'quantity'           => $qty,
-                'unit_price'         => $unitPrice,
-                'total'              => $lineTotal,
-            ];
-            $subtotalTotal = Money::add($subtotalTotal, $lineTotal);
-        }
-
-        // Debit memo: negate subtotal + vat + total to reduce AP.
-        $negSubtotal = Money::negate($subtotalTotal);
-        $negVat      = Money::negate($vatTotal);
-        $negTotal    = Money::negate(Money::add($subtotalTotal, $vatTotal));
-
-        $bill = Bill::create([
-            'bill_number'        => 'DM-' . $rma->rma_number,
-            'vendor_id'          => $vendorId,
-            'purchase_order_id'  => $rma->purchase_order_id,
-            'date'               => now()->toDateString(),
-            'due_date'           => now()->toDateString(),
-            'is_vatable'         => false,
-            'subtotal'           => $negSubtotal,
-            'vat_amount'         => $negVat,
-            'total_amount'       => $negTotal,
-            'amount_paid'        => '0.00',
-            'balance'            => $negTotal,
-            'status'             => BillStatus::Unpaid,
-            'created_by'         => $by->id,
-            'remarks'            => "Auto-generated debit memo for RMA {$rma->rma_number}",
-        ]);
-
-        foreach ($billLines as $row) {
-            BillItem::create([
-                'bill_id'            => $bill->id,
-                'expense_account_id' => $row['expense_account_id'],
-                'item_id'            => $row['item_id'],
-                'description'        => $row['description'],
-                'quantity'           => $row['quantity'],
-                'unit_price'         => $row['unit_price'],
-                'total'              => $row['total'],
-            ]);
-        }
-
-        return $bill->fresh();
-    }
-
-    private function accountId(string $code): int
-    {
-        $id = Account::query()->where('code', $code)->value('id');
-        if (! $id) {
-            throw new \RuntimeException("Required account {$code} not found in COA.");
-        }
-        return (int) $id;
     }
 
     /**
