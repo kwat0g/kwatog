@@ -271,8 +271,10 @@ Only drivers have a mobile PWA. Production operators, QC inspectors, and mainten
 
 ## Prioritized build backlog (ranked by thesis + business impact)
 
-> **Progress (2026-06-23):** 15 of 32 backlog items SHIPPED. All Tier 1 + most
-> of Tier 2 complete and merged to main with 857 backend tests green.
+> **Progress (2026-06-24):** 17 of 32 backlog items SHIPPED. All Tier 1, all
+> Tier 2 except biometric API, plus budget enforcement — merged to main with
+> 857 backend tests green. Sales pipeline (Lead→Opportunity→Quote→SO) verified
+> end-to-end live.
 
 ### TIER 1 — Build immediately (highest impact, lowest effort) — ✅ ALL DONE
 | # | Feature | Module | Effort | Status |
@@ -290,7 +292,7 @@ Only drivers have a mobile PWA. Production operators, QC inspectors, and mainten
 | # | Feature | Module | Effort | Status |
 |---|---|---|---|---|
 | 9 | Skills matrix | HR | 1 week | ✅ shipped (`e5fcaa4`) |
-| 10 | Sales pipeline (Lead/Oppty/Quote) | CRM | 2 weeks | ⬜ pending |
+| 10 | Sales pipeline (Lead/Oppty/Quote) | CRM | 2 weeks | ✅ shipped (`ca7b520`/`8757053`/`b6461c6`) |
 | 11 | Price tiers / volume discounts | CRM | 3 days | ✅ shipped (`aa7b14e`) |
 | 12 | Container tracking | Supply Chain | 1 week | ✅ shipped (`40b4e5c`) |
 | 13 | BI device API integration | Attendance | 1 week | ⬜ pending |
@@ -325,5 +327,5 @@ Only drivers have a mobile PWA. Production operators, QC inspectors, and mainten
 | 28 | Asset transfer workflow | Assets | 2 days |
 | 29 | Depreciation method selection | Assets | 3 days |
 | 30 | Real-time dashboard (WebSocket) | Dashboard | 1 week |
-| 31 | Budget enforcement at PO level | Budgeting/Purchasing | 2 days |
+| 31 | Budget enforcement at PO level | Budgeting/Purchasing | 2 days | ✅ shipped (`fdbbd76`) |
 | 32 | B2B portal → supplier PPAP view | B2B/Quality | 2 days |
