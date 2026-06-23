@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Common\Middleware;
 
+use App\Modules\Auth\Models\User;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -20,6 +21,19 @@ class SessionTimeout
         $user = $request->user();
         if (! $user) {
             return $next($request);
+        }
+
+        // OGAMI audit DEFECT-3 — this middleware (and the auth:sanctum SPA stack
+        // it guards) is for internal Users only. A B2B portal bearer token can
+        // resolve under the sanctum guard with a SupplierPortalUser /
+        // CustomerPortalUser principal, which has no role / must_change_password /
+        // last_activity columns; writing last_activity on it threw a SQL 500.
+        // Reject any non-User principal here with a clean 401.
+        if (! $user instanceof User) {
+            return response()->json([
+                'message' => 'Unauthenticated.',
+                'code'    => 'guard_mismatch',
+            ], 401);
         }
 
         // Block all activity if password is expired, except change-password

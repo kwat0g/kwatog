@@ -36,13 +36,24 @@ class OvertimeController
 
     public function approve(ApproveOvertimeRequestRequest $request, OvertimeRequest $overtime): OvertimeRequestResource
     {
-        $ot = $this->service->approve($overtime, $request->user(), $request->input('remarks'));
+        // OGAMI audit DEFECT-1 — the service throws RuntimeException for business
+        // -rule violations (self-approval SoD, non-pending state). Surface them as
+        // 422 like the Leave/Loan controllers, instead of leaking an unhandled 500.
+        try {
+            $ot = $this->service->approve($overtime, $request->user(), $request->input('remarks'));
+        } catch (\RuntimeException $e) {
+            abort(422, $e->getMessage());
+        }
         return new OvertimeRequestResource($ot);
     }
 
     public function reject(RejectOvertimeRequestRequest $request, OvertimeRequest $overtime): OvertimeRequestResource
     {
-        $ot = $this->service->reject($overtime, $request->user(), $request->input('reason'));
+        try {
+            $ot = $this->service->reject($overtime, $request->user(), $request->input('reason'));
+        } catch (\RuntimeException $e) {
+            abort(422, $e->getMessage());
+        }
         return new OvertimeRequestResource($ot);
     }
 

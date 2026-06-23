@@ -670,14 +670,18 @@ class ComprehensiveDemoSeeder extends Seeder
             $monthly = round($principal / $payPeriods, 2);
             $paidPeriods = $i === 0 ? $payPeriods : ($i === 1 ? 6 : 0);
             $totalPaid = round($monthly * $paidPeriods, 2);
-            $balance = round(($principal * 1.05) - $totalPaid, 2);
+            // Business rule: company loans are ZERO interest. Balance is a
+            // straight principal minus what has been paid.
+            $balance = round($principal - $totalPaid, 2);
 
             DB::table('employee_loans')->insert([
                 'loan_no'               => 'LN-' . $now->format('Ymd') . '-' . str_pad((string)($i + 1), 4, '0', STR_PAD_LEFT),
                 'employee_id'           => $emp->id,
-                'loan_type'             => ['Salary Loan', 'Emergency Loan', 'Equipment Loan'][$i],
+                // Must be a valid LoanType backing value (company_loan|cash_advance),
+                // NOT a free-text label — the model casts this column to the enum.
+                'loan_type'             => [\App\Modules\Loans\Enums\LoanType::CompanyLoan->value, \App\Modules\Loans\Enums\LoanType::CashAdvance->value, \App\Modules\Loans\Enums\LoanType::CompanyLoan->value][$i],
                 'principal'             => $principal,
-                'interest_rate'         => 0.05,
+                'interest_rate'         => 0,
                 'monthly_amortization'  => $monthly,
                 'total_paid'            => $totalPaid,
                 'balance'               => $balance,

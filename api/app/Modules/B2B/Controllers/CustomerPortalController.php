@@ -57,6 +57,7 @@ class CustomerPortalController extends Controller
             ->whereIn('status', ['sent', 'overdue', 'partial'])->sum('balance');
 
         $recentOrders = SalesOrder::where('customer_id', $customerId)
+            ->withCount('items')
             ->orderByDesc('created_at')->limit(5)->get();
 
         $recentInvoices = Invoice::where('customer_id', $customerId)

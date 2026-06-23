@@ -1,0 +1,15 @@
+{
+  "id": "ogami-hashid-obfuscation",
+  "goal": "Confirm that resource ids are HashID-obfuscated: a real hash resolves, but raw integer ids and garbage strings return 404 (no integer-id enumeration).",
+  "precondition": { "start_url": "http://localhost/hr/employees" },
+  "postconditions": {
+    "url_contains": "localhost",
+    "http_status": 404,
+    "probe": { "path_integer": "/api/v1/hr/employees/1", "path_garbage": "/api/v1/hr/employees/xxxx" }
+  },
+  "forbidden_states": ["captcha", "payment", "login_redirect"],
+  "evidence": { "trace": true, "actions": true, "screenshots": true },
+  "budget": { "steps": 8, "attempts": 1, "wall_clock_s": 120, "model_calls": 12, "usd": 0.50 },
+  "auth_profile": "P_ADMIN",
+  "verified_live": "2026-06-23: real hash -> 200; /1 -> 404; /42 -> 404; /xxxx -> 404. Also: 6th bad login -> 429 (rate limit)."
+}

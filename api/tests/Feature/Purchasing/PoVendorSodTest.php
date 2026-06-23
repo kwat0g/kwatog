@@ -18,13 +18,13 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
 /**
- * OGAMI-002 — segregation of duties on PO approval: the user who created the
- * vendor must not approve a PO to that vendor.
+ * OGAMI-002 / audit DEFECT-2 — segregation of duties on PO approval: the user
+ * who created the vendor must not approve a PO to that vendor.
  *
- * NOTE: the `vendors` table currently has NO `created_by` column, so this guard
- * is dormant (it skips gracefully). The first test documents that gap. The
- * active-path test self-activates the day a `created_by` column is added — see
- * the report for the schema follow-up the orchestrator must own.
+ * The `vendors.created_by` column now exists (migration 0222) and is populated
+ * by VendorService::create(), so the guard is ACTIVE. The first test asserts a
+ * vendor with no recorded creator still flows (guard cannot fire on unknown
+ * makers); the second asserts the creator is blocked.
  */
 class PoVendorSodTest extends TestCase
 {
@@ -65,21 +65,19 @@ class PoVendorSodTest extends TestCase
         ], $by);
     }
 
-    public function test_vendor_sod_guard_is_dormant_without_created_by_column(): void
+    public function test_vendor_with_unknown_creator_does_not_trip_the_guard(): void
     {
-        // Documents the verified schema gap: the guard cannot fire today because
-        // there is nothing recording who created a vendor.
-        $this->assertFalse(
+        // The column now exists, but a vendor whose created_by is null (legacy /
+        // imported rows) has an unknown maker, so the guard cannot fire and the PO
+        // flows through the normal approval workflow.
+        $this->assertTrue(
             Schema::hasColumn('vendors', 'created_by'),
-            'vendors.created_by now exists — enable the active SoD path (drop this assertion).'
+            'vendors.created_by must exist for the active SoD guard (migration 0222).'
         );
 
-        // With the column absent, a vendor creator approving their own PO must NOT
-        // be blocked by the SoD guard (it skips gracefully). The PO still flows
-        // through the normal approval workflow.
         $svc = app(PurchaseOrderService::class);
         $maker = $this->makeUser('purchasing_officer');
-        $vendor = Vendor::factory()->create();
+        $vendor = Vendor::factory()->create(['created_by' => null]);
 
         $po = $this->makePo($svc, $maker, $vendor);
         $submitted = $svc->submit($po);

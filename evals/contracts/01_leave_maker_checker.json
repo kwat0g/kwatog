@@ -1,0 +1,14 @@
+{
+  "id": "ogami-leave-maker-checker",
+  "goal": "File a leave request as an employee, approve it through department head then HR, and confirm it reaches the approved state.",
+  "precondition": { "start_url": "http://localhost/self-service/leave" },
+  "postconditions": {
+    "url_contains": "localhost",
+    "text_contains": "approved"
+  },
+  "forbidden_states": ["captcha", "payment", "login_redirect"],
+  "evidence": { "trace": true, "actions": true, "screenshots": true },
+  "budget": { "steps": 20, "attempts": 1, "wall_clock_s": 300, "model_calls": 30, "usd": 1.50 },
+  "auth_profiles": ["P_EMP", "P_DEPTHEAD", "P_HR"],
+  "notes": "Cross-role: P_EMP submits (pending_dept) -> P_DEPTHEAD approve-dept (pending_hr) -> P_HR approve-hr (approved). Verify the employee's leave balance decreased afterward."
+}

@@ -27,7 +27,7 @@ Route::prefix('admin/edge-devices')
 
 /* ─── Edge device API (per-device bearer token) ─────────────── */
 Route::prefix('edge/v1')
-    ->middleware(['auth:edge_device', StampEdgeLastSeen::class, 'throttle:60,1'])
+    ->middleware(['auth:edge_device', 'portal:edge_device', StampEdgeLastSeen::class, 'throttle:60,1'])
     ->group(function (): void {
         Route::get('/health', [EdgeHealthController::class, 'ping']);
         Route::post('/scan', [EdgeScanController::class, 'resolve'])

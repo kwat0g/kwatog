@@ -8,3 +8,8 @@ coverage
 *.log
 .DS_Store
 tsconfig.tsbuildinfo
+
+# Playwright generated artifacts
+playwright-report
+test-results
+.playwright

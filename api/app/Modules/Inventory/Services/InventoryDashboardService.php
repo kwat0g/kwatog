@@ -81,8 +81,8 @@ class InventoryDashboardService
                     'lead_time_days'  => (int) $item->lead_time_days,
                     'is_critical'     => (bool) $item->is_critical,
                     'severity'        => $available <= $safety ? 'critical' : 'low',
-                    'open_pr'         => $openPr ? ['number' => $openPr->pr_number, 'status' => (string) $openPr->status] : null,
-                    'open_po'         => $openPo ? ['number' => $openPo->po_number, 'status' => (string) $openPo->status] : null,
+                    'open_pr'         => $openPr ? ['number' => $openPr->pr_number, 'status' => $openPr->status?->value] : null,
+                    'open_po'         => $openPo ? ['number' => $openPo->po_number, 'status' => $openPo->status?->value] : null,
                 ];
             }
         }

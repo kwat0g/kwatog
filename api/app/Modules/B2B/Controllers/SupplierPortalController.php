@@ -22,6 +22,7 @@ use App\Modules\B2B\Requests\Supplier\SubmitInvoiceRequest;
 use App\Modules\B2B\Requests\Supplier\UploadShippingDocumentsRequest;
 use App\Modules\B2B\Resources\DeliveryScheduleResource;
 use App\Modules\Auth\Models\User;
+use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Resources\PurchaseOrderResource;
 use App\Modules\SupplyChain\Models\Delivery;
@@ -58,16 +59,17 @@ class SupplierPortalController extends Controller
         $pendingDeliveryCount = PurchaseOrder::where('vendor_id', $vendorId)
             ->where('status', 'sent')->count();
 
-        $unpaidInvoiceCount = Invoice::whereHas('purchaseOrder', fn ($q) => $q->where('vendor_id', $vendorId))
-            ->whereIn('status', ['sent', 'overdue', 'partial'])->count();
+        $unpaidInvoiceCount = Bill::where('vendor_id', $vendorId)
+            ->whereIn('status', ['unpaid', 'partial'])->count();
 
-        $totalUnpaid = Invoice::whereHas('purchaseOrder', fn ($q) => $q->where('vendor_id', $vendorId))
-            ->whereIn('status', ['sent', 'overdue', 'partial'])->sum('balance');
+        $totalUnpaid = Bill::where('vendor_id', $vendorId)
+            ->whereIn('status', ['unpaid', 'partial'])->sum('balance');
 
         $recentPos = PurchaseOrder::where('vendor_id', $vendorId)
             ->orderByDesc('created_at')->limit(5)->get();
 
-        $recentInvoices = Invoice::whereHas('purchaseOrder', fn ($q) => $q->where('vendor_id', $vendorId))
+        $recentInvoices = Bill::where('vendor_id', $vendorId)
+            ->with('purchaseOrder:id,po_number')
             ->orderByDesc('created_at')->limit(5)->get();
 
         return response()->json([
@@ -77,7 +79,7 @@ class SupplierPortalController extends Controller
                 'unpaid_invoice_count'   => $unpaidInvoiceCount,
                 'total_unpaid_amount'    => number_format((float) $totalUnpaid, 2),
                 'recent_pos'             => PurchaseOrderResource::collection($recentPos),
-                'recent_invoices'        => InvoiceResource::collection($recentInvoices),
+                'recent_invoices'        => BillResource::collection($recentInvoices),
             ],
         ]);
     }
@@ -474,21 +476,21 @@ class SupplierPortalController extends Controller
     {
         $user = $this->user($request);
 
-        $query = Invoice::whereHas('purchaseOrder', fn ($q) => $q->where('vendor_id', $user->vendor_id))
+        $query = Bill::where('vendor_id', $user->vendor_id)
             ->with(['purchaseOrder:id,po_number', 'vendor:id,name'])
             ->orderByDesc('created_at');
 
-        return InvoiceResource::collection($query->paginate(min((int) $request->query('per_page', 25), 100)));
+        return BillResource::collection($query->paginate(min((int) $request->query('per_page', 25), 100)));
     }
 
     /**
      * GET /api/v1/b2b/supplier/invoices/{id}
      */
-    public function invoiceDetail(Invoice $invoice, Request $request): InvoiceResource
+    public function invoiceDetail(Bill $invoice, Request $request): BillResource
     {
         $user = $this->user($request);
         abort_if(
-            !$invoice->purchaseOrder || $invoice->purchaseOrder->vendor_id !== $user->vendor_id,
+            $invoice->vendor_id !== $user->vendor_id,
             403,
             'You do not have access to this invoice.'
         );
@@ -500,7 +502,7 @@ class SupplierPortalController extends Controller
             'payments',
         ]);
 
-        return new InvoiceResource($invoice);
+        return new BillResource($invoice);
     }
 
     /**
@@ -510,8 +512,8 @@ class SupplierPortalController extends Controller
     {
         $user = $this->user($request);
 
-        $query = Delivery::whereHas('purchaseOrder', fn ($q) => $q->where('vendor_id', $user->vendor_id))
-            ->with(['purchaseOrder:id,po_number', 'driver:id,name'])
+        $query = GoodsReceiptNote::where('vendor_id', $user->vendor_id)
+            ->with(['purchaseOrder:id,po_number'])
             ->orderByDesc('created_at');
 
         if ($status = $request->query('status')) {

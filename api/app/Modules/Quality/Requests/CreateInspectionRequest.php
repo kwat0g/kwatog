@@ -51,7 +51,24 @@ class CreateInspectionRequest extends FormRequest
             }
         }
 
-        parent::prepareForValidation();
+        // Run the ResolvesHashIds trait's decoder for the static map
+        // (`product_id` etc). Overriding prepareForValidation in a subclass
+        // hides the trait's own implementation, so we re-run its logic here.
+        $fields = $this->hashIdFields();
+        if (! empty($fields)) {
+            $payload = $this->all();
+            $changed = false;
+            foreach ($fields as $path => $modelClass) {
+                $value = data_get($payload, $path);
+                if ($value === null || $value === '') continue;
+                $decoded = \App\Common\Support\HashIdFilter::decode($value, $modelClass);
+                \Illuminate\Support\Arr::set($payload, $path, $decoded);
+                $changed = true;
+            }
+            if ($changed) {
+                $this->merge($payload);
+            }
+        }
     }
 
     public function rules(): array

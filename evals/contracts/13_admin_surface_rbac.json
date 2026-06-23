@@ -1,0 +1,15 @@
+{
+  "id": "ogami-admin-surface-rbac",
+  "goal": "As a non-admin role (HR officer), attempt to reach the admin user-management and role-management pages. The system must deny access (403).",
+  "precondition": { "start_url": "http://localhost/admin/users" },
+  "postconditions": {
+    "url_contains": "localhost",
+    "http_status": 403,
+    "must_not_text_contains": ["Create User", "Manage Roles"]
+  },
+  "forbidden_states": ["captcha", "payment", "login_redirect"],
+  "evidence": { "trace": true, "actions": true, "screenshots": true },
+  "budget": { "steps": 8, "attempts": 1, "wall_clock_s": 120, "model_calls": 12, "usd": 0.50 },
+  "auth_profile": "P_HR",
+  "verified_live": "2026-06-23: hr/finance/emp -> 403 on /admin/users and /admin/roles; admin -> 200. Dashboard segregation also holds (hr 403 on /dashboard/accounting, 200 on /dashboard/hr)."
+}

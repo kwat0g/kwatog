@@ -1,0 +1,18 @@
+{
+  "id": "ogami-ot-sod-self-approve",
+  "goal": "As a department head who holds both attendance.ot.create and attendance.ot.approve, file your OWN overtime request and attempt to approve it. The system MUST refuse it (segregation of duties).",
+  "precondition": { "start_url": "http://localhost/hr/attendance/overtime/create" },
+  "postconditions": {
+    "url_contains": "localhost",
+    "text_contains": "You cannot approve your own overtime request.",
+    "http_status": 422,
+    "must_not_text_contains": ["approved"]
+  },
+  "forbidden_states": ["captcha", "payment", "login_redirect"],
+  "evidence": { "trace": true, "actions": true, "screenshots": true },
+  "budget": { "steps": 12, "attempts": 1, "wall_clock_s": 180, "model_calls": 18, "usd": 1.00 },
+  "auth_profile": "P_DEPTHEAD",
+  "expected_status": "PASSING",
+  "defect": "DEFECT-1 (FIXED 2026-06-23)",
+  "verified_live": "Before fix: self-approve -> HTTP 200 approved (guard dead — OvertimeService.php read $ot->employee?->user_id, a non-existent column). After fix ($ot->employee?->user?->id + controller try/catch -> 422): self-approve -> 422 'You cannot approve your own overtime request.', a different approver -> 200. Regression: api/tests/Feature/Attendance/OvertimeSelfApprovalSodTest.php."
+}

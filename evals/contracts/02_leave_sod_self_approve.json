@@ -1,0 +1,17 @@
+{
+  "id": "ogami-leave-sod-self-approve",
+  "goal": "As a department head who holds both leave.create and leave.approve_dept, file your OWN leave request and then attempt to approve it at the department step. The system must refuse it (segregation of duties).",
+  "precondition": { "start_url": "http://localhost/self-service/leave" },
+  "postconditions": {
+    "url_contains": "localhost",
+    "text_contains": "You cannot act on a record you submitted.",
+    "http_status": 422,
+    "must_not_text_contains": ["pending_hr", "approved"]
+  },
+  "forbidden_states": ["captcha", "payment", "login_redirect"],
+  "evidence": { "trace": true, "actions": true, "screenshots": true },
+  "budget": { "steps": 12, "attempts": 1, "wall_clock_s": 180, "model_calls": 18, "usd": 1.00 },
+  "auth_profile": "P_DEPTHEAD",
+  "verified_live": "2026-06-23: create 201 pending_dept; self approve-dept -> 422 with the expected message. Guard A active.",
+  "notes": "API equivalent: PATCH /api/v1/leaves/requests/{id}/approve-dept by the submitter -> 422."
+}

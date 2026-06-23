@@ -1,0 +1,16 @@
+{
+  "id": "ogami-payslip-horizontal-leak",
+  "goal": "As a base employee, attempt to open another employee's payslip by its hash id. The system must deny access (403).",
+  "precondition": { "start_url": "http://localhost/self-service/payslips" },
+  "postconditions": {
+    "url_contains": "localhost",
+    "http_status": 403,
+    "must_not_text_contains": ["net_pay", "basic_monthly_salary"]
+  },
+  "forbidden_states": ["captcha", "payment", "login_redirect"],
+  "evidence": { "trace": true, "actions": true, "screenshots": true },
+  "budget": { "steps": 8, "attempts": 1, "wall_clock_s": 120, "model_calls": 12, "usd": 0.50 },
+  "auth_profile": "P_EMP",
+  "verified_live": "2026-06-23: GET /api/v1/payrolls/{otherEmployeeHash} and /payslip both returned 403. authorizePayroll() guard works.",
+  "notes": "Target hash comes from the admin-visible payroll list (a different employee_id than P_EMP)."
+}

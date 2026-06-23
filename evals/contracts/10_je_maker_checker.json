@@ -1,0 +1,16 @@
+{
+  "id": "ogami-je-maker-checker",
+  "goal": "As a finance officer, create a balanced journal entry and then attempt to post it yourself. The system must refuse self-posting (segregation of duties); a different user (admin, holding the override) must be able to post it.",
+  "precondition": { "start_url": "http://localhost/accounting/journal-entries/create" },
+  "postconditions": {
+    "url_contains": "localhost",
+    "text_contains": "journal entry you created",
+    "http_status": 422
+  },
+  "forbidden_states": ["captcha", "payment", "login_redirect"],
+  "evidence": { "trace": true, "actions": true, "screenshots": true },
+  "budget": { "steps": 16, "attempts": 1, "wall_clock_s": 240, "model_calls": 24, "usd": 1.50 },
+  "auth_profiles": ["P_FINANCE", "P_ADMIN"],
+  "verified_live": "2026-06-23: finance self-post -> 422 'You cannot post a journal entry you created...segregation of duties.'; admin override-post -> 200 posted.",
+  "notes": "Second stage (P_ADMIN posts same JE) should reach status 'posted'. Override permission: accounting.journal.self_post_override."
+}

@@ -155,7 +155,13 @@ class OvertimeService
                 throw new RuntimeException('Only pending overtime requests can be approved.');
             }
 
-            $submitterId = $ot->employee?->user_id;
+            // SoD: the requesting employee must not approve their own OT. The
+            // user<->employee link is one-directional (users.employee_id ->
+            // employees.id), exposed via Employee::user(); there is NO
+            // employees.user_id column, so resolve the submitter through the
+            // relationship rather than a non-existent attribute (OGAMI audit
+            // DEFECT-1 — the old $ot->employee?->user_id was always null).
+            $submitterId = $ot->employee?->user?->id;
             if ($submitterId !== null && (int) $submitterId === (int) $approver->id) {
                 throw new RuntimeException('You cannot approve your own overtime request.');
             }

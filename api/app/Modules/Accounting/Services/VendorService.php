@@ -8,6 +8,7 @@ use App\Common\Support\SearchOperator;
 
 use App\Modules\Accounting\Models\Vendor;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -39,6 +40,15 @@ class VendorService
 
     public function create(array $data): Vendor
     {
+        // OGAMI audit DEFECT-2 — record the vendor's creator so the PO
+        // vendor-creator SoD guard (PurchaseOrderService::assertVendorSod) can
+        // fire. Caller-supplied created_by wins (seeders/imports); otherwise the
+        // authenticated web user. Only set when the column exists, so this stays
+        // safe if the migration has not run yet.
+        if (\Illuminate\Support\Facades\Schema::hasColumn('vendors', 'created_by')) {
+            $data['created_by'] ??= Auth::id();
+        }
+
         return DB::transaction(fn () => Vendor::create($data));
     }
 

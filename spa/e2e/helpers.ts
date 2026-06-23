@@ -63,7 +63,7 @@ export const USERS: Record<string, MockUser> = {
 // ── Auth Mocking ──────────────────────────────────────────────────────────
 
 /**
- * Mock Sanctum CSRF cookie + `/api/v1/user` endpoint for the given user.
+ * Mock Sanctum CSRF cookie + `/api/v1/auth/user` endpoint for the given user.
  *
  * Call this BEFORE `page.goto()` when you need full control over API mocking
  * (e.g. for loading state tests where the dashboard route should never resolve).
@@ -72,7 +72,7 @@ export async function mockAuth(page: Page, user: MockUser): Promise<void> {
   await page.route('**/sanctum/csrf-cookie', async (route) => {
     await route.fulfill({ status: 204 });
   });
-  await page.route('**/api/v1/user', async (route) => {
+  await page.route('**/api/v1/auth/user', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',

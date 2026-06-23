@@ -46,6 +46,9 @@ return Application::configure(basePath: dirname(__DIR__))
             'feature'           => CheckFeature::class,
             'session.timeout'   => SessionTimeout::class,
             'password.expired'  => CheckPasswordExpiry::class,
+            // B2B portal guard-type assertion — blocks web-session bleed into
+            // the sanctum-driver portal guards (see EnsurePortalGuard).
+            'portal'            => \App\Common\Middleware\EnsurePortalGuard::class,
             // Sanctum token-ability gate (T2.1 — Edge devices).
             'ability'           => \Laravel\Sanctum\Http\Middleware\CheckAbilities::class,
             'abilities'         => \Laravel\Sanctum\Http\Middleware\CheckForAnyAbility::class,

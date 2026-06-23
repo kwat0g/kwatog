@@ -23,7 +23,7 @@ class Vendor extends Model
 
     protected $fillable = [
         'name', 'contact_person', 'email', 'phone', 'address',
-        'tin', 'payment_terms_days', 'is_active',
+        'tin', 'payment_terms_days', 'is_active', 'created_by',
     ];
 
     protected $casts = [
