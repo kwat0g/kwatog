@@ -40,3 +40,4 @@ api/.phpunit.result.cache
 # Local docker overrides
 docker-compose.override.yml
 /backups/
+.claude/worktrees/
