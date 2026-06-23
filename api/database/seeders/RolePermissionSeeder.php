@@ -272,6 +272,9 @@ class RolePermissionSeeder extends Seeder
                 // `manage` = catalog CRUD + publish revisions + mark-reviewed.
                 ['slug' => 'quality.documents.view',       'name' => 'View Controlled Documents'],
                 ['slug' => 'quality.documents.manage',     'name' => 'Manage Controlled Documents'],
+                // PPAP & APQP tracking (IATF 16949).
+                ['slug' => 'quality.ppap.view',            'name' => 'View PPAP Submissions'],
+                ['slug' => 'quality.ppap.manage',          'name' => 'Manage PPAP Submissions'],
             ],
 
             // Maintenance
@@ -427,7 +430,7 @@ class RolePermissionSeeder extends Seeder
                         'inventory.view',
                         // Quality: view + read sub-resources for quality dashboard / NCR/inspection pages
                         'quality.view', 'quality.inspections.view', 'quality.ncr.view',
-                        'quality.copq.view',
+                        'quality.copq.view', 'quality.ppap.view',
                         'dashboard.plant_manager.view', 'dashboard.ppc.view',
                         'maintenance.view', 'assets.view',
                         'search.global', 'notifications.preferences.manage',
@@ -468,6 +471,8 @@ class RolePermissionSeeder extends Seeder
                         'forecasting.view',
                         'return_management.view', 'return_management.manage',
                         'dashboard.purchasing.view',
+                        // PPAP: purchasing owns supplier part-approval.
+                        'quality.ppap.view', 'quality.ppap.manage',
                     ],
                 ),
             ],
