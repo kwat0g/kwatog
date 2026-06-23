@@ -65,6 +65,11 @@ class ReturnRequestResource extends JsonResource
                 'invoice_number' => $this->creditNote->invoice_number,
             ] : null),
 
+            'debit_note'           => $this->whenLoaded('debitNote', fn () => $this->debitNote ? [
+                'id'          => $this->debitNote->hash_id,
+                'bill_number' => $this->debitNote->bill_number,
+            ] : null),
+
             'items'                => $this->whenLoaded('items', fn () =>
                 ReturnRequestItemResource::collection($this->items)
             ),

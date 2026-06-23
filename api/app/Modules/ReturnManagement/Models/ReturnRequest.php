@@ -6,6 +6,7 @@ namespace App\Modules\ReturnManagement\Models;
 
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
+use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Models\Vendor;
@@ -42,6 +43,7 @@ class ReturnRequest extends Model
         'internal_notes',
         'resolution',
         'credit_note_id',
+        'debit_note_id',
         'replacement_wo_id',
         'refund_amount',
         'stock_movement_id',
@@ -108,6 +110,15 @@ class ReturnRequest extends Model
     public function creditNote(): BelongsTo
     {
         return $this->belongsTo(Invoice::class, 'credit_note_id');
+    }
+
+    /**
+     * Debit memo issued against a supplier return (references a Bill with
+     * negative total). Populated by ReturnRequestService::complete().
+     */
+    public function debitNote(): BelongsTo
+    {
+        return $this->belongsTo(Bill::class, 'debit_note_id');
     }
 
     public function stockMovement(): BelongsTo
