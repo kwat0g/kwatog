@@ -22,6 +22,7 @@ Route::middleware(['auth:sanctum'])->prefix('return-management')->group(function
     Route::post('/return-requests/{returnRequest}/approve',  [ReturnRequestController::class, 'approve']) ->middleware('permission:return_management.manage');
     Route::post('/return-requests/{returnRequest}/receive',  [ReturnRequestController::class, 'receive']) ->middleware('permission:return_management.manage');
     Route::post('/return-requests/{returnRequest}/inspect',  [ReturnRequestController::class, 'inspect']) ->middleware('permission:return_management.manage');
+    Route::post('/return-requests/{returnRequest}/dispose',  [ReturnRequestController::class, 'dispose']) ->middleware('permission:return_management.manage');
     Route::post('/return-requests/{returnRequest}/complete', [ReturnRequestController::class, 'complete'])->middleware('permission:return_management.manage');
     Route::post('/return-requests/{returnRequest}/reject',   [ReturnRequestController::class, 'reject'])  ->middleware('permission:return_management.manage');
     Route::post('/return-requests/{returnRequest}/cancel',   [ReturnRequestController::class, 'cancel'])  ->middleware('permission:return_management.manage');

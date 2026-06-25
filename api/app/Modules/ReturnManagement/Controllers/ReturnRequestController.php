@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\ReturnManagement\Controllers;
 
 use App\Modules\ReturnManagement\Models\ReturnRequest;
+use App\Modules\ReturnManagement\Requests\DisposeReturnRequest;
 use App\Modules\ReturnManagement\Resources\ReturnRequestResource;
 use App\Modules\ReturnManagement\Services\ReturnRequestService;
 use Illuminate\Http\Request;
@@ -71,6 +72,7 @@ class ReturnRequestController extends Controller
         $returnRequest->load([
             'items.product',
             'items.item',
+            'items.ncr:id,ncr_number',
             'customer',
             'vendor',
             'salesOrder',
@@ -78,6 +80,7 @@ class ReturnRequestController extends Controller
             'purchaseOrder',
             'bill',
             'creditNote',
+            'creditMemo',
             'creator:id,name',
             'approver:id,name',
             'completer:id,name',
@@ -165,6 +168,16 @@ class ReturnRequestController extends Controller
 
         $rma = $this->service->inspect($returnRequest, $validated['internal_notes'] ?? null, $request->user());
         return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor']));
+    }
+
+    /**
+     * Dispose items on an inspected RMA.
+     */
+    public function dispose(DisposeReturnRequest $request, ReturnRequest $returnRequest): ReturnRequestResource
+    {
+        return new ReturnRequestResource(
+            $this->service->dispose($returnRequest, $request->validated()['dispositions'], $request->user())
+        );
     }
 
     /**

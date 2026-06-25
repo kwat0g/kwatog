@@ -32,6 +32,7 @@ class ReturnRequest extends Model
         'rma_number',
         'type',
         'status',
+        'disposition_status',
         'sales_order_id',
         'invoice_id',
         'purchase_order_id',
@@ -44,6 +45,7 @@ class ReturnRequest extends Model
         'internal_notes',
         'resolution',
         'credit_note_id',
+        'credit_memo_id',
         'replacement_wo_id',
         'refund_amount',
         'stock_movement_id',
@@ -112,6 +114,11 @@ class ReturnRequest extends Model
     public function creditNote(): BelongsTo
     {
         return $this->belongsTo(Invoice::class, 'credit_note_id');
+    }
+
+    public function creditMemo(): BelongsTo
+    {
+        return $this->belongsTo(Invoice::class, 'credit_memo_id');
     }
 
     public function stockMovement(): BelongsTo

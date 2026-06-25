@@ -7,6 +7,7 @@ namespace App\Modules\ReturnManagement\Models;
 use App\Common\Traits\HasHashId;
 use App\Modules\CRM\Models\Product;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Quality\Models\NonConformanceReport;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -25,6 +26,9 @@ class ReturnRequestItem extends Model
         'total',
         'reason',
         'condition',
+        'disposition',
+        'disposition_notes',
+        'ncr_id',
         'stock_movement_quantity',
         'source_sales_order_item_id',
         'source_invoice_item_id',
@@ -53,5 +57,10 @@ class ReturnRequestItem extends Model
     public function item(): BelongsTo
     {
         return $this->belongsTo(Item::class);
+    }
+
+    public function ncr(): BelongsTo
+    {
+        return $this->belongsTo(NonConformanceReport::class, 'ncr_id');
     }
 }

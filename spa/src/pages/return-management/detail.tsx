@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, lazy, Suspense } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -10,6 +10,8 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { returnManagementApi } from '@/api/returnManagement';
 import { usePermission } from '@/hooks/usePermission';
+
+const DisposeDialog = lazy(() => import('./dispose'));
 
 const STATUS_VARIANT: Record<string, 'success' | 'danger' | 'warning' | 'info' | 'neutral' | 'purple'> = {
   draft: 'neutral',
@@ -55,6 +57,7 @@ export default function ReturnRequestDetailPage() {
   const [confirmAction, setConfirmAction] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [locationId, setLocationId] = useState('');
+  const [showDispose, setShowDispose] = useState(false);
 
   const { data: rma, isLoading, isError, refetch } = useQuery({
     queryKey: ['return-request', id],
@@ -102,8 +105,9 @@ export default function ReturnRequestDetailPage() {
         { key: 'reject', label: 'Reject', variant: 'danger' },
       ];
       case 'inspected': return [
-        { key: 'complete', label: 'Complete RMA', variant: 'primary' },
-        { key: 'reject', label: 'Reject', variant: 'danger' },
+        ...(rma?.disposition_status !== 'disposed' ? [{ key: 'dispose', label: 'Dispose Items', variant: 'primary' as const }] : []),
+        { key: 'complete', label: 'Complete RMA', variant: 'primary' as const },
+        { key: 'reject', label: 'Reject', variant: 'danger' as const },
       ];
       default: return [];
     }
@@ -159,6 +163,8 @@ export default function ReturnRequestDetailPage() {
                 onClick={() => {
                   if (action.key === 'reject') {
                     setConfirmAction('reject');
+                  } else if (action.key === 'dispose') {
+                    setShowDispose(true);
                   } else {
                     actionMutation.mutate({ action: action.key });
                   }
@@ -323,6 +329,7 @@ export default function ReturnRequestDetailPage() {
                   <th className="py-2 pr-3 font-medium">Unit Price</th>
                   <th className="py-2 pr-3 font-medium">Condition</th>
                   <th className="py-2 pr-3 font-medium">Reason</th>
+                  <th className="py-2 pr-3 font-medium">Disposition</th>
                 </tr>
               </thead>
               <tbody>
@@ -340,6 +347,11 @@ export default function ReturnRequestDetailPage() {
                     <td className="py-2 pr-3">₱{parseFloat(item.unit_price).toLocaleString()}</td>
                     <td className="py-2 pr-3">{CONDITION_LABELS[item.condition ?? ''] || item.condition || '—'}</td>
                     <td className="py-2 pr-3">{item.reason || '—'}</td>
+                    <td className="py-2 pr-3">
+                      {item.disposition
+                        ? <Chip variant={item.disposition === 'restock' ? 'success' : item.disposition === 'scrap' ? 'danger' : 'warning'}>{item.disposition.replace('_', ' ')}</Chip>
+                        : '—'}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -400,6 +412,13 @@ export default function ReturnRequestDetailPage() {
           </div>
         </div>
       </Modal>
+
+      {/* Dispose Items Dialog */}
+      {rma && showDispose && (
+        <Suspense fallback={null}>
+          <DisposeDialog rma={rma} isOpen={showDispose} onClose={() => setShowDispose(false)} />
+        </Suspense>
+      )}
     </div>
   );
 }

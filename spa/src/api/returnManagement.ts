@@ -1,5 +1,5 @@
 import { client } from '@/api/client';
-import type { ReturnRequest, ReturnRequestFormData } from '@/types/returnManagement';
+import type { ReturnRequest, ReturnRequestFormData, DispositionPayload } from '@/types/returnManagement';
 
 export const returnManagementApi = {
   list: (params?: Record<string, string | number | undefined>) =>
@@ -22,6 +22,9 @@ export const returnManagementApi = {
 
   inspect: (id: string, internalNotes?: string) =>
     client.post(`/return-management/return-requests/${id}/inspect`, { internal_notes: internalNotes }).then((r) => r.data.data as ReturnRequest),
+
+  dispose: (id: string, dispositions: DispositionPayload[]) =>
+    client.post<{ data: ReturnRequest }>(`/return-management/return-requests/${id}/dispose`, { dispositions }).then((r) => r.data.data),
 
   complete: (id: string, locationId?: string) =>
     client.post(`/return-management/return-requests/${id}/complete`, { location_id: locationId }).then((r) => r.data.data as ReturnRequest),

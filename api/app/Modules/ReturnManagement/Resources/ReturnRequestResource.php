@@ -19,6 +19,7 @@ class ReturnRequestResource extends JsonResource
             'status'               => $this->status?->value,
             'status_label'         => $this->status?->label(),
             'is_editable'          => $this->is_editable,
+            'disposition_status'   => $this->disposition_status,
 
             'reason_code'          => $this->reason_code,
             'reason_description'   => $this->reason_description,
@@ -63,6 +64,11 @@ class ReturnRequestResource extends JsonResource
             'credit_note'          => $this->whenLoaded('creditNote', fn () => $this->creditNote ? [
                 'id'             => $this->creditNote->hash_id,
                 'invoice_number' => $this->creditNote->invoice_number,
+            ] : null),
+
+            'credit_memo'          => $this->whenLoaded('creditMemo', fn () => $this->creditMemo ? [
+                'id'             => $this->creditMemo->hash_id,
+                'invoice_number' => $this->creditMemo->invoice_number,
             ] : null),
 
             'debit_note'           => $this->whenLoaded('debitNote', fn () => $this->debitNote ? [

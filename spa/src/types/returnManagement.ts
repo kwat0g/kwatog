@@ -1,3 +1,11 @@
+export type DispositionType = 'scrap' | 'rework' | 'restock' | 'return_to_supplier';
+
+export interface DispositionPayload {
+  item_id: string;
+  disposition: DispositionType;
+  notes?: string;
+}
+
 export interface ReturnRequestItem {
   id: string;
   product_id?: number;
@@ -8,6 +16,9 @@ export interface ReturnRequestItem {
   total: string;
   reason?: string;
   condition?: string;
+  disposition?: DispositionType;
+  disposition_notes?: string;
+  ncr?: { id: string; ncr_number: string };
   product?: { id: string; part_number: string; name: string };
   item?: { id: string; code: string; name: string };
 }
@@ -20,6 +31,7 @@ export interface ReturnRequest {
   status: string;
   status_label: string;
   is_editable: boolean;
+  disposition_status?: string;
   reason_code?: string;
   reason_description?: string;
   customer_notes?: string;
@@ -35,6 +47,7 @@ export interface ReturnRequest {
   customer?: { id: string; name: string };
   vendor?: { id: string; name: string };
   credit_note?: { id: string; invoice_number: string };
+  credit_memo?: { id: string; invoice_number: string };
   items?: ReturnRequestItem[];
   item_count: number;
   creator?: { id: string; name: string };

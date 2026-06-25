@@ -12,6 +12,7 @@ use App\Modules\Quality\Enums\InspectionEntityType;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Services\InspectionService;
+use App\Modules\Quality\Services\NcrService;
 use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
 use App\Modules\ReturnManagement\Enums\ReturnRequestType;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
@@ -239,6 +240,85 @@ class ReturnRequestService
 
             return $rma->fresh();
         });
+    }
+
+    /**
+     * Dispose items on an inspected RMA (inspected → disposition_status=disposed).
+     *
+     * For each item, sets a disposition (scrap/rework/restock/return_to_supplier).
+     * Auto-creates NCRs for scrap/rework items with a product. Auto-creates
+     * a credit memo for customer returns with positive item totals.
+     */
+    public function dispose(ReturnRequest $rma, array $dispositions, User $by): ReturnRequest
+    {
+        $this->ensureStatus($rma, ReturnRequestStatus::Inspected);
+
+        return DB::transaction(function () use ($rma, $dispositions, $by) {
+            $rma->load('items');
+
+            foreach ($rma->items as $item) {
+                $disp = collect($dispositions)->firstWhere('item_id', $item->hash_id);
+                if (! $disp) {
+                    continue;
+                }
+
+                $item->update([
+                    'disposition'       => $disp['disposition'],
+                    'disposition_notes' => $disp['notes'] ?? null,
+                ]);
+
+                // Auto-NCR for quality issues (scrap or rework with a product)
+                if (in_array($disp['disposition'], ['scrap', 'rework'], true) && $item->product_id) {
+                    $ncrService = app(NcrService::class);
+                    $ncr = $ncrService->create([
+                        'source'             => 'customer_complaint',
+                        'severity'           => 'medium',
+                        'product_id'         => $item->product_id,
+                        'defect_description' => "Auto-created from RMA {$rma->rma_number}. "
+                            . "Disposition: {$disp['disposition']}. "
+                            . ($disp['notes'] ?? ''),
+                        'affected_quantity'  => (int) ($item->returned_quantity > 0
+                            ? $item->returned_quantity
+                            : $item->quantity),
+                        'is_auto_generated'  => true,
+                    ], $by);
+                    $item->update(['ncr_id' => $ncr->id]);
+                }
+            }
+
+            $rma->update(['disposition_status' => 'disposed']);
+
+            // Auto credit memo for customer returns
+            if ($rma->type === ReturnRequestType::CustomerReturn && $rma->invoice_id) {
+                $creditTotal = $rma->items->sum(fn ($i) => (float) $i->total);
+                if ($creditTotal > 0) {
+                    $creditMemo = $this->createCreditMemo($rma, $creditTotal, $by);
+                    $rma->update(['credit_memo_id' => $creditMemo->id]);
+                }
+            }
+
+            return $rma->fresh()->load('items');
+        });
+    }
+
+    /**
+     * Create a credit memo (negative invoice) for a customer return.
+     */
+    private function createCreditMemo(ReturnRequest $rma, float $amount, User $by): \App\Modules\Accounting\Models\Invoice
+    {
+        return \App\Modules\Accounting\Models\Invoice::create([
+            'invoice_number' => $this->sequences->generate('invoice'),
+            'customer_id'    => $rma->customer_id,
+            'status'         => 'finalized',
+            'subtotal'       => -abs($amount),
+            'vat_amount'     => -abs(round($amount * 0.12, 2)),
+            'total_amount'   => -abs(round($amount * 1.12, 2)),
+            'balance'        => -abs(round($amount * 1.12, 2)),
+            'date'           => now()->toDateString(),
+            'due_date'       => now()->toDateString(),
+            'remarks'        => "Credit memo for RMA {$rma->rma_number}",
+            'created_by'     => $by->id,
+        ]);
     }
 
     /**

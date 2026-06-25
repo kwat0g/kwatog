@@ -21,6 +21,12 @@ class ReturnRequestItemResource extends JsonResource
             'total'             => (string) $this->total,
             'reason'            => $this->reason,
             'condition'         => $this->condition,
+            'disposition'       => $this->disposition,
+            'disposition_notes' => $this->disposition_notes,
+            'ncr'               => $this->whenLoaded('ncr', fn () => $this->ncr ? [
+                'id'         => $this->ncr->hash_id,
+                'ncr_number' => $this->ncr->ncr_number,
+            ] : null),
             'product'           => $this->whenLoaded('product', fn () => $this->product ? [
                 'id'          => $this->product->hash_id,
                 'part_number' => $this->product->part_number,
