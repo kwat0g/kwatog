@@ -7,6 +7,7 @@ namespace App\Modules\Admin\Controllers;
 use App\Common\Models\AuditLog;
 use App\Common\Support\AuditFieldLabels;
 use App\Common\Support\SearchOperator;
+use App\Common\Services\Pdf\PdfRenderService;
 use App\Modules\Admin\Resources\AuditLogResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -108,6 +109,70 @@ class AuditLogController
             'Content-Type'        => 'text/csv; charset=UTF-8',
             'Cache-Control'       => 'no-store, no-cache, must-revalidate',
             'X-Content-Type-Options' => 'nosniff',
+        ]);
+    }
+
+    /**
+     * Entity-scoped audit trail — "show me all changes to PO-202604-0015".
+     * IATF 16949 compliance: full traceability per record across all actions.
+     *
+     * Accepts model_type (class basename or FQCN) + model_id (hashid or int).
+     */
+    public function entityTrail(Request $request): AnonymousResourceCollection
+    {
+        $modelType = $request->input('model_type');
+        $modelId   = $request->input('model_id');
+
+        abort_if(!$modelType || !$modelId, 422, 'model_type and model_id required');
+
+        // Decode hashid to integer if possible; fall back to raw int for tests.
+        $decoded = app('hashids')->decode((string) $modelId);
+        $numericId = !empty($decoded) ? (int) $decoded[0] : (ctype_digit((string) $modelId) ? (int) $modelId : null);
+        abort_if($numericId === null, 422, 'Invalid model_id');
+
+        $query = AuditLog::query()
+            ->where(function ($q) use ($modelType) {
+                // Match exact FQCN or basename (e.g. "PurchaseOrder" matches
+                // "App\Modules\Purchasing\Models\PurchaseOrder").
+                $q->where('model_type', $modelType)
+                  ->orWhere('model_type', SearchOperator::like(), '%\\'.$modelType);
+            })
+            ->where('model_id', $numericId)
+            ->with(['user:id,name,email,role_id', 'user.role:id,name,slug'])
+            ->orderByDesc('created_at');
+
+        return AuditLogResource::collection($query->paginate(100));
+    }
+
+    /**
+     * PDF export of audit logs — same filter set as index().
+     * Capped at 500 rows to keep PDF rendering performant.
+     */
+    public function exportPdf(Request $request, PdfRenderService $pdfService): \Illuminate\Http\Response
+    {
+        $logs = $this->filteredQuery($request)
+            ->with('user:id,name,email')
+            ->limit(500)
+            ->get();
+
+        $filterSummary = collect($request->only([
+            'model_type', 'user_id', 'action', 'from', 'to',
+        ]))->filter()->map(fn ($v, $k) => "{$k}={$v}")->implode(', ') ?: 'None';
+
+        $bytes = $pdfService->render('pdf.audit-log', [
+            'logs'          => $logs,
+            'filterSummary' => $filterSummary,
+        ], [
+            'orientation' => 'landscape',
+            'title'       => 'Audit Trail Report',
+        ]);
+
+        $filename = 'audit-trail-'.now()->format('Ymd-His').'.pdf';
+
+        return response($bytes, 200, [
+            'Content-Type'        => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+            'Cache-Control'       => 'no-store, no-cache, must-revalidate',
         ]);
     }
 

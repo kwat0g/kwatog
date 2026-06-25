@@ -28,6 +28,9 @@ const AdminGovTablesPage = lazy(() => import('@/pages/admin/gov-tables'));
 // Audit log diff (Sprint 8 — Task 79; list page already exists)
 const AuditLogDetailPage = lazy(() => import('@/pages/admin/audit-logs/detail'));
 
+// Entity-scoped audit trail — IATF compliance
+const EntityAuditTrailPage = lazy(() => import('@/pages/admin/audit-logs/entity'));
+
 export const adminRoutes = (
   <>
     {/* Admin — no hub page, direct access to sub-pages */}
@@ -86,6 +89,15 @@ export const adminRoutes = (
       element={
         <PermissionGuard permission="admin.audit_logs.view">
           <AuditLogsPage />
+        </PermissionGuard>
+      }
+    />
+    {/* Entity-scoped audit trail — must come before :id */}
+    <Route
+      path="/admin/audit-logs/entity"
+      element={
+        <PermissionGuard permission="admin.audit_logs.view">
+          <EntityAuditTrailPage />
         </PermissionGuard>
       }
     />

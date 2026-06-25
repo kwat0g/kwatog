@@ -66,10 +66,17 @@ Route::prefix('admin')
     ->group(function (): void {
         Route::get('audit-logs',         [\App\Modules\Admin\Controllers\AuditLogController::class, 'index'])
             ->middleware('permission:admin.audit_logs.view');
+        // Entity-scoped trail — "show all changes to PO-202604-0015".
+        // Must come before `{id}` to avoid segment capture.
+        Route::get('audit-logs/entity', [\App\Modules\Admin\Controllers\AuditLogController::class, 'entityTrail'])
+            ->middleware('permission:admin.audit_logs.view');
         // Sprint P7 — CSV export. Same filter set as `index`. Must come
         // before the `{id}` route to keep `export` from being matched as
         // an id segment.
         Route::get('audit-logs/export',  [\App\Modules\Admin\Controllers\AuditLogController::class, 'export'])
+            ->middleware('permission:admin.audit_logs.view');
+        // PDF export — same filter set as index, rendered as landscape PDF.
+        Route::get('audit-logs/export/pdf', [\App\Modules\Admin\Controllers\AuditLogController::class, 'exportPdf'])
             ->middleware('permission:admin.audit_logs.view');
         Route::get('audit-logs/{id}',    [\App\Modules\Admin\Controllers\AuditLogController::class, 'show'])
             ->middleware('permission:admin.audit_logs.view')
