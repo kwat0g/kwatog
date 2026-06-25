@@ -10,6 +10,10 @@ const AssetDetailPage      = lazy(() => import('@/pages/assets/detail'));
 const EditAssetPage        = lazy(() => import('@/pages/assets/edit'));
 const DepreciationRunsPage = lazy(() => import('@/pages/admin/depreciation'));
 
+// Asset Transfers
+const AssetTransfersListPage  = lazy(() => import('@/pages/assets/transfers'));
+const CreateAssetTransferPage = lazy(() => import('@/pages/assets/transfers/create'));
+
 export const assetsRoutes = (
   <>
     {/* Assets module (Sprint 8 — Task 70) */}
@@ -18,6 +22,11 @@ export const assetsRoutes = (
         element={<PermissionGuard permission="assets.view"><AssetsListPage /></PermissionGuard>} />
       <Route path="/assets/create"
         element={<PermissionGuard permission="assets.create"><CreateAssetPage /></PermissionGuard>} />
+      {/* Asset Transfers — literal paths before :id param */}
+      <Route path="/assets/transfers"
+        element={<PermissionGuard permission="assets.transfer"><AssetTransfersListPage /></PermissionGuard>} />
+      <Route path="/assets/transfers/create"
+        element={<PermissionGuard permission="assets.transfer"><CreateAssetTransferPage /></PermissionGuard>} />
       <Route path="/assets/:id"
         element={<PermissionGuard permission="assets.view"><AssetDetailPage /></PermissionGuard>} />
       <Route path="/assets/:id/edit"

@@ -27,6 +27,10 @@ const ComplaintsListPage  = lazy(() => import('@/pages/crm/complaints'));
 const ComplaintDetailPage = lazy(() => import('@/pages/crm/complaints/detail'));
 const ComplaintCreatePage = lazy(() => import('@/pages/crm/complaints/create'));
 
+// Commission tracking
+const CommissionsListPage = lazy(() => import('@/pages/crm/commissions'));
+const CommissionRatesPage = lazy(() => import('@/pages/crm/commissions/rates'));
+
 export const crmRoutes = (
   <>
     {/* CRM module (Sprint 6 — Tasks 47, 48) */}
@@ -74,6 +78,12 @@ export const crmRoutes = (
         element={<PermissionGuard permission="crm.complaints.manage"><ComplaintCreatePage /></PermissionGuard>} />
       <Route path="/crm/complaints/:id"
         element={<PermissionGuard permission="crm.complaints.manage"><ComplaintDetailPage /></PermissionGuard>} />
+
+      {/* Commission tracking */}
+      <Route path="/crm/commissions"
+        element={<PermissionGuard permission="crm.commissions.view"><CommissionsListPage /></PermissionGuard>} />
+      <Route path="/crm/commissions/rates"
+        element={<PermissionGuard permission="crm.commissions.manage"><CommissionRatesPage /></PermissionGuard>} />
     </Route>
   </>
 );

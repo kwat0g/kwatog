@@ -49,3 +49,30 @@ export interface DisposeAssetData {
   disposed_date?: string;
   remarks?: string;
 }
+
+/* ── Asset Transfers ── */
+
+export type AssetTransferStatus = 'pending' | 'approved' | 'rejected' | 'completed';
+
+export interface AssetTransfer {
+  id: string;
+  transfer_number: string;
+  asset: { id: string; asset_code: string; name: string };
+  from_department: { id: string; name: string };
+  to_department: { id: string; name: string };
+  reason: string | null;
+  transfer_date: string;
+  status: AssetTransferStatus;
+  requested_by: string;
+  approved_by: string | null;
+  approved_at: string | null;
+  created_at: string;
+}
+
+export interface CreateTransferData {
+  asset_id: string;
+  from_department_id: string;
+  to_department_id: string;
+  reason?: string;
+  transfer_date: string;
+}
