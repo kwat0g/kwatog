@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Modules\Accounting\Controllers\CustomerController;
+use App\Modules\CRM\Controllers\CommissionController;
 use App\Modules\CRM\Controllers\ComplaintController;
 use App\Modules\CRM\Controllers\LeadController;
 use App\Modules\CRM\Controllers\OpportunityController;
@@ -99,4 +100,13 @@ Route::middleware(['auth:sanctum', 'feature:crm'])->prefix('crm')->group(functio
         ->middleware('permission:crm.complaints.manage');
     Route::get('/complaints/{complaint}/8d/pdf',           [ComplaintController::class, 'pdf'])
         ->middleware('permission:crm.complaints.manage');
+
+    /* ─── Commission tracking ─── */
+    Route::prefix('commissions')->group(function () {
+        Route::get('/',           [CommissionController::class, 'index'])->middleware('permission:crm.commissions.view');
+        Route::get('/rates',      [CommissionController::class, 'rates'])->middleware('permission:crm.commissions.view');
+        Route::post('/rates',     [CommissionController::class, 'setRate'])->middleware('permission:crm.commissions.manage');
+        Route::post('/{earning}/approve', [CommissionController::class, 'approve'])->middleware('permission:crm.commissions.manage');
+        Route::post('/batch-paid', [CommissionController::class, 'batchPaid'])->middleware('permission:crm.commissions.manage');
+    });
 });

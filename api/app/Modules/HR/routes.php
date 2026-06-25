@@ -7,7 +7,9 @@ use App\Modules\HR\Controllers\EmployeeAccountController;
 use App\Modules\HR\Controllers\EmployeeController;
 use App\Modules\HR\Controllers\EmployeeDirectoryController;
 use App\Modules\HR\Controllers\EmployeeOnboardingController;
+use App\Modules\HR\Controllers\PerformanceReviewController;
 use App\Modules\HR\Controllers\PositionController;
+use App\Modules\HR\Controllers\SuccessionPlanController;
 use App\Modules\HR\Controllers\ProfileUpdateReviewController;
 use App\Modules\HR\Controllers\SelfServiceController;
 use Illuminate\Support\Facades\Route;
@@ -166,6 +168,24 @@ Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function 
 
         // T3.4.A — read-only training records for the session employee.
         Route::get('/trainings', [SelfServiceController::class, 'trainings']);
+    });
+
+    // Succession planning
+    Route::apiResource('succession-plans', SuccessionPlanController::class)
+        ->middleware('permission:hr.succession.manage');
+
+    // Performance reviews
+    Route::prefix('performance-reviews')->middleware('permission:hr.performance.view')->group(function () {
+        Route::get('/cycles',                    [PerformanceReviewController::class, 'cycles']);
+        Route::post('/cycles',                   [PerformanceReviewController::class, 'storeCycle'])->middleware('permission:hr.performance.manage');
+        Route::post('/cycles/{cycle}/activate',  [PerformanceReviewController::class, 'activateCycle'])->middleware('permission:hr.performance.manage');
+        Route::post('/cycles/{cycle}/close',     [PerformanceReviewController::class, 'closeCycle'])->middleware('permission:hr.performance.manage');
+        Route::get('/',                          [PerformanceReviewController::class, 'index']);
+        Route::post('/',                         [PerformanceReviewController::class, 'store'])->middleware('permission:hr.performance.manage');
+        Route::post('/{review}/submit',          [PerformanceReviewController::class, 'submit']);
+        Route::post('/{review}/acknowledge',     [PerformanceReviewController::class, 'acknowledge']);
+        Route::get('/templates',                 [PerformanceReviewController::class, 'templates']);
+        Route::post('/templates',                [PerformanceReviewController::class, 'storeTemplate'])->middleware('permission:hr.performance.manage');
     });
 
     // Sprint 8 — Task 71: clearance lifecycle

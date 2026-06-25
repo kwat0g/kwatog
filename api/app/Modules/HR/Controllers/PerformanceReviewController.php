@@ -1,0 +1,97 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Modules\HR\Controllers;
+
+use App\Modules\HR\Models\PerformanceReview;
+use App\Modules\HR\Models\ReviewCycle;
+use App\Modules\HR\Services\PerformanceReviewService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Routing\Controller;
+
+class PerformanceReviewController extends Controller
+{
+    public function __construct(private readonly PerformanceReviewService $service) {}
+
+    public function cycles(Request $request): JsonResponse
+    {
+        return response()->json($this->service->listCycles($request->all()));
+    }
+
+    public function storeCycle(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'name'        => ['required', 'string', 'max:100'],
+            'cycle_type'  => ['required', 'string'],
+            'start_date'  => ['required', 'date'],
+            'end_date'    => ['required', 'date', 'after:start_date'],
+            'description' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        return response()->json(['data' => $this->service->createCycle($data)], 201);
+    }
+
+    public function activateCycle(ReviewCycle $cycle): JsonResponse
+    {
+        return response()->json(['data' => $this->service->activateCycle($cycle)]);
+    }
+
+    public function closeCycle(ReviewCycle $cycle): JsonResponse
+    {
+        return response()->json(['data' => $this->service->closeCycle($cycle)]);
+    }
+
+    public function index(Request $request): JsonResponse
+    {
+        return response()->json($this->service->listReviews($request->all()));
+    }
+
+    public function store(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'review_cycle_id' => ['required', 'integer', 'exists:review_cycles,id'],
+            'employee_id'     => ['required', 'integer', 'exists:employees,id'],
+            'reviewer_id'     => ['required', 'integer', 'exists:employees,id'],
+            'template_id'     => ['nullable', 'integer', 'exists:review_templates,id'],
+        ]);
+
+        return response()->json(['data' => $this->service->createReview($data)], 201);
+    }
+
+    public function submit(PerformanceReview $review, Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'ratings'        => ['required', 'array'],
+            'strengths'      => ['nullable', 'string', 'max:5000'],
+            'improvements'   => ['nullable', 'string', 'max:5000'],
+            'goals'          => ['nullable', 'string', 'max:5000'],
+            'overall_score'  => ['required', 'decimal:0,2', 'min:1', 'max:5'],
+            'overall_rating' => ['required', 'string', 'max:30'],
+        ]);
+
+        return response()->json(['data' => $this->service->submitReview($review, $data)]);
+    }
+
+    public function acknowledge(PerformanceReview $review): JsonResponse
+    {
+        return response()->json(['data' => $this->service->acknowledge($review)]);
+    }
+
+    public function templates(): JsonResponse
+    {
+        return response()->json($this->service->listTemplates());
+    }
+
+    public function storeTemplate(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'name'        => ['required', 'string', 'max:100'],
+            'description' => ['nullable', 'string', 'max:2000'],
+            'criteria'    => ['required', 'array'],
+        ]);
+
+        return response()->json(['data' => $this->service->createTemplate($data)], 201);
+    }
+}

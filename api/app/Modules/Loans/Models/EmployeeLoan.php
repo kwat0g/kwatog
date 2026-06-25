@@ -27,6 +27,7 @@ class EmployeeLoan extends Model
         'pay_periods_total', 'pay_periods_remaining',
         'approval_chain_size', 'purpose',
         'is_final_pay_deduction',
+        'government_reference_no',
     ];
 
     protected $casts = [

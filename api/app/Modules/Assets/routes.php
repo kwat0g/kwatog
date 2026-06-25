@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Modules\Assets\Controllers\AssetController;
 use App\Modules\Assets\Controllers\AssetDepreciationController;
+use App\Modules\Assets\Controllers\AssetTransferController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -24,4 +25,12 @@ Route::middleware(['auth:sanctum', 'feature:assets'])->prefix('assets')->group(f
 Route::middleware(['auth:sanctum', 'feature:assets'])->prefix('asset-depreciations')->group(function () {
     Route::get('/',     [AssetDepreciationController::class, 'index'])->middleware('permission:assets.depreciation.view');
     Route::post('/run', [AssetDepreciationController::class, 'runMonth'])->middleware('permission:assets.depreciation.run');
+});
+
+Route::middleware(['auth:sanctum', 'feature:assets'])->prefix('asset-transfers')->group(function () {
+    Route::get('/',                    [AssetTransferController::class, 'index'])->middleware('permission:assets.view');
+    Route::post('/',                   [AssetTransferController::class, 'store'])->middleware('permission:assets.transfer');
+    Route::get('/{assetTransfer}',     [AssetTransferController::class, 'show'])->middleware('permission:assets.view');
+    Route::post('/{assetTransfer}/approve', [AssetTransferController::class, 'approve'])->middleware('permission:assets.transfer.approve');
+    Route::post('/{assetTransfer}/reject',  [AssetTransferController::class, 'reject'])->middleware('permission:assets.transfer.approve');
 });
