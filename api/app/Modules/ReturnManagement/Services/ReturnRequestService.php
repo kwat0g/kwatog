@@ -253,6 +253,10 @@ class ReturnRequestService
     {
         $this->ensureStatus($rma, ReturnRequestStatus::Inspected);
 
+        if ($rma->disposition_status === 'disposed') {
+            throw new \RuntimeException('RMA has already been disposed.');
+        }
+
         return DB::transaction(function () use ($rma, $dispositions, $by) {
             $rma->load('items');
 
@@ -267,8 +271,8 @@ class ReturnRequestService
                     'disposition_notes' => $disp['notes'] ?? null,
                 ]);
 
-                // Auto-NCR for quality issues (scrap or rework with a product)
-                if (in_array($disp['disposition'], ['scrap', 'rework'], true) && $item->product_id) {
+                // Auto-NCR for quality issues (scrap or rework with a product, skip if already linked)
+                if (in_array($disp['disposition'], ['scrap', 'rework'], true) && $item->product_id && !$item->ncr_id) {
                     $ncrService = app(NcrService::class);
                     $ncr = $ncrService->create([
                         'source'             => 'customer_complaint',
