@@ -41,6 +41,8 @@ Route::prefix('b2b/supplier')->group(function () {
         Route::get('statement-of-account',               [SupplierPortalController::class, 'statementOfAccount']);
         Route::get('delivery-schedules',                 [SupplierPortalController::class, 'deliverySchedules']);
         Route::post('delivery-schedules',                [SupplierPortalController::class, 'storeDeliverySchedule']);
+        // PPAP submissions (read-only, scoped to this supplier).
+        Route::get('ppap-submissions',                   [SupplierPortalController::class, 'ppapSubmissions']);
     });
 });
 

@@ -525,4 +525,28 @@ class SupplierPortalController extends Controller
         ]);
     }
 
+    /**
+     * GET /api/v1/b2b/supplier/ppap-submissions
+     * Read-only list of this supplier's PPAP submissions (IATF 16949).
+     */
+    public function ppapSubmissions(Request $request): JsonResponse
+    {
+        $user = $this->user($request);
+
+        $query = \App\Modules\Quality\Models\PpapSubmission::query()
+            ->where('vendor_id', $user->vendor_id)
+            ->with(['item:id,code,name', 'elements'])
+            ->orderByDesc('created_at');
+
+        if ($status = $request->query('status')) {
+            $query->where('status', $status);
+        }
+
+        return response()->json([
+            'data' => \App\Modules\Quality\Resources\PpapSubmissionResource::collection(
+                $query->paginate(min((int) $request->query('per_page', 25), 100))
+            ),
+        ]);
+    }
+
 }
