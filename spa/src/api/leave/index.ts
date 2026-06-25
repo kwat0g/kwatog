@@ -1,6 +1,6 @@
 import { client } from '../client';
 import type { ApiSuccess, PaginatedResponse, ListParams } from '@/types';
-import type { LeaveType, LeaveRequest, EmployeeLeaveBalance, CreateLeaveRequestData } from '@/types/leave';
+import type { LeaveType, LeaveRequest, EmployeeLeaveBalance, CreateLeaveRequestData, LeaveCalendarData } from '@/types/leave';
 
 // Opt-out so transient backend hiccups on these reference queries don't spam
 // the global "Something went wrong" toast — the page handles empty state.
@@ -43,4 +43,9 @@ export const leaveRequestsApi = {
     client.patch<ApiSuccess<LeaveRequest>>(`/leaves/requests/${id}/reject`, { reason }).then((r) => r.data.data),
   cancel: (id: string) =>
     client.patch<ApiSuccess<LeaveRequest>>(`/leaves/requests/${id}/cancel`).then((r) => r.data.data),
+};
+
+export const leaveCalendarApi = {
+  index: (params: { year?: number; month?: number; department_id?: string }) =>
+    client.get<{ data: LeaveCalendarData }>('/leaves/calendar', { params }).then((r) => r.data.data),
 };

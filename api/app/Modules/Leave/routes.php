@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Modules\Leave\Controllers\LeaveBalanceController;
+use App\Modules\Leave\Controllers\LeaveCalendarController;
 use App\Modules\Leave\Controllers\LeaveRequestController;
 use App\Modules\Leave\Controllers\LeaveTypeController;
 use Illuminate\Support\Facades\Route;
@@ -17,6 +18,9 @@ Route::middleware(['auth:sanctum', 'feature:leave'])->prefix('leaves')->group(fu
 
     // Year-end processing (OGAMI-104)
     Route::post('/process-year-end', [LeaveTypeController::class, 'processYearEnd'])->middleware('permission:leave.types.manage');
+
+    // Calendar heatmap (must be before {leaveRequest} parameter routes)
+    Route::get('/calendar', [LeaveCalendarController::class, 'index'])->middleware('permission:leave.view');
 
     // Balances
     Route::get('/balances/me',                [LeaveBalanceController::class, 'me'])->middleware('permission:leave.view');

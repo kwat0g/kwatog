@@ -58,4 +58,26 @@ export interface CreateLeaveRequestData {
   document_path?: string;
 }
 
+export interface LeaveCalendarDay {
+  date: string;
+  day_of_week: number;
+  approved_count: number;
+  pending_count: number;
+  present_count: number;
+  headcount: number;
+  coverage_pct: number;
+  employees_on_leave: Array<{
+    employee_name: string;
+    status: string;
+    leave_type: string;
+  }>;
+}
+
+export interface LeaveCalendarData {
+  year: number;
+  month: number;
+  headcount: number;
+  days: LeaveCalendarDay[];
+}
+
 export type { Department };

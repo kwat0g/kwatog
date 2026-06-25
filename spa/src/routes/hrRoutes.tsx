@@ -30,6 +30,7 @@ const OvertimeCreatePage = lazy(() => import('@/pages/attendance/overtime/create
 const LeavesPage = lazy(() => import('@/pages/leaves'));
 const CreateLeavePage = lazy(() => import('@/pages/leaves/create'));
 const LeaveDetailPage = lazy(() => import('@/pages/leaves/detail'));
+const LeaveCalendarPage = lazy(() => import('@/pages/leaves/calendar'));
 
 // Loans (Sprint 2 — Task 22)
 const LoansPage = lazy(() => import('@/pages/loans'));
@@ -125,6 +126,10 @@ export const hrRoutes = (
       <Route
         path="/hr/leaves"
         element={<PermissionGuard permission="leave.view"><LeavesPage /></PermissionGuard>}
+      />
+      <Route
+        path="/hr/leaves/calendar"
+        element={<PermissionGuard permission="leave.view"><LeaveCalendarPage /></PermissionGuard>}
       />
       <Route
         path="/hr/leaves/create"
