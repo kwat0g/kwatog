@@ -201,6 +201,7 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'production.schedule.view',         'name' => 'View Production Schedule'],
                 ['slug' => 'production.schedule.confirm',      'name' => 'Confirm Production Schedule'],
                 ['slug' => 'production.dashboard.view',        'name' => 'View Production Dashboard'],
+                ['slug' => 'production.operator.access',       'name' => 'Access Factory Floor PWA'],
             ],
 
             // MRP — Sprint 6 Tasks 49, 50, 52, 53

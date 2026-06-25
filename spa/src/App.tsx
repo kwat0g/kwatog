@@ -25,6 +25,7 @@ import { advancedRoutes } from '@/routes/advancedRoutes';
 import { selfServiceRoutes } from '@/routes/selfServiceRoutes';
 import { portalRoutes } from '@/routes/portalRoutes';
 import { driverRoutes } from '@/routes/driverRoutes';
+import { factoryRoutes } from '@/routes/factoryRoutes';
 
 // Errors
 const NotFoundPage = lazy(() => import('@/pages/error/NotFound'));
@@ -71,6 +72,11 @@ export default function App() {
             Uses AuthGuard with the main session (drivers log in via /login).
             DriverLayout renders a mobile-first shell with no sidebar. */}
         {driverRoutes}
+
+        {/* Factory Floor PWA — Mobile-first for shop floor operators.
+            Uses AuthGuard with the main session (operators log in via /login).
+            FactoryFloorLayout renders a mobile-first shell with bottom nav. */}
+        {factoryRoutes}
 
         {/* B2B Portals — Supplier + Customer
             SECURITY: Portal routes are deliberately outside the main AuthGuard

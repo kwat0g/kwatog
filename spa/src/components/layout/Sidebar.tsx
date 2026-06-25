@@ -43,6 +43,9 @@ import {
   BadgeCheck,
   Navigation,
   X,
+  UserPlus,
+  Star,
+  Coins,
   type LucideIcon,
 } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo } from 'react';
@@ -108,6 +111,7 @@ const SECTIONS: NavSection[] = [
       { to: '/crm/products',         label: 'Products',         icon: Tag,        feature: 'crm', permission: 'crm.products.view' },
       { to: '/crm/price-agreements', label: 'Price Agreements', icon: FileText,   feature: 'crm', permission: 'crm.price_agreements.view' },
       { to: '/crm/complaints',       label: 'Complaints',       icon: MessageSquare, feature: 'crm', permission: 'crm.complaints.manage' },
+      { to: '/crm/commissions',      label: 'Commissions',      icon: Coins,         feature: 'crm', permission: 'crm.commissions.view' },
       { to: '/accounting/customers', label: 'AR Customers',     icon: Users,      feature: 'accounting', permission: 'accounting.customers.view' },
       { to: '/return-management',    label: 'Returns (RMA)',    icon: RotateCcw,  feature: 'return_management', permission: 'return_management.view' },
     ],
@@ -182,6 +186,8 @@ const SECTIONS: NavSection[] = [
       { to: '/hr/leaves',       label: 'Leave',       icon: CalendarDays, feature: 'leave',     permission: 'leave.view' },
       { to: '/payroll/periods', label: 'Payroll',     icon: Wallet,      feature: 'payroll',    permission: 'payroll.view', badgeKey: 'payroll' },
       { to: '/payroll/statutory', label: 'Statutory Exports', icon: FileText, feature: 'payroll', permission: 'payroll.view' },
+      { to: '/hr/succession-plans',      label: 'Succession',          icon: UserPlus,    feature: 'hr', permission: 'hr.succession.manage' },
+      { to: '/hr/performance-reviews',   label: 'Performance Reviews', icon: Star,        feature: 'hr', permission: 'hr.performance.view' },
     ],
   },
   {
@@ -197,6 +203,7 @@ const SECTIONS: NavSection[] = [
     label: 'Assets',
     items: [
       { to: '/assets', label: 'Fixed Assets', icon: Building2, feature: 'assets', permission: 'assets.view' },
+      { to: '/assets/transfers', label: 'Asset Transfers', icon: ArrowLeftRight, feature: 'assets', permission: 'assets.transfer' },
     ],
   },
   {
