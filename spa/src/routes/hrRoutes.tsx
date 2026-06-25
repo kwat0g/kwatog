@@ -50,6 +50,9 @@ const PerformanceCyclesPage = lazy(() => import('@/pages/hr/performance-reviews'
 const PerformanceReviewsPage = lazy(() => import('@/pages/hr/performance-reviews/reviews'));
 const SubmitReviewPage = lazy(() => import('@/pages/hr/performance-reviews/submit'));
 
+// Training Matrix
+const TrainingMatrixPage = lazy(() => import('@/pages/hr/training/matrix'));
+
 export const hrRoutes = (
   <>
     {/* HR module */}
@@ -183,6 +186,12 @@ export const hrRoutes = (
         element={<PermissionGuard permission="hr.performance.view"><PerformanceReviewsPage /></PermissionGuard>} />
       <Route path="/hr/performance-reviews/:id/submit"
         element={<PermissionGuard permission="hr.performance.view"><SubmitReviewPage /></PermissionGuard>} />
+    </Route>
+
+    {/* Training Matrix */}
+    <Route element={<ModuleGuard module="hr" />}>
+      <Route path="/hr/training/matrix"
+        element={<PermissionGuard permission="hr.trainings.view"><TrainingMatrixPage /></PermissionGuard>} />
     </Route>
   </>
 );

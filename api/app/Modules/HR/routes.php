@@ -85,6 +85,10 @@ Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function 
     Route::patch('/employee-trainings/{record}/cancel',   [\App\Modules\HR\Controllers\EmployeeTrainingController::class, 'cancel'])
         ->middleware('permission:hr.employees.trainings.manage');
 
+    // Training matrix heatmap — must come BEFORE {training} param routes.
+    Route::get('training/matrix', [\App\Modules\HR\Controllers\TrainingMatrixController::class, 'index'])
+        ->middleware('permission:hr.trainings.view');
+
     // T3.4.A — Training catalog (admin CRUD).
     Route::prefix('trainings')->group(function () {
         Route::get('/',              [\App\Modules\HR\Controllers\TrainingController::class, 'index'])

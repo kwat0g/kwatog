@@ -159,3 +159,40 @@ export interface Employee {
   created_at: string;
   updated_at: string;
 }
+
+// ─── Training Matrix Heatmap ─────────────────────────────────────
+export type TrainingMatrixCellStatus = 'trained' | 'expired' | 'gap';
+
+export interface TrainingMatrixSkill {
+  id: string;
+  name: string;
+  category: string | null;
+}
+
+export interface TrainingMatrixCell {
+  skill_id: string;
+  status: TrainingMatrixCellStatus;
+  level: string | null;
+  expiry_date: string | null;
+}
+
+export interface TrainingMatrixRow {
+  employee_id: string;
+  employee_name: string;
+  department: string | null;
+  cells: TrainingMatrixCell[];
+}
+
+export interface TrainingMatrixSummary {
+  total_employees: number;
+  total_skills: number;
+  trained_count: number;
+  gap_count: number;
+  expired_count: number;
+}
+
+export interface TrainingMatrixData {
+  skills: TrainingMatrixSkill[];
+  rows: TrainingMatrixRow[];
+  summary: TrainingMatrixSummary;
+}
