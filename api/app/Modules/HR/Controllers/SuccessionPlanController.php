@@ -25,11 +25,11 @@ class SuccessionPlanController extends Controller
         );
     }
 
-    public function store(StoreSuccessionPlanRequest $request): SuccessionPlanResource
+    public function store(StoreSuccessionPlanRequest $request): \Illuminate\Http\JsonResponse
     {
-        return new SuccessionPlanResource(
+        return (new SuccessionPlanResource(
             $this->service->create($request->validated())
-        );
+        ))->response()->setStatusCode(201);
     }
 
     public function show(SuccessionPlan $successionPlan): SuccessionPlanResource

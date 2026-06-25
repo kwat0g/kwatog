@@ -42,7 +42,7 @@ class CommissionService
             return null;
         }
 
-        $date = $so->order_date ?? now()->toDateString();
+        $date = $so->date?->toDateString() ?? now()->toDateString();
 
         $rate = CommissionRate::query()
             ->where('employee_id', $so->sales_rep_id)

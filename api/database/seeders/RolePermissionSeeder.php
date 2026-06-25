@@ -301,6 +301,21 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'hr.clearance.sign',          'name' => 'Sign Clearance Item'],
                 ['slug' => 'hr.separation.finalize',     'name' => 'Finalize Separation & Final Pay'],
             ],
+            'hr_succession' => [
+                ['slug' => 'hr.succession.manage',       'name' => 'Manage Succession Plans'],
+            ],
+            'hr_performance' => [
+                ['slug' => 'hr.performance.view',        'name' => 'View Performance Reviews'],
+                ['slug' => 'hr.performance.manage',      'name' => 'Manage Performance Reviews'],
+            ],
+            'crm_commissions' => [
+                ['slug' => 'crm.commissions.view',       'name' => 'View Commissions'],
+                ['slug' => 'crm.commissions.manage',     'name' => 'Manage Commissions'],
+            ],
+            'asset_transfers' => [
+                ['slug' => 'assets.transfer',            'name' => 'Request Asset Transfer'],
+                ['slug' => 'assets.transfer.approve',    'name' => 'Approve Asset Transfer'],
+            ],
             'dashboards' => [
                 ['slug' => 'dashboard.plant_manager.view','name' => 'View Plant Manager Dashboard'],
                 ['slug' => 'dashboard.hr.view',           'name' => 'View HR Dashboard'],
@@ -376,6 +391,8 @@ class RolePermissionSeeder extends Seeder
                     $this->module('attendance'),
                     $this->module('leave'),
                     $this->module('hr_separation'),
+                    $this->module('hr_succession'),
+                    $this->module('hr_performance'),
                     $this->module('loans'),
                     $this->selfService(),
                     [
@@ -404,6 +421,8 @@ class RolePermissionSeeder extends Seeder
                     $this->module('budgeting'),
                     $this->module('loans'),
                     $this->module('assets'),
+                    $this->module('crm_commissions'),
+                    $this->module('asset_transfers'),
                     $this->selfService(),
                     [
                         'admin.gov_tables.manage', 'dashboard.accounting.view',

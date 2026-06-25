@@ -182,11 +182,13 @@ Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function 
         Route::post('/cycles/{cycle}/close',     [PerformanceReviewController::class, 'closeCycle'])->middleware('permission:hr.performance.manage');
         Route::get('/',                          [PerformanceReviewController::class, 'index']);
         Route::post('/',                         [PerformanceReviewController::class, 'store'])->middleware('permission:hr.performance.manage');
-        Route::post('/{review}/submit',          [PerformanceReviewController::class, 'submit']);
-        Route::post('/{review}/acknowledge',     [PerformanceReviewController::class, 'acknowledge']);
         Route::get('/templates',                 [PerformanceReviewController::class, 'templates']);
         Route::post('/templates',                [PerformanceReviewController::class, 'storeTemplate'])->middleware('permission:hr.performance.manage');
     });
+
+    // Submit/acknowledge — accessible by any authenticated employee (controller does its own auth)
+    Route::post('performance-reviews/{review}/submit',      [PerformanceReviewController::class, 'submit']);
+    Route::post('performance-reviews/{review}/acknowledge', [PerformanceReviewController::class, 'acknowledge']);
 
     // Sprint 8 — Task 71: clearance lifecycle
     Route::prefix('clearances')->group(function () {

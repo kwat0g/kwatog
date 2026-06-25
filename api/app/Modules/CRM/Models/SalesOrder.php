@@ -28,7 +28,7 @@ class SalesOrder extends Model
     }
 
     protected $fillable = [
-        'so_number', 'customer_id', 'date', 'subtotal', 'vat_amount',
+        'so_number', 'customer_id', 'sales_rep_id', 'date', 'subtotal', 'vat_amount',
         'total_amount', 'status', 'payment_terms_days', 'delivery_terms',
         'notes', 'mrp_plan_id', 'created_by', 'incoterm',
     ];

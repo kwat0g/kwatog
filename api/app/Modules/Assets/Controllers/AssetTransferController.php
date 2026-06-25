@@ -24,11 +24,11 @@ class AssetTransferController extends Controller
         );
     }
 
-    public function store(StoreAssetTransferRequest $request): AssetTransferResource
+    public function store(StoreAssetTransferRequest $request): \Illuminate\Http\JsonResponse
     {
-        return new AssetTransferResource(
+        return (new AssetTransferResource(
             $this->service->create($request->validated())
-        );
+        ))->response()->setStatusCode(201);
     }
 
     public function show(AssetTransfer $assetTransfer): AssetTransferResource
