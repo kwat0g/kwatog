@@ -4,19 +4,17 @@ declare(strict_types=1);
 
 namespace App\Modules\B2B\Controllers;
 
-use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Resources\InvoiceResource;
 use App\Modules\Accounting\Services\PdfService;
-use App\Modules\Accounting\Services\StatementOfAccountService;
 use App\Modules\B2B\Models\CustomerPortalUser;
-use App\Modules\B2B\Models\DeliverySchedule;
 use App\Modules\B2B\Requests\Customer\CreateComplaintRequest;
 use App\Modules\B2B\Requests\Customer\CustomerStoreDeliveryScheduleRequest;
 use App\Modules\B2B\Resources\DeliveryScheduleResource;
+use App\Modules\B2B\Services\CustomerPortalService;
 use App\Modules\CRM\Models\CustomerComplaint;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Resources\SalesOrderResource;
-use App\Modules\CRM\Services\SalesOrderService;
+use App\Modules\Accounting\Models\Invoice;
 use App\Modules\SupplyChain\Models\Delivery;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -26,9 +24,8 @@ use Illuminate\Routing\Controller;
 class CustomerPortalController extends Controller
 {
     public function __construct(
+        private readonly CustomerPortalService $service,
         private readonly PdfService $pdf,
-        private readonly SalesOrderService $salesOrderService,
-        private readonly StatementOfAccountService $soa,
     ) {}
 
     private function user(Request $request): CustomerPortalUser
@@ -44,44 +41,13 @@ class CustomerPortalController extends Controller
     public function dashboard(Request $request): JsonResponse
     {
         $user = $this->user($request);
-        $customerId = $user->customer_id;
+        $data = $this->service->dashboard($user->customer_id);
 
-        $openSoCount = SalesOrder::where('customer_id', $customerId)
-            ->whereIn('status', ['draft', 'confirmed'])->count();
+        // Wrap collection fields in API Resources for consistent serialization.
+        $data['recent_orders']   = SalesOrderResource::collection($data['recent_orders']);
+        $data['recent_invoices'] = InvoiceResource::collection($data['recent_invoices']);
 
-        $pendingDeliveryCount = Delivery::whereHas('salesOrder', fn ($q) => $q->where('customer_id', $customerId))
-            ->whereIn('status', ['scheduled', 'loading', 'in_transit'])->count();
-
-        $openInvoiceCount = Invoice::where('customer_id', $customerId)
-            ->whereIn('status', ['sent', 'overdue', 'partial'])->count();
-
-        $totalOutstanding = Invoice::where('customer_id', $customerId)
-            ->whereIn('status', ['sent', 'overdue', 'partial'])->sum('balance');
-
-        $recentOrders = SalesOrder::where('customer_id', $customerId)
-            ->orderByDesc('created_at')->limit(5)->get();
-
-        $recentInvoices = Invoice::where('customer_id', $customerId)
-            ->orderByDesc('created_at')->limit(5)->get();
-
-        $recentDeliveries = Delivery::whereHas('salesOrder', fn ($q) => $q->where('customer_id', $customerId))
-            ->orderByDesc('created_at')->limit(5)->get();
-
-        $recentComplaints = CustomerComplaint::where('customer_id', $customerId)
-            ->orderByDesc('created_at')->limit(5)->get();
-
-        return response()->json([
-            'data' => [
-                'open_so_count'          => $openSoCount,
-                'pending_delivery_count'  => $pendingDeliveryCount,
-                'open_invoice_count'      => $openInvoiceCount,
-                'total_outstanding'       => number_format((float) $totalOutstanding, 2),
-                'recent_orders'           => SalesOrderResource::collection($recentOrders),
-                'recent_invoices'         => InvoiceResource::collection($recentInvoices),
-                'recent_deliveries'       => $recentDeliveries,
-                'recent_complaints'       => $recentComplaints,
-            ],
-        ]);
+        return response()->json(['data' => $data]);
     }
 
     /**
@@ -91,18 +57,13 @@ class CustomerPortalController extends Controller
     {
         $user = $this->user($request);
 
-        $query = SalesOrder::where('customer_id', $user->customer_id)
-            ->with(['items.product:id,part_number,name'])
-            ->orderByDesc('created_at');
+        $paginator = $this->service->salesOrders($user->customer_id, [
+            'status'   => $request->query('status'),
+            'search'   => $request->query('search'),
+            'per_page' => $request->query('per_page', 25),
+        ]);
 
-        if ($status = $request->query('status')) {
-            $query->where('status', $status);
-        }
-        if ($search = $request->query('search')) {
-            $query->where('so_number', 'like', "%{$search}%");
-        }
-
-        return SalesOrderResource::collection($query->paginate(min((int) $request->query('per_page', 25), 100)));
+        return SalesOrderResource::collection($paginator);
     }
 
     /**
@@ -111,30 +72,20 @@ class CustomerPortalController extends Controller
     public function salesOrderShow(SalesOrder $salesOrder, Request $request): SalesOrderResource
     {
         $user = $this->user($request);
-        abort_if($salesOrder->customer_id !== $user->customer_id, 403);
-
-        $salesOrder->load([
-            'items.product:id,part_number,name',
-            'deliveries:id,delivery_number,status,delivered_at,confirmed_at',
-            'invoices:id,invoice_number,total_amount,status,created_at',
-            'workOrders:id,wo_number,status',
-        ]);
+        $salesOrder = $this->service->salesOrderDetail($user->customer_id, $salesOrder);
 
         return new SalesOrderResource($salesOrder);
     }
 
     /**
      * GET /api/v1/b2b/customer/sales-orders/{id}/chain
-     * Order-to-Cash chain visualization steps.
      */
     public function salesOrderChain(SalesOrder $salesOrder, Request $request): JsonResponse
     {
         $user = $this->user($request);
-        abort_if($salesOrder->customer_id !== $user->customer_id, 403);
+        $chain = $this->service->salesOrderChain($user->customer_id, $salesOrder);
 
-        return response()->json([
-            'data' => $this->salesOrderService->chain($salesOrder),
-        ]);
+        return response()->json(['data' => $chain]);
     }
 
     /**
@@ -144,11 +95,11 @@ class CustomerPortalController extends Controller
     {
         $user = $this->user($request);
 
-        $query = Invoice::where('customer_id', $user->customer_id)
-            ->with(['salesOrder:id,so_number'])
-            ->orderByDesc('created_at');
+        $paginator = $this->service->invoices($user->customer_id, [
+            'per_page' => $request->query('per_page', 25),
+        ]);
 
-        return InvoiceResource::collection($query->paginate(min((int) $request->query('per_page', 25), 100)));
+        return InvoiceResource::collection($paginator);
     }
 
     /**
@@ -157,9 +108,7 @@ class CustomerPortalController extends Controller
     public function invoiceDetail(Invoice $invoice, Request $request): InvoiceResource
     {
         $user = $this->user($request);
-        abort_if($invoice->customer_id !== $user->customer_id, 403);
-
-        $invoice->load(['salesOrder:id,so_number', 'items', 'payments']);
+        $invoice = $this->service->invoiceDetail($user->customer_id, $invoice);
 
         return new InvoiceResource($invoice);
     }
@@ -171,27 +120,21 @@ class CustomerPortalController extends Controller
     {
         $user = $this->user($request);
 
-        $query = Delivery::whereHas('salesOrder', fn ($q) => $q->where('customer_id', $user->customer_id))
-            ->with(['salesOrder:id,so_number', 'driver:id,name'])
-            ->orderByDesc('created_at');
-
-        if ($status = $request->query('status')) {
-            $query->where('status', $status);
-        }
-
-        return response()->json([
-            'data' => $query->get(),
+        $deliveries = $this->service->deliveries($user->customer_id, [
+            'status' => $request->query('status'),
         ]);
+
+        return response()->json(['data' => $deliveries]);
     }
 
     /**
      * GET /api/v1/b2b/customer/invoices/{id}/pdf
-     * Download invoice as PDF.
      */
     public function invoicePdf(Invoice $invoice, Request $request)
     {
         $user = $this->user($request);
-        abort_if($invoice->customer_id !== $user->customer_id, 403);
+        // Ownership check via service
+        $this->service->invoiceDetail($user->customer_id, $invoice);
 
         return $this->pdf->invoice($invoice);
     }
@@ -202,19 +145,7 @@ class CustomerPortalController extends Controller
     public function deliveryDetail(Delivery $delivery, Request $request): JsonResponse
     {
         $user = $this->user($request);
-
-        // Ensure delivery belongs to this customer's sales order
-        abort_if(
-            !$delivery->salesOrder || $delivery->salesOrder->customer_id !== $user->customer_id,
-            403
-        );
-
-        $delivery->load([
-            'salesOrder:id,so_number',
-            'items',
-            'proofs',
-            'driver:id,name',
-        ]);
+        $delivery = $this->service->deliveryDetail($user->customer_id, $delivery);
 
         return response()->json(['data' => $delivery]);
     }
@@ -225,13 +156,9 @@ class CustomerPortalController extends Controller
     public function complaints(Request $request): JsonResponse
     {
         $user = $this->user($request);
+        $complaints = $this->service->complaints($user->customer_id);
 
-        $query = CustomerComplaint::where('customer_id', $user->customer_id)
-            ->orderByDesc('created_at');
-
-        return response()->json([
-            'data' => $query->get(),
-        ]);
+        return response()->json(['data' => $complaints]);
     }
 
     /**
@@ -240,19 +167,7 @@ class CustomerPortalController extends Controller
     public function createComplaint(CreateComplaintRequest $request): JsonResponse
     {
         $user = $this->user($request);
-
-        $validated = $request->validated();
-
-        $complaint = CustomerComplaint::create([
-            'customer_id'       => $user->customer_id,
-            'sales_order_id'    => $validated['order_id'] ?? null,
-            'severity'          => $validated['severity'],
-            'description'       => $validated['description'],
-            'affected_quantity' => $validated['affected_quantity'],
-            'status'            => 'open',
-            'complaint_number'  => 'CC-' . strtoupper(uniqid()),
-            'received_date'     => now(),
-        ]);
+        $complaint = $this->service->createComplaint($user->customer_id, $request->validated());
 
         return response()->json([
             'data'    => $complaint,
@@ -262,49 +177,25 @@ class CustomerPortalController extends Controller
 
     /**
      * GET /api/v1/b2b/customer/complaints/{complaint}/8d-report
-     * View the 8D report for a resolved/closed complaint.
      */
     public function complaint8dReport(CustomerComplaint $complaint, Request $request): JsonResponse
     {
         $user = $this->user($request);
-        abort_if($complaint->customer_id !== $user->customer_id, 403);
+        $report = $this->service->complaint8dReport($user->customer_id, $complaint);
 
-        $report = $complaint->eightDReport;
-
-        if (! $report) {
+        if ($report === null) {
             return response()->json(['message' => 'No 8D report available for this complaint yet.'], 404);
         }
 
-        return response()->json([
-            'data' => [
-                'complaint_number' => $complaint->complaint_number,
-                'complaint_status' => $complaint->status?->value ?? $complaint->status,
-                'severity'         => $complaint->severity?->value ?? $complaint->severity,
-                'description'      => $complaint->description,
-                'report' => [
-                    'id'               => $report->hash_id,
-                    'd1_team'          => $report->d1_team,
-                    'd2_problem'       => $report->d2_problem,
-                    'd3_containment'   => $report->d3_containment,
-                    'd4_root_cause'    => $report->d4_root_cause,
-                    'd5_corrective_action' => $report->d5_corrective_action,
-                    'd6_verification'  => $report->d6_verification,
-                    'd7_prevention'    => $report->d7_prevention,
-                    'd8_recognition'   => $report->d8_recognition,
-                    'finalized_at'     => optional($report->finalized_at)->toIso8601String(),
-                ],
-            ],
-        ]);
+        return response()->json(['data' => $report]);
     }
 
     /**
      * GET /api/v1/b2b/customer/statement-of-account
-     * Customer statement of account with running balance, transactions, and aging.
      */
     public function statementOfAccount(Request $request): JsonResponse
     {
         $user = $this->user($request);
-
         $customer = $user->customer;
 
         if (! $customer) {
@@ -312,22 +203,18 @@ class CustomerPortalController extends Controller
         }
 
         $asOf = $request->query('as_of');
-        $result = $this->soa->forCustomer($customer, $asOf);
+        $result = $this->service->statementOfAccount($customer, $asOf);
 
         return response()->json(['data' => $result]);
     }
 
     /**
      * GET /api/v1/b2b/customer/delivery-schedules
-     * List the customer's monthly delivery requirement submissions.
      */
     public function deliverySchedules(Request $request): JsonResponse
     {
         $user = $this->user($request);
-
-        $schedules = DeliverySchedule::where('customer_id', $user->customer_id)
-            ->orderByDesc('created_at')
-            ->get();
+        $schedules = $this->service->deliverySchedules($user->customer_id);
 
         return response()->json([
             'data' => DeliveryScheduleResource::collection($schedules),
@@ -336,20 +223,11 @@ class CustomerPortalController extends Controller
 
     /**
      * POST /api/v1/b2b/customer/delivery-schedules
-     * Submit monthly delivery requirements.
      */
     public function storeDeliverySchedule(CustomerStoreDeliveryScheduleRequest $request): JsonResponse
     {
         $user = $this->user($request);
-
-        $validated = $request->validated();
-
-        $schedule = DeliverySchedule::create([
-            'customer_id' => $user->customer_id,
-            'month'       => $validated['month'],
-            'status'      => 'submitted',
-            'lines'       => $validated['lines'],
-        ]);
+        $schedule = $this->service->storeDeliverySchedule($user->customer_id, $request->validated());
 
         return response()->json([
             'data'    => new DeliveryScheduleResource($schedule),
