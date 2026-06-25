@@ -7,6 +7,7 @@ import type {
   ForecastMethod,
   ForecastAccuracy,
   HistoricalDemandPoint,
+  ProductAccuracy,
   StockOutResponse,
 } from '@/types/forecasting';
 
@@ -68,4 +69,14 @@ export const forecastingApi = {
     client
       .get<{ data: ForecastAccuracy }>(`/forecasting/accuracy?year=${year}`)
       .then((r) => r.data),
+
+  accuracySummary: (year?: number) =>
+    client
+      .get<{ data: ForecastAccuracy }>('/forecasting/accuracy/summary', { params: { year } })
+      .then((r) => r.data.data),
+
+  accuracyByProduct: (year?: number) =>
+    client
+      .get<{ data: ProductAccuracy[] }>('/forecasting/accuracy/products', { params: { year } })
+      .then((r) => r.data.data),
 };

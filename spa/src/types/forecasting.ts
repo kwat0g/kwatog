@@ -66,3 +66,12 @@ export interface ForecastAccuracy {
   periods_evaluated: number;
   monthly: ForecastAccuracyMonth[];
 }
+
+export interface ProductAccuracy {
+  product_id: string;
+  part_number: string;
+  name: string;
+  mape: number;
+  bias: number;
+  periods_evaluated: number;
+}

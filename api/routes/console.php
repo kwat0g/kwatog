@@ -235,3 +235,11 @@ Schedule::command('ncr:check-effectiveness')
     ->dailyAt('02:05')
     ->withoutOverlapping()
     ->onOneServer();
+
+// ADV11 — Monthly forecast accuracy reconciliation on the 2nd at 04:00.
+// Backfills actual_quantity & variance for elapsed forecast periods. Idempotent.
+Schedule::command('forecasting:reconcile-actuals')
+    ->monthlyOn(2, '04:00')
+    ->name('forecasting:reconcile-actuals')
+    ->withoutOverlapping()
+    ->onOneServer();

@@ -5,6 +5,7 @@ import { PermissionGuard } from '@/components/guards/PermissionGuard';
 // ADV11 — Demand & Sales Forecasting
 const DemandForecastingPage  = lazy(() => import('@/pages/forecasting/demand'));
 const StockOutProjectionPage = lazy(() => import('@/pages/forecasting/stock-out'));
+const ForecastAccuracyPage   = lazy(() => import('@/pages/forecasting/accuracy'));
 
 // ADV9 — Budgeting
 const BudgetOverviewPage          = lazy(() => import('@/pages/budgeting'));
@@ -26,6 +27,8 @@ export const advancedRoutes = (
       element={<PermissionGuard permission="forecasting.view"><DemandForecastingPage /></PermissionGuard>} />
     <Route path="/forecasting/stock-out"
       element={<PermissionGuard permission="forecasting.view"><StockOutProjectionPage /></PermissionGuard>} />
+    <Route path="/forecasting/accuracy"
+      element={<PermissionGuard permission="forecasting.view"><ForecastAccuracyPage /></PermissionGuard>} />
 
     {/* ADV9 — Budgeting */}
     <Route path="/budgeting" element={<PermissionGuard permission="budgeting.view"><BudgetOverviewPage /></PermissionGuard>} />

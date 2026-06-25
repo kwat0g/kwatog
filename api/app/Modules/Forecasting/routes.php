@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Modules\Forecasting\Controllers\DemandForecastController;
+use App\Modules\Forecasting\Controllers\ForecastAccuracyController;
 use App\Modules\Forecasting\Controllers\ForecastMrpController;
 use App\Modules\Forecasting\Controllers\StockOutProjectionController;
 use Illuminate\Support\Facades\Route;
@@ -31,6 +32,14 @@ Route::middleware(['auth:sanctum'])->prefix('forecasting')->group(function () {
     /* ─── Forecast accuracy (MAPE) ─── */
     Route::get('/accuracy',
         [DemandForecastController::class, 'accuracy'])
+        ->middleware('permission:forecasting.view');
+
+    /* ─── Forecast accuracy — dedicated controller ─── */
+    Route::get('/accuracy/summary',
+        [ForecastAccuracyController::class, 'summary'])
+        ->middleware('permission:forecasting.view');
+    Route::get('/accuracy/products',
+        [ForecastAccuracyController::class, 'byProduct'])
         ->middleware('permission:forecasting.view');
 
     /* ─── Stock-out projection ─── */
