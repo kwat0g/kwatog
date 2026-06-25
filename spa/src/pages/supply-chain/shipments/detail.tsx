@@ -2,7 +2,7 @@
 import { useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, FileText, Trash2, Upload } from 'lucide-react';
+import { ArrowRight, Download, FileText, Trash2, Upload } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { AxiosError } from 'axios';
 import { shipmentsApi } from '@/api/supply-chain';
@@ -363,6 +363,43 @@ export default function ShipmentDetailPage() {
               </Link>
             </Panel>
           )}
+
+          {/* ImpEx document generation */}
+          <Panel title="ImpEx documents">
+            <div className="space-y-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<Download size={14} />}
+                className="w-full justify-start"
+                onClick={() =>
+                  window.open(
+                    `/api/v1/supply-chain/shipments/${id}/packing-list`,
+                    '_blank',
+                  )
+                }
+              >
+                Packing list
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<Download size={14} />}
+                className="w-full justify-start"
+                onClick={() =>
+                  window.open(
+                    `/api/v1/supply-chain/shipments/${id}/commercial-invoice`,
+                    '_blank',
+                  )
+                }
+              >
+                Commercial invoice
+              </Button>
+            </div>
+            <p className="text-2xs text-muted mt-2">
+              Auto-generated from shipment + PO data
+            </p>
+          </Panel>
 
           {/* Timestamps */}
           <Panel title="Record">

@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Modules\SupplyChain\Controllers\DeliveryController;
 use App\Modules\SupplyChain\Controllers\DeliveryProofController;
 use App\Modules\SupplyChain\Controllers\DriverDeliveryController;
+use App\Modules\SupplyChain\Controllers\ImpexDocumentController;
 use App\Modules\SupplyChain\Controllers\ShipmentController;
 use App\Modules\SupplyChain\Controllers\VehicleController;
 use Illuminate\Support\Facades\Route;
@@ -33,6 +34,12 @@ Route::middleware(['auth:sanctum', 'feature:supply_chain'])->prefix('supply-chai
     /* ─── OGAMI-104 — Landed cost calculation ─── */
     Route::post('/shipments/{shipment}/calculate-landed-cost', [ShipmentController::class, 'calculateLandedCost'])
         ->middleware('permission:supply_chain.shipments.manage');
+
+    /* ─── ImpEx document PDF generation (packing list + commercial invoice) ─── */
+    Route::get('/shipments/{shipment}/packing-list',       [ImpexDocumentController::class, 'packingList'])
+        ->middleware('permission:supply_chain.view');
+    Route::get('/shipments/{shipment}/commercial-invoice',  [ImpexDocumentController::class, 'commercialInvoice'])
+        ->middleware('permission:supply_chain.view');
 
     /* ─── Shipment documents ─── */
     Route::post('/shipments/{shipment}/documents',          [ShipmentController::class, 'uploadDocument'])
