@@ -45,7 +45,14 @@ class PerformanceReviewController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        return response()->json($this->service->listReviews($request->all()));
+        $user = $request->user();
+        $filters = $request->all();
+
+        if (! $user->can('hr.performance.manage')) {
+            $filters['scoped_employee_id'] = $user->employee?->id;
+        }
+
+        return response()->json($this->service->listReviews($filters));
     }
 
     public function store(Request $request): JsonResponse
@@ -62,6 +69,9 @@ class PerformanceReviewController extends Controller
 
     public function submit(PerformanceReview $review, Request $request): JsonResponse
     {
+        $employeeId = $request->user()->employee?->id;
+        abort_unless($employeeId && $employeeId === $review->reviewer_id, 403, 'Only the assigned reviewer may submit.');
+
         $data = $request->validate([
             'ratings'        => ['required', 'array'],
             'strengths'      => ['nullable', 'string', 'max:5000'],
@@ -74,8 +84,11 @@ class PerformanceReviewController extends Controller
         return response()->json(['data' => $this->service->submitReview($review, $data)]);
     }
 
-    public function acknowledge(PerformanceReview $review): JsonResponse
+    public function acknowledge(PerformanceReview $review, Request $request): JsonResponse
     {
+        $employeeId = $request->user()->employee?->id;
+        abort_unless($employeeId && $employeeId === $review->employee_id, 403, 'Only the reviewed employee may acknowledge.');
+
         return response()->json(['data' => $this->service->acknowledge($review)]);
     }
 

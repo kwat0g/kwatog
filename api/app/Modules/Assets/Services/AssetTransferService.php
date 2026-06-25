@@ -60,6 +60,10 @@ class AssetTransferService
             throw new RuntimeException('Only pending transfers can be approved.');
         }
 
+        if ((int) $transfer->requested_by === $by->id) {
+            throw new RuntimeException('Cannot approve a transfer you requested.');
+        }
+
         return DB::transaction(function () use ($transfer, $by) {
             $transfer->forceFill([
                 'status'      => TransferStatus::Approved->value,

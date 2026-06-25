@@ -46,9 +46,16 @@ class CommissionController extends Controller
 
     public function batchPaid(Request $request): JsonResponse
     {
-        $request->validate(['ids' => ['required', 'array', 'min:1']]);
+        $request->validate(['ids' => ['required', 'array', 'min:1'], 'ids.*' => ['required', 'string']]);
 
-        $decoded = collect($request->input('ids'))->map(fn ($hash) => app('hashids')->decode($hash)[0] ?? null)->filter()->all();
+        $decoded = collect($request->input('ids'))
+            ->map(fn ($hash) => app('hashids')->decode($hash)[0] ?? null)
+            ->filter()
+            ->all();
+
+        if (empty($decoded)) {
+            abort(422, 'No valid earning IDs provided.');
+        }
 
         $count = $this->service->markPaid($decoded, $request->user());
         return response()->json(['paid_count' => $count]);

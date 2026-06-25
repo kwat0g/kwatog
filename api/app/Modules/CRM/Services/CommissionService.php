@@ -75,6 +75,11 @@ class CommissionService
 
     public function approve(CommissionEarning $earning, User $by): CommissionEarning
     {
+        $beneficiaryUserId = \App\Modules\Auth\Models\User::where('employee_id', $earning->employee_id)->value('id');
+        if ($beneficiaryUserId && (int) $beneficiaryUserId === $by->id) {
+            throw new \RuntimeException('Cannot approve your own commission earning.');
+        }
+
         return DB::transaction(function () use ($earning, $by) {
             $earning->forceFill([
                 'status'      => CommissionStatus::Approved->value,

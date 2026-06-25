@@ -71,6 +71,10 @@ class PerformanceReviewService
         if (! empty($filters['employee_id'])) {
             $q->where('employee_id', $filters['employee_id']);
         }
+        if (! empty($filters['scoped_employee_id'])) {
+            $empId = $filters['scoped_employee_id'];
+            $q->where(fn ($b) => $b->where('employee_id', $empId)->orWhere('reviewer_id', $empId));
+        }
         if (! empty($filters['status'])) {
             $q->where('status', $filters['status']);
         }
