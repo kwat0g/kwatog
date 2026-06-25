@@ -44,7 +44,15 @@ class MaintenanceWorkOrderService
         ]);
 
         foreach (['maintainable_type', 'type', 'priority', 'status'] as $f) {
-            if (! empty($filters[$f])) $q->where($f, $filters[$f]);
+            if (! empty($filters[$f])) {
+                $val = (string) $filters[$f];
+                // Support comma-separated multi-value filter (e.g. "open,assigned,in_progress")
+                if (str_contains($val, ',')) {
+                    $q->whereIn($f, array_map('trim', explode(',', $val)));
+                } else {
+                    $q->where($f, $val);
+                }
+            }
         }
         if (! empty($filters['assigned_to'])) {
             $q->where('assigned_to', $filters['assigned_to']);

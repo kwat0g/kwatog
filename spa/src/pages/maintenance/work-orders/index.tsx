@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import { Plus, Smartphone } from 'lucide-react';
 import { workOrdersApi, type WorkOrderListParams } from '@/api/maintenance/workOrders';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -123,11 +123,16 @@ export default function MaintenanceWorkOrdersListPage() {
         title="Maintenance work orders"
         subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'order' : 'orders'}` : undefined}
         actions={
-          can('maintenance.wo.create') ? (
-            <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/maintenance/work-orders/create')}>
-              New work order
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" size="sm" icon={<Smartphone size={14} />} onClick={() => navigate('/maintenance/mobile')}>
+              Mobile view
             </Button>
-          ) : undefined
+            {can('maintenance.wo.create') && (
+              <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/maintenance/work-orders/create')}>
+                New work order
+              </Button>
+            )}
+          </div>
         }
       />
       <FilterBar
