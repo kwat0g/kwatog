@@ -271,10 +271,10 @@ Only drivers have a mobile PWA. Production operators, QC inspectors, and mainten
 
 ## Prioritized build backlog (ranked by thesis + business impact)
 
-> **Progress (2026-06-24):** 23 of 32 backlog items SHIPPED. All Tier 1, all
+> **Progress (2026-06-25):** 30 of 32 backlog items SHIPPED. All Tier 1, all
 > Tier 2 except biometric API, 4 of 5 Tier-3 thesis differentiators (CAPA, Mold,
-> PPAP, Forecast→MRP — only Mobile PWA pending), plus budget enforcement and
-> asset depreciation/insurance. Merged to main with 857 backend tests green.
+> PPAP, Forecast→MRP — only Mobile PWA pending), plus all Tier 4 except real-time
+> dashboard WebSocket. Merged to main with 857 backend tests green.
 
 ### TIER 1 — Build immediately (highest impact, lowest effort) — ✅ ALL DONE
 | # | Feature | Module | Effort | Status |
@@ -315,17 +315,17 @@ Only drivers have a mobile PWA. Production operators, QC inspectors, and mainten
 | 20 | Forecast→MRP integration | Forecasting/MRP | 1 week | ✅ shipped (forecast MRP projection) |
 
 ### TIER 4 — Nice to have (lower urgency)
-| # | Feature | Module | Effort |
-|---|---|---|---|
-| 21 | Performance review system | HR | 2 weeks |
-| 22 | Succession planning | HR | 3 days |
-| 23 | Commission tracking | CRM | 3 days |
-| 24 | Customer statement of account | CRM/Accounting | 3 days |
-| 25 | Interest-bearing loan amortization | Loans | 1 week |
-| 26 | SSS/Pag-IBIG government loans | Loans | 1 week |
+| # | Feature | Module | Effort | Status |
+|---|---|---|---|---|
+| 21 | Performance review system | HR | 2 weeks | ✅ shipped (`1eea7eb`) |
+| 22 | Succession planning | HR | 3 days | ✅ shipped (`1eea7eb`) |
+| 23 | Commission tracking | CRM | 3 days | ✅ shipped (`1eea7eb`) |
+| 24 | Customer statement of account | CRM/Accounting | 3 days | ✅ shipped (`260d65b`) |
+| 25 | Interest-bearing loan amortization | Loans | 1 week | ✅ shipped (`1eea7eb`) |
+| 26 | SSS/Pag-IBIG government loans | Loans | 1 week | ✅ shipped (`1eea7eb`) |
 | 27 | Insurance tracking | Assets | 2 days | ✅ shipped (`0241` migration) |
-| 28 | Asset transfer workflow | Assets | 2 days |
+| 28 | Asset transfer workflow | Assets | 2 days | ✅ shipped (`1eea7eb`) |
 | 29 | Depreciation method selection | Assets | 3 days | ✅ shipped (straight-line/declining-balance) |
-| 30 | Real-time dashboard (WebSocket) | Dashboard | 1 week |
+| 30 | Real-time dashboard (WebSocket) | Dashboard | 1 week | ⬜ pending (backend events wired, frontend consumes) |
 | 31 | Budget enforcement at PO level | Budgeting/Purchasing | 2 days | ✅ shipped (`fdbbd76`) |
-| 32 | B2B portal → supplier PPAP view | B2B/Quality | 2 days |
+| 32 | B2B portal → supplier PPAP view | B2B/Quality | 2 days | ✅ shipped (`3883e84`) |
