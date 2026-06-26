@@ -11,13 +11,13 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LinkedRecords } from '@/components/chain/LinkedRecords';
 import { ActivityStream } from '@/components/chain/ActivityStream';
-import { Modal } from '@/components/ui/Modal';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { ChainHeader } from '@/components/chain';
 import { usePermission } from '@/hooks/usePermission';
 import { useChainProgress } from '@/hooks/useChainProgress';
+import { ChainResultModal, ChainErrorPanel } from './chain-result';
 import type { SalesOrderStatus, SoChainResult } from '@/types/crm';
 
 const statusVariant: Record<SalesOrderStatus, 'success' | 'info' | 'warning' | 'neutral' | 'danger'> = {
@@ -38,6 +38,7 @@ export default function SalesOrderDetailPage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [chainResult, setChainResult] = useState<SoChainResult | null>(null);
+  const [confirmError, setConfirmError] = useState<{ message: string; errors?: Record<string, string[]> } | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['crm', 'sales-orders', 'detail', id],
@@ -60,11 +61,15 @@ export default function SalesOrderDetailPage() {
       qc.invalidateQueries({ queryKey: ['crm', 'sales-orders', 'detail', id] });
       qc.invalidateQueries({ queryKey: ['crm', 'sales-orders', 'chain', id] });
       setConfirmOpen(false);
+      setConfirmError(null);
       setChainResult(result.chain_result);
       toast.success(`Sales order ${result.data.so_number} confirmed.`);
     },
-    onError: (e: AxiosError<{ message?: string }>) => {
-      toast.error(e.response?.data?.message ?? 'Failed to confirm sales order.');
+    onError: (e: AxiosError<{ message?: string; errors?: Record<string, string[]> }>) => {
+      const msg = e.response?.data?.message ?? 'Failed to confirm sales order.';
+      const errors = e.response?.data?.errors;
+      setConfirmError({ message: msg, errors });
+      toast.error(msg);
     },
   });
 
@@ -159,7 +164,10 @@ export default function SalesOrderDetailPage() {
         bottom={chain.data ? <ChainHeader steps={chain.data} className="mt-2" /> : null}
       />
 
-      <div className="px-5 py-4 grid gap-4 lg:grid-cols-3">
+      <div className="px-5 py-4 space-y-4">
+        <ChainErrorPanel error={confirmError} onDismiss={() => setConfirmError(null)} />
+
+        <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-4">
           <Panel title="Overview">
             <dl className="grid grid-cols-3 gap-x-4 gap-y-3 text-sm">
@@ -282,6 +290,7 @@ export default function SalesOrderDetailPage() {
             />
           </Panel>
         </div>
+        </div>
       </div>
 
       <ConfirmDialog
@@ -327,79 +336,7 @@ export default function SalesOrderDetailPage() {
         pending={cancel.isPending}
       />
 
-      <Modal
-        isOpen={!!chainResult}
-        onClose={() => setChainResult(null)}
-        title="Sales Order Confirmed"
-        size="lg"
-      >
-        {chainResult && (
-          <div className="py-4 space-y-4">
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-success font-medium">{chainResult.so_number} confirmed</span>
-            </div>
-
-            {/* Work Orders summary */}
-            <div>
-              <h4 className="text-xs uppercase tracking-wider text-muted font-medium mb-2">
-                Work Orders ({chainResult.work_orders_created})
-              </h4>
-              <div className="space-y-1.5">
-                {chainResult.work_orders.map((wo) => (
-                  <div key={wo.id} className="flex items-center justify-between text-sm border border-default rounded-md px-3 py-2">
-                    <div className="flex items-center gap-2">
-                      <Chip variant={wo.needs_manual_scheduling ? 'warning' : 'success'}>
-                        {wo.needs_manual_scheduling ? 'Manual' : 'Scheduled'}
-                      </Chip>
-                      <span className="font-mono">{wo.wo_number}</span>
-                      <span className="text-muted">{wo.product?.name}</span>
-                    </div>
-                    <div className="text-xs text-muted font-mono">
-                      {wo.machine ?? 'Needs scheduling'}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Material Planning */}
-            {(chainResult.shortages > 0 || chainResult.prs_created > 0) && (
-              <div>
-                <h4 className="text-xs uppercase tracking-wider text-muted font-medium mb-2">Material Planning</h4>
-                <div className="text-sm space-y-1">
-                  {chainResult.shortages > 0 && (
-                    <p className="text-warning">
-                      {chainResult.shortages} material shortage{chainResult.shortages > 1 ? 's' : ''} detected
-                    </p>
-                  )}
-                  {chainResult.prs_created > 0 && (
-                    <p className="text-muted">
-                      {chainResult.prs_created} Purchase Request{chainResult.prs_created > 1 ? 's' : ''} auto-created
-                    </p>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Summary line */}
-            <div className="text-xs text-muted border-t border-default pt-3">
-              {chainResult.auto_scheduled} auto-scheduled · {chainResult.needs_manual} need manual scheduling
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2 border-t border-default">
-              <Button variant="secondary" size="sm" onClick={() => { setChainResult(null); navigate('/production/work-orders'); }}>
-                View Work Orders
-              </Button>
-              <Button variant="secondary" size="sm" onClick={() => { setChainResult(null); navigate('/mrp/plans'); }}>
-                View MRP Plan
-              </Button>
-              <Button variant="primary" size="sm" onClick={() => setChainResult(null)}>
-                Done
-              </Button>
-            </div>
-          </div>
-        )}
-      </Modal>
+      <ChainResultModal chainResult={chainResult} onClose={() => setChainResult(null)} />
     </div>
   );
 }
