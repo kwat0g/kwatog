@@ -11,6 +11,9 @@ use App\Modules\HR\Controllers\PerformanceReviewController;
 use App\Modules\HR\Controllers\PositionController;
 use App\Modules\HR\Controllers\SuccessionPlanController;
 use App\Modules\HR\Controllers\ProfileUpdateReviewController;
+use App\Modules\HR\Controllers\PublicRecruitmentController;
+use App\Modules\HR\Controllers\RecruitmentApplicationController;
+use App\Modules\HR\Controllers\RecruitmentPostingController;
 use App\Modules\HR\Controllers\SelfServiceController;
 use Illuminate\Support\Facades\Route;
 
@@ -207,4 +210,37 @@ Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function 
         Route::patch('/{clearance}/finalize',    [\App\Modules\HR\Controllers\SeparationController::class, 'finalize'])
             ->middleware('permission:hr.separation.finalize');
     });
+
+    // Recruitment — HR-facing (authenticated)
+    Route::middleware('feature:recruitment')->prefix('recruitment')->group(function () {
+        Route::prefix('postings')->group(function () {
+            Route::get('/',            [RecruitmentPostingController::class, 'index'])->middleware('permission:hr.recruitment.view');
+            Route::post('/',           [RecruitmentPostingController::class, 'store'])->middleware('permission:hr.recruitment.manage');
+            Route::get('/{jobPosting}',  [RecruitmentPostingController::class, 'show'])->middleware('permission:hr.recruitment.view');
+            Route::put('/{jobPosting}',  [RecruitmentPostingController::class, 'update'])->middleware('permission:hr.recruitment.manage');
+            Route::delete('/{jobPosting}', [RecruitmentPostingController::class, 'destroy'])->middleware('permission:hr.recruitment.manage');
+            Route::patch('/{jobPosting}/status', [RecruitmentPostingController::class, 'changeStatus'])->middleware('permission:hr.recruitment.manage');
+        });
+
+        Route::prefix('applications')->group(function () {
+            Route::get('/',                     [RecruitmentApplicationController::class, 'index'])->middleware('permission:hr.recruitment.view');
+            Route::get('/{jobApplication}',     [RecruitmentApplicationController::class, 'show'])->middleware('permission:hr.recruitment.view');
+            Route::patch('/{jobApplication}/stage', [RecruitmentApplicationController::class, 'changeStage'])->middleware('permission:hr.recruitment.applications');
+            Route::post('/{jobApplication}/interviews', [RecruitmentApplicationController::class, 'storeInterview'])->middleware('permission:hr.recruitment.applications');
+            Route::post('/{jobApplication}/notes',      [RecruitmentApplicationController::class, 'storeNote'])->middleware('permission:hr.recruitment.applications');
+            Route::get('/{jobApplication}/resume',      [RecruitmentApplicationController::class, 'downloadResume'])->middleware('permission:hr.recruitment.view');
+            Route::get('/{jobApplication}/convert',     [RecruitmentApplicationController::class, 'conversionData'])->middleware('permission:hr.recruitment.hire');
+        });
+
+        Route::patch('/interviews/{interview}', [RecruitmentApplicationController::class, 'updateInterview'])->middleware('permission:hr.recruitment.applications');
+    });
+});
+
+// Recruitment — public-facing (no auth)
+Route::prefix('public/recruitment')->middleware('throttle:30,1')->group(function () {
+    Route::get('/job-postings',              [PublicRecruitmentController::class, 'index']);
+    Route::get('/job-postings/{jobPosting}', [PublicRecruitmentController::class, 'show']);
+    Route::post('/job-postings/{jobPosting}/apply', [PublicRecruitmentController::class, 'apply'])
+        ->middleware('throttle:10,1');
+    Route::get('/applications/track/{trackingCode}', [PublicRecruitmentController::class, 'track']);
 });
