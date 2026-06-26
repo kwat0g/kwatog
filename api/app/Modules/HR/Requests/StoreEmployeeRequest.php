@@ -94,6 +94,8 @@ class StoreEmployeeRequest extends FormRequest
 
             'bank_name'       => ['nullable', 'string', 'max:100'],
             'bank_account_no' => ['nullable', 'string', 'max:50', 'regex:/^[A-Za-z0-9\\-\\s]+$/'],
+
+            'from_application' => ['nullable', 'string'],
         ];
     }
 

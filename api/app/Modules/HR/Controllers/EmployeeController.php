@@ -5,18 +5,24 @@ declare(strict_types=1);
 namespace App\Modules\HR\Controllers;
 
 use App\Modules\HR\Models\Employee;
+use App\Modules\HR\Models\JobApplication;
+use App\Modules\HR\Enums\ApplicationStage;
 use App\Modules\HR\Requests\SeparateEmployeeRequest;
 use App\Modules\HR\Requests\StoreEmployeeRequest;
 use App\Modules\HR\Requests\UpdateEmployeeRequest;
 use App\Modules\HR\Resources\EmployeeResource;
 use App\Modules\HR\Services\EmployeeService;
+use App\Modules\HR\Services\RecruitmentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class EmployeeController
 {
-    public function __construct(private readonly EmployeeService $service) {}
+    public function __construct(
+        private readonly EmployeeService $service,
+        private readonly RecruitmentService $recruitmentService,
+    ) {}
 
     public function index(Request $request): AnonymousResourceCollection
     {
@@ -25,7 +31,22 @@ class EmployeeController
 
     public function store(StoreEmployeeRequest $request): JsonResponse
     {
-        $employee = $this->service->create($request->validatedData());
+        $data = $request->validatedData();
+        $fromApplication = $data['from_application'] ?? null;
+        unset($data['from_application']);
+
+        $employee = $this->service->create($data);
+
+        if ($fromApplication) {
+            $decoded = app('hashids')->decode($fromApplication);
+            if (!empty($decoded)) {
+                $application = JobApplication::find($decoded[0]);
+                if ($application && $application->stage === ApplicationStage::Hired) {
+                    $this->recruitmentService->markConverted($application, $employee);
+                }
+            }
+        }
+
         return (new EmployeeResource($employee))->response()->setStatusCode(201);
     }
 
