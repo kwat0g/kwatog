@@ -4,7 +4,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { returnManagementApi } from '@/api/returnManagement';
 import type { ReturnRequest, ReturnRequestItem, DispositionType, DispositionPayload } from '@/types/returnManagement';
-import { toast } from '@/lib/toast';
+import toast from 'react-hot-toast';
 
 const DISPOSITION_OPTIONS: Array<{ value: DispositionType; label: string }> = [
   { value: 'scrap', label: 'Scrap' },

@@ -128,7 +128,7 @@ export default function MachineHealthPage() {
     queryFn: () => machinesApi.list({ per_page: 500 }),
   });
 
-  const machineId = selectedMachine ? Number(selectedMachine) : undefined;
+  const machineId = selectedMachine ?? undefined;
 
   const { data: healthSnapshot, isLoading: healthLoading, isError: healthError, refetch: healthRefetch } = useQuery({
     queryKey: ['machine-health', 'snapshot', machineId],

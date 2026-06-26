@@ -17,6 +17,7 @@ export interface AuditLogEntry {
 export interface AuditLogParams extends ListParams {
   action?: 'created' | 'updated' | 'deleted';
   model_type?: string;
+  model_id?: string;
   user_id?: string;
   from?: string;
   to?: string;

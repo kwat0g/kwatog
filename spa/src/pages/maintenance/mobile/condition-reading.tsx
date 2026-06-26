@@ -36,7 +36,7 @@ export default function MobileConditionReading() {
   // ── Health snapshot for selected machine ───────────────
   const { data: healthData } = useQuery({
     queryKey: ['maintenance', 'health-snapshot', machineId],
-    queryFn: () => conditionReadingsApi.healthSnapshot({ machine_id: parseInt(machineId, 10) }),
+    queryFn: () => conditionReadingsApi.healthSnapshot({ machine_id: machineId }),
     enabled: !!machineId,
   });
 
@@ -44,15 +44,15 @@ export default function MobileConditionReading() {
   const mutation = useMutation({
     mutationFn: () =>
       conditionReadingsApi.record({
-        machine_id: parseInt(machineId, 10),
+        machine_id: machineId,
         metric,
         value: parseFloat(value),
         source: 'manual',
         notes: notes.trim() || undefined,
       }),
     onSuccess: (result) => {
-      setLastResult(result as unknown as ConditionReadingResult);
-      if ((result as unknown as ConditionReadingResult).triggered) {
+      setLastResult(result);
+      if (result.triggered) {
         toast.error('Threshold breached! Corrective WO created.', { duration: 5000 });
       } else {
         toast.success('Reading recorded');

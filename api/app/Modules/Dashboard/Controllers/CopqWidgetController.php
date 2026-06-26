@@ -16,7 +16,7 @@ class CopqWidgetController
 
     public function index(Request $request): JsonResponse
     {
-        $months = min($request->integer('months', 6), 12);
+        $months = max(1, min($request->integer('months', 6), 12));
 
         // Current month live computation
         $current = $this->copq->compute(now()->startOfMonth(), now()->endOfMonth());

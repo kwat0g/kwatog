@@ -160,7 +160,7 @@ export default function LeaveCalendarPage() {
                       <div className="max-w-[200px] text-left whitespace-normal">
                         {cell.employees_on_leave.map((e, j) => (
                           <div key={j} className="truncate">
-                            {e.employee_name} ({e.leave_type}) - {e.status.replace('_', ' ')}
+                            {e.employee_name} ({e.leave_type}) - {e.status.replace(/_/g, ' ')}
                           </div>
                         ))}
                       </div>
@@ -247,7 +247,7 @@ export default function LeaveCalendarPage() {
                         ? 'bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-300'
                         : 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300',
                     )}>
-                      {emp.status.replace('_', ' ')}
+                      {emp.status.replace(/_/g, ' ')}
                     </span>
                   </div>
                 </div>

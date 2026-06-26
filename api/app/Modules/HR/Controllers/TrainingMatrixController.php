@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Controllers;
 
+use App\Common\Support\HashIdFilter;
 use App\Modules\HR\Enums\EmployeeStatus;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\Skill;
+use App\Modules\HR\Models\Department;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -23,13 +25,7 @@ class TrainingMatrixController
     {
         $deptId = null;
         if ($request->filled('department_id')) {
-            $raw = $request->input('department_id');
-            if (ctype_digit((string) $raw)) {
-                $deptId = (int) $raw;
-            } else {
-                $decoded = app('hashids')->decode((string) $raw);
-                $deptId = $decoded[0] ?? null;
-            }
+            $deptId = HashIdFilter::decode($request->input('department_id'), Department::class);
         }
 
         $employees = Employee::query()

@@ -123,7 +123,7 @@ export interface ConditionTrendPoint {
 }
 
 export interface RecordConditionReadingData {
-  machine_id: number;
+  machine_id: string;
   metric: ConditionMetric;
   value: number;
   unit?: string;
@@ -163,7 +163,7 @@ export interface DailyDowntimeTrend {
 }
 
 export interface TopMachineDowntime {
-  machine_id: number;
+  machine_id: string;
   machine_code: string;
   name: string;
   downtime_minutes: number;

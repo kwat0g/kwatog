@@ -8,8 +8,8 @@ export interface DispositionPayload {
 
 export interface ReturnRequestItem {
   id: string;
-  product_id?: number;
-  item_id?: number;
+  product_id?: string;
+  item_id?: string;
   quantity: string;
   returned_quantity: string;
   unit_price: string;

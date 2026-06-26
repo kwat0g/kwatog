@@ -9,7 +9,6 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { dashboardsApi } from '@/api/dashboards';
 import { kpiLink } from '@/lib/dashboardLinks';
-import { formatPeso } from '@/lib/formatNumber';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { StatCard } from '@/components/ui/StatCard';
 import { Panel } from '@/components/ui/Panel';

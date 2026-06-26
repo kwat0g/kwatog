@@ -19,6 +19,7 @@ use App\Modules\Purchasing\Resources\PurchaseOrderResource;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -228,45 +229,43 @@ class SupplierPortalService
             throw new \RuntimeException('This purchase order has no items to bill.');
         }
 
-        $internalUser = User::first();
+        return DB::transaction(function () use ($purchaseOrder, $data, $items, $file, $portalUserId) {
+            $systemUser = app(EdgeSystemUserResolver::class);
 
-        if (! $internalUser) {
-            throw new \RuntimeException('No internal user available to create the bill.');
-        }
+            $bill = $systemUser->impersonate(fn () => $this->bills->create([
+                'bill_number'       => $data['bill_number'],
+                'vendor_id'         => $purchaseOrder->vendor->hash_id,
+                'purchase_order_id' => $purchaseOrder->hash_id,
+                'date'              => $data['date'],
+                'due_date'          => $data['due_date'] ?? $data['date'],
+                'is_vatable'        => $data['is_vatable'] ?? true,
+                'remarks'           => $data['remarks'] ?? null,
+                'items'             => $items,
+            ], User::find($systemUser->id())));
 
-        $bill = $this->bills->create([
-            'bill_number'       => $data['bill_number'],
-            'vendor_id'         => $purchaseOrder->vendor->hash_id,
-            'purchase_order_id' => $purchaseOrder->hash_id,
-            'date'              => $data['date'],
-            'due_date'          => $data['due_date'] ?? $data['date'],
-            'is_vatable'        => $data['is_vatable'] ?? true,
-            'remarks'           => $data['remarks'] ?? null,
-            'items'             => $items,
-        ], $internalUser);
+            if ($file) {
+                $folder = "portal/supplier-invoices/{$bill->id}";
+                $path = $file->store($folder, 'local');
 
-        if ($file) {
-            $folder = "portal/supplier-invoices/{$bill->id}";
-            $path = $file->store($folder, 'local');
+                PortalShippingDocument::create([
+                    'purchase_order_id' => $purchaseOrder->id,
+                    'bill_id'           => $bill->id,
+                    'document_type'     => 'supplier_invoice',
+                    'file_path'         => $path,
+                    'original_filename' => $file->getClientOriginalName(),
+                    'file_size_bytes'   => $file->getSize(),
+                    'mime_type'         => $file->getMimeType(),
+                    'notes'             => 'Supplier-submitted invoice for bill ' . $bill->bill_number,
+                    'uploaded_by'       => $portalUserId,
+                    'uploaded_at'       => now(),
+                ]);
+            }
 
-            PortalShippingDocument::create([
-                'purchase_order_id' => $purchaseOrder->id,
-                'bill_id'           => $bill->id,
-                'document_type'     => 'supplier_invoice',
-                'file_path'         => $path,
-                'original_filename' => $file->getClientOriginalName(),
-                'file_size_bytes'   => $file->getSize(),
-                'mime_type'         => $file->getMimeType(),
-                'notes'             => 'Supplier-submitted invoice for bill ' . $bill->bill_number,
-                'uploaded_by'       => $portalUserId,
-                'uploaded_at'       => now(),
-            ]);
-        }
-
-        return [
-            'bill'    => $bill,
-            'message' => 'Invoice submitted successfully. Bill has been created in Accounts Payable.',
-        ];
+            return [
+                'bill'    => $bill,
+                'message' => 'Invoice submitted successfully. Bill has been created in Accounts Payable.',
+            ];
+        });
     }
 
     /**

@@ -151,7 +151,7 @@ export function CopqWidget() {
               Monthly COPQ Trend (Last 6 Months)
             </div>
             <BarComparison
-              data={trend}
+              data={trend as unknown as Record<string, unknown>[]}
               bars={TREND_BARS}
               xKey="month"
               height={220}

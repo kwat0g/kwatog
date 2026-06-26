@@ -8,8 +8,8 @@
  */
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Download, FileText, Clock, User as UserIcon, ArrowRight } from 'lucide-react';
-import { auditLogsApi, type AuditLogEntry } from '@/api/admin/audit-logs';
+import { Download, Clock, User as UserIcon, ArrowRight } from 'lucide-react';
+import { auditLogsApi, type AuditLogEntry, type AuditLogParams } from '@/api/admin/audit-logs';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -95,7 +95,7 @@ export default function EntityAuditTrailPage() {
   });
 
   const handleExportPdf = () => {
-    const url = auditLogsApi.exportPdfUrl({ model_type: modelType });
+    const url = auditLogsApi.exportPdfUrl({ model_type: modelType, model_id: modelId } as AuditLogParams);
     window.open(url, '_blank');
   };
 

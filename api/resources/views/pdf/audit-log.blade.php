@@ -59,7 +59,7 @@
             <span class="chip">{{ ucfirst($log->action) }}</span>
           </td>
           <td style="font-family: 'DejaVu Sans Mono', monospace; font-size: 8px;">
-            {{ $basename }} #{{ $log->model_id }}
+            {{ $basename }} #{{ $log->model_id ? app('hashids')->encode((int) $log->model_id) : '—' }}
           </td>
           <td style="font-size: 8px;">{{ $summary }}</td>
         </tr>

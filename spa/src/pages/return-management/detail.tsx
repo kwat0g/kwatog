@@ -349,7 +349,7 @@ export default function ReturnRequestDetailPage() {
                     <td className="py-2 pr-3">{item.reason || '—'}</td>
                     <td className="py-2 pr-3">
                       {item.disposition
-                        ? <Chip variant={item.disposition === 'restock' ? 'success' : item.disposition === 'scrap' ? 'danger' : 'warning'}>{item.disposition.replace('_', ' ')}</Chip>
+                        ? <Chip variant={item.disposition === 'restock' ? 'success' : item.disposition === 'scrap' ? 'danger' : 'warning'}>{item.disposition.replace(/_/g, ' ')}</Chip>
                         : '—'}
                     </td>
                   </tr>
