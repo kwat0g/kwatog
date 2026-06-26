@@ -16,7 +16,7 @@ import { landingApi } from '@/api/landing';
 const FOOTER_LINKS = {
   company: [
     { label: 'About us', href: '#top' },
-    { label: 'Careers', href: '#' },
+    { label: 'Careers', href: '/careers' },
     { label: 'News & insights', href: '#' },
   ],
   quality: [

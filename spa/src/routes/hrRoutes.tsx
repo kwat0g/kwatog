@@ -53,6 +53,15 @@ const SubmitReviewPage = lazy(() => import('@/pages/hr/performance-reviews/submi
 // Training Matrix
 const TrainingMatrixPage = lazy(() => import('@/pages/hr/training/matrix'));
 
+// Recruitment
+const RecruitmentDashboard = lazy(() => import('@/pages/hr/recruitment'));
+const PostingsListPage = lazy(() => import('@/pages/hr/recruitment/postings'));
+const PostingCreatePage = lazy(() => import('@/pages/hr/recruitment/postings/create'));
+const PostingDetailPage = lazy(() => import('@/pages/hr/recruitment/postings/detail'));
+const PostingEditPage = lazy(() => import('@/pages/hr/recruitment/postings/edit'));
+const ApplicationsListPage = lazy(() => import('@/pages/hr/recruitment/applications'));
+const ApplicationDetailPage = lazy(() => import('@/pages/hr/recruitment/applications/detail'));
+
 export const hrRoutes = (
   <>
     {/* HR module */}
@@ -192,6 +201,24 @@ export const hrRoutes = (
     <Route element={<ModuleGuard module="hr" />}>
       <Route path="/hr/training/matrix"
         element={<PermissionGuard permission="hr.trainings.view"><TrainingMatrixPage /></PermissionGuard>} />
+    </Route>
+
+    {/* Recruitment */}
+    <Route element={<ModuleGuard module="recruitment" />}>
+      <Route path="/hr/recruitment"
+        element={<PermissionGuard permission="hr.recruitment.view"><RecruitmentDashboard /></PermissionGuard>} />
+      <Route path="/hr/recruitment/postings"
+        element={<PermissionGuard permission="hr.recruitment.view"><PostingsListPage /></PermissionGuard>} />
+      <Route path="/hr/recruitment/postings/create"
+        element={<PermissionGuard permission="hr.recruitment.manage"><PostingCreatePage /></PermissionGuard>} />
+      <Route path="/hr/recruitment/postings/:id"
+        element={<PermissionGuard permission="hr.recruitment.view"><PostingDetailPage /></PermissionGuard>} />
+      <Route path="/hr/recruitment/postings/:id/edit"
+        element={<PermissionGuard permission="hr.recruitment.manage"><PostingEditPage /></PermissionGuard>} />
+      <Route path="/hr/recruitment/applications"
+        element={<PermissionGuard permission="hr.recruitment.view"><ApplicationsListPage /></PermissionGuard>} />
+      <Route path="/hr/recruitment/applications/:id"
+        element={<PermissionGuard permission="hr.recruitment.view"><ApplicationDetailPage /></PermissionGuard>} />
     </Route>
   </>
 );

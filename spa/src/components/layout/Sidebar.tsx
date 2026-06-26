@@ -46,6 +46,7 @@ import {
   UserPlus,
   Star,
   Coins,
+  Briefcase,
   type LucideIcon,
 } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo } from 'react';
@@ -188,6 +189,7 @@ const SECTIONS: NavSection[] = [
       { to: '/payroll/statutory', label: 'Statutory Exports', icon: FileText, feature: 'payroll', permission: 'payroll.view' },
       { to: '/hr/succession-plans',      label: 'Succession',          icon: UserPlus,    feature: 'hr', permission: 'hr.succession.manage' },
       { to: '/hr/performance-reviews',   label: 'Performance Reviews', icon: Star,        feature: 'hr', permission: 'hr.performance.view' },
+      { to: '/hr/recruitment',              label: 'Recruitment',         icon: Briefcase,   feature: 'recruitment', permission: 'hr.recruitment.view' },
     ],
   },
   {
