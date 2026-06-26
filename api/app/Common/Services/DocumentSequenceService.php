@@ -58,6 +58,9 @@ class DocumentSequenceService
         'opportunity'      => ['prefix' => 'OPP',   'reset' => 'monthly', 'pad' => 4],
         'quote'            => ['prefix' => 'QT',    'reset' => 'monthly', 'pad' => 4],
         'asset_transfer'   => ['prefix' => 'AT',    'reset' => 'monthly', 'pad' => 4],
+        // Recruitment — job postings and applications.
+        'job_posting'      => ['prefix' => 'JP',    'reset' => 'monthly', 'pad' => 4],
+        'job_application'  => ['prefix' => 'JA',    'reset' => 'monthly', 'pad' => 4],
     ];
 
     /**

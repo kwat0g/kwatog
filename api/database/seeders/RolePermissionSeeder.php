@@ -309,6 +309,12 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'hr.performance.view',        'name' => 'View Performance Reviews'],
                 ['slug' => 'hr.performance.manage',      'name' => 'Manage Performance Reviews'],
             ],
+            'hr_recruitment' => [
+                ['slug' => 'hr.recruitment.view',         'name' => 'View Job Postings & Applications'],
+                ['slug' => 'hr.recruitment.manage',       'name' => 'Create & Edit Job Postings'],
+                ['slug' => 'hr.recruitment.applications', 'name' => 'Manage Applications (stage, notes, interviews)'],
+                ['slug' => 'hr.recruitment.hire',         'name' => 'Mark Hired & Convert to Employee'],
+            ],
             'crm_commissions' => [
                 ['slug' => 'crm.commissions.view',       'name' => 'View Commissions'],
                 ['slug' => 'crm.commissions.manage',     'name' => 'Manage Commissions'],
@@ -394,6 +400,7 @@ class RolePermissionSeeder extends Seeder
                     $this->module('hr_separation'),
                     $this->module('hr_succession'),
                     $this->module('hr_performance'),
+                    $this->module('hr_recruitment'),
                     $this->module('loans'),
                     $this->selfService(),
                     [
