@@ -23,6 +23,7 @@ function formatSalary(min: string | null, max: string | null) {
 
 export default function CareersPage() {
   const [page, setPage] = useState(1);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['public-postings', page],
@@ -34,7 +35,7 @@ export default function CareersPage() {
 
   return (
     <div className="min-h-screen bg-white" style={{ fontFamily: "'Bricolage Grotesque Variable', sans-serif" }}>
-      <LandingNav />
+      <LandingNav open={menuOpen} onOpenChange={setMenuOpen} />
 
       <main className="mx-auto max-w-6xl px-6 pb-24 pt-32">
         <div className="mb-12 text-center">

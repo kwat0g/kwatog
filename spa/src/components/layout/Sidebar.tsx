@@ -46,7 +46,6 @@ import {
   UserPlus,
   Star,
   Coins,
-  Briefcase,
   type LucideIcon,
 } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo } from 'react';

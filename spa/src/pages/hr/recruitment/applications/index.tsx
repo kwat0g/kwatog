@@ -103,7 +103,7 @@ export default function ApplicationsListPage() {
 
       <div className="mt-4">
         {isLoading ? (
-          <SkeletonTable rows={5} cols={5} />
+          <SkeletonTable rows={5} columns={5} />
         ) : isError ? (
           <EmptyState title="Error loading applications" action={<Button onClick={() => refetch()}>Retry</Button>} />
         ) : !data?.data?.length ? (
@@ -113,12 +113,8 @@ export default function ApplicationsListPage() {
             columns={columns}
             data={data.data}
             onRowClick={(row) => navigate(`/hr/recruitment/applications/${row.id}`)}
-            pagination={data.meta ? {
-              currentPage: data.meta.current_page,
-              lastPage: data.meta.last_page,
-              total: data.meta.total,
-              onPageChange: setPage,
-            } : undefined}
+            meta={data.meta}
+            onPageChange={setPage}
           />
         )}
       </div>

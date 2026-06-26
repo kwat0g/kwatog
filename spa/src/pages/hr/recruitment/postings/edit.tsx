@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Select } from '@/components/ui/Select';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SkeletonTable } from '@/components/ui/Skeleton';
-import { toast } from '@/lib/toast';
+import toast from 'react-hot-toast';
 
 const schema = z.object({
   title: z.string().min(1, 'Title is required').max(200),
@@ -44,12 +44,12 @@ export default function PostingEditPage() {
 
   const { data: departments } = useQuery({
     queryKey: ['departments'],
-    queryFn: () => departmentsApi.list().then((r) => r.data?.data ?? []),
+    queryFn: () => departmentsApi.list().then((r) => r.data ?? []),
   });
 
   const { data: positions } = useQuery({
     queryKey: ['positions'],
-    queryFn: () => positionsApi.list().then((r) => r.data?.data ?? []),
+    queryFn: () => positionsApi.list().then((r) => r.data ?? []),
   });
 
   const {
@@ -95,7 +95,7 @@ export default function PostingEditPage() {
     },
   });
 
-  if (isLoading) return <SkeletonTable rows={5} cols={3} />;
+  if (isLoading) return <SkeletonTable rows={5} columns={3} />;
 
   return (
     <div>
@@ -181,7 +181,7 @@ export default function PostingEditPage() {
           <Button type="submit" disabled={mutation.isPending}>
             {mutation.isPending ? 'Saving...' : 'Save Changes'}
           </Button>
-          <Button type="button" variant="outline" onClick={() => navigate(`/hr/recruitment/postings/${id}`)}>
+          <Button type="button" variant="secondary" onClick={() => navigate(`/hr/recruitment/postings/${id}`)}>
             Cancel
           </Button>
         </div>

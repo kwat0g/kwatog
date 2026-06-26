@@ -34,6 +34,7 @@ export default function ApplicationTrackPage() {
   const [code, setCode] = useState('');
   const [info, setInfo] = useState<TrackingInfo | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const mutation = useMutation({
     mutationFn: (trackingCode: string) =>
@@ -60,7 +61,7 @@ export default function ApplicationTrackPage() {
 
   return (
     <div className="min-h-screen bg-white" style={{ fontFamily: "'Bricolage Grotesque Variable', sans-serif" }}>
-      <LandingNav />
+      <LandingNav open={menuOpen} onOpenChange={setMenuOpen} />
 
       <main className="mx-auto max-w-2xl px-6 pb-24 pt-32">
         <Link

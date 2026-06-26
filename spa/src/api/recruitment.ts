@@ -1,5 +1,5 @@
-import client from './client';
-import type { Paginated } from '@/types/common';
+import { client } from './client';
+import type { PaginatedResponse } from '@/types';
 import type {
   JobPosting,
   JobApplication,
@@ -12,7 +12,7 @@ const BASE = '/recruitment';
 
 export const recruitmentApi = {
   listPostings: (params?: Record<string, unknown>) =>
-    client.get<Paginated<JobPosting>>(`${BASE}/postings`, { params }),
+    client.get<PaginatedResponse<JobPosting>>(`${BASE}/postings`, { params }),
   showPosting: (id: string) =>
     client.get<{ data: JobPosting }>(`${BASE}/postings/${id}`),
   createPosting: (data: CreateJobPostingData) =>
@@ -25,7 +25,7 @@ export const recruitmentApi = {
     client.patch<{ data: JobPosting }>(`${BASE}/postings/${id}/status`, { status }),
 
   listApplications: (params?: Record<string, unknown>) =>
-    client.get<Paginated<JobApplication>>(`${BASE}/applications`, { params }),
+    client.get<PaginatedResponse<JobApplication>>(`${BASE}/applications`, { params }),
   showApplication: (id: string) =>
     client.get<{ data: JobApplication }>(`${BASE}/applications/${id}`),
   changeStage: (id: string, data: { action: 'advance' | 'reject'; rejection_reason?: string }) =>

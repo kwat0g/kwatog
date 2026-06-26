@@ -35,6 +35,7 @@ export default function JobPostingDetailPage() {
   const [resume, setResume] = useState<File | null>(null);
   const [trackingCode, setTrackingCode] = useState<string | null>(null);
   const [resumeError, setResumeError] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const { data, isLoading, isError } = useQuery({
@@ -87,7 +88,7 @@ export default function JobPostingDetailPage() {
 
   return (
     <div className="min-h-screen bg-white" style={{ fontFamily: "'Bricolage Grotesque Variable', sans-serif" }}>
-      <LandingNav />
+      <LandingNav open={menuOpen} onOpenChange={setMenuOpen} />
 
       <main className="mx-auto max-w-3xl px-6 pb-24 pt-32">
         <Link

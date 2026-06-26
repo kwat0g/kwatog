@@ -8,8 +8,8 @@ import { DataTable, type Column } from '@/components/ui/DataTable';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { usePermission } from '@/hooks/usePermission';
-import { toast } from '@/lib/toast';
-import type { JobPosting, JobPostingStatus, JobApplication, ApplicationStage } from '@/types/recruitment';
+import toast from 'react-hot-toast';
+import type { JobPostingStatus, JobApplication, ApplicationStage } from '@/types/recruitment';
 
 const STATUS_CHIP: Record<JobPostingStatus, 'neutral' | 'success' | 'warning' | 'info'> = {
   draft: 'neutral',
@@ -68,7 +68,7 @@ export default function PostingDetailPage() {
     { key: 'applied_at', header: 'Applied', cell: (r) => <span className="font-mono text-xs tabular-nums">{new Date(r.applied_at).toLocaleDateString()}</span> },
   ];
 
-  if (isLoading) return <SkeletonTable rows={5} cols={4} />;
+  if (isLoading) return <SkeletonTable rows={5} columns={4} />;
   if (!posting) return <p className="text-muted">Posting not found.</p>;
 
   return (
@@ -79,7 +79,7 @@ export default function PostingDetailPage() {
         actions={
           can('hr.recruitment.manage') ? (
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => navigate(`/hr/recruitment/postings/${id}/edit`)}>
+              <Button variant="secondary" size="sm" onClick={() => navigate(`/hr/recruitment/postings/${id}/edit`)}>
                 <Edit size={14} /> Edit
               </Button>
               {posting.status === 'draft' && (
@@ -88,7 +88,7 @@ export default function PostingDetailPage() {
                 </Button>
               )}
               {posting.status === 'open' && (
-                <Button variant="outline" size="sm" onClick={() => statusMutation.mutate('closed')}>
+                <Button variant="secondary" size="sm" onClick={() => statusMutation.mutate('closed')}>
                   Close
                 </Button>
               )}

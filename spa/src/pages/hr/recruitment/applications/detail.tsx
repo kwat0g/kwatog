@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { usePermission } from '@/hooks/usePermission';
-import { toast } from '@/lib/toast';
+import toast from 'react-hot-toast';
 import type { ApplicationStage, ApplicationInterview } from '@/types/recruitment';
 
 const STAGE_CHIP: Record<ApplicationStage, 'neutral' | 'info' | 'warning' | 'success' | 'danger'> = {
@@ -83,7 +83,7 @@ export default function ApplicationDetailPage() {
     onError: () => toast.error('Failed to add note.'),
   });
 
-  if (isLoading) return <SkeletonTable rows={5} cols={3} />;
+  if (isLoading) return <SkeletonTable rows={5} columns={3} />;
   if (!application) return <p className="text-muted">Application not found.</p>;
 
   const isTerminal = application.stage === 'hired' || application.stage === 'rejected';
@@ -178,7 +178,7 @@ export default function ApplicationDetailPage() {
             )}
             <div className="mt-3">
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 onClick={() => {
                   recruitmentApi.downloadResume(id!).then((res) => {

@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { Select } from '@/components/ui/Select';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { toast } from '@/lib/toast';
+import toast from 'react-hot-toast';
 
 const schema = z.object({
   title: z.string().min(1, 'Title is required').max(200),
@@ -36,12 +36,12 @@ export default function PostingCreatePage() {
 
   const { data: departments } = useQuery({
     queryKey: ['departments'],
-    queryFn: () => departmentsApi.list().then((r) => r.data?.data ?? []),
+    queryFn: () => departmentsApi.list().then((r) => r.data ?? []),
   });
 
   const { data: positions } = useQuery({
     queryKey: ['positions'],
-    queryFn: () => positionsApi.list().then((r) => r.data?.data ?? []),
+    queryFn: () => positionsApi.list().then((r) => r.data ?? []),
   });
 
   const {
@@ -60,7 +60,7 @@ export default function PostingCreatePage() {
 
   const mutation = useMutation({
     mutationFn: (data: FormData) => recruitmentApi.createPosting(data as any),
-    onSuccess: (res) => {
+    onSuccess: (res: { data: { data: { id: string } } }) => {
       toast.success('Job posting created.');
       queryClient.invalidateQueries({ queryKey: ['recruitment-postings'] });
       navigate(`/hr/recruitment/postings/${res.data.data.id}`);
@@ -160,7 +160,7 @@ export default function PostingCreatePage() {
           <Button type="submit" disabled={mutation.isPending}>
             {mutation.isPending ? 'Creating...' : 'Create Posting'}
           </Button>
-          <Button type="button" variant="outline" onClick={() => navigate('/hr/recruitment/postings')}>
+          <Button type="button" variant="secondary" onClick={() => navigate('/hr/recruitment/postings')}>
             Cancel
           </Button>
         </div>

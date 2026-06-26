@@ -28,7 +28,7 @@ export default function CreateEmployeePage() {
 
   const { data: conversionData, isLoading: conversionLoading } = useQuery({
     queryKey: ['recruitment-conversion', fromApplication],
-    queryFn: () => recruitmentApi.getConversionData(fromApplication!).then((r) => r.data.data),
+    queryFn: () => recruitmentApi.getConversionData(fromApplication!).then((r: { data: { data: Record<string, string | null> } }) => r.data.data),
     enabled: !!fromApplication,
   });
 
@@ -52,7 +52,7 @@ export default function CreateEmployeePage() {
     mutationFn: (d: EmployeeFormValues) => {
       const payload = cleanup(d);
       if (fromApplication) {
-        (payload as Record<string, unknown>).from_application = fromApplication;
+        (payload as unknown as Record<string, unknown>).from_application = fromApplication;
       }
       return employeesApi.create(payload);
     },
@@ -77,7 +77,7 @@ export default function CreateEmployeePage() {
   });
 
   if (fromApplication && conversionLoading) {
-    return <SkeletonTable rows={5} cols={3} />;
+    return <SkeletonTable rows={5} columns={3} />;
   }
 
   return (
