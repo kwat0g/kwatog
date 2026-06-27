@@ -2,14 +2,18 @@ import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, XCircle, Calendar, Download, MessageSquare, UserPlus } from 'lucide-react';
+import { cn } from '@/lib/cn';
 import { recruitmentApi } from '@/api/recruitment';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Panel } from '@/components/ui/Panel';
+import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { SkeletonTable } from '@/components/ui/Skeleton';
 import { usePermission } from '@/hooks/usePermission';
+import { formatDate, formatDateTime } from '@/lib/formatDate';
 import toast from 'react-hot-toast';
 import type { ApplicationStage, ApplicationInterview } from '@/types/recruitment';
 
@@ -20,6 +24,15 @@ const STAGE_CHIP: Record<ApplicationStage, 'neutral' | 'info' | 'warning' | 'suc
   offer: 'info',
   hired: 'success',
   rejected: 'danger',
+};
+
+const STAGE_LABEL: Record<ApplicationStage, string> = {
+  new: 'New',
+  screening: 'Screening',
+  interview: 'Interview',
+  offer: 'Offer',
+  hired: 'Hired',
+  rejected: 'Rejected',
 };
 
 const PIPELINE_STAGES: ApplicationStage[] = ['new', 'screening', 'interview', 'offer', 'hired'];
@@ -36,7 +49,7 @@ export default function ApplicationDetailPage() {
   const [interviewData, setInterviewData] = useState({ scheduled_at: '', location: '', interviewer_name: '' });
   const [noteBody, setNoteBody] = useState('');
 
-  const { data: application, isLoading } = useQuery({
+  const { data: application, isLoading, isError, refetch } = useQuery({
     queryKey: ['recruitment-application', id],
     queryFn: () => recruitmentApi.showApplication(id!).then((r) => r.data.data),
     enabled: !!id,
@@ -83,8 +96,17 @@ export default function ApplicationDetailPage() {
     onError: () => toast.error('Failed to add note.'),
   });
 
-  if (isLoading) return <SkeletonTable rows={5} columns={3} />;
-  if (!application) return <p className="text-muted">Application not found.</p>;
+  if (isLoading) return <SkeletonDetail />;
+  if (isError || !application) {
+    return (
+      <EmptyState
+        icon="alert-circle"
+        title="Application not found"
+        description="The record may have been deleted or you don't have access."
+        action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
+      />
+    );
+  }
 
   const isTerminal = application.stage === 'hired' || application.stage === 'rejected';
   const currentIdx = PIPELINE_STAGES.indexOf(application.stage as ApplicationStage);
@@ -92,58 +114,74 @@ export default function ApplicationDetailPage() {
   return (
     <div>
       <PageHeader
-        title={application.full_name}
-        subtitle={`${application.application_number} · Applied for ${application.job_posting?.title ?? 'Unknown'}`}
+        title={
+          <span className="flex items-center gap-2">
+            {application.full_name}
+            <Chip variant={STAGE_CHIP[application.stage]}>{STAGE_LABEL[application.stage]}</Chip>
+          </span>
+        }
+        subtitle={<span className="font-mono">{application.application_number} · {application.job_posting?.title ?? 'Unknown'}</span>}
+        backTo="/hr/recruitment/applications"
+        backLabel="Applications"
+        breadcrumbs={[
+          { label: 'HR', href: '/hr' },
+          { label: 'Recruitment', href: '/hr/recruitment' },
+          { label: 'Applications', href: '/hr/recruitment/applications' },
+          { label: application.full_name },
+        ]}
         actions={
           can('hr.recruitment.applications') && !isTerminal ? (
-            <div className="flex gap-2">
-              <Button size="sm" onClick={() => advanceMutation.mutate()} disabled={advanceMutation.isPending}>
-                <ArrowRight size={14} /> Advance
+            <>
+              <Button size="sm" icon={<ArrowRight size={12} />} onClick={() => advanceMutation.mutate()} disabled={advanceMutation.isPending} loading={advanceMutation.isPending}>
+                Advance
               </Button>
-              <Button variant="danger" size="sm" onClick={() => setShowRejectDialog(true)}>
-                <XCircle size={14} /> Reject
+              <Button variant="danger" size="sm" icon={<XCircle size={12} />} onClick={() => setShowRejectDialog(true)}>
+                Reject
               </Button>
-            </div>
+            </>
           ) : application.stage === 'hired' && can('hr.recruitment.hire') && !application.converted_employee ? (
-            <Button onClick={() => navigate(`/hr/employees/create?from_application=${id}`)}>
-              <UserPlus size={14} /> Convert to Employee
+            <Button size="sm" icon={<UserPlus size={12} />} onClick={() => navigate(`/hr/employees/create?from_application=${id}`)}>
+              Convert to Employee
             </Button>
           ) : undefined
         }
       />
 
       {/* Pipeline stepper */}
-      <div className="mt-6 flex items-center gap-1">
-        {PIPELINE_STAGES.map((stage, idx) => {
-          const isActive = idx === currentIdx;
-          const isDone = idx < currentIdx;
-          return (
-            <div key={stage} className="flex items-center gap-1">
-              <div
-                className={`rounded-full px-3 py-1 text-xs font-medium ${
-                  isActive
-                    ? 'bg-foreground text-background'
-                    : isDone
-                    ? 'bg-emerald-100 text-emerald-800'
-                    : 'bg-muted/30 text-muted'
-                }`}
-              >
-                {stage}
+      <div className="px-5 py-3">
+        <div className="flex items-center gap-1">
+          {PIPELINE_STAGES.map((stage, idx) => {
+            const isActive = idx === currentIdx;
+            const isDone = idx < currentIdx;
+            return (
+              <div key={stage} className="flex items-center gap-1">
+                <div
+                  className={cn(
+                    'rounded-full px-3 py-1 text-xs font-medium transition-colors',
+                    isActive
+                      ? 'bg-accent text-white'
+                      : isDone
+                      ? 'bg-success/10 text-success'
+                      : 'bg-elevated text-muted',
+                  )}
+                >
+                  {STAGE_LABEL[stage]}
+                </div>
+                {idx < PIPELINE_STAGES.length - 1 && (
+                  <div className={cn('h-0.5 w-4', isDone ? 'bg-success/40' : 'bg-border')} />
+                )}
               </div>
-              {idx < PIPELINE_STAGES.length - 1 && (
-                <div className={`h-0.5 w-4 ${isDone ? 'bg-emerald-300' : 'bg-border'}`} />
-              )}
-            </div>
-          );
-        })}
-        {application.stage === 'rejected' && (
-          <Chip variant="danger" className="ml-2">Rejected at {application.rejected_at_stage}</Chip>
-        )}
+            );
+          })}
+          {application.stage === 'rejected' && (
+            <Chip variant="danger" className="ml-2">Rejected at {application.rejected_at_stage}</Chip>
+          )}
+        </div>
       </div>
 
       {/* Reject dialog */}
       {showRejectDialog && (
-        <div className="mt-4 rounded-lg border border-danger/30 bg-danger/5 p-4">
+        <div className="mx-5 mb-4 rounded-md border border-danger/30 bg-danger/5 p-4">
           <p className="text-sm font-medium">Rejection reason:</p>
           <Textarea
             className="mt-2"
@@ -153,7 +191,7 @@ export default function ApplicationDetailPage() {
             placeholder="Provide a reason..."
           />
           <div className="mt-3 flex gap-2">
-            <Button variant="danger" size="sm" onClick={() => rejectMutation.mutate(rejectionReason)} disabled={rejectMutation.isPending}>
+            <Button variant="danger" size="sm" onClick={() => rejectMutation.mutate(rejectionReason)} disabled={rejectMutation.isPending} loading={rejectMutation.isPending}>
               Confirm Reject
             </Button>
             <Button variant="ghost" size="sm" onClick={() => setShowRejectDialog(false)}>Cancel</Button>
@@ -161,25 +199,25 @@ export default function ApplicationDetailPage() {
         </div>
       )}
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-3">
-        {/* Main info */}
-        <div className="space-y-6 lg:col-span-2">
-          <section className="rounded-lg border border-border p-4">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">Contact Information</h3>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2 text-sm">
-              <div><span className="text-muted">Email:</span> {application.email}</div>
-              <div><span className="text-muted">Phone:</span> {application.phone}</div>
-            </div>
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 px-5 pb-4">
+        <div className="space-y-4">
+          {/* Contact */}
+          <Panel title="Contact Information">
+            <dl className="grid gap-3 sm:grid-cols-2 text-sm">
+              <DetailItem label="Email">{application.email}</DetailItem>
+              <DetailItem label="Phone">{application.phone}</DetailItem>
+            </dl>
             {application.cover_letter && (
-              <div className="mt-3">
-                <span className="text-sm text-muted">Cover Letter:</span>
-                <p className="mt-1 whitespace-pre-line text-sm">{application.cover_letter}</p>
+              <div className="mt-4 pt-3 border-t border-default">
+                <dt className="text-2xs uppercase tracking-wider text-muted font-medium">Cover Letter</dt>
+                <dd className="mt-1 whitespace-pre-line text-sm">{application.cover_letter}</dd>
               </div>
             )}
-            <div className="mt-3">
+            <div className="mt-4 pt-3 border-t border-default">
               <Button
                 variant="secondary"
                 size="sm"
+                icon={<Download size={12} />}
                 onClick={() => {
                   recruitmentApi.downloadResume(id!).then((res) => {
                     const url = URL.createObjectURL(res.data);
@@ -191,62 +229,70 @@ export default function ApplicationDetailPage() {
                   });
                 }}
               >
-                <Download size={14} /> Download Resume
+                Download Resume
               </Button>
             </div>
-          </section>
+          </Panel>
 
           {/* Interviews */}
-          <section className="rounded-lg border border-border p-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">Interviews</h3>
-              {can('hr.recruitment.applications') && (
-                <Button variant="ghost" size="sm" onClick={() => setShowInterviewForm(!showInterviewForm)}>
-                  <Calendar size={14} /> Schedule
+          <Panel
+            title={`Interviews (${application.interviews?.length ?? 0})`}
+            actions={
+              can('hr.recruitment.applications') ? (
+                <Button variant="ghost" size="sm" icon={<Calendar size={12} />} onClick={() => setShowInterviewForm(!showInterviewForm)}>
+                  Schedule
                 </Button>
-              )}
-            </div>
-
+              ) : undefined
+            }
+          >
             {showInterviewForm && (
-              <div className="mt-3 space-y-2 rounded border border-border p-3">
+              <div className="mb-4 space-y-2 rounded-md border border-default p-3 bg-elevated">
                 <Input
+                  label="Date & Time"
                   type="datetime-local"
+                  required
                   value={interviewData.scheduled_at}
                   onChange={(e) => setInterviewData((d) => ({ ...d, scheduled_at: e.target.value }))}
-                  placeholder="Date & time"
                 />
                 <Input
+                  label="Location"
                   value={interviewData.location}
                   onChange={(e) => setInterviewData((d) => ({ ...d, location: e.target.value }))}
-                  placeholder="Location (optional)"
+                  placeholder="Room 201 / Zoom link"
                 />
                 <Input
+                  label="Interviewer"
+                  required
                   value={interviewData.interviewer_name}
                   onChange={(e) => setInterviewData((d) => ({ ...d, interviewer_name: e.target.value }))}
-                  placeholder="Interviewer name"
+                  placeholder="Full name"
                 />
-                <Button
-                  size="sm"
-                  onClick={() => interviewMutation.mutate({
-                    scheduled_at: new Date(interviewData.scheduled_at).toISOString(),
-                    location: interviewData.location || undefined,
-                    interviewer_name: interviewData.interviewer_name,
-                  })}
-                  disabled={!interviewData.scheduled_at || !interviewData.interviewer_name || interviewMutation.isPending}
-                >
-                  Save Interview
-                </Button>
+                <div className="flex gap-2 pt-1">
+                  <Button
+                    size="sm"
+                    onClick={() => interviewMutation.mutate({
+                      scheduled_at: new Date(interviewData.scheduled_at).toISOString(),
+                      location: interviewData.location || undefined,
+                      interviewer_name: interviewData.interviewer_name,
+                    })}
+                    disabled={!interviewData.scheduled_at || !interviewData.interviewer_name || interviewMutation.isPending}
+                    loading={interviewMutation.isPending}
+                  >
+                    Save
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setShowInterviewForm(false)}>Cancel</Button>
+                </div>
               </div>
             )}
 
-            <div className="mt-3 space-y-2">
-              {application.interviews?.length ? (
-                application.interviews.map((iv: ApplicationInterview) => (
-                  <div key={iv.id} className="flex items-center justify-between rounded bg-muted/20 px-3 py-2 text-sm">
+            {application.interviews?.length ? (
+              <ul className="divide-y divide-default">
+                {application.interviews.map((iv: ApplicationInterview) => (
+                  <li key={iv.id} className="flex items-center justify-between py-2.5">
                     <div>
-                      <p className="font-medium">{iv.interviewer_name}</p>
-                      <p className="text-xs text-muted">
-                        {new Date(iv.scheduled_at).toLocaleString()}
+                      <p className="text-sm font-medium">{iv.interviewer_name}</p>
+                      <p className="text-xs text-muted font-mono tabular-nums">
+                        {formatDateTime(iv.scheduled_at)}
                         {iv.location && ` · ${iv.location}`}
                       </p>
                     </div>
@@ -255,22 +301,25 @@ export default function ApplicationDetailPage() {
                         {iv.outcome}
                       </Chip>
                     )}
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-muted">No interviews scheduled.</p>
-              )}
-            </div>
-          </section>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted">No interviews scheduled.</p>
+            )}
+          </Panel>
 
           {/* Notes */}
-          <section className="rounded-lg border border-border p-4">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">
-              <MessageSquare size={14} className="inline mr-1" /> Notes
-            </h3>
-
+          <Panel
+            title={
+              <span className="flex items-center gap-1.5">
+                <MessageSquare size={14} />
+                Notes ({application.notes?.length ?? 0})
+              </span>
+            }
+          >
             {can('hr.recruitment.applications') && (
-              <div className="mt-3 flex gap-2">
+              <div className="mb-4 flex gap-2">
                 <Textarea
                   value={noteBody}
                   onChange={(e) => setNoteBody(e.target.value)}
@@ -282,57 +331,70 @@ export default function ApplicationDetailPage() {
                   size="sm"
                   onClick={() => { if (noteBody.trim()) noteMutation.mutate(noteBody.trim()); }}
                   disabled={!noteBody.trim() || noteMutation.isPending}
+                  loading={noteMutation.isPending}
                 >
                   Add
                 </Button>
               </div>
             )}
 
-            <div className="mt-3 space-y-2">
-              {application.notes?.length ? (
-                application.notes.map((note) => (
-                  <div key={note.id} className="rounded bg-muted/20 px-3 py-2 text-sm">
-                    <p>{note.body}</p>
+            {application.notes?.length ? (
+              <ul className="divide-y divide-default">
+                {application.notes.map((note) => (
+                  <li key={note.id} className="py-2.5">
+                    <p className="text-sm">{note.body}</p>
                     <p className="mt-1 text-xs text-muted">
-                      {note.user.name} · {new Date(note.created_at).toLocaleString()}
+                      {note.user.name} · <span className="font-mono tabular-nums">{formatDateTime(note.created_at)}</span>
                     </p>
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-muted">No notes yet.</p>
-              )}
-            </div>
-          </section>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted">No notes yet.</p>
+            )}
+          </Panel>
         </div>
 
-        {/* Sidebar info */}
-        <div className="space-y-3 rounded-lg border border-border p-4 h-fit">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted">Stage</span>
-            <Chip variant={STAGE_CHIP[application.stage]}>{application.stage_label}</Chip>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted">Tracking Code</span>
-            <span className="font-mono text-xs">{application.tracking_code}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted">Applied</span>
-            <span className="font-mono text-xs tabular-nums">{new Date(application.applied_at).toLocaleDateString()}</span>
-          </div>
-          {application.rejection_reason && (
-            <div className="mt-2 rounded bg-danger/5 p-2">
-              <span className="text-xs font-medium text-danger">Rejection reason:</span>
-              <p className="mt-1 text-xs">{application.rejection_reason}</p>
-            </div>
-          )}
-          {application.converted_employee && (
-            <div className="mt-2 rounded bg-emerald-50 p-2">
-              <span className="text-xs font-medium text-emerald-800">Converted to employee:</span>
-              <p className="mt-1 text-xs font-mono">{application.converted_employee.employee_no}</p>
-            </div>
-          )}
+        {/* Sidebar */}
+        <div className="space-y-4">
+          <Panel title="At a glance">
+            <dl className="text-sm space-y-2">
+              <DetailItem label="Stage">
+                <Chip variant={STAGE_CHIP[application.stage]}>{STAGE_LABEL[application.stage]}</Chip>
+              </DetailItem>
+              <DetailItem label="Tracking Code">
+                <span className="font-mono text-xs">{application.tracking_code}</span>
+              </DetailItem>
+              <DetailItem label="Applied">
+                <span className="font-mono tabular-nums">{formatDate(application.applied_at)}</span>
+              </DetailItem>
+            </dl>
+
+            {application.rejection_reason && (
+              <div className="mt-3 rounded-md bg-danger/5 p-3 border border-danger/20">
+                <span className="text-2xs uppercase tracking-wider text-danger font-medium">Rejection reason</span>
+                <p className="mt-1 text-xs">{application.rejection_reason}</p>
+              </div>
+            )}
+
+            {application.converted_employee && (
+              <div className="mt-3 rounded-md bg-success/5 p-3 border border-success/20">
+                <span className="text-2xs uppercase tracking-wider text-success font-medium">Converted to employee</span>
+                <p className="mt-1 text-xs font-mono">{application.converted_employee.employee_no}</p>
+              </div>
+            )}
+          </Panel>
         </div>
       </div>
+    </div>
+  );
+}
+
+function DetailItem({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <dt className="text-2xs uppercase tracking-wider text-muted font-medium">{label}</dt>
+      <dd className="mt-0.5">{children}</dd>
     </div>
   );
 }

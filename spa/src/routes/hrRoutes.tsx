@@ -129,7 +129,7 @@ export const hrRoutes = (
       />
       <Route
         path="/hr/attendance/overtime/create"
-        element={<PermissionGuard permission="attendance.overtime.create"><OvertimeCreatePage /></PermissionGuard>}
+        element={<PermissionGuard permission="attendance.ot.create"><OvertimeCreatePage /></PermissionGuard>}
       />
     </Route>
 

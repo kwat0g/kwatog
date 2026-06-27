@@ -11,7 +11,9 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { Select } from '@/components/ui/Select';
+import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { onFormInvalid } from '@/lib/formErrors';
 import toast from 'react-hot-toast';
 
 const schema = z.object({
@@ -78,93 +80,83 @@ export default function PostingCreatePage() {
 
   return (
     <div>
-      <PageHeader title="Create Job Posting" subtitle="Post a new open position" />
+      <PageHeader
+        title="Create Job Posting"
+        subtitle="Post a new open position"
+        backTo="/hr/recruitment/postings"
+        backLabel="Postings"
+        breadcrumbs={[
+          { label: 'HR', href: '/hr' },
+          { label: 'Recruitment', href: '/hr/recruitment' },
+          { label: 'Postings', href: '/hr/recruitment/postings' },
+          { label: 'Create' },
+        ]}
+      />
 
-      <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="mt-6 max-w-2xl space-y-4">
-        <div>
-          <label className="mb-1 block text-sm font-medium">Title *</label>
-          <Input {...register('title')} placeholder="e.g. Injection Molding Operator" />
-          {errors.title && <p className="mt-1 text-xs text-danger">{errors.title.message}</p>}
-        </div>
+      <div className="px-5 py-4">
+        <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormData>())} className="max-w-2xl space-y-4">
+          <Panel title="Basic Information">
+            <div className="space-y-4">
+              <Input label="Title" required {...register('title')} placeholder="e.g. Injection Molding Operator" error={errors.title?.message} />
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-sm font-medium">Department *</label>
-            <Select {...register('department_id')}>
-              <option value="">Select department</option>
-              {departments?.map((d: any) => (
-                <option key={d.id} value={d.id}>{d.name}</option>
-              ))}
-            </Select>
-            {errors.department_id && <p className="mt-1 text-xs text-danger">{errors.department_id.message}</p>}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Select label="Department" required {...register('department_id')} error={errors.department_id?.message}>
+                  <option value="">Select department</option>
+                  {departments?.map((d: any) => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </Select>
+                <Select label="Position" {...register('position_id')}>
+                  <option value="">None</option>
+                  {positions?.map((p: any) => (
+                    <option key={p.id} value={p.id}>{p.title}</option>
+                  ))}
+                </Select>
+              </div>
+
+              <Select label="Employment Type" required {...register('employment_type')}>
+                <option value="regular">Regular</option>
+                <option value="probationary">Probationary</option>
+                <option value="contractual">Contractual</option>
+                <option value="project_based">Project-Based</option>
+              </Select>
+            </div>
+          </Panel>
+
+          <Panel title="Job Details">
+            <div className="space-y-4">
+              <Textarea label="Description" required {...register('description')} rows={5} placeholder="Job description..." error={errors.description?.message} />
+              <Textarea label="Requirements" required {...register('requirements')} rows={4} placeholder="Qualifications and requirements..." error={errors.requirements?.message} />
+            </div>
+          </Panel>
+
+          <Panel title="Compensation & Settings">
+            <div className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-3">
+                <Input label="Salary Min" {...register('salary_range_min')} type="number" step="0.01" placeholder="0.00" prefix="₱" />
+                <Input label="Salary Max" {...register('salary_range_max')} type="number" step="0.01" placeholder="0.00" prefix="₱" />
+                <Input label="Slots" {...register('slots')} type="number" min={1} max={100} />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input type="checkbox" id="show_salary" {...register('show_salary')} className="h-4 w-4 rounded border-default text-accent" />
+                <label htmlFor="show_salary" className="text-sm">Show salary range on public listing</label>
+              </div>
+
+              <Input label="Application Deadline" {...register('closes_at')} type="date" />
+            </div>
+          </Panel>
+
+          <div className="flex gap-3 pt-2">
+            <Button type="submit" disabled={mutation.isPending} loading={mutation.isPending}>
+              Create Posting
+            </Button>
+            <Button type="button" variant="secondary" onClick={() => navigate('/hr/recruitment/postings')}>
+              Cancel
+            </Button>
           </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium">Position (optional)</label>
-            <Select {...register('position_id')}>
-              <option value="">None</option>
-              {positions?.map((p: any) => (
-                <option key={p.id} value={p.id}>{p.title}</option>
-              ))}
-            </Select>
-          </div>
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium">Employment Type *</label>
-          <Select {...register('employment_type')}>
-            <option value="regular">Regular</option>
-            <option value="probationary">Probationary</option>
-            <option value="contractual">Contractual</option>
-            <option value="project_based">Project-Based</option>
-          </Select>
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium">Description *</label>
-          <Textarea {...register('description')} rows={5} placeholder="Job description..." />
-          {errors.description && <p className="mt-1 text-xs text-danger">{errors.description.message}</p>}
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium">Requirements *</label>
-          <Textarea {...register('requirements')} rows={4} placeholder="Qualifications and requirements..." />
-          {errors.requirements && <p className="mt-1 text-xs text-danger">{errors.requirements.message}</p>}
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-3">
-          <div>
-            <label className="mb-1 block text-sm font-medium">Salary Min</label>
-            <Input {...register('salary_range_min')} type="number" step="0.01" placeholder="0.00" />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium">Salary Max</label>
-            <Input {...register('salary_range_max')} type="number" step="0.01" placeholder="0.00" />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium">Slots</label>
-            <Input {...register('slots')} type="number" min={1} max={100} />
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <input type="checkbox" id="show_salary" {...register('show_salary')} className="rounded" />
-          <label htmlFor="show_salary" className="text-sm">Show salary range on public listing</label>
-        </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium">Application Deadline</label>
-          <Input {...register('closes_at')} type="date" />
-        </div>
-
-        <div className="flex gap-3 pt-4">
-          <Button type="submit" disabled={mutation.isPending}>
-            {mutation.isPending ? 'Creating...' : 'Create Posting'}
-          </Button>
-          <Button type="button" variant="secondary" onClick={() => navigate('/hr/recruitment/postings')}>
-            Cancel
-          </Button>
-        </div>
-      </form>
+        </form>
+      </div>
     </div>
   );
 }

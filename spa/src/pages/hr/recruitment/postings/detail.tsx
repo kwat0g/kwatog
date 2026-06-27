@@ -5,9 +5,13 @@ import { recruitmentApi } from '@/api/recruitment';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { DataTable, type Column } from '@/components/ui/DataTable';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Panel } from '@/components/ui/Panel';
+import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { SkeletonTable } from '@/components/ui/Skeleton';
 import { usePermission } from '@/hooks/usePermission';
+import { formatDate } from '@/lib/formatDate';
+import { formatPeso } from '@/lib/formatNumber';
 import toast from 'react-hot-toast';
 import type { JobPostingStatus, JobApplication, ApplicationStage } from '@/types/recruitment';
 
@@ -16,6 +20,13 @@ const STATUS_CHIP: Record<JobPostingStatus, 'neutral' | 'success' | 'warning' | 
   open: 'success',
   closed: 'warning',
   filled: 'info',
+};
+
+const STATUS_LABEL: Record<JobPostingStatus, string> = {
+  draft: 'Draft',
+  open: 'Open',
+  closed: 'Closed',
+  filled: 'Filled',
 };
 
 const STAGE_CHIP: Record<ApplicationStage, 'neutral' | 'info' | 'warning' | 'success' | 'danger'> = {
@@ -27,13 +38,22 @@ const STAGE_CHIP: Record<ApplicationStage, 'neutral' | 'info' | 'warning' | 'suc
   rejected: 'danger',
 };
 
+const STAGE_LABEL: Record<ApplicationStage, string> = {
+  new: 'New',
+  screening: 'Screening',
+  interview: 'Interview',
+  offer: 'Offer',
+  hired: 'Hired',
+  rejected: 'Rejected',
+};
+
 export default function PostingDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { can } = usePermission();
 
-  const { data: posting, isLoading } = useQuery({
+  const { data: posting, isLoading, isError, refetch } = useQuery({
     queryKey: ['recruitment-posting', id],
     queryFn: () => recruitmentApi.showPosting(id!).then((r) => r.data.data),
     enabled: !!id,
@@ -64,26 +84,48 @@ export default function PostingDetailPage() {
 
   const appColumns: Column<JobApplication>[] = [
     { key: 'full_name', header: 'Applicant', cell: (r) => <span className="font-medium">{r.full_name}</span> },
-    { key: 'stage', header: 'Stage', cell: (r) => <Chip variant={STAGE_CHIP[r.stage]}>{r.stage_label}</Chip> },
-    { key: 'applied_at', header: 'Applied', cell: (r) => <span className="font-mono text-xs tabular-nums">{new Date(r.applied_at).toLocaleDateString()}</span> },
+    { key: 'stage', header: 'Stage', cell: (r) => <Chip variant={STAGE_CHIP[r.stage]}>{STAGE_LABEL[r.stage]}</Chip> },
+    { key: 'applied_at', header: 'Applied', cell: (r) => <span className="font-mono text-xs tabular-nums">{formatDate(r.applied_at)}</span> },
   ];
 
-  if (isLoading) return <SkeletonTable rows={5} columns={4} />;
-  if (!posting) return <p className="text-muted">Posting not found.</p>;
+  if (isLoading) return <SkeletonDetail />;
+  if (isError || !posting) {
+    return (
+      <EmptyState
+        icon="alert-circle"
+        title="Posting not found"
+        description="The record may have been deleted or you don't have access."
+        action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
+      />
+    );
+  }
 
   return (
     <div>
       <PageHeader
-        title={posting.title}
-        subtitle={`${posting.posting_number} · ${posting.department?.name ?? ''}`}
+        title={
+          <span className="flex items-center gap-2">
+            {posting.title}
+            <Chip variant={STATUS_CHIP[posting.status]}>{STATUS_LABEL[posting.status]}</Chip>
+          </span>
+        }
+        subtitle={<span className="font-mono">{posting.posting_number} · {posting.department?.name ?? ''}</span>}
+        backTo="/hr/recruitment/postings"
+        backLabel="Postings"
+        breadcrumbs={[
+          { label: 'HR', href: '/hr' },
+          { label: 'Recruitment', href: '/hr/recruitment' },
+          { label: 'Postings', href: '/hr/recruitment/postings' },
+          { label: posting.title },
+        ]}
         actions={
           can('hr.recruitment.manage') ? (
-            <div className="flex gap-2">
-              <Button variant="secondary" size="sm" onClick={() => navigate(`/hr/recruitment/postings/${id}/edit`)}>
-                <Edit size={14} /> Edit
+            <>
+              <Button variant="secondary" size="sm" icon={<Edit size={12} />} onClick={() => navigate(`/hr/recruitment/postings/${id}/edit`)}>
+                Edit
               </Button>
               {posting.status === 'draft' && (
-                <Button size="sm" onClick={() => statusMutation.mutate('open')} disabled={statusMutation.isPending}>
+                <Button size="sm" onClick={() => statusMutation.mutate('open')} disabled={statusMutation.isPending} loading={statusMutation.isPending}>
                   Publish
                 </Button>
               )}
@@ -93,71 +135,68 @@ export default function PostingDetailPage() {
                 </Button>
               )}
               {posting.status === 'draft' && (
-                <Button variant="danger" size="sm" onClick={() => { if (confirm('Delete this posting?')) deleteMutation.mutate(); }}>
-                  <Trash2 size={14} />
+                <Button variant="danger" size="sm" icon={<Trash2 size={12} />} onClick={() => { if (confirm('Delete this posting?')) deleteMutation.mutate(); }}>
+                  Delete
                 </Button>
               )}
-            </div>
+            </>
           ) : undefined
         }
       />
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-3">
-        <div className="space-y-4 lg:col-span-2">
-          <section>
-            <h3 className="text-sm font-semibold text-muted uppercase tracking-wide">Description</h3>
-            <p className="mt-1 whitespace-pre-line text-sm">{posting.description}</p>
-          </section>
-          <section>
-            <h3 className="text-sm font-semibold text-muted uppercase tracking-wide">Requirements</h3>
-            <p className="mt-1 whitespace-pre-line text-sm">{posting.requirements}</p>
-          </section>
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 px-5 py-4">
+        <div className="space-y-4">
+          <Panel title="Description">
+            <p className="whitespace-pre-line text-sm">{posting.description}</p>
+          </Panel>
+          <Panel title="Requirements">
+            <p className="whitespace-pre-line text-sm">{posting.requirements}</p>
+          </Panel>
         </div>
 
-        <div className="space-y-3 rounded-lg border border-border p-4">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted">Status</span>
-            <Chip variant={STATUS_CHIP[posting.status]}>{posting.status}</Chip>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted">Employment</span>
-            <span className="text-sm capitalize">{posting.employment_type?.replace('_', ' ')}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted">Slots</span>
-            <span className="text-sm font-mono tabular-nums">{posting.slots}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted">Applications</span>
-            <span className="text-sm font-mono tabular-nums">{posting.application_count ?? 0}</span>
-          </div>
-          {posting.salary_range_min && (
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted">Salary</span>
-              <span className="text-sm font-mono tabular-nums">
-                ₱{Number(posting.salary_range_min).toLocaleString()}
-                {posting.salary_range_max ? ` – ₱${Number(posting.salary_range_max).toLocaleString()}` : ''}
-              </span>
-            </div>
-          )}
-          {posting.posted_at && (
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted">Posted</span>
-              <span className="text-sm font-mono text-xs tabular-nums">{new Date(posting.posted_at).toLocaleDateString()}</span>
-            </div>
-          )}
-          {posting.closes_at && (
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted">Closes</span>
-              <span className="text-sm font-mono text-xs tabular-nums">{new Date(posting.closes_at).toLocaleDateString()}</span>
-            </div>
-          )}
+        <div className="space-y-4">
+          <Panel title="At a glance">
+            <dl className="text-sm space-y-2">
+              <DetailItem label="Status">
+                <Chip variant={STATUS_CHIP[posting.status]}>{STATUS_LABEL[posting.status]}</Chip>
+              </DetailItem>
+              <DetailItem label="Employment">
+                <span className="capitalize">{posting.employment_type?.replace('_', ' ')}</span>
+              </DetailItem>
+              <DetailItem label="Slots">
+                <span className="font-mono tabular-nums">{posting.slots}</span>
+              </DetailItem>
+              <DetailItem label="Applications">
+                <span className="font-mono tabular-nums">{posting.application_count ?? 0}</span>
+              </DetailItem>
+              {posting.salary_range_min && (
+                <DetailItem label="Salary">
+                  <span className="font-mono tabular-nums">
+                    {formatPeso(posting.salary_range_min)}
+                    {posting.salary_range_max ? ` – ${formatPeso(posting.salary_range_max)}` : ''}
+                  </span>
+                </DetailItem>
+              )}
+              {posting.posted_at && (
+                <DetailItem label="Posted">
+                  <span className="font-mono tabular-nums">{formatDate(posting.posted_at)}</span>
+                </DetailItem>
+              )}
+              {posting.closes_at && (
+                <DetailItem label="Closes">
+                  <span className="font-mono tabular-nums">{formatDate(posting.closes_at)}</span>
+                </DetailItem>
+              )}
+            </dl>
+          </Panel>
         </div>
       </div>
 
-      <div className="mt-8">
-        <h2 className="text-lg font-semibold">Applications</h2>
-        <div className="mt-3">
+      <div className="px-5 pb-4">
+        <Panel
+          title={`Applications (${appsData?.data?.length ?? 0})`}
+          noPadding
+        >
           {appsData?.data?.length ? (
             <DataTable
               columns={appColumns}
@@ -165,10 +204,23 @@ export default function PostingDetailPage() {
               onRowClick={(row) => navigate(`/hr/recruitment/applications/${row.id}`)}
             />
           ) : (
-            <p className="py-8 text-center text-muted">No applications yet.</p>
+            <EmptyState
+              icon="inbox"
+              title="No applications yet"
+              description="Applications for this posting will appear here."
+            />
           )}
-        </div>
+        </Panel>
       </div>
+    </div>
+  );
+}
+
+function DetailItem({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <dt className="text-2xs uppercase tracking-wider text-muted font-medium">{label}</dt>
+      <dd className="mt-0.5">{children}</dd>
     </div>
   );
 }

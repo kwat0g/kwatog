@@ -87,7 +87,7 @@ export const dashboardRoutes = (
     />
 
     <Route path="/admin/users-roles"
-      element={<PermissionGuard permission="admin.users.view"><AdminUsersRolesHubPage /></PermissionGuard>} />
+      element={<PermissionGuard permission="admin.users.manage"><AdminUsersRolesHubPage /></PermissionGuard>} />
 
     {/* Notifications page (Sprint 8 — Task 77) */}
     <Route path="/notifications" element={<NotificationsListPage />} />

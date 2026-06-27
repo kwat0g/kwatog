@@ -4,8 +4,13 @@ import { Briefcase, Users, FileText, Plus } from 'lucide-react';
 import { recruitmentApi } from '@/api/recruitment';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
+import { DataTable, type Column } from '@/components/ui/DataTable';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Panel } from '@/components/ui/Panel';
+import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
+import { formatDate } from '@/lib/formatDate';
 import type { JobApplication, ApplicationStage } from '@/types/recruitment';
 
 const STAGE_CHIP: Record<ApplicationStage, 'neutral' | 'info' | 'warning' | 'success' | 'danger'> = {
@@ -30,122 +35,141 @@ export default function RecruitmentDashboard() {
   const navigate = useNavigate();
   const { can } = usePermission();
 
-  const { data: postingsData } = useQuery({
+  const { data: postingsData, isLoading: postingsLoading } = useQuery({
     queryKey: ['recruitment-postings', { status: 'open' }],
     queryFn: () => recruitmentApi.listPostings({ status: 'open', per_page: 5 }).then((r) => r.data),
   });
 
-  const { data: applicationsData } = useQuery({
+  const { data: applicationsData, isLoading: appsLoading } = useQuery({
     queryKey: ['recruitment-applications', { per_page: 10 }],
     queryFn: () => recruitmentApi.listApplications({ per_page: 10 }).then((r) => r.data),
   });
 
   const applications = applicationsData?.data ?? [];
   const openPostings = postingsData?.meta?.total ?? 0;
+  const totalApps = applicationsData?.meta?.total ?? 0;
 
   const stageCounts = applications.reduce<Record<string, number>>((acc, app: JobApplication) => {
     acc[app.stage] = (acc[app.stage] ?? 0) + 1;
     return acc;
   }, {});
 
+  const isLoading = postingsLoading && appsLoading;
+
+  if (isLoading) return <SkeletonDetail />;
+
+  const columns: Column<JobApplication>[] = [
+    {
+      key: 'full_name',
+      header: 'Applicant',
+      cell: (r) => <span className="font-medium">{r.full_name}</span>,
+    },
+    {
+      key: 'position',
+      header: 'Position',
+      cell: (r) => r.job_posting?.title ?? '—',
+    },
+    {
+      key: 'stage',
+      header: 'Stage',
+      cell: (r) => <Chip variant={STAGE_CHIP[r.stage]}>{STAGE_LABEL[r.stage]}</Chip>,
+    },
+    {
+      key: 'applied_at',
+      header: 'Applied',
+      cell: (r) => <span className="font-mono text-xs tabular-nums">{formatDate(r.applied_at)}</span>,
+    },
+  ];
+
   return (
     <div>
       <PageHeader
         title="Recruitment"
         subtitle="Manage job postings and applications"
+        breadcrumbs={[
+          { label: 'HR', href: '/hr' },
+          { label: 'Recruitment' },
+        ]}
         actions={
           can('hr.recruitment.manage') ? (
-            <Button onClick={() => navigate('/hr/recruitment/postings/create')}>
-              <Plus size={16} /> New Posting
+            <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/hr/recruitment/postings/create')}>
+              New Posting
             </Button>
           ) : undefined
         }
       />
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 px-5 py-4 sm:grid-cols-3">
         <button
           onClick={() => navigate('/hr/recruitment/postings')}
-          className="rounded-lg border border-border bg-surface p-5 text-left transition-colors hover:bg-muted/30"
+          className="rounded-md border border-default bg-canvas p-5 text-left transition-colors hover:bg-elevated"
         >
           <div className="flex items-center gap-3">
-            <Briefcase size={20} className="text-muted" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-elevated">
+              <Briefcase size={18} className="text-muted" />
+            </div>
             <div>
               <p className="text-2xl font-bold font-mono tabular-nums">{openPostings}</p>
-              <p className="text-sm text-muted">Open Postings</p>
+              <p className="text-xs text-muted font-medium uppercase tracking-wider">Open Postings</p>
             </div>
           </div>
         </button>
 
         <button
           onClick={() => navigate('/hr/recruitment/applications')}
-          className="rounded-lg border border-border bg-surface p-5 text-left transition-colors hover:bg-muted/30"
+          className="rounded-md border border-default bg-canvas p-5 text-left transition-colors hover:bg-elevated"
         >
           <div className="flex items-center gap-3">
-            <Users size={20} className="text-muted" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-elevated">
+              <Users size={18} className="text-muted" />
+            </div>
             <div>
-              <p className="text-2xl font-bold font-mono tabular-nums">{applicationsData?.meta?.total ?? 0}</p>
-              <p className="text-sm text-muted">Total Applications</p>
+              <p className="text-2xl font-bold font-mono tabular-nums">{totalApps}</p>
+              <p className="text-xs text-muted font-medium uppercase tracking-wider">Total Applications</p>
             </div>
           </div>
         </button>
 
         <button
           onClick={() => navigate('/hr/recruitment/applications?stage=new')}
-          className="rounded-lg border border-border bg-surface p-5 text-left transition-colors hover:bg-muted/30"
+          className="rounded-md border border-default bg-canvas p-5 text-left transition-colors hover:bg-elevated"
         >
           <div className="flex items-center gap-3">
-            <FileText size={20} className="text-muted" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-elevated">
+              <FileText size={18} className="text-muted" />
+            </div>
             <div>
               <p className="text-2xl font-bold font-mono tabular-nums">{stageCounts['new'] ?? 0}</p>
-              <p className="text-sm text-muted">New Applications</p>
+              <p className="text-xs text-muted font-medium uppercase tracking-wider">New Applications</p>
             </div>
           </div>
         </button>
       </div>
 
-      <div className="mt-8">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Recent Applications</h2>
-          <Button variant="ghost" size="sm" onClick={() => navigate('/hr/recruitment/applications')}>
-            View all
-          </Button>
-        </div>
-        <div className="mt-3 overflow-x-auto rounded-lg border border-border">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-muted/30">
-                <th className="px-4 py-2 text-left font-medium">Applicant</th>
-                <th className="px-4 py-2 text-left font-medium">Position</th>
-                <th className="px-4 py-2 text-left font-medium">Stage</th>
-                <th className="px-4 py-2 text-left font-medium">Applied</th>
-              </tr>
-            </thead>
-            <tbody>
-              {applications.length === 0 ? (
-                <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-muted">No applications yet.</td>
-                </tr>
-              ) : (
-                applications.map((app: JobApplication) => (
-                  <tr
-                    key={app.id}
-                    onClick={() => navigate(`/hr/recruitment/applications/${app.id}`)}
-                    className="cursor-pointer border-b border-border last:border-0 hover:bg-muted/20"
-                  >
-                    <td className="px-4 py-2 font-medium">{app.full_name}</td>
-                    <td className="px-4 py-2">{app.job_posting?.title ?? '—'}</td>
-                    <td className="px-4 py-2">
-                      <Chip variant={STAGE_CHIP[app.stage]}>{STAGE_LABEL[app.stage]}</Chip>
-                    </td>
-                    <td className="px-4 py-2 font-mono text-xs tabular-nums">
-                      {new Date(app.applied_at).toLocaleDateString()}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+      <div className="px-5 pb-4">
+        <Panel
+          title="Recent Applications"
+          actions={
+            <Button variant="ghost" size="sm" onClick={() => navigate('/hr/recruitment/applications')}>
+              View all
+            </Button>
+          }
+          noPadding
+        >
+          {applications.length === 0 ? (
+            <EmptyState
+              icon="inbox"
+              title="No applications yet"
+              description="Applications will appear here as candidates apply."
+            />
+          ) : (
+            <DataTable
+              columns={columns}
+              data={applications}
+              onRowClick={(row) => navigate(`/hr/recruitment/applications/${row.id}`)}
+            />
+          )}
+        </Panel>
       </div>
     </div>
   );

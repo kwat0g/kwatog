@@ -85,7 +85,8 @@ class SettingsSeeder extends Seeder
             'assets'      => true,   // Sprint 8 Task 70
             'search'      => true,   // Sprint 8 Task 75
             'notifications' => true, // Sprint 8 Task 77
-            'recruitment'   => true, // Recruitment module
+            'recruitment'       => true, // Recruitment module
+            'return_management' => true, // Return Management (RMA) module
         ];
 
         foreach ($modules as $slug => $enabled) {

@@ -53,6 +53,7 @@ class UserResource extends JsonResource
             'hr', 'attendance', 'leave', 'payroll', 'loans', 'accounting',
             'inventory', 'purchasing', 'supply_chain', 'production',
             'mrp', 'crm', 'quality', 'maintenance', 'recruitment',
+            'assets', 'return_management',
         ];
 
         return array_values(array_filter(

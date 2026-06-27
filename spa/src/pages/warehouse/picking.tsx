@@ -15,7 +15,7 @@ import { formatDate } from '@/lib/formatDate';
 
 export default function PickingListPage() {
   const { can } = usePermission();
-  const canPick = can('inventory.picking.manage');
+  const canPick = can('inventory.picking.view');
 
   const [selectedMis, setSelectedMis] = useState<string | null>(null);
 
