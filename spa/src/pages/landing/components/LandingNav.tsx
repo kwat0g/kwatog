@@ -6,6 +6,10 @@
  * anchors live inline on desktop and in a slide-down sheet on mobile; the Login
  * button stays visible at every breakpoint.
  *
+ * When rendered on a non-landing page (e.g. /careers), the logo and section
+ * anchors navigate back to / with the anchor, and a "Careers" link appears
+ * in the desktop nav and mobile sheet.
+ *
  * Accessibility: the mobile sheet is a focus-managed disclosure. The parent owns
  * the `open` state so it can mark the page content `inert` while the sheet is up;
  * here we move focus into the sheet on open, trap Tab within it, close on Escape,
@@ -13,25 +17,32 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Menu, X, LogIn } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { NAV_LINKS } from '../data';
 import { useMagnetic } from '../hooks/useMagnetic';
 
-interface LandingNavProps {
+export interface LandingNavProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
 export function LandingNav({ open, onOpenChange }: LandingNavProps) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isLanding = location.pathname === '/';
   const [scrolled, setScrolled] = useState(false);
   const [activeHref, setActiveHref] = useState<string>('');
   const toggleRef = useRef<HTMLButtonElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const loginRef = useMagnetic<HTMLButtonElement>({ strength: 0.28, duration: 0.5 });
+
+  const handleAnchorClick = (href: string) => {
+    if (isLanding) return;
+    navigate('/' + href);
+  };
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
@@ -41,19 +52,15 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
   }, []);
 
   // Active-section tracking via a single IntersectionObserver.
-  // rootMargin pushes the trigger zone toward the vertical center so the
-  // section that occupies most of the viewport wins.
   useEffect(() => {
-    const sectionIds = NAV_LINKS.map((l) => l.href.slice(1)); // strip '#'
+    if (!isLanding) return;
+    const sectionIds = NAV_LINKS.map((l) => l.href.slice(1));
     const elements = sectionIds
       .map((id) => document.getElementById(id))
       .filter((el): el is HTMLElement => el !== null);
 
     if (elements.length === 0) return;
 
-    // Track every section's latest state (each callback only carries the
-    // entries that *changed*), then derive the active link from the full set —
-    // the topmost still-intersecting section wins, and we clear when none are.
     const states = new Map<string, IntersectionObserverEntry>();
     const observer = new IntersectionObserver(
       (entries) => {
@@ -68,7 +75,7 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
 
     elements.forEach((el) => observer.observe(el));
     return () => observer.disconnect();
-  }, []);
+  }, [isLanding]);
 
   // Lock body scroll while the mobile sheet is open.
   useEffect(() => {
@@ -78,13 +85,11 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
     };
   }, [open]);
 
-  // Focus management: move focus into the sheet on open, trap Tab, Escape to
-  // close, and restore focus to the toggle button on close.
+  // Focus management
   useEffect(() => {
     if (!open) return;
     const sheet = sheetRef.current;
     if (!sheet) return;
-    // Capture the toggle node now; restore focus to it on cleanup.
     const toggle = toggleRef.current;
 
     const focusable = () =>
@@ -136,7 +141,13 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
       <nav className="mx-auto flex h-16 max-w-7xl items-center justify-between px-5 sm:px-8">
         {/* Brand */}
         <a
-          href="#top"
+          href={isLanding ? '#top' : '/'}
+          onClick={(e) => {
+            if (!isLanding) {
+              e.preventDefault();
+              navigate('/');
+            }
+          }}
           className="group flex items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas"
         >
           <BrandLogo alt="Ogami" className="h-9 transition-transform duration-500 group-hover:scale-105" />
@@ -148,11 +159,17 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
         {/* Desktop links */}
         <div className="hidden items-center gap-8 lg:flex">
           {NAV_LINKS.map((link) => {
-            const isActive = activeHref === link.href;
+            const isActive = isLanding && activeHref === link.href;
             return (
               <a
                 key={link.href}
-                href={link.href}
+                href={isLanding ? link.href : '/' + link.href}
+                onClick={(e) => {
+                  if (!isLanding) {
+                    e.preventDefault();
+                    handleAnchorClick(link.href);
+                  }
+                }}
                 aria-current={isActive ? 'location' : undefined}
                 className={cn(
                   'relative rounded-sm font-sans text-[13px] transition-colors',
@@ -167,17 +184,24 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
               </a>
             );
           })}
+          <button
+            type="button"
+            onClick={() => navigate('/careers')}
+            className={cn(
+              'relative rounded-sm font-sans text-[13px] transition-colors',
+              'after:absolute after:-bottom-1.5 after:left-0 after:h-px after:bg-landing-accent after:transition-all after:duration-300',
+              'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-landing-accent focus-visible:ring-offset-4 focus-visible:ring-offset-landing-canvas',
+              location.pathname.startsWith('/careers')
+                ? 'text-landing-text after:w-full'
+                : 'text-landing-text-secondary after:w-0 hover:text-landing-text hover:after:w-full',
+            )}
+          >
+            Careers
+          </button>
         </div>
 
         {/* Actions */}
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => navigate('/careers')}
-            className="hidden font-sans text-[13px] text-landing-text-secondary transition-colors hover:text-landing-text sm:inline-block"
-          >
-            Careers
-          </button>
           <button
             ref={loginRef}
             type="button"
@@ -221,9 +245,15 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
           {NAV_LINKS.map((link) => (
             <a
               key={link.href}
-              href={link.href}
+              href={isLanding ? link.href : '/' + link.href}
               tabIndex={open ? undefined : -1}
-              onClick={() => onOpenChange(false)}
+              onClick={(e) => {
+                onOpenChange(false);
+                if (!isLanding) {
+                  e.preventDefault();
+                  handleAnchorClick(link.href);
+                }
+              }}
               className="rounded-lg px-3 py-3 font-display text-lg text-landing-text-secondary transition-colors hover:bg-landing-elevated hover:text-landing-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas"
             >
               {link.label}

@@ -3,7 +3,7 @@ import type { PaginatedResponse } from '@/types';
 import type { PublicJobPosting, TrackingInfo } from '@/types/recruitment';
 
 const publicClient = axios.create({
-  baseURL: '/api/v1/hr/public/recruitment',
+  baseURL: '/api/v1/public/recruitment',
   headers: { Accept: 'application/json' },
 });
 

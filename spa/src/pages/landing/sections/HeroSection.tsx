@@ -12,7 +12,8 @@
 
 import { useLayoutEffect, useRef } from 'react';
 import gsap from 'gsap';
-import { ArrowRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ArrowRight, Briefcase } from 'lucide-react';
 import { HeroCanvas } from '../components/HeroCanvas';
 import { PartBlueprint } from '../components/PartBlueprint';
 import { ScrambleText } from '../components/ScrambleText';
@@ -148,6 +149,13 @@ export function HeroSection() {
             >
               Explore capabilities
             </a>
+            <Link
+              to="/careers"
+              className="inline-flex items-center justify-center gap-2 rounded-full border border-landing-border-strong px-7 py-4 font-sans text-sm font-medium text-landing-text transition-colors duration-300 hover:border-landing-text hover:bg-landing-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas"
+            >
+              <Briefcase size={15} />
+              Careers
+            </Link>
           </div>
 
           <ul
