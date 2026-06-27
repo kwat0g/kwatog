@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Requests;
 
+use App\Common\Support\HashId;
 use App\Modules\HR\Enums\EmploymentType;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -13,6 +14,23 @@ class UpdateJobPostingRequest extends FormRequest
     public function authorize(): bool
     {
         return $this->user()->can('hr.recruitment.manage');
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $merge = [];
+        foreach (['department_id', 'position_id'] as $field) {
+            $val = $this->input($field);
+            if (is_string($val) && $val !== '') {
+                $decoded = HashId::decode($val);
+                if ($decoded !== null) {
+                    $merge[$field] = $decoded;
+                }
+            }
+        }
+        if (!empty($merge)) {
+            $this->merge($merge);
+        }
     }
 
     public function rules(): array
