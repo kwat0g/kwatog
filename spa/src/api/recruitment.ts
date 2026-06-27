@@ -8,7 +8,7 @@ import type {
   CreateJobPostingData,
 } from '@/types/recruitment';
 
-const BASE = '/recruitment';
+const BASE = '/hr/recruitment';
 
 export const recruitmentApi = {
   listPostings: (params?: Record<string, unknown>) =>

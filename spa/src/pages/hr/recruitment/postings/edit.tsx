@@ -114,8 +114,7 @@ export default function PostingEditPage() {
         ]}
       />
 
-      <div className="px-5 py-4">
-        <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormData>())} className="max-w-2xl space-y-4">
+      <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormData>())} className="max-w-2xl mx-auto px-5 py-6 space-y-4">
           <Panel title="Basic Information">
             <div className="space-y-4">
               <Input label="Title" required {...register('title')} error={errors.title?.message} />
@@ -168,16 +167,15 @@ export default function PostingEditPage() {
             </div>
           </Panel>
 
-          <div className="flex gap-3 pt-2">
-            <Button type="submit" disabled={mutation.isPending} loading={mutation.isPending}>
-              Save Changes
-            </Button>
+          <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="secondary" onClick={() => navigate(`/hr/recruitment/postings/${id}`)}>
               Cancel
             </Button>
+            <Button type="submit" variant="primary" disabled={mutation.isPending} loading={mutation.isPending}>
+              {mutation.isPending ? 'Saving…' : 'Save Changes'}
+            </Button>
           </div>
         </form>
-      </div>
     </div>
   );
 }
