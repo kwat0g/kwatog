@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Controllers;
 
-use App\Http\Controllers\Controller;
 use App\Modules\HR\Models\ApplicationInterview;
 use App\Modules\HR\Models\JobApplication;
 use App\Modules\HR\Requests\AdvanceApplicationRequest;
@@ -17,7 +16,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Storage;
 
-class RecruitmentApplicationController extends Controller
+class RecruitmentApplicationController
 {
     public function __construct(private RecruitmentService $service) {}
 

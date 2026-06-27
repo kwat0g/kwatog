@@ -184,20 +184,6 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
               </a>
             );
           })}
-          <button
-            type="button"
-            onClick={() => navigate('/careers')}
-            className={cn(
-              'relative rounded-sm font-sans text-[13px] transition-colors',
-              'after:absolute after:-bottom-1.5 after:left-0 after:h-px after:bg-landing-accent after:transition-all after:duration-300',
-              'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-landing-accent focus-visible:ring-offset-4 focus-visible:ring-offset-landing-canvas',
-              location.pathname.startsWith('/careers')
-                ? 'text-landing-text after:w-full'
-                : 'text-landing-text-secondary after:w-0 hover:text-landing-text hover:after:w-full',
-            )}
-          >
-            Careers
-          </button>
         </div>
 
         {/* Actions */}
@@ -259,14 +245,6 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
               {link.label}
             </a>
           ))}
-          <button
-            type="button"
-            tabIndex={open ? undefined : -1}
-            onClick={() => { onOpenChange(false); navigate('/careers'); }}
-            className="rounded-lg px-3 py-3 text-left font-display text-lg text-landing-text-secondary transition-colors hover:bg-landing-elevated hover:text-landing-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas"
-          >
-            Careers
-          </button>
         </div>
       </div>
     </header>

@@ -111,7 +111,7 @@ class RecruitmentApplicationTest extends TestCase
                 'interviewer_name' => 'Maria Santos',
             ]);
 
-        $response->assertStatus(200);
+        $response->assertStatus(201);
         $response->assertJsonPath('data.interviewer_name', 'Maria Santos');
         $this->assertDatabaseCount('application_interviews', 1);
     }

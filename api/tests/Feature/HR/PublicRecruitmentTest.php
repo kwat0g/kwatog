@@ -52,7 +52,7 @@ class PublicRecruitmentTest extends TestCase
 
     public function test_public_can_list_open_postings(): void
     {
-        $response = $this->getJson('/api/v1/hr/public/recruitment/job-postings');
+        $response = $this->getJson('/api/v1/public/recruitment/job-postings');
         $response->assertOk();
         $response->assertJsonCount(1, 'data');
         $response->assertJsonPath('data.0.title', 'Molding Operator');
@@ -60,7 +60,7 @@ class PublicRecruitmentTest extends TestCase
 
     public function test_public_can_view_single_posting(): void
     {
-        $response = $this->getJson("/api/v1/hr/public/recruitment/job-postings/{$this->posting->hash_id}");
+        $response = $this->getJson("/api/v1/public/recruitment/job-postings/{$this->posting->hash_id}");
         $response->assertOk();
         $response->assertJsonPath('data.title', 'Molding Operator');
     }
@@ -70,7 +70,7 @@ class PublicRecruitmentTest extends TestCase
         Storage::fake('local');
         Mail::fake();
 
-        $response = $this->postJson("/api/v1/hr/public/recruitment/job-postings/{$this->posting->hash_id}/apply", [
+        $response = $this->postJson("/api/v1/public/recruitment/job-postings/{$this->posting->hash_id}/apply", [
             'first_name'   => 'Juan',
             'last_name'    => 'Dela Cruz',
             'email'        => 'juan@example.com',
@@ -94,7 +94,7 @@ class PublicRecruitmentTest extends TestCase
 
         Storage::fake('local');
 
-        $response = $this->postJson("/api/v1/hr/public/recruitment/job-postings/{$this->posting->hash_id}/apply", [
+        $response = $this->postJson("/api/v1/public/recruitment/job-postings/{$this->posting->hash_id}/apply", [
             'first_name' => 'Test',
             'last_name'  => 'User',
             'email'      => 'test@example.com',
@@ -110,7 +110,7 @@ class PublicRecruitmentTest extends TestCase
         Storage::fake('local');
         Mail::fake();
 
-        $applyResponse = $this->postJson("/api/v1/hr/public/recruitment/job-postings/{$this->posting->hash_id}/apply", [
+        $applyResponse = $this->postJson("/api/v1/public/recruitment/job-postings/{$this->posting->hash_id}/apply", [
             'first_name' => 'Maria',
             'last_name'  => 'Santos',
             'email'      => 'maria@example.com',
@@ -120,7 +120,7 @@ class PublicRecruitmentTest extends TestCase
 
         $code = $applyResponse->json('tracking_code');
 
-        $trackResponse = $this->getJson("/api/v1/hr/public/recruitment/applications/track/{$code}");
+        $trackResponse = $this->getJson("/api/v1/public/recruitment/applications/track/{$code}");
         $trackResponse->assertOk();
         $trackResponse->assertJsonPath('data.status', 'Application Received');
         $trackResponse->assertJsonPath('data.position', 'Molding Operator');
@@ -128,7 +128,7 @@ class PublicRecruitmentTest extends TestCase
 
     public function test_invalid_tracking_code_returns_404(): void
     {
-        $response = $this->getJson('/api/v1/hr/public/recruitment/applications/track/INVALID');
+        $response = $this->getJson('/api/v1/public/recruitment/applications/track/INVALID');
         $response->assertStatus(404);
     }
 }

@@ -50,7 +50,7 @@ class RecruitmentPostingTest extends TestCase
             'slots'           => 2,
         ]);
 
-        $response->assertStatus(200);
+        $response->assertStatus(201);
         $response->assertJsonPath('data.title', 'Injection Molding Operator');
         $response->assertJsonPath('data.status', 'draft');
         $this->assertDatabaseHas('job_postings', [

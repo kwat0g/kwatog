@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Controllers;
 
-use App\Http\Controllers\Controller;
 use App\Modules\HR\Enums\JobPostingStatus;
 use App\Modules\HR\Models\JobPosting;
 use App\Modules\HR\Requests\StoreJobPostingRequest;
@@ -15,7 +14,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
-class RecruitmentPostingController extends Controller
+class RecruitmentPostingController
 {
     public function __construct(private RecruitmentService $service) {}
 
