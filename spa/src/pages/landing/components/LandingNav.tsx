@@ -172,6 +172,13 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
         {/* Actions */}
         <div className="flex items-center gap-2">
           <button
+            type="button"
+            onClick={() => navigate('/careers')}
+            className="hidden font-sans text-[13px] text-landing-text-secondary transition-colors hover:text-landing-text sm:inline-block"
+          >
+            Careers
+          </button>
+          <button
             ref={loginRef}
             type="button"
             onClick={() => navigate('/login')}
@@ -222,6 +229,14 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
               {link.label}
             </a>
           ))}
+          <button
+            type="button"
+            tabIndex={open ? undefined : -1}
+            onClick={() => { onOpenChange(false); navigate('/careers'); }}
+            className="rounded-lg px-3 py-3 text-left font-display text-lg text-landing-text-secondary transition-colors hover:bg-landing-elevated hover:text-landing-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas"
+          >
+            Careers
+          </button>
         </div>
       </div>
     </header>

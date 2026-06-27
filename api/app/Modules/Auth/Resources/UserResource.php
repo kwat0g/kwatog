@@ -52,7 +52,7 @@ class UserResource extends JsonResource
         $modules = [
             'hr', 'attendance', 'leave', 'payroll', 'loans', 'accounting',
             'inventory', 'purchasing', 'supply_chain', 'production',
-            'mrp', 'crm', 'quality', 'maintenance',
+            'mrp', 'crm', 'quality', 'maintenance', 'recruitment',
         ];
 
         return array_values(array_filter(
