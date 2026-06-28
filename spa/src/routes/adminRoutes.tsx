@@ -31,6 +31,9 @@ const AuditLogDetailPage = lazy(() => import('@/pages/admin/audit-logs/detail'))
 // Entity-scoped audit trail — IATF compliance
 const EntityAuditTrailPage = lazy(() => import('@/pages/admin/audit-logs/entity'));
 
+// Active sessions management
+const SessionsPage = lazy(() => import('@/pages/admin/sessions'));
+
 export const adminRoutes = (
   <>
     {/* Admin — no hub page, direct access to sub-pages */}
@@ -81,6 +84,14 @@ export const adminRoutes = (
       element={
         <PermissionGuard permission="admin.settings.manage">
           <SettingsPage />
+        </PermissionGuard>
+      }
+    />
+    <Route
+      path="/admin/sessions"
+      element={
+        <PermissionGuard permission="admin.settings.manage">
+          <SessionsPage />
         </PermissionGuard>
       }
     />

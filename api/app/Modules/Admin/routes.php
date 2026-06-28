@@ -5,6 +5,8 @@ declare(strict_types=1);
 use App\Modules\Admin\Controllers\ActivityFeedController;
 use App\Modules\Admin\Controllers\PermissionController;
 use App\Modules\Admin\Controllers\RoleController;
+use App\Modules\Admin\Controllers\SettingsController;
+use App\Modules\Admin\Controllers\SessionController;
 use App\Modules\Admin\Controllers\UserAdminController;
 use App\Modules\Admin\Controllers\UserPermissionOverrideController;
 use Illuminate\Support\Facades\Route;
@@ -86,9 +88,15 @@ Route::prefix('admin')
 Route::prefix('admin')
     ->middleware(['auth:sanctum', 'session.timeout', 'password.expired', 'permission:admin.settings.manage'])
     ->group(function (): void {
-        Route::get('settings',        [\App\Modules\Admin\Controllers\SettingsController::class, 'index'])
+        Route::get('settings',        [SettingsController::class, 'index'])
             ->middleware('permission:admin.settings.manage');
-        Route::put('settings/{key}',  [\App\Modules\Admin\Controllers\SettingsController::class, 'update'])
+        Route::put('settings/{key}',  [SettingsController::class, 'update'])
+            ->middleware('permission:admin.settings.manage');
+        Route::get('system-info',     [SettingsController::class, 'systemInfo'])
+            ->middleware('permission:admin.settings.manage');
+        Route::get('sessions',        [SessionController::class, 'index'])
+            ->middleware('permission:admin.settings.manage');
+        Route::delete('sessions/{session}', [SessionController::class, 'destroy'])
             ->middleware('permission:admin.settings.manage');
     });
 
