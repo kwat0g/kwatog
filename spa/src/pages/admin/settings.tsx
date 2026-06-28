@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   Shield,
   Puzzle,
+  Search,
 } from 'lucide-react';
 import { settingsApi, type SettingRow, type SettingValue } from '@/api/admin/settings';
 import { Button } from '@/components/ui/Button';
@@ -126,6 +127,7 @@ const GROUP_ORDER = [
 export default function SettingsPage() {
   const queryClient = useQueryClient();
   const refreshAuth = useAuthStore((s) => s.refresh);
+  const [search, setSearch] = useState('');
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['admin', 'settings'],
@@ -147,10 +149,21 @@ export default function SettingsPage() {
 
   const groups = useMemo(() => {
     if (!data) return [] as Array<[string, SettingRow[]]>;
+    const q = search.toLowerCase().trim();
     return GROUP_ORDER
       .filter((g) => Array.isArray(data[g]) && data[g].length > 0)
-      .map((g) => [g, data[g]] as [string, SettingRow[]]);
-  }, [data]);
+      .map((g) => {
+        const rows = q
+          ? data[g].filter((r: SettingRow) =>
+              r.key.toLowerCase().includes(q) ||
+              (r.label ?? '').toLowerCase().includes(q) ||
+              (r.description ?? '').toLowerCase().includes(q),
+            )
+          : data[g];
+        return [g, rows] as [string, SettingRow[]];
+      })
+      .filter(([, rows]) => rows.length > 0);
+  }, [data, search]);
 
   return (
     <div>
@@ -174,20 +187,41 @@ export default function SettingsPage() {
           />
         )}
 
-        {data &&
-          groups.map(([group, rows]) => {
-            const meta = GROUP_META[group];
-            return (
-              <SettingsGroup
-                key={group}
-                group={group}
-                meta={meta}
-                rows={rows}
-                saving={update.isPending ? update.variables?.key : undefined}
-                onSave={(key, value) => update.mutate({ key, value })}
+        {data && (
+          <>
+            <div className="relative max-w-sm">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+              <Input
+                placeholder="Search settings..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9"
               />
-            );
-          })}
+            </div>
+
+            {groups.length === 0 && search && (
+              <EmptyState
+                icon="search"
+                title="No settings found"
+                description={`No settings match "${search}".`}
+              />
+            )}
+
+            {groups.map(([group, rows]) => {
+              const meta = GROUP_META[group];
+              return (
+                <SettingsGroup
+                  key={group}
+                  group={group}
+                  meta={meta}
+                  rows={rows}
+                  saving={update.isPending ? update.variables?.key : undefined}
+                  onSave={(key, value) => update.mutate({ key, value })}
+                />
+              );
+            })}
+          </>
+        )}
       </div>
     </div>
   );
