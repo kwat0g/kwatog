@@ -1,8 +1,17 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
+import {
+  Building2,
+  Calendar,
+  Banknote,
+  CheckCircle2,
+  Shield,
+  Puzzle,
+} from 'lucide-react';
 import { settingsApi, type SettingRow, type SettingValue } from '@/api/admin/settings';
 import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
 import { Panel } from '@/components/ui/Panel';
@@ -12,9 +21,9 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { useAuthStore } from '@/stores/authStore';
 
 const MODULE_LABELS: Record<string, string> = {
-  hr: 'HR',
+  hr: 'Human Resources',
   attendance: 'Attendance',
-  leave: 'Leave',
+  leave: 'Leave Management',
   payroll: 'Payroll',
   loans: 'Loans',
   accounting: 'Accounting',
@@ -26,15 +35,93 @@ const MODULE_LABELS: Record<string, string> = {
   crm: 'CRM',
   quality: 'Quality',
   maintenance: 'Maintenance',
+  assets: 'Assets',
+  search: 'Global Search',
+  notifications: 'Notifications',
+  recruitment: 'Recruitment',
+  return_management: 'Return Management',
+  b2b_portals: 'B2B Portals',
+  forecasting: 'Forecasting',
+  budgeting: 'Budgeting',
 };
 
-const GROUP_LABELS: Record<string, string> = {
-  company: 'Company',
-  fiscal: 'Fiscal',
-  payroll: 'Payroll',
-  approval: 'Approvals',
-  modules: 'Modules',
+interface GroupMeta {
+  label: string;
+  description: string;
+  icon: React.ReactNode;
+}
+
+const GROUP_META: Record<string, GroupMeta> = {
+  company: {
+    label: 'Company',
+    description: 'Organization identity used on documents and reports',
+    icon: <Building2 size={16} />,
+  },
+  fiscal: {
+    label: 'Fiscal',
+    description: 'Fiscal year configuration',
+    icon: <Calendar size={16} />,
+  },
+  payroll: {
+    label: 'Payroll',
+    description: 'Pay schedule and payslip delivery',
+    icon: <Banknote size={16} />,
+  },
+  approval: {
+    label: 'Approvals',
+    description: 'Approval thresholds and auto-resolve behavior',
+    icon: <CheckCircle2 size={16} />,
+  },
+  accounting: {
+    label: 'Accounting',
+    description: 'Default accounts and automated collection',
+    icon: <Banknote size={16} />,
+  },
+  attendance: {
+    label: 'Attendance',
+    description: 'Overtime detection from biometric data',
+    icon: <Calendar size={16} />,
+  },
+  hr: {
+    label: 'HR',
+    description: 'Hiring and employee provisioning',
+    icon: <Building2 size={16} />,
+  },
+  purchasing: {
+    label: 'Purchasing',
+    description: 'Three-way matching tolerances',
+    icon: <Banknote size={16} />,
+  },
+  inventory: {
+    label: 'Inventory',
+    description: 'Stock policies and safety stock calculation',
+    icon: <Puzzle size={16} />,
+  },
+  security: {
+    label: 'Security',
+    description: 'Login policies, session timeouts, and password rules',
+    icon: <Shield size={16} />,
+  },
+  modules: {
+    label: 'Modules',
+    description: 'Enable or disable entire modules for all users',
+    icon: <Puzzle size={16} />,
+  },
 };
+
+const GROUP_ORDER = [
+  'company',
+  'fiscal',
+  'payroll',
+  'approval',
+  'accounting',
+  'attendance',
+  'hr',
+  'purchasing',
+  'inventory',
+  'security',
+  'modules',
+];
 
 export default function SettingsPage() {
   const queryClient = useQueryClient();
@@ -51,7 +138,6 @@ export default function SettingsPage() {
     onSuccess: async (_data, variables) => {
       toast.success(`Saved ${variables.key}`);
       queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] });
-      // Module toggles affect what the sidebar shows — refresh user.
       if (variables.key.startsWith('modules.')) {
         await refreshAuth();
       }
@@ -61,9 +147,8 @@ export default function SettingsPage() {
 
   const groups = useMemo(() => {
     if (!data) return [] as Array<[string, SettingRow[]]>;
-    const ordered = ['company', 'fiscal', 'payroll', 'approval', 'modules'];
-    return ordered
-      .filter((g) => Array.isArray(data[g]))
+    return GROUP_ORDER
+      .filter((g) => Array.isArray(data[g]) && data[g].length > 0)
       .map((g) => [g, data[g]] as [string, SettingRow[]]);
   }, [data]);
 
@@ -71,10 +156,10 @@ export default function SettingsPage() {
     <div>
       <PageHeader
         title="Settings"
-        subtitle="Company information, payroll cadence, approvals, and module feature flags"
+        subtitle="Company information, payroll, approvals, security policies, and module feature flags"
       />
 
-      <div className="px-5 py-4 max-w-3xl">
+      <div className="px-5 py-4 max-w-3xl space-y-6">
         {isLoading && <SkeletonForm />}
 
         {isError && (
@@ -89,60 +174,140 @@ export default function SettingsPage() {
           />
         )}
 
-        {data && groups.map(([group, rows]) => (
-          <div key={group} className="mb-6">
-            <Panel title={GROUP_LABELS[group] ?? group}>
-              <div className="flex flex-col divide-y divide-[var(--border-subtle)]">
-                {rows.map((row) => (
-                  <SettingRowEditor
-                    key={row.key}
-                    row={row}
-                    isModule={group === 'modules'}
-                    saving={update.isPending && update.variables?.key === row.key}
-                    onSave={(value) => update.mutate({ key: row.key, value })}
-                  />
-                ))}
-              </div>
-            </Panel>
-          </div>
-        ))}
+        {data &&
+          groups.map(([group, rows]) => {
+            const meta = GROUP_META[group];
+            return (
+              <SettingsGroup
+                key={group}
+                group={group}
+                meta={meta}
+                rows={rows}
+                saving={update.isPending ? update.variables?.key : undefined}
+                onSave={(key, value) => update.mutate({ key, value })}
+              />
+            );
+          })}
       </div>
     </div>
+  );
+}
+
+interface SettingsGroupProps {
+  group: string;
+  meta?: GroupMeta;
+  rows: SettingRow[];
+  saving?: string;
+  onSave: (key: string, value: SettingValue) => void;
+}
+
+function SettingsGroup({ group, meta, rows, saving, onSave }: SettingsGroupProps) {
+  const isModule = group === 'modules';
+
+  return (
+    <Panel
+      title={
+        <span className="flex items-center gap-2">
+          {meta && <span className="text-muted">{meta.icon}</span>}
+          <span>{meta?.label ?? group}</span>
+        </span>
+      }
+    >
+      {meta?.description && (
+        <p className="text-xs text-muted -mt-1 mb-3">{meta.description}</p>
+      )}
+      <div className="flex flex-col divide-y divide-[var(--border-subtle)]">
+        {rows.map((row) => (
+          <SettingRowEditor
+            key={row.key}
+            row={row}
+            isModule={isModule}
+            isSaving={saving === row.key}
+            onSave={(value) => onSave(row.key, value)}
+          />
+        ))}
+      </div>
+    </Panel>
   );
 }
 
 interface RowEditorProps {
   row: SettingRow;
   isModule: boolean;
-  saving: boolean;
+  isSaving: boolean;
   onSave: (value: SettingValue) => void;
 }
 
-function SettingRowEditor({ row, isModule, saving, onSave }: RowEditorProps) {
+function SettingRowEditor({ row, isModule, isSaving, onSave }: RowEditorProps) {
+  const [confirmToggle, setConfirmToggle] = useState<{
+    key: string;
+    currentValue: boolean;
+  } | null>(null);
+
+  const label = row.label ?? row.key;
+  const description = row.description;
+
   if (isModule) {
     const slug = row.key.replace('modules.', '');
+    const displayLabel = row.label ?? MODULE_LABELS[slug] ?? slug;
+    const isEnabled = Boolean(row.value);
+
     return (
-      <div className="flex items-center justify-between py-2.5 first:pt-0 last:pb-0">
-        <div>
-          <div className="text-sm">{MODULE_LABELS[slug] ?? slug}</div>
-          <div className="text-xs font-mono text-muted">{row.key}</div>
+      <>
+        <div className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
+          <div className="flex-1 min-w-0 pr-4">
+            <div className="text-sm font-medium">{displayLabel}</div>
+            <div className="text-2xs font-mono text-muted mt-0.5">{row.key}</div>
+            {description && (
+              <div className="text-xs text-muted mt-1">{description}</div>
+            )}
+          </div>
+          <Switch
+            checked={isEnabled}
+            disabled={isSaving}
+            onChange={() =>
+              setConfirmToggle({ key: row.key, currentValue: isEnabled })
+            }
+          />
         </div>
-        <Switch
-          checked={Boolean(row.value)}
-          disabled={saving}
-          onChange={(e) => onSave(e.target.checked)}
+        <ConfirmDialog
+          isOpen={confirmToggle?.key === row.key}
+          title={
+            confirmToggle?.currentValue
+              ? `Disable ${displayLabel}?`
+              : `Enable ${displayLabel}?`
+          }
+          description={
+            confirmToggle?.currentValue
+              ? `All ${displayLabel} pages will become inaccessible for all users. Existing data is preserved and will be visible again when re-enabled.`
+              : `${displayLabel} pages will become accessible to users with the appropriate permissions.`
+          }
+          confirmLabel={confirmToggle?.currentValue ? 'Disable' : 'Enable'}
+          variant={confirmToggle?.currentValue ? 'danger' : 'primary'}
+          onConfirm={() => {
+            onSave(!confirmToggle!.currentValue);
+            setConfirmToggle(null);
+          }}
+          onClose={() => setConfirmToggle(null)}
+          pending={isSaving}
         />
-      </div>
+      </>
     );
   }
 
   if (typeof row.value === 'boolean') {
     return (
-      <div className="flex items-center justify-between py-2.5">
-        <div className="text-sm">{row.key}</div>
+      <div className="flex items-center justify-between py-3">
+        <div className="flex-1 min-w-0 pr-4">
+          <div className="text-sm font-medium">{label}</div>
+          <div className="text-2xs font-mono text-muted mt-0.5">{row.key}</div>
+          {description && (
+            <div className="text-xs text-muted mt-1">{description}</div>
+          )}
+        </div>
         <Switch
           checked={row.value}
-          disabled={saving}
+          disabled={isSaving}
           onChange={(e) => onSave(e.target.checked)}
         />
       </div>
@@ -153,8 +318,10 @@ function SettingRowEditor({ row, isModule, saving, onSave }: RowEditorProps) {
     return (
       <ScalarRow
         row={row}
+        label={label}
+        description={description}
         type="number"
-        saving={saving}
+        saving={isSaving}
         onSave={(s) => onSave(s === '' ? 0 : Number(s))}
       />
     );
@@ -163,8 +330,10 @@ function SettingRowEditor({ row, isModule, saving, onSave }: RowEditorProps) {
   return (
     <ScalarRow
       row={row}
+      label={label}
+      description={description}
       type="text"
-      saving={saving}
+      saving={isSaving}
       onSave={(s) => onSave(s)}
     />
   );
@@ -172,26 +341,32 @@ function SettingRowEditor({ row, isModule, saving, onSave }: RowEditorProps) {
 
 function ScalarRow({
   row,
+  label,
+  description,
   type,
   saving,
   onSave,
 }: {
   row: SettingRow;
+  label: string;
+  description: string | null;
   type: 'text' | 'number';
   saving: boolean;
   onSave: (s: string) => void;
 }) {
   return (
-    <div className="grid grid-cols-2 items-center gap-3 py-2.5">
-      <div>
-        <div className="text-sm">{row.key}</div>
-        <div className="text-xs text-muted">{row.group}</div>
+    <div className="grid grid-cols-[1fr_auto] items-start gap-4 py-3">
+      <div className="min-w-0">
+        <div className="text-sm font-medium">{label}</div>
+        <div className="text-2xs font-mono text-muted mt-0.5">{row.key}</div>
+        {description && (
+          <div className="text-xs text-muted mt-1">{description}</div>
+        )}
       </div>
-      <div className="flex items-center gap-2">
+      <div className="w-48">
         <Input
           type={type}
           defaultValue={String(row.value ?? '')}
-          containerClassName="flex-1"
           onBlur={(e) => {
             if (String(row.value ?? '') !== e.currentTarget.value) {
               onSave(e.currentTarget.value);

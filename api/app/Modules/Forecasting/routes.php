@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Route;
  * Auto-mounted under /api/v1 by App\Providers\ModuleServiceProvider.
  */
 
-Route::middleware(['auth:sanctum'])->prefix('forecasting')->group(function () {
+Route::middleware(['auth:sanctum', 'feature:forecasting'])->prefix('forecasting')->group(function () {
 
     /* ─── Demand forecasts ─── */
     Route::get('/demand-forecasts',

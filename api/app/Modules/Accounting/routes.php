@@ -99,7 +99,8 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
         ->middleware('permission:accounting.dashboard.view');
 
     /* ─── Budgeting (ADV9) ────────────────────────────── */
-    Route::prefix('budgets')->group(function () {
+    Route::middleware(['feature:budgeting'])->group(function () {
+        Route::prefix('budgets')->group(function () {
         Route::get('/',                               [BudgetController::class, 'index'])        ->middleware('permission:budgeting.view');
         Route::get('/fiscal-years',                   [BudgetController::class, 'fiscalYears'])  ->middleware('permission:budgeting.view');
         Route::get('/overview',                       [BudgetController::class, 'overview'])     ->middleware('permission:budgeting.view');
@@ -123,5 +124,6 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
         Route::post('/',                              [BudgetTransferController::class, 'store'])   ->middleware('permission:budgeting.manage');
         Route::post('/{transfer}/approve',            [BudgetTransferController::class, 'approve']) ->middleware('permission:budgeting.approve');
         Route::post('/{transfer}/reject',             [BudgetTransferController::class, 'reject'])  ->middleware('permission:budgeting.approve');
+    });
     });
 });

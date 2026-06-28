@@ -22,7 +22,7 @@ Route::prefix('b2b/supplier')->group(function () {
     Route::post('logout', [SupplierAuthController::class, 'logout'])->middleware('throttle:auth');
 
     // Authenticated
-    Route::middleware(['auth:supplier_portal', 'portal:supplier_portal'])->group(function () {
+    Route::middleware(['auth:supplier_portal', 'portal:supplier_portal', 'feature:b2b_portals'])->group(function () {
         Route::get('me',                                [SupplierAuthController::class, 'me']);
         Route::get('dashboard',                          [SupplierPortalController::class, 'dashboard']);
         Route::get('purchase-orders',                    [SupplierPortalController::class, 'purchaseOrders']);
@@ -54,7 +54,7 @@ Route::prefix('b2b/customer')->group(function () {
     Route::post('logout', [CustomerAuthController::class, 'logout'])->middleware('throttle:auth');
 
     // Authenticated
-    Route::middleware(['auth:customer_portal', 'portal:customer_portal'])->group(function () {
+    Route::middleware(['auth:customer_portal', 'portal:customer_portal', 'feature:b2b_portals'])->group(function () {
         Route::get('me',                                [CustomerAuthController::class, 'me']);
         Route::get('dashboard',                          [CustomerPortalController::class, 'dashboard']);
         Route::get('orders',                             [CustomerPortalController::class, 'salesOrders']);
