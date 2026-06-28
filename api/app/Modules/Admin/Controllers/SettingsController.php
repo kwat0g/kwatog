@@ -53,4 +53,29 @@ class SettingsController
             ],
         ]);
     }
+
+    public function systemInfo(): JsonResponse
+    {
+        $dbVersion = 'unknown';
+        try {
+            $dbVersion = DB::selectOne('SELECT version() as v')->v ?? 'unknown';
+        } catch (\Throwable) {
+        }
+
+        return response()->json(['data' => [
+            'php_version'     => PHP_VERSION,
+            'laravel_version' => app()->version(),
+            'database'        => [
+                'driver'  => config('database.default'),
+                'version' => $dbVersion,
+            ],
+            'cache_driver'   => config('cache.default'),
+            'queue_driver'   => config('queue.default'),
+            'session_driver' => config('session.driver'),
+            'app_env'        => config('app.env'),
+            'app_debug'      => (bool) config('app.debug'),
+            'timezone'       => config('app.timezone'),
+            'server_time'    => now()->toIso8601String(),
+        ]]);
+    }
 }

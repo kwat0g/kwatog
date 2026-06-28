@@ -9,8 +9,9 @@ import {
   Shield,
   Puzzle,
   Search,
+  Server,
 } from 'lucide-react';
-import { settingsApi, type SettingRow, type SettingValue } from '@/api/admin/settings';
+import { settingsApi, type SettingRow, type SettingValue, type SystemInfo } from '@/api/admin/settings';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -160,6 +161,11 @@ export default function SettingsPage() {
     queryFn: settingsApi.index,
   });
 
+  const { data: sysInfo } = useQuery({
+    queryKey: ['admin', 'system-info'],
+    queryFn: settingsApi.systemInfo,
+  });
+
   const update = useMutation({
     mutationFn: ({ key, value }: { key: string; value: SettingValue }) =>
       settingsApi.update(key, value),
@@ -248,6 +254,8 @@ export default function SettingsPage() {
             })}
           </>
         )}
+
+        {sysInfo && <SystemInfoPanel info={sysInfo} />}
       </div>
     </div>
   );
@@ -456,5 +464,40 @@ function ScalarRow({
         />
       </div>
     </div>
+  );
+}
+
+function SystemInfoPanel({ info }: { info: SystemInfo }) {
+  const items: Array<[string, string]> = [
+    ['PHP Version', info.php_version],
+    ['Laravel Version', info.laravel_version],
+    ['Database', `${info.database.driver} — ${info.database.version}`],
+    ['Cache Driver', info.cache_driver],
+    ['Queue Driver', info.queue_driver],
+    ['Session Driver', info.session_driver],
+    ['Environment', info.app_env],
+    ['Debug Mode', info.app_debug ? 'On' : 'Off'],
+    ['Timezone', info.timezone],
+    ['Server Time', new Date(info.server_time).toLocaleString()],
+  ];
+
+  return (
+    <Panel
+      title={
+        <span className="flex items-center gap-2">
+          <span className="text-muted"><Server size={16} /></span>
+          <span>System Information</span>
+        </span>
+      }
+    >
+      <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2">
+        {items.map(([label, value]) => (
+          <div key={label} className="contents">
+            <dt className="text-sm text-muted">{label}</dt>
+            <dd className="text-sm font-mono tabular-nums">{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </Panel>
   );
 }
