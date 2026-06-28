@@ -295,6 +295,7 @@ function SettingRowEditor({ row, isModule, isSaving, onSave }: RowEditorProps) {
             {description && (
               <div className="text-xs text-muted mt-1">{description}</div>
             )}
+            <ChangeAttribution row={row} />
           </div>
           <Switch
             checked={isEnabled}
@@ -338,6 +339,7 @@ function SettingRowEditor({ row, isModule, isSaving, onSave }: RowEditorProps) {
           {description && (
             <div className="text-xs text-muted mt-1">{description}</div>
           )}
+          <ChangeAttribution row={row} />
         </div>
         <Switch
           checked={row.value}
@@ -373,6 +375,16 @@ function SettingRowEditor({ row, isModule, isSaving, onSave }: RowEditorProps) {
   );
 }
 
+function ChangeAttribution({ row }: { row: SettingRow }) {
+  if (!row.updated_by_name || !row.updated_at) return null;
+  return (
+    <div className="text-2xs text-muted mt-1">
+      Last changed by {row.updated_by_name} &middot;{' '}
+      {new Date(row.updated_at).toLocaleDateString()}
+    </div>
+  );
+}
+
 function ScalarRow({
   row,
   label,
@@ -396,6 +408,7 @@ function ScalarRow({
         {description && (
           <div className="text-xs text-muted mt-1">{description}</div>
         )}
+        <ChangeAttribution row={row} />
       </div>
       <div className="w-48">
         <Input

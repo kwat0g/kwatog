@@ -6,6 +6,9 @@ export interface SettingRow {
   key: string;
   value: SettingValue;
   group: string;
+  label: string | null;
+  description: string | null;
+  updated_by_name?: string | null;
   updated_at?: string | null;
 }
 
