@@ -46,6 +46,32 @@ const MODULE_LABELS: Record<string, string> = {
   budgeting: 'Budgeting',
 };
 
+const MODULE_DEPENDENCIES: Record<string, string[]> = {
+  budgeting: ['accounting'],
+  forecasting: ['inventory', 'crm'],
+  recruitment: ['hr'],
+  payroll: ['hr', 'attendance'],
+  loans: ['hr', 'payroll'],
+  leave: ['hr'],
+  attendance: ['hr'],
+  quality: ['production', 'inventory'],
+  production: ['mrp', 'inventory'],
+  supply_chain: ['inventory', 'purchasing'],
+  maintenance: ['production'],
+  b2b_portals: ['crm', 'accounting'],
+  return_management: ['crm', 'inventory'],
+};
+
+function getEnabledDependents(moduleSlug: string, allModuleRows: SettingRow[]): string[] {
+  return Object.entries(MODULE_DEPENDENCIES)
+    .filter(([, deps]) => deps.includes(moduleSlug))
+    .filter(([mod]) => {
+      const row = allModuleRows.find((r) => r.key === `modules.${mod}`);
+      return row && Boolean(row.value);
+    })
+    .map(([mod]) => MODULE_LABELS[mod] ?? mod);
+}
+
 interface GroupMeta {
   label: string;
   description: string;
@@ -256,6 +282,7 @@ function SettingsGroup({ group, meta, rows, saving, onSave }: SettingsGroupProps
             key={row.key}
             row={row}
             isModule={isModule}
+            allModuleRows={isModule ? rows : undefined}
             isSaving={saving === row.key}
             onSave={(value) => onSave(row.key, value)}
           />
@@ -268,11 +295,12 @@ function SettingsGroup({ group, meta, rows, saving, onSave }: SettingsGroupProps
 interface RowEditorProps {
   row: SettingRow;
   isModule: boolean;
+  allModuleRows?: SettingRow[];
   isSaving: boolean;
   onSave: (value: SettingValue) => void;
 }
 
-function SettingRowEditor({ row, isModule, isSaving, onSave }: RowEditorProps) {
+function SettingRowEditor({ row, isModule, allModuleRows, isSaving, onSave }: RowEditorProps) {
   const [confirmToggle, setConfirmToggle] = useState<{
     key: string;
     currentValue: boolean;
@@ -285,6 +313,9 @@ function SettingRowEditor({ row, isModule, isSaving, onSave }: RowEditorProps) {
     const slug = row.key.replace('modules.', '');
     const displayLabel = row.label ?? MODULE_LABELS[slug] ?? slug;
     const isEnabled = Boolean(row.value);
+    const dependents = isEnabled && allModuleRows
+      ? getEnabledDependents(slug, allModuleRows)
+      : [];
 
     return (
       <>
@@ -314,7 +345,9 @@ function SettingRowEditor({ row, isModule, isSaving, onSave }: RowEditorProps) {
           }
           description={
             confirmToggle?.currentValue
-              ? `All ${displayLabel} pages will become inaccessible for all users. Existing data is preserved and will be visible again when re-enabled.`
+              ? (dependents.length > 0
+                  ? `Disabling ${displayLabel} may affect these enabled modules that depend on it: ${dependents.join(', ')}. All ${displayLabel} pages will become inaccessible for all users. Existing data is preserved.`
+                  : `All ${displayLabel} pages will become inaccessible for all users. Existing data is preserved and will be visible again when re-enabled.`)
               : `${displayLabel} pages will become accessible to users with the appropriate permissions.`
           }
           confirmLabel={confirmToggle?.currentValue ? 'Disable' : 'Enable'}
