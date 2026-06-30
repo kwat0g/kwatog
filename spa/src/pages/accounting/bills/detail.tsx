@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Panel } from '@/components/ui/Panel';
@@ -55,6 +56,7 @@ export default function BillDetailPage() {
   const qc = useQueryClient();
   const { can } = usePermission();
   const [showPay, setShowPay] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
   const { data: bill, isLoading, isError, refetch } = useQuery({
     queryKey: ['accounting', 'bills', id],
@@ -131,7 +133,7 @@ export default function BillDetailPage() {
               <Button variant="primary" size="sm" icon={<Receipt size={14} />} onClick={() => setShowPay(true)}>Record payment</Button>
             )}
             {bill.amount_paid === '0.00' && bill.status !== 'cancelled' && can('accounting.bills.update') && (
-              <Button variant="danger" size="sm" icon={<Ban size={14} />} onClick={() => { if (confirm('Cancel this bill? This will reverse the JE.')) cancelMut.mutate(); }}>
+              <Button variant="danger" size="sm" icon={<Ban size={14} />} onClick={() => setShowCancelConfirm(true)}>
                 Cancel
               </Button>
             )}
@@ -243,6 +245,17 @@ export default function BillDetailPage() {
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={showCancelConfirm}
+        onClose={() => setShowCancelConfirm(false)}
+        onConfirm={() => { cancelMut.mutate(); setShowCancelConfirm(false); }}
+        title="Cancel this bill?"
+        description="This will reverse the associated journal entry. This action cannot be undone."
+        variant="danger"
+        confirmLabel="Cancel bill"
+        pending={cancelMut.isPending}
+      />
     </div>
   );
 }

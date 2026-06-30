@@ -10,6 +10,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { Panel } from '@/components/ui/Panel';
 import { Textarea } from '@/components/ui/Textarea';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { ChainHeader, ApprovalTimeline } from '@/components/chain';
@@ -25,6 +26,9 @@ export default function LeaveDetailPage() {
   const user = useAuthStore((s) => s.user);
   const [reject, setReject] = useState(false);
   const [reason, setReason] = useState('');
+  const [confirmApproveDept, setConfirmApproveDept] = useState(false);
+  const [confirmApproveHR, setConfirmApproveHR] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState(false);
 
   const { data: req, isLoading, isError, refetch } = useQuery({
     queryKey: ['leaves', 'request', id],
@@ -90,18 +94,18 @@ export default function LeaveDetailPage() {
             {/* Series R/R3 — declarative permission gating via <CanDo>. */}
             {req.status === 'pending_dept' && (
               <CanDo permission="leave.approve_dept">
-                <Button variant="primary" size="sm" icon={<Check size={12} />} disabled={approveDept.isPending} loading={approveDept.isPending} onClick={() => approveDept.mutate()}>Approve</Button>
+                <Button variant="primary" size="sm" icon={<Check size={12} />} disabled={approveDept.isPending} loading={approveDept.isPending} onClick={() => setConfirmApproveDept(true)}>Approve</Button>
                 <Button variant="danger" size="sm" icon={<X size={12} />} onClick={() => setReject(true)}>Reject</Button>
               </CanDo>
             )}
             {req.status === 'pending_hr' && (
               <CanDo permission="leave.approve_hr">
-                <Button variant="primary" size="sm" icon={<Check size={12} />} disabled={approveHR.isPending} loading={approveHR.isPending} onClick={() => approveHR.mutate()}>Approve</Button>
+                <Button variant="primary" size="sm" icon={<Check size={12} />} disabled={approveHR.isPending} loading={approveHR.isPending} onClick={() => setConfirmApproveHR(true)}>Approve</Button>
                 <Button variant="danger" size="sm" icon={<X size={12} />} onClick={() => setReject(true)}>Reject</Button>
               </CanDo>
             )}
             {canCancel && (
-              <Button variant="secondary" size="sm" icon={<RotateCcw size={12} />} onClick={() => cancelMut.mutate()} disabled={cancelMut.isPending}>Cancel</Button>
+              <Button variant="secondary" size="sm" icon={<RotateCcw size={12} />} onClick={() => setConfirmCancel(true)} disabled={cancelMut.isPending}>Cancel</Button>
             )}
           </>
         }
@@ -150,6 +154,39 @@ export default function LeaveDetailPage() {
           </div>
         </Modal>
       )}
+
+      <ConfirmDialog
+        isOpen={confirmApproveDept}
+        onClose={() => setConfirmApproveDept(false)}
+        onConfirm={() => { approveDept.mutate(); setConfirmApproveDept(false); }}
+        title="Approve leave request?"
+        description="This will grant department-level approval."
+        confirmLabel="Approve"
+        variant="warning"
+        pending={approveDept.isPending}
+      />
+
+      <ConfirmDialog
+        isOpen={confirmApproveHR}
+        onClose={() => setConfirmApproveHR(false)}
+        onConfirm={() => { approveHR.mutate(); setConfirmApproveHR(false); }}
+        title="Approve leave request?"
+        description="This will grant HR-level approval."
+        confirmLabel="Approve"
+        variant="warning"
+        pending={approveHR.isPending}
+      />
+
+      <ConfirmDialog
+        isOpen={confirmCancel}
+        onClose={() => setConfirmCancel(false)}
+        onConfirm={() => { cancelMut.mutate(); setConfirmCancel(false); }}
+        title="Cancel leave request?"
+        description="This will withdraw the leave request."
+        confirmLabel="Yes, cancel"
+        variant="danger"
+        pending={cancelMut.isPending}
+      />
     </div>
   );
 }

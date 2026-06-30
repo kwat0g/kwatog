@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import { budgetingApi } from '@/api/accounting/budgeting';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
@@ -21,8 +22,8 @@ import type { BudgetTransfer } from '@/types/budgeting';
 // ─── Transfer form ────────────────────────────────────────────────────────────
 
 const schema = z.object({
-  from_budget_line_id: z.coerce.number().int().min(1, 'Required'),
-  to_budget_line_id: z.coerce.number().int().min(1, 'Required'),
+  from_budget_line_id: z.string().min(1, 'Required'),
+  to_budget_line_id: z.string().min(1, 'Required'),
   amount: z.coerce.number({ invalid_type_error: 'Must be a number' }).positive('Must be > 0'),
   reason: z.string().min(10, 'Reason must be at least 10 characters'),
 });
@@ -56,20 +57,20 @@ function TransferFormModal({ open, onClose }: { open: boolean; onClose: () => vo
       <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="space-y-4">
         <Input
           label="From budget line ID"
-          type="number"
+          type="text"
           {...register('from_budget_line_id')}
           error={errors.from_budget_line_id?.message}
           required
-          placeholder="e.g. 12"
-          helper="Enter the numeric line item ID (visible in budget detail)"
+          placeholder="e.g. yR3kLm"
+          helper="Enter the budget line item ID (visible in budget detail)"
         />
         <Input
           label="To budget line ID"
-          type="number"
+          type="text"
           {...register('to_budget_line_id')}
           error={errors.to_budget_line_id?.message}
           required
-          placeholder="e.g. 15"
+          placeholder="e.g. xP4mBn"
         />
         <Input
           label="Amount (₱)"
@@ -103,6 +104,8 @@ function TransferFormModal({ open, onClose }: { open: boolean; onClose: () => vo
 export default function BudgetTransfersPage() {
   const [page, setPage] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);
+  const [confirmApprove, setConfirmApprove] = useState<string | null>(null);
+  const [confirmReject, setConfirmReject] = useState<string | null>(null);
   const { can } = usePermission();
   const qc = useQueryClient();
 
@@ -114,13 +117,13 @@ export default function BudgetTransfersPage() {
 
   const approve = useMutation({
     mutationFn: (id: string) => budgetingApi.transfers.approve(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['budget-transfers'] }); toast.success('Transfer approved'); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['budget-transfers'] }); toast.success('Transfer approved'); setConfirmApprove(null); },
     onError: () => toast.error('Approval failed'),
   });
 
   const reject = useMutation({
     mutationFn: (id: string) => budgetingApi.transfers.reject(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['budget-transfers'] }); toast.success('Transfer rejected'); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['budget-transfers'] }); toast.success('Transfer rejected'); setConfirmReject(null); },
     onError: () => toast.error('Rejection failed'),
   });
 
@@ -162,14 +165,14 @@ export default function BudgetTransfersPage() {
       cell: (r) => r.status === 'pending' && can('budgeting.manage') ? (
         <div className="flex gap-1">
           <button
-            onClick={() => approve.mutate(r.id)}
+            onClick={() => setConfirmApprove(r.id)}
             title="Approve"
             className="p-1 rounded text-muted hover:text-success hover:bg-success/10 transition-colors"
           >
             <Check size={14} />
           </button>
           <button
-            onClick={() => reject.mutate(r.id)}
+            onClick={() => setConfirmReject(r.id)}
             title="Reject"
             className="p-1 rounded text-muted hover:text-danger hover:bg-danger/10 transition-colors"
           >
@@ -215,6 +218,25 @@ export default function BudgetTransfersPage() {
       )}
 
       <TransferFormModal open={modalOpen} onClose={() => setModalOpen(false)} />
+
+      <ConfirmDialog
+        isOpen={confirmApprove !== null}
+        onClose={() => setConfirmApprove(null)}
+        onConfirm={() => { if (confirmApprove) approve.mutate(confirmApprove); }}
+        title="Approve budget transfer?"
+        variant="warning"
+        confirmLabel="Approve"
+        pending={approve.isPending}
+      />
+      <ConfirmDialog
+        isOpen={confirmReject !== null}
+        onClose={() => setConfirmReject(null)}
+        onConfirm={() => { if (confirmReject) reject.mutate(confirmReject); }}
+        title="Reject budget transfer?"
+        variant="danger"
+        confirmLabel="Reject"
+        pending={reject.isPending}
+      />
     </div>
   );
 }

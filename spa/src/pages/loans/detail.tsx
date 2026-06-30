@@ -10,6 +10,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { Panel } from '@/components/ui/Panel';
 import { Textarea } from '@/components/ui/Textarea';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { ChainHeader, ApprovalTimeline } from '@/components/chain';
@@ -25,6 +26,8 @@ export default function LoanDetailPage() {
   const { can } = usePermission();
   const [reject, setReject] = useState(false);
   const [reason, setReason] = useState('');
+  const [confirmApprove, setConfirmApprove] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState(false);
 
   const { data: loan, isLoading, isError, refetch } = useQuery({
     queryKey: ['loans', 'show', id],
@@ -80,12 +83,12 @@ export default function LoanDetailPage() {
           <>
             {isPending && can('loans.approve') && (
               <>
-                <Button variant="primary" size="sm" icon={<Check size={12} />} disabled={approve.isPending} loading={approve.isPending} onClick={() => approve.mutate()}>Approve</Button>
+                <Button variant="primary" size="sm" icon={<Check size={12} />} disabled={approve.isPending} loading={approve.isPending} onClick={() => setConfirmApprove(true)}>Approve</Button>
                 <Button variant="danger" size="sm" icon={<X size={12} />} onClick={() => setReject(true)}>Reject</Button>
               </>
             )}
             {(isPending || loan.status === 'active') && can('loans.approve') && (
-              <Button variant="secondary" size="sm" onClick={() => cancel.mutate()} disabled={cancel.isPending}>Cancel</Button>
+              <Button variant="secondary" size="sm" onClick={() => setConfirmCancel(true)} disabled={cancel.isPending}>Cancel</Button>
             )}
           </>
         }
@@ -196,6 +199,27 @@ export default function LoanDetailPage() {
           </div>
         </Modal>
       )}
+
+      <ConfirmDialog
+        isOpen={confirmApprove}
+        onClose={() => setConfirmApprove(false)}
+        onConfirm={() => { approve.mutate(); setConfirmApprove(false); }}
+        title="Approve loan request?"
+        description="This will approve and disburse the loan."
+        confirmLabel="Approve"
+        variant="warning"
+        pending={approve.isPending}
+      />
+
+      <ConfirmDialog
+        isOpen={confirmCancel}
+        onClose={() => setConfirmCancel(false)}
+        onConfirm={() => { cancel.mutate(); setConfirmCancel(false); }}
+        title="Cancel loan request?"
+        confirmLabel="Yes, cancel"
+        variant="danger"
+        pending={cancel.isPending}
+      />
     </div>
   );
 }

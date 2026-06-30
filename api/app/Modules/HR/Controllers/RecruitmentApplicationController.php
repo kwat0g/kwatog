@@ -50,7 +50,11 @@ class RecruitmentApplicationController
         if ($request->input('action') === 'reject') {
             $this->service->rejectApplication($jobApplication, $request->input('rejection_reason'));
         } else {
-            $this->service->advanceStage($jobApplication);
+            $interviewData = $request->input('interview');
+            if ($interviewData) {
+                $interviewData['created_by'] = $request->user()->id;
+            }
+            $this->service->advanceStage($jobApplication, $interviewData);
         }
 
         return new JobApplicationResource($jobApplication->fresh()->load('jobPosting'));
@@ -83,7 +87,7 @@ class RecruitmentApplicationController
 
         return response()->json([
             'data' => [
-                'id'   => $note->id,
+                'id'   => $note->hash_id,
                 'body' => $note->body,
                 'user' => ['id' => $request->user()->hash_id, 'name' => $request->user()->name],
                 'created_at' => $note->created_at->toIso8601String(),

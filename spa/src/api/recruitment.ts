@@ -28,7 +28,11 @@ export const recruitmentApi = {
     client.get<PaginatedResponse<JobApplication>>(`${BASE}/applications`, { params }),
   showApplication: (id: string) =>
     client.get<{ data: JobApplication }>(`${BASE}/applications/${id}`),
-  changeStage: (id: string, data: { action: 'advance' | 'reject'; rejection_reason?: string }) =>
+  changeStage: (id: string, data: {
+    action: 'advance' | 'reject';
+    rejection_reason?: string;
+    interview?: { scheduled_at: string; location?: string; interviewer_name: string };
+  }) =>
     client.patch<{ data: JobApplication }>(`${BASE}/applications/${id}/stage`, data),
   scheduleInterview: (id: string, data: { scheduled_at: string; location?: string; interviewer_name: string }) =>
     client.post<{ data: ApplicationInterview }>(`${BASE}/applications/${id}/interviews`, data),

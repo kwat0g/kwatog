@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Models;
 
+use App\Common\Traits\HasHashId;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ApplicationNote extends Model
 {
+    use HasHashId;
     protected $fillable = [
         'job_application_id',
         'user_id',

@@ -14,6 +14,7 @@ import { selfServiceApi } from '@/api/self-service';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { Textarea } from '@/components/ui/Textarea';
 import { Input } from '@/components/ui/Input';
@@ -46,6 +47,7 @@ function todayIso(): string {
 export default function SelfServiceOvertimePage() {
   const queryClient = useQueryClient();
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState<string | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['self-service', 'overtime'],
@@ -99,7 +101,7 @@ export default function SelfServiceOvertimePage() {
             {data.pending.length === 0 ? (
               <p className="text-xs text-muted px-1 py-2">No pending requests.</p>
             ) : (
-              <RequestList rows={data.pending} onCancel={(id) => cancel.mutate(id)} />
+              <RequestList rows={data.pending} onCancel={(id) => setConfirmCancel(id)} />
             )}
           </Section>
 
@@ -122,6 +124,16 @@ export default function SelfServiceOvertimePage() {
           queryClient.invalidateQueries({ queryKey: ['self-service', 'overtime'] });
           setSheetOpen(false);
         }}
+      />
+
+      <ConfirmDialog
+        isOpen={confirmCancel !== null}
+        onClose={() => setConfirmCancel(null)}
+        onConfirm={() => { if (confirmCancel) cancel.mutate(confirmCancel); }}
+        title="Cancel overtime request?"
+        variant="danger"
+        confirmLabel="Yes, cancel"
+        pending={cancel.isPending}
       />
       </div>{/* .px-5 py-4 */}
     </div>
@@ -241,7 +253,6 @@ function ApplyOvertimeSheet({
           label="Date"
           type="date"
           value={date}
-          min={todayIso()}
           onChange={(e) => setDate(e.target.value)}
         />
 

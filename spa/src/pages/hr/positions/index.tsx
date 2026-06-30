@@ -16,6 +16,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Panel } from '@/components/ui/Panel';
 import { Select } from '@/components/ui/Select';
 import { SkeletonTable } from '@/components/ui/Skeleton';
@@ -206,22 +207,16 @@ export default function PositionsPage() {
       )}
 
       {pendingDelete && (
-        <Modal isOpen onClose={() => setPendingDelete(null)} size="sm" title="Delete position">
-          <p className="text-sm py-2">
-            Delete <span className="font-medium">{pendingDelete.title}</span>?
-          </p>
-          <div className="flex justify-end gap-2 pt-3 border-t border-default">
-            <Button variant="secondary" onClick={() => setPendingDelete(null)} disabled={deleteMutation.isPending}>Cancel</Button>
-            <Button
-              variant="danger"
-              onClick={() => deleteMutation.mutate(pendingDelete.id)}
-              disabled={deleteMutation.isPending}
-              loading={deleteMutation.isPending}
-            >
-              Delete
-            </Button>
-          </div>
-        </Modal>
+        <ConfirmDialog
+          isOpen
+          onClose={() => setPendingDelete(null)}
+          onConfirm={() => deleteMutation.mutate(pendingDelete.id)}
+          title="Delete position?"
+          description={<>Delete <span className="font-medium">{pendingDelete.title}</span>? This cannot be undone.</>}
+          variant="danger"
+          confirmLabel="Delete"
+          pending={deleteMutation.isPending}
+        />
       )}
     </div>
   );

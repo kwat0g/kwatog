@@ -33,8 +33,8 @@ export interface CreateBudgetData {
 }
 
 export interface CreateTransferData {
-  from_budget_line_id: number;
-  to_budget_line_id: number;
+  from_budget_line_id: string;
+  to_budget_line_id: string;
   amount: number;
   reason: string;
 }

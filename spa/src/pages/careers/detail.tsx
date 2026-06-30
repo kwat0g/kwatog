@@ -132,7 +132,20 @@ export default function JobPostingDetailPage() {
 
             <section className="mt-6">
               <h2 className="text-lg font-semibold text-neutral-900">Requirements</h2>
-              <p className="mt-2 whitespace-pre-line text-neutral-700">{posting.requirements}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {posting.requirements
+                  .split('\n')
+                  .map((r: string) => r.trim())
+                  .filter(Boolean)
+                  .map((req: string, i: number) => (
+                    <span
+                      key={i}
+                      className="inline-flex items-center rounded-md border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-sm text-neutral-700"
+                    >
+                      {req}
+                    </span>
+                  ))}
+              </div>
             </section>
 
             {posting.closes_at && (

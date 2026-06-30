@@ -12,6 +12,7 @@ import { accountsApi } from '@/api/accounting/accounts';
 import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -56,6 +57,8 @@ export default function InvoiceDetailPage() {
   const qc = useQueryClient();
   const { can } = usePermission();
   const [showCollect, setShowCollect] = useState(false);
+  const [showFinalize, setShowFinalize] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
   const { data: invoice, isLoading, isError, refetch } = useQuery({
     queryKey: ['accounting', 'invoices', id],
@@ -136,7 +139,7 @@ export default function InvoiceDetailPage() {
               <Button variant="secondary" size="sm" icon={<Printer size={14} />}>Print</Button>
             </a>
             {isDraft && can('accounting.invoices.create') && (
-              <Button variant="primary" size="sm" icon={<CheckCircle2 size={14} />} onClick={() => finalizeMut.mutate()} loading={finalizeMut.isPending} disabled={finalizeMut.isPending}>
+              <Button variant="primary" size="sm" icon={<CheckCircle2 size={14} />} onClick={() => setShowFinalize(true)} disabled={finalizeMut.isPending}>
                 Finalize
               </Button>
             )}
@@ -144,7 +147,7 @@ export default function InvoiceDetailPage() {
               <Button variant="primary" size="sm" icon={<Coins size={14} />} onClick={() => setShowCollect(true)}>Record collection</Button>
             )}
             {invoice.amount_paid === '0.00' && invoice.status !== 'cancelled' && can('accounting.invoices.update') && (
-              <Button variant="danger" size="sm" icon={<Ban size={14} />} onClick={() => { if (confirm('Cancel this invoice?')) cancelMut.mutate(); }}>Cancel</Button>
+              <Button variant="danger" size="sm" icon={<Ban size={14} />} onClick={() => setShowCancelConfirm(true)}>Cancel</Button>
             )}
           </div>
         }
@@ -252,6 +255,27 @@ export default function InvoiceDetailPage() {
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={showFinalize}
+        onClose={() => setShowFinalize(false)}
+        onConfirm={() => { finalizeMut.mutate(); setShowFinalize(false); }}
+        title="Finalize invoice?"
+        description="Once finalized, this invoice will be sent to the customer and cannot be edited."
+        confirmLabel="Finalize"
+        variant="warning"
+        pending={finalizeMut.isPending}
+      />
+      <ConfirmDialog
+        isOpen={showCancelConfirm}
+        onClose={() => setShowCancelConfirm(false)}
+        onConfirm={() => { cancelMut.mutate(); setShowCancelConfirm(false); }}
+        title="Cancel this invoice?"
+        description="This action cannot be undone."
+        confirmLabel="Cancel invoice"
+        variant="danger"
+        pending={cancelMut.isPending}
+      />
     </div>
   );
 }

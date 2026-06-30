@@ -29,7 +29,7 @@ class JobApplicationResource extends JsonResource
             'job_posting'        => new JobPostingResource($this->whenLoaded('jobPosting')),
             'interviews'         => ApplicationInterviewResource::collection($this->whenLoaded('interviews')),
             'notes'              => $this->whenLoaded('notes', fn () => $this->notes->map(fn ($n) => [
-                'id'   => $n->id,
+                'id'   => $n->hash_id,
                 'body' => $n->body,
                 'user' => ['id' => $n->user->hash_id, 'name' => $n->user->name],
                 'created_at' => $n->created_at?->toIso8601String(),

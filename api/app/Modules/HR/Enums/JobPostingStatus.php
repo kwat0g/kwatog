@@ -21,6 +21,16 @@ enum JobPostingStatus: string
         };
     }
 
+    public function canTransitionTo(self $target): bool
+    {
+        return match ($this) {
+            self::Draft  => $target === self::Open,
+            self::Open   => in_array($target, [self::Closed, self::Filled], true),
+            self::Closed => $target === self::Open,
+            self::Filled => false,
+        };
+    }
+
     public static function values(): array
     {
         return array_map(fn ($c) => $c->value, self::cases());

@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Edit, Trash2 } from 'lucide-react';
 import { recruitmentApi } from '@/api/recruitment';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { DataTable, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
@@ -52,6 +54,7 @@ export default function PostingDetailPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { can } = usePermission();
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const { data: posting, isLoading, isError, refetch } = useQuery({
     queryKey: ['recruitment-posting', id],
@@ -80,6 +83,7 @@ export default function PostingDetailPage() {
       toast.success('Posting deleted.');
       navigate('/hr/recruitment/postings');
     },
+    onError: () => toast.error('Failed to delete posting.'),
   });
 
   const appColumns: Column<JobApplication>[] = [
@@ -135,7 +139,7 @@ export default function PostingDetailPage() {
                 </Button>
               )}
               {posting.status === 'draft' && (
-                <Button variant="danger" size="sm" icon={<Trash2 size={12} />} onClick={() => { if (confirm('Delete this posting?')) deleteMutation.mutate(); }}>
+                <Button variant="danger" size="sm" icon={<Trash2 size={12} />} onClick={() => setShowDeleteConfirm(true)}>
                   Delete
                 </Button>
               )}
@@ -150,7 +154,20 @@ export default function PostingDetailPage() {
             <p className="whitespace-pre-line text-sm">{posting.description}</p>
           </Panel>
           <Panel title="Requirements">
-            <p className="whitespace-pre-line text-sm">{posting.requirements}</p>
+            <div className="flex flex-wrap gap-2">
+              {posting.requirements
+                .split('\n')
+                .map((r: string) => r.trim())
+                .filter(Boolean)
+                .map((req: string, i: number) => (
+                  <span
+                    key={i}
+                    className="inline-flex items-center rounded-md border border-default bg-elevated px-3 py-1.5 text-sm"
+                  >
+                    {req}
+                  </span>
+                ))}
+            </div>
           </Panel>
         </div>
 
@@ -212,6 +229,17 @@ export default function PostingDetailPage() {
           )}
         </Panel>
       </div>
+
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={() => { deleteMutation.mutate(); setShowDeleteConfirm(false); }}
+        title="Delete this posting?"
+        description="This job posting will be permanently removed."
+        variant="danger"
+        confirmLabel="Delete"
+        pending={deleteMutation.isPending}
+      />
     </div>
   );
 }

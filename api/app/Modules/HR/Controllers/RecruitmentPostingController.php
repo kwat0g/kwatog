@@ -56,6 +56,14 @@ class RecruitmentPostingController
 
     public function destroy(JobPosting $jobPosting): JsonResponse
     {
+        if ($jobPosting->status !== JobPostingStatus::Draft) {
+            abort(422, 'Only draft postings can be deleted.');
+        }
+
+        if ($jobPosting->applications()->exists()) {
+            abort(422, 'Cannot delete a posting that has applications.');
+        }
+
         $jobPosting->delete();
         return response()->json(null, 204);
     }

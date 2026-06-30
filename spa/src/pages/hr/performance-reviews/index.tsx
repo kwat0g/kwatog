@@ -10,6 +10,7 @@ import { Plus } from 'lucide-react';
 import { reviewCyclesApi, type CycleListParams } from '@/api/hr/performance-reviews';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { DataTable, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
@@ -44,6 +45,8 @@ export default function PerformanceCyclesPage() {
   const qc = useQueryClient();
   const [filters, setFilters] = useState<CycleListParams>({ page: 1, per_page: 25 });
   const [showCreate, setShowCreate] = useState(false);
+  const [confirmActivate, setConfirmActivate] = useState<string | null>(null);
+  const [confirmClose, setConfirmClose] = useState<string | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['performance-cycles', filters],
@@ -54,6 +57,7 @@ export default function PerformanceCyclesPage() {
   const activateMutation = useMutation({
     mutationFn: (id: string) => reviewCyclesApi.activate(id),
     onSuccess: () => {
+      setConfirmActivate(null);
       qc.invalidateQueries({ queryKey: ['performance-cycles'] });
       toast.success('Cycle activated.');
     },
@@ -63,6 +67,7 @@ export default function PerformanceCyclesPage() {
   const closeMutation = useMutation({
     mutationFn: (id: string) => reviewCyclesApi.close(id),
     onSuccess: () => {
+      setConfirmClose(null);
       qc.invalidateQueries({ queryKey: ['performance-cycles'] });
       toast.success('Cycle closed.');
     },
@@ -83,13 +88,13 @@ export default function PerformanceCyclesPage() {
       cell: (r) => (
         <div className="flex items-center gap-1 justify-end">
           {r.status === 'draft' && can('hr.performance.manage') && (
-            <Button variant="ghost" size="sm" onClick={() => activateMutation.mutate(r.id)}
+            <Button variant="ghost" size="sm" onClick={() => setConfirmActivate(r.id)}
               disabled={activateMutation.isPending}>
               Activate
             </Button>
           )}
           {r.status === 'active' && can('hr.performance.manage') && (
-            <Button variant="ghost" size="sm" onClick={() => closeMutation.mutate(r.id)}
+            <Button variant="ghost" size="sm" onClick={() => setConfirmClose(r.id)}
               disabled={closeMutation.isPending}>
               Close
             </Button>
@@ -168,6 +173,28 @@ export default function PerformanceCyclesPage() {
           setShowCreate(false);
           qc.invalidateQueries({ queryKey: ['performance-cycles'] });
         }}
+      />
+
+      <ConfirmDialog
+        isOpen={confirmActivate !== null}
+        onClose={() => setConfirmActivate(null)}
+        onConfirm={() => { if (confirmActivate) activateMutation.mutate(confirmActivate); }}
+        title="Activate review cycle?"
+        description="Employees will be able to submit self-assessments."
+        confirmLabel="Activate"
+        variant="warning"
+        pending={activateMutation.isPending}
+      />
+
+      <ConfirmDialog
+        isOpen={confirmClose !== null}
+        onClose={() => setConfirmClose(null)}
+        onConfirm={() => { if (confirmClose) closeMutation.mutate(confirmClose); }}
+        title="Close review cycle?"
+        description="No more reviews can be submitted after closing."
+        confirmLabel="Close"
+        variant="warning"
+        pending={closeMutation.isPending}
       />
     </div>
   );

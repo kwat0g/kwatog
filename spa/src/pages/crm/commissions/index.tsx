@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { commissionsApi, type CommissionEarningListParams } from '@/api/crm/commissions';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { DataTable, NumCell, type Column, type BulkAction } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
@@ -25,6 +26,7 @@ export default function CommissionsListPage() {
   const { can } = usePermission();
   const qc = useQueryClient();
   const [filters, setFilters] = useState<CommissionEarningListParams>({ page: 1, per_page: 25 });
+  const [confirmApprove, setConfirmApprove] = useState<string | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['commissions', 'earnings', filters],
@@ -37,6 +39,7 @@ export default function CommissionsListPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['commissions', 'earnings'] });
       toast.success('Commission approved.');
+      setConfirmApprove(null);
     },
     onError: () => toast.error('Failed to approve commission.'),
   });
@@ -88,7 +91,7 @@ export default function CommissionsListPage() {
             size="sm"
             icon={<Check size={12} />}
             disabled={approveMutation.isPending}
-            onClick={(e) => { e.stopPropagation(); approveMutation.mutate(r.id); }}
+            onClick={(e) => { e.stopPropagation(); setConfirmApprove(r.id); }}
           >
             Approve
           </Button>
@@ -167,6 +170,16 @@ export default function CommissionsListPage() {
           />
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={confirmApprove !== null}
+        onClose={() => setConfirmApprove(null)}
+        onConfirm={() => { if (confirmApprove) approveMutation.mutate(confirmApprove); }}
+        title="Approve commission?"
+        variant="warning"
+        confirmLabel="Approve"
+        pending={approveMutation.isPending}
+      />
     </div>
   );
 }

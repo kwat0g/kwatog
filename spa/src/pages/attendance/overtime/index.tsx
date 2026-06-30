@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { overtimeApi } from '@/api/attendance/overtime';
 import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { DataTable, NumCell, StackedCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
@@ -26,6 +27,8 @@ export default function OvertimeListPage() {
   const [filters, setFilters] = useState<ListParams>({ page: 1, per_page: 100, sort: 'date', direction: 'desc' });
   const [reject, setReject] = useState<OvertimeRequest | null>(null);
   const [reason, setReason] = useState('');
+  const [confirmApprove, setConfirmApprove] = useState<string | null>(null);
+  const [showBulkApprove, setShowBulkApprove] = useState(false);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['attendance', 'overtime', filters],
@@ -38,6 +41,7 @@ export default function OvertimeListPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['attendance', 'overtime'] });
       toast.success('Overtime approved.');
+      setConfirmApprove(null);
     },
     onError: () => toast.error('Failed to approve.'),
   });
@@ -89,7 +93,7 @@ export default function OvertimeListPage() {
       align: 'right' as const,
       cell: (r: OvertimeRequest) => r.status !== 'pending' ? null : (
         <div className="flex items-center justify-end gap-1">
-          <Button variant="primary" size="sm" onClick={(e) => { e.stopPropagation(); approveMutation.mutate(r.id); }} disabled={approveMutation.isPending}>Approve</Button>
+          <Button variant="primary" size="sm" onClick={(e) => { e.stopPropagation(); setConfirmApprove(r.id); }} disabled={approveMutation.isPending}>Approve</Button>
           <Button variant="danger" size="sm" onClick={(e) => { e.stopPropagation(); setReject(r); }}>Reject</Button>
         </div>
       ),
@@ -109,13 +113,7 @@ export default function OvertimeListPage() {
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={() => {
-                  const ids = grouped.pending.slice(0, 100).map((o) => o.id);
-                  if (ids.length === 0) return;
-                  const ok = window.confirm(`Approve ${ids.length} pending overtime request${ids.length === 1 ? '' : 's'}?`);
-                  if (!ok) return;
-                  bulkApproveMutation.mutate(ids);
-                }}
+                onClick={() => setShowBulkApprove(true)}
                 disabled={bulkApproveMutation.isPending}
               >
                 Bulk approve ({Math.min(grouped.pending.length, 100)})
@@ -143,11 +141,35 @@ export default function OvertimeListPage() {
 
       {data && all.length > 0 && view === 'kanban' && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 px-5 py-4">
-          <KanbanColumn title="Pending" variant="warning" items={grouped.pending} onApprove={(id) => approveMutation.mutate(id)} onReject={setReject} canApprove={can('attendance.ot.approve')} approving={approveMutation.isPending} />
+          <KanbanColumn title="Pending" variant="warning" items={grouped.pending} onApprove={(id) => setConfirmApprove(id)} onReject={setReject} canApprove={can('attendance.ot.approve')} approving={approveMutation.isPending} />
           <KanbanColumn title="Approved" variant="success" items={grouped.approved} />
           <KanbanColumn title="Rejected" variant="danger" items={grouped.rejected} />
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={confirmApprove !== null}
+        onClose={() => setConfirmApprove(null)}
+        onConfirm={() => { if (confirmApprove) approveMutation.mutate(confirmApprove); }}
+        title="Approve overtime request?"
+        variant="warning"
+        confirmLabel="Approve"
+        pending={approveMutation.isPending}
+      />
+
+      <ConfirmDialog
+        isOpen={showBulkApprove}
+        onClose={() => setShowBulkApprove(false)}
+        onConfirm={() => {
+          const ids = grouped.pending.slice(0, 100).map((o) => o.id);
+          if (ids.length > 0) bulkApproveMutation.mutate(ids);
+          setShowBulkApprove(false);
+        }}
+        title={`Approve ${Math.min(grouped.pending.length, 100)} pending overtime request${Math.min(grouped.pending.length, 100) === 1 ? '' : 's'}?`}
+        variant="warning"
+        confirmLabel="Approve all"
+        pending={bulkApproveMutation.isPending}
+      />
 
       {reject && (
         <Modal isOpen onClose={() => { setReject(null); setReason(''); }} size="sm" title="Reject overtime request">

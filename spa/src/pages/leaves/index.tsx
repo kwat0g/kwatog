@@ -12,6 +12,7 @@ import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { Modal } from '@/components/ui/Modal';
 import { Panel } from '@/components/ui/Panel';
 import { Textarea } from '@/components/ui/Textarea';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
@@ -27,6 +28,8 @@ export default function LeavesPage() {
 
   const [actionTarget, setActionTarget] = useState<{ req: LeaveRequest; mode: 'reject' } | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+  const [confirmApproveDept, setConfirmApproveDept] = useState<string | null>(null);
+  const [confirmApproveHR, setConfirmApproveHR] = useState<string | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['leaves', filters],
@@ -77,13 +80,13 @@ export default function LeavesPage() {
         <div className="flex items-center justify-end gap-1">
           {r.status === 'pending_dept' && can('leave.approve_dept') && (
             <>
-              <Button variant="primary" size="sm" disabled={approveDept.isPending} onClick={(e) => { e.stopPropagation(); approveDept.mutate(r.id); }}>Approve</Button>
+              <Button variant="primary" size="sm" disabled={approveDept.isPending} onClick={(e) => { e.stopPropagation(); setConfirmApproveDept(r.id); }}>Approve</Button>
               <Button variant="danger" size="sm" onClick={(e) => { e.stopPropagation(); setActionTarget({ req: r, mode: 'reject' }); }}>Reject</Button>
             </>
           )}
           {r.status === 'pending_hr' && can('leave.approve_hr') && (
             <>
-              <Button variant="primary" size="sm" disabled={approveHR.isPending} onClick={(e) => { e.stopPropagation(); approveHR.mutate(r.id); }}>Approve</Button>
+              <Button variant="primary" size="sm" disabled={approveHR.isPending} onClick={(e) => { e.stopPropagation(); setConfirmApproveHR(r.id); }}>Approve</Button>
               <Button variant="danger" size="sm" onClick={(e) => { e.stopPropagation(); setActionTarget({ req: r, mode: 'reject' }); }}>Reject</Button>
             </>
           )}
@@ -178,6 +181,28 @@ export default function LeavesPage() {
           </div>
         </Modal>
       )}
+
+      <ConfirmDialog
+        isOpen={confirmApproveDept !== null}
+        onClose={() => setConfirmApproveDept(null)}
+        onConfirm={() => { if (confirmApproveDept) approveDept.mutate(confirmApproveDept); setConfirmApproveDept(null); }}
+        title="Approve leave request?"
+        description="This will grant department-level approval."
+        confirmLabel="Approve"
+        variant="warning"
+        pending={approveDept.isPending}
+      />
+
+      <ConfirmDialog
+        isOpen={confirmApproveHR !== null}
+        onClose={() => setConfirmApproveHR(null)}
+        onConfirm={() => { if (confirmApproveHR) approveHR.mutate(confirmApproveHR); setConfirmApproveHR(null); }}
+        title="Approve leave request?"
+        description="This will grant HR-level approval."
+        confirmLabel="Approve"
+        variant="warning"
+        pending={approveHR.isPending}
+      />
     </div>
   );
 }

@@ -6,18 +6,20 @@ namespace App\Modules\HR\Controllers;
 
 use App\Modules\HR\Models\PerformanceReview;
 use App\Modules\HR\Models\ReviewCycle;
+use App\Modules\HR\Resources\ReviewCycleResource;
 use App\Modules\HR\Services\PerformanceReviewService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Routing\Controller;
 
 class PerformanceReviewController extends Controller
 {
     public function __construct(private readonly PerformanceReviewService $service) {}
 
-    public function cycles(Request $request): JsonResponse
+    public function cycles(Request $request): AnonymousResourceCollection
     {
-        return response()->json($this->service->listCycles($request->all()));
+        return ReviewCycleResource::collection($this->service->listCycles($request->all()));
     }
 
     public function storeCycle(Request $request): JsonResponse
@@ -30,17 +32,19 @@ class PerformanceReviewController extends Controller
             'description' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        return response()->json(['data' => $this->service->createCycle($data)], 201);
+        return (new ReviewCycleResource($this->service->createCycle($data)))
+            ->response()
+            ->setStatusCode(201);
     }
 
     public function activateCycle(ReviewCycle $cycle): JsonResponse
     {
-        return response()->json(['data' => $this->service->activateCycle($cycle)]);
+        return response()->json(['data' => new ReviewCycleResource($this->service->activateCycle($cycle))]);
     }
 
     public function closeCycle(ReviewCycle $cycle): JsonResponse
     {
-        return response()->json(['data' => $this->service->closeCycle($cycle)]);
+        return response()->json(['data' => new ReviewCycleResource($this->service->closeCycle($cycle))]);
     }
 
     public function index(Request $request): JsonResponse
@@ -58,11 +62,20 @@ class PerformanceReviewController extends Controller
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'review_cycle_id' => ['required', 'integer', 'exists:review_cycles,id'],
-            'employee_id'     => ['required', 'integer', 'exists:employees,id'],
-            'reviewer_id'     => ['required', 'integer', 'exists:employees,id'],
-            'template_id'     => ['nullable', 'integer', 'exists:review_templates,id'],
+            'review_cycle_id' => ['required', 'string'],
+            'employee_id'     => ['required', 'string'],
+            'reviewer_id'     => ['required', 'string'],
+            'template_id'     => ['nullable', 'string'],
         ]);
+
+        $hashids = app('hashids');
+        foreach (['review_cycle_id', 'employee_id', 'reviewer_id', 'template_id'] as $field) {
+            if (!empty($data[$field])) {
+                $decoded = $hashids->decode($data[$field]);
+                abort_if(empty($decoded), 422, "Invalid {$field}.");
+                $data[$field] = $decoded[0];
+            }
+        }
 
         return response()->json(['data' => $this->service->createReview($data)], 201);
     }

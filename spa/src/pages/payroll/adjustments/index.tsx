@@ -9,6 +9,7 @@ import { Chip, type ChipVariant } from '@/components/ui/Chip';
 import { DataTable, NumCell, StackedCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Modal } from '@/components/ui/Modal';
 import { Textarea } from '@/components/ui/Textarea';
 import { SkeletonTable } from '@/components/ui/Skeleton';
@@ -37,6 +38,7 @@ export default function PayrollAdjustmentsPage() {
   });
   const [rejectTarget, setRejectTarget] = useState<PayrollAdjustment | null>(null);
   const [rejectRemarks, setRejectRemarks] = useState('');
+  const [confirmApprove, setConfirmApprove] = useState<string | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['payroll-adjustments', filters],
@@ -46,7 +48,7 @@ export default function PayrollAdjustmentsPage() {
 
   const approveMutation = useMutation({
     mutationFn: (id: string) => adjustmentsApi.approve(id),
-    onSuccess: () => { toast.success('Adjustment approved.'); qc.invalidateQueries({ queryKey: ['payroll-adjustments'] }); },
+    onSuccess: () => { toast.success('Adjustment approved.'); qc.invalidateQueries({ queryKey: ['payroll-adjustments'] }); setConfirmApprove(null); },
     onError: () => toast.error('Failed to approve adjustment.'),
   });
   const rejectMutation = useMutation({
@@ -103,7 +105,7 @@ export default function PayrollAdjustmentsPage() {
       cell: (r) => r.status === 'pending' && can('payroll.adjustments.create') ? (
         <div className="flex items-center gap-1">
           <Button size="sm" variant="ghost" icon={<Check size={12} />}
-            onClick={() => approveMutation.mutate(r.id)}
+            onClick={() => setConfirmApprove(r.id)}
             disabled={approveMutation.isPending}>
             Approve
           </Button>
@@ -185,6 +187,16 @@ export default function PayrollAdjustmentsPage() {
           </Button>
         </div>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={!!confirmApprove}
+        onClose={() => setConfirmApprove(null)}
+        onConfirm={() => { if (confirmApprove) approveMutation.mutate(confirmApprove); }}
+        title="Approve payroll adjustment?"
+        variant="warning"
+        confirmLabel="Approve"
+        pending={approveMutation.isPending}
+      />
     </div>
   );
 }

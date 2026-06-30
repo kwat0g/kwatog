@@ -47,6 +47,10 @@ class RecruitmentService
 
     public function changePostingStatus(JobPosting $posting, JobPostingStatus $newStatus): void
     {
+        if (!$posting->status->canTransitionTo($newStatus)) {
+            throw new \LogicException("Cannot transition posting from {$posting->status->value} to {$newStatus->value}.");
+        }
+
         if ($newStatus === JobPostingStatus::Open && !$posting->posted_at) {
             $posting->posted_at = now();
         }
@@ -89,14 +93,25 @@ class RecruitmentService
         });
     }
 
-    public function advanceStage(JobApplication $application): void
+    public function advanceStage(JobApplication $application, ?array $interviewData = null): void
     {
         $next = $application->stage->next();
         if (!$next) {
             throw new \LogicException("Cannot advance from terminal stage: {$application->stage->value}");
         }
-        $application->stage = $next;
-        $application->save();
+
+        if ($application->stage === ApplicationStage::Screening && !$interviewData) {
+            throw new \LogicException('Interview data required when advancing to interview stage.');
+        }
+
+        DB::transaction(function () use ($application, $next, $interviewData) {
+            $application->stage = $next;
+            $application->save();
+
+            if ($interviewData && $next === ApplicationStage::Interview) {
+                $this->scheduleInterview($application, $interviewData);
+            }
+        });
     }
 
     public function rejectApplication(JobApplication $application, ?string $reason = null): void
@@ -112,6 +127,10 @@ class RecruitmentService
 
     public function scheduleInterview(JobApplication $application, array $data): ApplicationInterview
     {
+        if ($application->stage !== ApplicationStage::Interview) {
+            throw new \LogicException("Interviews can only be scheduled at the interview stage, current: {$application->stage->value}");
+        }
+
         $interview = ApplicationInterview::create($data + [
             'job_application_id' => $application->id,
         ]);
@@ -220,7 +239,7 @@ class RecruitmentService
     private function notifyHrNewApplication(JobApplication $application, JobPosting $posting): void
     {
         $hrUsers = User::whereHas('role', function ($q) {
-            $q->whereIn('slug', ['hr_officer', 'hr_manager', 'system_admin']);
+            $q->whereIn('slug', ['hr_officer', 'system_admin']);
         })->where('is_active', true)->get();
 
         if ($hrUsers->isEmpty()) {

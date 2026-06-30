@@ -28,11 +28,12 @@ enum ApplicationStage: string
     public function publicLabel(): string
     {
         return match ($this) {
-            self::New, self::Screening => 'Application Received',
-            self::Interview            => 'Under Review',
-            self::Offer                => 'Offer Extended',
-            self::Hired                => 'Hired',
-            self::Rejected             => 'Not Selected',
+            self::New       => 'Application Received',
+            self::Screening => 'Under Review',
+            self::Interview => 'Interview Stage',
+            self::Offer     => 'Offer Extended',
+            self::Hired     => 'Hired',
+            self::Rejected  => 'Not Selected',
         };
     }
 

@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { assetTransfersApi, type AssetTransferListParams } from '@/api/assets';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { DataTable, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
@@ -27,6 +28,8 @@ export default function AssetTransfersListPage() {
   const qc = useQueryClient();
   const { can } = usePermission();
   const [filters, setFilters] = useState<AssetTransferListParams>({ page: 1, per_page: 25 });
+  const [confirmApprove, setConfirmApprove] = useState<string | null>(null);
+  const [confirmReject, setConfirmReject] = useState<string | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['asset-transfers', filters],
@@ -39,6 +42,7 @@ export default function AssetTransfersListPage() {
     onSuccess: (transfer) => {
       qc.invalidateQueries({ queryKey: ['asset-transfers'] });
       toast.success(`Transfer ${transfer.transfer_number} approved.`);
+      setConfirmApprove(null);
     },
     onError: () => toast.error('Failed to approve transfer.'),
   });
@@ -48,6 +52,7 @@ export default function AssetTransfersListPage() {
     onSuccess: (transfer) => {
       qc.invalidateQueries({ queryKey: ['asset-transfers'] });
       toast.success(`Transfer ${transfer.transfer_number} rejected.`);
+      setConfirmReject(null);
     },
     onError: () => toast.error('Failed to reject transfer.'),
   });
@@ -72,12 +77,12 @@ export default function AssetTransfersListPage() {
         <div className="flex items-center gap-1">
           <Button variant="primary" size="sm"
             disabled={approveMutation.isPending || rejectMutation.isPending}
-            onClick={(e: React.MouseEvent) => { e.stopPropagation(); approveMutation.mutate(r.id); }}>
+            onClick={(e: React.MouseEvent) => { e.stopPropagation(); setConfirmApprove(r.id); }}>
             Approve
           </Button>
           <Button variant="danger" size="sm"
             disabled={approveMutation.isPending || rejectMutation.isPending}
-            onClick={(e: React.MouseEvent) => { e.stopPropagation(); rejectMutation.mutate(r.id); }}>
+            onClick={(e: React.MouseEvent) => { e.stopPropagation(); setConfirmReject(r.id); }}>
             Reject
           </Button>
         </div>
@@ -135,6 +140,25 @@ export default function AssetTransfersListPage() {
             onPageChange={(page) => setFilters((f) => ({ ...f, page }))} />
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={confirmApprove !== null}
+        onClose={() => setConfirmApprove(null)}
+        onConfirm={() => { if (confirmApprove) approveMutation.mutate(confirmApprove); }}
+        title="Approve asset transfer?"
+        variant="warning"
+        confirmLabel="Approve"
+        pending={approveMutation.isPending}
+      />
+      <ConfirmDialog
+        isOpen={confirmReject !== null}
+        onClose={() => setConfirmReject(null)}
+        onConfirm={() => { if (confirmReject) rejectMutation.mutate(confirmReject); }}
+        title="Reject asset transfer?"
+        variant="danger"
+        confirmLabel="Reject"
+        pending={rejectMutation.isPending}
+      />
     </div>
   );
 }

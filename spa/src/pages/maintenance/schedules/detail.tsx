@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { schedulesApi } from '@/api/maintenance/schedules';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
 import { StatCard } from '@/components/ui/StatCard';
@@ -20,6 +21,7 @@ export default function MaintenanceScheduleDetailPage() {
   const qc = useQueryClient();
   const { can } = usePermission();
   const [deleting, setDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['maintenance', 'schedules', id],
@@ -28,7 +30,6 @@ export default function MaintenanceScheduleDetailPage() {
   });
 
   const handleDelete = async () => {
-    if (!confirm('Delete this schedule? This cannot be undone.')) return;
     setDeleting(true);
     try {
       await schedulesApi.destroy(id);
@@ -64,7 +65,7 @@ export default function MaintenanceScheduleDetailPage() {
               <Button variant="secondary" size="sm" onClick={() => navigate(`/maintenance/schedules/${id}/edit`)}>
                 <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
               </Button>
-              <Button variant="danger" size="sm" onClick={handleDelete} loading={deleting}>
+              <Button variant="danger" size="sm" onClick={() => setShowDeleteConfirm(true)} loading={deleting}>
                 <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete
               </Button>
             </div>
@@ -107,6 +108,17 @@ export default function MaintenanceScheduleDetailPage() {
           </div>
         </Panel>
       </div>
+
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDelete}
+        title="Delete this schedule?"
+        description="This cannot be undone."
+        variant="danger"
+        confirmLabel="Delete"
+        pending={deleting}
+      />
     </div>
   );
 }

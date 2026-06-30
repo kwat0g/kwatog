@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { workOrdersApi } from '@/api/maintenance/workOrders';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Modal } from '@/components/ui/Modal';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
@@ -30,6 +31,7 @@ export default function MaintenanceWorkOrderDetailPage() {
   const [completeOpen, setCompleteOpen] = useState(false);
   const [completeRemarks, setCompleteRemarks] = useState('');
   const [completeDowntime, setCompleteDowntime] = useState<number>(0);
+  const [confirmStart, setConfirmStart] = useState(false);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['maintenance', 'work-order', id],
@@ -84,7 +86,7 @@ export default function MaintenanceWorkOrderDetailPage() {
           <div className="flex gap-1.5">
             <Chip variant={STATUS_CHIP[data.status]}>{data.status.replace('_', ' ')}</Chip>
             {isActionable && data.status !== 'in_progress' && can('maintenance.wo.complete') && (
-              <Button variant="secondary" size="sm" onClick={() => startMutation.mutate()} loading={startMutation.isPending}>
+              <Button variant="secondary" size="sm" onClick={() => setConfirmStart(true)} loading={startMutation.isPending}>
                 Start
               </Button>
             )}
@@ -198,6 +200,17 @@ export default function MaintenanceWorkOrderDetailPage() {
           </Button>
         </div>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={confirmStart}
+        onClose={() => setConfirmStart(false)}
+        onConfirm={() => startMutation.mutate()}
+        title="Start work order?"
+        description="The clock will start on this maintenance task."
+        variant="primary"
+        confirmLabel="Start"
+        pending={startMutation.isPending}
+      />
     </div>
   );
 }

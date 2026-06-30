@@ -1,4 +1,5 @@
 /** Sprint 8 — Task 71. Separation/clearance detail with sign + final-pay + finalize flow. */
+import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
@@ -6,6 +7,7 @@ import { Check } from 'lucide-react';
 import { separationsApi } from '@/api/separations';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Panel } from '@/components/ui/Panel';
 import { StatCard } from '@/components/ui/StatCard';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
@@ -24,6 +26,7 @@ export default function SeparationDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
   const qc = useQueryClient();
   const { can } = usePermission();
+  const [showFinalizeConfirm, setShowFinalizeConfirm] = useState(false);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['clearance', id],
@@ -43,6 +46,7 @@ export default function SeparationDetailPage() {
   const finalize = useMutation({
     mutationFn: () => separationsApi.finalize(id),
     onSuccess: () => {
+      setShowFinalizeConfirm(false);
       qc.invalidateQueries({ queryKey: ['clearance', id] });
       qc.invalidateQueries({ queryKey: ['hr', 'separations'] });
       toast.success('Separation finalized; JE posted.');
@@ -86,7 +90,7 @@ export default function SeparationDetailPage() {
               </Button>
             )}
             {data.final_pay_computed && data.status !== 'finalized' && can('hr.separation.finalize') && (
-              <Button variant="primary" size="sm" onClick={() => finalize.mutate()} loading={finalize.isPending}>
+              <Button variant="primary" size="sm" onClick={() => setShowFinalizeConfirm(true)} loading={finalize.isPending}>
                 Finalize
               </Button>
             )}
@@ -151,6 +155,17 @@ export default function SeparationDetailPage() {
           </Panel>
         </aside>
       </div>
+
+      <ConfirmDialog
+        isOpen={showFinalizeConfirm}
+        onClose={() => setShowFinalizeConfirm(false)}
+        onConfirm={() => finalize.mutate()}
+        title="Finalize separation?"
+        description="This will post the final pay journal entry. This action cannot be undone."
+        confirmLabel="Finalize"
+        variant="danger"
+        pending={finalize.isPending}
+      />
     </div>
   );
 }

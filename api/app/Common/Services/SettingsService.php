@@ -43,7 +43,7 @@ class SettingsService
         return $row ? json_decode($row->value, true) : $default;
     }
 
-    public function set(string $key, mixed $value, ?string $group = null): void
+    public function set(string $key, mixed $value, ?string $group = null, ?string $label = null, ?string $description = null): void
     {
         if (! Schema::hasTable('settings')) {
             return;
@@ -56,6 +56,12 @@ class SettingsService
         ];
         if ($group !== null) {
             $payload['group'] = $group;
+        }
+        if ($label !== null) {
+            $payload['label'] = $label;
+        }
+        if ($description !== null) {
+            $payload['description'] = $description;
         }
 
         if ($existing) {

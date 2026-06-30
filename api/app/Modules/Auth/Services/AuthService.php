@@ -6,6 +6,7 @@ namespace App\Modules\Auth\Services;
 
 use App\Common\Models\AuditLog;
 use App\Modules\Admin\Services\LoginHistoryService;
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\PasswordHistory;
 use App\Modules\Auth\Models\User;
 use App\Modules\Dashboard\Services\DashboardLayoutService;
@@ -18,13 +19,10 @@ use Illuminate\Validation\ValidationException;
 
 class AuthService
 {
-    private const MAX_ATTEMPTS = 5;
-    private const LOCK_MINUTES = 15;
-    private const PASSWORD_HISTORY_DEPTH = 3;
-
     public function __construct(
         private readonly LoginHistoryService $loginHistory,
         private readonly DashboardLayoutService $dashboardLayouts,
+        private readonly SettingsService $settings,
     ) {}
 
     /**
@@ -68,8 +66,10 @@ class AuthService
         if (! Hash::check($password, $user->password)) {
             $user->failed_login_attempts++;
             $crossedThreshold = false;
-            if ($user->failed_login_attempts >= self::MAX_ATTEMPTS) {
-                $user->locked_until = now()->addMinutes(self::LOCK_MINUTES);
+            $maxAttempts = (int) $this->settings->get('security.max_login_attempts', 5);
+            if ($user->failed_login_attempts >= $maxAttempts) {
+                $lockMinutes = (int) $this->settings->get('security.lockout_minutes', 15);
+                $user->locked_until = now()->addMinutes($lockMinutes);
                 $crossedThreshold = true;
             }
             $user->save();
@@ -135,8 +135,8 @@ class AuthService
                 throw ValidationException::withMessages(['current_password' => 'Current password is incorrect.']);
             }
 
-            // Ensure not in last N hashes
-            $recent = $user->passwordHistory()->limit(self::PASSWORD_HISTORY_DEPTH)->pluck('password_hash');
+            $historyDepth = (int) $this->settings->get('security.password_history_depth', 3);
+            $recent = $user->passwordHistory()->limit($historyDepth)->pluck('password_hash');
             foreach ($recent as $oldHash) {
                 if (Hash::check($new, $oldHash)) {
                     throw ValidationException::withMessages([
@@ -160,7 +160,7 @@ class AuthService
 
             // Trim history beyond depth
             $keepIds = $user->passwordHistory()
-                ->limit(self::PASSWORD_HISTORY_DEPTH)
+                ->limit($historyDepth)
                 ->pluck('id')
                 ->all();
             if (! empty($keepIds)) {

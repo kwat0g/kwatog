@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { schedulesApi, type ScheduleListParams } from '@/api/maintenance/schedules';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
@@ -21,15 +22,17 @@ export default function MaintenanceSchedulesListPage() {
   const { can } = usePermission();
   const qc = useQueryClient();
   const [filters, setFilters] = useState<ScheduleListParams>({ page: 1, per_page: 25 });
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   const handleDelete = async (scheduleId: string) => {
-    if (!confirm('Delete this schedule? This cannot be undone.')) return;
     try {
       await schedulesApi.destroy(scheduleId);
       qc.invalidateQueries({ queryKey: ['maintenance', 'schedules'] });
       toast.success('Schedule deleted.');
     } catch {
       toast.error('Failed to delete schedule.');
+    } finally {
+      setDeleteTarget(null);
     }
   };
 
@@ -90,7 +93,7 @@ export default function MaintenanceSchedulesListPage() {
             <Pencil size={13} />
           </button>
           <button
-            onClick={(e) => { e.stopPropagation(); handleDelete(r.id); }}
+            onClick={(e) => { e.stopPropagation(); setDeleteTarget(r.id); }}
             className="p-1.5 text-muted hover:text-danger hover:bg-elevated rounded-sm"
             aria-label="Delete"
           >
@@ -157,6 +160,16 @@ export default function MaintenanceSchedulesListPage() {
             onRowClick={(r) => navigate(`/maintenance/schedules/${r.id}`)} />
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => { if (deleteTarget) handleDelete(deleteTarget); }}
+        title="Delete this schedule?"
+        description="This cannot be undone."
+        variant="danger"
+        confirmLabel="Delete"
+      />
     </div>
   );
 }

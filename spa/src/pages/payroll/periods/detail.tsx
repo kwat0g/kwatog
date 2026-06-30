@@ -7,6 +7,7 @@ import { periodsApi } from '@/api/payroll/periods';
 import { payrollsApi, type PayrollListParams } from '@/api/payroll/payrolls';
 import type { PayrollVarianceReport } from '@/types/payroll';
 import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Chip, type ChipVariant } from '@/components/ui/Chip';
 import { DataTable, NumCell, StackedCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -98,6 +99,9 @@ export default function PayrollPeriodDetailPage() {
 
   // ADV1 — Disbursement proof
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showApproveDialog, setShowApproveDialog] = useState(false);
+  const [showFinalizeDialog, setShowFinalizeDialog] = useState(false);
+  const [showDisbursedDialog, setShowDisbursedDialog] = useState(false);
 
   const markDisbursedMutation = useMutation({
     mutationFn: () => periodsApi.markDisbursed(id!),
@@ -245,14 +249,14 @@ export default function PayrollPeriodDetailPage() {
             )}
             {canApprove && (
               <Button variant="primary" size="sm" icon={<CheckCircle2 size={14} />}
-                onClick={() => approveMutation.mutate()}
+                onClick={() => setShowApproveDialog(true)}
                 disabled={approveMutation.isPending} loading={approveMutation.isPending}>
                 Approve
               </Button>
             )}
             {canFinalize && (
               <Button variant="primary" size="sm" icon={<Lock size={14} />}
-                onClick={() => finalizeMutation.mutate()}
+                onClick={() => setShowFinalizeDialog(true)}
                 disabled={finalizeMutation.isPending} loading={finalizeMutation.isPending}>
                 Finalize
               </Button>
@@ -273,7 +277,7 @@ export default function PayrollPeriodDetailPage() {
             )}
             {canDisburse && (
               <Button variant="primary" size="sm" icon={<Banknote size={14} />}
-                onClick={() => markDisbursedMutation.mutate()}
+                onClick={() => setShowDisbursedDialog(true)}
                 disabled={markDisbursedMutation.isPending} loading={markDisbursedMutation.isPending}>
                 Mark as Disbursed
               </Button>
@@ -423,6 +427,37 @@ export default function PayrollPeriodDetailPage() {
           setShowUploadModal(false);
         }}
       />
+
+      <ConfirmDialog
+        isOpen={showApproveDialog}
+        onClose={() => setShowApproveDialog(false)}
+        onConfirm={() => { approveMutation.mutate(); setShowApproveDialog(false); }}
+        title="Approve payroll period?"
+        description="This marks the period as reviewed and approved."
+        variant="warning"
+        confirmLabel="Approve"
+        pending={approveMutation.isPending}
+      />
+      <ConfirmDialog
+        isOpen={showFinalizeDialog}
+        onClose={() => setShowFinalizeDialog(false)}
+        onConfirm={() => { finalizeMutation.mutate(); setShowFinalizeDialog(false); }}
+        title="Finalize payroll period?"
+        description="This will lock the period. Payslips will be generated and no further changes can be made."
+        variant="danger"
+        confirmLabel="Finalize"
+        pending={finalizeMutation.isPending}
+      />
+      <ConfirmDialog
+        isOpen={showDisbursedDialog}
+        onClose={() => setShowDisbursedDialog(false)}
+        onConfirm={() => { markDisbursedMutation.mutate(); setShowDisbursedDialog(false); }}
+        title="Mark as disbursed?"
+        description="This confirms that salaries have been transferred to employee bank accounts."
+        variant="warning"
+        confirmLabel="Mark Disbursed"
+        pending={markDisbursedMutation.isPending}
+      />
     </div>
   );
 }
@@ -549,6 +584,7 @@ function VariancePanel({
 /** ADV1 — A single disbursement proof card showing file info & actions. */
 function DisbursementProofCard({ proof, periodId }: { proof: DisbursementProof; periodId: string }) {
   const qc = useQueryClient();
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const deleteMutation = useMutation({
     mutationFn: () => periodsApi.deleteProof(periodId, proof.id),
@@ -597,7 +633,7 @@ function DisbursementProofCard({ proof, periodId }: { proof: DisbursementProof; 
           <Eye size={14} />
         </a>
         <button
-          onClick={() => { if (confirm('Delete this proof file?')) deleteMutation.mutate(); }}
+          onClick={() => setShowDeleteConfirm(true)}
           disabled={deleteMutation.isPending}
           className="inline-flex items-center justify-center h-8 w-8 rounded hover:bg-danger-bg text-muted hover:text-danger-fg transition-colors"
           title="Delete proof"
@@ -605,6 +641,16 @@ function DisbursementProofCard({ proof, periodId }: { proof: DisbursementProof; 
           <Trash2 size={14} />
         </button>
       </div>
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={() => { deleteMutation.mutate(); setShowDeleteConfirm(false); }}
+        title="Delete this proof file?"
+        description="This will permanently remove the uploaded disbursement proof."
+        variant="danger"
+        confirmLabel="Delete"
+        pending={deleteMutation.isPending}
+      />
     </div>
   );
 }

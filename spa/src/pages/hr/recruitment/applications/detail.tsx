@@ -6,6 +6,7 @@ import { cn } from '@/lib/cn';
 import { recruitmentApi } from '@/api/recruitment';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -37,6 +38,13 @@ const STAGE_LABEL: Record<ApplicationStage, string> = {
 
 const PIPELINE_STAGES: ApplicationStage[] = ['new', 'screening', 'interview', 'offer', 'hired'];
 
+const NEXT_STAGE_LABEL: Partial<Record<ApplicationStage, string>> = {
+  new: 'Move to Screening',
+  screening: 'Move to Interview',
+  interview: 'Move to Offer',
+  offer: 'Mark as Hired',
+};
+
 export default function ApplicationDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -45,6 +53,8 @@ export default function ApplicationDetailPage() {
 
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
+  const [showAdvanceConfirm, setShowAdvanceConfirm] = useState(false);
+  const [showAdvanceInterview, setShowAdvanceInterview] = useState(false);
   const [showInterviewForm, setShowInterviewForm] = useState(false);
   const [interviewData, setInterviewData] = useState({ scheduled_at: '', location: '', interviewer_name: '' });
   const [noteBody, setNoteBody] = useState('');
@@ -56,8 +66,12 @@ export default function ApplicationDetailPage() {
   });
 
   const advanceMutation = useMutation({
-    mutationFn: () => recruitmentApi.changeStage(id!, { action: 'advance' }),
+    mutationFn: (interview?: { scheduled_at: string; location?: string; interviewer_name: string }) =>
+      recruitmentApi.changeStage(id!, { action: 'advance', interview }),
     onSuccess: () => {
+      setShowAdvanceConfirm(false);
+      setShowAdvanceInterview(false);
+      setInterviewData({ scheduled_at: '', location: '', interviewer_name: '' });
       toast.success('Application advanced.');
       queryClient.invalidateQueries({ queryKey: ['recruitment-application', id] });
     },
@@ -132,8 +146,14 @@ export default function ApplicationDetailPage() {
         actions={
           can('hr.recruitment.applications') && !isTerminal ? (
             <>
-              <Button size="sm" icon={<ArrowRight size={12} />} onClick={() => advanceMutation.mutate()} disabled={advanceMutation.isPending} loading={advanceMutation.isPending}>
-                Advance
+              <Button
+                size="sm"
+                icon={<ArrowRight size={12} />}
+                onClick={() => application.stage === 'screening' ? setShowAdvanceInterview(true) : setShowAdvanceConfirm(true)}
+                disabled={advanceMutation.isPending}
+                loading={advanceMutation.isPending}
+              >
+                {NEXT_STAGE_LABEL[application.stage] ?? 'Advance'}
               </Button>
               <Button variant="danger" size="sm" icon={<XCircle size={12} />} onClick={() => setShowRejectDialog(true)}>
                 Reject
@@ -174,9 +194,17 @@ export default function ApplicationDetailPage() {
             );
           })}
           {application.stage === 'rejected' && (
-            <Chip variant="danger" className="ml-2">Rejected at {application.rejected_at_stage}</Chip>
+            <Chip variant="danger" className="ml-2">Rejected at {STAGE_LABEL[application.rejected_at_stage as ApplicationStage] ?? application.rejected_at_stage}</Chip>
           )}
         </div>
+        {!isTerminal && (
+          <p className="mt-1.5 text-xs text-muted px-5">
+            {application.stage === 'new' && 'Review the application and advance to screening when ready.'}
+            {application.stage === 'screening' && 'Screen the candidate. You\'ll need to schedule an interview to advance.'}
+            {application.stage === 'interview' && 'Schedule and conduct interviews. Advance to offer when interviews are complete.'}
+            {application.stage === 'offer' && 'Extend an offer to the candidate. Mark as hired once accepted.'}
+          </p>
+        )}
       </div>
 
       {/* Reject dialog */}
@@ -195,6 +223,50 @@ export default function ApplicationDetailPage() {
               Confirm Reject
             </Button>
             <Button variant="ghost" size="sm" onClick={() => setShowRejectDialog(false)}>Cancel</Button>
+          </div>
+        </div>
+      )}
+
+      {/* Advance to interview — schedule interview form */}
+      {showAdvanceInterview && (
+        <div className="mx-5 mb-4 rounded-md border border-accent/30 bg-accent/5 p-4">
+          <p className="text-sm font-medium mb-3">Schedule an interview to move this applicant to the interview stage:</p>
+          <div className="space-y-2">
+            <Input
+              label="Date & Time"
+              type="datetime-local"
+              required
+              value={interviewData.scheduled_at}
+              onChange={(e) => setInterviewData((d) => ({ ...d, scheduled_at: e.target.value }))}
+            />
+            <Input
+              label="Location"
+              value={interviewData.location}
+              onChange={(e) => setInterviewData((d) => ({ ...d, location: e.target.value }))}
+              placeholder="Room 201 / Zoom link"
+            />
+            <Input
+              label="Interviewer"
+              required
+              value={interviewData.interviewer_name}
+              onChange={(e) => setInterviewData((d) => ({ ...d, interviewer_name: e.target.value }))}
+              placeholder="Full name"
+            />
+          </div>
+          <div className="mt-3 flex gap-2">
+            <Button
+              size="sm"
+              onClick={() => advanceMutation.mutate({
+                scheduled_at: new Date(interviewData.scheduled_at).toISOString(),
+                location: interviewData.location || undefined,
+                interviewer_name: interviewData.interviewer_name,
+              })}
+              disabled={!interviewData.scheduled_at || !interviewData.interviewer_name || advanceMutation.isPending}
+              loading={advanceMutation.isPending}
+            >
+              Schedule & Move to Interview
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setShowAdvanceInterview(false)}>Cancel</Button>
           </div>
         </div>
       )}
@@ -238,7 +310,7 @@ export default function ApplicationDetailPage() {
           <Panel
             title={`Interviews (${application.interviews?.length ?? 0})`}
             actions={
-              can('hr.recruitment.applications') ? (
+              can('hr.recruitment.applications') && application.stage === 'interview' ? (
                 <Button variant="ghost" size="sm" icon={<Calendar size={12} />} onClick={() => setShowInterviewForm(!showInterviewForm)}>
                   Schedule
                 </Button>
@@ -386,6 +458,17 @@ export default function ApplicationDetailPage() {
           </Panel>
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={showAdvanceConfirm}
+        onClose={() => setShowAdvanceConfirm(false)}
+        onConfirm={() => advanceMutation.mutate(undefined)}
+        title="Advance to next stage?"
+        description="The applicant will move to the next recruitment stage."
+        confirmLabel="Advance"
+        variant="warning"
+        pending={advanceMutation.isPending}
+      />
     </div>
   );
 }

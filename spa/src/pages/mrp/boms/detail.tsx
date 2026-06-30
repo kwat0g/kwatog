@@ -7,6 +7,7 @@ import { bomsApi } from '@/api/mrp/boms';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -16,6 +17,7 @@ export default function BomDetailPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [deleting, setDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['mrp', 'boms', 'detail', id],
@@ -24,7 +26,6 @@ export default function BomDetailPage() {
   });
 
   const handleDelete = async () => {
-    if (!confirm('Delete this BOM? This cannot be undone.')) return;
     setDeleting(true);
     try {
       await bomsApi.delete(id!);
@@ -66,12 +67,23 @@ export default function BomDetailPage() {
             <Button variant="secondary" size="sm" onClick={() => navigate(`/mrp/boms/${id}/edit`)}>
               <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
             </Button>
-            <Button variant="danger" size="sm" onClick={handleDelete} loading={deleting}>
+            <Button variant="danger" size="sm" onClick={() => setShowDeleteConfirm(true)} loading={deleting}>
               <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete
             </Button>
           </div>
         }
       />
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDelete}
+        title="Delete this BOM?"
+        description="This cannot be undone."
+        variant="danger"
+        confirmLabel="Delete"
+        pending={deleting}
+      />
+
       <div className="px-5 py-4 space-y-4">
         <Panel title="Materials" meta={`${data.item_count} ${data.item_count === 1 ? 'line' : 'lines'}`} noPadding>
           <table className="w-full text-xs">

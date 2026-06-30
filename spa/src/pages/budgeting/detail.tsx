@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, Link } from 'react-router-dom';
 import { budgetingApi } from '@/api/accounting/budgeting';
@@ -6,6 +7,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Panel } from '@/components/ui/Panel';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { FullPageLoader } from '@/components/ui/Spinner';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/cn';
@@ -20,6 +22,9 @@ export default function BudgetDetailPage() {
   const { can } = usePermission();
   const canManage = can('budgeting.manage');
   const canApprove = can('budgeting.approve');
+  const [confirmSubmit, setConfirmSubmit] = useState(false);
+  const [confirmApprove, setConfirmApprove] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
 
   const { data: budget, isLoading } = useQuery<Budget>({
     queryKey: ['budget', id],
@@ -32,6 +37,7 @@ export default function BudgetDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['budget', id] });
       toast.success('Budget submitted for approval.');
+      setConfirmSubmit(false);
     },
     onError: () => toast.error('Failed to submit budget.'),
   });
@@ -41,6 +47,7 @@ export default function BudgetDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['budget', id] });
       toast.success('Budget approved and activated.');
+      setConfirmApprove(false);
     },
     onError: () => toast.error('Failed to approve budget.'),
   });
@@ -50,6 +57,7 @@ export default function BudgetDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['budget', id] });
       toast.success('Budget closed.');
+      setConfirmClose(false);
     },
     onError: () => toast.error('Failed to close budget.'),
   });
@@ -94,17 +102,17 @@ export default function BudgetDetailPage() {
               <ArrowLeft size={14} /> Back
             </Link>
             {canSubmit && (
-              <Button size="sm" variant="primary" onClick={() => submitMutation.mutate()} loading={submitMutation.isPending}>
+              <Button size="sm" variant="primary" onClick={() => setConfirmSubmit(true)} loading={submitMutation.isPending}>
                 <Send size={14} /> Submit for Approval
               </Button>
             )}
             {canApproveAction && (
-              <Button size="sm" variant="primary" onClick={() => approveMutation.mutate()} loading={approveMutation.isPending}>
+              <Button size="sm" variant="primary" onClick={() => setConfirmApprove(true)} loading={approveMutation.isPending}>
                 <CheckCircle size={14} /> Approve
               </Button>
             )}
             {canClose && (
-              <Button size="sm" variant="secondary" onClick={() => closeMutation.mutate()} loading={closeMutation.isPending}>
+              <Button size="sm" variant="secondary" onClick={() => setConfirmClose(true)} loading={closeMutation.isPending}>
                 <XCircle size={14} /> Close
               </Button>
             )}
@@ -227,6 +235,35 @@ export default function BudgetDetailPage() {
           </div>
         </Panel>
       )}
+
+      <ConfirmDialog
+        isOpen={confirmSubmit}
+        onClose={() => setConfirmSubmit(false)}
+        onConfirm={() => submitMutation.mutate()}
+        title="Submit budget for approval?"
+        variant="warning"
+        confirmLabel="Submit"
+        pending={submitMutation.isPending}
+      />
+      <ConfirmDialog
+        isOpen={confirmApprove}
+        onClose={() => setConfirmApprove(false)}
+        onConfirm={() => approveMutation.mutate()}
+        title="Approve budget?"
+        variant="warning"
+        confirmLabel="Approve"
+        pending={approveMutation.isPending}
+      />
+      <ConfirmDialog
+        isOpen={confirmClose}
+        onClose={() => setConfirmClose(false)}
+        onConfirm={() => closeMutation.mutate()}
+        title="Close budget period?"
+        description="No further changes or transfers will be allowed."
+        variant="warning"
+        confirmLabel="Close"
+        pending={closeMutation.isPending}
+      />
     </div>
   );
 }

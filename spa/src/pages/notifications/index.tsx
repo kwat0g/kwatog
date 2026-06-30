@@ -12,14 +12,13 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Check, Trash2 } from 'lucide-react';
+import { Check, Eye } from 'lucide-react';
 import { notificationsApi, type NotificationRow } from '@/api/notifications';
 import { Button } from '@/components/ui/Button';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { cn } from '@/lib/cn';
-import toast from 'react-hot-toast';
 import {
   bucketLabel,
   dateBucket,
@@ -30,7 +29,9 @@ import {
 
 type FilterKey = 'all' | 'unread' | NotificationGroup;
 
-const FILTERS: Array<{ key: FilterKey; label: string }> = [
+interface FilterDef { key: FilterKey; label: string }
+
+const FILTERS: FilterDef[] = [
   { key: 'all',       label: 'All' },
   { key: 'unread',    label: 'Unread' },
   { key: 'approvals', label: 'Approvals' },
@@ -42,7 +43,6 @@ export default function NotificationsListPage() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const [filter, setFilter] = useState<FilterKey>('all');
-
   const unreadOnly = filter === 'unread';
 
   const { data, isLoading, isError, refetch } = useQuery({
@@ -58,19 +58,6 @@ export default function NotificationsListPage() {
   const markAll = useMutation({
     mutationFn: () => notificationsApi.markAllRead(),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
-  });
-
-  const deleteOne = useMutation({
-    mutationFn: (id: string) => notificationsApi.delete(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
-  });
-
-  const deleteAllReadMutation = useMutation({
-    mutationFn: () => notificationsApi.deleteAllRead(),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['notifications'] });
-      toast.success('All read notifications deleted');
-    },
   });
 
   // Apply group filter client-side (filter chips other than All / Unread).
@@ -110,47 +97,52 @@ export default function NotificationsListPage() {
             : undefined
         }
         actions={
-          <div className="flex gap-1.5">
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={<Check size={14} />}
-              onClick={() => markAll.mutate()}
-              loading={markAll.isPending}
-              disabled={(data?.meta.unread_count ?? 0) === 0}
-            >
-              Mark all read
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={<Trash2 size={14} />}
-              onClick={() => deleteAllReadMutation.mutate()}
-              loading={deleteAllReadMutation.isPending}
-            >
-              Delete all read
-            </Button>
-          </div>
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<Check size={14} />}
+            onClick={() => markAll.mutate()}
+            loading={markAll.isPending}
+            disabled={(data?.meta.unread_count ?? 0) === 0}
+          >
+            Mark all read
+          </Button>
         }
       />
 
       {/* Filter chips */}
       <div className="px-5 py-3 border-b border-default flex items-center gap-1.5 flex-wrap">
-        {FILTERS.map((f) => (
-          <button
-            key={f.key}
-            type="button"
-            onClick={() => setFilter(f.key)}
-            className={cn(
-              'h-7 px-3 text-xs rounded-md border transition-colors duration-fast',
-              filter === f.key
-                ? 'bg-primary text-canvas border-primary'
-                : 'border-default hover:bg-elevated',
-            )}
-          >
-            {f.label}
-          </button>
-        ))}
+        {FILTERS.map((f) => {
+          const unreadCount = data?.meta.unread_count ?? 0;
+          const showBadge = f.key === 'unread' && unreadCount > 0;
+          return (
+            <button
+              key={f.key}
+              type="button"
+              onClick={() => setFilter(f.key)}
+              className={cn(
+                'h-7 px-3 text-xs rounded-md border transition-colors duration-fast inline-flex items-center gap-1.5',
+                filter === f.key
+                  ? 'bg-primary text-canvas border-primary'
+                  : 'border-default hover:bg-elevated',
+              )}
+            >
+              {f.label}
+              {showBadge && (
+                <span
+                  className={cn(
+                    'inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-2xs font-mono tabular-nums rounded-full',
+                    filter === f.key
+                      ? 'bg-canvas/20 text-canvas'
+                      : 'bg-accent text-accent-fg',
+                  )}
+                >
+                  {unreadCount}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       <div className="px-5 py-4">
@@ -236,17 +228,19 @@ export default function NotificationsListPage() {
                                 {timeAgo(n.created_at)}
                               </span>
                             </span>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                deleteOne.mutate(n.id);
-                              }}
-                              className="ml-auto shrink-0 p-1 rounded hover:bg-subtle text-muted hover:text-danger transition-colors"
-                              aria-label="Delete notification"
-                            >
-                              <Trash2 size={12} />
-                            </button>
+                            {isUnread && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  markRead.mutate(n.id);
+                                }}
+                                className="ml-auto shrink-0 p-1 rounded hover:bg-subtle text-muted hover:text-primary transition-colors"
+                                aria-label="Mark as read"
+                              >
+                                <Eye size={12} />
+                              </button>
+                            )}
                           </button>
                         </li>
                       );
@@ -258,6 +252,7 @@ export default function NotificationsListPage() {
           </div>
         )}
       </div>
+
     </div>
   );
 }

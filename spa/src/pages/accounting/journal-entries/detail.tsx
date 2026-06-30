@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
@@ -7,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Chip, type ChipVariant } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
@@ -22,6 +24,9 @@ export default function JournalEntryDetailPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { can } = usePermission();
+  const [showPost, setShowPost] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
+  const [showReverse, setShowReverse] = useState(false);
 
   const { data: je, isLoading, isError, refetch } = useQuery({
     queryKey: ['accounting', 'journal-entries', id],
@@ -85,17 +90,17 @@ export default function JournalEntryDetailPage() {
               <Button variant="secondary" size="sm" icon={<Printer size={14} />}>Print</Button>
             </a>
             {isDraft && can('accounting.journal.post') && (
-              <Button variant="primary" size="sm" onClick={() => postMut.mutate()} loading={postMut.isPending} disabled={postMut.isPending}>
+              <Button variant="primary" size="sm" onClick={() => setShowPost(true)} disabled={postMut.isPending}>
                 Post
               </Button>
             )}
             {isDraft && can('accounting.journal.create') && (
-              <Button variant="danger" size="sm" onClick={() => { if (confirm('Delete this draft?')) deleteMut.mutate(); }} disabled={deleteMut.isPending}>
+              <Button variant="danger" size="sm" onClick={() => setShowDelete(true)} disabled={deleteMut.isPending}>
                 Delete
               </Button>
             )}
             {isPosted && !je.reversed_by_entry_id && can('accounting.journal.reverse') && (
-              <Button variant="secondary" size="sm" onClick={() => { if (confirm('Reverse this posted entry?')) reverseMut.mutate(); }} loading={reverseMut.isPending} disabled={reverseMut.isPending}>
+              <Button variant="secondary" size="sm" onClick={() => setShowReverse(true)} loading={reverseMut.isPending} disabled={reverseMut.isPending}>
                 Reverse
               </Button>
             )}
@@ -161,6 +166,37 @@ export default function JournalEntryDetailPage() {
           </Panel>
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={showPost}
+        onClose={() => setShowPost(false)}
+        onConfirm={() => { postMut.mutate(); setShowPost(false); }}
+        title="Post journal entry?"
+        description="This will update account balances. Posted entries cannot be edited."
+        confirmLabel="Post"
+        variant="warning"
+        pending={postMut.isPending}
+      />
+      <ConfirmDialog
+        isOpen={showDelete}
+        onClose={() => setShowDelete(false)}
+        onConfirm={() => { deleteMut.mutate(); setShowDelete(false); }}
+        title="Delete this draft?"
+        description="This journal entry will be permanently removed."
+        confirmLabel="Delete"
+        variant="danger"
+        pending={deleteMut.isPending}
+      />
+      <ConfirmDialog
+        isOpen={showReverse}
+        onClose={() => setShowReverse(false)}
+        onConfirm={() => { reverseMut.mutate(); setShowReverse(false); }}
+        title="Reverse this posted entry?"
+        description="A new reversing entry will be created and posted automatically."
+        confirmLabel="Reverse"
+        variant="warning"
+        pending={reverseMut.isPending}
+      />
     </div>
   );
 }

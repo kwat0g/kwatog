@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { govTablesApi, type UpdateGovTableData } from '@/api/admin/gov-tables';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -58,6 +59,8 @@ export default function AdminGovTablesPage() {
 function AgencyTable({ agency }: { agency: ContributionAgency }) {
   const qc = useQueryClient();
   const [editing, setEditing] = useState<GovernmentTable | null>(null);
+  const [confirmDeactivate, setConfirmDeactivate] = useState<string | null>(null);
+  const [confirmActivate, setConfirmActivate] = useState<string | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['gov-tables', agency],
@@ -69,6 +72,7 @@ function AgencyTable({ agency }: { agency: ContributionAgency }) {
     onSuccess: () => {
       toast.success('Bracket deactivated.');
       qc.invalidateQueries({ queryKey: ['gov-tables', agency] });
+      setConfirmDeactivate(null);
     },
     onError: () => toast.error('Failed to deactivate bracket.'),
   });
@@ -78,6 +82,7 @@ function AgencyTable({ agency }: { agency: ContributionAgency }) {
     onSuccess: () => {
       toast.success('Bracket activated.');
       qc.invalidateQueries({ queryKey: ['gov-tables', agency] });
+      setConfirmActivate(null);
     },
     onError: () => toast.error('Failed to activate bracket.'),
   });
@@ -141,11 +146,11 @@ function AgencyTable({ agency }: { agency: ContributionAgency }) {
                         onClick={() => setEditing(row)}>Edit</Button>
                       {row.is_active ? (
                         <Button size="sm" variant="ghost" icon={<EyeOff size={12} />}
-                          onClick={() => deactivate.mutate(row.id)}
+                          onClick={() => setConfirmDeactivate(row.id)}
                           disabled={deactivate.isPending}>Deactivate</Button>
                       ) : (
                         <Button size="sm" variant="ghost" icon={<Eye size={12} />}
-                          onClick={() => activate.mutate(row.id)}
+                          onClick={() => setConfirmActivate(row.id)}
                           disabled={activate.isPending}>Activate</Button>
                       )}
                     </div>
@@ -161,6 +166,25 @@ function AgencyTable({ agency }: { agency: ContributionAgency }) {
         bracket={editing}
         onClose={() => setEditing(null)}
         agency={agency}
+      />
+
+      <ConfirmDialog
+        isOpen={confirmDeactivate !== null}
+        onClose={() => setConfirmDeactivate(null)}
+        onConfirm={() => { if (confirmDeactivate) deactivate.mutate(confirmDeactivate); }}
+        title="Deactivate this bracket?"
+        variant="warning"
+        confirmLabel="Deactivate"
+        pending={deactivate.isPending}
+      />
+      <ConfirmDialog
+        isOpen={confirmActivate !== null}
+        onClose={() => setConfirmActivate(null)}
+        onConfirm={() => { if (confirmActivate) activate.mutate(confirmActivate); }}
+        title="Activate this bracket?"
+        variant="primary"
+        confirmLabel="Activate"
+        pending={activate.isPending}
       />
     </div>
   );

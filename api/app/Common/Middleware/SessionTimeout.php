@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Common\Middleware;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use Closure;
 use Illuminate\Http\Request;
@@ -11,11 +12,14 @@ use Illuminate\Support\Carbon;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Idle-session timeout: 15 min for `employee` role, 30 min for everyone else.
+ * Idle-session timeout. Durations are configurable via admin settings;
+ * defaults: 15 min for `employee` role, 30 min for everyone else.
  * Updates last_activity on every authenticated request.
  */
 class SessionTimeout
 {
+    public function __construct(private readonly SettingsService $settings) {}
+
     public function handle(Request $request, Closure $next): Response
     {
         $user = $request->user();
@@ -52,7 +56,9 @@ class SessionTimeout
         }
 
         $isEmployee = ($user->role?->slug ?? null) === 'employee';
-        $minutes = $isEmployee ? 15 : 30;
+        $minutes = $isEmployee
+            ? (int) $this->settings->get('security.session_timeout_employee', 15)
+            : (int) $this->settings->get('security.session_timeout_default', 30);
         $lastActivity = $user->last_activity ? Carbon::parse($user->last_activity) : null;
 
         if ($lastActivity && $lastActivity->diffInMinutes(now()) >= $minutes) {
