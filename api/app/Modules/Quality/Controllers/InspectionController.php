@@ -19,22 +19,88 @@ class InspectionController
 {
     public function __construct(private readonly InspectionService $service) {}
 
+    /**
+     * @OA\Get(
+     *     path="/quality/inspections",
+     *     tags={"Inspections"},
+     *     summary="List inspections",
+     *     description="Returns a paginated list of quality inspections. Filterable by type (incoming, in_process, outgoing), status, and date range.",
+     *     security={{"sanctum":{}}},
+     *     @OA\Parameter(name="type", in="query", required=false, @OA\Schema(type="string", enum={"incoming","in_process","outgoing"})),
+     *     @OA\Parameter(name="status", in="query", required=false, @OA\Schema(type="string", enum={"pending","in_progress","passed","failed","cancelled"})),
+     *     @OA\Parameter(name="page", in="query", required=false, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, description="Paginated inspection list"),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=403, description="Unauthorized")
+     * )
+     */
     public function index(Request $request): AnonymousResourceCollection
     {
         return InspectionResource::collection($this->service->list($request->query()));
     }
 
+    /**
+     * @OA\Get(
+     *     path="/quality/inspections/{id}",
+     *     tags={"Inspections"},
+     *     summary="Show inspection detail",
+     *     description="Returns full inspection details including spec, measurements, and linked NCRs.",
+     *     security={{"sanctum":{}}},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="string"), description="Inspection hash ID"),
+     *     @OA\Response(response=200, description="Inspection detail"),
+     *     @OA\Response(response=404, description="Inspection not found")
+     * )
+     */
     public function show(Inspection $inspection): InspectionResource
     {
         return new InspectionResource($this->service->show($inspection));
     }
 
+    /**
+     * @OA\Post(
+     *     path="/quality/inspections",
+     *     tags={"Inspections"},
+     *     summary="Create a new inspection",
+     *     description="Creates an inspection record with auto-generated number (QC-YYYYMM-NNNN). Links to inspection spec for tolerance evaluation.",
+     *     security={{"sanctum":{}}},
+     *     @OA\RequestBody(required=true, @OA\JsonContent(
+     *         required={"type", "inspection_spec_id", "batch_quantity"},
+     *         @OA\Property(property="type", type="string", enum={"incoming","in_process","outgoing"}),
+     *         @OA\Property(property="inspection_spec_id", type="string", description="Inspection spec hash ID"),
+     *         @OA\Property(property="batch_quantity", type="integer", minimum=1),
+     *         @OA\Property(property="work_order_id", type="string", description="Work order hash ID (for in-process/outgoing)"),
+     *         @OA\Property(property="grn_id", type="string", description="GRN hash ID (for incoming)")
+     *     )),
+     *     @OA\Response(response=200, description="Inspection created"),
+     *     @OA\Response(response=422, description="Validation error")
+     * )
+     */
     public function store(CreateInspectionRequest $request): InspectionResource
     {
         $insp = $this->service->create($request->validated(), $request->user());
         return new InspectionResource($insp);
     }
 
+    /**
+     * @OA\Post(
+     *     path="/quality/inspections/{id}/measurements",
+     *     tags={"Inspections"},
+     *     summary="Record inspection measurements",
+     *     description="Records actual measurements for inspection parameters. Auto-evaluates pass/fail against spec tolerances.",
+     *     security={{"sanctum":{}}},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="string")),
+     *     @OA\RequestBody(required=true, @OA\JsonContent(
+     *         required={"rows"},
+     *         @OA\Property(property="rows", type="array", @OA\Items(type="object",
+     *             @OA\Property(property="parameter_id", type="string"),
+     *             @OA\Property(property="actual_value", type="number"),
+     *             @OA\Property(property="result", type="string", enum={"pass","fail"})
+     *         ))
+     *     )),
+     *     @OA\Response(response=200, description="Measurements recorded"),
+     *     @OA\Response(response=422, description="Validation error")
+     * )
+     */
     public function recordMeasurements(
         RecordMeasurementsRequest $request,
         Inspection $inspection
@@ -44,6 +110,18 @@ class InspectionController
         return new InspectionResource($insp);
     }
 
+    /**
+     * @OA\Post(
+     *     path="/quality/inspections/{id}/complete",
+     *     tags={"Inspections"},
+     *     summary="Complete an inspection",
+     *     description="Finalizes the inspection. Sets overall pass/fail based on recorded measurements.",
+     *     security={{"sanctum":{}}},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="string")),
+     *     @OA\Response(response=200, description="Inspection completed"),
+     *     @OA\Response(response=422, description="Cannot complete — measurements incomplete or invalid state")
+     * )
+     */
     public function complete(Request $request, Inspection $inspection): InspectionResource
     {
         $insp = $this->service->complete($inspection, $request->user());
