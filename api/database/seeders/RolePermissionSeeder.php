@@ -276,6 +276,8 @@ class RolePermissionSeeder extends Seeder
                 // PPAP & APQP tracking (IATF 16949).
                 ['slug' => 'quality.ppap.view',            'name' => 'View PPAP Submissions'],
                 ['slug' => 'quality.ppap.manage',          'name' => 'Manage PPAP Submissions'],
+                ['slug' => 'quality.spc.view',             'name' => 'View SPC Control Charts'],
+                ['slug' => 'quality.spc.manage',           'name' => 'Manage SPC Control Charts'],
             ],
 
             // Maintenance
@@ -457,7 +459,7 @@ class RolePermissionSeeder extends Seeder
                         'inventory.view',
                         // Quality: view + read sub-resources for quality dashboard / NCR/inspection pages
                         'quality.view', 'quality.inspections.view', 'quality.ncr.view',
-                        'quality.copq.view', 'quality.ppap.view',
+                        'quality.copq.view', 'quality.ppap.view', 'quality.spc.view',
                         'dashboard.plant_manager.view', 'dashboard.ppc.view',
                         'maintenance.view', 'assets.view',
                         'search.global', 'notifications.preferences.manage',
