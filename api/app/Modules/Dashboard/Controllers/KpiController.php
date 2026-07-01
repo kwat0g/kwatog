@@ -18,14 +18,14 @@ class KpiController
         $year = (int) $request->query('year', (string) Carbon::now()->year);
         $month = (int) $request->query('month', (string) Carbon::now()->month);
 
-        return response()->json(['data' => $this->service->getScorecard($year, $month)]);
+        return response()->json(['data' => $this->service->getScorecard($year, $month, $request->user())]);
     }
 
     public function trend(Request $request, string $code): JsonResponse
     {
         $months = max(1, min(24, (int) $request->query('months', '12')));
 
-        return response()->json(['data' => $this->service->getTrend($code, $months)]);
+        return response()->json(['data' => $this->service->getTrend($code, $months, $request->user())]);
     }
 
     public function compute(Request $request): JsonResponse

@@ -10,11 +10,21 @@ use App\Modules\Dashboard\Enums\KpiTrend;
 use App\Modules\Dashboard\Models\KpiDefinition;
 use App\Modules\Dashboard\Models\KpiSnapshot;
 use Carbon\Carbon;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class KpiSnapshotService
 {
+    private const MODULE_PERMISSIONS = [
+        'production'   => 'production.dashboard.view',
+        'quality'      => 'dashboard.quality.view',
+        'supply_chain' => 'dashboard.ppc.view',
+        'purchasing'   => 'dashboard.purchasing.view',
+        'attendance'   => 'dashboard.hr.view',
+        'accounting'   => 'accounting.dashboard.view',
+        'inventory'    => 'dashboard.warehouse.view',
+    ];
     public function computeAll(int $year, int $month): void
     {
         $definitions = KpiDefinition::active()->orderBy('display_order')->get();
@@ -57,9 +67,14 @@ class KpiSnapshotService
         );
     }
 
-    public function getScorecard(int $year, int $month): array
+    public function getScorecard(int $year, int $month, ?Authenticatable $user = null): array
     {
         $definitions = KpiDefinition::active()->orderBy('display_order')->get();
+
+        if ($user) {
+            $definitions = $definitions->filter(fn (KpiDefinition $def) => $this->userCanSeeModule($user, $def->module));
+        }
+
         return $definitions->map(function (KpiDefinition $def) use ($year, $month) {
             $snapshot = KpiSnapshot::where('definition_id', $def->id)
                 ->where('period_year', $year)
@@ -88,9 +103,14 @@ class KpiSnapshotService
         })->all();
     }
 
-    public function getTrend(string $kpiCode, int $months = 12): array
+    public function getTrend(string $kpiCode, int $months = 12, ?Authenticatable $user = null): array
     {
         $def = KpiDefinition::where('code', $kpiCode)->firstOrFail();
+
+        if ($user && !$this->userCanSeeModule($user, $def->module)) {
+            abort(403, 'You do not have permission to view this KPI.');
+        }
+
         return KpiSnapshot::where('definition_id', $def->id)
             ->orderByDesc('period_year')
             ->orderByDesc('period_month')
@@ -105,6 +125,15 @@ class KpiSnapshotService
                 'status' => $s->status?->value,
             ])
             ->all();
+    }
+
+    private function userCanSeeModule(Authenticatable $user, string $module): bool
+    {
+        $permission = self::MODULE_PERMISSIONS[$module] ?? null;
+        if ($permission === null) {
+            return true;
+        }
+        return $user->can($permission);
     }
 
     private function determineTrend(float $actual, ?string $previous): KpiTrend
