@@ -121,6 +121,12 @@ Route::middleware(['auth:sanctum', 'feature:quality'])->prefix('quality')->group
     /* ─── T3.6.B — COPQ rollup trend ─── */
     Route::get('/copq/trend',                                   [CopqController::class, 'trend'])
         ->middleware('permission:quality.copq.view');
+    Route::get('/copq/summary',                                 [CopqController::class, 'summary'])
+        ->middleware('permission:quality.copq.view');
+    Route::get('/copq/by-product',                              [CopqController::class, 'byProduct'])
+        ->middleware('permission:quality.copq.view');
+    Route::get('/copq/by-supplier',                             [CopqController::class, 'bySupplier'])
+        ->middleware('permission:quality.copq.view');
 
     /* ─── ADV3 — IATF 16949 traceability (batch + lot search, shipment lots) ─── */
     Route::get('/traceability/search', [TraceabilityController::class, 'search'])

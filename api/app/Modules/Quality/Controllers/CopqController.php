@@ -5,24 +5,20 @@ declare(strict_types=1);
 namespace App\Modules\Quality\Controllers;
 
 use App\Modules\Quality\Models\CopqSnapshot;
+use App\Modules\Quality\Services\CopqService;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
-/**
- * T3.6.B — Cost-of-Poor-Quality trend endpoint.
- *
- * Returns the most recent N persisted COPQ snapshots in ascending
- * (period_year, period_month) order so dashboards chart left-to-right.
- * `?months=` is clamped to [1, 36]; default is 12.
- */
 class CopqController
 {
+    public function __construct(private readonly CopqService $service) {}
+
     public function trend(Request $request): JsonResponse
     {
         $requested = (int) $request->query('months', 12);
         $months    = max(1, min(36, $requested));
 
-        // Take the most recent N rows (DESC), then re-order ASC for charting.
         $rows = CopqSnapshot::query()
             ->orderByDesc('period_year')
             ->orderByDesc('period_month')
@@ -47,5 +43,28 @@ class CopqController
                 'computed_at'              => optional($r->computed_at)->toIso8601String(),
             ])->values(),
         ]);
+    }
+
+    public function summary(): JsonResponse
+    {
+        return response()->json(['data' => $this->service->getSummary()]);
+    }
+
+    public function byProduct(Request $request): JsonResponse
+    {
+        $from = Carbon::parse($request->query('from', Carbon::now()->startOfYear()->toDateString()));
+        $to = Carbon::parse($request->query('to', Carbon::now()->endOfMonth()->toDateString()));
+        $limit = max(1, min(50, (int) $request->query('limit', 20)));
+
+        return response()->json(['data' => $this->service->getByProduct($from, $to, $limit)]);
+    }
+
+    public function bySupplier(Request $request): JsonResponse
+    {
+        $from = Carbon::parse($request->query('from', Carbon::now()->startOfYear()->toDateString()));
+        $to = Carbon::parse($request->query('to', Carbon::now()->endOfMonth()->toDateString()));
+        $limit = max(1, min(50, (int) $request->query('limit', 20)));
+
+        return response()->json(['data' => $this->service->getBySupplier($from, $to, $limit)]);
     }
 }

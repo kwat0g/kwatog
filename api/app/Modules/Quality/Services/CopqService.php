@@ -157,6 +157,100 @@ class CopqService
             && $to->equalTo($from->copy()->endOfMonth());
     }
 
+    public function getSummary(): array
+    {
+        $now = Carbon::now();
+        $currentMonth = $this->compute(
+            $now->copy()->startOfMonth(),
+            $now->copy()->endOfMonth()
+        );
+
+        $ytdSnapshots = CopqSnapshot::where('period_year', $now->year)
+            ->where('period_month', '<', $now->month)
+            ->get();
+
+        $ytdTotal = $ytdSnapshots->sum('total_cost') + ($currentMonth['total'] ?? 0);
+        $ytdScrap = $ytdSnapshots->sum('internal_scrap_cost') + ($currentMonth['internal_failure']['scrap_cost'] ?? 0);
+        $ytdRework = $ytdSnapshots->sum('internal_rework_cost') + ($currentMonth['internal_failure']['rework_cost'] ?? 0);
+
+        return [
+            'current_month' => $currentMonth,
+            'ytd' => [
+                'total' => round((float) $ytdTotal, 2),
+                'scrap_cost' => round((float) $ytdScrap, 2),
+                'rework_cost' => round((float) $ytdRework, 2),
+                'months_covered' => $ytdSnapshots->count() + 1,
+            ],
+        ];
+    }
+
+    public function getByProduct(CarbonInterface $from, CarbonInterface $to, int $limit = 20): array
+    {
+        $fromTs = $from->toDateTimeString();
+        $toTs = $to->toDateTimeString();
+
+        $rows = DB::table('non_conformance_reports as n')
+            ->join('products as p', 'n.product_id', '=', 'p.id')
+            ->where('n.status', 'closed')
+            ->whereBetween('n.closed_at', [$fromTs, $toTs])
+            ->select([
+                'p.id as product_id',
+                'p.name as product_name',
+                'p.part_number',
+                DB::raw('COUNT(n.id) as ncr_count'),
+                DB::raw("SUM(CASE WHEN n.disposition = 'scrap' THEN n.affected_quantity * p.standard_cost ELSE 0 END) as scrap_cost"),
+                DB::raw("SUM(CASE WHEN n.disposition = 'rework' THEN n.affected_quantity * p.standard_cost * 0.30 ELSE 0 END) as rework_cost"),
+                DB::raw('SUM(n.affected_quantity * p.standard_cost) as total_cost'),
+            ])
+            ->groupBy('p.id', 'p.name', 'p.part_number')
+            ->orderByDesc('total_cost')
+            ->limit($limit)
+            ->get();
+
+        return $rows->map(fn ($r) => [
+            'product_id' => $r->product_id,
+            'product_name' => $r->product_name,
+            'part_number' => $r->part_number,
+            'ncr_count' => (int) $r->ncr_count,
+            'scrap_cost' => round((float) $r->scrap_cost, 2),
+            'rework_cost' => round((float) $r->rework_cost, 2),
+            'total_cost' => round((float) $r->total_cost, 2),
+        ])->toArray();
+    }
+
+    public function getBySupplier(CarbonInterface $from, CarbonInterface $to, int $limit = 20): array
+    {
+        $fromTs = $from->toDateTimeString();
+        $toTs = $to->toDateTimeString();
+
+        if (!Schema::hasTable('vendors')) {
+            return [];
+        }
+
+        $rows = DB::table('non_conformance_reports as n')
+            ->join('vendors as v', 'n.vendor_id', '=', 'v.id')
+            ->where('n.status', 'closed')
+            ->where('n.source', 'inspection_fail')
+            ->whereBetween('n.closed_at', [$fromTs, $toTs])
+            ->select([
+                'v.id as vendor_id',
+                'v.name as vendor_name',
+                DB::raw('COUNT(n.id) as ncr_count'),
+                DB::raw('SUM(n.affected_quantity) as total_defective_qty'),
+            ])
+            ->groupBy('v.id', 'v.name')
+            ->orderByDesc('ncr_count')
+            ->limit($limit)
+            ->get();
+
+        return $rows->map(fn ($r) => [
+            'vendor_id' => $r->vendor_id,
+            'vendor_name' => $r->vendor_name,
+            'ncr_count' => (int) $r->ncr_count,
+            'total_defective_qty' => (int) $r->total_defective_qty,
+        ])->toArray();
+    }
+
     /**
      * Preserved legacy ad-hoc path (avg(items.standard_cost) fallback) for
      * non-month-aligned ranges. Dashboards never hit this in practice.
