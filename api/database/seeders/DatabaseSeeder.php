@@ -72,6 +72,9 @@ class DatabaseSeeder extends Seeder
             DashboardWidgetSeeder::class,
             DashboardRoleLayoutSeeder::class,
 
+            // KPI Scorecard — definition catalog for the KPI snapshot engine.
+            KpiDefinitionSeeder::class,
+
             // Comprehensive demo data — fills all 24 modules so every
             // feature page has realistic records to browse and test.
             ComprehensiveDemoSeeder::class,

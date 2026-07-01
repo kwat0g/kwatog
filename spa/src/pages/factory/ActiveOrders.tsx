@@ -33,7 +33,7 @@ export default function ActiveOrders() {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 touch-manipulation">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold">Active Work Orders</h1>
         <button

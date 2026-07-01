@@ -29,6 +29,7 @@ import {
   RotateCcw,
   Building2,
   BarChart2,
+  BarChart3,
   PieChart,
   Landmark,
   Store,
@@ -42,6 +43,7 @@ import {
   Activity,
   BadgeCheck,
   Navigation,
+  Route,
   X,
   UserPlus,
   Star,
@@ -98,8 +100,9 @@ const SECTIONS: NavSection[] = [
   {
     label: 'Overview',
     items: [
-      { to: '/dashboard',     label: 'Dashboard',     icon: LayoutDashboard },
-      { to: '/chains',        label: 'Chain Tracker', icon: Workflow, permission: 'crm.sales_orders.view' },
+      { to: '/dashboard',     label: 'Dashboard',      icon: LayoutDashboard },
+      { to: '/dashboard/scorecard', label: 'KPI Scorecard', icon: BarChart3, permission: 'dashboard.plant_manager.view' },
+      { to: '/chains',        label: 'Chain Tracker',  icon: Workflow, permission: 'crm.sales_orders.view' },
       { to: '/approvals',     label: 'Approvals',     icon: Inbox,  permission: 'approvals.board.view', badgeKey: 'approvals' },
       { to: '/notifications', label: 'Notifications', icon: Bell,   badgeKey: 'unread' },
     ],
@@ -122,6 +125,7 @@ const SECTIONS: NavSection[] = [
     items: [
       { to: '/production/work-orders', label: 'Work Orders',      icon: FileText,      feature: 'production', permission: 'production.work_orders.view', badgeKey: 'work_orders' },
       { to: '/production/schedule',    label: 'Schedule (Gantt)', icon: CalendarClock, feature: 'production', permission: 'production.schedule.view' },
+      { to: '/production/routings',    label: 'Routings',         icon: Route,         feature: 'production', permission: 'production.routings.view' },
       { to: '/production/oee',         label: 'OEE Report',       icon: Activity,      feature: 'production', permission: 'production.dashboard.view' },
       { to: '/mrp/plans',              label: 'MRP Plans',        icon: Layers,        feature: 'mrp', permission: 'mrp.plans.view' },
       { to: '/mrp/boms',               label: 'Bill of Materials', icon: ListTree,     feature: 'mrp', permission: 'mrp.boms.view' },
@@ -163,6 +167,9 @@ const SECTIONS: NavSection[] = [
       { to: '/quality/ncrs',             label: 'NCRs',             icon: AlertTriangle, feature: 'quality', permission: 'quality.view', badgeKey: 'ncrs' },
       { to: '/quality/ncr-templates',    label: 'NCR Templates',    icon: FileText,      feature: 'quality', permission: 'quality.ncr.manage' },
       { to: '/quality/traceability',     label: 'Traceability',     icon: GitFork,       feature: 'quality', permission: 'quality.inspections.view' },
+      { to: '/quality/spc',               label: 'SPC',              icon: Activity,      feature: 'quality', permission: 'quality.spc.view' },
+      { to: '/quality/copq',              label: 'COPQ',             icon: Coins,         feature: 'quality', permission: 'quality.copq.view' },
+      { to: '/quality/documents',          label: 'Documents',        icon: FileText,      feature: 'quality', permission: 'quality.documents.view' },
     ],
   },
   {

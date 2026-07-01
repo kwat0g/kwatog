@@ -82,7 +82,7 @@ export default function QcQuickCheck() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 touch-manipulation">
       <h1 className="text-lg font-semibold">Quick QC Check</h1>
 
       {/* Work Order selection */}

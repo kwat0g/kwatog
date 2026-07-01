@@ -101,6 +101,11 @@ class WorkOrder extends Model
         return $this->hasMany(WorkOrderOutput::class)->orderByDesc('recorded_at');
     }
 
+    public function operations(): HasMany
+    {
+        return $this->hasMany(WoOperation::class)->orderBy('sequence');
+    }
+
     public function downtimes(): HasMany
     {
         return $this->hasMany(MachineDowntime::class);

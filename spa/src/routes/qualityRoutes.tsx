@@ -18,6 +18,16 @@ const NcrTemplatesListPage = lazy(() => import('@/pages/quality/ncr-templates'))
 const NcrTemplateFormPage  = lazy(() => import('@/pages/quality/ncr-templates/create'));
 // ADV3 — IATF 16949 traceability search
 const TraceabilityPage = lazy(() => import('@/pages/quality/traceability'));
+// SPC — Statistical Process Control
+const SpcChartsListPage     = lazy(() => import('@/pages/quality/spc'));
+const SpcChartDetailPage    = lazy(() => import('@/pages/quality/spc/chart-detail'));
+const SpcCapabilityStudyPage = lazy(() => import('@/pages/quality/spc/capability-study'));
+// COPQ — Cost of Poor Quality analytics
+const CopqAnalyticsPage = lazy(() => import('@/pages/quality/copq'));
+// Task 16 — Document Control
+const DocumentsListPage  = lazy(() => import('@/pages/quality/documents'));
+const DocumentDetailPage = lazy(() => import('@/pages/quality/documents/detail'));
+const DocumentCreatePage = lazy(() => import('@/pages/quality/documents/create'));
 
 export const qualityRoutes = (
   <>
@@ -52,6 +62,23 @@ export const qualityRoutes = (
       {/* ADV3 — IATF 16949 traceability search */}
       <Route path="/quality/traceability"
         element={<PermissionGuard permission="quality.inspections.view"><TraceabilityPage /></PermissionGuard>} />
+      {/* SPC — Statistical Process Control */}
+      <Route path="/quality/spc"
+        element={<PermissionGuard permission="quality.spc.view"><SpcChartsListPage /></PermissionGuard>} />
+      <Route path="/quality/spc/capability"
+        element={<PermissionGuard permission="quality.spc.view"><SpcCapabilityStudyPage /></PermissionGuard>} />
+      <Route path="/quality/spc/:id"
+        element={<PermissionGuard permission="quality.spc.view"><SpcChartDetailPage /></PermissionGuard>} />
+      {/* COPQ — Cost of Poor Quality analytics */}
+      <Route path="/quality/copq"
+        element={<PermissionGuard permission="quality.copq.view"><CopqAnalyticsPage /></PermissionGuard>} />
+      {/* Task 16 — Document Control */}
+      <Route path="/quality/documents"
+        element={<PermissionGuard permission="quality.documents.view"><DocumentsListPage /></PermissionGuard>} />
+      <Route path="/quality/documents/new"
+        element={<PermissionGuard permission="quality.documents.manage"><DocumentCreatePage /></PermissionGuard>} />
+      <Route path="/quality/documents/:id"
+        element={<PermissionGuard permission="quality.documents.view"><DocumentDetailPage /></PermissionGuard>} />
     </Route>
   </>
 );

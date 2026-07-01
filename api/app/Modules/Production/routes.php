@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use App\Modules\Production\Controllers\DashboardController;
 use App\Modules\Production\Controllers\OeeController;
+use App\Modules\Production\Controllers\ProductionRoutingController;
+use App\Modules\Production\Controllers\WoOperationController;
 use App\Modules\Production\Controllers\WorkOrderController;
 use Illuminate\Support\Facades\Route;
 
@@ -49,4 +51,25 @@ Route::middleware(['auth:sanctum', 'feature:production'])->prefix('production')-
 
     /* ─── Production dashboard (Task 58) ─── */
     Route::get('/dashboard', [DashboardController::class, 'index'])->middleware('permission:production.dashboard.view');
+
+    /* ─── Product routings (Task 10) ─── */
+    Route::get('/routings',                       [ProductionRoutingController::class, 'index'])    ->middleware('permission:production.routings.view');
+    Route::post('/routings',                      [ProductionRoutingController::class, 'store'])    ->middleware('permission:production.routings.manage');
+    Route::get('/routings/{routing}',             [ProductionRoutingController::class, 'show'])     ->middleware('permission:production.routings.view');
+    Route::put('/routings/{routing}',             [ProductionRoutingController::class, 'update'])   ->middleware('permission:production.routings.manage');
+    Route::post('/routings/{routing}/duplicate',  [ProductionRoutingController::class, 'duplicate'])->middleware('permission:production.routings.manage');
+
+    /* ─── WO Operations (Task 11) ─── */
+    Route::get('/work-orders/{workOrder}/operations',   [WoOperationController::class, 'index'])       ->middleware('permission:production.work_orders.view');
+    // Literal "/operations/schedule" MUST come before "{operation}" parameter routes.
+    Route::get('/operations/schedule',                   [WoOperationController::class, 'schedule'])    ->middleware('permission:production.dashboard.view');
+    Route::get('/operations/{operation}',                [WoOperationController::class, 'show'])        ->middleware('permission:production.work_orders.view');
+    Route::post('/operations/{operation}/start-setup',   [WoOperationController::class, 'startSetup']) ->middleware('permission:production.work_orders.lifecycle');
+    Route::post('/operations/{operation}/end-setup',     [WoOperationController::class, 'endSetup'])   ->middleware('permission:production.work_orders.lifecycle');
+    Route::post('/operations/{operation}/start',         [WoOperationController::class, 'start'])      ->middleware('permission:production.work_orders.lifecycle');
+    Route::post('/operations/{operation}/pause',         [WoOperationController::class, 'pause'])      ->middleware('permission:production.work_orders.lifecycle');
+    Route::post('/operations/{operation}/resume',        [WoOperationController::class, 'resume'])     ->middleware('permission:production.work_orders.lifecycle');
+    Route::post('/operations/{operation}/output',        [WoOperationController::class, 'recordOutput'])->middleware('permission:production.wo.record');
+    Route::post('/operations/{operation}/complete',      [WoOperationController::class, 'complete'])   ->middleware('permission:production.work_orders.lifecycle');
+    Route::post('/operations/{operation}/skip',          [WoOperationController::class, 'skip'])       ->middleware('permission:production.work_orders.lifecycle');
 });

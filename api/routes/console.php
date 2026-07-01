@@ -243,3 +243,12 @@ Schedule::command('forecasting:reconcile-actuals')
     ->name('forecasting:reconcile-actuals')
     ->withoutOverlapping()
     ->onOneServer();
+
+// Task 14 — KPI monthly snapshot on 2nd at 03:00 for the previous month.
+// Iterates all active KpiDefinition rows, calls each calculator, and upserts
+// KpiSnapshot rows. Idempotent (updateOrCreate keyed by definition+period).
+Schedule::command('kpi:compute-monthly')
+    ->monthlyOn(2, '03:00')
+    ->name('kpi:compute-monthly')
+    ->withoutOverlapping()
+    ->onOneServer();

@@ -5,6 +5,7 @@ import { Check, Pause, Play, StopCircle, Ban, Lock, Activity } from 'lucide-reac
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { workOrdersApi } from '@/api/production/workOrders';
+import { woOperationsApi } from '@/api/production/routings';
 import { machinesApi } from '@/api/mrp/machines';
 import { moldsApi } from '@/api/mrp/molds';
 import { Button } from '@/components/ui/Button';
@@ -20,12 +21,34 @@ import { ChainHeader, LinkedRecords, ActivityStream } from '@/components/chain';
 import { useEcho } from '@/hooks/useEcho';
 import { useChainProgress } from '@/hooks/useChainProgress';
 import { usePermission } from '@/hooks/usePermission';
+import { cn } from '@/lib/cn';
 import type { WorkOrderStatus } from '@/types/production';
+import type { WoOperationStatus } from '@/types/production/routing';
 
 const variant: Record<WorkOrderStatus, 'success' | 'info' | 'warning' | 'danger' | 'neutral'> = {
   planned: 'neutral', confirmed: 'info', in_progress: 'info',
   paused: 'warning', completed: 'success', closed: 'success', cancelled: 'danger',
 };
+
+const OP_STATUS_CHIP: Record<WoOperationStatus, 'success' | 'info' | 'warning' | 'danger' | 'neutral'> = {
+  pending: 'neutral',
+  setup: 'info',
+  in_progress: 'warning',
+  paused: 'danger',
+  completed: 'success',
+  skipped: 'neutral',
+};
+
+const OP_STATUS_LABEL: Record<WoOperationStatus, string> = {
+  pending: 'Pending',
+  setup: 'Setup',
+  in_progress: 'In Progress',
+  paused: 'Paused',
+  completed: 'Completed',
+  skipped: 'Skipped',
+};
+
+type DetailTab = 'details' | 'operations';
 
 type LifecycleAction = 'confirm' | 'start' | 'pause' | 'resume' | 'complete' | 'close' | 'cancel';
 
@@ -42,7 +65,7 @@ export default function WorkOrderDetailPage() {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [selectedMachineId, setSelectedMachineId] = useState<string>('');
   const [selectedMoldId, setSelectedMoldId] = useState<string>('');
-
+  const [tab, setTab] = useState<DetailTab>('details');
   const machineList = useQuery({
     queryKey: ['mrp', 'machines', 'all'],
     queryFn: () => machinesApi.list({ per_page: 100 }),
@@ -63,6 +86,12 @@ export default function WorkOrderDetailPage() {
     queryKey: ['production', 'work-orders', 'chain', id],
     queryFn: () => workOrdersApi.chain(id!),
     enabled: !!id,
+  });
+
+  const operations = useQuery({
+    queryKey: ['production', 'work-orders', 'operations', id],
+    queryFn: () => woOperationsApi.list(id!),
+    enabled: !!id && tab === 'operations',
   });
 
   // Live updates from output recordings.
@@ -152,6 +181,25 @@ export default function WorkOrderDetailPage() {
         bottom={chain.data ? <ChainHeader steps={chain.data} className="mt-2" /> : null}
       />
 
+      {/* Tabs */}
+      <div className="px-5 border-b border-default flex gap-4">
+        {(['details', 'operations'] as DetailTab[]).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={cn(
+              'px-1 pb-2 text-xs uppercase tracking-wider transition-colors',
+              tab === t
+                ? 'border-b-2 border-accent text-accent font-medium'
+                : 'text-muted hover:text-strong'
+            )}
+          >
+            {t === 'details' ? 'Details' : 'Operations'}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'details' && (
       <div className="px-5 py-4 grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-4">
           {/* ADV3 — IATF 16949 Production Batch panel. Visible once the WO has
@@ -368,6 +416,69 @@ export default function WorkOrderDetailPage() {
           </Panel>
         </div>
       </div>
+      )}
+
+      {tab === 'operations' && (
+      <div className="px-5 py-4">
+        <Panel title="Operations" meta={operations.data ? `${operations.data.length} operations` : undefined} noPadding>
+          {operations.isLoading && (
+            <div className="p-4 text-sm text-muted">Loading operations...</div>
+          )}
+          {operations.isError && (
+            <div className="p-4">
+              <EmptyState
+                icon="alert-circle"
+                title="Failed to load operations"
+                action={<Button variant="secondary" size="sm" onClick={() => operations.refetch()}>Retry</Button>}
+              />
+            </div>
+          )}
+          {operations.data && operations.data.length === 0 && (
+            <div className="p-4 text-sm text-muted">No operations defined for this work order.</div>
+          )}
+          {operations.data && operations.data.length > 0 && (
+            <table className="w-full text-xs">
+              <thead className="bg-subtle">
+                <tr>
+                  <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 w-14">#</th>
+                  <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Operation</th>
+                  <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Status</th>
+                  <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Operator</th>
+                  <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Machine</th>
+                  <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Qty progress</th>
+                  <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Start</th>
+                  <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">End</th>
+                </tr>
+              </thead>
+              <tbody>
+                {operations.data.map((op) => (
+                  <tr key={op.id} className="border-t border-subtle">
+                    <td className="px-2.5 py-2 text-right font-mono tabular-nums">{op.sequence}</td>
+                    <td className="px-2.5 py-2">{op.operation_name}</td>
+                    <td className="px-2.5 py-2">
+                      <Chip variant={OP_STATUS_CHIP[op.status]}>{OP_STATUS_LABEL[op.status]}</Chip>
+                    </td>
+                    <td className="px-2.5 py-2">
+                      {op.operator
+                        ? `${op.operator.first_name} ${op.operator.last_name}`
+                        : <span className="text-muted">—</span>}
+                    </td>
+                    <td className="px-2.5 py-2 font-mono">
+                      {op.machine?.machine_code ?? <span className="text-muted">—</span>}
+                    </td>
+                    <td className="px-2.5 py-2 text-right font-mono tabular-nums">
+                      {Number(op.qty_completed).toLocaleString()} / {Number(op.qty_planned).toLocaleString()}
+                    </td>
+                    <td className="px-2.5 py-2 font-mono">{op.actual_start?.slice(0, 16) ?? '—'}</td>
+                    <td className="px-2.5 py-2 font-mono">{op.actual_end?.slice(0, 16) ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Panel>
+      </div>
+      )}
 
       <Modal
         isOpen={showConfirmDialog}

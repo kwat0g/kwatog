@@ -12,6 +12,10 @@ const ProductionSchedulePage = lazy(() => import('@/pages/production/schedule'))
 const ProductionDashboardPage = lazy(() => import('@/pages/production/dashboard'));
 const OeeReportPage          = lazy(() => import('@/pages/production/oee'));
 
+// Task 12 — Production Routings
+const RoutingsListPage  = lazy(() => import('@/pages/production/routings'));
+const RoutingEditorPage = lazy(() => import('@/pages/production/routings/editor'));
+
 export const productionRoutes = (
   <>
     {/* Production module (Sprint 6 — Tasks 51, 54, 55, 58; WO create added in audit §3.1) */}
@@ -38,6 +42,14 @@ export const productionRoutes = (
         element={<PermissionGuard permission="production.work_orders.view"><WorkOrderDetailPage /></PermissionGuard>} />
       <Route path="/production/work-orders/:id/record-output"
         element={<PermissionGuard permission="production.wo.record"><RecordOutputPage /></PermissionGuard>} />
+
+      {/* Task 12 — Production Routings */}
+      <Route path="/production/routings"
+        element={<PermissionGuard permission="production.routings.view"><RoutingsListPage /></PermissionGuard>} />
+      <Route path="/production/routings/create"
+        element={<PermissionGuard permission="production.routings.manage"><RoutingEditorPage /></PermissionGuard>} />
+      <Route path="/production/routings/:id"
+        element={<PermissionGuard permission="production.routings.manage"><RoutingEditorPage /></PermissionGuard>} />
     </Route>
   </>
 );
