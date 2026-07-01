@@ -28,6 +28,84 @@ use App\Modules\SupplyChain\Models\ShipmentLot;
  */
 class TraceabilityService
 {
+    public function simulateRecall(string $lotNumber): array
+    {
+        $lotNumber = trim($lotNumber);
+        if ($lotNumber === '') {
+            return ['found' => false, 'lot_number' => $lotNumber, 'affected_customers' => [], 'affected_deliveries' => [], 'total_affected_qty' => 0];
+        }
+
+        $woIds = collect();
+
+        $wo = WorkOrder::where('batch_number', $lotNumber)->first();
+        if ($wo) {
+            $woIds->push($wo->id);
+        }
+
+        $lot = ShipmentLot::with(['delivery', 'customer:id,name'])
+            ->where('lot_number', $lotNumber)
+            ->first();
+        if ($lot) {
+            $woIds = $woIds->merge($lot->work_order_ids ?? []);
+        }
+
+        $grnItem = GrnItem::where('material_lot_number', $lotNumber)->first();
+        if ($grnItem) {
+            $consumingWoIds = WorkOrder::query()
+                ->whereJsonContains('material_lot_references', ['material_lot_number' => $lotNumber])
+                ->pluck('id');
+            $woIds = $woIds->merge($consumingWoIds);
+        }
+
+        if ($woIds->isEmpty() && !$lot) {
+            return ['found' => false, 'lot_number' => $lotNumber, 'affected_customers' => [], 'affected_deliveries' => [], 'total_affected_qty' => 0];
+        }
+
+        $affectedLots = ShipmentLot::with(['delivery', 'customer:id,name'])
+            ->where(function ($q) use ($woIds, $lot) {
+                foreach ($woIds->unique()->all() as $woId) {
+                    $q->orWhereJsonContains('work_order_ids', (int) $woId);
+                }
+                if ($lot) {
+                    $q->orWhere('id', $lot->id);
+                }
+            })
+            ->get();
+
+        $deliveries = [];
+        $customers = [];
+        $totalQty = 0;
+
+        foreach ($affectedLots as $sl) {
+            $totalQty += (int) $sl->quantity;
+
+            if ($sl->delivery) {
+                $deliveries[$sl->delivery->id] = [
+                    'id' => $sl->delivery->hash_id,
+                    'delivery_number' => $sl->delivery->delivery_number,
+                    'status' => (string) ($sl->delivery->status?->value ?? $sl->delivery->status),
+                    'delivered_at' => optional($sl->delivery->delivered_at)->toIso8601String(),
+                    'lot_number' => $sl->lot_number,
+                    'quantity' => (int) $sl->quantity,
+                ];
+            }
+            if ($sl->customer) {
+                $customers[$sl->customer->id] = [
+                    'id' => $sl->customer->hash_id,
+                    'name' => $sl->customer->name,
+                ];
+            }
+        }
+
+        return [
+            'found' => true,
+            'lot_number' => $lotNumber,
+            'affected_customers' => array_values($customers),
+            'affected_deliveries' => array_values($deliveries),
+            'total_affected_qty' => $totalQty,
+        ];
+    }
+
     /**
      * @return array{found: bool, term: string, type: string|null, trace: array}
      */

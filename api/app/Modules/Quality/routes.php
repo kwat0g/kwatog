@@ -131,6 +131,8 @@ Route::middleware(['auth:sanctum', 'feature:quality'])->prefix('quality')->group
     /* ─── ADV3 — IATF 16949 traceability (batch + lot search, shipment lots) ─── */
     Route::get('/traceability/search', [TraceabilityController::class, 'search'])
         ->middleware('permission:quality.inspections.view');
+    Route::get('/traceability/recall-simulation', [TraceabilityController::class, 'recallSimulation'])
+        ->middleware('permission:quality.inspections.view');
 
     Route::get('/traceability/deliveries/{delivery}/shipment-lot',
         [ShipmentLotController::class, 'showForDelivery'])

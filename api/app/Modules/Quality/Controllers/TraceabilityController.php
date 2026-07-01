@@ -21,4 +21,11 @@ class TraceabilityController
         $result = $this->service->search($term);
         return response()->json(['data' => $result]);
     }
+
+    public function recallSimulation(Request $request): JsonResponse
+    {
+        $lotNumber = (string) $request->query('lot', '');
+        $result = $this->service->simulateRecall($lotNumber);
+        return response()->json(['data' => $result]);
+    }
 }
