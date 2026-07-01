@@ -163,6 +163,7 @@ const SECTIONS: NavSection[] = [
       { to: '/quality/ncrs',             label: 'NCRs',             icon: AlertTriangle, feature: 'quality', permission: 'quality.view', badgeKey: 'ncrs' },
       { to: '/quality/ncr-templates',    label: 'NCR Templates',    icon: FileText,      feature: 'quality', permission: 'quality.ncr.manage' },
       { to: '/quality/traceability',     label: 'Traceability',     icon: GitFork,       feature: 'quality', permission: 'quality.inspections.view' },
+      { to: '/quality/spc',               label: 'SPC',              icon: Activity,      feature: 'quality', permission: 'quality.spc.view' },
     ],
   },
   {

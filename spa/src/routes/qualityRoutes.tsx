@@ -18,6 +18,10 @@ const NcrTemplatesListPage = lazy(() => import('@/pages/quality/ncr-templates'))
 const NcrTemplateFormPage  = lazy(() => import('@/pages/quality/ncr-templates/create'));
 // ADV3 — IATF 16949 traceability search
 const TraceabilityPage = lazy(() => import('@/pages/quality/traceability'));
+// SPC — Statistical Process Control
+const SpcChartsListPage     = lazy(() => import('@/pages/quality/spc'));
+const SpcChartDetailPage    = lazy(() => import('@/pages/quality/spc/chart-detail'));
+const SpcCapabilityStudyPage = lazy(() => import('@/pages/quality/spc/capability-study'));
 
 export const qualityRoutes = (
   <>
@@ -52,6 +56,13 @@ export const qualityRoutes = (
       {/* ADV3 — IATF 16949 traceability search */}
       <Route path="/quality/traceability"
         element={<PermissionGuard permission="quality.inspections.view"><TraceabilityPage /></PermissionGuard>} />
+      {/* SPC — Statistical Process Control */}
+      <Route path="/quality/spc"
+        element={<PermissionGuard permission="quality.spc.view"><SpcChartsListPage /></PermissionGuard>} />
+      <Route path="/quality/spc/capability"
+        element={<PermissionGuard permission="quality.spc.view"><SpcCapabilityStudyPage /></PermissionGuard>} />
+      <Route path="/quality/spc/:id"
+        element={<PermissionGuard permission="quality.spc.view"><SpcChartDetailPage /></PermissionGuard>} />
     </Route>
   </>
 );
