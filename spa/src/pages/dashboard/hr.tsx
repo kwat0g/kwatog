@@ -9,6 +9,7 @@ import { StatCard } from '@/components/ui/StatCard';
 import { Chip } from '@/components/ui/Chip';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { ForecastPanel } from '@/components/dashboard/ForecastPanel';
+import { KpiStrip } from '@/components/dashboard/KpiStrip';
 import { DonutBreakdown } from '@/components/charts';
 import { client } from '@/api/client';
 import type { ApiSuccess } from '@/types';
@@ -99,6 +100,9 @@ export default function HrDashboard() {
                 <StatCard key={kpi.label} label={kpi.label} value={kpi.value} helper={kpi.unit} />
               ))}
             </div>
+
+            {/* KPI Scorecard strip */}
+            <KpiStrip codes={['attendance_rate']} />
 
             {/* Row 2 — Attendance summary + pending my action */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">

@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/Button';
 import { ForecastPanel } from '@/components/dashboard/ForecastPanel';
 import { DonutBreakdown, BarComparison } from '@/components/charts';
 import { CopqWidget } from '@/pages/dashboard/widgets/CopqWidget';
+import { KpiStrip } from '@/components/dashboard/KpiStrip';
 
 /* ───────────────────────── Typed interface ───────────────────────── */
 
@@ -372,6 +373,9 @@ export default function QcDashboard() {
             />
           ))}
         </section>
+
+        {/* KPI Scorecard strip */}
+        <KpiStrip codes={['dppm', 'first_pass_yield', 'ncr_closure_days', 'copq_pct_revenue']} />
 
         {/* ── Row 2: Inspection Queue + Defect Pareto ── */}
         <div className="grid grid-cols-2 gap-4">

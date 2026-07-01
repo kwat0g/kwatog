@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/Button';
 import { StockOutPanel } from '@/components/dashboard/StockOutPanel';
 import { DemandForecastPanel } from '@/components/dashboard/DemandForecastPanel';
 import { DonutBreakdown, BarComparison } from '@/components/charts';
+import { KpiStrip } from '@/components/dashboard/KpiStrip';
 
 /* ───────────────────────── Typed interface ───────────────────────── */
 
@@ -313,6 +314,9 @@ export default function PurchasingDashboard() {
             />
           ))}
         </section>
+
+        {/* KPI Scorecard strip */}
+        <KpiStrip codes={['supplier_quality', 'on_time_delivery']} />
 
         {/* ── Row 2: PR Action Queue + PO Pipeline ── */}
         <div className="grid grid-cols-2 gap-4">

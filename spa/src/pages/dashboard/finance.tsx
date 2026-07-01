@@ -13,6 +13,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
 import { ChainBottleneckWidget } from '@/components/dashboard/ChainBottleneckWidget';
 import { ForecastPanel } from '@/components/dashboard/ForecastPanel';
+import { KpiStrip } from '@/components/dashboard/KpiStrip';
 import { BarComparison } from '@/components/charts';
 
 /**
@@ -99,6 +100,9 @@ export default function FinanceDashboardPage() {
                 linkTo="/accounting/income-statement"
               />
             </div>
+
+            {/* KPI Scorecard strip */}
+            <KpiStrip codes={['copq_pct_revenue', 'ar_aging_60d', 'budget_utilization']} />
 
             {/* Row 2 — AR / AP aging side by side. */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">

@@ -12,6 +12,7 @@ import { client } from '@/api/client';
 import { ChainBottleneckWidget } from '@/components/dashboard/ChainBottleneckWidget';
 import { StockOutPanel } from '@/components/dashboard/StockOutPanel';
 import { DemandForecastPanel } from '@/components/dashboard/DemandForecastPanel';
+import { KpiStrip } from '@/components/dashboard/KpiStrip';
 import { DonutBreakdown, BarComparison } from '@/components/charts';
 import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
@@ -134,6 +135,9 @@ export default function PlantManagerDashboard() {
                 />
               ))}
             </div>
+
+            {/* KPI Scorecard strip */}
+            <KpiStrip codes={['oee', 'dppm', 'first_pass_yield', 'on_time_delivery']} />
 
             {/* Row 2 — Chain stage breakdown */}
             <Panel title="Order-to-Cash Chain" actions={<Link className="text-xs text-link hover:underline" to="/approvals">View board →</Link>}>

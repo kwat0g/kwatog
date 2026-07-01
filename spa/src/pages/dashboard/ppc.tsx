@@ -27,6 +27,7 @@ import { chainStageLink, alertRefLink, kpiLink } from '@/lib/dashboardLinks';
 import { StockOutPanel } from '@/components/dashboard/StockOutPanel';
 import { DemandForecastPanel } from '@/components/dashboard/DemandForecastPanel';
 import { DonutBreakdown, BarComparison } from '@/components/charts';
+import { KpiStrip } from '@/components/dashboard/KpiStrip';
 
 /* ───────────────────────── Typed interface ───────────────────────── */
 
@@ -552,6 +553,9 @@ export default function PpcDashboard() {
       <div className="px-5 py-4 space-y-4">
         {/* ── Row 1: KPIs ── */}
         <KpiRow kpis={kpis} />
+
+        {/* KPI Scorecard strip */}
+        <KpiStrip codes={['oee', 'wo_completion_rate', 'on_time_delivery', 'first_pass_yield']} />
 
         {/* ── Row 2: Chain stages + Alerts ── */}
         <div className="grid grid-cols-2 gap-4">

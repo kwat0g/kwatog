@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/Button';
 import { StockOutPanel } from '@/components/dashboard/StockOutPanel';
 import { DonutBreakdown } from '@/components/charts';
 import { usePermission } from '@/hooks/usePermission';
+import { KpiStrip } from '@/components/dashboard/KpiStrip';
 
 /* ───────────────────────── Typed interface ───────────────────────── */
 
@@ -286,6 +287,9 @@ export default function WarehouseDashboard() {
             />
           ))}
         </section>
+
+        {/* KPI Scorecard strip */}
+        <KpiStrip codes={['inventory_turnover', 'supplier_quality']} />
 
         {/* ── Row 2: Incoming + Outgoing queue ── */}
         <div className="grid grid-cols-2 gap-4">
