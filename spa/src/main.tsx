@@ -7,6 +7,7 @@ import App from './App';
 import { queryClient } from './lib/queryClient';
 import { useThemeStore } from './stores/themeStore';
 import { applyPlainMode } from './lib/plainMode';
+import { registerSW } from './sw-register';
 import '@fontsource-variable/bricolage-grotesque/wght.css';
 import './styles/globals.css';
 
@@ -59,3 +60,6 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     </QueryClientProvider>
   </React.StrictMode>,
 );
+
+// Register service worker for PWA offline support (factory + driver terminals)
+registerSW();

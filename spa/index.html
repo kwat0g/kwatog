@@ -17,14 +17,16 @@
 
     <!-- Geist + Geist Mono — self-hosted fonts (woff2) for production independence. -->
 
-    <!-- T2.5 — Driver PWA (Add to Home Screen for iOS + Android) -->
-    <link rel="manifest" href="/driver-manifest.webmanifest" />
+    <!-- PWA manifests — each sub-app has its own; sw-register.ts picks the right
+         manifest at runtime based on URL path. The default link below is the
+         factory/shop-floor manifest; it is swapped via JS for /driver paths. -->
+    <link rel="manifest" href="/factory-manifest.webmanifest" />
     <meta name="theme-color" content="#4f46e5" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="OGAMI Driver" />
-    <link rel="apple-touch-icon" href="/driver-icon-192.png" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Ogami SF" />
+    <link rel="apple-touch-icon" href="/ogami-icon-192.png" />
 
     <title>Ogami ERP</title>
   </head>

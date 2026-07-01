@@ -62,7 +62,7 @@ export default function RecordOutput() {
   const canSubmit = (parseInt(goodCount, 10) || 0) > 0 || (parseInt(rejectCount, 10) || 0) > 0;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 touch-manipulation">
       {/* Back link */}
       <Link
         to="/factory"
