@@ -4,11 +4,13 @@ import { Panel } from '@/components/ui/Panel';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
+import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 
 export default function SupplierDeliveriesPage() {
   const { data: deliveries, isLoading, isError, refetch } = useQuery({
     queryKey: ['portal', 'supplier', 'deliveries'],
     queryFn: () => supplierPortalApi.listDeliveries(),
+    placeholderData: (prev) => prev,
   });
 
   if (isLoading) return <SkeletonBlock className="h-64 rounded-lg" />;
@@ -31,9 +33,7 @@ export default function SupplierDeliveriesPage() {
                 <td className="py-2.5 px-3 font-mono">{d.delivery_number}</td>
                 <td className="py-2.5 px-3 text-muted">{d.delivered_at ?? '—'}</td>
                 <td className="py-2.5 px-3 text-right">
-                  <span className="inline-block px-2 py-0.5 rounded-full text-2xs font-medium bg-subtle text-muted uppercase">
-                    {d.status}
-                  </span>
+                  <Chip variant={chipVariantForStatus(d.status)}>{d.status}</Chip>
                 </td>
               </tr>
             ))}

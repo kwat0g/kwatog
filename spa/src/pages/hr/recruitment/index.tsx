@@ -40,6 +40,7 @@ export default function RecruitmentDashboard() {
   const { data: postingsData, isLoading: postingsLoading } = useQuery({
     queryKey: ['recruitment-postings', { status: 'open', per_page: 5 }],
     queryFn: () => recruitmentApi.listPostings({ status: 'open', per_page: 5 }).then((r) => r.data),
+    placeholderData: (prev) => prev,
   });
 
   const { data: applicationsData, isLoading: appsLoading } = useQuery({

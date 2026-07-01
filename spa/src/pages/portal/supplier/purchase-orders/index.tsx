@@ -5,11 +5,14 @@ import { Panel } from '@/components/ui/Panel';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
+import { formatPeso } from '@/lib/formatNumber';
+import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 
 export default function SupplierPurchaseOrdersPage() {
   const { data: pos, isLoading, isError, refetch } = useQuery({
     queryKey: ['portal', 'supplier', 'pos'],
     queryFn: () => supplierPortalApi.listPos(),
+    placeholderData: (prev) => prev,
   });
 
   if (isLoading) return <SkeletonBlock className="h-64 rounded-lg" />;
@@ -37,19 +40,10 @@ export default function SupplierPurchaseOrdersPage() {
                   </Link>
                 </td>
                 <td className="py-2.5 px-3 text-muted">{po.date ?? '—'}</td>
-                <td className="py-2.5 px-3 text-right font-mono">₱{Number(po.total_amount).toLocaleString()}</td>
+                <td className="py-2.5 px-3 text-right font-mono tabular-nums">{formatPeso(po.total_amount)}</td>
                 <td className="py-2.5 px-3 text-muted">{po.expected_delivery_date ?? '—'}</td>
                 <td className="py-2.5 px-3 text-right">
-                  <span className={`inline-block px-2 py-0.5 rounded-full text-2xs font-medium uppercase ${
-                    po.status === 'sent' ? 'bg-accent/10 text-accent' :
-                    po.status === 'acknowledged' ? 'bg-success/10 text-success' :
-                    po.status === 'partially_received' ? 'bg-warning/10 text-warning' :
-                    po.status === 'fully_received' ? 'bg-success/10 text-success' :
-                    po.status === 'closed' ? 'bg-subtle text-muted' :
-                    'bg-subtle text-muted'
-                  }`}>
-                    {po.status.replace(/_/g, ' ')}
-                  </span>
+                  <Chip variant={chipVariantForStatus(po.status)}>{po.status.replace(/_/g, ' ')}</Chip>
                 </td>
               </tr>
             ))}

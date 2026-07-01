@@ -15,6 +15,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { adminUsersApi } from '@/api/admin/users';
 import { client } from '@/api/client';
 import type { AdminUserDetail } from '@/types/admin';
+import { formatDate, formatDateTime } from '@/lib/formatDate';
 import { PermissionOverrides } from './_components/PermissionOverrides';
 
 interface RoleOption { id: string; name: string }
@@ -175,13 +176,13 @@ export default function AdminUserDetailPage() {
             </Field>
             <Field label="Last Login">
               <span className="font-mono tabular-nums">
-                {user.last_activity ? new Date(user.last_activity).toLocaleString() : 'Never'}
+                {user.last_activity ? formatDateTime(user.last_activity) : 'Never'}
               </span>
             </Field>
             <Field label="Password Changed">
               <span className="font-mono tabular-nums">
                 {user.password_changed_at
-                  ? new Date(user.password_changed_at).toLocaleDateString()
+                  ? formatDate(user.password_changed_at)
                   : '—'}
               </span>
             </Field>
@@ -205,7 +206,7 @@ export default function AdminUserDetailPage() {
             </Field>
             <Field label="Created">
               <span className="font-mono tabular-nums">
-                {user.created_at ? new Date(user.created_at).toLocaleDateString() : '—'}
+                {user.created_at ? formatDate(user.created_at) : '—'}
               </span>
             </Field>
           </div>
@@ -270,7 +271,7 @@ export default function AdminUserDetailPage() {
                 {user.recent_logins.map((evt) => (
                   <tr key={evt.id} className="h-8 border-b border-subtle">
                     <td className="px-2.5 font-mono tabular-nums text-secondary">
-                      {evt.created_at ? new Date(evt.created_at).toLocaleString() : '—'}
+                      {evt.created_at ? formatDateTime(evt.created_at) : '—'}
                     </td>
                     <td className="px-2.5">
                       <Chip variant={evt.status === 'success' ? 'success' : 'danger'}>

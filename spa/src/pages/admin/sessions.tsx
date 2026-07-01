@@ -10,6 +10,7 @@ import { DataTable, type Column, StackedCell } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { formatDateTime } from '@/lib/formatDate';
 
 function parseUserAgent(ua: string | null): string {
   if (!ua) return 'Unknown';
@@ -43,7 +44,7 @@ const columns: Column<ActiveSession>[] = [
     header: 'Last Activity',
     cell: (s) => (
       <span className="text-xs">
-        {new Date(s.last_activity_at).toLocaleString()}
+        {formatDateTime(s.last_activity_at)}
       </span>
     ),
   },

@@ -5,6 +5,7 @@ import { Panel } from '@/components/ui/Panel';
 import { Button } from '@/components/ui/Button';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { formatDate } from '@/lib/formatDate';
 
 interface ScheduleForm {
   purchase_order_id: string;
@@ -89,9 +90,9 @@ export default function SupplierDeliverySchedulesPage() {
   };
 
   const statusColors: Record<string, string> = {
-    submitted: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
-    confirmed: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
-    rejected: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+    submitted: 'bg-info-bg text-info-fg',
+    confirmed: 'bg-success-bg text-success-fg',
+    rejected: 'bg-danger-bg text-danger-fg',
   };
 
   return (
@@ -225,7 +226,7 @@ export default function SupplierDeliverySchedulesPage() {
                   </span>
                 </div>
                 <p className="text-2xs text-muted">
-                  {new Date(s.created_at).toLocaleDateString()}
+                  {formatDate(s.created_at)}
                 </p>
               </div>
               <div className="overflow-x-auto">

@@ -17,6 +17,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { OeeGauge } from '@/components/production/OeeGauge';
 import { BreakdownAlertCard } from '@/components/production/BreakdownAlertCard';
 import { useEcho } from '@/hooks/useEcho';
+import { formatInt } from '@/lib/formatNumber';
 
 export default function ProductionDashboardPage() {
   const qc = useQueryClient();
@@ -93,12 +94,12 @@ export default function ProductionDashboardPage() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <StatCard
             label="Today output"
-            value={`${k.today_output_good.toLocaleString()} / ${k.today_output_total.toLocaleString()}`}
-            helper={k.today_output_reject > 0 ? `${k.today_output_reject.toLocaleString()} rejects` : undefined}
+            value={`${formatInt(k.today_output_good)} / ${formatInt(k.today_output_total)}`}
+            helper={k.today_output_reject > 0 ? `${formatInt(k.today_output_reject)} rejects` : undefined}
           />
           <StatCard
             label="Active work orders"
-            value={k.active_work_orders.toLocaleString()}
+            value={formatInt(k.active_work_orders)}
           />
           <StatCard
             label="Machine utilization"
@@ -190,7 +191,7 @@ export default function ProductionDashboardPage() {
                   <div key={d.defect_code}>
                     <div className="flex justify-between text-xs mb-1">
                       <span><span className="font-mono">{d.defect_code}</span> · <span className="text-muted">{d.defect_name}</span></span>
-                      <span className="font-mono tabular-nums">{d.count.toLocaleString()} <span className="text-2xs text-muted">({d.percent.toFixed(1)}%)</span></span>
+                      <span className="font-mono tabular-nums">{formatInt(d.count)} <span className="text-2xs text-muted">({d.percent.toFixed(1)}%)</span></span>
                     </div>
                     <div className="h-1.5 bg-elevated rounded-full overflow-hidden">
                       <div className="h-1.5 bg-accent rounded-full" style={{ width: `${Math.min(100, d.percent)}%` }} aria-hidden />

@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { DataTable, NumCell, StackedCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { formatInt } from '@/lib/formatNumber';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { Modal } from '@/components/ui/Modal';
 import { SkeletonTable } from '@/components/ui/Skeleton';
@@ -150,7 +151,7 @@ export default function EmployeesListPage() {
     <div>
       <PageHeader
         title="Employees"
-        subtitle={data ? `${data.meta.total.toLocaleString()} employees` : undefined}
+        subtitle={data ? `${formatInt(data.meta.total)} employees` : undefined}
         actions={
           can('hr.employees.create') && (
             <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/hr/employees/create')}>

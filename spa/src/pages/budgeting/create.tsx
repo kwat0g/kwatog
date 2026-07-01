@@ -9,7 +9,7 @@ import { Panel } from '@/components/ui/Panel';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { FullPageLoader } from '@/components/ui/Spinner';
+import { SkeletonDetail } from '@/components/ui/Skeleton';
 import toast from 'react-hot-toast';
 import { Plus, Trash2 } from 'lucide-react';
 import type { FiscalYear } from '@/types/budgeting';
@@ -98,7 +98,7 @@ export default function BudgetCreatePage() {
 
   const totalAllocated = lineItems.reduce((sum, li) => sum + calcAnnual(li), 0);
 
-  if (yearsLoading) return <FullPageLoader />;
+  if (yearsLoading) return <SkeletonDetail />;
 
   return (
     <div className="p-6 space-y-6">
@@ -156,17 +156,17 @@ export default function BudgetCreatePage() {
         <Panel title="Summary">
           <div className="space-y-3 text-sm">
             <div className="flex justify-between py-2 border-b border-default/50">
-              <span className="text-text-subtle">Fiscal Year</span>
+              <span className="text-muted">Fiscal Year</span>
               <span className="font-medium">
                 {fiscalYears?.find((fy) => Number(fy.id) === fiscalYearId)?.year ?? '—'}
               </span>
             </div>
             <div className="flex justify-between py-2 border-b border-default/50">
-              <span className="text-text-subtle">Budget Type</span>
+              <span className="text-muted">Budget Type</span>
               <span className="font-medium capitalize">{budgetType}</span>
             </div>
             <div className="flex justify-between py-2 border-b border-default/50">
-              <span className="text-text-subtle">Department</span>
+              <span className="text-muted">Department</span>
               <span className="font-medium">
                 {departmentId
                   ? departments?.find((d: { id: string }) => d.id === String(departmentId))?.name ?? '—'
@@ -174,12 +174,12 @@ export default function BudgetCreatePage() {
               </span>
             </div>
             <div className="flex justify-between py-2">
-              <span className="text-text-subtle">Total Lines</span>
+              <span className="text-muted">Total Lines</span>
               <span className="font-medium">{lineItems.filter((li) => li.account_id > 0).length}</span>
             </div>
             <div className="flex justify-between py-2 border-t border-default">
               <span className="font-semibold">Total Allocated</span>
-              <span className="font-mono font-bold text-lg">₱{(totalAllocated / 1_000_000).toFixed(2)}M</span>
+              <span className="font-mono tabular-nums font-bold text-lg">₱{(totalAllocated / 1_000_000).toFixed(2)}M</span>
             </div>
           </div>
         </Panel>
@@ -195,7 +195,7 @@ export default function BudgetCreatePage() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-default text-left text-xs uppercase tracking-wider text-text-subtle">
+              <tr className="border-b border-default text-left text-xs uppercase tracking-wider text-muted">
                 <th className="py-2 pr-3 min-w-[180px] sticky left-0 bg-canvas">Account</th>
                 {MONTHS.map((m) => (
                   <th key={m.key} className="py-2 pr-2 text-right font-mono w-[60px]">{m.label}</th>
@@ -230,13 +230,13 @@ export default function BudgetCreatePage() {
                       />
                     </td>
                   ))}
-                  <td className="py-1.5 pr-3 text-right font-mono font-medium">
+                  <td className="py-1.5 pr-3 text-right font-mono tabular-nums font-medium">
                     ₱{(calcAnnual(li) / 1_000).toFixed(0)}K
                   </td>
                   <td className="py-1.5">
                     <button
                       onClick={() => removeLineItem(i)}
-                      className="p-1 text-text-subtle hover:text-danger transition-colors"
+                      className="p-1 text-muted hover:text-danger transition-colors"
                       title="Remove line"
                     >
                       <Trash2 size={14} />
@@ -249,7 +249,7 @@ export default function BudgetCreatePage() {
         </div>
 
         {lineItems.length === 0 && (
-          <p className="text-sm text-text-subtle py-4 text-center">No line items. Click "Add Line" to begin.</p>
+          <p className="text-sm text-muted py-4 text-center">No line items. Click "Add Line" to begin.</p>
         )}
       </Panel>
 

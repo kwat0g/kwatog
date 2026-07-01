@@ -21,6 +21,7 @@ import { SkeletonForm } from '@/components/ui/Skeleton';
 import { Switch } from '@/components/ui/Switch';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { useAuthStore } from '@/stores/authStore';
+import { formatDate, formatDateTime } from '@/lib/formatDate';
 
 const MODULE_LABELS: Record<string, string> = {
   hr: 'Human Resources',
@@ -421,7 +422,7 @@ function ChangeAttribution({ row }: { row: SettingRow }) {
   return (
     <div className="text-2xs text-muted mt-1">
       Last changed by {row.updated_by_name} &middot;{' '}
-      {new Date(row.updated_at).toLocaleDateString()}
+      {formatDate(row.updated_at)}
     </div>
   );
 }
@@ -478,7 +479,7 @@ function SystemInfoPanel({ info }: { info: SystemInfo }) {
     ['Environment', info.app_env],
     ['Debug Mode', info.app_debug ? 'On' : 'Off'],
     ['Timezone', info.timezone],
-    ['Server Time', new Date(info.server_time).toLocaleString()],
+    ['Server Time', formatDateTime(info.server_time)],
   ];
 
   return (

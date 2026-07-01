@@ -8,6 +8,7 @@ import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useState } from 'react';
+import { formatPeso } from '@/lib/formatNumber';
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = window.URL.createObjectURL(blob);
@@ -277,8 +278,8 @@ export default function SupplierPurchaseOrderDetailPage() {
                   <td className="py-2 px-3">{item.name}</td>
                   <td className="py-2 px-3 text-right">{item.quantity_ordered}</td>
                   <td className="py-2 px-3 text-right">{item.quantity_received}</td>
-                  <td className="py-2 px-3 text-right font-mono">₱{Number(item.unit_price).toLocaleString()}</td>
-                  <td className="py-2 px-3 text-right font-mono">₱{Number(item.total_price).toLocaleString()}</td>
+                  <td className="py-2 px-3 text-right font-mono">{formatPeso(item.unit_price)}</td>
+                  <td className="py-2 px-3 text-right font-mono">{formatPeso(item.total_price)}</td>
                 </tr>
               ))}
             </tbody>
@@ -351,9 +352,9 @@ export default function SupplierPurchaseOrderDetailPage() {
               {po.bills.map((bill) => (
                 <tr key={bill.id} className="border-b border-border/50">
                   <td className="py-2 px-3 font-mono text-accent">{bill.bill_number}</td>
-                  <td className="py-2 px-3 text-right font-mono">₱{Number(bill.total_amount).toLocaleString()}</td>
-                  <td className="py-2 px-3 text-right font-mono">₱{Number(bill.paid_amount).toLocaleString()}</td>
-                  <td className="py-2 px-3 text-right font-mono">₱{Number(bill.balance).toLocaleString()}</td>
+                  <td className="py-2 px-3 text-right font-mono">{formatPeso(bill.total_amount)}</td>
+                  <td className="py-2 px-3 text-right font-mono">{formatPeso(bill.paid_amount)}</td>
+                  <td className="py-2 px-3 text-right font-mono">{formatPeso(bill.balance)}</td>
                   <td className="py-2 px-3 text-muted">{bill.due_date ?? '—'}</td>
                   <td className="py-2 px-3 text-right">
                     <span className={`inline-block px-2 py-0.5 rounded-full text-2xs font-medium uppercase ${

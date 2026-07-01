@@ -13,6 +13,7 @@ import {
 } from '@/components/ui';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
+import { formatDateTime } from '@/lib/formatDate';
 import {
   profileUpdateRequestsApi,
   type ProfileUpdateRequestStatus,
@@ -158,7 +159,7 @@ export default function ProfileUpdateRequestsPage() {
                 </div>
                 <div className="text-xs text-muted">
                   <span className="font-mono tabular-nums">
-                    {row.created_at ? new Date(row.created_at).toLocaleString() : ''}
+                    {row.created_at ? formatDateTime(row.created_at) : ''}
                   </span>
                 </div>
               </header>

@@ -5,11 +5,14 @@ import { Panel } from '@/components/ui/Panel';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
+import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
+import { formatPeso } from '@/lib/formatNumber';
 
 export default function CustomerOrdersPage() {
   const { data: orders, isLoading, isError, refetch } = useQuery({
     queryKey: ['portal', 'customer', 'orders'],
     queryFn: () => customerPortalApi.listOrders(),
+    placeholderData: (prev) => prev,
   });
 
   if (isLoading) return <SkeletonBlock className="h-64 rounded-lg" />;
@@ -36,18 +39,10 @@ export default function CustomerOrdersPage() {
                   </Link>
                 </td>
                 <td className="py-2.5 px-3 text-muted">{order.date ?? '—'}</td>
-                <td className="py-2.5 px-3 text-right font-mono">₱{Number(order.total_amount).toLocaleString()}</td>
+                <td className="py-2.5 px-3 text-right font-mono">{formatPeso(order.total_amount)}</td>
 
                 <td className="py-2.5 px-3 text-right">
-                  <span className={`inline-block px-2 py-0.5 rounded-full text-2xs font-medium uppercase ${
-                    order.status === 'draft' ? 'bg-subtle text-muted' :
-                    order.status === 'confirmed' ? 'bg-accent/10 text-accent' :
-                    order.status === 'in_production' ? 'bg-warning/10 text-warning' :
-                    order.status === 'shipped' ? 'bg-info/10 text-info' :
-                    order.status === 'delivered' ? 'bg-success/10 text-success' :
-                    order.status === 'cancelled' ? 'bg-danger/10 text-danger' :
-                    'bg-subtle text-muted'
-                  }`}>{order.status.replace(/_/g, ' ')}</span>
+                  <Chip variant={chipVariantForStatus(order.status)}>{order.status.replace(/_/g, ' ')}</Chip>
                 </td>
               </tr>
             ))}

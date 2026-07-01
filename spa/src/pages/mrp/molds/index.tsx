@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { formatInt } from '@/lib/formatNumber';
 import type { Mold, MoldStatus } from '@/types/mrp';
 
 const variant: Record<MoldStatus, 'success' | 'info' | 'warning' | 'danger' | 'neutral'> = {
@@ -37,13 +38,13 @@ export default function MoldsListPage() {
       cell: (r) => r.product ? <span><span className="font-mono">{r.product.part_number}</span> · {r.product.name}</span> : '—',
     },
     { key: 'cavity', header: 'Cavities', align: 'right', cell: (r) => <NumCell>{r.cavity_count}</NumCell> },
-    { key: 'rate', header: 'Output / hr', align: 'right', cell: (r) => <NumCell>{r.output_rate_per_hour.toLocaleString()}</NumCell> },
+    { key: 'rate', header: 'Output / hr', align: 'right', cell: (r) => <NumCell>{formatInt(r.output_rate_per_hour)}</NumCell> },
     {
       key: 'shots', header: 'Shots', align: 'right',
       cell: (r) => (
         <div className="flex flex-col items-end gap-0.5 min-w-[120px]">
           <span className="font-mono tabular-nums text-xs">
-            {r.current_shot_count.toLocaleString()} / {r.max_shots_before_maintenance.toLocaleString()}
+            {formatInt(r.current_shot_count)} / {formatInt(r.max_shots_before_maintenance)}
           </span>
           <div className="w-full h-1 bg-elevated rounded-full overflow-hidden">
             <div

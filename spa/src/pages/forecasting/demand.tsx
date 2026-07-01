@@ -18,7 +18,7 @@ import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
-import { Badge } from '@/components/ui/Badge';
+import { Chip } from '@/components/ui/Chip';
 import { StatCard } from '@/components/ui/StatCard';
 import { productsApi } from '@/api/crm/products';
 import { customersApi } from '@/api/accounting/customers';
@@ -327,7 +327,7 @@ export default function DemandForecastingPage() {
                   <tr key={f.id} className="border-b border-default/50">
                     <td className="px-4 py-2">{MONTH_NAMES[f.forecast_month - 1]} {f.forecast_year}</td>
                     <td className="px-4 py-2">
-                      <Badge variant="neutral">{METHOD_LABELS[f.method]}</Badge>
+                      <Chip variant="neutral">{METHOD_LABELS[f.method]}</Chip>
                     </td>
                     <td className="px-4 py-2 text-right tabular-nums">{f.forecasted_quantity.toFixed(2)}</td>
                     <td className="px-4 py-2 text-right tabular-nums">

@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { UserBadge } from '@/components/ui/UserBadge';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { cn } from '@/lib/cn';
+import { formatPeso } from '@/lib/formatNumber';
 import type {
   ApprovalKind,
   ApprovalCardActive,
@@ -272,7 +273,7 @@ function ActiveCard({
       <div className="text-xs text-secondary line-clamp-2">{card.summary}</div>
       {card.amount && (
         <div className="text-xs text-muted mt-1 font-mono tabular-nums">
-          ₱ {Number(card.amount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+          {formatPeso(card.amount)}
         </div>
       )}
       {card.requester && (

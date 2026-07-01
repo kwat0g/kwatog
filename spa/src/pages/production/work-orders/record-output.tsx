@@ -22,6 +22,7 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { useEcho } from '@/hooks/useEcho';
+import { formatInt } from '@/lib/formatNumber';
 import type { DefectType } from '@/types/production';
 
 const schema = z.object({
@@ -192,14 +193,14 @@ export default function RecordOutputPage() {
         <div className="space-y-4">
           <Panel title="Live cumulative" meta="updated via WebSocket">
             <dl className="space-y-2 text-sm">
-              <div className="flex justify-between"><dt className="text-muted">Produced</dt><dd className="font-mono tabular-nums">{cumulative.produced.toLocaleString()}</dd></div>
-              <div className="flex justify-between"><dt className="text-muted">Good</dt><dd className="font-mono tabular-nums text-success-fg">{cumulative.good.toLocaleString()}</dd></div>
-              <div className="flex justify-between"><dt className="text-muted">Reject</dt><dd className="font-mono tabular-nums text-warning-fg">{cumulative.reject.toLocaleString()}</dd></div>
+              <div className="flex justify-between"><dt className="text-muted">Produced</dt><dd className="font-mono tabular-nums">{formatInt(cumulative.produced)}</dd></div>
+              <div className="flex justify-between"><dt className="text-muted">Good</dt><dd className="font-mono tabular-nums text-success-fg">{formatInt(cumulative.good)}</dd></div>
+              <div className="flex justify-between"><dt className="text-muted">Reject</dt><dd className="font-mono tabular-nums text-warning-fg">{formatInt(cumulative.reject)}</dd></div>
               <div className="flex justify-between"><dt className="text-muted">Scrap rate</dt><dd className="font-mono tabular-nums">{Number(cumulative.scrap).toFixed(2)}%</dd></div>
               {wo.data && (
                 <div className="flex justify-between border-t border-default pt-2 mt-2">
                   <dt className="text-muted">Target</dt>
-                  <dd className="font-mono tabular-nums">{wo.data.quantity_target.toLocaleString()}</dd>
+                  <dd className="font-mono tabular-nums">{formatInt(wo.data.quantity_target)}</dd>
                 </div>
               )}
             </dl>

@@ -18,6 +18,7 @@ import { CanDo } from '@/components/guards/CanDo';
 import { permissionsApi } from '@/api/admin/permissions';
 import { userOverridesApi } from '@/api/admin/user-overrides';
 import { usePermission } from '@/hooks/usePermission';
+import { formatDateTime } from '@/lib/formatDate';
 import type { ApiValidationError } from '@/types';
 import type {
   CreateUserPermissionOverrideData,
@@ -174,7 +175,7 @@ export function PermissionOverrides({
                   </Tooltip>
                 </td>
                 <td className="px-2.5 font-mono tabular-nums text-secondary">
-                  {o.expires_at ? new Date(o.expires_at).toLocaleString() : 'No expiry'}
+                  {o.expires_at ? formatDateTime(o.expires_at) : 'No expiry'}
                 </td>
                 <td className="px-2.5 text-right" onClick={(e) => e.stopPropagation()}>
                   <CanDo permission="admin.users.manage_permissions">

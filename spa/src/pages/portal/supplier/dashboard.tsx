@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import { supplierPortalApi } from '@/api/b2b/supplier';
 import { Chip } from '@/components/ui/Chip';
+import { formatPeso } from '@/lib/formatNumber';
 import { StatCard } from '@/components/ui/StatCard';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
@@ -52,7 +53,7 @@ export default function SupplierDashboardPage() {
         />
         <StatCard
           label="Total Unpaid"
-          value={dashboard?.total_unpaid_amount ? `₱${Number(dashboard.total_unpaid_amount).toLocaleString()}` : '₱0'}
+          value={dashboard?.total_unpaid_amount ? `{formatPeso(dashboard.total_unpaid_amount)}` : '₱0'}
           helper="Outstanding balance"
         />
       </div>
@@ -82,7 +83,7 @@ export default function SupplierDashboardPage() {
                     </Link>
                   </td>
                   <td className="py-2 px-3 text-muted">{po.date ?? '—'}</td>
-                  <td className="py-2 px-3 text-right font-mono">₱{Number(po.total_amount).toLocaleString()}</td>
+                  <td className="py-2 px-3 text-right font-mono">{formatPeso(po.total_amount)}</td>
                   <td className="py-2 px-3 text-right">
                     <Chip variant="neutral">{po.status}</Chip>
                   </td>
@@ -120,7 +121,7 @@ export default function SupplierDashboardPage() {
                     </Link>
                   </td>
                   <td className="py-2 px-3 text-muted">{inv.date ?? '—'}</td>
-                  <td className="py-2 px-3 text-right font-mono">₱{Number(inv.total_amount).toLocaleString()}</td>
+                  <td className="py-2 px-3 text-right font-mono">{formatPeso(inv.total_amount)}</td>
                   <td className="py-2 px-3 text-right">
                     <Chip variant={inv.status === 'paid' ? 'success' : inv.status === 'overdue' ? 'danger' : 'warning'}>
                       {inv.status}

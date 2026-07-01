@@ -4,6 +4,7 @@ import type { VendorStatementOfAccount } from '@/types/b2b';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 
 const bucketLabels: Record<string, string> = {
   current: 'Current (Not Due)',
@@ -14,17 +15,11 @@ const bucketLabels: Record<string, string> = {
 };
 
 const bucketColors: Record<string, string> = {
-  current: 'text-emerald-600 dark:text-emerald-400',
-  d1_30: 'text-yellow-600 dark:text-yellow-400',
-  d31_60: 'text-orange-600 dark:text-orange-400',
-  d61_90: 'text-red-600 dark:text-red-400',
-  d91_plus: 'text-rose-700 dark:text-rose-400',
-};
-
-const statusColors: Record<string, string> = {
-  unpaid: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
-  partial: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
-  paid: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+  current: 'text-success',
+  d1_30: 'text-warning',
+  d31_60: 'text-warning',
+  d61_90: 'text-danger',
+  d91_plus: 'text-danger',
 };
 
 export default function SupplierStatementOfAccountPage() {
@@ -129,11 +124,7 @@ export default function SupplierStatementOfAccountPage() {
                     <td className="px-4 py-2.5 text-right">{bill.total_amount}</td>
                     <td className="px-4 py-2.5 text-right font-semibold">{bill.balance}</td>
                     <td className="px-4 py-2.5 text-center">
-                      <span className={`inline-block px-2 py-0.5 rounded text-2xs font-medium ${
-                        statusColors[bill.status] ?? 'bg-gray-100 text-gray-700'
-                      }`}>
-                        {bill.status}
-                      </span>
+                      <Chip variant={chipVariantForStatus(bill.status)}>{bill.status}</Chip>
                     </td>
                     <td className="px-4 py-2.5 text-center">
                       <span className={`text-2xs font-medium ${

@@ -8,6 +8,7 @@ import { publicRecruitmentApi } from '@/api/public-recruitment';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import type { TrackingInfo } from '@/types/recruitment';
+import { formatDate, formatDateTime } from '@/lib/formatDate';
 
 const STAGE_STEPS = [
   'Application Received',
@@ -90,7 +91,7 @@ export default function ApplicationTrackPage() {
         </form>
 
         {notFound && (
-          <p className="mt-4 text-sm text-red-600">
+          <p className="mt-4 text-sm text-danger">
             No application found with that tracking code. Please double-check and try again.
           </p>
         )}
@@ -100,7 +101,7 @@ export default function ApplicationTrackPage() {
             <div className="mb-6">
               <h2 className="text-lg font-semibold text-neutral-900">{info.position}</h2>
               <p className="mt-1 text-sm text-neutral-500">
-                Applied on {new Date(info.applied_at).toLocaleDateString()}
+                Applied on {formatDate(info.applied_at)}
               </p>
               <p className="mt-1 font-mono text-xs text-neutral-400">{info.tracking_code}</p>
             </div>
@@ -122,7 +123,7 @@ export default function ApplicationTrackPage() {
                         <div
                           className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
                             isDone
-                              ? 'bg-emerald-500 text-white'
+                              ? 'bg-success text-white'
                               : isActive
                               ? 'bg-neutral-900 text-white'
                               : 'bg-neutral-200 text-neutral-400'
@@ -131,7 +132,7 @@ export default function ApplicationTrackPage() {
                           {isDone ? <CheckCircle size={14} /> : idx + 1}
                         </div>
                         {idx < STAGE_STEPS.length - 1 && (
-                          <div className={`h-6 w-0.5 ${isDone ? 'bg-emerald-300' : 'bg-neutral-200'}`} />
+                          <div className={`h-6 w-0.5 ${isDone ? 'bg-success' : 'bg-neutral-200'}`} />
                         )}
                       </div>
                       <span
@@ -158,7 +159,7 @@ export default function ApplicationTrackPage() {
                 <div className="mt-2 space-y-1 text-sm text-blue-800">
                   <p className="flex items-center gap-1.5">
                     <Calendar size={14} />
-                    {new Date(info.interview.scheduled_at).toLocaleString()}
+                    {formatDateTime(info.interview.scheduled_at)}
                   </p>
                   {info.interview.location && (
                     <p className="flex items-center gap-1.5">

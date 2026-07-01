@@ -3,6 +3,7 @@ import { AlertTriangle, CheckCircle, ExternalLink, Info, Package, ShoppingCart }
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { Modal } from '@/components/ui/Modal';
+import { formatInt } from '@/lib/formatNumber';
 import type { SoChainResult, SoChainResultWo } from '@/types/crm';
 
 // ─── Sub-components ────────────────────────────────────────────────────────
@@ -19,7 +20,7 @@ function WoRow({ wo }: { wo: SoChainResultWo }) {
       </div>
       <div className="flex items-center gap-3 shrink-0">
         <span className="text-xs text-muted font-mono tabular-nums">
-          {wo.quantity_target.toLocaleString()} pcs
+          {formatInt(wo.quantity_target)} pcs
         </span>
         <span className="text-xs text-muted font-mono tabular-nums">
           {wo.machine ?? 'Needs scheduling'}
@@ -122,7 +123,7 @@ export function ChainResultModal({ chainResult, onClose }: ChainResultModalProps
 
         {/* Warning banner for issues */}
         {(hasConflicts || hasManualWos) && (
-          <div className="flex items-start gap-2 border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 rounded-md px-3 py-2.5 text-sm">
+          <div className="flex items-start gap-2 border border-warning bg-warning-bg rounded-md px-3 py-2.5 text-sm">
             <Info size={16} className="text-warning mt-0.5 shrink-0" />
             <div className="text-muted">
               {hasManualWos && (

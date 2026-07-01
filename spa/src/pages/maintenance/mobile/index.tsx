@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { workOrdersApi } from '@/api/maintenance/workOrders';
 import { useAuthStore } from '@/stores/authStore';
 import { RefreshCw, Clock, AlertTriangle } from 'lucide-react';
+import { formatDate } from '@/lib/formatDate';
 import type {
   MaintenanceWorkOrder,
   MaintenanceWorkOrderStatus,
@@ -26,6 +27,7 @@ export default function MobileMaintenanceList() {
           : {}),
         per_page: 50,
       }),
+    placeholderData: (prev) => prev,
     refetchInterval: 30_000,
   });
 
@@ -111,7 +113,7 @@ export default function MobileMaintenanceList() {
             {wo.created_at && (
               <span className="inline-flex items-center gap-1 font-mono tabular-nums">
                 <Clock className="w-3 h-3" />
-                {new Date(wo.created_at).toLocaleDateString()}
+                {formatDate(wo.created_at)}
               </span>
             )}
           </div>
@@ -148,10 +150,10 @@ function TabButton({
 }
 
 const PRIORITY_CLASSES: Record<MaintenancePriority, string> = {
-  critical: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200',
-  high:     'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
-  medium:   'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200',
-  low:      'bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200',
+  critical: 'bg-danger-bg text-danger-fg',
+  high:     'bg-warning-bg text-warning-fg',
+  medium:   'bg-info-bg text-info-fg',
+  low:      'bg-muted text-secondary',
 };
 
 function PriorityChip({ priority }: { priority: MaintenancePriority }) {
@@ -165,11 +167,11 @@ function PriorityChip({ priority }: { priority: MaintenancePriority }) {
 }
 
 const STATUS_CLASSES: Record<MaintenanceWorkOrderStatus, string> = {
-  open:        'bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200',
-  assigned:    'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200',
-  in_progress: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200',
-  completed:   'bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200',
-  cancelled:   'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200',
+  open:        'bg-muted text-secondary',
+  assigned:    'bg-info-bg text-info-fg',
+  in_progress: 'bg-success-bg text-success-fg',
+  completed:   'bg-muted text-secondary',
+  cancelled:   'bg-danger-bg text-danger-fg',
 };
 
 function StatusChip({ status }: { status: MaintenanceWorkOrderStatus }) {
@@ -196,7 +198,7 @@ function Skeleton() {
 function ErrorRetry({ onRetry }: { onRetry: () => void }) {
   return (
     <div className="py-12 text-center" role="alert">
-      <div className="text-red-600 dark:text-red-400 mb-2">Could not load work orders.</div>
+      <div className="text-danger mb-2">Could not load work orders.</div>
       <button
         type="button"
         onClick={onRetry}

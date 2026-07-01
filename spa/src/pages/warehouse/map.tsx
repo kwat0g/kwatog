@@ -8,6 +8,7 @@ import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
+import { formatDate } from '@/lib/formatDate';
 const STATUS_COLORS: Record<string, string> = {
   empty:   'bg-surface text-muted border border-subtle',
   ok:      'bg-success/10 text-success-fg border border-success/20',
@@ -193,7 +194,7 @@ const [selectedBin, setSelectedBin] = useState<{ id: string; detail: any } | nul
                           {binDetail.data.last_movement && (
                             <div className="text-2xs text-muted pt-1">
                               Last: {binDetail.data.last_movement.movement_type.replace(/_/g, ' ')}
-                              {' · '}{new Date(binDetail.data.last_movement.created_at).toLocaleDateString()}
+                              {' · '}{formatDate(binDetail.data.last_movement.created_at)}
                             </div>
                           )}
                         </div>

@@ -16,6 +16,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Search, Workflow, ArrowRight, AlertTriangle, Clock, RotateCcw } from 'lucide-react';
 import { salesOrdersApi } from '@/api/crm/salesOrders';
 import { chainApi } from '@/api/chain';
+import { formatPeso, formatInt } from '@/lib/formatNumber';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Panel } from '@/components/ui/Panel';
 import { Chip, type ChipVariant } from '@/components/ui/Chip';
@@ -37,8 +38,7 @@ const SO_STATUS_VARIANT: Record<SalesOrderStatus, ChipVariant> = {
   cancelled: 'danger',
 } as Record<SalesOrderStatus, ChipVariant>;
 
-const peso = (v: string | number) =>
-  '₱ ' + Number(v).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const peso = (v: string | number) => formatPeso(v);
 
 /** Map a bottleneck row to the right destination page. */
 function bottleneckHref(row: ChainBottleneckRow): string {
@@ -308,7 +308,7 @@ function ChainDetail({ id, onClear }: { id: string; onClear: () => void }) {
                   items: so.work_orders.map((wo) => ({
                     id: wo.wo_number,
                     href: `/production/work-orders/${wo.id}`,
-                    meta: `${wo.product?.part_number ?? ''} · ${wo.quantity_produced.toLocaleString()} / ${wo.quantity_target.toLocaleString()}`,
+                    meta: `${wo.product?.part_number ?? ''} · ${formatInt(wo.quantity_produced)} / ${formatInt(wo.quantity_target)}`,
                     chip: { variant: wo.status === 'completed' || wo.status === 'closed' ? 'success' as const : wo.status === 'in_progress' ? 'info' as const : wo.status === 'paused' ? 'warning' as const : wo.status === 'cancelled' ? 'danger' as const : 'neutral' as const, text: wo.status.replace('_', ' ') },
                   })),
                 }] : []),

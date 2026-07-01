@@ -8,6 +8,7 @@ import { Panel } from '@/components/ui/Panel';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
+import { formatPeso } from '@/lib/formatNumber';
 
 export default function CustomerDashboardPage() {
   const { data: dashboard, isLoading, isError, refetch } = useQuery({
@@ -52,7 +53,7 @@ export default function CustomerDashboardPage() {
         />
         <StatCard
           label="Outstanding"
-          value={dashboard?.total_outstanding ? `₱${Number(dashboard.total_outstanding).toLocaleString()}` : '₱0'}
+          value={dashboard?.total_outstanding ? `{formatPeso(dashboard.total_outstanding)}` : '₱0'}
           helper="Total balance"
         />
       </div>
@@ -82,7 +83,7 @@ export default function CustomerDashboardPage() {
                     </Link>
                   </td>
                   <td className="py-2 px-3 text-muted">{order.date ?? '—'}</td>
-                  <td className="py-2 px-3 text-right font-mono">₱{Number(order.total_amount).toLocaleString()}</td>
+                  <td className="py-2 px-3 text-right font-mono">{formatPeso(order.total_amount)}</td>
                   <td className="py-2 px-3 text-right">
                     <Chip variant="neutral">{order.status}</Chip>
                   </td>
@@ -120,7 +121,7 @@ export default function CustomerDashboardPage() {
                     </Link>
                   </td>
                   <td className="py-2 px-3 text-muted">{inv.date ?? '—'}</td>
-                  <td className="py-2 px-3 text-right font-mono">₱{Number(inv.total_amount).toLocaleString()}</td>
+                  <td className="py-2 px-3 text-right font-mono">{formatPeso(inv.total_amount)}</td>
                   <td className="py-2 px-3 text-right">
                     <Chip variant={inv.status === 'paid' ? 'success' : inv.status === 'overdue' ? 'danger' : 'warning'}>
                       {inv.status}

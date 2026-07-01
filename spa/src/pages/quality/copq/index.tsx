@@ -26,9 +26,10 @@ import { Panel } from '@/components/ui/Panel';
 import { StatCard } from '@/components/ui/StatCard';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { formatPeso, formatInt } from '@/lib/formatNumber';
 
 // ─── Helpers ─────────────────────────────────────
-const PESO = (v: number) => `₱${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const PESO = (v: number) => formatPeso(v);
 const PESO_SHORT = (v: number) => {
   if (v >= 1_000_000) return `₱${(v / 1_000_000).toFixed(1)}M`;
   if (v >= 1_000) return `₱${(v / 1_000).toFixed(1)}K`;
@@ -64,6 +65,7 @@ export default function CopqAnalyticsPage() {
   const trend = useQuery({
     queryKey: ['quality', 'copq', 'trend', months],
     queryFn: () => copqApi.trend(months),
+    placeholderData: (prev) => prev,
   });
 
   const summary = useQuery({
@@ -316,7 +318,7 @@ export default function CopqAnalyticsPage() {
                     <tr key={row.vendor_id} className="hover:bg-subtle transition-colors">
                       <td className="px-4 py-2 truncate max-w-[250px]">{row.vendor_name}</td>
                       <td className="px-4 py-2 text-right font-mono tabular-nums">{row.ncr_count}</td>
-                      <td className="px-4 py-2 text-right font-mono tabular-nums">{row.defective_qty.toLocaleString()}</td>
+                      <td className="px-4 py-2 text-right font-mono tabular-nums">{formatInt(row.defective_qty)}</td>
                     </tr>
                   ))}
                 </tbody>

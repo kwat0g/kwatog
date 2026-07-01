@@ -18,6 +18,7 @@ export default function ChartOfAccountsPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['accounting', 'accounts', 'tree'],
     queryFn: () => accountsApi.tree(),
+    placeholderData: (prev) => prev,
   });
 
   const [expanded, setExpanded] = useState<Set<string>>(new Set());

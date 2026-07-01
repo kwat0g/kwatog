@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
 import { Select } from '@/components/ui/Select';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
+import { formatDateFull } from '@/lib/formatDate';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { PageHeader } from '@/components/layout/PageHeader';
 import type { LeaveCalendarDay } from '@/types/leave';
@@ -20,15 +21,15 @@ const MONTH_NAMES = [
 ] as const;
 
 function coverageColor(pct: number): string {
-  if (pct > 80) return 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800';
-  if (pct >= 60) return 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800';
-  return 'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800';
+  if (pct > 80) return 'bg-success-bg border-success';
+  if (pct >= 60) return 'bg-warning-bg border-warning';
+  return 'bg-danger-bg border-danger';
 }
 
 function coverageTextColor(pct: number): string {
-  if (pct > 80) return 'text-emerald-700 dark:text-emerald-400';
-  if (pct >= 60) return 'text-amber-700 dark:text-amber-400';
-  return 'text-red-700 dark:text-red-400';
+  if (pct > 80) return 'text-success';
+  if (pct >= 60) return 'text-warning';
+  return 'text-danger';
 }
 
 export default function LeaveCalendarPage() {
@@ -195,12 +196,12 @@ export default function LeaveCalendarPage() {
                       )}
                     </div>
                     {cell.approved_count > 0 && (
-                      <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono tabular-nums mt-0.5">
+                      <div className="text-[10px] text-success font-mono tabular-nums mt-0.5">
                         {cell.approved_count} approved
                       </div>
                     )}
                     {cell.pending_count > 0 && (
-                      <div className="text-[10px] text-amber-600 dark:text-amber-400 font-mono tabular-nums">
+                      <div className="text-[10px] text-warning font-mono tabular-nums">
                         {cell.pending_count} pending
                       </div>
                     )}
@@ -213,15 +214,15 @@ export default function LeaveCalendarPage() {
           {/* Legend */}
           <div className="flex items-center gap-4 mt-4 text-xs text-muted">
             <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-sm bg-emerald-100 dark:bg-emerald-900 border border-emerald-300 dark:border-emerald-700" />
+              <span className="w-3 h-3 rounded-sm bg-success-bg border border-success" />
               &gt;80% present
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-sm bg-amber-100 dark:bg-amber-900 border border-amber-300 dark:border-amber-700" />
+              <span className="w-3 h-3 rounded-sm bg-warning-bg border border-warning" />
               60-80% present
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-sm bg-red-100 dark:bg-red-900 border border-red-300 dark:border-red-700" />
+              <span className="w-3 h-3 rounded-sm bg-danger-bg border border-danger" />
               &lt;60% present
             </div>
           </div>
@@ -232,7 +233,7 @@ export default function LeaveCalendarPage() {
       {selectedDay && selectedDay.employees_on_leave.length > 0 && (
         <div className="px-5 pb-4">
           <Panel
-            title={`Employees on leave — ${new Date(selectedDay.date + 'T00:00:00').toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}`}
+            title={`Employees on leave — ${formatDateFull(selectedDay.date + 'T00:00:00')}`}
             meta={`${selectedDay.present_count}/${selectedDay.headcount} present (${selectedDay.coverage_pct}% coverage)`}
           >
             <div className="divide-y divide-subtle">
@@ -244,8 +245,8 @@ export default function LeaveCalendarPage() {
                     <span className={cn(
                       'text-[10px] font-medium px-1.5 py-0.5 rounded',
                       emp.status === 'approved'
-                        ? 'bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-300'
-                        : 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300',
+                        ? 'bg-success-bg text-success'
+                        : 'bg-warning-bg text-warning',
                     )}>
                       {emp.status.replace(/_/g, ' ')}
                     </span>
@@ -259,7 +260,7 @@ export default function LeaveCalendarPage() {
 
       {selectedDay && selectedDay.employees_on_leave.length === 0 && (
         <div className="px-5 pb-4">
-          <Panel title={`${new Date(selectedDay.date + 'T00:00:00').toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}`}>
+          <Panel title={formatDateFull(selectedDay.date + 'T00:00:00')}>
             <p className="text-sm text-muted">No employees on leave this day.</p>
           </Panel>
         </div>

@@ -10,6 +10,8 @@ import { Select } from '@/components/ui/Select';
 import { UserBadge } from '@/components/ui/UserBadge';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { cn } from '@/lib/cn';
+import { formatDate } from '@/lib/formatDate';
+import { formatInt } from '@/lib/formatNumber';
 import type {
   ActivityEvent,
   ActivitySeverity,
@@ -33,7 +35,7 @@ function relTime(iso: string): string {
   if (h < 24) return `${h}h ago`;
   const d = Math.round(h / 24);
   if (d < 7) return `${d}d ago`;
-  return new Date(iso).toLocaleDateString();
+  return formatDate(iso);
 }
 
 export default function AdminActivityFeedPage() {
@@ -57,7 +59,7 @@ export default function AdminActivityFeedPage() {
     <div>
       <PageHeader
         title="System activity"
-        subtitle={data ? `${data.meta.total.toLocaleString()} events` : undefined}
+        subtitle={data ? `${formatInt(data.meta.total)} events` : undefined}
         backTo="/admin/audit-logs"
         backLabel="Audit Logs"
         breadcrumbs={[

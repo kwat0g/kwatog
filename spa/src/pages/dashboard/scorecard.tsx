@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { usePermission } from '@/hooks/usePermission';
+import { formatInt, formatPeso } from '@/lib/formatNumber';
 import { kpiApi } from '@/api/kpi';
 import type { KpiScorecardItem, KpiTrendPoint } from '@/types/dashboard/kpi';
 
@@ -32,9 +33,9 @@ const UNIT_SUFFIX: Record<string, string> = {
 };
 
 const STATUS_DOT: Record<string, string> = {
-  on_target: 'bg-emerald-500',
-  warning: 'bg-amber-500',
-  off_target: 'bg-red-500',
+  on_target: 'bg-success',
+  warning: 'bg-warning',
+  off_target: 'bg-danger',
 };
 
 const TREND_COLOR: Record<string, string> = {
@@ -52,7 +53,7 @@ function formatKpiValue(value: string, unit: string): string {
   const num = parseFloat(value);
   if (isNaN(num)) return value;
   if (unit === 'currency') {
-    return `₱${num.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return formatPeso(num);
   }
   if (unit === 'percentage' || unit === 'ratio') {
     return num.toFixed(2);
@@ -60,7 +61,7 @@ function formatKpiValue(value: string, unit: string): string {
   if (unit === 'days') {
     return num.toFixed(1);
   }
-  return num.toLocaleString();
+  return formatInt(num);
 }
 
 export default function ScorecardPage() {
@@ -208,7 +209,7 @@ function KpiCard({ item, year, month }: { item: KpiScorecardItem; year: number; 
   const TrendIcon = trend === 'up' ? TrendingUp : trend === 'down' ? TrendingDown : Minus;
   const trendColor = trend === 'flat'
     ? 'text-muted'
-    : trendIsPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400';
+    : trendIsPositive ? 'text-success' : 'text-danger';
 
   const card = (
     <Panel className="group relative transition-colors duration-fast hover:bg-elevated">

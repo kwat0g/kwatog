@@ -5,11 +5,14 @@ import { Panel } from '@/components/ui/Panel';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
+import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
+import { formatPeso } from '@/lib/formatNumber';
 
 export default function CustomerInvoicesPage() {
   const { data: invoices, isLoading, isError, refetch } = useQuery({
     queryKey: ['portal', 'customer', 'invoices'],
     queryFn: () => customerPortalApi.listInvoices(),
+    placeholderData: (prev) => prev,
   });
 
   if (isLoading) return <SkeletonBlock className="h-64 rounded-lg" />;
@@ -38,14 +41,11 @@ export default function CustomerInvoicesPage() {
                   </Link>
                 </td>
                 <td className="py-2.5 px-3 text-muted">{inv.date ?? '—'}</td>
-                <td className="py-2.5 px-3 text-right font-mono">₱{Number(inv.total_amount).toLocaleString()}</td>
-                <td className="py-2.5 px-3 text-right font-mono">₱{Number(inv.balance).toLocaleString()}</td>
+                <td className="py-2.5 px-3 text-right font-mono">{formatPeso(inv.total_amount)}</td>
+                <td className="py-2.5 px-3 text-right font-mono">{formatPeso(inv.balance)}</td>
                 <td className="py-2.5 px-3 text-muted">{inv.due_date ?? '—'}</td>
                 <td className="py-2.5 px-3 text-right">
-                  <span className={`inline-block px-2 py-0.5 rounded-full text-2xs font-medium uppercase ${
-                    inv.status === 'paid' ? 'bg-success/10 text-success' :
-                    inv.status === 'overdue' ? 'bg-danger/10 text-danger' : 'bg-warning/10 text-warning'
-                  }`}>{inv.status}</span>
+                  <Chip variant={chipVariantForStatus(inv.status)}>{inv.status}</Chip>
                 </td>
               </tr>
             ))}

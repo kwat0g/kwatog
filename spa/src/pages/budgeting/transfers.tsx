@@ -17,6 +17,7 @@ import { Panel } from '@/components/ui/Panel';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
+import { formatPeso } from '@/lib/formatNumber';
 import type { BudgetTransfer } from '@/types/budgeting';
 
 // ─── Transfer form ────────────────────────────────────────────────────────────
@@ -150,7 +151,7 @@ export default function BudgetTransfersPage() {
     },
     {
       key: 'amount', header: 'Amount', align: 'right',
-      cell: (r) => <NumCell>₱ {Number(r.amount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</NumCell>,
+      cell: (r) => <NumCell>{formatPeso(r.amount)}</NumCell>,
     },
     {
       key: 'status', header: 'Status',

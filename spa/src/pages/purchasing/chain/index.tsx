@@ -15,6 +15,7 @@ export default function ProcurementChainPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['purchasing', 'chain'],
     queryFn: () => procurementChainApi.overview(),
+    placeholderData: (prev) => prev,
     refetchInterval: 60_000,
   });
 

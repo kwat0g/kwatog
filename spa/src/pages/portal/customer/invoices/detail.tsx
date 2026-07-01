@@ -7,6 +7,8 @@ import { Panel } from '@/components/ui/Panel';
 import { Button } from '@/components/ui/Button';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { formatPeso } from '@/lib/formatNumber';
+import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = window.URL.createObjectURL(blob);
@@ -53,18 +55,15 @@ export default function CustomerInvoiceDetailPage() {
         <Button variant="ghost" size="sm" icon={<FileDown size={14} />} onClick={downloadPdf} className="ml-auto">
           PDF
         </Button>
-        <span className={`inline-block px-2 py-0.5 rounded-full text-2xs font-medium uppercase ${
-          invoice.status === 'paid' ? 'bg-success/10 text-success' :
-          invoice.status === 'overdue' ? 'bg-danger/10 text-danger' : 'bg-warning/10 text-warning'
-        }`}>{invoice.status}</span>
+        <Chip variant={chipVariantForStatus(invoice.status)}>{invoice.status}</Chip>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
         <Panel title="Total Amount" className="text-center">
-          <p className="text-lg font-semibold font-mono">₱{Number(invoice.total_amount).toLocaleString()}</p>
+          <p className="text-lg font-semibold font-mono tabular-nums">{formatPeso(invoice.total_amount)}</p>
         </Panel>
         <Panel title="Balance Due" className="text-center">
-          <p className="text-lg font-semibold font-mono">₱{Number(invoice.balance).toLocaleString()}</p>
+          <p className="text-lg font-semibold font-mono tabular-nums">{formatPeso(invoice.balance)}</p>
         </Panel>
         <Panel title="Due Date" className="text-center">
           <p className="text-lg font-semibold">{invoice.due_date ?? '—'}</p>
@@ -86,9 +85,9 @@ export default function CustomerInvoiceDetailPage() {
               {invoice.items.map((item, i) => (
                 <tr key={i} className="border-b border-border/50">
                   <td className="py-2 px-3">{item.description}</td>
-                  <td className="py-2 px-3 text-right">{item.quantity}</td>
-                  <td className="py-2 px-3 text-right font-mono">₱{Number(item.unit_price).toLocaleString()}</td>
-                  <td className="py-2 px-3 text-right font-mono">₱{Number(item.total_price).toLocaleString()}</td>
+                  <td className="py-2 px-3 text-right font-mono tabular-nums">{item.quantity}</td>
+                  <td className="py-2 px-3 text-right font-mono tabular-nums">{formatPeso(item.unit_price)}</td>
+                  <td className="py-2 px-3 text-right font-mono tabular-nums">{formatPeso(item.total_price)}</td>
                 </tr>
               ))}
             </tbody>
@@ -111,7 +110,7 @@ export default function CustomerInvoiceDetailPage() {
                 <tr key={i} className="border-b border-border/50">
                   <td className="py-2 px-3 text-muted">{p.paid_at ?? '—'}</td>
                   <td className="py-2 px-3 capitalize">{p.payment_method}</td>
-                  <td className="py-2 px-3 text-right font-mono">₱{Number(p.amount).toLocaleString()}</td>
+                  <td className="py-2 px-3 text-right font-mono tabular-nums">{formatPeso(p.amount)}</td>
                 </tr>
               ))}
             </tbody>

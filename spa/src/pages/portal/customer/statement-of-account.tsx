@@ -7,6 +7,8 @@ import { StatCard } from '@/components/ui/StatCard';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
+import { formatPeso } from '@/lib/formatNumber';
+import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 
 const BUCKET_LABELS: Record<string, string> = {
   current: 'Current',
@@ -54,7 +56,7 @@ export default function StatementOfAccountPage() {
           <StatCard
             key={key}
             label={BUCKET_LABELS[key] ?? key}
-            value={`₱${Number(value).toLocaleString()}`}
+            value={formatPeso(value)}
             className={BUCKET_COLORS[key]}
           />
         ))}
@@ -63,7 +65,7 @@ export default function StatementOfAccountPage() {
       <div className="text-center p-3 bg-surface border border-default rounded-md">
         <span className="text-2xs uppercase tracking-wide text-muted">Total Outstanding</span>
         <p className="text-xl font-semibold font-mono text-primary mt-1">
-          ₱{Number(soa.total_outstanding).toLocaleString()}
+          {formatPeso(soa.total_outstanding)}
         </p>
       </div>
 
@@ -91,14 +93,10 @@ export default function StatementOfAccountPage() {
                   </td>
                   <td className="py-2 px-3 text-muted">{inv.date ?? '—'}</td>
                   <td className="py-2 px-3 text-muted">{inv.due_date ?? '—'}</td>
-                  <td className="py-2 px-3 text-right font-mono">₱{Number(inv.total_amount).toLocaleString()}</td>
-                  <td className="py-2 px-3 text-right font-mono">₱{Number(inv.balance).toLocaleString()}</td>
+                  <td className="py-2 px-3 text-right font-mono tabular-nums">{formatPeso(inv.total_amount)}</td>
+                  <td className="py-2 px-3 text-right font-mono tabular-nums">{formatPeso(inv.balance)}</td>
                   <td className="py-2 px-3 text-right">
-                    <span className={`inline-block px-2 py-0.5 rounded-full text-2xs font-medium uppercase ${
-                      inv.status === 'paid' ? 'bg-success/10 text-success' :
-                      inv.status === 'overdue' ? 'bg-danger/10 text-danger' :
-                      'bg-warning/10 text-warning'
-                    }`}>{inv.status}</span>
+                    <Chip variant={chipVariantForStatus(inv.status)}>{inv.status}</Chip>
                   </td>
                 </tr>
               ))}

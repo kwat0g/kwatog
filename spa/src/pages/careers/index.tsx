@@ -6,6 +6,8 @@ import { LandingNav } from '@/pages/landing/components/LandingNav';
 import { LandingFooter } from '@/pages/landing/components/LandingFooter';
 import { publicRecruitmentApi } from '@/api/public-recruitment';
 import type { PublicJobPosting } from '@/types/recruitment';
+import { formatDate } from '@/lib/formatDate';
+import { formatPeso } from '@/lib/formatNumber';
 
 const EMPLOYMENT_LABELS: Record<string, string> = {
   regular: 'Regular',
@@ -16,9 +18,8 @@ const EMPLOYMENT_LABELS: Record<string, string> = {
 
 function formatSalary(min: string | null, max: string | null) {
   if (!min && !max) return null;
-  const fmt = (v: string) => `₱${Number(v).toLocaleString()}`;
-  if (min && max) return `${fmt(min)} – ${fmt(max)}`;
-  return min ? `From ${fmt(min)}` : `Up to ${fmt(max!)}`;
+  if (min && max) return `${formatPeso(min)} – ${formatPeso(max)}`;
+  return min ? `From ${formatPeso(min)}` : `Up to ${formatPeso(max!)}`;
 }
 
 export default function CareersPage() {
@@ -28,6 +29,7 @@ export default function CareersPage() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['public-postings', page],
     queryFn: () => publicRecruitmentApi.listPostings({ page }).then((r) => r.data),
+    placeholderData: (prev) => prev,
   });
 
   const postings = data?.data ?? [];
@@ -97,9 +99,9 @@ export default function CareersPage() {
                       </span>
                     )}
                     {posting.closes_at && (
-                      <span className="flex items-center gap-1.5 text-amber-600">
+                      <span className="flex items-center gap-1.5 text-warning">
                         <Clock size={14} />
-                        Closes {new Date(posting.closes_at).toLocaleDateString()}
+                        Closes {formatDate(posting.closes_at)}
                       </span>
                     )}
                   </div>

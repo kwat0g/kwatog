@@ -65,6 +65,7 @@ export default function DepartmentsPage() {
   const { data: rows = [], isLoading, isError, refetch } = useQuery({
     queryKey: ['hr', 'departments', 'tree'],
     queryFn: () => departmentsApi.tree(),
+    placeholderData: (prev) => prev,
   });
 
   const [expanded, setExpanded] = useState<Set<string>>(new Set());

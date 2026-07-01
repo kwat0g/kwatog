@@ -79,6 +79,7 @@ export default function ItemCategoriesPage() {
   const tree = useQuery({
     queryKey: ['inventory', 'categories', 'tree'],
     queryFn: () => itemCategoriesApi.tree(),
+    placeholderData: (prev) => prev,
   });
   const flatList = useQuery({
     queryKey: ['inventory', 'categories'],

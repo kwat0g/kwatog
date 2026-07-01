@@ -171,8 +171,8 @@ export default function QcQuickCheck() {
 
         {/* Fail prompt for defect description */}
         {showFailPrompt && (
-          <div className="rounded-lg border-2 border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20 p-3">
-            <label htmlFor="defect_desc" className="block text-sm font-medium text-red-700 dark:text-red-300 mb-1">
+          <div className="rounded-lg border-2 border-danger bg-danger-bg p-3">
+            <label htmlFor="defect_desc" className="block text-sm font-medium text-danger mb-1">
               Describe the defect
             </label>
             <textarea
@@ -193,7 +193,7 @@ export default function QcQuickCheck() {
             type="button"
             onClick={handlePass}
             disabled={!canSubmit || mutation.isPending}
-            className="min-h-[56px] rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 text-white font-bold text-lg transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+            className="min-h-[56px] rounded-lg bg-success hover:bg-success/90 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 text-white font-bold text-lg transition-colors focus:outline-none focus:ring-2 focus:ring-success focus:ring-offset-2"
           >
             {mutation.isPending ? '...' : 'PASS'}
           </button>
@@ -201,7 +201,7 @@ export default function QcQuickCheck() {
             type="button"
             onClick={handleFail}
             disabled={!canSubmit || mutation.isPending}
-            className="min-h-[56px] rounded-lg bg-red-600 hover:bg-red-700 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 text-white font-bold text-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+            className="min-h-[56px] rounded-lg bg-danger hover:bg-danger/90 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 text-white font-bold text-lg transition-colors focus:outline-none focus:ring-2 focus:ring-danger focus:ring-offset-2"
           >
             {mutation.isPending ? '...' : 'FAIL'}
           </button>

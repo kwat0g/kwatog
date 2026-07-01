@@ -14,15 +14,16 @@ import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonTable } from '@/components/ui/Skeleton';
-import { Badge } from '@/components/ui/Badge';
+import { Chip } from '@/components/ui/Chip';
 import { forecastingApi } from '@/api/forecasting';
 import type { StockOutRisk } from '@/types/forecasting';
+import { formatDate, formatDateTime } from '@/lib/formatDate';
 
-const RISK_VARIANT: Record<StockOutRisk, 'danger' | 'warning' | 'accent' | 'neutral'> = {
+const RISK_VARIANT: Record<StockOutRisk, 'danger' | 'warning' | 'info' | 'neutral'> = {
   critical: 'danger',
   high:     'warning',
   medium:   'warning',
-  low:      'accent',
+  low:      'info',
   ok:       'neutral',
 };
 
@@ -89,7 +90,7 @@ export default function StockOutProjectionPage() {
               <div className="p-3">
                 <div className="flex items-center justify-between">
                   <span className="text-2xs uppercase tracking-wide text-muted">{RISK_LABEL[risk]}</span>
-                  <Badge variant={RISK_VARIANT[risk]}>{counts[risk]}</Badge>
+                  <Chip variant={RISK_VARIANT[risk]}>{counts[risk]}</Chip>
                 </div>
                 <div className="text-xl font-medium text-primary mt-1 tabular-nums">
                   {counts[risk]}
@@ -101,7 +102,7 @@ export default function StockOutProjectionPage() {
 
         <Panel
           title="Items at risk"
-          meta={generatedAt ? <span className="text-2xs text-muted">Generated {new Date(generatedAt).toLocaleString()}</span> : null}
+          meta={generatedAt ? <span className="text-2xs text-muted">Generated {formatDateTime(generatedAt)}</span> : null}
           noPadding
         >
           {q.isLoading ? (
@@ -150,13 +151,13 @@ export default function StockOutProjectionPage() {
                         )}
                       </td>
                       <td className="px-4 py-2 text-2xs">
-                        {r.reorder_date ? new Date(r.reorder_date).toLocaleDateString() : '—'}
+                        {r.reorder_date ? formatDate(r.reorder_date) : '—'}
                       </td>
                       <td className="px-4 py-2 text-right tabular-nums">
                         {r.suggested_qty !== null ? r.suggested_qty.toFixed(2) : '—'}
                       </td>
                       <td className="px-4 py-2">
-                        <Badge variant={RISK_VARIANT[r.risk]}>{RISK_LABEL[r.risk]}</Badge>
+                        <Chip variant={RISK_VARIANT[r.risk]}>{RISK_LABEL[r.risk]}</Chip>
                       </td>
                       <td className="px-4 py-2 text-right">
                         <Link to="/purchasing/purchase-requests/create">

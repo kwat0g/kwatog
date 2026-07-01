@@ -1,20 +1,24 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { budgetingApi } from '@/api/accounting/budgeting';
 import { usePermission } from '@/hooks/usePermission';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Panel } from '@/components/ui/Panel';
 import { StatCard } from '@/components/ui/StatCard';
-import { Badge } from '@/components/ui/Badge';
-import { FullPageLoader } from '@/components/ui/Spinner';
+import { Chip } from '@/components/ui/Chip';
+import { SkeletonTable } from '@/components/ui/Skeleton';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/cn';
+import { formatPeso } from '@/lib/formatNumber';
 import { Plus } from 'lucide-react';
 import type { BudgetOverview } from '@/types/budgeting';
 
 export default function BudgetOverviewPage() {
   const { can } = usePermission();
   const canManage = can('budgeting.manage');
+  const navigate = useNavigate();
   const [selectedStatus, setSelectedStatus] = useState<string>('');
 
   const { data: overview, isLoading, error } = useQuery<BudgetOverview>({
@@ -27,21 +31,31 @@ export default function BudgetOverviewPage() {
     queryFn: () => budgetingApi.list({ status: selectedStatus || undefined, per_page: 50 }),
   });
 
-  if (isLoading) return <FullPageLoader />;
-  if (error) return <div className="p-6 text-red-500">Failed to load budget overview.</div>;
+  if (isLoading) return (
+    <div className="p-6 space-y-6">
+      <PageHeader title="Budget Overview" subtitle="Loading..." />
+      <SkeletonTable columns={5} rows={6} />
+    </div>
+  );
+  if (error) return (
+    <div className="p-6 space-y-6">
+      <PageHeader title="Budget Overview" />
+      <EmptyState icon="alert-circle" title="Failed to load budget overview" />
+    </div>
+  );
 
   const getStatusColor = (pct: number) => {
-    if (pct >= 120) return 'text-red-600 bg-red-50 border-red-200';
-    if (pct >= 100) return 'text-orange-600 bg-orange-50 border-orange-200';
-    if (pct >= 95) return 'text-amber-600 bg-amber-50 border-amber-200';
-    if (pct >= 80) return 'text-yellow-600 bg-yellow-50 border-yellow-200';
-    return 'text-green-600 bg-green-50 border-green-200';
+    if (pct >= 120) return 'text-danger-fg bg-danger-bg';
+    if (pct >= 100) return 'text-warning-fg bg-warning-bg';
+    if (pct >= 95) return 'text-warning-fg bg-warning-bg';
+    if (pct >= 80) return 'text-warning-fg bg-warning-bg';
+    return 'text-success-fg bg-success-bg';
   };
 
   const getStatusDot = (pct: number) => {
-    if (pct >= 95) return 'bg-red-500';
-    if (pct >= 80) return 'bg-yellow-500';
-    return 'bg-green-500';
+    if (pct >= 95) return 'bg-danger';
+    if (pct >= 80) return 'bg-warning';
+    return 'bg-success';
   };
 
   const getStatusLabel = (pct: number) => {
@@ -59,12 +73,14 @@ export default function BudgetOverviewPage() {
         subtitle={`FY ${new Date().getFullYear()} — Department Budget Summary`}
         actions={
           canManage && (
-            <Link
-              to="/budgeting/create"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-accent text-white hover:bg-accent-hover transition-colors"
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<Plus size={14} />}
+              onClick={() => navigate('/budgeting/create')}
             >
-              <Plus size={14} /> Create Budget
-            </Link>
+              Create Budget
+            </Button>
           )
         }
       />
@@ -85,16 +101,16 @@ export default function BudgetOverviewPage() {
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-secondary">{overview.utilization_pct}% consumed</span>
-              <span className={cn('font-medium', overview.utilization_pct >= 95 ? 'text-red-600' : 'text-green-600')}>
-                ₱ {(overview.total_spent + overview.total_committed).toLocaleString()} / ₱ {overview.total_allocated.toLocaleString()}
+              <span className={cn('font-medium font-mono tabular-nums', overview.utilization_pct >= 95 ? 'text-danger' : 'text-success')}>
+                {formatPeso(overview.total_spent + overview.total_committed)} / {formatPeso(overview.total_allocated)}
               </span>
             </div>
             <div className="h-3 bg-muted rounded-full overflow-hidden">
               <div
                 className={cn(
                   'h-full rounded-full transition-all duration-500',
-                  overview.utilization_pct >= 95 ? 'bg-red-500' :
-                  overview.utilization_pct >= 80 ? 'bg-yellow-500' : 'bg-green-500'
+                  overview.utilization_pct >= 95 ? 'bg-danger' :
+                  overview.utilization_pct >= 80 ? 'bg-warning' : 'bg-success'
                 )}
                 style={{ width: `${Math.min(overview.utilization_pct, 100)}%` }}
               />
@@ -107,12 +123,12 @@ export default function BudgetOverviewPage() {
       {overview && (
         <Panel
           title="By Department"
-          meta={<Badge variant={overview.utilization_pct >= 80 ? 'warning' : 'accent'}>{overview.utilization_pct}% overall</Badge>}
+          meta={<Chip variant={overview.utilization_pct >= 80 ? 'warning' : 'success'}>{overview.utilization_pct}% overall</Chip>}
         >
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-default text-left text-xs uppercase tracking-wider text-text-subtle">
+                <tr className="border-b border-default text-left text-xs uppercase tracking-wider text-muted">
                   <th className="py-2 pr-4">Department</th>
                   <th className="py-2 pr-4 text-right">Allocated</th>
                   <th className="py-2 pr-4 text-right">Spent</th>
@@ -128,10 +144,10 @@ export default function BudgetOverviewPage() {
                         {dept.department}
                       </Link>
                     </td>
-                    <td className="py-2.5 pr-4 text-right font-mono">₱ {(dept.allocated / 1_000_000).toFixed(1)}M</td>
-                    <td className="py-2.5 pr-4 text-right font-mono">₱ {(dept.spent / 1_000_000).toFixed(1)}M</td>
+                    <td className="py-2.5 pr-4 text-right font-mono tabular-nums">₱ {(dept.allocated / 1_000_000).toFixed(1)}M</td>
+                    <td className="py-2.5 pr-4 text-right font-mono tabular-nums">₱ {(dept.spent / 1_000_000).toFixed(1)}M</td>
                     <td className="py-2.5 pr-4 text-right">
-                      <span className={cn('inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium', getStatusColor(dept.pct))}>
+                      <span className={cn('inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium font-mono tabular-nums', getStatusColor(dept.pct))}>
                         {dept.pct}%
                       </span>
                     </td>
@@ -173,7 +189,7 @@ export default function BudgetOverviewPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-default text-left text-xs uppercase tracking-wider text-text-subtle">
+                <tr className="border-b border-default text-left text-xs uppercase tracking-wider text-muted">
                   <th className="py-2 pr-4">Name</th>
                   <th className="py-2 pr-4">Type</th>
                   <th className="py-2 pr-4 text-right">Allocated</th>
@@ -191,31 +207,31 @@ export default function BudgetOverviewPage() {
                         {budget.name}
                       </Link>
                       {budget.department && (
-                        <span className="ml-2 text-xs text-text-subtle">{budget.department.name}</span>
+                        <span className="ml-2 text-xs text-muted">{budget.department.name}</span>
                       )}
                     </td>
                     <td className="py-2.5 pr-4">
-                      <Badge variant="neutral">{budget.budget_type}</Badge>
+                      <Chip variant="neutral">{budget.budget_type}</Chip>
                     </td>
-                    <td className="py-2.5 pr-4 text-right font-mono">₱ {(budget.total_allocated / 1_000).toFixed(0)}K</td>
-                    <td className="py-2.5 pr-4 text-right font-mono">₱ {(budget.total_spent / 1_000).toFixed(0)}K</td>
-                    <td className="py-2.5 pr-4 text-right font-mono">₱ {(budget.available / 1_000).toFixed(0)}K</td>
+                    <td className="py-2.5 pr-4 text-right font-mono tabular-nums">₱ {(budget.total_allocated / 1_000).toFixed(0)}K</td>
+                    <td className="py-2.5 pr-4 text-right font-mono tabular-nums">₱ {(budget.total_spent / 1_000).toFixed(0)}K</td>
+                    <td className="py-2.5 pr-4 text-right font-mono tabular-nums">₱ {(budget.available / 1_000).toFixed(0)}K</td>
                     <td className="py-2.5 pr-4 text-center">
                       <span className={cn(
-                        'inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium',
+                        'inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium font-mono tabular-nums',
                         getStatusColor(budget.utilization_pct)
                       )}>
                         {budget.utilization_pct}%
                       </span>
                     </td>
                     <td className="py-2.5 text-center">
-                      <Badge variant={
-                        budget.status === 'active' ? 'accent' :
+                      <Chip variant={
+                        budget.status === 'active' ? 'success' :
                         budget.status === 'draft' ? 'neutral' :
                         budget.status === 'closed' ? 'neutral' : 'warning'
                       }>
                         {budget.status}
-                      </Badge>
+                      </Chip>
                     </td>
                   </tr>
                 ))}
@@ -223,7 +239,7 @@ export default function BudgetOverviewPage() {
             </table>
           </div>
         ) : (
-          <p className="text-sm text-text-subtle py-4 text-center">No budgets found.</p>
+          <p className="text-sm text-muted py-4 text-center">No budgets found.</p>
         )}
       </Panel>
     </div>

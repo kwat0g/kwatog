@@ -20,6 +20,7 @@ import { Switch } from '@/components/ui/Switch';
 import { Textarea } from '@/components/ui/Textarea';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
+import { formatInt } from '@/lib/formatNumber';
 import { numberInputProps } from '@/lib/numberInput';
 
 const lineSchema = z.object({
@@ -284,7 +285,7 @@ export default function CreatePurchaseOrderPage() {
               Total <span className="font-mono font-medium text-primary">₱ {total.toFixed(2)}</span>.
               {requiresVp && (
                 <span className="block mt-1 text-warning-fg">
-                  Total ≥ ₱ {VP_THRESHOLD.toLocaleString()} — VP approval will be required before send.
+                  Total ≥ ₱ {formatInt(VP_THRESHOLD)} — VP approval will be required before send.
                 </span>
               )}
             </>

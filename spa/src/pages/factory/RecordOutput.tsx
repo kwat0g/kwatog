@@ -5,6 +5,7 @@ import { factoryApi } from '@/api/factory';
 import toast from 'react-hot-toast';
 import { ArrowLeft } from 'lucide-react';
 import type { WorkOrderOutput } from '@/types/production';
+import { formatTime } from '@/lib/formatDate';
 
 export default function RecordOutput() {
   const { woId } = useParams<{ woId: string }>();
@@ -77,7 +78,7 @@ export default function RecordOutput() {
         <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
           <div className="flex items-center justify-between">
             <span className="font-mono text-sm font-medium">{workOrder.wo_number}</span>
-            <span className="text-xs px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200 font-medium">
+            <span className="text-xs px-2 py-0.5 rounded bg-success-bg text-success-fg font-medium">
               {workOrder.status.replace(/_/g, ' ')}
             </span>
           </div>
@@ -175,11 +176,11 @@ export default function RecordOutput() {
               <div>
                 <div className="flex items-center gap-3">
                   <span className="text-sm">
-                    <span className="font-mono tabular-nums font-medium text-emerald-700 dark:text-emerald-400">
+                    <span className="font-mono tabular-nums font-medium text-success">
                       +{output.good_count}
                     </span>
                     {output.reject_count > 0 && (
-                      <span className="font-mono tabular-nums text-red-600 dark:text-red-400 ml-2">
+                      <span className="font-mono tabular-nums text-danger ml-2">
                         -{output.reject_count}
                       </span>
                     )}
@@ -190,7 +191,7 @@ export default function RecordOutput() {
                 )}
               </div>
               <div className="text-xs text-zinc-400 font-mono tabular-nums">
-                {new Date(output.recorded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                {formatTime(output.recorded_at)}
               </div>
             </div>
           ))}

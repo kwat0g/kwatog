@@ -47,12 +47,12 @@ export default function DriverDeliveryList() {
 }
 
 const STATUS_CLASSES: Record<DriverDeliveryStatus, string> = {
-  scheduled:  'bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200',
-  loading:    'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
-  in_transit: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200',
-  delivered:  'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200',
-  confirmed:  'bg-emerald-200 text-emerald-900 dark:bg-emerald-800/60 dark:text-emerald-100',
-  cancelled:  'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200',
+  scheduled:  'bg-muted text-secondary',
+  loading:    'bg-warning-bg text-warning-fg',
+  in_transit: 'bg-info-bg text-info-fg',
+  delivered:  'bg-success-bg text-success-fg',
+  confirmed:  'bg-success-bg text-success-fg',
+  cancelled:  'bg-danger-bg text-danger-fg',
 };
 
 function StatusChip({ status }: { status: DriverDeliveryStatus }) {
@@ -83,7 +83,7 @@ function Skeleton() {
 function ErrorRetry({ onRetry }: { onRetry: () => void }) {
   return (
     <div className="py-12 text-center" role="alert">
-      <div className="text-red-600 mb-2">Could not load deliveries.</div>
+      <div className="text-danger mb-2">Could not load deliveries.</div>
       <button
         type="button"
         onClick={onRetry}

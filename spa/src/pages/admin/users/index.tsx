@@ -19,6 +19,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { adminUsersApi } from '@/api/admin/users';
 import { client } from '@/api/client';
+import { formatDateTime } from '@/lib/formatDate';
 import type {
   AdminUserListItem,
   AdminUserListFilters,
@@ -144,7 +145,7 @@ export default function AdminUsersIndexPage() {
       sortable: true,
       cell: (row) => (
         <span className="font-mono tabular-nums text-secondary">
-          {row.last_activity ? new Date(row.last_activity).toLocaleString() : 'Never'}
+          {row.last_activity ? formatDateTime(row.last_activity) : 'Never'}
         </span>
       ),
     },

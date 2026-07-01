@@ -94,17 +94,17 @@ export default function ActiveOrders() {
 // ─── Status chip ────────────────────────────────────────────────────────────
 
 const STATUS_CLASSES: Record<WorkOrderStatus, string> = {
-  planned:     'bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200',
-  confirmed:   'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200',
-  in_progress: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200',
-  paused:      'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
-  completed:   'bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200',
-  closed:      'bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200',
-  cancelled:   'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200',
+  planned:     'bg-muted text-secondary',
+  confirmed:   'bg-info-bg text-info-fg',
+  in_progress: 'bg-success-bg text-success-fg',
+  paused:      'bg-warning-bg text-warning-fg',
+  completed:   'bg-muted text-secondary',
+  closed:      'bg-muted text-secondary',
+  cancelled:   'bg-danger-bg text-danger-fg',
 };
 
 function StatusChip({ status }: { status: WorkOrderStatus }) {
-  const cls = STATUS_CLASSES[status] ?? 'bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200';
+  const cls = STATUS_CLASSES[status] ?? 'bg-muted text-secondary';
   return (
     <span className={`text-xs px-2 py-0.5 rounded font-medium ${cls}`}>
       {status.replace(/_/g, ' ')}
@@ -130,7 +130,7 @@ function Skeleton() {
 function ErrorRetry({ onRetry }: { onRetry: () => void }) {
   return (
     <div className="py-12 text-center" role="alert">
-      <div className="text-red-600 dark:text-red-400 mb-2">Could not load work orders.</div>
+      <div className="text-danger mb-2">Could not load work orders.</div>
       <button
         type="button"
         onClick={onRetry}

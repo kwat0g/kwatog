@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { formatInt } from '@/lib/formatNumber';
 import type { WorkOrder, WorkOrderStatus } from '@/types/production';
 
 const variant: Record<WorkOrderStatus, 'success' | 'info' | 'warning' | 'danger' | 'neutral'> = {
@@ -48,13 +49,13 @@ export default function WorkOrdersListPage() {
       key: 'machine', header: 'Machine',
       cell: (r) => r.machine ? <span className="font-mono text-xs">{r.machine.machine_code}</span> : <span className="text-muted">—</span>,
     },
-    { key: 'qty', header: 'Target', align: 'right', cell: (r) => <NumCell>{r.quantity_target.toLocaleString()}</NumCell> },
+    { key: 'qty', header: 'Target', align: 'right', cell: (r) => <NumCell>{formatInt(r.quantity_target)}</NumCell> },
     {
       key: 'progress', header: 'Progress', align: 'right',
       cell: (r) => (
         <div className="flex flex-col items-end gap-0.5 min-w-[120px]">
           <span className="font-mono tabular-nums text-xs">
-            {r.quantity_produced.toLocaleString()} / {r.quantity_target.toLocaleString()}
+            {formatInt(r.quantity_produced)} / {formatInt(r.quantity_target)}
           </span>
           <div className="w-full h-1 bg-elevated rounded-full overflow-hidden">
             <div className="h-1 bg-accent rounded-full" style={{ width: `${Math.min(100, r.progress_percentage)}%` }} aria-hidden />

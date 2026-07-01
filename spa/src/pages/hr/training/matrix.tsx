@@ -14,9 +14,9 @@ import { cn } from '@/lib/cn';
 import type { TrainingMatrixCell, TrainingMatrixCellStatus } from '@/types/hr';
 
 const STATUS_COLORS: Record<TrainingMatrixCellStatus, string> = {
-  trained: 'bg-emerald-100 dark:bg-emerald-900/50 border-emerald-300 dark:border-emerald-700',
-  expired: 'bg-red-100 dark:bg-red-900/50 border-red-300 dark:border-red-700',
-  gap:     'bg-neutral-100 dark:bg-neutral-800 border-neutral-300 dark:border-neutral-700',
+  trained: 'bg-success-bg border-success',
+  expired: 'bg-danger-bg border-danger',
+  gap:     'bg-muted border-default',
 };
 
 const STATUS_LABELS: Record<TrainingMatrixCellStatus, string> = {
@@ -251,15 +251,15 @@ export default function TrainingMatrixPage() {
           {/* Legend */}
           <div className="flex items-center gap-5 mt-4 text-xs text-muted">
             <div className="flex items-center gap-1.5">
-              <span className="w-4 h-4 rounded border bg-emerald-100 dark:bg-emerald-900/50 border-emerald-300 dark:border-emerald-700" />
+              <span className="w-4 h-4 rounded border bg-success-bg border-success" />
               Trained
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-4 h-4 rounded border bg-red-100 dark:bg-red-900/50 border-red-300 dark:border-red-700" />
+              <span className="w-4 h-4 rounded border bg-danger-bg border-danger" />
               Expired
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-4 h-4 rounded border bg-neutral-100 dark:bg-neutral-800 border-neutral-300 dark:border-neutral-700" />
+              <span className="w-4 h-4 rounded border bg-muted border-default" />
               Gap
             </div>
             <div className="text-muted ml-2">

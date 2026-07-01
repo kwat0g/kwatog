@@ -21,6 +21,7 @@ import { Panel } from '@/components/ui/Panel';
 import { StatCard } from '@/components/ui/StatCard';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { formatPeso } from '@/lib/formatNumber';
 
 export default function QualityDashboardPage() {
   const [selectedDefect, setSelectedDefect] = useState<string | null>(null);
@@ -203,12 +204,12 @@ export default function QualityDashboardPage() {
             <StatCard
               label="Scrap Units"
               value={String(copq.internal_failure.scrap_units)}
-              helper={`₱${copq.internal_failure.scrap_cost.toLocaleString()} est. cost`}
+              helper={`${formatPeso(copq.internal_failure.scrap_cost)} est. cost`}
             />
             <StatCard
               label="Rework Units"
               value={String(copq.internal_failure.rework_units)}
-              helper={`₱${copq.internal_failure.rework_cost.toLocaleString()} est. cost`}
+              helper={`${formatPeso(copq.internal_failure.rework_cost)} est. cost`}
             />
             <StatCard
               label="Customer Returns"
@@ -217,7 +218,7 @@ export default function QualityDashboardPage() {
             />
             <StatCard
               label="Est. COPQ"
-              value={`₱${copq.total.toLocaleString()}`}
+              value={formatPeso(copq.total)}
               helper="internal + external failure"
             />
           </div>

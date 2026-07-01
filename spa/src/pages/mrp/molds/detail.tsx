@@ -7,6 +7,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { formatInt } from '@/lib/formatNumber';
 import type { MoldStatus } from '@/types/mrp';
 
 const variant: Record<MoldStatus, 'success' | 'neutral' | 'info' | 'danger' | 'warning'> = {
@@ -81,7 +82,7 @@ export default function MoldDetailPage() {
               <dt className="text-muted">Cycle time</dt>
               <dd className="col-span-2 font-mono tabular-nums">{m.cycle_time_seconds}s</dd>
               <dt className="text-muted">Output / hr</dt>
-              <dd className="col-span-2 font-mono tabular-nums">{m.output_rate_per_hour.toLocaleString()}</dd>
+              <dd className="col-span-2 font-mono tabular-nums">{formatInt(m.output_rate_per_hour)}</dd>
               <dt className="text-muted">Setup time</dt>
               <dd className="col-span-2 font-mono tabular-nums">{m.setup_time_minutes} min</dd>
               <dt className="text-muted">Location</dt>
@@ -126,7 +127,7 @@ export default function MoldDetailPage() {
                       <td className="px-2.5 py-2 font-mono">{h.event_date}</td>
                       <td className="px-2.5 py-2 font-mono">{h.event_type}</td>
                       <td className="px-2.5 py-2 text-muted">{h.description ?? '—'}</td>
-                      <td className="px-2.5 py-2 text-right font-mono tabular-nums">{h.shot_count_at_event.toLocaleString()}</td>
+                      <td className="px-2.5 py-2 text-right font-mono tabular-nums">{formatInt(h.shot_count_at_event)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -139,15 +140,15 @@ export default function MoldDetailPage() {
           <Panel title="Shot count">
             <div className="space-y-3">
               <div className="text-2xl font-medium font-mono tabular-nums">
-                {m.current_shot_count.toLocaleString()}
-                <span className="text-sm text-muted"> / {m.max_shots_before_maintenance.toLocaleString()}</span>
+                {formatInt(m.current_shot_count)}
+                <span className="text-sm text-muted"> / {formatInt(m.max_shots_before_maintenance)}</span>
               </div>
               <div className="h-1.5 w-full bg-subtle rounded-full overflow-hidden">
                 <div className={`h-full ${barColor}`} style={{ width: `${pct}%` }} />
               </div>
               <div className="text-xs font-mono tabular-nums text-muted">{pct.toFixed(1)}% of cycle limit</div>
               <div className="text-xs font-mono tabular-nums text-muted pt-2 border-t border-subtle">
-                Lifetime: {m.lifetime_total_shots.toLocaleString()} / {m.lifetime_max_shots.toLocaleString()}
+                Lifetime: {formatInt(m.lifetime_total_shots)} / {formatInt(m.lifetime_max_shots)}
               </div>
             </div>
           </Panel>

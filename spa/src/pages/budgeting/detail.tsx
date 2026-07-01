@@ -5,16 +5,24 @@ import { budgetingApi } from '@/api/accounting/budgeting';
 import { usePermission } from '@/hooks/usePermission';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Panel } from '@/components/ui/Panel';
-import { Badge } from '@/components/ui/Badge';
+import { Chip, type ChipVariant } from '@/components/ui/Chip';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { FullPageLoader } from '@/components/ui/Spinner';
+import { StatCard } from '@/components/ui/StatCard';
+import { SkeletonDetail } from '@/components/ui/Skeleton';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { formatDate } from '@/lib/formatDate';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/cn';
-import { ArrowLeft, DollarSign, TrendingUp, AlertTriangle, CheckCircle, Send, XCircle } from 'lucide-react';
+import { ArrowLeft, Send, XCircle, CheckCircle } from 'lucide-react';
 import type { Budget } from '@/types/budgeting';
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'] as const;
+
+const STATUS_VARIANT: Record<string, ChipVariant> = {
+  active: 'success', approved: 'success', submitted: 'warning',
+  draft: 'neutral', closed: 'neutral',
+};
 
 export default function BudgetDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -62,16 +70,8 @@ export default function BudgetDetailPage() {
     onError: () => toast.error('Failed to close budget.'),
   });
 
-  if (isLoading) return <FullPageLoader />;
-  if (!budget) return <div className="p-6 text-red-500">Budget not found.</div>;
-
-  const statusBadge = (status: string) => {
-    const variants: Record<string, 'accent' | 'warning' | 'danger' | 'neutral'> = {
-      active: 'accent', approved: 'accent', submitted: 'warning',
-      draft: 'neutral', closed: 'neutral',
-    };
-    return <Badge variant={variants[status] || 'neutral'}>{status}</Badge>;
-  };
+  if (isLoading) return <SkeletonDetail />;
+  if (!budget) return <EmptyState icon="alert-circle" title="Budget not found" />;
 
   const canSubmit = budget.status === 'draft' && canManage;
   const canApproveAction = budget.status === 'submitted' && canApprove;
@@ -83,13 +83,13 @@ export default function BudgetDetailPage() {
         title={budget.name}
         subtitle={
           <div className="flex items-center gap-3 mt-1">
-            {statusBadge(budget.status)}
-            {budget.department && <span className="text-sm text-text-subtle">{budget.department.name}</span>}
-            <Badge variant="neutral">{budget.budget_type}</Badge>
+            <Chip variant={STATUS_VARIANT[budget.status] ?? 'neutral'}>{budget.status}</Chip>
+            {budget.department && <span className="text-sm text-muted">{budget.department.name}</span>}
+            <Chip variant="neutral">{budget.budget_type}</Chip>
             <span className={cn(
               'text-xs font-medium px-1.5 py-0.5 rounded',
-              budget.utilization_pct >= 95 ? 'text-red-600 bg-red-50' :
-              budget.utilization_pct >= 80 ? 'text-yellow-600 bg-yellow-50' : 'text-green-600 bg-green-50'
+              budget.utilization_pct >= 95 ? 'text-danger-fg bg-danger-bg' :
+              budget.utilization_pct >= 80 ? 'text-warning-fg bg-warning-bg' : 'text-success-fg bg-success-bg'
             )}>
               {budget.utilization_pct}% used
             </span>
@@ -122,39 +122,21 @@ export default function BudgetDetailPage() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="rounded-lg border border-default p-4">
-          <div className="flex items-center gap-2 text-sm text-text-subtle mb-1">
-            <DollarSign size={14} /> Allocated
-          </div>
-          <p className="text-2xl font-bold">₱{(budget.total_allocated / 1_000_000).toFixed(2)}M</p>
-        </div>
-        <div className="rounded-lg border border-default p-4">
-          <div className="flex items-center gap-2 text-sm text-text-subtle mb-1">
-            <TrendingUp size={14} /> Spent
-          </div>
-          <p className="text-2xl font-bold">₱{(budget.total_spent / 1_000_000).toFixed(2)}M</p>
-        </div>
-        <div className="rounded-lg border border-default p-4">
-          <div className="flex items-center gap-2 text-sm text-text-subtle mb-1">
-            <AlertTriangle size={14} /> Committed
-          </div>
-          <p className="text-2xl font-bold">₱{(budget.total_committed / 1_000_000).toFixed(2)}M</p>
-        </div>
-        <div className="rounded-lg border border-default p-4">
-          <div className="flex items-center gap-2 text-sm text-text-subtle mb-1">
-            <DollarSign size={14} /> Available
-          </div>
-          <p className={cn('text-2xl font-bold', budget.available < 0 ? 'text-red-600' : 'text-green-600')}>
-            ₱{(budget.available / 1_000_000).toFixed(2)}M
-          </p>
-        </div>
+        <StatCard label="Allocated" value={`₱${(budget.total_allocated / 1_000_000).toFixed(2)}M`} />
+        <StatCard label="Spent" value={`₱${(budget.total_spent / 1_000_000).toFixed(2)}M`} />
+        <StatCard label="Committed" value={`₱${(budget.total_committed / 1_000_000).toFixed(2)}M`} />
+        <StatCard
+          label="Available"
+          value={`₱${(budget.available / 1_000_000).toFixed(2)}M`}
+          className={budget.available < 0 ? 'text-danger' : 'text-success'}
+        />
       </div>
 
       {/* Utilization Bar */}
       <div className="space-y-1.5">
         <div className="flex justify-between text-sm">
           <span className="text-secondary">Utilization</span>
-          <span className={cn('font-medium', budget.utilization_pct >= 95 ? 'text-red-600' : 'text-green-600')}>
+          <span className={cn('font-medium', budget.utilization_pct >= 95 ? 'text-danger' : 'text-success')}>
             {budget.utilization_pct}%
           </span>
         </div>
@@ -162,8 +144,8 @@ export default function BudgetDetailPage() {
           <div
             className={cn(
               'h-full rounded-full transition-all duration-500',
-              budget.utilization_pct >= 95 ? 'bg-red-500' :
-              budget.utilization_pct >= 80 ? 'bg-yellow-500' : 'bg-green-500'
+              budget.utilization_pct >= 95 ? 'bg-danger' :
+              budget.utilization_pct >= 80 ? 'bg-warning' : 'bg-success'
             )}
             style={{ width: `${Math.min(budget.utilization_pct, 100)}%` }}
           />
@@ -171,12 +153,12 @@ export default function BudgetDetailPage() {
       </div>
 
       {/* Line Items */}
-      <Panel title="Line Items" meta={<span className="text-xs text-text-subtle">Monthly allocations per account</span>}>
+      <Panel title="Line Items" meta={<span className="text-xs text-muted">Monthly allocations per account</span>}>
         {budget.line_items && budget.line_items.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-default text-left text-xs uppercase tracking-wider text-text-subtle">
+                <tr className="border-b border-default text-left text-xs uppercase tracking-wider text-muted">
                   <th className="py-2 pr-3">Account</th>
                   {MONTHS.map((m) => (
                     <th key={m} className="py-2 pr-3 text-right font-mono">{m}</th>
@@ -191,7 +173,7 @@ export default function BudgetDetailPage() {
                   <tr key={li.id} className="border-b border-default/50 hover:bg-elevated/50 transition-colors">
                     <td className="py-2 pr-3">
                       <span className="font-medium">{li.account?.code}</span>
-                      <span className="ml-1.5 text-text-subtle text-xs">{li.account?.name}</span>
+                      <span className="ml-1.5 text-muted text-xs">{li.account?.name}</span>
                     </td>
                     {MONTHS.map((m) => {
                       const val = li[m.toLowerCase() as keyof typeof li] as number;
@@ -203,7 +185,7 @@ export default function BudgetDetailPage() {
                     })}
                     <td className="py-2 pr-3 text-right font-mono font-medium">₱{(li.annual_total / 1000).toFixed(0)}K</td>
                     <td className="py-2 pr-3 text-right font-mono">₱{(li.actual_total / 1000).toFixed(0)}K</td>
-                    <td className={cn('py-2 text-right font-mono', li.variance < 0 ? 'text-red-600' : 'text-green-600')}>
+                    <td className={cn('py-2 text-right font-mono', li.variance < 0 ? 'text-danger' : 'text-success')}>
                       {li.variance >= 0 ? '+' : ''}{li.variance >= 0 ? '₱' : '-₱'}{(Math.abs(li.variance) / 1000).toFixed(0)}K
                     </td>
                   </tr>
@@ -212,7 +194,7 @@ export default function BudgetDetailPage() {
             </table>
           </div>
         ) : (
-          <p className="text-sm text-text-subtle py-4 text-center">No line items configured.</p>
+          <p className="text-sm text-muted py-4 text-center">No line items configured.</p>
         )}
       </Panel>
 
@@ -223,13 +205,13 @@ export default function BudgetDetailPage() {
             {budget.submitted_by && (
               <div className="flex items-center justify-between py-1.5 border-b border-default/50">
                 <span className="text-secondary">Submitted by</span>
-                <span>{budget.submitted_by.name} {budget.submitted_at ? `on ${new Date(budget.submitted_at).toLocaleDateString()}` : ''}</span>
+                <span>{budget.submitted_by.name} {budget.submitted_at ? `on ${formatDate(budget.submitted_at)}` : ''}</span>
               </div>
             )}
             {budget.approved_by && (
               <div className="flex items-center justify-between py-1.5">
                 <span className="text-secondary">Approved by</span>
-                <span>{budget.approved_by.name} {budget.approved_at ? `on ${new Date(budget.approved_at).toLocaleDateString()}` : ''}</span>
+                <span>{budget.approved_by.name} {budget.approved_at ? `on ${formatDate(budget.approved_at)}` : ''}</span>
               </div>
             )}
           </div>

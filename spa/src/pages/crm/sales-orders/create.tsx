@@ -29,6 +29,7 @@ import { customersApi } from '@/api/accounting/customers';
 import { productsApi } from '@/api/crm/products';
 import { salesOrdersApi } from '@/api/crm/salesOrders';
 import type { CreateSalesOrderData } from '@/types/crm';
+import { formatPeso } from '@/lib/formatNumber';
 
 const itemSchema = z.object({
   product_id:    z.string().min(1, 'Product is required'),
@@ -247,7 +248,7 @@ export default function CreateSalesOrderPage() {
 
             <div className="text-xs text-muted">
               Estimate (uses standard cost): <span className="font-mono tabular-nums text-primary">
-                ₱ {previewSubtotal.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {formatPeso(previewSubtotal)}
               </span>
               <div className="text-2xs">Final pricing pulled from active price agreement on save.</div>
             </div>

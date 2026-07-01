@@ -10,6 +10,8 @@ import type { SparePartUsage } from '@/types/maintenance';
 import type { Item } from '@/types/inventory';
 import { client } from '@/api/client';
 import type { ApiSuccess, PaginatedResponse } from '@/types';
+import { formatDateTime } from '@/lib/formatDate';
+import { formatPeso } from '@/lib/formatNumber';
 
 export default function MobileWorkOrderDetail() {
   const { mwoId } = useParams<{ mwoId: string }>();
@@ -111,7 +113,7 @@ export default function MobileWorkOrderDetail() {
   if (error || !wo) {
     return (
       <div className="py-12 text-center" role="alert">
-        <div className="text-red-600 dark:text-red-400 mb-2">Could not load work order.</div>
+        <div className="text-danger mb-2">Could not load work order.</div>
         <button
           type="button"
           onClick={() => refetch()}
@@ -145,10 +147,10 @@ export default function MobileWorkOrderDetail() {
           <span
             className={`text-xs px-2 py-0.5 rounded font-medium ${
               wo.priority === 'critical'
-                ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200'
+                ? 'bg-danger-bg text-danger-fg'
                 : wo.priority === 'high'
-                  ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200'
-                  : 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200'
+                  ? 'bg-warning-bg text-warning-fg'
+                  : 'bg-info-bg text-info-fg'
             }`}
           >
             {wo.priority === 'critical' && <AlertTriangle className="w-3 h-3 inline mr-1" />}
@@ -182,7 +184,7 @@ export default function MobileWorkOrderDetail() {
           type="button"
           onClick={() => startMutation.mutate()}
           disabled={startMutation.isPending}
-          className="w-full min-h-[52px] rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 text-white font-semibold text-base transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 inline-flex items-center justify-center gap-2"
+          className="w-full min-h-[52px] rounded-lg bg-success hover:bg-success/90 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 text-white font-semibold text-base transition-colors focus:outline-none focus:ring-2 focus:ring-success focus:ring-offset-2 inline-flex items-center justify-center gap-2"
         >
           <Play className="w-5 h-5" />
           {startMutation.isPending ? 'Starting...' : 'Start Work'}
@@ -218,14 +220,14 @@ export default function MobileWorkOrderDetail() {
                     </div>
                   </div>
                   <div className="font-mono tabular-nums text-xs text-zinc-500">
-                    ₱{parseFloat(sp.total_cost).toLocaleString()}
+                    {formatPeso(sp.total_cost)}
                   </div>
                 </div>
               ))}
               <div className="text-right text-xs text-zinc-500 pt-1 border-t border-zinc-100 dark:border-zinc-800">
                 Total cost:{' '}
                 <span className="font-mono tabular-nums font-medium text-zinc-900 dark:text-zinc-100">
-                  ₱{parseFloat(wo.cost).toLocaleString()}
+                  {formatPeso(wo.cost)}
                 </span>
               </div>
             </div>
@@ -252,7 +254,7 @@ export default function MobileWorkOrderDetail() {
                   </div>
                 </div>
                 <div className="font-mono tabular-nums text-xs text-zinc-500">
-                  ₱{parseFloat(sp.total_cost).toLocaleString()}
+                  {formatPeso(sp.total_cost)}
                 </div>
               </div>
             ))}
@@ -322,7 +324,7 @@ export default function MobileWorkOrderDetail() {
                 <div className="text-zinc-700 dark:text-zinc-300">{log.description}</div>
                 <div className="text-xs text-zinc-400 mt-0.5 font-mono tabular-nums">
                   {log.logger?.name ?? 'System'}
-                  {log.created_at && ` — ${new Date(log.created_at).toLocaleString()}`}
+                  {log.created_at && ` — ${formatDateTime(log.created_at)}`}
                 </div>
               </div>
             ))}
@@ -396,7 +398,7 @@ export default function MobileWorkOrderDetail() {
                     setPartLocationId('');
                     setPartQty('');
                   }}
-                  className="text-zinc-400 hover:text-red-500 min-h-[44px] min-w-[44px] flex items-center justify-center rounded focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="text-muted hover:text-danger min-h-[44px] min-w-[44px] flex items-center justify-center rounded focus:outline-none focus:ring-2 focus:ring-danger"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>

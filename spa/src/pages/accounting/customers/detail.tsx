@@ -185,7 +185,7 @@ export default function CustomerDetailPage() {
                         <Link to={`/crm/sales-orders/${so.id}`} className="font-mono text-accent hover:underline">{so.so_number}</Link>
                       </td>
                       <td className="px-2.5 py-2 text-right font-mono tabular-nums">{so.date}</td>
-                      <td className="px-2.5 py-2 text-right font-mono tabular-nums">₱ {Number(so.total_amount).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td className="px-2.5 py-2 text-right font-mono tabular-nums">{formatPeso(so.total_amount)}</td>
                       <td className="px-2.5 py-2">
                         <Chip variant={
                           so.status === 'delivered' || so.status === 'invoiced' ? 'success'

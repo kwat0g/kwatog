@@ -83,6 +83,7 @@ export default function DowntimeAnalyticsPage() {
   const { data: summary, isLoading: summaryLoading, isError: summaryError, refetch: summaryRefetch } = useQuery({
     queryKey: ['downtime-analytics', 'summary', days],
     queryFn: () => downtimeAnalyticsApi.summary({ days }),
+    placeholderData: (prev) => prev,
   });
 
   const { data: trend, isLoading: trendLoading } = useQuery({

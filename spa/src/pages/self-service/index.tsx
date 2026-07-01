@@ -68,6 +68,7 @@ function SelfServiceContent() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['self-service', 'dashboard'],
     queryFn: () => dashboardsApi.employee(),
+    placeholderData: (prev) => prev,
     refetchInterval: 60_000,
   });
 

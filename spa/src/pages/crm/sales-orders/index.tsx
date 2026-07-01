@@ -11,6 +11,7 @@ import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
+import { formatPeso } from '@/lib/formatNumber';
 import type { SalesOrder, SalesOrderStatus } from '@/types/crm';
 
 const statusVariant: Record<SalesOrderStatus, 'success' | 'info' | 'warning' | 'neutral' | 'danger'> = {
@@ -47,7 +48,7 @@ export default function SalesOrdersListPage() {
     { key: 'items', header: 'Lines', align: 'right', cell: (r) => <NumCell>{r.item_count}</NumCell> },
     {
       key: 'total', header: 'Total', align: 'right',
-      cell: (r) => <NumCell>₱ {Number(r.total_amount).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</NumCell>,
+      cell: (r) => <NumCell>{formatPeso(r.total_amount)}</NumCell>,
     },
     {
       key: 'status', header: 'Status',

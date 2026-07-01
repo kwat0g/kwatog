@@ -7,6 +7,7 @@ import { Panel } from '@/components/ui/Panel';
 import { Button } from '@/components/ui/Button';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { formatPeso } from '@/lib/formatNumber';
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = window.URL.createObjectURL(blob);
@@ -61,10 +62,10 @@ export default function SupplierInvoiceDetailPage() {
 
       <div className="grid grid-cols-3 gap-3">
         <Panel title="Total Amount" className="text-center">
-          <p className="text-lg font-semibold font-mono">₱{Number(invoice.total_amount).toLocaleString()}</p>
+          <p className="text-lg font-semibold font-mono">{formatPeso(invoice.total_amount)}</p>
         </Panel>
         <Panel title="Balance" className="text-center">
-          <p className="text-lg font-semibold font-mono">₱{Number(invoice.balance).toLocaleString()}</p>
+          <p className="text-lg font-semibold font-mono">{formatPeso(invoice.balance)}</p>
         </Panel>
         <Panel title="Due Date" className="text-center">
           <p className="text-lg font-semibold">{invoice.due_date ?? '—'}</p>
@@ -87,8 +88,8 @@ export default function SupplierInvoiceDetailPage() {
                 <tr key={i} className="border-b border-border/50">
                   <td className="py-2 px-3">{item.description}</td>
                   <td className="py-2 px-3 text-right">{item.quantity}</td>
-                  <td className="py-2 px-3 text-right font-mono">₱{Number(item.unit_price).toLocaleString()}</td>
-                  <td className="py-2 px-3 text-right font-mono">₱{Number(item.total_price).toLocaleString()}</td>
+                  <td className="py-2 px-3 text-right font-mono">{formatPeso(item.unit_price)}</td>
+                  <td className="py-2 px-3 text-right font-mono">{formatPeso(item.total_price)}</td>
                 </tr>
               ))}
             </tbody>
@@ -111,7 +112,7 @@ export default function SupplierInvoiceDetailPage() {
                 <tr key={i} className="border-b border-border/50">
                   <td className="py-2 px-3 text-muted">{p.paid_at ?? '—'}</td>
                   <td className="py-2 px-3 capitalize">{p.payment_method}</td>
-                  <td className="py-2 px-3 text-right font-mono">₱{Number(p.amount).toLocaleString()}</td>
+                  <td className="py-2 px-3 text-right font-mono">{formatPeso(p.amount)}</td>
                 </tr>
               ))}
             </tbody>

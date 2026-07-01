@@ -71,7 +71,7 @@ export default function DriverDeliveryDetail() {
   if (error || !data) {
     return (
       <div className="py-12 text-center" role="alert">
-        <div className="text-red-600 mb-2">Could not load delivery.</div>
+        <div className="text-danger mb-2">Could not load delivery.</div>
         <button
           type="button"
           onClick={() => refetch()}

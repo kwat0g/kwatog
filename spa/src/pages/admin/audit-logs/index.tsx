@@ -11,6 +11,7 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { UserBadge } from '@/components/ui/UserBadge';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatDateTime } from '@/lib/formatDate';
+import { formatInt } from '@/lib/formatNumber';
 
 const actionVariant = {
   created: 'success',
@@ -73,7 +74,7 @@ export default function AuditLogsPage() {
     <div>
       <PageHeader
         title="Audit logs"
-        subtitle={data ? `${data.meta.total.toLocaleString()} entries` : undefined}
+        subtitle={data ? `${formatInt(data.meta.total)} entries` : undefined}
         backTo="/admin/audit-logs"
         backLabel="Admin"
         actions={

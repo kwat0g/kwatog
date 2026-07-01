@@ -22,6 +22,7 @@ import { useEcho } from '@/hooks/useEcho';
 import { useChainProgress } from '@/hooks/useChainProgress';
 import { usePermission } from '@/hooks/usePermission';
 import { cn } from '@/lib/cn';
+import { formatInt } from '@/lib/formatNumber';
 import type { WorkOrderStatus } from '@/types/production';
 import type { WoOperationStatus } from '@/types/production/routing';
 
@@ -215,7 +216,7 @@ export default function WorkOrderDetailPage() {
                 </dd>
                 <dt className="text-muted">Produced</dt>
                 <dd className="col-span-2 font-mono tabular-nums">
-                  {data.quantity_good.toLocaleString()} good / {data.quantity_rejected.toLocaleString()} rejected
+                  {formatInt(data.quantity_good)} good / {formatInt(data.quantity_rejected)} rejected
                 </dd>
               </dl>
               {data.material_lot_references.length > 0 && (
@@ -271,9 +272,9 @@ export default function WorkOrderDetailPage() {
               <dt className="text-muted">Mold</dt>
               <dd className="col-span-2 font-mono">{data.mold?.mold_code ?? '—'}</dd>
               <dt className="text-muted">Target / Produced</dt>
-              <dd className="col-span-2 font-mono tabular-nums">{data.quantity_produced.toLocaleString()} / {data.quantity_target.toLocaleString()}</dd>
+              <dd className="col-span-2 font-mono tabular-nums">{formatInt(data.quantity_produced)} / {formatInt(data.quantity_target)}</dd>
               <dt className="text-muted">Good / Reject</dt>
-              <dd className="col-span-2 font-mono tabular-nums">{data.quantity_good.toLocaleString()} / {data.quantity_rejected.toLocaleString()} (scrap {Number(data.scrap_rate).toFixed(2)}%)</dd>
+              <dd className="col-span-2 font-mono tabular-nums">{formatInt(data.quantity_good)} / {formatInt(data.quantity_rejected)} (scrap {Number(data.scrap_rate).toFixed(2)}%)</dd>
               <dt className="text-muted">Planned</dt>
               <dd className="col-span-2 font-mono">{data.planned_start?.slice(0, 16)} → {data.planned_end?.slice(0, 16)}</dd>
               <dt className="text-muted">Actual</dt>
@@ -467,7 +468,7 @@ export default function WorkOrderDetailPage() {
                       {op.machine?.machine_code ?? <span className="text-muted">—</span>}
                     </td>
                     <td className="px-2.5 py-2 text-right font-mono tabular-nums">
-                      {Number(op.qty_completed).toLocaleString()} / {Number(op.qty_planned).toLocaleString()}
+                      {formatInt(op.qty_completed)} / {formatInt(op.qty_planned)}
                     </td>
                     <td className="px-2.5 py-2 font-mono">{op.actual_start?.slice(0, 16) ?? '—'}</td>
                     <td className="px-2.5 py-2 font-mono">{op.actual_end?.slice(0, 16) ?? '—'}</td>

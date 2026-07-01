@@ -7,6 +7,7 @@ import { attendancesApi, type ImportResult } from '@/api/attendance/attendances'
 import { Button } from '@/components/ui/Button';
 import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { formatInt } from '@/lib/formatNumber';
 
 export default function AttendanceImportPage() {
   const navigate = useNavigate();
@@ -137,7 +138,7 @@ function Stat({ label, value, variant = 'neutral' }: { label: string; value: num
   return (
     <div className="p-3 border border-default rounded-md bg-surface">
       <div className="text-2xs uppercase tracking-wider text-muted font-medium mb-1">{label}</div>
-      <div className={`text-2xl font-medium font-mono tabular-nums ${colour}`}>{value.toLocaleString()}</div>
+      <div className={`text-2xl font-medium font-mono tabular-nums ${colour}`}>{formatInt(value)}</div>
     </div>
   );
 }

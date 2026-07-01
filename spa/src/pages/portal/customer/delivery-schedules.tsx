@@ -8,6 +8,8 @@ import { Panel } from '@/components/ui/Panel';
 import { Button } from '@/components/ui/Button';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { formatDate } from '@/lib/formatDate';
+import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import type { DeliveryScheduleLine } from '@/types/b2b';
 
 const MONTH_OPTIONS: string[] = [];
@@ -148,10 +150,7 @@ export default function DeliverySchedulesPage() {
               <div key={s.id} className="border border-default rounded-md p-3 hover:bg-subtle/50 transition-colors">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-semibold">{s.month}</span>
-                  <span className={`inline-block px-2 py-0.5 rounded-full text-2xs font-medium uppercase ${
-                    s.status === 'confirmed' ? 'bg-success/10 text-success' :
-                    'bg-subtle text-muted'
-                  }`}>{s.status}</span>
+                  <Chip variant={chipVariantForStatus(s.status)}>{s.status}</Chip>
                 </div>
                 <table className="w-full text-xs">
                   <thead>
@@ -165,14 +164,14 @@ export default function DeliverySchedulesPage() {
                     {s.lines.map((line, li) => (
                       <tr key={li} className="border-b border-border/50">
                         <td className="py-1.5 px-2">{line.product_name}</td>
-                        <td className="py-1.5 px-2 text-right font-mono">{line.quantity}</td>
+                        <td className="py-1.5 px-2 text-right font-mono tabular-nums">{line.quantity}</td>
                         <td className="py-1.5 px-2 text-muted">{line.notes ?? '—'}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
                 <p className="text-2xs text-muted mt-1.5">
-                  Submitted {new Date(s.created_at).toLocaleDateString()}
+                  Submitted {formatDate(s.created_at)}
                 </p>
               </div>
             ))}

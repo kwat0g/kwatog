@@ -172,18 +172,18 @@ export default function MobileConditionReading() {
 
       {/* Alert banner for triggered WO */}
       {lastResult?.triggered && (
-        <div className="rounded-lg border-2 border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20 p-4" role="alert">
+        <div className="rounded-lg border-2 border-danger bg-danger-bg p-4" role="alert">
           <div className="flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+            <AlertTriangle className="w-5 h-5 text-danger flex-shrink-0 mt-0.5" />
             <div>
-              <div className="text-sm font-semibold text-red-800 dark:text-red-200">
+              <div className="text-sm font-semibold text-danger">
                 Threshold Breached
               </div>
-              <p className="text-sm text-red-700 dark:text-red-300 mt-1">
+              <p className="text-sm text-danger mt-1">
                 {lastResult.reason}
               </p>
               {lastResult.work_order && (
-                <p className="text-sm text-red-600 dark:text-red-400 mt-1 font-mono">
+                <p className="text-sm text-danger mt-1 font-mono">
                   Corrective WO created: {lastResult.work_order.mwo_number}
                 </p>
               )}
@@ -194,12 +194,12 @@ export default function MobileConditionReading() {
 
       {/* Success banner for non-breach */}
       {lastResult && !lastResult.triggered && (
-        <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 p-4">
-          <div className="flex items-center gap-2 text-sm text-emerald-800 dark:text-emerald-200">
+        <div className="rounded-lg border border-success bg-success-bg p-4">
+          <div className="flex items-center gap-2 text-sm text-success">
             <CheckCircle2 className="w-4 h-4" />
             Reading within normal range.
             {lastResult.reason && (
-              <span className="text-xs text-emerald-600 dark:text-emerald-400 ml-1">
+              <span className="text-xs text-success ml-1">
                 ({lastResult.reason})
               </span>
             )}
@@ -221,10 +221,10 @@ export default function MobileConditionReading() {
                   <span
                     className={`w-2 h-2 rounded-full flex-shrink-0 ${
                       snap.status === 'critical'
-                        ? 'bg-red-500'
+                        ? 'bg-danger'
                         : snap.status === 'warning'
-                          ? 'bg-amber-500'
-                          : 'bg-emerald-500'
+                          ? 'bg-warning'
+                          : 'bg-success'
                     }`}
                   />
                   <span className="capitalize font-medium">{snap.metric.replace(/_/g, ' ')}</span>

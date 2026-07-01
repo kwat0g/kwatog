@@ -7,6 +7,7 @@ import { Panel } from '@/components/ui/Panel';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
+import { formatDateTime } from '@/lib/formatDate';
 import type { EightDReportData } from '@/types/b2b';
 
 export default function CustomerComplaintsPage() {
@@ -20,6 +21,7 @@ export default function CustomerComplaintsPage() {
   const { data: complaints, isLoading } = useQuery({
     queryKey: ['portal', 'customer', 'complaints'],
     queryFn: () => customerPortalApi.listComplaints(),
+    placeholderData: (prev) => prev,
   });
 
   const createMut = useMutation({
@@ -183,7 +185,7 @@ export default function CustomerComplaintsPage() {
                   ))}
                   {viewing8d.report.finalized_at && (
                     <p className="text-2xs text-muted text-right">
-                      Finalized: {new Date(viewing8d.report.finalized_at).toLocaleString()}
+                      Finalized: {formatDateTime(viewing8d.report.finalized_at)}
                     </p>
                   )}
                 </div>

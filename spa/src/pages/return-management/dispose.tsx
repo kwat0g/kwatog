@@ -4,6 +4,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { returnManagementApi } from '@/api/returnManagement';
 import type { ReturnRequest, ReturnRequestItem, DispositionType, DispositionPayload } from '@/types/returnManagement';
+import { formatInt } from '@/lib/formatNumber';
 import toast from 'react-hot-toast';
 
 const DISPOSITION_OPTIONS: Array<{ value: DispositionType; label: string }> = [
@@ -84,7 +85,7 @@ export default function DisposeDialog({ rma, isOpen, onClose }: Props) {
                 <tr key={item.id} className="border-b border-default">
                   <td className="py-2 pr-3">{itemLabel(item)}</td>
                   <td className="py-2 pr-3 text-right font-mono tabular-nums">
-                    {parseFloat(item.returned_quantity || item.quantity).toLocaleString()}
+                    {formatInt(item.returned_quantity || item.quantity)}
                   </td>
                   <td className="py-2 pr-3">
                     <select

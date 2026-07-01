@@ -11,6 +11,7 @@ import { Chip } from '@/components/ui/Chip';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import type { ConditionTrendPoint, ConditionMetric, MachineHealthSnapshot } from '@/types/maintenance';
+import { formatDate, formatDateTime } from '@/lib/formatDate';
 
 const METRIC_ICONS: Record<ConditionMetric, typeof Activity> = {
   temperature: Thermometer,
@@ -79,7 +80,7 @@ function HealthGauge({ metric, snapshot }: { metric: ConditionMetric; snapshot: 
         </div>
       </div>
       {snapshot?.recorded_at && (
-        <p className="mt-2 text-2xs text-muted">Last reading: {new Date(snapshot.recorded_at).toLocaleString()}</p>
+        <p className="mt-2 text-2xs text-muted">Last reading: {formatDateTime(snapshot.recorded_at)}</p>
       )}
     </Panel>
   );
@@ -113,8 +114,8 @@ function TrendChart({ points, metric }: { points: ConditionTrendPoint[]; metric:
         })}
       </div>
       <div className="mt-1 flex justify-between text-2xs text-muted">
-        <span>{points[0]?.recorded_at ? new Date(points[0].recorded_at).toLocaleDateString() : ''}</span>
-        <span>{points[points.length - 1]?.recorded_at ? new Date(points[points.length - 1].recorded_at).toLocaleDateString() : ''}</span>
+        <span>{points[0]?.recorded_at ? formatDate(points[0].recorded_at) : ''}</span>
+        <span>{points[points.length - 1]?.recorded_at ? formatDate(points[points.length - 1].recorded_at) : ''}</span>
       </div>
     </div>
   );
@@ -126,6 +127,7 @@ export default function MachineHealthPage() {
   const { data: machines } = useQuery({
     queryKey: ['machines', 'list'],
     queryFn: () => machinesApi.list({ per_page: 500 }),
+    placeholderData: (prev) => prev,
   });
 
   const machineId = selectedMachine ?? undefined;

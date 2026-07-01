@@ -369,8 +369,8 @@ export default function InspectionSpecEditorPage() {
                 <tbody>
                   {Object.entries(spcData.data.data).map(([id, s]) => {
                     const item = s as SpcResult;
-                    const cpColor = item.cp >= 1.33 ? 'text-emerald-600 dark:text-emerald-400' : item.cp >= 1.0 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400';
-                    const cpkColor = item.cpk >= 1.33 ? 'text-emerald-600 dark:text-emerald-400' : item.cpk >= 1.0 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400';
+                    const cpColor = item.cp >= 1.33 ? 'text-success' : item.cp >= 1.0 ? 'text-warning' : 'text-danger';
+                    const cpkColor = item.cpk >= 1.33 ? 'text-success' : item.cpk >= 1.0 ? 'text-warning' : 'text-danger';
                     return (
                       <tr key={id} className="border-t border-subtle">
                         <td className="px-2.5 py-2">

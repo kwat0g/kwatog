@@ -10,6 +10,8 @@ import { DataTable, NumCell, StackedCell, type Column } from '@/components/ui/Da
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
+import { formatTime } from '@/lib/formatDate';
+import { formatInt } from '@/lib/formatNumber';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
@@ -33,7 +35,7 @@ export default function AttendancePage() {
     placeholderData: (prev) => prev,
   });
 
-  const fmtTime = (iso: string | null) => iso ? new Date(iso).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', hour12: false }) : '—';
+  const fmtTime = (iso: string | null) => iso ? formatTime(iso) : '—';
   const minToHm = (m: number) => m === 0 ? '—' : `${Math.floor(m / 60)}h ${m % 60}m`;
 
   const columns: Column<Attendance>[] = [
@@ -95,7 +97,7 @@ export default function AttendancePage() {
     <div>
       <PageHeader
         title="Daily Time Records"
-        subtitle={data ? `${data.meta.total.toLocaleString()} records` : undefined}
+        subtitle={data ? `${formatInt(data.meta.total)} records` : undefined}
         actions={
           <>
             <Button variant="secondary" size="sm" icon={<Calendar size={14} />} onClick={() => navigate('/hr/attendance/overtime')}>

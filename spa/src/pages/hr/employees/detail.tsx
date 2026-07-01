@@ -13,6 +13,7 @@ import { employeesApi, type SeparateData } from '@/api/hr/employees';
 import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { formatTime } from '@/lib/formatDate';
 import { Modal } from '@/components/ui/Modal';
 import { Panel } from '@/components/ui/Panel';
 import { Input } from '@/components/ui/Input';
@@ -389,8 +390,8 @@ function AttendanceTab({ employeeId }: { employeeId: string }) {
           {rows.map((r: any) => (
             <tr key={r.id} className="h-8 border-b border-subtle hover:bg-subtle">
               <td className="px-4 font-mono">{formatDate(r.date)}</td>
-              <td className="px-4 font-mono">{r.time_in ? new Date(r.time_in).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', hour12: false }) : '—'}</td>
-              <td className="px-4 font-mono">{r.time_out ? new Date(r.time_out).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', hour12: false }) : '—'}</td>
+              <td className="px-4 font-mono">{r.time_in ? formatTime(r.time_in) : '—'}</td>
+              <td className="px-4 font-mono">{r.time_out ? formatTime(r.time_out) : '—'}</td>
               <td className="px-4 text-right font-mono tabular-nums">{r.regular_hours}</td>
               <td className="px-4 text-right font-mono tabular-nums">{r.overtime_hours}</td>
               <td className="px-4 text-right font-mono tabular-nums">{r.night_diff_hours}</td>

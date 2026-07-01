@@ -7,6 +7,8 @@ import { Panel } from '@/components/ui/Panel';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
+import { formatPeso } from '@/lib/formatNumber';
+import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 
 export default function CustomerOrderDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -39,12 +41,7 @@ export default function CustomerOrderDetailPage() {
             <p className="text-2xs text-muted">{order.date ?? '—'}</p>
           </div>
         </div>
-        <span className={`inline-block px-2 py-0.5 rounded-full text-2xs font-medium uppercase ${
-          order.status === 'confirmed' ? 'bg-accent/10 text-accent' :
-          order.status === 'shipped' ? 'bg-info/10 text-info' :
-          order.status === 'delivered' ? 'bg-success/10 text-success' :
-          'bg-subtle text-muted'
-        }`}>{order.status.replace(/_/g, ' ')}</span>
+        <Chip variant={chipVariantForStatus(order.status)}>{order.status.replace(/_/g, ' ')}</Chip>
       </div>
 
       {/* Order-to-Cash Chain Visualization */}
@@ -72,9 +69,9 @@ export default function CustomerOrderDetailPage() {
                 <tr key={item.id} className="border-b border-border/50">
                   <td className="py-2 px-3 font-mono text-muted">{item.part_number}</td>
                   <td className="py-2 px-3">{item.name}</td>
-                  <td className="py-2 px-3 text-right">{item.quantity}</td>
-                  <td className="py-2 px-3 text-right font-mono">₱{Number(item.unit_price).toLocaleString()}</td>
-                  <td className="py-2 px-3 text-right font-mono">₱{Number(item.total_price).toLocaleString()}</td>
+                  <td className="py-2 px-3 text-right font-mono tabular-nums">{item.quantity}</td>
+                  <td className="py-2 px-3 text-right font-mono tabular-nums">{formatPeso(item.unit_price)}</td>
+                  <td className="py-2 px-3 text-right font-mono tabular-nums">{formatPeso(item.total_price)}</td>
                 </tr>
               ))}
             </tbody>
@@ -101,11 +98,11 @@ export default function CustomerOrderDetailPage() {
               {order.work_orders.map((wo) => (
                 <tr key={wo.id} className="border-b border-border/50">
                   <td className="py-2 px-3 font-mono">{wo.wo_number}</td>
-                  <td className="py-2 px-3 text-right">{wo.quantity_target}</td>
-                  <td className="py-2 px-3 text-right">{wo.quantity_produced}</td>
+                  <td className="py-2 px-3 text-right font-mono tabular-nums">{wo.quantity_target}</td>
+                  <td className="py-2 px-3 text-right font-mono tabular-nums">{wo.quantity_produced}</td>
                   <td className="py-2 px-3 text-muted">{wo.planned_start ?? '—'}</td>
                   <td className="py-2 px-3 text-right">
-                    <span className="inline-block px-2 py-0.5 rounded-full text-2xs font-medium bg-subtle text-muted uppercase">{wo.status}</span>
+                    <Chip variant={chipVariantForStatus(wo.status)}>{wo.status}</Chip>
                   </td>
                 </tr>
               ))}

@@ -78,6 +78,7 @@ export default function WarehousePage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['inventory', 'warehouse', 'tree'],
     queryFn: () => warehouseApi.tree(),
+    placeholderData: (prev) => prev,
   });
 
   const [activeWh, setActiveWh] = useState<string | null>(null);

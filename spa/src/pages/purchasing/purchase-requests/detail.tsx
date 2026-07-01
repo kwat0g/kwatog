@@ -247,7 +247,7 @@ function buildPrChainSteps(pr: PurchaseRequest): ChainStep[] {
     steps.push({
       key: `step-${r.step_order}`,
       label: r.role_slug.replace(/_/g, ' '),
-      date: r.acted_at ? new Date(r.acted_at).toLocaleDateString() : undefined,
+      date: r.acted_at ? formatDate(r.acted_at) : undefined,
       state: r.action === 'approved' ? 'done' : r.action === 'pending' ? 'active' : 'pending',
     });
   }

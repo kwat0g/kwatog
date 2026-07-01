@@ -16,6 +16,11 @@ export function formatDateLong(value: string | Date | null | undefined, fallback
   return d ? format(d, 'MMMM d, yyyy') : fallback;
 }
 
+export function formatDateFull(value: string | Date | null | undefined, fallback = '—'): string {
+  const d = toDate(value);
+  return d ? format(d, 'EEEE, MMMM d, yyyy') : fallback;
+}
+
 export function formatDateIso(value: string | Date | null | undefined, fallback = '—'): string {
   const d = toDate(value);
   return d ? format(d, 'yyyy-MM-dd') : fallback;
@@ -24,6 +29,11 @@ export function formatDateIso(value: string | Date | null | undefined, fallback 
 export function formatDateTime(value: string | Date | null | undefined, fallback = '—'): string {
   const d = toDate(value);
   return d ? format(d, 'MMM d, yyyy · HH:mm') : fallback;
+}
+
+export function formatTime(value: string | Date | null | undefined, fallback = '—'): string {
+  const d = toDate(value);
+  return d ? format(d, 'HH:mm') : fallback;
 }
 
 export function formatRelative(value: string | Date | null | undefined, fallback = '—'): string {

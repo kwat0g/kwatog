@@ -16,6 +16,7 @@ import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { ChainHeader } from '@/components/chain';
 import { usePermission } from '@/hooks/usePermission';
+import { formatPeso, formatInt, formatDecimal } from '@/lib/formatNumber';
 import { useChainProgress } from '@/hooks/useChainProgress';
 import { ChainResultModal, ChainErrorPanel } from './chain-result';
 import type { SalesOrderStatus, SoChainResult } from '@/types/crm';
@@ -209,10 +210,10 @@ export default function SalesOrderDetailPage() {
                       <div className="font-mono">{item.product?.part_number}</div>
                       <div className="text-xs text-muted">{item.product?.name}</div>
                     </td>
-                    <td className="px-2.5 py-2 text-right font-mono tabular-nums">{Number(item.quantity).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                    <td className="px-2.5 py-2 text-right font-mono tabular-nums">₱ {Number(item.unit_price).toFixed(2)}</td>
-                    <td className="px-2.5 py-2 text-right font-mono tabular-nums font-medium">₱ {Number(item.total).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                    <td className="px-2.5 py-2 text-right font-mono tabular-nums">{Number(item.quantity_delivered).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td className="px-2.5 py-2 text-right font-mono tabular-nums">{formatDecimal(item.quantity)}</td>
+                    <td className="px-2.5 py-2 text-right font-mono tabular-nums">{formatPeso(item.unit_price)}</td>
+                    <td className="px-2.5 py-2 text-right font-mono tabular-nums font-medium">{formatPeso(item.total)}</td>
+                    <td className="px-2.5 py-2 text-right font-mono tabular-nums">{formatDecimal(item.quantity_delivered)}</td>
                     <td className="px-2.5 py-2 text-right font-mono tabular-nums">{item.delivery_date}</td>
                   </tr>
                 ))}
@@ -220,17 +221,17 @@ export default function SalesOrderDetailPage() {
               <tfoot>
                 <tr className="border-t border-default bg-subtle">
                   <td className="px-2.5 py-2 text-right text-muted text-2xs uppercase" colSpan={4}>Subtotal</td>
-                  <td className="px-2.5 py-2 text-right font-mono tabular-nums">₱ {Number(data.subtotal).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td className="px-2.5 py-2 text-right font-mono tabular-nums">{formatPeso(data.subtotal)}</td>
                   <td colSpan={2} />
                 </tr>
                 <tr className="border-t border-subtle bg-subtle">
                   <td className="px-2.5 py-2 text-right text-muted text-2xs uppercase" colSpan={4}>VAT (12%)</td>
-                  <td className="px-2.5 py-2 text-right font-mono tabular-nums">₱ {Number(data.vat_amount).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td className="px-2.5 py-2 text-right font-mono tabular-nums">{formatPeso(data.vat_amount)}</td>
                   <td colSpan={2} />
                 </tr>
                 <tr className="border-t border-default bg-subtle">
                   <td className="px-2.5 py-2 text-right text-muted text-2xs uppercase font-medium" colSpan={4}>Total</td>
-                  <td className="px-2.5 py-2 text-right font-mono tabular-nums font-medium text-primary">₱ {Number(data.total_amount).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td className="px-2.5 py-2 text-right font-mono tabular-nums font-medium text-primary">{formatPeso(data.total_amount)}</td>
                   <td colSpan={2} />
                 </tr>
               </tfoot>
@@ -259,7 +260,7 @@ export default function SalesOrderDetailPage() {
                   items: data.work_orders.map((wo) => ({
                     id: wo.wo_number,
                     href: `/production/work-orders/${wo.id}`,
-                    meta: `${wo.product?.part_number ?? ''} · ${wo.quantity_produced.toLocaleString()} / ${wo.quantity_target.toLocaleString()}`,
+                    meta: `${wo.product?.part_number ?? ''} · ${formatInt(wo.quantity_produced)} / ${formatInt(wo.quantity_target)}`,
                     chip: { variant: wo.status === 'completed' || wo.status === 'closed' ? 'success' as const : wo.status === 'in_progress' ? 'info' as const : wo.status === 'paused' ? 'warning' as const : wo.status === 'cancelled' ? 'danger' as const : 'neutral' as const, text: wo.status.replace('_', ' ') },
                   })),
                 }] : []),
@@ -303,7 +304,7 @@ export default function SalesOrderDetailPage() {
             <p>
               Customer: <span className="font-medium text-primary">{data.customer?.name}</span>
               {' · '}{data.item_count} line items{' · '}
-              <span className="font-mono">₱ {Number(data.total_amount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+              <span className="font-mono">{formatPeso(data.total_amount)}</span>
             </p>
             <p className="text-muted">Confirming this order will automatically:</p>
             <ul className="list-none space-y-1 text-muted">

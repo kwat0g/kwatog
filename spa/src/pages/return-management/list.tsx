@@ -1,180 +1,191 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { PageHeader } from '@/components/layout/PageHeader';
-import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
-import { EmptyState } from '@/components/ui/EmptyState';
+import { Link, useNavigate } from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import { returnManagementApi } from '@/api/returnManagement';
+import { Button } from '@/components/ui/Button';
+import { Chip, type ChipVariant } from '@/components/ui/Chip';
+import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
+import { SkeletonTable } from '@/components/ui/Skeleton';
+import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
+import { formatDate } from '@/lib/formatDate';
 import type { ReturnRequest } from '@/types/returnManagement';
 
-const STATUS_COLORS: Record<string, string> = {
-  draft: 'bg-gray-500/20 text-gray-500 border-gray-500/30',
-  pending_approval: 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30',
-  approved: 'bg-blue-500/20 text-blue-500 border-blue-500/30',
-  received: 'bg-indigo-500/20 text-indigo-500 border-indigo-500/30',
-  inspected: 'bg-purple-500/20 text-purple-500 border-purple-500/30',
-  completed: 'bg-green-500/20 text-green-500 border-green-500/30',
-  rejected: 'bg-red-500/20 text-red-500 border-red-500/30',
-  cancelled: 'bg-gray-500/10 text-gray-400 border-gray-500/20',
+const STATUS_VARIANT: Record<string, ChipVariant> = {
+  draft: 'neutral',
+  pending_approval: 'warning',
+  approved: 'info',
+  received: 'info',
+  inspected: 'purple',
+  completed: 'success',
+  rejected: 'danger',
+  cancelled: 'neutral',
 };
 
-const TYPE_COLORS: Record<string, string> = {
-  customer_return: 'bg-cyan-500/20 text-cyan-500 border-cyan-500/30',
-  supplier_return: 'bg-orange-500/20 text-orange-500 border-orange-500/30',
+const TYPE_VARIANT: Record<string, ChipVariant> = {
+  customer_return: 'info',
+  supplier_return: 'warning',
 };
-
-function StatusBadge({ status, statusLabel }: { status: string; statusLabel?: string }) {
-  return (
-    <Badge variant="accent" className={STATUS_COLORS[status] || ''}>
-      {statusLabel || status}
-    </Badge>
-  );
-}
-
-function TypeBadge({ type, typeLabel }: { type: string; typeLabel?: string }) {
-  return (
-    <Badge variant="accent" className={TYPE_COLORS[type] || ''}>
-      {typeLabel || type}
-    </Badge>
-  );
-}
 
 export default function ReturnManagementListPage() {
-  const [typeFilter, setTypeFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [page, setPage] = useState(1);
+  const navigate = useNavigate();
   const { can } = usePermission();
+  const [filters, setFilters] = useState<Record<string, unknown>>({ page: 1, per_page: 25 });
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['return-requests', typeFilter, statusFilter, page],
-    queryFn: () =>
-      returnManagementApi.list({
-        type: typeFilter || undefined,
-        status: statusFilter || undefined,
-        per_page: 25,
-        page,
-      }),
+    queryKey: ['return-requests', filters],
+    queryFn: () => returnManagementApi.list(filters as Record<string, string | number | undefined>),
+    placeholderData: (prev) => prev,
   });
 
-  const items: ReturnRequest[] = data?.data ?? [];
-  const meta = data?.meta;
+  const columns: Column<ReturnRequest>[] = [
+    {
+      key: 'rma',
+      header: 'RMA #',
+      cell: (r) => (
+        <Link to={`/return-management/${r.id}`} className="font-mono text-accent">
+          {r.rma_number}
+        </Link>
+      ),
+    },
+    {
+      key: 'type',
+      header: 'Type',
+      cell: (r) => (
+        <Chip variant={TYPE_VARIANT[r.type] ?? 'neutral'}>
+          {r.type_label || r.type.replace(/_/g, ' ')}
+        </Chip>
+      ),
+    },
+    {
+      key: 'source',
+      header: 'Source',
+      cell: (r) => (
+        <span className="text-secondary">
+          {r.customer?.name || r.vendor?.name || r.source_label || '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      cell: (r) => (
+        <Chip variant={STATUS_VARIANT[r.status] ?? 'neutral'}>
+          {r.status_label || r.status.replace(/_/g, ' ')}
+        </Chip>
+      ),
+    },
+    {
+      key: 'reason',
+      header: 'Reason',
+      className: 'max-w-[160px]',
+      cell: (r) => (
+        <span className="text-muted truncate block">
+          {r.reason_description || r.reason_code || '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'items',
+      header: 'Items',
+      align: 'right',
+      cell: (r) => <NumCell>{r.item_count}</NumCell>,
+    },
+    {
+      key: 'date',
+      header: 'Date',
+      cell: (r) => <NumCell>{formatDate(r.return_date)}</NumCell>,
+    },
+  ];
+
+  const filterConfig: FilterConfig[] = [
+    {
+      key: 'type',
+      label: 'Type',
+      type: 'select',
+      options: [
+        { value: '', label: 'All types' },
+        { value: 'customer_return', label: 'Customer return' },
+        { value: 'supplier_return', label: 'Supplier return' },
+      ],
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      type: 'select',
+      options: [
+        { value: '', label: 'All statuses' },
+        { value: 'draft', label: 'Draft' },
+        { value: 'pending_approval', label: 'Pending approval' },
+        { value: 'approved', label: 'Approved' },
+        { value: 'received', label: 'Received' },
+        { value: 'inspected', label: 'Inspected' },
+        { value: 'completed', label: 'Completed' },
+        { value: 'rejected', label: 'Rejected' },
+        { value: 'cancelled', label: 'Cancelled' },
+      ],
+    },
+  ];
 
   return (
     <div>
       <PageHeader
         title="Return Management (RMA)"
-        subtitle="Customer returns & supplier returns"
-        backTo="/dashboard"
+        subtitle={data ? `${data.meta.total} return requests` : undefined}
         actions={
           can('return_management.manage') ? (
-            <Link to="/return-management/new">
-              <Button variant="primary" icon={<Plus size={14} />}>
-                New RMA
-              </Button>
-            </Link>
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<Plus size={14} />}
+              onClick={() => navigate('/return-management/new')}
+            >
+              New RMA
+            </Button>
           ) : null
         }
       />
-
-      {/* Filters */}
-      <div className="flex gap-3 mb-4 px-4">
-        <select
-          className="input text-sm"
-          value={typeFilter}
-          onChange={(e) => { setTypeFilter(e.target.value); setPage(1); }}
-        >
-          <option value="">All types</option>
-          <option value="customer_return">Customer returns</option>
-          <option value="supplier_return">Supplier returns</option>
-        </select>
-        <select
-          className="input text-sm"
-          value={statusFilter}
-          onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-        >
-          <option value="">All statuses</option>
-          <option value="draft">Draft</option>
-          <option value="pending_approval">Pending Approval</option>
-          <option value="approved">Approved</option>
-          <option value="received">Received</option>
-          <option value="inspected">Inspected</option>
-          <option value="completed">Completed</option>
-          <option value="rejected">Rejected</option>
-          <option value="cancelled">Cancelled</option>
-        </select>
-      </div>
-
-      {/* Table */}
-      <div className="px-4">
-        {isError ? (
-          <EmptyState icon="alert-circle" title="Failed to load return requests" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />
-        ) : isLoading ? (
-          <div className="text-center text-muted py-12">Loading…</div>
-        ) : items.length === 0 ? (
-          <div className="text-center text-muted py-12">No return requests found.</div>
-        ) : (
-          <>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-default text-left text-xs uppercase tracking-wider text-muted">
-                  <th className="py-2 pr-3 font-medium">RMA #</th>
-                  <th className="py-2 pr-3 font-medium">Type</th>
-                  <th className="py-2 pr-3 font-medium">Source</th>
-                  <th className="py-2 pr-3 font-medium">Status</th>
-                  <th className="py-2 pr-3 font-medium">Reason</th>
-                  <th className="py-2 pr-3 font-medium">Items</th>
-                  <th className="py-2 pr-3 font-medium">Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((rma) => (
-                  <tr key={rma.id} className="border-b border-default hover:bg-elevated/50 transition-colors">
-                    <td className="py-2.5 pr-3">
-                      <Link to={`/return-management/${rma.id}`} className="text-accent hover:underline font-medium">
-                        {rma.rma_number}
-                      </Link>
-                    </td>
-                    <td className="py-2.5 pr-3">
-                      <TypeBadge type={rma.type} typeLabel={rma.type_label} />
-                    </td>
-                    <td className="py-2.5 pr-3 text-secondary">
-                      {rma.customer?.name || rma.vendor?.name || rma.source_label || '—'}
-                    </td>
-                    <td className="py-2.5 pr-3">
-                      <StatusBadge status={rma.status} statusLabel={rma.status_label} />
-                    </td>
-                    <td className="py-2.5 pr-3 text-secondary max-w-[160px] truncate">
-                      {rma.reason_description || rma.reason_code || '—'}
-                    </td>
-                    <td className="py-2.5 pr-3 text-secondary">{rma.item_count}</td>
-                    <td className="py-2.5 pr-3 text-secondary">
-                      {rma.return_date ? new Date(rma.return_date).toLocaleDateString() : '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            {/* Pagination */}
-            {meta && meta.last_page > 1 && (
-              <div className="flex justify-center gap-2 mt-4">
-                {Array.from({ length: meta.last_page }, (_, i) => i + 1).map((p) => (
-                  <button
-                    key={p}
-                    onClick={() => setPage(p)}
-                    className={`px-3 py-1 text-sm rounded ${p === meta.current_page ? 'bg-accent text-white' : 'bg-elevated text-secondary hover:text-primary'}`}
-                  >
-                    {p}
-                  </button>
-                ))}
-              </div>
-            )}
-          </>
-        )}
-      </div>
+      <FilterBar
+        filters={filterConfig}
+        values={filters}
+        onSearch={(s) => setFilters((f) => ({ ...f, search: s, page: 1 }))}
+        onFilter={(k, v) => setFilters((f) => ({ ...f, [k]: v, page: 1 }))}
+        searchPlaceholder="Search RMA number..."
+      />
+      {isLoading && !data && <SkeletonTable columns={7} rows={6} />}
+      {isError && (
+        <EmptyState
+          icon="alert-circle"
+          title="Failed to load return requests"
+          action={<Button onClick={() => refetch()}>Retry</Button>}
+        />
+      )}
+      {data && data.data.length === 0 && (
+        <EmptyState
+          icon="inbox"
+          title="No return requests"
+          action={
+            can('return_management.manage') ? (
+              <Button variant="primary" onClick={() => navigate('/return-management/new')}>
+                New RMA
+              </Button>
+            ) : undefined
+          }
+        />
+      )}
+      {data && data.data.length > 0 && (
+        <div className="px-5 py-4">
+          <DataTable
+            columns={columns}
+            data={data.data}
+            meta={data.meta}
+            onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+          />
+        </div>
+      )}
     </div>
   );
 }

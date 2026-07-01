@@ -22,6 +22,7 @@ import { Select } from '@/components/ui/Select';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
+import { formatInt } from '@/lib/formatNumber';
 import type { ApiValidationError, ListParams } from '@/types';
 import { onFormInvalid } from '@/lib/formErrors';
 import type { Position } from '@/types/hr';
@@ -118,7 +119,7 @@ export default function PositionsPage() {
     <div>
       <PageHeader
         title="Positions"
-        subtitle={data ? `${data.meta.total.toLocaleString()} positions` : undefined}
+        subtitle={data ? `${formatInt(data.meta.total)} positions` : undefined}
         actions={
           can('hr.positions.manage') && (
             <Button variant="primary" size="sm" onClick={() => { setEditing(null); setModalOpen(true); }} icon={<Plus size={14} />}>
