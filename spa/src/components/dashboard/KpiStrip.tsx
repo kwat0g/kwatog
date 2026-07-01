@@ -19,9 +19,16 @@ const STATUS_DOT: Record<string, string> = {
   off_target: 'bg-red-500',
 };
 
-const TrendIcon = ({ trend }: { trend: string }) => {
-  if (trend === 'up') return <TrendingUp size={12} className="text-emerald-500" />;
-  if (trend === 'down') return <TrendingDown size={12} className="text-red-500" />;
+const TREND_COLORS: Record<string, Record<string, string>> = {
+  on_target: { up: 'text-emerald-500', down: 'text-emerald-500', flat: 'text-muted' },
+  warning: { up: 'text-amber-500', down: 'text-amber-500', flat: 'text-muted' },
+  off_target: { up: 'text-red-500', down: 'text-red-500', flat: 'text-muted' },
+};
+
+const TrendIcon = ({ trend, status }: { trend: string; status: string }) => {
+  const color = TREND_COLORS[status]?.[trend] ?? 'text-muted';
+  if (trend === 'up') return <TrendingUp size={12} className={color} />;
+  if (trend === 'down') return <TrendingDown size={12} className={color} />;
   return <Minus size={12} className="text-muted" />;
 };
 
@@ -36,11 +43,14 @@ export function KpiStrip({ codes, className }: KpiStripProps) {
   const year = prevMonth.getFullYear();
   const month = prevMonth.getMonth() + 1;
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['kpi', 'scorecard', year, month],
     queryFn: () => kpiApi.scorecard(year, month).then((r) => r.data.data),
     staleTime: 5 * 60_000,
+    retry: 1,
   });
+
+  if (isError) return null;
 
   if (isLoading || !data) {
     return (
@@ -83,7 +93,7 @@ export function KpiStrip({ codes, className }: KpiStripProps) {
             {snap && (
               <div className="flex items-center gap-1 mt-0.5 shrink-0">
                 <span className={cn('w-1.5 h-1.5 rounded-full', STATUS_DOT[snap.status] ?? 'bg-gray-400')} />
-                <TrendIcon trend={snap.trend} />
+                <TrendIcon trend={snap.trend} status={snap.status} />
               </div>
             )}
           </Link>

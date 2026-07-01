@@ -64,9 +64,9 @@ export const dashboardRoutes = (
       element={<PermissionGuard permission="dashboard.quality.view"><QcDashboardPage /></PermissionGuard>} />
     <Route path="/dashboard/admin"
       element={<PermissionGuard permission="dashboard.admin.view"><AdminDashboardPage /></PermissionGuard>} />
-    {/* Task 15 — KPI Scorecard */}
+    {/* Task 15 — KPI Scorecard (any authenticated user) */}
     <Route path="/dashboard/scorecard"
-      element={<PermissionGuard permission="dashboard.plant_manager.view"><ScorecardPage /></PermissionGuard>} />
+      element={<ScorecardPage />} />
 
     {/* Series F / Task F1 — Cross-module calendar */}
     <Route

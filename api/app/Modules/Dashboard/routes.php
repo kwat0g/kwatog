@@ -77,14 +77,12 @@ Route::prefix('dashboard')
 /*
  * Task 15 — KPI Scorecard endpoints.
  *
- * Scorecard + trend: plant_manager permission (read-only).
+ * Scorecard + trend: any authenticated user (aggregate company metrics).
  * Compute: admin-only (triggers re-calculation).
  */
 Route::middleware('auth:sanctum')->prefix('dashboard/kpi')->group(function () {
-    Route::get('/scorecard', [KpiController::class, 'scorecard'])
-        ->middleware('permission:dashboard.plant_manager.view');
-    Route::get('/trend/{code}', [KpiController::class, 'trend'])
-        ->middleware('permission:dashboard.plant_manager.view');
+    Route::get('/scorecard', [KpiController::class, 'scorecard']);
+    Route::get('/trend/{code}', [KpiController::class, 'trend']);
     Route::post('/compute', [KpiController::class, 'compute'])
         ->middleware('permission:dashboard.admin.view');
 });

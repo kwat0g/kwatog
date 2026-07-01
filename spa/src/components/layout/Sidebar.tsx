@@ -101,7 +101,7 @@ const SECTIONS: NavSection[] = [
     label: 'Overview',
     items: [
       { to: '/dashboard',     label: 'Dashboard',      icon: LayoutDashboard },
-      { to: '/dashboard/scorecard', label: 'KPI Scorecard', icon: BarChart3, permission: 'dashboard.plant_manager.view' },
+      { to: '/dashboard/scorecard', label: 'KPI Scorecard', icon: BarChart3 },
       { to: '/chains',        label: 'Chain Tracker',  icon: Workflow, permission: 'crm.sales_orders.view' },
       { to: '/approvals',     label: 'Approvals',     icon: Inbox,  permission: 'approvals.board.view', badgeKey: 'approvals' },
       { to: '/notifications', label: 'Notifications', icon: Bell,   badgeKey: 'unread' },
