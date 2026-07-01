@@ -42,6 +42,7 @@ import {
   Activity,
   BadgeCheck,
   Navigation,
+  Route,
   X,
   UserPlus,
   Star,
@@ -122,6 +123,7 @@ const SECTIONS: NavSection[] = [
     items: [
       { to: '/production/work-orders', label: 'Work Orders',      icon: FileText,      feature: 'production', permission: 'production.work_orders.view', badgeKey: 'work_orders' },
       { to: '/production/schedule',    label: 'Schedule (Gantt)', icon: CalendarClock, feature: 'production', permission: 'production.schedule.view' },
+      { to: '/production/routings',    label: 'Routings',         icon: Route,         feature: 'production', permission: 'production.routings.view' },
       { to: '/production/oee',         label: 'OEE Report',       icon: Activity,      feature: 'production', permission: 'production.dashboard.view' },
       { to: '/mrp/plans',              label: 'MRP Plans',        icon: Layers,        feature: 'mrp', permission: 'mrp.plans.view' },
       { to: '/mrp/boms',               label: 'Bill of Materials', icon: ListTree,     feature: 'mrp', permission: 'mrp.boms.view' },
