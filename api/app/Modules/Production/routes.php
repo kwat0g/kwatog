@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Modules\Production\Controllers\DashboardController;
 use App\Modules\Production\Controllers\OeeController;
+use App\Modules\Production\Controllers\ProductionRoutingController;
 use App\Modules\Production\Controllers\WorkOrderController;
 use Illuminate\Support\Facades\Route;
 
@@ -49,4 +50,11 @@ Route::middleware(['auth:sanctum', 'feature:production'])->prefix('production')-
 
     /* ─── Production dashboard (Task 58) ─── */
     Route::get('/dashboard', [DashboardController::class, 'index'])->middleware('permission:production.dashboard.view');
+
+    /* ─── Product routings (Task 10) ─── */
+    Route::get('/routings',                       [ProductionRoutingController::class, 'index'])    ->middleware('permission:production.routings.view');
+    Route::post('/routings',                      [ProductionRoutingController::class, 'store'])    ->middleware('permission:production.routings.manage');
+    Route::get('/routings/{routing}',             [ProductionRoutingController::class, 'show'])     ->middleware('permission:production.routings.view');
+    Route::put('/routings/{routing}',             [ProductionRoutingController::class, 'update'])   ->middleware('permission:production.routings.manage');
+    Route::post('/routings/{routing}/duplicate',  [ProductionRoutingController::class, 'duplicate'])->middleware('permission:production.routings.manage');
 });
