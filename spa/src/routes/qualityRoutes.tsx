@@ -22,6 +22,8 @@ const TraceabilityPage = lazy(() => import('@/pages/quality/traceability'));
 const SpcChartsListPage     = lazy(() => import('@/pages/quality/spc'));
 const SpcChartDetailPage    = lazy(() => import('@/pages/quality/spc/chart-detail'));
 const SpcCapabilityStudyPage = lazy(() => import('@/pages/quality/spc/capability-study'));
+// COPQ — Cost of Poor Quality analytics
+const CopqAnalyticsPage = lazy(() => import('@/pages/quality/copq'));
 
 export const qualityRoutes = (
   <>
@@ -63,6 +65,9 @@ export const qualityRoutes = (
         element={<PermissionGuard permission="quality.spc.view"><SpcCapabilityStudyPage /></PermissionGuard>} />
       <Route path="/quality/spc/:id"
         element={<PermissionGuard permission="quality.spc.view"><SpcChartDetailPage /></PermissionGuard>} />
+      {/* COPQ — Cost of Poor Quality analytics */}
+      <Route path="/quality/copq"
+        element={<PermissionGuard permission="quality.copq.view"><CopqAnalyticsPage /></PermissionGuard>} />
     </Route>
   </>
 );

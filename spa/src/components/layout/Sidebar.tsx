@@ -164,6 +164,7 @@ const SECTIONS: NavSection[] = [
       { to: '/quality/ncr-templates',    label: 'NCR Templates',    icon: FileText,      feature: 'quality', permission: 'quality.ncr.manage' },
       { to: '/quality/traceability',     label: 'Traceability',     icon: GitFork,       feature: 'quality', permission: 'quality.inspections.view' },
       { to: '/quality/spc',               label: 'SPC',              icon: Activity,      feature: 'quality', permission: 'quality.spc.view' },
+      { to: '/quality/copq',              label: 'COPQ',             icon: Coins,         feature: 'quality', permission: 'quality.copq.view' },
     ],
   },
   {
