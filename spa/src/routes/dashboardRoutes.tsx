@@ -20,6 +20,9 @@ const WarehouseDashboardPage   = lazy(() => import('@/pages/dashboard/warehouse'
 const QcDashboardPage          = lazy(() => import('@/pages/dashboard/quality'));
 const AdminDashboardPage       = lazy(() => import('@/pages/dashboard/admin'));
 
+// Task 15 — KPI Scorecard
+const ScorecardPage            = lazy(() => import('@/pages/dashboard/scorecard'));
+
 // Cross-module pages (no specific module guard)
 const CalendarPage       = lazy(() => import('@/pages/calendar'));
 const ApprovalsBoardPage = lazy(() => import('@/pages/approvals'));
@@ -61,6 +64,9 @@ export const dashboardRoutes = (
       element={<PermissionGuard permission="dashboard.quality.view"><QcDashboardPage /></PermissionGuard>} />
     <Route path="/dashboard/admin"
       element={<PermissionGuard permission="dashboard.admin.view"><AdminDashboardPage /></PermissionGuard>} />
+    {/* Task 15 — KPI Scorecard */}
+    <Route path="/dashboard/scorecard"
+      element={<PermissionGuard permission="dashboard.plant_manager.view"><ScorecardPage /></PermissionGuard>} />
 
     {/* Series F / Task F1 — Cross-module calendar */}
     <Route

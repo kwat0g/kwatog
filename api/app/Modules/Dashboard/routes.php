@@ -6,6 +6,7 @@ use App\Modules\Dashboard\Controllers\BadgeController;
 use App\Modules\Dashboard\Controllers\CopqWidgetController;
 use App\Modules\Dashboard\Controllers\DashboardController;
 use App\Modules\Dashboard\Controllers\DashboardLayoutController;
+use App\Modules\Dashboard\Controllers\KpiController;
 use App\Modules\Accounting\Controllers\FinanceDashboardController;
 use Illuminate\Support\Facades\Route;
 
@@ -72,3 +73,18 @@ Route::prefix('dashboard')
         Route::put('/layout',        [DashboardLayoutController::class, 'save']);
         Route::post('/layout/reset', [DashboardLayoutController::class, 'reset']);
     });
+
+/*
+ * Task 15 — KPI Scorecard endpoints.
+ *
+ * Scorecard + trend: plant_manager permission (read-only).
+ * Compute: admin-only (triggers re-calculation).
+ */
+Route::middleware('auth:sanctum')->prefix('dashboard/kpi')->group(function () {
+    Route::get('/scorecard', [KpiController::class, 'scorecard'])
+        ->middleware('permission:dashboard.plant_manager.view');
+    Route::get('/trend/{code}', [KpiController::class, 'trend'])
+        ->middleware('permission:dashboard.plant_manager.view');
+    Route::post('/compute', [KpiController::class, 'compute'])
+        ->middleware('permission:dashboard.admin.view');
+});
