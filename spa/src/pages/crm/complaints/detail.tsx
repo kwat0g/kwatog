@@ -8,7 +8,7 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
-import { Check, Ban, FileDown, Lock } from 'lucide-react';
+import { Check, Ban, FileDown, Lock, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { AxiosError } from 'axios';
 import { complaintsApi, type EightDPatch } from '@/api/crm/complaints';
@@ -183,6 +183,11 @@ export default function ComplaintDetailPage() {
         ]}
         actions={
           <div className="flex items-center gap-2">
+            <Link to="/quality/traceability">
+              <Button variant="secondary" size="sm" icon={<Search size={14} />}>
+                Trace
+              </Button>
+            </Link>
             {report && isFinalized && (
               <Button variant="secondary" size="sm" icon={<FileDown size={14} />}
                 onClick={() => window.open(complaintsApi.pdfUrl(id), '_blank')}>
