@@ -169,6 +169,7 @@ const SECTIONS: NavSection[] = [
       { to: '/quality/traceability',     label: 'Traceability',     icon: GitFork,       feature: 'quality', permission: 'quality.inspections.view' },
       { to: '/quality/spc',               label: 'SPC',              icon: Activity,      feature: 'quality', permission: 'quality.spc.view' },
       { to: '/quality/copq',              label: 'COPQ',             icon: Coins,         feature: 'quality', permission: 'quality.copq.view' },
+      { to: '/quality/documents',          label: 'Documents',        icon: FileText,      feature: 'quality', permission: 'quality.documents.view' },
     ],
   },
   {
