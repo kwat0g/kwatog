@@ -35,7 +35,7 @@ export function DevErrorPanel() {
         onClick={toggle}
         className={cn(
           'fixed bottom-4 right-4 z-50 flex items-center gap-2 px-3 py-1.5 rounded-full',
-          'border border-default bg-canvas shadow-lg text-xs',
+          'border border-default bg-canvas text-xs',
           unread > 0 ? 'text-danger-fg border-danger-bg' : 'text-muted',
           'hover:bg-elevated transition-colors',
         )}
@@ -53,7 +53,7 @@ export function DevErrorPanel() {
       </button>
 
       {open && (
-        <div className="fixed bottom-16 right-4 z-50 w-[min(640px,calc(100vw-32px))] max-h-[70vh] flex flex-col rounded-md border border-default bg-canvas shadow-2xl">
+        <div className="fixed bottom-16 right-4 z-50 w-[min(640px,calc(100vw-32px))] max-h-[70vh] flex flex-col rounded-md border border-default bg-canvas">
           <header className="flex items-center justify-between px-3 py-2 border-b border-default">
             <div className="flex items-center gap-2">
               <AlertTriangle size={14} className="text-danger-fg" />
@@ -83,7 +83,7 @@ export function DevErrorPanel() {
 
           <div className="overflow-y-auto flex-1">
             {entries.length === 0 ? (
-              <div className="p-6 text-center text-xs text-muted">
+              <div className="p-5 text-center text-xs text-muted">
                 No server errors captured yet.
               </div>
             ) : (

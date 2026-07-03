@@ -94,20 +94,20 @@ export default function RecruitmentDashboard() {
       />
 
       {/* Stats strip */}
-      <div className="flex items-center gap-6 px-5 py-3 border-b border-default">
+      <div className="flex items-center gap-4 px-5 py-3 border-b border-default">
         <div>
-          <p className="text-2xl font-bold font-mono tabular-nums">{openPostings.length}</p>
+          <p className="text-2xl font-medium font-mono tabular-nums">{openPostings.length}</p>
           <p className="text-2xs text-muted font-medium uppercase tracking-wider">Open Postings</p>
         </div>
         <div className="h-8 w-px bg-border" />
         <div>
-          <p className="text-2xl font-bold font-mono tabular-nums">{totalApps}</p>
+          <p className="text-2xl font-medium font-mono tabular-nums">{totalApps}</p>
           <p className="text-2xs text-muted font-medium uppercase tracking-wider">Total Applications</p>
         </div>
         <div className="h-8 w-px bg-border" />
         {PIPELINE_STAGES.map((stage) => (
           <div key={stage}>
-            <p className="text-lg font-bold font-mono tabular-nums">{stageCounts[stage] ?? 0}</p>
+            <p className="text-lg font-medium font-mono tabular-nums">{stageCounts[stage] ?? 0}</p>
             <p className="text-2xs text-muted font-medium uppercase tracking-wider">{STAGE_LABEL[stage]}</p>
           </div>
         ))}

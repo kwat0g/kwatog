@@ -90,7 +90,7 @@ function CustomTooltip({ active, payload }: { active?: boolean; payload?: Array<
   if (!active || !payload?.[0]) return null;
   const pt = payload[0].payload;
   return (
-    <div className="bg-canvas border border-default rounded-md shadow-lg p-3 text-xs max-w-xs">
+    <div className="bg-canvas border border-default rounded-md p-3 text-xs max-w-xs">
       <div className="font-medium mb-1">Subgroup #{pt.subgroup}</div>
       <div className="font-mono tabular-nums">
         Mean: {pt.value.toFixed(4)}
@@ -120,7 +120,7 @@ function RangeTooltip({ active, payload }: { active?: boolean; payload?: Array<{
   if (!active || !payload?.[0]) return null;
   const pt = payload[0].payload;
   return (
-    <div className="bg-canvas border border-default rounded-md shadow-lg p-3 text-xs">
+    <div className="bg-canvas border border-default rounded-md p-3 text-xs">
       <div className="font-medium mb-1">Subgroup #{pt.subgroup}</div>
       <div className="font-mono tabular-nums">Range: {pt.range.toFixed(4)}</div>
     </div>

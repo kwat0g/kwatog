@@ -101,7 +101,7 @@ export default function BudgetCreatePage() {
   if (yearsLoading) return <SkeletonDetail />;
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-5 space-y-6">
       <PageHeader
         title="Create Budget"
         subtitle="Set up a new budget with monthly allocations per account"
@@ -110,7 +110,7 @@ export default function BudgetCreatePage() {
         breadcrumbs={[{ label: 'Budgeting', href: '/budgeting' }, { label: 'Create Budget' }]}
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Budget Details */}
         <Panel title="Budget Details">
           <div className="space-y-4">
@@ -178,8 +178,8 @@ export default function BudgetCreatePage() {
               <span className="font-medium">{lineItems.filter((li) => li.account_id > 0).length}</span>
             </div>
             <div className="flex justify-between py-2 border-t border-default">
-              <span className="font-semibold">Total Allocated</span>
-              <span className="font-mono tabular-nums font-bold text-lg">₱{(totalAllocated / 1_000_000).toFixed(2)}M</span>
+              <span className="font-medium">Total Allocated</span>
+              <span className="font-mono tabular-nums font-medium text-lg">₱{(totalAllocated / 1_000_000).toFixed(2)}M</span>
             </div>
           </div>
         </Panel>

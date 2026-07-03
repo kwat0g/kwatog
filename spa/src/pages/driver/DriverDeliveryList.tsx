@@ -23,12 +23,12 @@ export default function DriverDeliveryList() {
 
   return (
     <div className="space-y-3">
-      <h1 className="text-lg font-semibold">Today's Deliveries</h1>
+      <h1 className="text-lg font-medium">Today's Deliveries</h1>
       {rows.map(d => (
         <Link
           key={d.id}
           to={`/driver/${d.id}`}
-          className="block rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+          className="block rounded-md border border-zinc-200 dark:border-zinc-800 bg-canvas dark:bg-zinc-900 p-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
         >
           <div className="flex items-baseline justify-between">
             <div className="font-mono text-sm">{d.delivery_number}</div>
@@ -74,7 +74,7 @@ function Skeleton() {
     >
       <span className="sr-only">Loading deliveries…</span>
       {[0, 1, 2].map(i => (
-        <div key={i} className="h-20 rounded-lg bg-zinc-100 dark:bg-zinc-800" />
+        <div key={i} className="h-20 rounded-md bg-zinc-100 dark:bg-zinc-800" />
       ))}
     </div>
   );

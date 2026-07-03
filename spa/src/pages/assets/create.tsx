@@ -68,7 +68,7 @@ export default function CreateAssetPage() {
   return (
     <div>
       <PageHeader title="New asset" backTo="/assets" backLabel="Assets" />
-      <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-3xl mx-auto px-5 py-6">
+      <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-3xl mx-auto px-5 py-4">
         <fieldset className="mb-6">
           <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">Identification</legend>
           <Input label="Name" {...register('name')} error={errors.name?.message} required />

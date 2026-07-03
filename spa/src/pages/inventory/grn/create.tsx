@@ -159,7 +159,7 @@ export default function CreateGrnPage() {
   return (
     <div>
       <PageHeader title="New GRN" backTo="/inventory/grn" backLabel="GRNs" />
-      <div className="max-w-5xl mx-auto px-5 py-6 space-y-4">
+      <div className="max-w-5xl mx-auto px-5 py-4 space-y-4">
         <Panel title="Reference">
           <div className="grid grid-cols-3 gap-3">
             <Select

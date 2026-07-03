@@ -85,7 +85,7 @@ export default function DriverPhotoCapture() {
       >
         ← Back to delivery
       </Link>
-      <h1 className="text-lg font-semibold">Receipt Photo</h1>
+      <h1 className="text-lg font-medium">Receipt Photo</h1>
 
       <input
         ref={fileRef}
@@ -104,9 +104,9 @@ export default function DriverPhotoCapture() {
       />
 
       {preview ? (
-        <img src={preview} alt="receipt preview" className="w-full rounded-lg" />
+        <img src={preview} alt="receipt preview" className="w-full rounded-md" />
       ) : (
-        <div className="aspect-[4/3] rounded-lg border-2 border-dashed border-zinc-300 dark:border-zinc-700 flex items-center justify-center text-zinc-500">
+        <div className="aspect-[4/3] rounded-md border-2 border-dashed border-zinc-300 dark:border-zinc-700 flex items-center justify-center text-zinc-500">
           No photo yet
         </div>
       )}
@@ -121,14 +121,14 @@ export default function DriverPhotoCapture() {
         <button
           type="button"
           onClick={() => fileRef.current?.click()}
-          className="rounded-lg border border-zinc-300 dark:border-zinc-700 py-3 min-h-[44px] focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+          className="rounded-md border border-zinc-300 dark:border-zinc-700 py-3 min-h-[44px] focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
         >
           {preview ? 'Retake' : 'Take Photo'}
         </button>
         <button
           type="button"
           onClick={() => galleryRef.current?.click()}
-          className="rounded-lg border border-zinc-300 dark:border-zinc-700 py-3 min-h-[44px] focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+          className="rounded-md border border-zinc-300 dark:border-zinc-700 py-3 min-h-[44px] focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
         >
           Choose from Gallery
         </button>
@@ -138,7 +138,7 @@ export default function DriverPhotoCapture() {
         type="button"
         disabled={!file || upload.isPending}
         onClick={() => upload.mutate()}
-        className="w-full rounded-lg bg-indigo-600 text-white py-3 font-medium disabled:opacity-60 min-h-[44px] focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+        className="w-full rounded-md bg-indigo-600 text-white py-3 font-medium disabled:opacity-60 min-h-[44px] focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
       >
         {upload.isPending ? 'Uploading…' : 'Upload Photo'}
       </button>

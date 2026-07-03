@@ -126,7 +126,7 @@ export default function LeaveCalendarPage() {
 
       {/* Error state */}
       {isError && (
-        <div className="px-5 py-8">
+        <div className="px-5 py-5">
           <EmptyState
             icon="alert-circle"
             title="Failed to load calendar"

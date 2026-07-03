@@ -103,7 +103,7 @@ export function ProcessSection() {
         ref={pinRef}
         className={cn(horizontal && 'lg:flex lg:h-screen lg:flex-col lg:justify-center')}
       >
-        <div className="px-5 sm:px-8 pt-20 sm:pt-28 lg:pt-0">
+        <div className="px-5 sm:px-5 pt-20 sm:pt-28 lg:pt-0">
           <SectionHeading
             eyebrow="The Ogami process"
             title={
@@ -145,7 +145,7 @@ export function ProcessSection() {
           <div
             ref={innerRef}
             className={cn(
-              'flex flex-col gap-5 px-5 pb-24 sm:px-8',
+              'flex flex-col gap-5 px-5 pb-24 sm:px-5',
               horizontal &&
                 'lg:flex-row lg:items-stretch lg:gap-7 lg:pb-0 lg:pr-[12vw]',
             )}
@@ -159,7 +159,7 @@ export function ProcessSection() {
                   data-step-index={step.index}
                   data-active="false"
                   className={cn(
-                    'group relative flex flex-col rounded-xl border border-landing-border bg-landing-elevated p-6 sm:p-7 transition-colors duration-500',
+                    'group relative flex flex-col rounded-md border border-landing-border bg-landing-elevated p-5 sm:p-7 transition-colors duration-500',
                     'hover:border-landing-accent/40',
                     // Active state: top accent rule + stronger border
                     'data-[active=true]:border-landing-accent/60',
@@ -184,12 +184,12 @@ export function ProcessSection() {
                     >
                       {step.index}
                     </span>
-                    <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-landing-border text-landing-text-secondary transition-colors duration-500 group-hover:border-landing-accent/40 group-hover:text-landing-accent group-data-[active=true]:border-landing-accent/40 group-data-[active=true]:text-landing-accent">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-md border border-landing-border text-landing-text-secondary transition-colors duration-500 group-hover:border-landing-accent/40 group-hover:text-landing-accent group-data-[active=true]:border-landing-accent/40 group-data-[active=true]:text-landing-accent">
                       <Icon size={20} strokeWidth={1.6} />
                     </div>
                   </div>
 
-                  <h3 className="mt-8 font-display text-xl font-semibold tracking-tight text-landing-text">
+                  <h3 className="mt-8 font-display text-xl font-medium tracking-tight text-landing-text">
                     {step.title}
                   </h3>
                   <p className="mt-3 font-sans text-[14px] leading-relaxed text-landing-text-secondary">

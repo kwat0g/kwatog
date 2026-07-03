@@ -109,7 +109,7 @@ export function NotificationBell() {
 
       {open && (
         <div
-          className="absolute right-0 top-9 w-80 bg-canvas border border-default rounded-md shadow-menu z-50 animate-fade-in overflow-hidden"
+          className="absolute right-0 top-9 w-80 bg-canvas border border-default rounded-md-menu z-50 animate-fade-in overflow-hidden"
           role="menu"
         >
           <div className="px-3 py-2 border-b border-default flex items-center justify-between">
@@ -129,7 +129,7 @@ export function NotificationBell() {
           </div>
 
           {items.length === 0 ? (
-            <div className="px-3 py-6 text-center text-sm text-muted">No notifications yet.</div>
+            <div className="px-3 py-4 text-center text-sm text-muted">No notifications yet.</div>
           ) : (
             <ul className="max-h-96 overflow-y-auto divide-y divide-subtle">
               {items.map((n) => {

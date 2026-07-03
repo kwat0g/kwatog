@@ -48,7 +48,7 @@ export default function BalanceSheetPage() {
           <Section title="Assets" rows={data.assets.accounts} total={data.assets.total} />
           <Section title="Liabilities" rows={data.liabilities.accounts} total={data.liabilities.total} />
           <Section title="Equity" rows={data.equity.accounts} total={data.equity.total} />
-          <div className="col-span-3 flex justify-end gap-8 pt-2 border-t border-default text-sm font-mono tabular-nums">
+          <div className="col-span-3 flex justify-end gap-5 pt-2 border-t border-default text-sm font-mono tabular-nums">
             <div>Total Assets: <span className="font-medium">{formatPeso(data.total_assets)}</span></div>
             <div>Total Liabilities + Equity: <span className="font-medium">{formatPeso(data.total_liabilities_equity)}</span></div>
           </div>

@@ -253,7 +253,7 @@ function Stat({
     <div>
       <div className="text-2xs uppercase tracking-wider text-muted font-medium">{label}</div>
       <div className="flex items-center gap-2 mt-0.5">
-        <span className="text-lg font-semibold tabular-nums">{value}</span>
+        <span className="text-lg font-medium tabular-nums">{value}</span>
         {tone !== 'neutral' && (
           <Chip variant={tone}>{tone === 'success' ? 'common' : 'different'}</Chip>
         )}

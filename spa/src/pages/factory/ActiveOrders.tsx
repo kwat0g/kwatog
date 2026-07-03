@@ -35,7 +35,7 @@ export default function ActiveOrders() {
   return (
     <div className="space-y-3 touch-manipulation">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">Active Work Orders</h1>
+        <h1 className="text-lg font-medium">Active Work Orders</h1>
         <button
           type="button"
           onClick={() => refetch()}
@@ -51,7 +51,7 @@ export default function ActiveOrders() {
         <Link
           key={wo.id}
           to={`/factory/${wo.id}/output`}
-          className="block rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 active:bg-zinc-50 dark:active:bg-zinc-800"
+          className="block rounded-md border border-zinc-200 dark:border-zinc-800 bg-canvas dark:bg-zinc-900 p-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 active:bg-zinc-50 dark:active:bg-zinc-800"
         >
           {/* Header: WO number + status */}
           <div className="flex items-center justify-between">
@@ -119,7 +119,7 @@ function Skeleton() {
     <div role="status" aria-live="polite" aria-busy="true" className="space-y-3 animate-pulse">
       <span className="sr-only">Loading work orders...</span>
       {[0, 1, 2, 3].map(i => (
-        <div key={i} className="h-32 rounded-lg bg-zinc-100 dark:bg-zinc-800" />
+        <div key={i} className="h-32 rounded-md bg-zinc-100 dark:bg-zinc-800" />
       ))}
     </div>
   );

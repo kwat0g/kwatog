@@ -29,7 +29,7 @@ export function BackToTop() {
       aria-label="Back to top"
       className={cn(
         'fixed bottom-6 right-6 z-40 flex h-11 w-11 items-center justify-center',
-        'rounded-full border border-landing-border bg-landing-surface text-landing-text shadow-menu',
+        'rounded-full border border-landing-border bg-landing-surface text-landing-text-menu',
         'transition-all duration-300 hover:bg-landing-elevated hover:border-landing-accent/40',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas',
         visible ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0 pointer-events-none',

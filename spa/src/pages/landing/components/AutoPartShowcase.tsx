@@ -92,7 +92,7 @@ export function AutoPartShowcase({ className }: AutoPartShowcaseProps) {
       )}
 
       {/* ghosted cross-section base */}
-      <div className="absolute inset-0 flex items-center justify-center p-10">
+      <div className="absolute inset-0 flex items-center justify-center p-5">
         <ProfileSilhouette part={part} className={motionOK ? 'opacity-[0.28]' : 'opacity-90'} />
       </div>
 

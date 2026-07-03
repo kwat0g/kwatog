@@ -54,7 +54,7 @@ export default function CreateMaintenanceWorkOrderPage() {
     <div>
       <PageHeader title="New maintenance work order" backTo="/maintenance/work-orders" backLabel="Work orders" breadcrumbs={[{ label: 'Maintenance', href: '/maintenance' }, { label: 'Work Orders', href: '/maintenance/work-orders' }, { label: 'New' }]} />
 
-      <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-2xl mx-auto px-5 py-6">
+      <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-2xl mx-auto px-5 py-4">
         <fieldset className="mb-6">
           <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">Target</legend>
           <div className="grid grid-cols-2 gap-3">

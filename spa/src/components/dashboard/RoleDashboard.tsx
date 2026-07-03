@@ -36,7 +36,7 @@ export function RoleDashboard({ role }: { role: Role }) {
 
   if (isLoading) {
     return (
-      <div className="px-5 py-6 space-y-4">
+      <div className="px-5 py-4 space-y-4">
         <div className="grid grid-cols-4 gap-2">
           {[1, 2, 3, 4].map((i) => <SkeletonBlock key={i} className="h-16 rounded-md" />)}
         </div>
@@ -46,7 +46,7 @@ export function RoleDashboard({ role }: { role: Role }) {
   }
   if (isError || !data) {
     return (
-      <div className="px-5 py-6">
+      <div className="px-5 py-4">
         <EmptyState icon="alert-circle" title="Failed to load dashboard"
           action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />
       </div>

@@ -242,7 +242,7 @@ export default function WarehouseDashboard() {
     return (
       <div>
         <PageHeader title="Warehouse Dashboard" subtitle="Inventory & logistics" />
-        <div className="px-5 py-6 space-y-4">
+        <div className="px-5 py-4 space-y-4">
           <div className="grid grid-cols-4 gap-2">
             {[1, 2, 3, 4].map((i) => <SkeletonBlock key={i} className="h-16 rounded-md" />)}
           </div>
@@ -257,7 +257,7 @@ export default function WarehouseDashboard() {
     return (
       <div>
         <PageHeader title="Warehouse Dashboard" subtitle="Inventory & logistics" />
-        <div className="px-5 py-6">
+        <div className="px-5 py-4">
           <EmptyState
             icon="alert-circle"
             title="Failed to load dashboard"

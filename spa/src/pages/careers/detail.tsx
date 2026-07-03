@@ -89,10 +89,10 @@ export default function JobPostingDetailPage() {
   const posting = data;
 
   return (
-    <div className="min-h-screen bg-white" style={{ fontFamily: "'Bricolage Grotesque Variable', sans-serif" }}>
+    <div className="min-h-screen bg-canvas" style={{ fontFamily: "'Bricolage Grotesque Variable', sans-serif" }}>
       <LandingNav open={menuOpen} onOpenChange={setMenuOpen} />
 
-      <main className="mx-auto max-w-3xl px-6 pb-24 pt-32">
+      <main className="mx-auto max-w-3xl px-5 pb-24 pt-32">
         <Link
           to="/careers"
           className="mb-8 inline-flex items-center gap-1.5 text-sm text-neutral-500 hover:text-neutral-900"
@@ -112,7 +112,7 @@ export default function JobPostingDetailPage() {
 
         {posting && (
           <>
-            <h1 className="text-3xl font-bold tracking-tight text-neutral-900">{posting.title}</h1>
+            <h1 className="text-3xl font-medium tracking-tight text-neutral-900">{posting.title}</h1>
             <div className="mt-3 flex flex-wrap gap-4 text-sm text-neutral-600">
               <span className="flex items-center gap-1.5">
                 <MapPin size={14} /> {posting.department.name}
@@ -128,12 +128,12 @@ export default function JobPostingDetailPage() {
             </div>
 
             <section className="mt-8">
-              <h2 className="text-lg font-semibold text-neutral-900">Description</h2>
+              <h2 className="text-lg font-medium text-neutral-900">Description</h2>
               <p className="mt-2 whitespace-pre-line text-neutral-700">{posting.description}</p>
             </section>
 
             <section className="mt-6">
-              <h2 className="text-lg font-semibold text-neutral-900">Requirements</h2>
+              <h2 className="text-lg font-medium text-neutral-900">Requirements</h2>
               <div className="mt-3 flex flex-wrap gap-2">
                 {posting.requirements
                   .split('\n')
@@ -159,13 +159,13 @@ export default function JobPostingDetailPage() {
             <hr className="my-10 border-neutral-200" />
 
             {trackingCode ? (
-              <div className="rounded-md border border-default bg-success-bg p-8 text-center">
+              <div className="rounded-md border border-default bg-success-bg p-5 text-center">
                 <CheckCircle className="mx-auto mb-3 text-success" size={40} />
-                <h2 className="text-xl font-bold text-neutral-900">Application Submitted!</h2>
+                <h2 className="text-xl font-medium text-neutral-900">Application Submitted!</h2>
                 <p className="mt-2 text-neutral-600">
                   Your tracking code is:
                 </p>
-                <p className="mt-1 font-mono text-2xl font-bold tracking-widest text-neutral-900">
+                <p className="mt-1 font-mono text-2xl font-medium tracking-widest text-neutral-900">
                   {trackingCode}
                 </p>
                 <p className="mt-3 text-sm text-neutral-500">
@@ -175,7 +175,7 @@ export default function JobPostingDetailPage() {
               </div>
             ) : (
               <div>
-                <h2 className="text-xl font-bold text-neutral-900">Apply for this Position</h2>
+                <h2 className="text-xl font-medium text-neutral-900">Apply for this Position</h2>
                 <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-4">
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div>

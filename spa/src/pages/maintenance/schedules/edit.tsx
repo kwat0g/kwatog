@@ -84,7 +84,7 @@ export default function EditMaintenanceSchedulePage() {
           { label: 'Edit' },
         ]}
       />
-      <form onSubmit={handleSubmit((v) => mutation.mutate(v), onFormInvalid<FormValues>())} className="max-w-2xl mx-auto px-5 py-6">
+      <form onSubmit={handleSubmit((v) => mutation.mutate(v), onFormInvalid<FormValues>())} className="max-w-2xl mx-auto px-5 py-4">
         <div className="mb-6 p-3 bg-subtle rounded-md text-sm">
           <span className="text-muted text-xs uppercase tracking-wider font-medium mr-2">Target</span>
           <span className="font-mono">{data.maintainable?.code ?? '—'}</span>

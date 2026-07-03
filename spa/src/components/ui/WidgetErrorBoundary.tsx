@@ -9,7 +9,7 @@ export function WidgetErrorBoundary({ children }: { children: React.ReactNode })
   return (
     <ErrorBoundary
       fallback={
-        <div className="flex flex-col items-center justify-center p-6 border border-default rounded-md bg-surface text-center">
+        <div className="flex flex-col items-center justify-center p-5 border border-default rounded-md bg-surface text-center">
           <h3 className="text-sm font-medium text-primary mb-1">Unable to load widget</h3>
           <p className="text-xs text-muted mb-3">This widget failed to render.</p>
           <Button

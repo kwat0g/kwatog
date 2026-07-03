@@ -84,7 +84,7 @@ function SelfServiceContent() {
   /* ─── ERROR ─── */
   if (isError || !data) {
     return (
-      <div className="px-5 py-6">
+      <div className="px-5 py-4">
         <EmptyState
           icon="alert-circle"
           title="Couldn't load your dashboard"

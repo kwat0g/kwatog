@@ -157,7 +157,7 @@ export function CommandPalette({ open, onClose }: Props) {
     >
       <div className="absolute inset-0 bg-black/30" />
       <div
-        className="relative w-full max-w-2xl rounded-md border border-default bg-canvas shadow-menu overflow-hidden"
+        className="relative w-full max-w-2xl rounded-md border border-default bg-canvas-menu overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2 px-3 py-2.5 border-b border-default">
@@ -176,7 +176,7 @@ export function CommandPalette({ open, onClose }: Props) {
 
         <div ref={listRef} className="max-h-[420px] overflow-y-auto">
           {trimmed.length < 2 && (
-            <div className="px-3 py-6 text-xs text-muted">
+            <div className="px-3 py-4 text-xs text-muted">
               <p>Type at least 2 characters to search across the ERP.</p>
               <p className="mt-2 text-2xs uppercase tracking-wider text-subtle">Try</p>
               <ul className="mt-1 space-y-0.5 text-xs">
@@ -191,7 +191,7 @@ export function CommandPalette({ open, onClose }: Props) {
           )}
 
           {showEmptyState && (
-            <div className="px-3 py-8 text-center">
+            <div className="px-3 py-5 text-center">
               <p className="text-sm text-default">
                 No results for <span className="font-mono">"{trimmed}"</span>
               </p>

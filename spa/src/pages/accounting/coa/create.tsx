@@ -75,7 +75,7 @@ export default function CreateAccountPage() {
       <PageHeader title="New account" backTo="/accounting/coa" backLabel="Chart of Accounts"
         breadcrumbs={[{ label: 'Finance', href: '/accounting/coa' }, { label: 'COA', href: '/accounting/coa' }, { label: 'New' }]} />
       <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())}
-        className="max-w-2xl mx-auto px-5 py-6 space-y-4">
+        className="max-w-2xl mx-auto px-5 py-4 space-y-4">
 
         <div className="grid grid-cols-2 gap-3">
           <Input label="Account code" {...register('code')} error={errors.code?.message} required

@@ -81,7 +81,7 @@ export default function CreateAssetTransferPage() {
   return (
     <div>
       <PageHeader title="New asset transfer" backTo="/assets/transfers" backLabel="Transfers" />
-      <form onSubmit={handleSubmit(onSubmit, onFormInvalid<FormValues>())} className="max-w-3xl mx-auto px-5 py-6">
+      <form onSubmit={handleSubmit(onSubmit, onFormInvalid<FormValues>())} className="max-w-3xl mx-auto px-5 py-4">
         <fieldset className="mb-6">
           <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">Transfer details</legend>
           <Select label="Asset" {...register('asset_id')} error={errors.asset_id?.message} required disabled={assetsLoading}>

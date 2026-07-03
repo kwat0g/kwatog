@@ -156,7 +156,7 @@ export default function EditBomPage() {
       />
       <form
         onSubmit={handleSubmit((v) => update.mutate(v), onFormInvalid<FormValues>())}
-        className="max-w-4xl mx-auto px-5 py-6"
+        className="max-w-4xl mx-auto px-5 py-4"
       >
         {/* Read-only product banner */}
         <div className="mb-6 p-3 bg-subtle rounded-md text-sm">

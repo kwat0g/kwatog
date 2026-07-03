@@ -111,7 +111,7 @@ export function StatsSection() {
             data-reveal-delay={(i * 0.08).toFixed(2)}
             className="border-l border-landing-border pl-6"
           >
-            <div className="font-display text-[clamp(2.75rem,6vw,4rem)] font-bold leading-none tracking-tight text-landing-text">
+            <div className="font-display text-[clamp(2.75rem,6vw,4rem)] font-medium leading-none tracking-tight text-landing-text">
               <Counter stat={stat} />
             </div>
             <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.16em] text-landing-muted">

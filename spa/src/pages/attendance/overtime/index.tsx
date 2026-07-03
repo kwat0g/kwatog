@@ -216,7 +216,7 @@ function KanbanColumn({
       noPadding
     >
       {items.length === 0 ? (
-        <p className="text-xs text-muted px-4 py-6 text-center">Nothing here.</p>
+        <p className="text-xs text-muted px-4 py-4 text-center">Nothing here.</p>
       ) : (
         <ul className="divide-y divide-subtle">
           {items.map((o) => (

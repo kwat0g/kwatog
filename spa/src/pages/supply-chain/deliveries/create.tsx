@@ -129,7 +129,7 @@ export default function CreateDeliveryPage() {
 
       <form
         onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())}
-        className="max-w-3xl mx-auto px-5 py-6"
+        className="max-w-3xl mx-auto px-5 py-4"
       >
         {/* ── Sales Order ── */}
         <fieldset className="mb-6">

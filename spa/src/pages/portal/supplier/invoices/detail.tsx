@@ -38,7 +38,7 @@ export default function SupplierInvoiceDetailPage() {
     }
   };
 
-  if (isLoading) return <SkeletonBlock className="h-80 rounded-lg" />;
+  if (isLoading) return <SkeletonBlock className="h-80 rounded-md" />;
   if (!invoice) return <EmptyState icon="file-x" title="Invoice not found" />;
 
   return (
@@ -48,7 +48,7 @@ export default function SupplierInvoiceDetailPage() {
           <ArrowLeft size={16} />
         </Link>
         <div>
-          <h2 className="text-sm font-semibold">{invoice.invoice_number}</h2>
+          <h2 className="text-sm font-medium">{invoice.invoice_number}</h2>
           <p className="text-2xs text-muted">{invoice.date ?? '—'}</p>
         </div>
         <Button variant="ghost" size="sm" icon={<FileDown size={14} />} onClick={downloadPdf} className="ml-auto">
@@ -62,13 +62,13 @@ export default function SupplierInvoiceDetailPage() {
 
       <div className="grid grid-cols-3 gap-3">
         <Panel title="Total Amount" className="text-center">
-          <p className="text-lg font-semibold font-mono">{formatPeso(invoice.total_amount)}</p>
+          <p className="text-lg font-medium font-mono">{formatPeso(invoice.total_amount)}</p>
         </Panel>
         <Panel title="Balance" className="text-center">
-          <p className="text-lg font-semibold font-mono">{formatPeso(invoice.balance)}</p>
+          <p className="text-lg font-medium font-mono">{formatPeso(invoice.balance)}</p>
         </Panel>
         <Panel title="Due Date" className="text-center">
-          <p className="text-lg font-semibold">{invoice.due_date ?? '—'}</p>
+          <p className="text-lg font-medium">{invoice.due_date ?? '—'}</p>
         </Panel>
       </div>
 

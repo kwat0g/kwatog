@@ -50,7 +50,7 @@ export function LandingFooter() {
   };
 
   return (
-    <footer className="relative border-t border-landing-border bg-landing-canvas px-5 py-16 sm:px-8">
+    <footer className="relative border-t border-landing-border bg-landing-canvas px-5 py-16 sm:px-5">
       <div className="mx-auto max-w-7xl">
         <div className="grid gap-12 md:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr_1.2fr]">
           {/* Brand + address */}
@@ -226,7 +226,7 @@ export function LandingFooter() {
           <p className="font-mono text-[11px] text-landing-subtle-text">
             © {year} {COMPANY.legalName}. All rights reserved.
           </p>
-          <div className="flex flex-wrap gap-4 sm:gap-6">
+          <div className="flex flex-wrap gap-4 sm:gap-4">
             {FOOTER_LINKS.legal.map((link) => (
               <a
                 key={link.label}

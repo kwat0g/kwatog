@@ -52,7 +52,7 @@ function StatCard({ label, value, icon: Icon, trend }: { label: string; value: s
       <div className="flex items-start justify-between">
         <div>
           <p className="text-2xs uppercase tracking-wider text-muted">{label}</p>
-          <p className="mt-1 text-xl font-semibold tabular-nums">{value}</p>
+          <p className="mt-1 text-xl font-medium tabular-nums">{value}</p>
         </div>
         <div className="rounded-md bg-elevated p-2">
           <Icon size={16} className="text-primary" />
@@ -258,7 +258,7 @@ export default function DowntimeAnalyticsPage() {
                     <div key={d.date} className="group relative flex flex-1 flex-col items-center">
                       <div className="w-full rounded-t bg-primary/60 hover:bg-primary transition-colors" style={{ height: `${Math.max(h, 2)}%` }} />
                       <div className="mt-1 text-2xs text-muted hidden sm:block">{d.date.slice(5)}</div>
-                      <div className="absolute -top-8 left-1/2 hidden -translate-x-1/2 rounded bg-canvas px-2 py-1 text-2xs shadow border border-default group-hover:block whitespace-nowrap">
+                      <div className="absolute -top-8 left-1/2 hidden -translate-x-1/2 rounded bg-canvas px-2 py-1 text-2xs border border-default group-hover:block whitespace-nowrap">
                         {d.total_minutes}m total / {d.breakdown_minutes}m breakdown
                       </div>
                     </div>

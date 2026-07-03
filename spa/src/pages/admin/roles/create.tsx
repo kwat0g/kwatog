@@ -140,7 +140,7 @@ export default function CreateRolePage() {
 
       <form
         onSubmit={handleSubmit((v) => submit.mutate(v))}
-        className="max-w-2xl px-5 py-6"
+        className="max-w-2xl px-5 py-4"
       >
         {/* ─── Basic info ────────────────────────────────── */}
         <fieldset className="mb-8">

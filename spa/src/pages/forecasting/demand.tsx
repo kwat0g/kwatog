@@ -318,11 +318,11 @@ export default function DemandForecastingPage() {
               </thead>
               <tbody>
                 {!productId ? (
-                  <tr><td colSpan={7} className="px-4 py-6 text-center text-muted">Select a product.</td></tr>
+                  <tr><td colSpan={7} className="px-4 py-4 text-center text-muted">Select a product.</td></tr>
                 ) : forecastsQ.isLoading ? (
-                  <tr><td colSpan={7} className="px-4 py-6"><SkeletonBlock className="h-6" /></td></tr>
+                  <tr><td colSpan={7} className="px-4 py-4"><SkeletonBlock className="h-6" /></td></tr>
                 ) : (forecastsQ.data ?? []).length === 0 ? (
-                  <tr><td colSpan={7} className="px-4 py-6 text-center text-muted">No forecasts yet — click <em>Recompute</em>.</td></tr>
+                  <tr><td colSpan={7} className="px-4 py-4 text-center text-muted">No forecasts yet — click <em>Recompute</em>.</td></tr>
                 ) : (forecastsQ.data ?? []).map((f) => (
                   <tr key={f.id} className="border-b border-default/50">
                     <td className="px-4 py-2">{MONTH_NAMES[f.forecast_month - 1]} {f.forecast_year}</td>

@@ -151,7 +151,7 @@ export function Modal({
       <div
         ref={dialogRef}
         className={cn(
-          'relative w-full bg-canvas border border-default rounded-lg shadow-menu animate-slide-up',
+          'relative w-full bg-canvas border border-default rounded-md-menu animate-slide-up',
           sizes[size],
           className,
         )}

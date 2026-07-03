@@ -83,16 +83,16 @@ export default function QcQuickCheck() {
 
   return (
     <div className="space-y-5 touch-manipulation">
-      <h1 className="text-lg font-semibold">Quick QC Check</h1>
+      <h1 className="text-lg font-medium">Quick QC Check</h1>
 
       {/* Work Order selection */}
-      <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 space-y-4">
+      <div className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-canvas dark:bg-zinc-900 p-4 space-y-4">
         <div>
           <label htmlFor="wo_select" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
             Work Order
           </label>
           {ordersLoading ? (
-            <div className="h-12 rounded-lg bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
+            <div className="h-12 rounded-md bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
           ) : (
             <select
               id="wo_select"
@@ -101,7 +101,7 @@ export default function QcQuickCheck() {
                 setSelectedWoId(e.target.value);
                 setShowFailPrompt(false);
               }}
-              className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 min-h-[44px]"
+              className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-canvas dark:bg-zinc-800 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 min-h-[44px]"
             >
               <option value="">Select a work order...</option>
               {orders.map(wo => (
@@ -135,7 +135,7 @@ export default function QcQuickCheck() {
             value={sampleSize}
             onChange={e => setSampleSize(e.target.value)}
             placeholder="e.g. 5"
-            className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-4 text-xl font-mono tabular-nums text-center focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-canvas dark:bg-zinc-800 px-4 py-4 text-xl font-mono tabular-nums text-center focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
           />
         </div>
 
@@ -151,7 +151,7 @@ export default function QcQuickCheck() {
             value={defectsFound}
             onChange={e => setDefectsFound(e.target.value)}
             placeholder="0"
-            className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-4 text-xl font-mono tabular-nums text-center focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-canvas dark:bg-zinc-800 px-4 py-4 text-xl font-mono tabular-nums text-center focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
           />
         </div>
 
@@ -165,13 +165,13 @@ export default function QcQuickCheck() {
             onChange={e => setNotes(e.target.value)}
             rows={2}
             placeholder="Visual observations..."
-            className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"
+            className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-canvas dark:bg-zinc-800 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"
           />
         </div>
 
         {/* Fail prompt for defect description */}
         {showFailPrompt && (
-          <div className="rounded-lg border-2 border-danger bg-danger-bg p-3">
+          <div className="rounded-md border-2 border-danger bg-danger-bg p-3">
             <label htmlFor="defect_desc" className="block text-sm font-medium text-danger mb-1">
               Describe the defect
             </label>
@@ -182,7 +182,7 @@ export default function QcQuickCheck() {
               rows={2}
               autoFocus
               placeholder="What failed? (e.g. flash on parting line, short shot, burn marks)"
-              className="w-full rounded-lg border border-red-300 dark:border-red-700 bg-white dark:bg-zinc-800 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 resize-none"
+              className="w-full rounded-md border border-red-300 dark:border-red-700 bg-canvas dark:bg-zinc-800 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 resize-none"
             />
           </div>
         )}
@@ -193,7 +193,7 @@ export default function QcQuickCheck() {
             type="button"
             onClick={handlePass}
             disabled={!canSubmit || mutation.isPending}
-            className="min-h-[56px] rounded-lg bg-success hover:bg-success/90 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 text-white font-bold text-lg transition-colors focus:outline-none focus:ring-2 focus:ring-success focus:ring-offset-2"
+            className="min-h-[56px] rounded-md bg-success hover:bg-success/90 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 text-white font-medium text-lg transition-colors focus:outline-none focus:ring-2 focus:ring-success focus:ring-offset-2"
           >
             {mutation.isPending ? '...' : 'PASS'}
           </button>
@@ -201,7 +201,7 @@ export default function QcQuickCheck() {
             type="button"
             onClick={handleFail}
             disabled={!canSubmit || mutation.isPending}
-            className="min-h-[56px] rounded-lg bg-danger hover:bg-danger/90 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 text-white font-bold text-lg transition-colors focus:outline-none focus:ring-2 focus:ring-danger focus:ring-offset-2"
+            className="min-h-[56px] rounded-md bg-danger hover:bg-danger/90 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 text-white font-medium text-lg transition-colors focus:outline-none focus:ring-2 focus:ring-danger focus:ring-offset-2"
           >
             {mutation.isPending ? '...' : 'FAIL'}
           </button>

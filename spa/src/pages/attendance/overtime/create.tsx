@@ -65,7 +65,7 @@ export default function OvertimeCreatePage() {
   return (
     <div>
       <PageHeader title="New overtime request" backTo="/hr/attendance/overtime" backLabel="Overtime" />
-      <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-2xl mx-auto px-5 py-6">
+      <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-2xl mx-auto px-5 py-4">
         <Panel title="Request details">
           <div className="grid grid-cols-2 gap-3">
             <Select label="Employee" required {...register('employee_id')} error={errors.employee_id?.message}>

@@ -42,7 +42,7 @@ export function BottomSheet({ isOpen, onClose, title, children, className }: Bot
       />
       <div
         className={cn(
-          'relative w-full max-h-[90vh] bg-canvas rounded-t-lg border-t border-default shadow-menu flex flex-col',
+          'relative w-full max-h-[90vh] bg-canvas rounded-t-lg border-t border-default-menu flex flex-col',
           className,
         )}
       >

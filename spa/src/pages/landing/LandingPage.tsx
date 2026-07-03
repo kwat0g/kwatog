@@ -53,7 +53,7 @@ const WARM_ACCENT: CSSProperties = {
   '--accent-fg': 'var(--landing-accent-fg)',
   '--ring': 'var(--landing-accent)',
   '--ring-offset': 'var(--landing-canvas)',
-  '--shadow-focus': '0 0 0 3px var(--landing-accent-glow)',
+  '---focus': '0 0 0 3px var(--landing-accent-glow)',
 } as CSSProperties;
 
 export default function LandingPage() {
@@ -80,7 +80,7 @@ export default function LandingPage() {
       <CrosshairCursor scopeRef={rootRef} />
       <a
         href="#capabilities"
-        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[60] focus:rounded-lg focus:bg-landing-accent focus:px-4 focus:py-2 focus:font-sans focus:text-sm focus:font-semibold focus:text-landing-accent-fg"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[60] focus:rounded-md focus:bg-landing-accent focus:px-4 focus:py-2 focus:font-sans focus:text-sm focus:font-medium focus:text-landing-accent-fg"
       >
         Skip to content
       </a>

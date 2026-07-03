@@ -80,7 +80,7 @@ export default function CreateStockAdjustmentPage() {
       <PageHeader title="Stock adjustment" backTo="/inventory/movements" backLabel="Movements" />
       <form
         onSubmit={handleSubmit((d) => { setPendingValues(d); setConfirmOpen(true); }, onFormInvalid<V>())}
-        className="max-w-3xl mx-auto px-5 py-6 space-y-4"
+        className="max-w-3xl mx-auto px-5 py-4 space-y-4"
       >
         <Panel title="Adjustment">
           <div className="grid grid-cols-2 gap-3">

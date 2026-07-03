@@ -61,10 +61,10 @@ export default function ApplicationTrackPage() {
   const isRejected = info?.status === 'Not Selected';
 
   return (
-    <div className="min-h-screen bg-white" style={{ fontFamily: "'Bricolage Grotesque Variable', sans-serif" }}>
+    <div className="min-h-screen bg-canvas" style={{ fontFamily: "'Bricolage Grotesque Variable', sans-serif" }}>
       <LandingNav open={menuOpen} onOpenChange={setMenuOpen} />
 
-      <main className="mx-auto max-w-2xl px-6 pb-24 pt-32">
+      <main className="mx-auto max-w-2xl px-5 pb-24 pt-32">
         <Link
           to="/careers"
           className="mb-8 inline-flex items-center gap-1.5 text-sm text-neutral-500 hover:text-neutral-900"
@@ -72,7 +72,7 @@ export default function ApplicationTrackPage() {
           <ArrowLeft size={14} /> Back to careers
         </Link>
 
-        <h1 className="text-3xl font-bold tracking-tight text-neutral-900">Track Your Application</h1>
+        <h1 className="text-3xl font-medium tracking-tight text-neutral-900">Track Your Application</h1>
         <p className="mt-2 text-neutral-600">
           Enter the tracking code you received after submitting your application.
         </p>
@@ -97,9 +97,9 @@ export default function ApplicationTrackPage() {
         )}
 
         {info && (
-          <div className="mt-8 rounded-md border border-neutral-200 p-6">
+          <div className="mt-8 rounded-md border border-neutral-200 p-5">
             <div className="mb-6">
-              <h2 className="text-lg font-semibold text-neutral-900">{info.position}</h2>
+              <h2 className="text-lg font-medium text-neutral-900">{info.position}</h2>
               <p className="mt-1 text-sm text-neutral-500">
                 Applied on {formatDate(info.applied_at)}
               </p>
@@ -121,7 +121,7 @@ export default function ApplicationTrackPage() {
                     <div key={step} className="flex items-start gap-3 py-2">
                       <div className="flex flex-col items-center">
                         <div
-                          className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
+                          className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium ${
                             isDone
                               ? 'bg-success text-white'
                               : isActive
@@ -137,7 +137,7 @@ export default function ApplicationTrackPage() {
                       </div>
                       <span
                         className={`text-sm ${
-                          isActive ? 'font-semibold text-neutral-900' : isDone ? 'text-neutral-600' : 'text-neutral-400'
+                          isActive ? 'font-medium text-neutral-900' : isDone ? 'text-neutral-600' : 'text-neutral-400'
                         }`}
                       >
                         {step}
@@ -155,7 +155,7 @@ export default function ApplicationTrackPage() {
 
             {info.interview && (
               <div className="mt-6 rounded-md bg-blue-50 p-4">
-                <h3 className="text-sm font-semibold text-blue-900">Upcoming Interview</h3>
+                <h3 className="text-sm font-medium text-blue-900">Upcoming Interview</h3>
                 <div className="mt-2 space-y-1 text-sm text-blue-800">
                   <p className="flex items-center gap-1.5">
                     <Calendar size={14} />

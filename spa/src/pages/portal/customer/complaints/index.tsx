@@ -50,12 +50,12 @@ export default function CustomerComplaintsPage() {
     }
   };
 
-  if (isLoading) return <SkeletonBlock className="h-64 rounded-lg" />;
+  if (isLoading) return <SkeletonBlock className="h-64 rounded-md" />;
 
   return (
     <div className="space-y-4 max-w-4xl">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold">Complaints</h2>
+        <h2 className="text-sm font-medium">Complaints</h2>
         <Button variant="primary" size="sm" icon={showForm ? <X size={14} /> : <Plus size={14} />} onClick={() => setShowForm(!showForm)}>
           {showForm ? 'Cancel' : 'New Complaint'}
         </Button>
@@ -151,10 +151,10 @@ export default function CustomerComplaintsPage() {
       {/* 8D Report Modal */}
       {viewing8d && (
         <div className="fixed inset-0 z-50 flex items-start justify-center pt-12 pb-8 bg-black/40 overflow-y-auto" onClick={() => setViewing8d(null)}>
-          <div className="bg-canvas border border-default rounded-lg shadow-xl max-w-2xl w-full mx-4" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-canvas border border-default rounded-md max-w-2xl w-full mx-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-3 border-b border-default">
               <div>
-                <h3 className="text-sm font-semibold">8D Report &mdash; {viewing8d.complaint_number}</h3>
+                <h3 className="text-sm font-medium">8D Report &mdash; {viewing8d.complaint_number}</h3>
                 <p className="text-2xs text-muted mt-0.5">
                   {viewing8d.severity} &middot; {viewing8d.complaint_status}
                 </p>
@@ -179,7 +179,7 @@ export default function CustomerComplaintsPage() {
                     { key: 'd8_recognition', label: 'D8: Recognition & Closure', val: viewing8d.report.d8_recognition },
                   ].map((d) => (
                     <div key={d.key} className="border border-default rounded-md p-3">
-                      <h4 className="text-2xs font-semibold uppercase tracking-wide text-muted mb-1.5">{d.label}</h4>
+                      <h4 className="text-2xs font-medium uppercase tracking-wide text-muted mb-1.5">{d.label}</h4>
                       <p className="text-xs whitespace-pre-wrap">{d.val ?? '—'}</p>
                     </div>
                   ))}

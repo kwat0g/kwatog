@@ -117,7 +117,7 @@ const [selectedBin, setSelectedBin] = useState<{ id: string; detail: any } | nul
                         key={loc.id}
                         type="button"
                         onClick={() => setSelectedBin({ id: loc.id, detail: loc })}
-                        className={`text-left p-2 rounded-md text-xs transition-all hover:shadow-md ${
+                        className={`text-left p-2 rounded-md text-xs transition-all hover: ${
                           STATUS_COLORS[loc.stock_status] || STATUS_COLORS['empty']
                         } ${selectedBin?.id === loc.id ? 'ring-2 ring-accent' : ''}`}
                       >
@@ -139,7 +139,7 @@ const [selectedBin, setSelectedBin] = useState<{ id: string; detail: any } | nul
                   </div>
                 )}
                 {zone && zone.locations.length === 0 && (
-                  <div className="text-sm text-muted py-8 text-center">No bins in this zone.</div>
+                  <div className="text-sm text-muted py-5 text-center">No bins in this zone.</div>
                 )}
               </div>
 
@@ -203,7 +203,7 @@ const [selectedBin, setSelectedBin] = useState<{ id: string; detail: any } | nul
                   </Panel>
                 )}
                 {!selectedBin && (
-                  <div className="text-sm text-muted text-center py-8">Click a bin to see details.</div>
+                  <div className="text-sm text-muted text-center py-5">Click a bin to see details.</div>
                 )}
               </div>
             </div>

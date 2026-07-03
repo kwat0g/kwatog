@@ -137,7 +137,7 @@ export default function CreatePurchaseOrderPage() {
       />
       <form
         onSubmit={handleSubmit((d) => { setPendingValues(d); setConfirmOpen(true); }, onFormInvalid<V>())}
-        className="max-w-5xl mx-auto px-5 py-6 space-y-4"
+        className="max-w-5xl mx-auto px-5 py-4 space-y-4"
       >
         <Panel title="Header">
           <div className="grid grid-cols-3 gap-3">

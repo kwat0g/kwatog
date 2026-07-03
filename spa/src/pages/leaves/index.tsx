@@ -217,7 +217,7 @@ function KanbanCol({
   return (
     <Panel title={<span className="flex items-center gap-2">{title} <Chip variant={variant}>{items.length}</Chip></span>} noPadding>
       {items.length === 0 ? (
-        <p className="text-xs text-muted px-4 py-6 text-center">Nothing here.</p>
+        <p className="text-xs text-muted px-4 py-4 text-center">Nothing here.</p>
       ) : (
         <ul className="divide-y divide-subtle">
           {items.map((l) => (

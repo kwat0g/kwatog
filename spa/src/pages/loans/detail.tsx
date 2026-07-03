@@ -135,7 +135,7 @@ export default function LoanDetailPage() {
 
           <Panel title={`Payments (${loan.payments?.length ?? 0})`} noPadding>
             {(loan.payments?.length ?? 0) === 0 ? (
-              <p className="text-xs text-muted px-4 py-6 text-center">No payments yet.</p>
+              <p className="text-xs text-muted px-4 py-4 text-center">No payments yet.</p>
             ) : (
               <table className="w-full text-sm">
                 <thead className="bg-subtle text-2xs uppercase tracking-wider text-muted">

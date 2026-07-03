@@ -25,7 +25,7 @@ export default function CustomerOrderDetailPage() {
     enabled: !!id,
   });
 
-  if (isLoading) return <SkeletonBlock className="h-96 rounded-lg" />;
+  if (isLoading) return <SkeletonBlock className="h-96 rounded-md" />;
   if (isError) return <EmptyState icon="alert-circle" title="Failed to load order" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />;
   if (!order) return <EmptyState icon="file-question" title="Order not found" />;
 
@@ -37,7 +37,7 @@ export default function CustomerOrderDetailPage() {
             <ArrowLeft size={16} />
           </Link>
           <div>
-            <h2 className="text-sm font-semibold">{order.so_number}</h2>
+            <h2 className="text-sm font-medium">{order.so_number}</h2>
             <p className="text-2xs text-muted">{order.date ?? '—'}</p>
           </div>
         </div>
@@ -46,7 +46,7 @@ export default function CustomerOrderDetailPage() {
 
       {/* Order-to-Cash Chain Visualization */}
       {chainSteps && chainSteps.length > 0 && (
-        <Panel title="Order Status" bodyClassName="py-4 px-6">
+        <Panel title="Order Status" bodyClassName="py-4 px-5">
           <ChainHeader steps={chainSteps} />
         </Panel>
       )}

@@ -139,7 +139,7 @@ export default function TrainingMatrixPage() {
 
       {/* Error state */}
       {isError && (
-        <div className="px-5 py-8">
+        <div className="px-5 py-5">
           <EmptyState
             icon="alert-circle"
             title="Failed to load training matrix"
@@ -150,7 +150,7 @@ export default function TrainingMatrixPage() {
 
       {/* Empty state */}
       {data && data.rows.length === 0 && (
-        <div className="px-5 py-8">
+        <div className="px-5 py-5">
           <EmptyState
             icon="grid-3x3"
             title="No data"

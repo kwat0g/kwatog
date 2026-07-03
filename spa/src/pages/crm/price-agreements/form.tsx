@@ -79,7 +79,7 @@ export function PriceAgreementForm({ initial, mode }: Props) {
   return (
     <form
       onSubmit={handleSubmit((v) => mutation.mutate(v), onFormInvalid<FormValues>())}
-      className="max-w-3xl mx-auto px-5 py-6"
+      className="max-w-3xl mx-auto px-5 py-4"
     >
       <fieldset className="mb-8">
         <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">Agreement details</legend>

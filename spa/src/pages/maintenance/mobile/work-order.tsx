@@ -104,8 +104,8 @@ export default function MobileWorkOrderDetail() {
       <div role="status" aria-live="polite" aria-busy="true" className="space-y-3 animate-pulse">
         <span className="sr-only">Loading work order...</span>
         <div className="h-6 w-24 rounded bg-zinc-100 dark:bg-zinc-800" />
-        <div className="h-48 rounded-lg bg-zinc-100 dark:bg-zinc-800" />
-        <div className="h-48 rounded-lg bg-zinc-100 dark:bg-zinc-800" />
+        <div className="h-48 rounded-md bg-zinc-100 dark:bg-zinc-800" />
+        <div className="h-48 rounded-md bg-zinc-100 dark:bg-zinc-800" />
       </div>
     );
   }
@@ -141,7 +141,7 @@ export default function MobileWorkOrderDetail() {
       </Link>
 
       {/* MWO Summary card */}
-      <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+      <div className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-canvas dark:bg-zinc-900 p-4">
         <div className="flex items-center justify-between">
           <span className="font-mono text-sm font-medium">{wo.mwo_number}</span>
           <span
@@ -184,7 +184,7 @@ export default function MobileWorkOrderDetail() {
           type="button"
           onClick={() => startMutation.mutate()}
           disabled={startMutation.isPending}
-          className="w-full min-h-[52px] rounded-lg bg-success hover:bg-success/90 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 text-white font-semibold text-base transition-colors focus:outline-none focus:ring-2 focus:ring-success focus:ring-offset-2 inline-flex items-center justify-center gap-2"
+          className="w-full min-h-[52px] rounded-md bg-success hover:bg-success/90 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 text-white font-medium text-base transition-colors focus:outline-none focus:ring-2 focus:ring-success focus:ring-offset-2 inline-flex items-center justify-center gap-2"
         >
           <Play className="w-5 h-5" />
           {startMutation.isPending ? 'Starting...' : 'Start Work'}
@@ -193,9 +193,9 @@ export default function MobileWorkOrderDetail() {
 
       {/* Parts Used section */}
       {!isTerminal && (
-        <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+        <div className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-canvas dark:bg-zinc-900 p-4">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-base font-semibold">Parts Used</h2>
+            <h2 className="text-base font-medium">Parts Used</h2>
             <button
               type="button"
               onClick={() => setShowPartSheet(true)}
@@ -239,8 +239,8 @@ export default function MobileWorkOrderDetail() {
 
       {/* Read-only parts for terminal states */}
       {isTerminal && wo.spare_parts && wo.spare_parts.length > 0 && (
-        <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
-          <h2 className="text-base font-semibold mb-3">Parts Used</h2>
+        <div className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-canvas dark:bg-zinc-900 p-4">
+          <h2 className="text-base font-medium mb-3">Parts Used</h2>
           <div className="space-y-2">
             {wo.spare_parts.map((sp: SparePartUsage) => (
               <div
@@ -269,9 +269,9 @@ export default function MobileWorkOrderDetail() {
             e.preventDefault();
             completeMutation.mutate();
           }}
-          className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 space-y-4"
+          className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-canvas dark:bg-zinc-900 p-4 space-y-4"
         >
-          <h2 className="text-base font-semibold">Complete Work Order</h2>
+          <h2 className="text-base font-medium">Complete Work Order</h2>
 
           <div>
             <label htmlFor="remarks" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
@@ -283,7 +283,7 @@ export default function MobileWorkOrderDetail() {
               onChange={e => setRemarks(e.target.value)}
               rows={3}
               placeholder="Describe what was done..."
-              className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"
+              className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-canvas dark:bg-zinc-800 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"
             />
           </div>
 
@@ -299,14 +299,14 @@ export default function MobileWorkOrderDetail() {
               value={downtimeMinutes}
               onChange={e => setDowntimeMinutes(e.target.value)}
               placeholder="0"
-              className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-4 text-2xl font-mono tabular-nums text-center focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-canvas dark:bg-zinc-800 px-4 py-4 text-2xl font-mono tabular-nums text-center focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             />
           </div>
 
           <button
             type="submit"
             disabled={completeMutation.isPending}
-            className="w-full min-h-[52px] rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 text-white font-semibold text-base transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 inline-flex items-center justify-center gap-2"
+            className="w-full min-h-[52px] rounded-md bg-indigo-600 hover:bg-indigo-700 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 text-white font-medium text-base transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 inline-flex items-center justify-center gap-2"
           >
             <CheckCircle2 className="w-5 h-5" />
             {completeMutation.isPending ? 'Completing...' : 'Complete Work Order'}
@@ -316,8 +316,8 @@ export default function MobileWorkOrderDetail() {
 
       {/* Activity log */}
       {wo.logs && wo.logs.length > 0 && (
-        <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
-          <h2 className="text-base font-semibold mb-3">Activity Log</h2>
+        <div className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-canvas dark:bg-zinc-900 p-4">
+          <h2 className="text-base font-medium mb-3">Activity Log</h2>
           <div className="space-y-2">
             {wo.logs.map(log => (
               <div key={log.id} className="text-sm">
@@ -359,7 +359,7 @@ export default function MobileWorkOrderDetail() {
                   onChange={e => setPartSearch(e.target.value)}
                   placeholder="Type to search..."
                   autoFocus
-                  className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-canvas dark:bg-zinc-800 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 />
               </div>
 
@@ -370,7 +370,7 @@ export default function MobileWorkOrderDetail() {
                       key={item.id}
                       type="button"
                       onClick={() => setSelectedItem(item)}
-                      className="w-full text-left p-3 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800 active:bg-zinc-100 dark:active:bg-zinc-700 min-h-[44px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full text-left p-3 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-800 active:bg-zinc-100 dark:active:bg-zinc-700 min-h-[44px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     >
                       <div className="text-sm font-medium">{item.name}</div>
                       <div className="text-xs text-zinc-500">{item.code} &middot; {item.unit_of_measure}</div>
@@ -386,7 +386,7 @@ export default function MobileWorkOrderDetail() {
           ) : (
             <>
               {/* Selected item summary */}
-              <div className="flex items-center justify-between p-3 rounded-lg bg-zinc-50 dark:bg-zinc-800/50">
+              <div className="flex items-center justify-between p-3 rounded-md bg-zinc-50 dark:bg-zinc-800/50">
                 <div>
                   <div className="text-sm font-medium">{selectedItem.name}</div>
                   <div className="text-xs text-zinc-500">{selectedItem.code}</div>
@@ -413,7 +413,7 @@ export default function MobileWorkOrderDetail() {
                   id="part_location"
                   value={partLocationId}
                   onChange={e => setPartLocationId(e.target.value)}
-                  className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 min-h-[44px]"
+                  className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-canvas dark:bg-zinc-800 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 min-h-[44px]"
                 >
                   <option value="">Select location...</option>
                   {stockData?.data?.map(
@@ -440,7 +440,7 @@ export default function MobileWorkOrderDetail() {
                   value={partQty}
                   onChange={e => setPartQty(e.target.value)}
                   placeholder="0"
-                  className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-4 text-xl font-mono tabular-nums text-center focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-canvas dark:bg-zinc-800 px-4 py-4 text-xl font-mono tabular-nums text-center focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 />
               </div>
 
@@ -456,7 +456,7 @@ export default function MobileWorkOrderDetail() {
                     quantity: partQty,
                   });
                 }}
-                className="w-full min-h-[52px] rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 text-white font-semibold text-base transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                className="w-full min-h-[52px] rounded-md bg-indigo-600 hover:bg-indigo-700 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 text-white font-medium text-base transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
               >
                 {sparePartMutation.isPending ? 'Recording...' : 'Add Part'}
               </button>

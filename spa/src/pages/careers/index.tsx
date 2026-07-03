@@ -36,12 +36,12 @@ export default function CareersPage() {
   const lastPage = data?.meta?.last_page ?? 1;
 
   return (
-    <div className="min-h-screen bg-white" style={{ fontFamily: "'Bricolage Grotesque Variable', sans-serif" }}>
+    <div className="min-h-screen bg-canvas" style={{ fontFamily: "'Bricolage Grotesque Variable', sans-serif" }}>
       <LandingNav open={menuOpen} onOpenChange={setMenuOpen} />
 
-      <main className="mx-auto max-w-6xl px-6 pb-24 pt-32">
+      <main className="mx-auto max-w-6xl px-5 pb-24 pt-32">
         <div className="mb-12 text-center">
-          <h1 className="text-4xl font-bold tracking-tight text-neutral-900 sm:text-5xl">
+          <h1 className="text-4xl font-medium tracking-tight text-neutral-900 sm:text-5xl">
             Join Our Team
           </h1>
           <p className="mt-4 text-lg text-neutral-600">
@@ -56,7 +56,7 @@ export default function CareersPage() {
         </div>
 
         {isLoading && (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {[1, 2, 3].map((i) => (
               <div key={i} className="h-48 animate-pulse rounded-md border border-neutral-200 bg-neutral-50" />
             ))}
@@ -73,14 +73,14 @@ export default function CareersPage() {
 
         {!isLoading && postings.length > 0 && (
           <>
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {postings.map((posting: PublicJobPosting) => (
                 <Link
                   key={posting.id}
                   to={`/careers/${posting.id}`}
-                  className="group rounded-md border border-neutral-200 p-6 transition-colors hover:border-neutral-400"
+                  className="group rounded-md border border-neutral-200 p-5 transition-colors hover:border-neutral-400"
                 >
-                  <h2 className="text-lg font-semibold text-neutral-900 group-hover:underline">
+                  <h2 className="text-lg font-medium text-neutral-900 group-hover:underline">
                     {posting.title}
                   </h2>
                   <div className="mt-3 flex flex-col gap-2 text-sm text-neutral-600">

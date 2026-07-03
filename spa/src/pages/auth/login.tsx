@@ -163,7 +163,7 @@ export default function LoginPage() {
             <Lock size={12} className="text-landing-accent" />
             Secure sign-in
           </p>
-          <h1 className="mt-3 font-display text-3xl font-bold tracking-tight text-landing-text">
+          <h1 className="mt-3 font-display text-3xl font-medium tracking-tight text-landing-text">
             Welcome back
           </h1>
           <p className="mt-1.5 text-[13px] text-landing-muted">
@@ -174,7 +174,7 @@ export default function LoginPage() {
         {wasRedirected && (
           <div
             role="status"
-            className="mb-5 rounded-lg border border-landing-accent/20 bg-landing-accent-glow px-4 py-3 text-[13px] text-landing-text-secondary"
+            className="mb-5 rounded-md border border-landing-accent/20 bg-landing-accent-glow px-4 py-3 text-[13px] text-landing-text-secondary"
           >
             Your session expired. Please sign in again to continue.
           </div>

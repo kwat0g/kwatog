@@ -84,7 +84,7 @@ export function HeroSection() {
     <section
       id="top"
       ref={rootRef}
-      className="relative isolate overflow-hidden bg-landing-canvas px-5 pb-20 pt-28 sm:px-8 lg:min-h-[100svh] lg:pt-32"
+      className="relative isolate overflow-hidden bg-landing-canvas px-5 pb-20 pt-28 sm:px-5 lg:min-h-[100svh] lg:pt-32"
     >
       {/* Blueprint grid backdrop — parallax decorative layer */}
       <div
@@ -112,7 +112,7 @@ export function HeroSection() {
             <ScrambleText text={COMPANY.locationLine} trigger="mount" />
           </p>
 
-          <h1 className="mt-6 font-display text-[clamp(2.5rem,6vw,4.75rem)] font-bold leading-[0.98] tracking-[-0.03em] text-landing-text">
+          <h1 className="mt-6 font-display text-[clamp(2.5rem,6vw,4.75rem)] font-medium leading-[0.98] tracking-[-0.03em] text-landing-text">
             <span data-hero-line className="block overflow-hidden">
               <span className="block">Precision the</span>
             </span>
@@ -137,7 +137,7 @@ export function HeroSection() {
             <a
               ref={quoteRef}
               href="#contact"
-              className="group inline-flex items-center justify-center gap-2 rounded-full bg-landing-accent px-7 py-4 font-sans text-sm font-semibold text-landing-accent-fg transition-colors duration-300 hover:bg-landing-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas"
+              className="group inline-flex items-center justify-center gap-2 rounded-full bg-landing-accent px-7 py-4 font-sans text-sm font-medium text-landing-accent-fg transition-colors duration-300 hover:bg-landing-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas"
             >
               Request a quote
               <ArrowRight size={16} className="transition-transform duration-300 group-hover:translate-x-1" />
@@ -178,7 +178,7 @@ export function HeroSection() {
         <div data-hero="frame" className="relative">
           <figure
             ref={figureRef}
-            className="relative aspect-square w-full overflow-hidden rounded-xl border border-landing-border-strong bg-landing-surface"
+            className="relative aspect-square w-full overflow-hidden rounded-md border border-landing-border-strong bg-landing-surface"
           >
             {/* corner registration marks */}
             {[

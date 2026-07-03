@@ -29,7 +29,7 @@ export function KeyboardShortcutHelp({ open, onClose }: Props) {
 
   return (
     <Modal isOpen={open} onClose={onClose} size="lg" title="Keyboard Shortcuts">
-      <div className="grid grid-cols-2 gap-6 py-4">
+      <div className="grid grid-cols-2 gap-4 py-4">
         {COLUMN_ORDER.map((groups, idx) => (
           <div key={idx} className="flex flex-col gap-5">
             {groups.map((group) => (

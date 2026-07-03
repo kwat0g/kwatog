@@ -32,13 +32,13 @@ export default function BudgetOverviewPage() {
   });
 
   if (isLoading) return (
-    <div className="p-6 space-y-6">
+    <div className="p-5 space-y-6">
       <PageHeader title="Budget Overview" subtitle="Loading..." />
       <SkeletonTable columns={5} rows={6} />
     </div>
   );
   if (error) return (
-    <div className="p-6 space-y-6">
+    <div className="p-5 space-y-6">
       <PageHeader title="Budget Overview" />
       <EmptyState icon="alert-circle" title="Failed to load budget overview" />
     </div>
@@ -67,7 +67,7 @@ export default function BudgetOverviewPage() {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-5 space-y-6">
       <PageHeader
         title="Budget Overview"
         subtitle={`FY ${new Date().getFullYear()} — Department Budget Summary`}

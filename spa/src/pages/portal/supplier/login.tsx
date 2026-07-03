@@ -52,14 +52,14 @@ export default function SupplierPortalLoginPage() {
     <div className="min-h-screen w-full flex items-center justify-center bg-canvas px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center mb-6">
-          <span className="h-10 w-10 rounded-lg bg-accent text-canvas inline-flex items-center justify-center mb-3">
+          <span className="h-10 w-10 rounded-md bg-accent text-canvas inline-flex items-center justify-center mb-3">
             <Building2 size={20} />
           </span>
-          <h1 className="text-lg font-semibold">Supplier Portal</h1>
+          <h1 className="text-lg font-medium">Supplier Portal</h1>
           <p className="text-xs text-muted mt-0.5">Sign in to view purchase orders, invoices, and more.</p>
         </div>
 
-        <form onSubmit={onSubmit} className="bg-elevated border border-border rounded-lg p-5 flex flex-col gap-3">
+        <form onSubmit={onSubmit} className="bg-elevated border border-border rounded-md p-5 flex flex-col gap-3">
           <Input
             type="email"
             name="email"

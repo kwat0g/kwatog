@@ -96,7 +96,7 @@ export default function CreatePurchaseRequestPage() {
       <PageHeader title="New purchase request" backTo="/purchasing/purchase-requests" backLabel="Purchase requests" />
       <form
         onSubmit={handleSubmit((d) => onValid(d, true), onFormInvalid<V>())}
-        className="max-w-5xl mx-auto px-5 py-6 space-y-4"
+        className="max-w-5xl mx-auto px-5 py-4 space-y-4"
       >
         <Panel title="Header">
           <div className="grid grid-cols-3 gap-3">

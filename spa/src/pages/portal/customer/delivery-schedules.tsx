@@ -54,7 +54,7 @@ export default function DeliverySchedulesPage() {
     setLines(updated);
   };
 
-  if (isLoading) return <SkeletonBlock className="h-64 rounded-lg" />;
+  if (isLoading) return <SkeletonBlock className="h-64 rounded-md" />;
 
   return (
     <div className="space-y-4 max-w-5xl">
@@ -63,7 +63,7 @@ export default function DeliverySchedulesPage() {
           <Link to="/portal/customer" className="text-muted hover:text-primary p-1 -ml-1">
             <ArrowLeft size={16} />
           </Link>
-          <h2 className="text-sm font-semibold">Delivery Schedules</h2>
+          <h2 className="text-sm font-medium">Delivery Schedules</h2>
         </div>
         <Button variant="primary" size="sm" icon={showForm ? <X size={14} /> : <Plus size={14} />} onClick={() => setShowForm(!showForm)}>
           {showForm ? 'Cancel' : 'New Schedule'}
@@ -149,7 +149,7 @@ export default function DeliverySchedulesPage() {
             {schedules.map((s) => (
               <div key={s.id} className="border border-default rounded-md p-3 hover:bg-subtle/50 transition-colors">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold">{s.month}</span>
+                  <span className="text-xs font-medium">{s.month}</span>
                   <Chip variant={chipVariantForStatus(s.status)}>{s.status}</Chip>
                 </div>
                 <table className="w-full text-xs">

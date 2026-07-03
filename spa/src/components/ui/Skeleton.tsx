@@ -55,7 +55,7 @@ export function SkeletonDetail() {
 
 export function SkeletonForm() {
   return (
-    <div className="max-w-3xl mx-auto px-5 py-6">
+    <div className="max-w-3xl mx-auto px-5 py-4">
       {[1, 2, 3].map((section) => (
         <div key={section} className="mb-8">
           <SkeletonBlock className="h-3 w-32 mb-4" />

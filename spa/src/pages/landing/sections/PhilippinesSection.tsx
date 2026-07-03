@@ -121,7 +121,7 @@ export function PhilippinesSection() {
   return (
     <section
       id="filipino-made"
-      className="relative overflow-hidden bg-landing-surface px-5 sm:px-8 py-20 sm:py-28"
+      className="relative overflow-hidden bg-landing-surface px-5 sm:px-5 py-20 sm:py-28"
     >
       <div className="mx-auto grid max-w-6xl items-center gap-14 lg:grid-cols-2 lg:gap-20">
         {/* Copy */}
@@ -136,7 +136,7 @@ export function PhilippinesSection() {
           <h2
             data-reveal
             data-reveal-delay="0.05"
-            className="mt-5 font-display text-[clamp(2.1rem,4.8vw,3.75rem)] font-bold leading-[1.04] tracking-[-0.02em] text-landing-text"
+            className="mt-5 font-display text-[clamp(2.1rem,4.8vw,3.75rem)] font-medium leading-[1.04] tracking-[-0.02em] text-landing-text"
           >
             World-class precision,
             <br className="hidden sm:block" /> proudly made at home.
@@ -161,7 +161,7 @@ export function PhilippinesSection() {
                 data-reveal-delay={(0.12 + i * 0.06).toFixed(2)}
                 className="flex items-baseline gap-5 border-t border-landing-border pt-5"
               >
-                <dt className="w-20 shrink-0 font-display text-2xl font-bold tracking-tight text-landing-accent">
+                <dt className="w-20 shrink-0 font-display text-2xl font-medium tracking-tight text-landing-accent">
                   {p.k}
                 </dt>
                 <dd className="font-sans text-[14px] leading-relaxed text-landing-text-secondary">
@@ -176,7 +176,7 @@ export function PhilippinesSection() {
         <div data-reveal="right" data-reveal-delay="0.1" className="relative">
           <figure
             ref={figureRef}
-            className="relative mx-auto aspect-square w-full max-w-md overflow-hidden rounded-xl border border-landing-border-strong bg-landing-canvas"
+            className="relative mx-auto aspect-square w-full max-w-md overflow-hidden rounded-md border border-landing-border-strong bg-landing-canvas"
           >
             {/* blueprint grid — pointer-parallax layer with vertical bleed so edges stay hidden */}
             <div

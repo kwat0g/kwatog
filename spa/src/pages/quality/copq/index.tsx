@@ -256,7 +256,7 @@ export default function CopqAnalyticsPage() {
             />
           )}
           {byProduct.data && byProduct.data.length === 0 && (
-            <div className="px-4 py-6 text-sm text-muted text-center">No product cost data.</div>
+            <div className="px-4 py-4 text-sm text-muted text-center">No product cost data.</div>
           )}
           {byProduct.data && byProduct.data.length > 0 && (
             <div className="overflow-x-auto">
@@ -301,7 +301,7 @@ export default function CopqAnalyticsPage() {
             />
           )}
           {bySupplier.data && bySupplier.data.length === 0 && (
-            <div className="px-4 py-6 text-sm text-muted text-center">No supplier NCR data.</div>
+            <div className="px-4 py-4 text-sm text-muted text-center">No supplier NCR data.</div>
           )}
           {bySupplier.data && bySupplier.data.length > 0 && (
             <div className="overflow-x-auto">

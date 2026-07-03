@@ -16,7 +16,7 @@ export default function CustomerDeliveryDetailPage() {
     enabled: !!id,
   });
 
-  if (isLoading) return <SkeletonBlock className="h-64 rounded-lg" />;
+  if (isLoading) return <SkeletonBlock className="h-64 rounded-md" />;
   if (isError) return <EmptyState icon="alert-circle" title="Failed to load delivery" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />;
   if (!delivery) return <EmptyState icon="file-x" title="Delivery not found" />;
 
@@ -27,7 +27,7 @@ export default function CustomerDeliveryDetailPage() {
           <ArrowLeft size={16} />
         </Link>
         <div>
-          <h2 className="text-sm font-semibold">{delivery.delivery_number}</h2>
+          <h2 className="text-sm font-medium">{delivery.delivery_number}</h2>
           <p className="text-2xs text-muted">{delivery.delivered_at ?? '—'}</p>
         </div>
       </div>
@@ -61,7 +61,7 @@ export default function CustomerDeliveryDetailPage() {
         <Panel title="Delivery Proofs">
           <div className="grid grid-cols-2 gap-3">
             {delivery.proofs.map((proof) => (
-              <div key={proof.id} className="border border-border rounded-lg p-3">
+              <div key={proof.id} className="border border-border rounded-md p-3">
                 <p className="text-xs font-medium capitalize mb-1">{proof.proof_type}</p>
                 {proof.view_url ? (
                   <a href={proof.view_url} target="_blank" rel="noopener noreferrer"

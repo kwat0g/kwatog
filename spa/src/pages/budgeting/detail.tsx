@@ -78,7 +78,7 @@ export default function BudgetDetailPage() {
   const canClose = (budget.status === 'active' || budget.status === 'approved') && canManage;
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-5 space-y-6">
       <PageHeader
         title={budget.name}
         subtitle={

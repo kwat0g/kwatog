@@ -90,7 +90,7 @@ export default function ResetPasswordPage() {
           <KeyRound size={12} className="text-landing-accent" />
           New password
         </p>
-        <h1 className="mt-3 font-display text-3xl font-bold tracking-tight text-landing-text">
+        <h1 className="mt-3 font-display text-3xl font-medium tracking-tight text-landing-text">
           Choose a new password
         </h1>
         <p className="mt-1.5 text-[13px] text-landing-muted">
@@ -101,10 +101,10 @@ export default function ResetPasswordPage() {
       {done ? (
         <div
           role="status"
-          className="rounded-xl border border-success/30 bg-success/10 p-5 text-center"
+          className="rounded-md border border-success/30 bg-success/10 p-5 text-center"
         >
           <CheckCircle size={32} className="mx-auto text-success" strokeWidth={1.5} />
-          <h2 className="mt-3 font-display text-lg font-semibold text-landing-text">
+          <h2 className="mt-3 font-display text-lg font-medium text-landing-text">
             Password updated
           </h2>
           <p className="mt-1 text-[13px] text-landing-text-secondary">

@@ -63,7 +63,7 @@ function HealthGauge({ metric, snapshot }: { metric: ConditionMetric; snapshot: 
       </div>
       <div className="mt-3">
         <div className="flex items-baseline gap-1">
-          <span className="text-2xl font-semibold tabular-nums">{snapshot?.value?.toFixed(2) ?? '—'}</span>
+          <span className="text-2xl font-medium tabular-nums">{snapshot?.value?.toFixed(2) ?? '—'}</span>
           <span className="text-sm text-muted">{METRIC_UNITS[metric]}</span>
         </div>
         <div className="mt-2 h-2 overflow-hidden rounded bg-elevated">
@@ -106,7 +106,7 @@ function TrendChart({ points, metric }: { points: ConditionTrendPoint[]; metric:
                 }`}
                 style={{ height: `${Math.max(h, 2)}%` }}
               />
-              <div className="absolute -top-6 left-1/2 hidden -translate-x-1/2 rounded bg-canvas px-2 py-0.5 text-2xs shadow border border-default group-hover:block whitespace-nowrap">
+              <div className="absolute -top-6 left-1/2 hidden -translate-x-1/2 rounded bg-canvas px-2 py-0.5 text-2xs border border-default group-hover:block whitespace-nowrap">
                 {p.value.toFixed(2)} {METRIC_UNITS[metric]}
               </div>
             </div>

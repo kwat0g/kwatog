@@ -120,7 +120,7 @@ export default function CreateReturnRequestPage() {
 
       <form
         onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())}
-        className="max-w-3xl mx-auto px-5 py-6 space-y-4"
+        className="max-w-3xl mx-auto px-5 py-4 space-y-4"
       >
         {/* Type & Source */}
         <Panel title="Type & Source">

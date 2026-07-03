@@ -13,7 +13,7 @@ export default function SupplierDeliveriesPage() {
     placeholderData: (prev) => prev,
   });
 
-  if (isLoading) return <SkeletonBlock className="h-64 rounded-lg" />;
+  if (isLoading) return <SkeletonBlock className="h-64 rounded-md" />;
   if (isError) return <EmptyState icon="alert-circle" title="Failed to load deliveries" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />;
 
   return (

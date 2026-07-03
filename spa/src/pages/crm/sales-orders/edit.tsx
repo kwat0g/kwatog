@@ -192,7 +192,7 @@ export default function EditSalesOrderPage() {
           { label: 'Sales orders', href: '/crm/sales-orders' },
           { label: `Edit ${detail.data.so_number}` },
         ]} />
-      <form onSubmit={handleSubmit((v) => update.mutate(v), onFormInvalid<FormValues>())} className="max-w-4xl mx-auto px-5 py-6">
+      <form onSubmit={handleSubmit((v) => update.mutate(v), onFormInvalid<FormValues>())} className="max-w-4xl mx-auto px-5 py-4">
         <fieldset className="mb-8">
           <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">Order header</legend>
           <div className="grid grid-cols-2 gap-3">

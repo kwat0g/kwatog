@@ -112,7 +112,7 @@ export default function CreateBomPage() {
       <PageHeader title="New BOM" backTo="/mrp/boms" backLabel="BOMs" />
       <form
         onSubmit={handleSubmit((v) => create.mutate(v), onFormInvalid<FormValues>())}
-        className="max-w-4xl mx-auto px-5 py-6"
+        className="max-w-4xl mx-auto px-5 py-4"
       >
         <fieldset className="mb-8">
           <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">Product</legend>

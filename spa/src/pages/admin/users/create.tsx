@@ -78,7 +78,7 @@ export default function AdminCreateUserPage() {
 
       <form
         onSubmit={handleSubmit((v) => mutation.mutate(v))}
-        className="max-w-2xl mx-auto px-5 py-6"
+        className="max-w-2xl mx-auto px-5 py-4"
       >
         <Panel>
           <fieldset className="space-y-4">

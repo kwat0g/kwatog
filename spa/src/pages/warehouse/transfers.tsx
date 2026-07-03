@@ -190,7 +190,7 @@ export default function TransferOrdersPage() {
                   </div>
                 </Panel>
               ) : (
-                <div className="text-sm text-muted text-center py-8">Select a transfer to view details.</div>
+                <div className="text-sm text-muted text-center py-5">Select a transfer to view details.</div>
               )}
             </div>
           </div>

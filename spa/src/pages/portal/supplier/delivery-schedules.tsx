@@ -100,7 +100,7 @@ export default function SupplierDeliverySchedulesPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold">Delivery Schedules</h2>
+          <h2 className="text-lg font-medium">Delivery Schedules</h2>
           <p className="text-xs text-muted">Submit and manage your delivery plans</p>
         </div>
         <Button onClick={() => setShowForm(!showForm)}>
@@ -111,7 +111,7 @@ export default function SupplierDeliverySchedulesPage() {
       {/* New schedule form */}
       {showForm && (
         <Panel className="p-4 space-y-4">
-          <h3 className="text-sm font-semibold">New Delivery Schedule</h3>
+          <h3 className="text-sm font-medium">New Delivery Schedule</h3>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1">
@@ -215,12 +215,12 @@ export default function SupplierDeliverySchedulesPage() {
             <Panel key={s.id} className="p-4 space-y-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <p className="text-sm font-semibold">{s.month}</p>
+                  <p className="text-sm font-medium">{s.month}</p>
                   <span className="text-2xs text-muted">
                     {s.purchase_order?.po_number ?? ''}
                   </span>
                   <span className={`inline-block px-2 py-0.5 rounded text-2xs font-medium ${
-                    statusColors[s.status] ?? 'bg-gray-100 text-gray-700'
+                    statusColors[s.status] ?? 'bg-subtle text-secondary'
                   }`}>
                     {s.status}
                   </span>

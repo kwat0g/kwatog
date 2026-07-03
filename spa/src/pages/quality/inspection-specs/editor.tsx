@@ -166,7 +166,7 @@ export default function InspectionSpecEditorPage() {
       <div>
         <PageHeader title="New inspection spec" backTo="/quality/inspection-specs" backLabel="Inspection specs"
           breadcrumbs={[{ label: 'Quality', href: '/quality' }, { label: 'Inspection specs', href: '/quality/inspection-specs' }, { label: 'New' }]} />
-        <div className="max-w-2xl mx-auto px-5 py-6 space-y-4">
+        <div className="max-w-2xl mx-auto px-5 py-4 space-y-4">
           <Select
             label="Product"
             required
@@ -228,7 +228,7 @@ export default function InspectionSpecEditorPage() {
       />
       <form
         onSubmit={handleSubmit((v) => upsert.mutate(v), onFormInvalid<FormValues>())}
-        className="max-w-5xl mx-auto px-5 py-6"
+        className="max-w-5xl mx-auto px-5 py-4"
       >
         <input type="hidden" {...register('product_id')} value={productId} />
 

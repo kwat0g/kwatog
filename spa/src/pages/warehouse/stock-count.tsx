@@ -281,7 +281,7 @@ export default function StockCountPage() {
                   )}
                 </>
               ) : (
-                <div className="text-sm text-muted text-center py-8">Select a session to view details.</div>
+                <div className="text-sm text-muted text-center py-5">Select a session to view details.</div>
               )}
             </div>
           </div>

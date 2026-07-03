@@ -52,14 +52,14 @@ export default function CustomerPortalLoginPage() {
     <div className="min-h-screen w-full flex items-center justify-center bg-canvas px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center mb-6">
-          <span className="h-10 w-10 rounded-lg bg-primary text-canvas inline-flex items-center justify-center mb-3">
+          <span className="h-10 w-10 rounded-md bg-primary text-canvas inline-flex items-center justify-center mb-3">
             <Package size={20} />
           </span>
-          <h1 className="text-lg font-semibold">Customer Portal</h1>
+          <h1 className="text-lg font-medium">Customer Portal</h1>
           <p className="text-xs text-muted mt-0.5">Sign in to view orders, invoices, and account details.</p>
         </div>
 
-        <form onSubmit={onSubmit} className="bg-elevated border border-border rounded-lg p-5 flex flex-col gap-3">
+        <form onSubmit={onSubmit} className="bg-elevated border border-border rounded-md p-5 flex flex-col gap-3">
           <Input
             type="email"
             name="email"

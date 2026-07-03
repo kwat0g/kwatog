@@ -29,7 +29,7 @@ export function CookieBanner() {
       aria-label="Cookie consent"
       className={cn(
         'fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-xl',
-        'rounded-2xl border border-landing-border bg-landing-surface/95 p-4 shadow-menu backdrop-blur-xl',
+        'rounded-md border border-landing-border bg-landing-surface/95 p-4-menu backdrop-blur-xl',
         'motion-safe:animate-slide-up',
       )}
     >
@@ -59,7 +59,7 @@ export function CookieBanner() {
         <button
           type="button"
           onClick={() => handleConsent('accepted')}
-          className="rounded-full bg-landing-accent px-4 py-2 text-xs font-semibold text-landing-accent-fg transition-colors hover:bg-landing-accent-hover"
+          className="rounded-full bg-landing-accent px-4 py-2 text-xs font-medium text-landing-accent-fg transition-colors hover:bg-landing-accent-hover"
         >
           Accept
         </button>

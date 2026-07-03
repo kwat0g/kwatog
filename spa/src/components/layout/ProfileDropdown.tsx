@@ -95,7 +95,7 @@ export function ProfileDropdown({ user, onLogout }: ProfileDropdownProps) {
         <div
           ref={menuRef}
           role="menu"
-          className="absolute right-0 top-full mt-1 w-56 rounded-lg border border-default bg-canvas shadow-lg z-50 py-1 animate-in fade-in slide-in-from-top-2 duration-150"
+          className="absolute right-0 top-full mt-1 w-56 rounded-md border border-default bg-canvas z-50 py-1 animate-in fade-in slide-in-from-top-2 duration-150"
         >
           {/* User info header */}
           <div className="px-3 py-2 border-b border-default">

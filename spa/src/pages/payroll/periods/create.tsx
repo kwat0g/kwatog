@@ -60,7 +60,7 @@ export default function CreatePayrollPeriodPage() {
   return (
     <div>
       <PageHeader title="New Payroll Period" backTo="/payroll/periods" backLabel="Payroll" breadcrumbs={[{ label: 'Payroll', href: '/payroll/periods' }, { label: 'Periods', href: '/payroll/periods' }, { label: 'New Period' }]} />
-      <form onSubmit={handleSubmit(onSubmit, onFormInvalid<FormValues>())} className="max-w-2xl mx-auto px-5 py-6">
+      <form onSubmit={handleSubmit(onSubmit, onFormInvalid<FormValues>())} className="max-w-2xl mx-auto px-5 py-4">
         <fieldset className="mb-8">
           <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">Schedule</legend>
           <div className="grid grid-cols-2 gap-3">

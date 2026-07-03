@@ -32,7 +32,7 @@ export default function StatementOfAccountPage() {
     queryFn: () => customerPortalApi.getStatementOfAccount(),
   });
 
-  if (isLoading) return <SkeletonBlock className="h-96 rounded-lg" />;
+  if (isLoading) return <SkeletonBlock className="h-96 rounded-md" />;
   if (isError) return <EmptyState icon="alert-circle" title="Failed to load statement" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />;
   if (!soa) return <EmptyState icon="receipt" title="Statement not available" />;
 
@@ -43,7 +43,7 @@ export default function StatementOfAccountPage() {
           <ArrowLeft size={16} />
         </Link>
         <div>
-          <h2 className="text-sm font-semibold">Statement of Account</h2>
+          <h2 className="text-sm font-medium">Statement of Account</h2>
           <p className="text-2xs text-muted">
             {soa.customer_name ?? 'Customer'} &middot; As of {soa.as_of_date}
           </p>
@@ -64,7 +64,7 @@ export default function StatementOfAccountPage() {
 
       <div className="text-center p-3 bg-surface border border-default rounded-md">
         <span className="text-2xs uppercase tracking-wide text-muted">Total Outstanding</span>
-        <p className="text-xl font-semibold font-mono text-primary mt-1">
+        <p className="text-xl font-medium font-mono text-primary mt-1">
           {formatPeso(soa.total_outstanding)}
         </p>
       </div>

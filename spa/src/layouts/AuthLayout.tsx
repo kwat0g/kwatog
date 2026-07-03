@@ -35,7 +35,7 @@ const WARM_ACCENT = {
   '--accent-hover': 'var(--landing-accent-hover)',
   '--accent-fg': 'var(--landing-accent-fg)',
   '--ring': 'var(--landing-accent)',
-  '--shadow-focus': '0 0 0 3px var(--landing-accent-glow)',
+  '---focus': '0 0 0 3px var(--landing-accent-glow)',
 } as CSSProperties;
 
 const GRID_BG: CSSProperties = {
@@ -150,7 +150,7 @@ export function AuthLayout() {
 
         {/* auto-cycling 3D parts tour inside a drawing frame */}
         <div className="relative mx-auto flex w-full max-w-sm items-center justify-center">
-          <figure className="relative aspect-square w-full overflow-hidden rounded-xl border border-landing-border-strong bg-landing-canvas">
+          <figure className="relative aspect-square w-full overflow-hidden rounded-md border border-landing-border-strong bg-landing-canvas">
             {/* faint blueprint grid inside the frame */}
             <div
               aria-hidden="true"
@@ -193,7 +193,7 @@ export function AuthLayout() {
 
         {/* tagline */}
         <div className="relative">
-          <p className="font-display text-2xl font-semibold leading-tight tracking-tight text-landing-text">
+          <p className="font-display text-2xl font-medium leading-tight tracking-tight text-landing-text">
             Precision, molded
             <br /> in the Philippines.
           </p>
@@ -204,7 +204,7 @@ export function AuthLayout() {
       </aside>
 
       {/* ── Form area ─────────────────────────────────────────────── */}
-      <main className="relative flex flex-col items-center justify-center px-5 py-12 sm:px-8">
+      <main className="relative flex flex-col items-center justify-center px-5 py-12 sm:px-5">
         {/* compact brand for mobile (brand panel hidden) */}
         <Link to="/" className="mb-10 flex items-center rounded-md lg:hidden">
           <BrandLogo alt="Ogami" className="h-10" />

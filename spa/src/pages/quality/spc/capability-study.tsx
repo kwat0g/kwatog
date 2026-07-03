@@ -80,7 +80,7 @@ function HistogramTooltip({ active, payload }: { active?: boolean; payload?: Arr
   if (!active || !payload?.[0]) return null;
   const bar = payload[0].payload;
   return (
-    <div className="bg-canvas border border-default rounded-md shadow-lg p-3 text-xs">
+    <div className="bg-canvas border border-default rounded-md p-3 text-xs">
       <div className="font-mono tabular-nums">
         {bar.binStart.toFixed(4)} to {bar.binEnd.toFixed(4)}
       </div>

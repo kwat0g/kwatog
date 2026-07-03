@@ -43,7 +43,7 @@ export default function DepartmentBudgetDetailPage() {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-5 space-y-6">
       <PageHeader
         title={`${departmentName} Budget`}
         subtitle={`FY ${new Date().getFullYear()} — Monthly Budget vs Actual Breakdown`}

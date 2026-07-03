@@ -61,7 +61,7 @@ function PortalSidebar({ type, nav, pathname, onLogout }: {
         <span className="h-7 w-7 rounded-md bg-accent text-canvas inline-flex items-center justify-center font-medium text-xs">
           <BrandIcon size={14} />
         </span>
-        <span className="text-sm font-semibold truncate">{brand}</span>
+        <span className="text-sm font-medium truncate">{brand}</span>
       </div>
 
       {/* Navigation */}
@@ -113,7 +113,7 @@ export default function PortalLayout({ type, user, onLogout, title, subtitle, ch
         {/* Top bar */}
         <header className="h-14 border-b border-border flex items-center justify-between px-5 shrink-0 bg-elevated/50 backdrop-blur-sm">
           <div>
-            <h1 className="text-sm font-semibold">{title}</h1>
+            <h1 className="text-sm font-medium">{title}</h1>
             <p className="text-2xs text-muted">{subtitle}</p>
           </div>
           <div className="flex items-center gap-3">
@@ -121,7 +121,7 @@ export default function PortalLayout({ type, user, onLogout, title, subtitle, ch
               <p className="text-xs font-medium">{user?.name}</p>
               <p className="text-2xs text-muted">{user?.email}</p>
             </div>
-            <div className="h-8 w-8 rounded-full bg-accent/10 text-accent flex items-center justify-center text-xs font-semibold">
+            <div className="h-8 w-8 rounded-full bg-accent/10 text-accent flex items-center justify-center text-xs font-medium">
               {user?.name?.charAt(0)?.toUpperCase() ?? '?'}
             </div>
           </div>

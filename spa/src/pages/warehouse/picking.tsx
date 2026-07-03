@@ -76,7 +76,7 @@ export default function PickingListPage() {
             {/* Picking list detail */}
             <div className="col-span-9 space-y-3">
               {!selectedMis && (
-                <div className="text-sm text-muted text-center py-8">Select a slip to view its picking list.</div>
+                <div className="text-sm text-muted text-center py-5">Select a slip to view its picking list.</div>
               )}
               {selectedMis && loadingList && (
                 <div className="space-y-3">

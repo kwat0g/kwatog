@@ -58,7 +58,7 @@ export function RowContextMenu({ open, x, y, items, onClose }: Props) {
       ref={ref}
       role="menu"
       style={{ position: 'fixed', left, top, minWidth: w }}
-      className="z-50 bg-elevated border border-default rounded-md shadow-menu py-1"
+      className="z-50 bg-elevated border border-default rounded-md-menu py-1"
     >
       {items.map((item, i) => (
         <button

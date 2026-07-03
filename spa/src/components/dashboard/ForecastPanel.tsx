@@ -128,7 +128,7 @@ export function ForecastPanel({
         {showKpi && data.kpi && (
           <div className="flex items-center justify-between p-2 bg-elevated rounded-md">
             <span className="text-sm text-muted">{data.kpi.label}</span>
-            <span className="text-lg font-semibold font-mono tabular-nums">
+            <span className="text-lg font-medium font-mono tabular-nums">
               {data.kpi.value}
               {unitLabel && <span className="text-xs text-muted ml-1">{unitLabel}</span>}
             </span>
@@ -167,7 +167,7 @@ export function ForecastPanel({
 
                 {/* Tooltip on hover */}
                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-10">
-                  <div className="bg-popover text-popover-foreground text-xs px-2 py-1 rounded-md shadow-lg whitespace-nowrap">
+                  <div className="bg-popover text-popover-foreground text-xs px-2 py-1 rounded-md whitespace-nowrap">
                     <span className="font-medium">{monthLabel}</span>
                     <span className="ml-1 font-mono">{formatValue(p.value)}</span>
                     {p.isForecast && p.confidence != null && (

@@ -99,7 +99,7 @@ export default function DriverDeliveryDetail() {
         ← All deliveries
       </Link>
 
-      <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-4 bg-white dark:bg-zinc-900">
+      <div className="rounded-md border border-zinc-200 dark:border-zinc-800 p-4 bg-canvas dark:bg-zinc-900">
         <div className="font-mono">{data.delivery_number}</div>
         <div className="mt-2 text-sm space-y-1">
           <div>
@@ -126,7 +126,7 @@ export default function DriverDeliveryDetail() {
           type="button"
           disabled={transition.isPending}
           onClick={() => transition.mutate(next)}
-          className="w-full rounded-lg bg-indigo-600 text-white py-3 font-medium disabled:opacity-60 min-h-[44px] focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+          className="w-full rounded-md bg-indigo-600 text-white py-3 font-medium disabled:opacity-60 min-h-[44px] focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
         >
           {transition.isPending ? 'Updating…' : label}
         </button>
@@ -136,7 +136,7 @@ export default function DriverDeliveryDetail() {
         <button
           type="button"
           onClick={() => navigate(`/driver/${id}/photo`)}
-          className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 py-3 font-medium min-h-[44px] focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+          className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 py-3 font-medium min-h-[44px] focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
         >
           {(data.proofs?.length ?? 0) > 0 ? 'Replace Receipt Photo' : 'Capture Receipt Photo'}
         </button>

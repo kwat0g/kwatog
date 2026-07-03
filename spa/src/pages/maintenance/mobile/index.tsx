@@ -39,7 +39,7 @@ export default function MobileMaintenanceList() {
   return (
     <div className="space-y-3">
       {/* Tab bar */}
-      <div className="flex rounded-lg bg-zinc-100 dark:bg-zinc-800 p-1">
+      <div className="flex rounded-md bg-zinc-100 dark:bg-zinc-800 p-1">
         <TabButton active={tab === 'my_assigned'} onClick={() => setTab('my_assigned')}>
           My Assigned
         </TabButton>
@@ -50,7 +50,7 @@ export default function MobileMaintenanceList() {
 
       {/* Header + refresh */}
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">Work Orders</h1>
+        <h1 className="text-lg font-medium">Work Orders</h1>
         <button
           type="button"
           onClick={() => refetch()}
@@ -85,7 +85,7 @@ export default function MobileMaintenanceList() {
         <Link
           key={wo.id}
           to={`/maintenance/mobile/${wo.id}`}
-          className="block rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 active:bg-zinc-50 dark:active:bg-zinc-800"
+          className="block rounded-md border border-zinc-200 dark:border-zinc-800 bg-canvas dark:bg-zinc-900 p-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 active:bg-zinc-50 dark:active:bg-zinc-800"
         >
           {/* Header: MWO number + priority */}
           <div className="flex items-center justify-between">
@@ -140,7 +140,7 @@ function TabButton({
       onClick={onClick}
       className={`flex-1 text-sm font-medium py-2 rounded-md min-h-[44px] transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
         active
-          ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-sm'
+          ? 'bg-canvas dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100'
           : 'text-zinc-500 dark:text-zinc-400'
       }`}
     >
@@ -187,9 +187,9 @@ function Skeleton() {
   return (
     <div role="status" aria-live="polite" aria-busy="true" className="space-y-3 animate-pulse">
       <span className="sr-only">Loading work orders...</span>
-      <div className="h-10 rounded-lg bg-zinc-100 dark:bg-zinc-800" />
+      <div className="h-10 rounded-md bg-zinc-100 dark:bg-zinc-800" />
       {[0, 1, 2, 3].map(i => (
-        <div key={i} className="h-28 rounded-lg bg-zinc-100 dark:bg-zinc-800" />
+        <div key={i} className="h-28 rounded-md bg-zinc-100 dark:bg-zinc-800" />
       ))}
     </div>
   );

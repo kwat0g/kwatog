@@ -118,11 +118,11 @@ function ChainPicker({ onPick }: { onPick: (id: string) => void }) {
         />
         <div className="mt-3 divide-y divide-subtle border-t border-subtle">
           {results.isLoading ? (
-            <div className="flex items-center gap-2 py-6 text-sm text-muted">
+            <div className="flex items-center gap-2 py-4 text-sm text-muted">
               <Spinner size="sm" /> Searching…
             </div>
           ) : orders.length === 0 ? (
-            <div className="py-8">
+            <div className="py-5">
               <EmptyState
                 icon="search"
                 title={search ? 'No matching sales orders' : 'Start typing to find an order'}
@@ -155,11 +155,11 @@ function ChainPicker({ onPick }: { onPick: (id: string) => void }) {
         meta={bottlenecks.data ? `${bottlenecks.data.total} stuck` : undefined}
       >
         {bottlenecks.isLoading ? (
-          <div className="flex items-center gap-2 py-6 text-sm text-muted">
+          <div className="flex items-center gap-2 py-4 text-sm text-muted">
             <Spinner size="sm" /> Loading…
           </div>
         ) : bottlenecks.isError ? (
-          <div className="py-6">
+          <div className="py-4">
             <EmptyState icon="alert-circle" title="Couldn’t load bottlenecks" description="Try refreshing." action={
               <button type="button" onClick={() => bottlenecks.refetch()} className="inline-flex items-center gap-1.5 text-sm text-accent hover:underline">
                 <RotateCcw size={13} /> Retry
@@ -167,7 +167,7 @@ function ChainPicker({ onPick }: { onPick: (id: string) => void }) {
             } />
           </div>
         ) : !bottlenecks.data || bottlenecks.data.total === 0 ? (
-          <div className="py-6">
+          <div className="py-4">
             <EmptyState icon="shield" title="Nothing stuck" description="Every chain is moving. Nice." />
           </div>
         ) : (

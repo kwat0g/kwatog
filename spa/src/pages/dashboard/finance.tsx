@@ -186,7 +186,7 @@ export default function FinanceDashboardPage() {
                           <td className="py-2 px-2 text-right font-mono tabular-nums">{formatPeso(c.d31_60)}</td>
                           <td className="py-2 px-2 text-right font-mono tabular-nums">{formatPeso(c.d61_90)}</td>
                           <td className="py-2 px-2 text-right font-mono tabular-nums">{formatPeso(c.d91_plus)}</td>
-                          <td className="py-2 px-2 text-right font-mono tabular-nums font-semibold">{formatPeso(c.total)}</td>
+                          <td className="py-2 px-2 text-right font-mono tabular-nums font-medium">{formatPeso(c.total)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -248,7 +248,7 @@ function AgingPanel({
           ))}
           <tr>
             <td className="pt-2 font-medium">Total</td>
-            <td className="pt-2 text-right font-mono tabular-nums font-semibold">{formatPeso(buckets.total)}</td>
+            <td className="pt-2 text-right font-mono tabular-nums font-medium">{formatPeso(buckets.total)}</td>
           </tr>
         </tbody>
       </table>
@@ -307,7 +307,7 @@ function UnpostedJesPanel({
       <div className="flex items-start gap-3">
         <div className="shrink-0 mt-0.5 text-muted"><ClipboardList size={20} /></div>
         <div>
-          <div className="text-2xl font-semibold font-mono tabular-nums">{data?.count ?? 0}</div>
+          <div className="text-2xl font-medium font-mono tabular-nums">{data?.count ?? 0}</div>
           {(data?.count ?? 0) === 0 ? (
             <p className="text-xs text-muted mt-1">All journal entries are posted.</p>
           ) : (
@@ -337,7 +337,7 @@ function ApDueThisWeekPanel({
           <CalendarClock size={16} className="text-muted" />
           <span className="text-sm text-muted">{data?.count ?? 0} bills</span>
         </div>
-        <div className="font-mono tabular-nums font-semibold">{formatPeso(data?.total ?? '0')}</div>
+        <div className="font-mono tabular-nums font-medium">{formatPeso(data?.total ?? '0')}</div>
       </div>
       {items.length === 0 ? (
         <p className="text-sm text-muted">No bills due in the next 7 days.</p>

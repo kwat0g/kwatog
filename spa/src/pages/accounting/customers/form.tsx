@@ -75,7 +75,7 @@ export default function CustomerFormPage({ mode }: { mode: 'create' | 'edit' }) 
           { label: 'Customers', href: '/accounting/customers' },
           { label: mode === 'create' ? 'New customer' : `Edit ${existing?.name ?? 'customer'}` },
         ]} />
-      <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-3xl mx-auto px-5 py-6 space-y-4">
+      <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-3xl mx-auto px-5 py-4 space-y-4">
         <Panel title="Identity">
           <div className="grid grid-cols-2 gap-3">
             <Input label="Customer name" required {...register('name')} error={errors.name?.message} />

@@ -186,7 +186,7 @@ function PermissionsTab() {
       <div className="mb-3 text-xs text-text-subtle">{totalPerms} total permissions across {modules.length} modules</div>
       <div className="grid grid-cols-2 gap-3">
         {modules.map(([mod, perms]) => (
-          <div key={mod} className="rounded-lg border border-default p-3">
+          <div key={mod} className="rounded-md border border-default p-3">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium capitalize">{mod.replace(/_/g, ' ')}</span>
               <Chip variant="neutral">{perms.length}</Chip>

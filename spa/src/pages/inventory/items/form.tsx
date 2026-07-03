@@ -107,7 +107,7 @@ export default function ItemFormPage({ mode }: { mode: 'create' | 'edit' }) {
         breadcrumbs={[{ label: 'Inventory', href: '/inventory' }, { label: 'Items', href: '/inventory/items' }, { label: mode === 'create' ? 'New item' : `Edit ${existing?.code ?? 'item'}` }]}
       />
       <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())}
-            className="max-w-3xl mx-auto px-5 py-6 space-y-4">
+            className="max-w-3xl mx-auto px-5 py-4 space-y-4">
         <Panel title="Identity">
           <div className="grid grid-cols-2 gap-3">
             <Input label="Code" required {...register('code')} error={errors.code?.message}
@@ -156,7 +156,7 @@ export default function ItemFormPage({ mode }: { mode: 'create' | 'edit' }) {
                    helper="Auto-PR rounds up to nearest multiple."
                    error={errors.minimum_order_quantity?.message} />
           </div>
-          <div className="mt-3 flex gap-6">
+          <div className="mt-3 flex gap-4">
             <Switch label="Critical item" {...register('is_critical')} />
             <Switch label="Active" {...register('is_active')} />
           </div>

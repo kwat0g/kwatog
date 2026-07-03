@@ -125,7 +125,7 @@ export default function SupplierPurchaseOrderDetailPage() {
     }
   };
 
-  if (isLoading) return <SkeletonBlock className="h-96 rounded-lg" />;
+  if (isLoading) return <SkeletonBlock className="h-96 rounded-md" />;
   if (!po) return <EmptyState icon="file-x" title="Purchase order not found" />;
 
   const canAcknowledge = !po.sent_to_supplier_at;
@@ -139,7 +139,7 @@ export default function SupplierPurchaseOrderDetailPage() {
             <ArrowLeft size={16} />
           </Link>
           <div>
-            <h2 className="text-sm font-semibold">{po.po_number}</h2>
+            <h2 className="text-sm font-medium">{po.po_number}</h2>
             <p className="text-2xs text-muted">{po.date ?? '—'}</p>
           </div>
         </div>

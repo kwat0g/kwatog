@@ -224,7 +224,7 @@ function Column({
 
 function EmptyColumn({ message }: { message: string }) {
   return (
-    <div className="text-xs text-muted text-center py-6">{message}</div>
+    <div className="text-xs text-muted text-center py-4">{message}</div>
   );
 }
 

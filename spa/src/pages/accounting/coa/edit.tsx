@@ -71,7 +71,7 @@ export default function EditAccountPage() {
       <PageHeader title={`Edit ${account.code}`} backTo="/accounting/coa" backLabel="Chart of Accounts"
         breadcrumbs={[{ label: 'COA', href: '/accounting/coa' }, { label: account.code }]} />
       <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())}
-        className="max-w-2xl mx-auto px-5 py-6 space-y-4">
+        className="max-w-2xl mx-auto px-5 py-4 space-y-4">
 
         <div className="grid grid-cols-2 gap-3">
           <div>

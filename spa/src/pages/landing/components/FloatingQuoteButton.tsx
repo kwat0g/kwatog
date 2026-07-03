@@ -34,9 +34,9 @@ export function FloatingQuoteButton() {
       onClick={scrollToContact}
       className={cn(
         'fixed bottom-6 left-1/2 z-40 -translate-x-1/2 lg:hidden',
-        'inline-flex items-center gap-2 rounded-full bg-landing-accent px-6 py-3',
-        'font-sans text-sm font-semibold text-landing-accent-fg shadow-menu',
-        'transition-all duration-300 hover:bg-landing-accent-hover hover:shadow-lg',
+        'inline-flex items-center gap-2 rounded-full bg-landing-accent px-5 py-3',
+        'font-sans text-sm font-medium text-landing-accent-fg-menu',
+        'transition-all duration-300 hover:bg-landing-accent-hover hover:',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas',
         visible ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0 pointer-events-none',
       )}

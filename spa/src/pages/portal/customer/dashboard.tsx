@@ -21,11 +21,11 @@ export default function CustomerDashboardPage() {
       <div className="space-y-4">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {Array.from({ length: 4 }).map((_, i) => (
-            <SkeletonBlock key={i} className="h-24 rounded-lg" />
+            <SkeletonBlock key={i} className="h-24 rounded-md" />
           ))}
         </div>
-        <SkeletonBlock className="h-48 rounded-lg" />
-        <SkeletonBlock className="h-48 rounded-lg" />
+        <SkeletonBlock className="h-48 rounded-md" />
+        <SkeletonBlock className="h-48 rounded-md" />
       </div>
     );
   }

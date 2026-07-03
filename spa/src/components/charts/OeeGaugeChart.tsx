@@ -37,7 +37,7 @@ export function OeeGaugeChart({ oee, availability, performance, quality }: Props
         </ResponsiveContainer>
         {/* Center label */}
         <div className="absolute inset-x-0 bottom-0 flex flex-col items-center pb-1 pointer-events-none">
-          <span className="text-2xl font-mono tabular-nums font-semibold">{oeePct.toFixed(1)}%</span>
+          <span className="text-2xl font-mono tabular-nums font-medium">{oeePct.toFixed(1)}%</span>
           <span className="text-2xs uppercase tracking-wider text-muted">OEE</span>
         </div>
       </div>

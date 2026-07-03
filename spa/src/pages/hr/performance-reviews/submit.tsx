@@ -136,7 +136,7 @@ export default function SubmitReviewPage() {
       />
       <form
         onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())}
-        className="max-w-3xl mx-auto px-5 py-6 space-y-5"
+        className="max-w-3xl mx-auto px-5 py-4 space-y-5"
       >
         {/* Review context */}
         <Panel title="Review details">

@@ -88,7 +88,7 @@ export function EmptyState({
   const Icon = ICONS[resolvedIcon] ?? Inbox;
 
   return (
-    <div className={cn('flex flex-col items-center justify-center py-12 px-6 text-center', className)}>
+    <div className={cn('flex flex-col items-center justify-center py-12 px-5 text-center', className)}>
       {/* Brand motif: faint DatumMark behind the icon cluster */}
       <div className="relative flex items-center justify-center mb-3">
         <DatumMark

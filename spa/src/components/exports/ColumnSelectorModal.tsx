@@ -83,10 +83,10 @@ export function ColumnSelectorModal({
   return (
     <Modal isOpen={isOpen} onClose={onClose} size="md" title="Export options">
       {isLoading && (
-        <div className="text-sm text-muted py-6 text-center">Loading columns…</div>
+        <div className="text-sm text-muted py-4 text-center">Loading columns…</div>
       )}
       {isError && (
-        <div className="text-sm text-danger py-6 text-center">
+        <div className="text-sm text-danger py-4 text-center">
           Failed to load column definitions. Please try again.
         </div>
       )}

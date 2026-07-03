@@ -131,7 +131,7 @@ export default function PostingCreatePage() {
         ]}
       />
 
-      <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormData>())} className="max-w-5xl mx-auto px-5 py-6 space-y-4">
+      <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormData>())} className="max-w-5xl mx-auto px-5 py-4 space-y-4">
         <Panel title="Job Details">
           <div className="space-y-4">
             <Input label="Job Title" required {...register('title')} placeholder="e.g. Injection Molding Operator" error={errors.title?.message} />

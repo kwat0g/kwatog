@@ -101,7 +101,7 @@ export function PermissionOverrides({
       )}
 
       {canManage && list.isLoading && (
-        <div className="flex items-center gap-2 py-6 text-muted">
+        <div className="flex items-center gap-2 py-4 text-muted">
           <Spinner /> <span className="text-sm">Loading overrides…</span>
         </div>
       )}

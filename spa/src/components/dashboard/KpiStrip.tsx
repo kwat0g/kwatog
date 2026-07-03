@@ -16,13 +16,13 @@ const UNIT_SUFFIX: Record<string, string> = {
 const STATUS_DOT: Record<string, string> = {
   on_target: 'bg-emerald-500',
   warning: 'bg-amber-500',
-  off_target: 'bg-red-500',
+  off_target: 'bg-danger',
 };
 
 const TREND_COLORS: Record<string, Record<string, string>> = {
   on_target: { up: 'text-emerald-500', down: 'text-emerald-500', flat: 'text-muted' },
   warning: { up: 'text-amber-500', down: 'text-amber-500', flat: 'text-muted' },
-  off_target: { up: 'text-red-500', down: 'text-red-500', flat: 'text-muted' },
+  off_target: { up: 'text-danger', down: 'text-danger', flat: 'text-muted' },
 };
 
 const TrendIcon = ({ trend, status }: { trend: string; status: string }) => {

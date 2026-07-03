@@ -73,9 +73,9 @@ export function ContactSection() {
   };
 
   return (
-    <section id="contact" className="relative bg-landing-canvas px-5 py-20 sm:px-8 sm:py-28">
+    <section id="contact" className="relative bg-landing-canvas px-5 py-20 sm:px-5 sm:py-28">
       <div className="mx-auto max-w-6xl">
-        <div className="relative overflow-hidden rounded-2xl border border-landing-border-strong bg-landing-surface px-7 py-16 sm:px-14 sm:py-20">
+        <div className="relative overflow-hidden rounded-md border border-landing-border-strong bg-landing-surface px-7 py-16 sm:px-14 sm:py-20">
           {/* atmosphere — soft warm wash + blueprint grid */}
           <div
             aria-hidden="true"
@@ -121,7 +121,7 @@ export function ContactSection() {
               <h2
                 data-reveal
                 data-reveal-delay="0.05"
-                className="mt-5 font-display text-[clamp(2.25rem,5.5vw,4rem)] font-bold leading-[1.02] tracking-[-0.025em] text-landing-text"
+                className="mt-5 font-display text-[clamp(2.25rem,5.5vw,4rem)] font-medium leading-[1.02] tracking-[-0.025em] text-landing-text"
               >
                 Have a part in mind? Let&apos;s mold it.
               </h2>
@@ -161,16 +161,16 @@ export function ContactSection() {
             <div
               data-reveal
               data-reveal-delay="0.15"
-              className="rounded-2xl border border-landing-border bg-landing-canvas p-6 sm:p-8"
+              className="rounded-md border border-landing-border bg-landing-canvas p-5 sm:p-5"
             >
               {submitted ? (
-                <div className="py-8 text-center">
+                <div className="py-5 text-center">
                   <CheckCircle
                     size={40}
                     className="mx-auto text-success"
                     strokeWidth={1.5}
                   />
-                  <h3 className="mt-4 font-display text-xl font-semibold text-landing-text">
+                  <h3 className="mt-4 font-display text-xl font-medium text-landing-text">
                     Request received
                   </h3>
                   <p className="mt-2 text-[13px] text-landing-text-secondary">
@@ -228,7 +228,7 @@ export function ContactSection() {
                   <label
                     htmlFor="drawing-upload"
                     className={cn(
-                      'group flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-landing-border bg-landing-elevated px-4 py-5 transition-colors hover:border-landing-accent/40',
+                      'group flex cursor-pointer flex-col items-center justify-center gap-2 rounded-md border border-dashed border-landing-border bg-landing-elevated px-4 py-5 transition-colors hover:border-landing-accent/40',
                       drawing && 'border-solid border-landing-accent/40',
                     )}
                   >

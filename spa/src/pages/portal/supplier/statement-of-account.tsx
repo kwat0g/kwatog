@@ -60,7 +60,7 @@ export default function SupplierStatementOfAccountPage() {
     <div className="max-w-5xl space-y-6">
       {/* Header */}
       <div>
-        <h2 className="text-lg font-semibold">Statement of Account</h2>
+        <h2 className="text-lg font-medium">Statement of Account</h2>
         <p className="text-xs text-muted">
           {soa.vendor_name ?? 'Vendor'} — as of {soa.as_of_date}
         </p>
@@ -68,7 +68,7 @@ export default function SupplierStatementOfAccountPage() {
 
       {/* Summary row */}
       <div className="flex items-baseline gap-2">
-        <span className="text-2xl font-bold">{soa.total_outstanding}</span>
+        <span className="text-2xl font-medium">{soa.total_outstanding}</span>
         <span className="text-xs text-muted">PHP total outstanding</span>
       </div>
 
@@ -83,7 +83,7 @@ export default function SupplierStatementOfAccountPage() {
           return (
             <Panel key={key} className="p-3 space-y-1">
               <p className="text-2xs text-muted uppercase tracking-wider">{bucketLabels[key]}</p>
-              <p className={`text-base font-bold ${bucketColors[key] ?? ''}`}>{amount}</p>
+              <p className={`text-base font-medium ${bucketColors[key] ?? ''}`}>{amount}</p>
               <p className="text-2xs text-muted">{pct}% of total</p>
             </Panel>
           );
@@ -92,11 +92,11 @@ export default function SupplierStatementOfAccountPage() {
 
       {/* Open bills table */}
       <Panel className="overflow-hidden">
-        <h3 className="text-sm font-semibold px-4 pt-3 pb-2 border-b border-border">
+        <h3 className="text-sm font-medium px-4 pt-3 pb-2 border-b border-border">
           Open Bills ({soa.open_bills.length})
         </h3>
         {soa.open_bills.length === 0 ? (
-          <div className="p-6">
+          <div className="p-5">
             <EmptyState icon="circle-check" title="No open bills" description="All bills are paid." />
           </div>
         ) : (
@@ -122,7 +122,7 @@ export default function SupplierStatementOfAccountPage() {
                     <td className="px-4 py-2.5 text-muted">{bill.date ?? '—'}</td>
                     <td className="px-4 py-2.5 text-muted">{bill.due_date ?? '—'}</td>
                     <td className="px-4 py-2.5 text-right">{bill.total_amount}</td>
-                    <td className="px-4 py-2.5 text-right font-semibold">{bill.balance}</td>
+                    <td className="px-4 py-2.5 text-right font-medium">{bill.balance}</td>
                     <td className="px-4 py-2.5 text-center">
                       <Chip variant={chipVariantForStatus(bill.status)}>{bill.status}</Chip>
                     </td>

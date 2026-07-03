@@ -70,7 +70,7 @@ export default function MobileConditionReading() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-lg font-semibold flex items-center gap-2">
+      <h1 className="text-lg font-medium flex items-center gap-2">
         <Thermometer className="w-5 h-5" />
         Condition Reading
       </h1>
@@ -81,7 +81,7 @@ export default function MobileConditionReading() {
           e.preventDefault();
           if (canSubmit) mutation.mutate();
         }}
-        className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 space-y-4"
+        className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-canvas dark:bg-zinc-900 p-4 space-y-4"
       >
         {/* Machine selector */}
         <div>
@@ -89,7 +89,7 @@ export default function MobileConditionReading() {
             Machine
           </label>
           {machinesLoading ? (
-            <div className="h-12 rounded-lg bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
+            <div className="h-12 rounded-md bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
           ) : (
             <select
               id="machine_select"
@@ -98,7 +98,7 @@ export default function MobileConditionReading() {
                 setMachineId(e.target.value);
                 setLastResult(null);
               }}
-              className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 min-h-[44px]"
+              className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-canvas dark:bg-zinc-800 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 min-h-[44px]"
             >
               <option value="">Select a machine...</option>
               {machines.map(m => (
@@ -119,7 +119,7 @@ export default function MobileConditionReading() {
             id="metric_select"
             value={metric}
             onChange={e => setMetric(e.target.value as ConditionMetric)}
-            className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 min-h-[44px]"
+            className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-canvas dark:bg-zinc-800 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 min-h-[44px]"
           >
             {METRICS.map(m => (
               <option key={m.value} value={m.value}>
@@ -142,7 +142,7 @@ export default function MobileConditionReading() {
             value={value}
             onChange={e => setValue(e.target.value)}
             placeholder={selectedMetricInfo?.placeholder}
-            className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-4 text-2xl font-mono tabular-nums text-center focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-canvas dark:bg-zinc-800 px-4 py-4 text-2xl font-mono tabular-nums text-center focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
           />
         </div>
 
@@ -157,14 +157,14 @@ export default function MobileConditionReading() {
             onChange={e => setNotes(e.target.value)}
             rows={2}
             placeholder="Observations..."
-            className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"
+            className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-canvas dark:bg-zinc-800 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"
           />
         </div>
 
         <button
           type="submit"
           disabled={!canSubmit || mutation.isPending}
-          className="w-full min-h-[52px] rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 text-white font-semibold text-base transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+          className="w-full min-h-[52px] rounded-md bg-indigo-600 hover:bg-indigo-700 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 text-white font-medium text-base transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
         >
           {mutation.isPending ? 'Recording...' : 'Record Reading'}
         </button>
@@ -172,11 +172,11 @@ export default function MobileConditionReading() {
 
       {/* Alert banner for triggered WO */}
       {lastResult?.triggered && (
-        <div className="rounded-lg border-2 border-danger bg-danger-bg p-4" role="alert">
+        <div className="rounded-md border-2 border-danger bg-danger-bg p-4" role="alert">
           <div className="flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 text-danger flex-shrink-0 mt-0.5" />
             <div>
-              <div className="text-sm font-semibold text-danger">
+              <div className="text-sm font-medium text-danger">
                 Threshold Breached
               </div>
               <p className="text-sm text-danger mt-1">
@@ -194,7 +194,7 @@ export default function MobileConditionReading() {
 
       {/* Success banner for non-breach */}
       {lastResult && !lastResult.triggered && (
-        <div className="rounded-lg border border-success bg-success-bg p-4">
+        <div className="rounded-md border border-success bg-success-bg p-4">
           <div className="flex items-center gap-2 text-sm text-success">
             <CheckCircle2 className="w-4 h-4" />
             Reading within normal range.
@@ -209,8 +209,8 @@ export default function MobileConditionReading() {
 
       {/* Health snapshot for selected machine */}
       {machineId && healthData && (
-        <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
-          <h2 className="text-base font-semibold mb-3">Current Health Status</h2>
+        <div className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-canvas dark:bg-zinc-900 p-4">
+          <h2 className="text-base font-medium mb-3">Current Health Status</h2>
           <div className="space-y-2">
             {(healthData as MachineHealthSnapshot[]).map(snap => (
               <div

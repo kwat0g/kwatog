@@ -75,7 +75,7 @@ export default function RecordOutput() {
 
       {/* WO Summary */}
       {workOrder && (
-        <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
+        <div className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-canvas dark:bg-zinc-900 p-4">
           <div className="flex items-center justify-between">
             <span className="font-mono text-sm font-medium">{workOrder.wo_number}</span>
             <span className="text-xs px-2 py-0.5 rounded bg-success-bg text-success-fg font-medium">
@@ -85,7 +85,7 @@ export default function RecordOutput() {
           <div className="mt-1 text-sm font-medium">{workOrder.product?.name ?? 'Unknown'}</div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-xs text-zinc-500">Progress:</span>
-            <span className="font-mono tabular-nums text-lg font-semibold">
+            <span className="font-mono tabular-nums text-lg font-medium">
               {workOrder.quantity_good}
             </span>
             <span className="text-xs text-zinc-500">/ {workOrder.quantity_target}</span>
@@ -105,9 +105,9 @@ export default function RecordOutput() {
           e.preventDefault();
           if (canSubmit) mutation.mutate();
         }}
-        className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 space-y-4"
+        className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-canvas dark:bg-zinc-900 p-4 space-y-4"
       >
-        <h2 className="text-base font-semibold">Record Output</h2>
+        <h2 className="text-base font-medium">Record Output</h2>
 
         <div>
           <label htmlFor="good_count" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
@@ -121,7 +121,7 @@ export default function RecordOutput() {
             value={goodCount}
             onChange={e => setGoodCount(e.target.value)}
             placeholder="0"
-            className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-4 text-2xl font-mono tabular-nums text-center focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-canvas dark:bg-zinc-800 px-4 py-4 text-2xl font-mono tabular-nums text-center focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
           />
         </div>
 
@@ -137,7 +137,7 @@ export default function RecordOutput() {
             value={rejectCount}
             onChange={e => setRejectCount(e.target.value)}
             placeholder="0"
-            className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-4 text-2xl font-mono tabular-nums text-center focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-canvas dark:bg-zinc-800 px-4 py-4 text-2xl font-mono tabular-nums text-center focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
           />
         </div>
 
@@ -151,14 +151,14 @@ export default function RecordOutput() {
             onChange={e => setRemarks(e.target.value)}
             rows={2}
             placeholder="Any observations..."
-            className="w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"
+            className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-canvas dark:bg-zinc-800 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"
           />
         </div>
 
         <button
           type="submit"
           disabled={!canSubmit || mutation.isPending}
-          className="w-full min-h-[52px] rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 text-white font-semibold text-base transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+          className="w-full min-h-[52px] rounded-md bg-indigo-600 hover:bg-indigo-700 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 text-white font-medium text-base transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
         >
           {mutation.isPending ? 'Recording...' : 'Record Output'}
         </button>
@@ -171,7 +171,7 @@ export default function RecordOutput() {
           {outputs.slice(0, 5).map((output: WorkOrderOutput) => (
             <div
               key={output.id}
-              className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-3 flex items-center justify-between"
+              className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-canvas dark:bg-zinc-900 p-3 flex items-center justify-between"
             >
               <div>
                 <div className="flex items-center gap-3">

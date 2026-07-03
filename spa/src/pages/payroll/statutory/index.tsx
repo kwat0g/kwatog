@@ -12,9 +12,9 @@ export default function StatutoryExportsPage() {
   const [month, setMonth] = useState(now.getMonth() + 1);
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-5 space-y-6">
       <div>
-        <h1 className="text-xl font-semibold">Statutory Filing Exports</h1>
+        <h1 className="text-xl font-medium">Statutory Filing Exports</h1>
         <p className="text-sm text-muted-foreground">
           Generate BIR, PhilHealth, and Pag-IBIG remittance files for finalized payroll periods.
         </p>

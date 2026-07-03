@@ -217,7 +217,7 @@ export default function RoutingEditorPage() {
 
       <form
         onSubmit={handleSubmit((v) => saveMut.mutate(v), onFormInvalid<FormValues>())}
-        className="max-w-5xl mx-auto px-5 py-6"
+        className="max-w-5xl mx-auto px-5 py-4"
       >
         {/* Product + notes */}
         <fieldset className="mb-8">

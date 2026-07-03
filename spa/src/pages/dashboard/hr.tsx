@@ -227,7 +227,7 @@ function PendingMyActionPanel({
         <p className="text-sm text-muted">No pending items requiring your action.</p>
       ) : (
         <>
-          <div className="text-3xl font-semibold font-mono tabular-nums mb-3">{data.total}</div>
+          <div className="text-3xl font-medium font-mono tabular-nums mb-3">{data.total}</div>
           <div className="space-y-1.5">
             {items.map((i) => (
               <div key={i.label} className="flex items-center justify-between text-sm">

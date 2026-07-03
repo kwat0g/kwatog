@@ -28,7 +28,7 @@ export function PartShowcaseSection() {
   const part = PARTS[partIndex];
 
   return (
-    <section id="parts-3d" className="relative bg-landing-canvas px-5 py-24 sm:px-8 sm:py-32">
+    <section id="parts-3d" className="relative bg-landing-canvas px-5 py-24 sm:px-5 sm:py-32">
       <div className="mx-auto max-w-7xl">
         <SectionHeading
           eyebrow="Inspect the part"
@@ -41,7 +41,7 @@ export function PartShowcaseSection() {
           intro="Every part we mold is a controlled geometry. Spin one, or pull it into an exploded view — the same way our engineers inspect a section before a single shot is run."
         />
 
-        <div className="mt-16 grid items-stretch gap-8 lg:grid-cols-[0.82fr_1.18fr] lg:gap-12">
+        <div className="mt-16 grid items-stretch gap-5 lg:grid-cols-[0.82fr_1.18fr] lg:gap-12">
           {/* ── Control rail ─────────────────────────────────────── */}
           <div data-reveal="left" className="flex flex-col">
             {/* part selector */}
@@ -70,7 +70,7 @@ export function PartShowcaseSection() {
             </div>
 
             {/* decoding spec readout */}
-            <dl className="mt-8 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-landing-border bg-landing-border">
+            <dl className="mt-8 grid grid-cols-2 gap-px overflow-hidden rounded-md border border-landing-border bg-landing-border">
               {[
                 { k: 'Material', v: part.material },
                 { k: 'Tolerance', v: part.tolerance },
@@ -139,7 +139,7 @@ export function PartShowcaseSection() {
 
           {/* ── Drawing frame ────────────────────────────────────── */}
           <div data-reveal="right">
-            <figure className="relative aspect-square w-full overflow-hidden rounded-xl border border-landing-border-strong bg-landing-surface sm:aspect-[5/4] lg:aspect-square">
+            <figure className="relative aspect-square w-full overflow-hidden rounded-md border border-landing-border-strong bg-landing-surface sm:aspect-[5/4] lg:aspect-square">
               {/* blueprint grid */}
               <div
                 aria-hidden="true"

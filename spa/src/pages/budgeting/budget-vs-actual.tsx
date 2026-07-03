@@ -33,7 +33,7 @@ export default function BudgetVsActualPage() {
   }, [data]);
 
   if (isLoading) return <SkeletonDetail />;
-  if (error) return <div className="p-6 text-danger-fg">Failed to load budget vs actual data.</div>;
+  if (error) return <div className="p-5 text-danger-fg">Failed to load budget vs actual data.</div>;
 
   // Group rows
   const grouped: Record<string, { rows: BudgetVsActualRow[]; budgeted: number; actual: number }> = {};
@@ -51,7 +51,7 @@ export default function BudgetVsActualPage() {
   const isFavorable = data && data.total_variance >= 0;
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-5 space-y-6">
       <PageHeader
         title="Budget vs Actual"
         subtitle="P&L comparison — budgeted amounts vs actuals"

@@ -138,7 +138,7 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
           : 'border-b border-transparent bg-transparent',
       )}
     >
-      <nav className="mx-auto flex h-16 max-w-7xl items-center justify-between px-5 sm:px-8">
+      <nav className="mx-auto flex h-16 max-w-7xl items-center justify-between px-5 sm:px-5">
         {/* Brand */}
         <a
           href={isLanding ? '#top' : '/'}
@@ -157,7 +157,7 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
         </a>
 
         {/* Desktop links */}
-        <div className="hidden items-center gap-8 lg:flex">
+        <div className="hidden items-center gap-5 lg:flex">
           {NAV_LINKS.map((link) => {
             const isActive = isLanding && activeHref === link.href;
             return (
@@ -240,7 +240,7 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
                   handleAnchorClick(link.href);
                 }
               }}
-              className="rounded-lg px-3 py-3 font-display text-lg text-landing-text-secondary transition-colors hover:bg-landing-elevated hover:text-landing-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas"
+              className="rounded-md px-3 py-3 font-display text-lg text-landing-text-secondary transition-colors hover:bg-landing-elevated hover:text-landing-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas"
             >
               {link.label}
             </a>

@@ -310,7 +310,7 @@ export default function OeeReportPage() {
             noPadding
           >
             {data.machines.length === 0 ? (
-              <p className="px-4 py-6 text-sm text-muted">No machines configured.</p>
+              <p className="px-4 py-4 text-sm text-muted">No machines configured.</p>
             ) : (
               <table className="w-full text-xs">
                 <thead className="bg-subtle">

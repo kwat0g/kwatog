@@ -3,7 +3,7 @@
  * cards, and grids across the public marketing site.
  *
  * Why this exists: sections had drifted to a mix of paddings (py-16/20/24/32),
- * radii (rounded-xl/2xl/[2rem]), card paddings (p-6/7/9), and gaps (gap-4/5/6).
+ * radii (rounded-md/2xl/[2rem]), card paddings (p-5/7/9), and gaps (gap-4/5/6).
  * That inconsistency is most of what made the page feel "busy". Every section
  * now composes these tokens instead of hand-rolling its own, so the vertical
  * rhythm and card language are identical end-to-end.
@@ -22,7 +22,7 @@ import { cn } from '@/lib/cn';
 export const container = 'mx-auto w-full max-w-6xl';
 
 /** Horizontal page gutter — identical on every section. */
-export const sectionPadX = 'px-5 sm:px-8';
+export const sectionPadX = 'px-5 sm:px-5';
 
 /** Vertical section rhythm — ONE scale for the whole page. */
 export const sectionPadY = 'py-20 sm:py-28';
@@ -63,7 +63,7 @@ export function card(
   className?: string,
 ): string {
   return cn(
-    'relative rounded-xl border border-landing-border bg-landing-surface p-6 sm:p-7',
+    'relative rounded-md border border-landing-border bg-landing-surface p-5 sm:p-7',
     variant === 'interactive' &&
       'transition-colors duration-300 hover:border-landing-accent/40',
     className,

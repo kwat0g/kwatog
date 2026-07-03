@@ -227,7 +227,7 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isPending, register
   const minBirthStr = new Date(Date.now() - 1000 * 60 * 60 * 24 * 365.25 * 15).toISOString().slice(0, 10);
 
   return (
-    <form onSubmit={handleSubmit(onSubmit, onFormInvalid<EmployeeFormValues>(FIELD_LABELS))} className="max-w-4xl mx-auto px-5 py-6 space-y-8">
+    <form onSubmit={handleSubmit(onSubmit, onFormInvalid<EmployeeFormValues>(FIELD_LABELS))} className="max-w-4xl mx-auto px-5 py-4 space-y-8">
       <FormErrorSummary errors={errors} />
       <Section title="Personal information">
         <div className="grid grid-cols-2 gap-3">
