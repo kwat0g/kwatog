@@ -68,10 +68,10 @@ export default function CustomerDashboardPage() {
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-border text-muted">
-                <th className="text-left py-2 px-3 font-medium">Order #</th>
-                <th className="text-left py-2 px-3 font-medium">Date</th>
-                <th className="text-right py-2 px-3 font-medium">Amount</th>
-                <th className="text-right py-2 px-3 font-medium">Status</th>
+                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Order #</th>
+                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Date</th>
+                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Amount</th>
+                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Status</th>
               </tr>
             </thead>
             <tbody>
@@ -83,8 +83,8 @@ export default function CustomerDashboardPage() {
                     </Link>
                   </td>
                   <td className="py-2 px-3 text-muted">{order.date ?? '—'}</td>
-                  <td className="py-2 px-3 text-right font-mono">{formatPeso(order.total_amount)}</td>
-                  <td className="py-2 px-3 text-right">
+                  <td  className="py-2 px-3 text-right font-mono tabular-nums">{formatPeso(order.total_amount)}</td>
+                  <td  className="py-2 px-3 text-right font-mono tabular-nums">
                     <Chip variant="neutral">{order.status}</Chip>
                   </td>
                 </tr>
@@ -106,10 +106,10 @@ export default function CustomerDashboardPage() {
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-border text-muted">
-                <th className="text-left py-2 px-3 font-medium">Invoice #</th>
-                <th className="text-left py-2 px-3 font-medium">Date</th>
-                <th className="text-right py-2 px-3 font-medium">Amount</th>
-                <th className="text-right py-2 px-3 font-medium">Status</th>
+                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Invoice #</th>
+                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Date</th>
+                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Amount</th>
+                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Status</th>
               </tr>
             </thead>
             <tbody>
@@ -121,8 +121,8 @@ export default function CustomerDashboardPage() {
                     </Link>
                   </td>
                   <td className="py-2 px-3 text-muted">{inv.date ?? '—'}</td>
-                  <td className="py-2 px-3 text-right font-mono">{formatPeso(inv.total_amount)}</td>
-                  <td className="py-2 px-3 text-right">
+                  <td  className="py-2 px-3 text-right font-mono tabular-nums">{formatPeso(inv.total_amount)}</td>
+                  <td  className="py-2 px-3 text-right font-mono tabular-nums">
                     <Chip variant={inv.status === 'paid' ? 'success' : inv.status === 'overdue' ? 'danger' : 'warning'}>
                       {inv.status}
                     </Chip>

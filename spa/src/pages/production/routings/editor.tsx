@@ -252,15 +252,15 @@ export default function RoutingEditorPage() {
             <table className="w-full text-xs">
               <thead className="bg-subtle">
                 <tr>
-                  <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 w-10">#</th>
-                  <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Operation</th>
-                  <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Work center</th>
-                  <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Machine</th>
-                  <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Mold</th>
-                  <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Setup (min)</th>
-                  <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Cycle (min)</th>
-                  <th className="text-center text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">QC</th>
-                  <th className="px-2 py-2 w-8" />
+                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 w-10">#</th>
+                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Operation</th>
+                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Work center</th>
+                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Machine</th>
+                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Mold</th>
+                  <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Setup (min)</th>
+                  <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Cycle (min)</th>
+                  <th  className="h-8 text-center text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">QC</th>
+                  <th  className="h-8 px-2 py-2 w-8 text-2xs uppercase tracking-wider text-muted font-medium" />
                 </tr>
               </thead>
               <tbody>
@@ -334,7 +334,7 @@ export default function RoutingEditorPage() {
                         <Checkbox {...register(`operations.${i}.qc_required` as const)} />
                       </div>
                     </td>
-                    <td className="px-2 py-1.5 text-right">
+                    <td  className="px-2 py-1.5 text-right font-mono tabular-nums">
                       <button
                         type="button"
                         onClick={() => remove(i)}

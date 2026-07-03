@@ -41,12 +41,7 @@ function cpkRating(cpk: number): { label: string; variant: ChipVariant } {
   return { label: 'Not capable', variant: 'danger' };
 }
 
-function cpRating(cp: number): { label: string; variant: ChipVariant } {
-  if (cp >= 1.67) return { label: 'Excellent', variant: 'success' };
-  if (cp >= 1.33) return { label: 'Capable', variant: 'success' };
-  if (cp >= 1.0) return { label: 'Marginal', variant: 'warning' };
-  return { label: 'Not capable', variant: 'danger' };
-}
+
 
 interface HistogramBar {
   label: string;
@@ -131,7 +126,7 @@ export default function CapabilityStudyPage() {
 
   const bars = useMemo(() => (result ? buildHistogramBars(result) : []), [result]);
   const cpkInfo = result ? cpkRating(result.cpk) : null;
-  const cpInfo = result ? cpRating(result.cp) : null;
+
 
   const handleRunStudy = () => {
     if (!selectedProductId || !selectedSpecItemId) {

@@ -146,10 +146,10 @@ export default function MaintenanceWorkOrderDetailPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-subtle">
-                    <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Item</th>
-                    <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Qty</th>
-                    <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Unit cost</th>
-                    <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Total</th>
+                    <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Item</th>
+                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Qty</th>
+                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Unit cost</th>
+                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Total</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -158,9 +158,9 @@ export default function MaintenanceWorkOrderDetailPage() {
                       <td className="py-1.5">
                         {sp.item ? <span><span className="font-mono">{sp.item.code}</span><span className="ml-2 text-muted">{sp.item.name}</span></span> : '—'}
                       </td>
-                      <td className="py-1.5 text-right font-mono tabular-nums">{sp.quantity}</td>
-                      <td className="py-1.5 text-right font-mono tabular-nums">₱{sp.unit_cost}</td>
-                      <td className="py-1.5 text-right font-mono tabular-nums font-medium">₱{sp.total_cost}</td>
+                      <td  className="py-1.5 text-right font-mono tabular-nums">{sp.quantity}</td>
+                      <td  className="py-1.5 text-right font-mono tabular-nums">₱{sp.unit_cost}</td>
+                      <td  className="py-1.5 text-right font-mono tabular-nums font-medium">₱{sp.total_cost}</td>
                     </tr>
                   ))}
                 </tbody>

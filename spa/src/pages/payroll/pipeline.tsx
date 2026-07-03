@@ -115,13 +115,13 @@ export default function PayrollPipelinePage() {
           <table className="w-full text-xs">
             <thead className="bg-subtle">
               <tr>
-                <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 w-8" />
-                <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Period</th>
-                <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Employees</th>
-                <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Gross</th>
-                <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Net</th>
-                <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 w-32">Status</th>
-                <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 w-24">Action</th>
+                <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 w-8" />
+                <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Period</th>
+                <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Employees</th>
+                <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Gross</th>
+                <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Net</th>
+                <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 w-32">Status</th>
+                <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 w-24">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -157,19 +157,19 @@ function PipelineRow({
         <div className="font-medium">{period.label}</div>
         {period.is_auto_created && <span className="text-2xs text-muted">auto-created</span>}
       </td>
-      <td className="px-2.5 py-2 text-right font-mono tabular-nums">
+      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">
         {period.employee_count > 0 ? period.employee_count : '—'}
       </td>
-      <td className="px-2.5 py-2 text-right font-mono tabular-nums">
+      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">
         {Number(period.total_gross) > 0 ? formatPeso(period.total_gross) : '—'}
       </td>
-      <td className="px-2.5 py-2 text-right font-mono tabular-nums">
+      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">
         {Number(period.total_net) > 0 ? formatPeso(period.total_net) : '—'}
       </td>
       <td className="px-2.5 py-2">
         <Chip variant={statusVariant(period.status)}>{period.status_label}</Chip>
       </td>
-      <td className="px-2.5 py-2 text-right">
+      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">
         {period.exists && period.status === 'draft' && (
           <Button
             variant="secondary"

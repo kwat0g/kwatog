@@ -130,11 +130,11 @@ export default function CustomerDetailPage() {
               <table className="w-full text-xs">
                 <thead className="bg-subtle">
                   <tr>
-                    <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Product</th>
-                    <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Price</th>
-                    <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Effective from</th>
-                    <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Effective to</th>
-                    <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Status</th>
+                    <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Product</th>
+                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Price</th>
+                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Effective from</th>
+                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Effective to</th>
+                    <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Status</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -146,9 +146,9 @@ export default function CustomerDetailPage() {
                           : <span className="text-muted">—</span>}
                         {pa.product && <span className="ml-2 text-muted">{pa.product.name}</span>}
                       </td>
-                      <td className="px-2.5 py-2 text-right font-mono tabular-nums">₱ {Number(pa.price).toFixed(2)}</td>
-                      <td className="px-2.5 py-2 text-right font-mono tabular-nums">{pa.effective_from}</td>
-                      <td className="px-2.5 py-2 text-right font-mono tabular-nums">{pa.effective_to}</td>
+                      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">₱ {Number(pa.price).toFixed(2)}</td>
+                      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{pa.effective_from}</td>
+                      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{pa.effective_to}</td>
                       <td className="px-2.5 py-2">
                         <Chip variant={pa.is_currently_active ? 'success' : 'neutral'}>
                           {pa.is_currently_active ? 'active' : 'expired'}
@@ -172,10 +172,10 @@ export default function CustomerDetailPage() {
               <table className="w-full text-xs">
                 <thead className="bg-subtle">
                   <tr>
-                    <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">SO no</th>
-                    <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Date</th>
-                    <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Total</th>
-                    <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Status</th>
+                    <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">SO no</th>
+                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Date</th>
+                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Total</th>
+                    <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Status</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -184,8 +184,8 @@ export default function CustomerDetailPage() {
                       <td className="px-2.5 py-2">
                         <Link to={`/crm/sales-orders/${so.id}`} className="font-mono text-accent hover:underline">{so.so_number}</Link>
                       </td>
-                      <td className="px-2.5 py-2 text-right font-mono tabular-nums">{so.date}</td>
-                      <td className="px-2.5 py-2 text-right font-mono tabular-nums">{formatPeso(so.total_amount)}</td>
+                      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{so.date}</td>
+                      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{formatPeso(so.total_amount)}</td>
                       <td className="px-2.5 py-2">
                         <Chip variant={
                           so.status === 'delivered' || so.status === 'invoiced' ? 'success'

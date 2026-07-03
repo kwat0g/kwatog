@@ -53,7 +53,7 @@ export default function IncomeStatementPage() {
               <tbody>
                 <Section label="REVENUE" rows={data.revenue.accounts} totalLabel="Total Revenue" total={data.revenue.total} />
                 {data.cogs.accounts.length > 0 && <Section label="COST OF GOODS SOLD" rows={data.cogs.accounts} totalLabel="Total COGS" total={data.cogs.total} />}
-                <tr className="h-9 border-t-2 border-primary font-medium"><td className="px-2.5">GROSS PROFIT</td><td className="px-2.5 text-right font-mono tabular-nums">{formatPeso(data.gross_profit)}</td></tr>
+                <tr className="h-9 border-t-2 border-primary font-medium"><td className="px-2.5">GROSS PROFIT</td><td  className="px-2.5 text-right font-mono tabular-nums">{formatPeso(data.gross_profit)}</td></tr>
                 <Section label="OPERATING EXPENSES" rows={data.operating_expenses.accounts} totalLabel="Total OpEx" total={data.operating_expenses.total} />
                 <tr className="h-10 border-t-2 border-primary border-b-2 border-primary font-medium">
                   <td className="px-2.5 text-base">NET INCOME</td>
@@ -75,10 +75,10 @@ function Section({ label, rows, totalLabel, total }: { label: string; rows: { co
       {rows.map((r) => (
         <tr key={r.code} className="h-7 border-b border-subtle">
           <td className="px-2.5 pl-6"><span className="font-mono text-muted">{r.code}</span> · {r.name}</td>
-          <td className="px-2.5 text-right font-mono tabular-nums">{formatPeso(r.amount)}</td>
+          <td  className="px-2.5 text-right font-mono tabular-nums">{formatPeso(r.amount)}</td>
         </tr>
       ))}
-      <tr className="h-7 border-b border-default font-medium"><td className="px-2.5">{totalLabel}</td><td className="px-2.5 text-right font-mono tabular-nums">{formatPeso(total)}</td></tr>
+      <tr className="h-7 border-b border-default font-medium"><td className="px-2.5">{totalLabel}</td><td  className="px-2.5 text-right font-mono tabular-nums">{formatPeso(total)}</td></tr>
     </>
   );
 }

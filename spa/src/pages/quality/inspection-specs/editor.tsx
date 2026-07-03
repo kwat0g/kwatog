@@ -248,14 +248,14 @@ export default function InspectionSpecEditorPage() {
             <table className="w-full text-xs">
               <thead className="bg-subtle">
                 <tr>
-                  <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 w-1/4">Parameter</th>
-                  <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Type</th>
-                  <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">UOM</th>
-                  <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Nominal</th>
-                  <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Min</th>
-                  <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Max</th>
-                  <th className="text-center text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Critical?</th>
-                  <th className="px-2 py-2" />
+                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 w-1/4">Parameter</th>
+                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Type</th>
+                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">UOM</th>
+                  <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Nominal</th>
+                  <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Min</th>
+                  <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Max</th>
+                  <th  className="h-8 text-center text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Critical?</th>
+                  <th  className="h-8 px-2 py-2 text-2xs uppercase tracking-wider text-muted font-medium" />
                 </tr>
               </thead>
               <tbody>
@@ -286,7 +286,7 @@ export default function InspectionSpecEditorPage() {
                         className="font-mono"
                       />
                     </td>
-                    <td className="px-2.5 py-1.5 text-right">
+                    <td  className="px-2.5 py-1.5 text-right font-mono tabular-nums">
                       <Input
                         {...register(`items.${i}.nominal_value` as const)}
                         error={errors.items?.[i]?.nominal_value?.message}
@@ -294,7 +294,7 @@ export default function InspectionSpecEditorPage() {
                         className="font-mono text-right"
                       />
                     </td>
-                    <td className="px-2.5 py-1.5 text-right">
+                    <td  className="px-2.5 py-1.5 text-right font-mono tabular-nums">
                       <Input
                         {...register(`items.${i}.tolerance_min` as const)}
                         error={errors.items?.[i]?.tolerance_min?.message}
@@ -302,7 +302,7 @@ export default function InspectionSpecEditorPage() {
                         className="font-mono text-right"
                       />
                     </td>
-                    <td className="px-2.5 py-1.5 text-right">
+                    <td  className="px-2.5 py-1.5 text-right font-mono tabular-nums">
                       <Input
                         {...register(`items.${i}.tolerance_max` as const)}
                         error={errors.items?.[i]?.tolerance_max?.message}
@@ -317,7 +317,7 @@ export default function InspectionSpecEditorPage() {
                         className="rounded border-default"
                       />
                     </td>
-                    <td className="px-2 py-1.5 text-right">
+                    <td  className="px-2 py-1.5 text-right font-mono tabular-nums">
                       <button
                         type="button"
                         onClick={() => remove(i)}
@@ -358,12 +358,12 @@ export default function InspectionSpecEditorPage() {
               <table className="w-full text-xs">
                 <thead className="bg-subtle">
                   <tr>
-                    <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Parameter</th>
-                    <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 font-mono">Cp</th>
-                    <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 font-mono">Cpk</th>
-                    <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 font-mono">Mean</th>
-                    <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 font-mono">σ</th>
-                    <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">n</th>
+                    <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Parameter</th>
+                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 font-mono">Cp</th>
+                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 font-mono">Cpk</th>
+                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 font-mono">Mean</th>
+                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 font-mono">σ</th>
+                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">n</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -383,13 +383,13 @@ export default function InspectionSpecEditorPage() {
                         <td className={`text-right px-2.5 py-2 font-mono tabular-nums ${cpkColor}`}>
                           {item.cpk.toFixed(3)}
                         </td>
-                        <td className="text-right px-2.5 py-2 font-mono tabular-nums">
+                        <td  className="text-right px-2.5 py-2 font-mono tabular-nums">
                           {item.mean.toFixed(4)}
                         </td>
-                        <td className="text-right px-2.5 py-2 font-mono tabular-nums">
+                        <td  className="text-right px-2.5 py-2 font-mono tabular-nums">
                           {item.std_dev.toFixed(4)}
                         </td>
-                        <td className="text-right px-2.5 py-2 font-mono tabular-nums text-muted">
+                        <td  className="text-right px-2.5 py-2 font-mono tabular-nums text-muted">
                           {item.sample_count}
                         </td>
                       </tr>

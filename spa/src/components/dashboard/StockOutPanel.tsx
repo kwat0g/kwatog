@@ -108,12 +108,12 @@ export function StockOutPanel({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-subtle">
-              <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-3 py-1.5">Item</th>
-              <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-3 py-1.5">On Hand</th>
-              <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-3 py-1.5">Safety</th>
-              <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-3 py-1.5">Daily</th>
-              <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-3 py-1.5">Days Left</th>
-              <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-3 py-1.5">Risk</th>
+              <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-3 py-1.5">Item</th>
+              <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-3 py-1.5">On Hand</th>
+              <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-3 py-1.5">Safety</th>
+              <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-3 py-1.5">Daily</th>
+              <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-3 py-1.5">Days Left</th>
+              <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-3 py-1.5">Risk</th>
             </tr>
           </thead>
           <tbody>
@@ -129,10 +129,10 @@ export function StockOutPanel({
                   </Link>
                   <span className="text-muted ml-1 text-xs">{r.name}</span>
                 </td>
-                <td className="px-3 py-2 text-right font-mono tabular-nums text-xs">{r.available}</td>
-                <td className="px-3 py-2 text-right font-mono tabular-nums text-xs">{r.safety_stock}</td>
-                <td className="px-3 py-2 text-right font-mono tabular-nums text-xs">{r.daily_demand}</td>
-                <td className="px-3 py-2 text-right font-mono tabular-nums text-xs">
+                <td  className="px-3 py-2 text-right font-mono tabular-nums text-xs">{r.available}</td>
+                <td  className="px-3 py-2 text-right font-mono tabular-nums text-xs">{r.safety_stock}</td>
+                <td  className="px-3 py-2 text-right font-mono tabular-nums text-xs">{r.daily_demand}</td>
+                <td  className="px-3 py-2 text-right font-mono tabular-nums text-xs">
                   {r.days_until_stockout != null ? (
                     <span className={r.days_until_stockout <= 3 ? 'text-danger' : r.days_until_stockout <= 7 ? 'text-warning' : ''}>
                       {r.days_until_stockout}
@@ -141,7 +141,7 @@ export function StockOutPanel({
                     <span className="text-muted">—</span>
                   )}
                 </td>
-                <td className="px-3 py-2 text-right">
+                <td  className="px-3 py-2 text-right font-mono tabular-nums">
                   <Chip variant={RISK_VARIANT[r.risk]}>
                     {RISK_LABEL[r.risk]}
                   </Chip>

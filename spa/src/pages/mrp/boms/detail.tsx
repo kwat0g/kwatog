@@ -89,12 +89,12 @@ export default function BomDetailPage() {
           <table className="w-full text-xs">
             <thead className="bg-subtle">
               <tr>
-                <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 w-12">#</th>
-                <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Item</th>
-                <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Qty / unit</th>
-                <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">UOM</th>
-                <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Waste %</th>
-                <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Effective</th>
+                <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 w-12">#</th>
+                <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Item</th>
+                <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Qty / unit</th>
+                <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">UOM</th>
+                <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Waste %</th>
+                <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Effective</th>
               </tr>
             </thead>
             <tbody>
@@ -105,10 +105,10 @@ export default function BomDetailPage() {
                     <div className="font-mono">{m.item?.code}</div>
                     <div className="text-xs text-muted">{m.item?.name}</div>
                   </td>
-                  <td className="px-2.5 py-2 text-right font-mono tabular-nums">{Number(m.quantity_per_unit).toFixed(4)}</td>
+                  <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{Number(m.quantity_per_unit).toFixed(4)}</td>
                   <td className="px-2.5 py-2">{m.unit}</td>
-                  <td className="px-2.5 py-2 text-right font-mono tabular-nums">{Number(m.waste_factor).toFixed(2)}</td>
-                  <td className="px-2.5 py-2 text-right font-mono tabular-nums font-medium">{Number(m.effective_quantity).toFixed(4)}</td>
+                  <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{Number(m.waste_factor).toFixed(2)}</td>
+                  <td  className="px-2.5 py-2 text-right font-mono tabular-nums font-medium">{Number(m.effective_quantity).toFixed(4)}</td>
                 </tr>
               ))}
             </tbody>

@@ -341,9 +341,9 @@ function DocumentsTab({ employee }: { employee: any }) {
       <table className="w-full text-sm">
         <thead className="bg-subtle text-2xs uppercase tracking-wider text-muted">
           <tr>
-            <th className="h-8 px-4 text-left">Type</th>
-            <th className="h-8 px-4 text-left">File</th>
-            <th className="h-8 px-4 text-left">Uploaded</th>
+            <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">Type</th>
+            <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">File</th>
+            <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">Uploaded</th>
           </tr>
         </thead>
         <tbody>
@@ -377,13 +377,13 @@ function AttendanceTab({ employeeId }: { employeeId: string }) {
       <table className="w-full text-sm">
         <thead className="bg-subtle text-2xs uppercase tracking-wider text-muted">
           <tr>
-            <th className="h-8 px-4 text-left">Date</th>
-            <th className="h-8 px-4 text-left">In</th>
-            <th className="h-8 px-4 text-left">Out</th>
-            <th className="h-8 px-4 text-right">Reg</th>
-            <th className="h-8 px-4 text-right">OT</th>
-            <th className="h-8 px-4 text-right">ND</th>
-            <th className="h-8 px-4 text-left">Status</th>
+            <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">Date</th>
+            <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">In</th>
+            <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">Out</th>
+            <th  className="h-8 px-4 text-right text-2xs uppercase tracking-wider text-muted font-medium">Reg</th>
+            <th  className="h-8 px-4 text-right text-2xs uppercase tracking-wider text-muted font-medium">OT</th>
+            <th  className="h-8 px-4 text-right text-2xs uppercase tracking-wider text-muted font-medium">ND</th>
+            <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">Status</th>
           </tr>
         </thead>
         <tbody>
@@ -392,9 +392,9 @@ function AttendanceTab({ employeeId }: { employeeId: string }) {
               <td className="px-4 font-mono">{formatDate(r.date)}</td>
               <td className="px-4 font-mono">{r.time_in ? formatTime(r.time_in) : '—'}</td>
               <td className="px-4 font-mono">{r.time_out ? formatTime(r.time_out) : '—'}</td>
-              <td className="px-4 text-right font-mono tabular-nums">{r.regular_hours}</td>
-              <td className="px-4 text-right font-mono tabular-nums">{r.overtime_hours}</td>
-              <td className="px-4 text-right font-mono tabular-nums">{r.night_diff_hours}</td>
+              <td  className="px-4 text-right font-mono tabular-nums">{r.regular_hours}</td>
+              <td  className="px-4 text-right font-mono tabular-nums">{r.overtime_hours}</td>
+              <td  className="px-4 text-right font-mono tabular-nums">{r.night_diff_hours}</td>
               <td className="px-4"><Chip variant={chipVariantForStatus(r.status)}>{r.status.replace('_', ' ')}</Chip></td>
             </tr>
           ))}
@@ -421,11 +421,11 @@ function LeavesTab({ employeeId }: { employeeId: string }) {
       <table className="w-full text-sm">
         <thead className="bg-subtle text-2xs uppercase tracking-wider text-muted">
           <tr>
-            <th className="h-8 px-4 text-left">No</th>
-            <th className="h-8 px-4 text-left">Type</th>
-            <th className="h-8 px-4 text-left">Dates</th>
-            <th className="h-8 px-4 text-right">Days</th>
-            <th className="h-8 px-4 text-left">Status</th>
+            <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">No</th>
+            <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">Type</th>
+            <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">Dates</th>
+            <th  className="h-8 px-4 text-right text-2xs uppercase tracking-wider text-muted font-medium">Days</th>
+            <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">Status</th>
           </tr>
         </thead>
         <tbody>
@@ -436,7 +436,7 @@ function LeavesTab({ employeeId }: { employeeId: string }) {
               </td>
               <td className="px-4">{r.leave_type?.code}</td>
               <td className="px-4 font-mono">{formatDate(r.start_date)} → {formatDate(r.end_date)}</td>
-              <td className="px-4 text-right font-mono tabular-nums">{r.days}</td>
+              <td  className="px-4 text-right font-mono tabular-nums">{r.days}</td>
               <td className="px-4"><Chip variant={chipVariantForStatus(r.status)}>{r.status.replace('_', ' ')}</Chip></td>
             </tr>
           ))}
@@ -463,11 +463,11 @@ function LoansTab({ employeeId }: { employeeId: string }) {
       <table className="w-full text-sm">
         <thead className="bg-subtle text-2xs uppercase tracking-wider text-muted">
           <tr>
-            <th className="h-8 px-4 text-left">Loan no</th>
-            <th className="h-8 px-4 text-left">Type</th>
-            <th className="h-8 px-4 text-right">Principal</th>
-            <th className="h-8 px-4 text-right">Balance</th>
-            <th className="h-8 px-4 text-left">Status</th>
+            <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">Loan no</th>
+            <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">Type</th>
+            <th  className="h-8 px-4 text-right text-2xs uppercase tracking-wider text-muted font-medium">Principal</th>
+            <th  className="h-8 px-4 text-right text-2xs uppercase tracking-wider text-muted font-medium">Balance</th>
+            <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">Status</th>
           </tr>
         </thead>
         <tbody>
@@ -477,8 +477,8 @@ function LoansTab({ employeeId }: { employeeId: string }) {
                 <Link to={`/hr/loans/${r.id}`} className="font-mono text-accent hover:underline">{r.loan_no}</Link>
               </td>
               <td className="px-4">{r.loan_type === 'company_loan' ? 'Company' : 'Cash advance'}</td>
-              <td className="px-4 text-right font-mono tabular-nums">₱ {r.principal}</td>
-              <td className="px-4 text-right font-mono tabular-nums">₱ {r.balance}</td>
+              <td  className="px-4 text-right font-mono tabular-nums">₱ {r.principal}</td>
+              <td  className="px-4 text-right font-mono tabular-nums">₱ {r.balance}</td>
               <td className="px-4"><Chip variant={chipVariantForStatus(r.status)}>{r.status}</Chip></td>
             </tr>
           ))}
@@ -517,18 +517,18 @@ function PropertyTab({ employee }: { employee: any }) {
       <table className="w-full text-sm">
         <thead className="bg-subtle text-2xs uppercase tracking-wider text-muted">
           <tr>
-            <th className="h-8 px-4 text-left">Item</th>
-            <th className="h-8 px-4 text-right">Qty</th>
-            <th className="h-8 px-4 text-left">Issued</th>
-            <th className="h-8 px-4 text-left">Returned</th>
-            <th className="h-8 px-4 text-left">Status</th>
+            <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">Item</th>
+            <th  className="h-8 px-4 text-right text-2xs uppercase tracking-wider text-muted font-medium">Qty</th>
+            <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">Issued</th>
+            <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">Returned</th>
+            <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">Status</th>
           </tr>
         </thead>
         <tbody>
           {items.map((p) => (
             <tr key={p.id} className="h-8 border-b border-subtle hover:bg-subtle">
               <td className="px-4">{p.item_name}</td>
-              <td className="px-4 text-right font-mono tabular-nums">{p.quantity}</td>
+              <td  className="px-4 text-right font-mono tabular-nums">{p.quantity}</td>
               <td className="px-4 font-mono">{formatDate(p.date_issued)}</td>
               <td className="px-4 font-mono">{p.date_returned ? formatDate(p.date_returned) : '—'}</td>
               <td className="px-4"><Chip variant={chipVariantForStatus(p.status)}>{p.status}</Chip></td>

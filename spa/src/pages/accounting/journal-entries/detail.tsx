@@ -124,11 +124,11 @@ export default function JournalEntryDetailPage() {
               <table className="w-full text-sm">
                 <thead className="text-2xs uppercase tracking-wider text-muted">
                   <tr className="border-b border-default bg-subtle">
-                    <th className="h-8 px-2.5 text-left">#</th>
-                    <th className="h-8 px-2.5 text-left">Account</th>
-                    <th className="h-8 px-2.5 text-left">Description</th>
-                    <th className="h-8 px-2.5 text-right">Debit</th>
-                    <th className="h-8 px-2.5 text-right">Credit</th>
+                    <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">#</th>
+                    <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Account</th>
+                    <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Description</th>
+                    <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">Debit</th>
+                    <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">Credit</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -139,14 +139,14 @@ export default function JournalEntryDetailPage() {
                         {l.account ? <span><span className="font-mono text-muted">{l.account.code}</span> · {l.account.name}</span> : '—'}
                       </td>
                       <td className="px-2.5 text-muted">{l.description ?? '—'}</td>
-                      <td className="px-2.5 text-right font-mono tabular-nums">{Number(l.debit) > 0 ? formatPeso(l.debit) : ''}</td>
-                      <td className="px-2.5 text-right font-mono tabular-nums">{Number(l.credit) > 0 ? formatPeso(l.credit) : ''}</td>
+                      <td  className="px-2.5 text-right font-mono tabular-nums">{Number(l.debit) > 0 ? formatPeso(l.debit) : ''}</td>
+                      <td  className="px-2.5 text-right font-mono tabular-nums">{Number(l.credit) > 0 ? formatPeso(l.credit) : ''}</td>
                     </tr>
                   ))}
                   <tr className="h-8 border-t-2 border-primary font-medium">
-                    <td colSpan={3} className="px-2.5 text-right">Totals</td>
-                    <td className="px-2.5 text-right font-mono tabular-nums">{formatPeso(je.total_debit)}</td>
-                    <td className="px-2.5 text-right font-mono tabular-nums">{formatPeso(je.total_credit)}</td>
+                    <td  colSpan={3} className="px-2.5 text-right font-mono tabular-nums">Totals</td>
+                    <td  className="px-2.5 text-right font-mono tabular-nums">{formatPeso(je.total_debit)}</td>
+                    <td  className="px-2.5 text-right font-mono tabular-nums">{formatPeso(je.total_credit)}</td>
                   </tr>
                 </tbody>
               </table>

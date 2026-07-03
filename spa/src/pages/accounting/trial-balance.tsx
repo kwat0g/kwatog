@@ -54,11 +54,11 @@ export default function TrialBalancePage() {
             <table className="w-full text-sm">
               <thead className="text-2xs uppercase tracking-wider text-muted">
                 <tr className="border-b border-default bg-subtle">
-                  <th className="h-8 px-2.5 text-left">Code</th>
-                  <th className="h-8 px-2.5 text-left">Account</th>
-                  <th className="h-8 px-2.5 text-left">Type</th>
-                  <th className="h-8 px-2.5 text-right">Debit</th>
-                  <th className="h-8 px-2.5 text-right">Credit</th>
+                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Code</th>
+                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Account</th>
+                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Type</th>
+                  <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">Debit</th>
+                  <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">Credit</th>
                 </tr>
               </thead>
               <tbody>
@@ -67,14 +67,14 @@ export default function TrialBalancePage() {
                     <td className="px-2.5 font-mono tabular-nums text-muted">{a.code}</td>
                     <td className="px-2.5">{a.name}</td>
                     <td className="px-2.5 text-xs text-muted uppercase tracking-wider">{a.type}</td>
-                    <td className="px-2.5 text-right font-mono tabular-nums">{Number(a.debit_total)  > 0 ? formatPeso(a.debit_total)  : ''}</td>
-                    <td className="px-2.5 text-right font-mono tabular-nums">{Number(a.credit_total) > 0 ? formatPeso(a.credit_total) : ''}</td>
+                    <td  className="px-2.5 text-right font-mono tabular-nums">{Number(a.debit_total)  > 0 ? formatPeso(a.debit_total)  : ''}</td>
+                    <td  className="px-2.5 text-right font-mono tabular-nums">{Number(a.credit_total) > 0 ? formatPeso(a.credit_total) : ''}</td>
                   </tr>
                 ))}
                 <tr className="h-9 border-t-2 border-primary font-medium">
-                  <td colSpan={3} className="px-2.5 text-right">Totals</td>
-                  <td className="px-2.5 text-right font-mono tabular-nums">{formatPeso(data.totals.debit)}</td>
-                  <td className="px-2.5 text-right font-mono tabular-nums">{formatPeso(data.totals.credit)}</td>
+                  <td  colSpan={3} className="px-2.5 text-right font-mono tabular-nums">Totals</td>
+                  <td  className="px-2.5 text-right font-mono tabular-nums">{formatPeso(data.totals.debit)}</td>
+                  <td  className="px-2.5 text-right font-mono tabular-nums">{formatPeso(data.totals.credit)}</td>
                 </tr>
               </tbody>
             </table>

@@ -183,13 +183,13 @@ export default function CreatePurchaseOrderPage() {
           <table className="w-full text-xs">
             <thead>
               <tr className="text-2xs uppercase tracking-wider text-muted">
-                <th className="text-left py-1 font-medium">Item</th>
-                <th className="text-left font-medium">Description</th>
-                <th className="text-right font-medium">Qty</th>
-                <th className="font-medium">Unit</th>
-                <th className="text-right font-medium">Unit price</th>
-                <th className="text-right font-medium">Total</th>
-                <th />
+                <th  className="h-8 text-left py-1 font-medium text-2xs uppercase tracking-wider text-muted">Item</th>
+                <th  className="h-8 text-left font-medium text-2xs uppercase tracking-wider text-muted">Description</th>
+                <th  className="h-8 text-right font-medium text-2xs uppercase tracking-wider text-muted">Qty</th>
+                <th  className="h-8 font-medium text-2xs uppercase tracking-wider text-muted">Unit</th>
+                <th  className="h-8 text-right font-medium text-2xs uppercase tracking-wider text-muted">Unit price</th>
+                <th  className="h-8 text-right font-medium text-2xs uppercase tracking-wider text-muted">Total</th>
+                <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium" />
               </tr>
             </thead>
             <tbody>
@@ -209,7 +209,7 @@ export default function CreatePurchaseOrderPage() {
                   <td>
                     <Input className="h-7" {...register(`items.${i}.description` as const)} error={errors.items?.[i]?.description?.message} />
                   </td>
-                  <td className="text-right">
+                  <td  className="text-right font-mono tabular-nums">
                     <input
                       className="h-7 w-20 px-2 rounded-sm border border-default text-right font-mono tabular-nums text-xs"
                       type="text"
@@ -223,7 +223,7 @@ export default function CreatePurchaseOrderPage() {
                       {...register(`items.${i}.unit` as const)}
                     />
                   </td>
-                  <td className="text-right">
+                  <td  className="text-right font-mono tabular-nums">
                     <input
                       className="h-7 w-24 px-2 rounded-sm border border-default text-right font-mono tabular-nums text-xs"
                       type="text"
@@ -231,10 +231,10 @@ export default function CreatePurchaseOrderPage() {
                       {...register(`items.${i}.unit_price` as const)}
                     />
                   </td>
-                  <td className="text-right font-mono tabular-nums pt-1">
+                  <td  className="text-right font-mono tabular-nums pt-1">
                     {(Number(watchedItems[i]?.quantity || 0) * Number(watchedItems[i]?.unit_price || 0)).toFixed(2)}
                   </td>
-                  <td className="text-right pt-1">
+                  <td  className="text-right pt-1 font-mono tabular-nums">
                     {fields.length > 1 && (
                       <button
                         type="button"
@@ -249,20 +249,20 @@ export default function CreatePurchaseOrderPage() {
                 </tr>
               ))}
               <tr className="border-t border-default">
-                <td colSpan={5} className="text-right py-1.5 text-muted">Subtotal</td>
-                <td className="text-right font-mono tabular-nums">₱ {subtotal.toFixed(2)}</td>
+                <td  colSpan={5} className="text-right py-1.5 text-muted font-mono tabular-nums">Subtotal</td>
+                <td  className="text-right font-mono tabular-nums">₱ {subtotal.toFixed(2)}</td>
                 <td />
               </tr>
               {isVatable && (
                 <tr>
-                  <td colSpan={5} className="text-right py-1 text-muted">VAT (12%)</td>
-                  <td className="text-right font-mono tabular-nums">₱ {vat.toFixed(2)}</td>
+                  <td  colSpan={5} className="text-right py-1 text-muted font-mono tabular-nums">VAT (12%)</td>
+                  <td  className="text-right font-mono tabular-nums">₱ {vat.toFixed(2)}</td>
                   <td />
                 </tr>
               )}
               <tr className="border-t border-default font-medium">
-                <td colSpan={5} className="text-right py-2 uppercase text-2xs tracking-wider">Total</td>
-                <td className="text-right font-mono tabular-nums">₱ {total.toFixed(2)}</td>
+                <td  colSpan={5} className="text-right py-2 uppercase text-2xs tracking-wider font-mono tabular-nums">Total</td>
+                <td  className="text-right font-mono tabular-nums">₱ {total.toFixed(2)}</td>
                 <td />
               </tr>
             </tbody>

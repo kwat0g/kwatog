@@ -41,7 +41,7 @@ export default function CareersPage() {
 
       <main className="mx-auto max-w-6xl px-5 pb-24 pt-32">
         <div className="mb-12 text-center">
-          <h1 className="text-4xl font-medium tracking-tight text-neutral-900 sm:text-5xl">
+          <h1 className="text-2xl font-medium tracking-tight text-neutral-900 sm:text-2xl">
             Join Our Team
           </h1>
           <p className="mt-4 text-lg text-neutral-600">

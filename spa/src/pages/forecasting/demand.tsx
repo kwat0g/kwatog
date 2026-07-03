@@ -307,13 +307,13 @@ export default function DemandForecastingPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-2xs uppercase tracking-wide text-muted bg-elevated/50 border-b border-default">
-                  <th className="px-4 py-2">Period</th>
-                  <th className="px-4 py-2">Method</th>
-                  <th className="px-4 py-2 text-right">Forecast qty</th>
-                  <th className="px-4 py-2 text-right">Confidence</th>
-                  <th className="px-4 py-2 text-right">Actual</th>
-                  <th className="px-4 py-2 text-right">Variance</th>
-                  <th className="px-4 py-2 text-right" />
+                  <th  className="h-8 px-4 py-2 text-2xs uppercase tracking-wider text-muted font-medium">Period</th>
+                  <th  className="h-8 px-4 py-2 text-2xs uppercase tracking-wider text-muted font-medium">Method</th>
+                  <th  className="h-8 px-4 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium">Forecast qty</th>
+                  <th  className="h-8 px-4 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium">Confidence</th>
+                  <th  className="h-8 px-4 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium">Actual</th>
+                  <th  className="h-8 px-4 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium">Variance</th>
+                  <th  className="h-8 px-4 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium" />
                 </tr>
               </thead>
               <tbody>
@@ -329,21 +329,21 @@ export default function DemandForecastingPage() {
                     <td className="px-4 py-2">
                       <Chip variant="neutral">{METHOD_LABELS[f.method]}</Chip>
                     </td>
-                    <td className="px-4 py-2 text-right tabular-nums">{f.forecasted_quantity.toFixed(2)}</td>
-                    <td className="px-4 py-2 text-right tabular-nums">
+                    <td  className="px-4 py-2 text-right tabular-nums font-mono">{f.forecasted_quantity.toFixed(2)}</td>
+                    <td  className="px-4 py-2 text-right tabular-nums font-mono">
                       {f.confidence_level !== null ? `${f.confidence_level.toFixed(0)}%` : '—'}
                     </td>
-                    <td className="px-4 py-2 text-right tabular-nums text-muted">
+                    <td  className="px-4 py-2 text-right tabular-nums text-muted font-mono">
                       {f.actual_quantity !== null ? f.actual_quantity.toFixed(2) : '—'}
                     </td>
-                    <td className="px-4 py-2 text-right tabular-nums">
+                    <td  className="px-4 py-2 text-right tabular-nums font-mono">
                       {f.variance !== null ? (
                         <span className={f.variance < 0 ? 'text-danger' : 'text-success'}>
                           {f.variance > 0 ? '+' : ''}{f.variance.toFixed(2)}
                         </span>
                       ) : '—'}
                     </td>
-                    <td className="px-4 py-2 text-right">
+                    <td  className="px-4 py-2 text-right font-mono tabular-nums">
                       <Button size="sm" variant="ghost" onClick={() => openManual(f)}>Override</Button>
                     </td>
                   </tr>

@@ -327,19 +327,19 @@ export default function InspectionDetailPage() {
               <table className="w-full text-xs">
                 <thead className="bg-subtle">
                   <tr>
-                    <th className="px-2.5 py-2 text-left text-2xs uppercase tracking-wider text-muted font-medium">
+                    <th  className="h-8 px-2.5 py-2 text-left text-2xs uppercase tracking-wider text-muted font-medium">
                       Parameter
                     </th>
-                    <th className="px-2.5 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium">
+                    <th  className="h-8 px-2.5 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium">
                       Nominal
                     </th>
-                    <th className="px-2.5 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium">
+                    <th  className="h-8 px-2.5 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium">
                       Tolerance
                     </th>
-                    <th className="px-2.5 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium">
+                    <th  className="h-8 px-2.5 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium">
                       Measured
                     </th>
-                    <th className="px-2.5 py-2 text-center text-2xs uppercase tracking-wider text-muted font-medium">
+                    <th  className="h-8 px-2.5 py-2 text-center text-2xs uppercase tracking-wider text-muted font-medium">
                       Pass
                     </th>
                   </tr>
@@ -361,11 +361,11 @@ export default function InspectionDetailPage() {
                             <span className="text-2xs uppercase text-muted">{m.parameter_type}</span>
                           </div>
                         </td>
-                        <td className="px-2.5 py-2 text-right font-mono tabular-nums">
+                        <td  className="px-2.5 py-2 text-right font-mono tabular-nums">
                           {m.nominal_value ?? '—'} {m.unit_of_measure ?? ''}
                         </td>
-                        <td className="px-2.5 py-2 text-right font-mono tabular-nums">{numericTol}</td>
-                        <td className="px-2.5 py-2 text-right">
+                        <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{numericTol}</td>
+                        <td  className="px-2.5 py-2 text-right font-mono tabular-nums">
                           {m.parameter_type === 'visual' ? (
                             <span className="text-muted text-2xs">N/A</span>
                           ) : (
@@ -455,12 +455,12 @@ export default function InspectionDetailPage() {
               <table className="w-full text-xs mt-2">
                 <thead>
                   <tr className="border-b border-default text-left text-muted">
-                    <th className="py-1.5 pr-3 font-medium">Dimension</th>
-                    <th className="py-1.5 pr-3 text-right font-medium">Mean</th>
-                    <th className="py-1.5 pr-3 text-right font-medium">Cp</th>
-                    <th className="py-1.5 pr-3 text-right font-medium">Cpk</th>
-                    <th className="py-1.5 pr-3 text-right font-medium">n</th>
-                    <th className="py-1.5 font-medium">Rating</th>
+                    <th  className="h-8 py-1.5 pr-3 font-medium text-2xs uppercase tracking-wider text-muted">Dimension</th>
+                    <th  className="h-8 py-1.5 pr-3 text-right font-medium text-2xs uppercase tracking-wider text-muted">Mean</th>
+                    <th  className="h-8 py-1.5 pr-3 text-right font-medium text-2xs uppercase tracking-wider text-muted">Cp</th>
+                    <th  className="h-8 py-1.5 pr-3 text-right font-medium text-2xs uppercase tracking-wider text-muted">Cpk</th>
+                    <th  className="h-8 py-1.5 pr-3 text-right font-medium text-2xs uppercase tracking-wider text-muted">n</th>
+                    <th  className="h-8 py-1.5 font-medium text-2xs uppercase tracking-wider text-muted">Rating</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -470,10 +470,10 @@ export default function InspectionDetailPage() {
                     return (
                       <tr key={item.parameter_name} className="border-b border-subtle">
                         <td className="py-1.5 pr-3">{item.parameter_name}{item.unit ? ` (${item.unit})` : ''}</td>
-                        <td className="py-1.5 pr-3 text-right font-mono tabular-nums">{item.mean.toFixed(3)}</td>
-                        <td className="py-1.5 pr-3 text-right font-mono tabular-nums">{item.cp.toFixed(2)}</td>
-                        <td className="py-1.5 pr-3 text-right font-mono tabular-nums font-medium">{item.cpk.toFixed(2)}</td>
-                        <td className="py-1.5 pr-3 text-right font-mono tabular-nums text-muted">{item.sample_count}</td>
+                        <td  className="py-1.5 pr-3 text-right font-mono tabular-nums">{item.mean.toFixed(3)}</td>
+                        <td  className="py-1.5 pr-3 text-right font-mono tabular-nums">{item.cp.toFixed(2)}</td>
+                        <td  className="py-1.5 pr-3 text-right font-mono tabular-nums font-medium">{item.cpk.toFixed(2)}</td>
+                        <td  className="py-1.5 pr-3 text-right font-mono tabular-nums text-muted">{item.sample_count}</td>
                         <td className="py-1.5"><Chip variant={variant}>{label}</Chip></td>
                       </tr>
                     );

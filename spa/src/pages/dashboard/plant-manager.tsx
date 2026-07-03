@@ -357,7 +357,7 @@ function FinancialSnapshotPanel({
           {rows.map((r) => (
             <tr key={r.label} className="border-b border-border last:border-0">
               <td className="py-1.5 text-muted">{r.label}</td>
-              <td className="py-1.5 text-right">
+              <td  className="py-1.5 text-right font-mono tabular-nums">
                 <Link to={r.href} className="font-mono tabular-nums hover:underline">
                   {formatPeso(r.value)}
                 </Link>
@@ -366,7 +366,7 @@ function FinancialSnapshotPanel({
           ))}
           <tr>
             <td className="pt-2 text-muted">Draft JEs</td>
-            <td className="pt-2 text-right font-mono tabular-nums">
+            <td  className="pt-2 text-right font-mono tabular-nums">
               {snapshot.je_draft_count}
             </td>
           </tr>

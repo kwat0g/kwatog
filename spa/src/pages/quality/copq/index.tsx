@@ -263,12 +263,12 @@ export default function CopqAnalyticsPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-default text-xs text-muted uppercase tracking-wider">
-                    <th className="text-left px-4 py-2 font-medium">Product</th>
-                    <th className="text-left px-4 py-2 font-medium">Part No.</th>
-                    <th className="text-right px-4 py-2 font-medium">NCRs</th>
-                    <th className="text-right px-4 py-2 font-medium">Scrap</th>
-                    <th className="text-right px-4 py-2 font-medium">Rework</th>
-                    <th className="text-right px-4 py-2 font-medium">Total</th>
+                    <th  className="h-8 text-left px-4 py-2 font-medium text-2xs uppercase tracking-wider text-muted">Product</th>
+                    <th  className="h-8 text-left px-4 py-2 font-medium text-2xs uppercase tracking-wider text-muted">Part No.</th>
+                    <th  className="h-8 text-right px-4 py-2 font-medium text-2xs uppercase tracking-wider text-muted">NCRs</th>
+                    <th  className="h-8 text-right px-4 py-2 font-medium text-2xs uppercase tracking-wider text-muted">Scrap</th>
+                    <th  className="h-8 text-right px-4 py-2 font-medium text-2xs uppercase tracking-wider text-muted">Rework</th>
+                    <th  className="h-8 text-right px-4 py-2 font-medium text-2xs uppercase tracking-wider text-muted">Total</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-default">
@@ -276,10 +276,10 @@ export default function CopqAnalyticsPage() {
                     <tr key={row.product_id} className="hover:bg-subtle transition-colors">
                       <td className="px-4 py-2 truncate max-w-[200px]">{row.product_name}</td>
                       <td className="px-4 py-2 font-mono text-xs text-muted">{row.part_number}</td>
-                      <td className="px-4 py-2 text-right font-mono tabular-nums">{row.ncr_count}</td>
-                      <td className="px-4 py-2 text-right font-mono tabular-nums text-danger">{PESO(row.scrap_cost)}</td>
-                      <td className="px-4 py-2 text-right font-mono tabular-nums text-warning">{PESO(row.rework_cost)}</td>
-                      <td className="px-4 py-2 text-right font-mono tabular-nums font-medium">{PESO(row.total_cost)}</td>
+                      <td  className="px-4 py-2 text-right font-mono tabular-nums">{row.ncr_count}</td>
+                      <td  className="px-4 py-2 text-right font-mono tabular-nums text-danger">{PESO(row.scrap_cost)}</td>
+                      <td  className="px-4 py-2 text-right font-mono tabular-nums text-warning">{PESO(row.rework_cost)}</td>
+                      <td  className="px-4 py-2 text-right font-mono tabular-nums font-medium">{PESO(row.total_cost)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -308,17 +308,17 @@ export default function CopqAnalyticsPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-default text-xs text-muted uppercase tracking-wider">
-                    <th className="text-left px-4 py-2 font-medium">Vendor</th>
-                    <th className="text-right px-4 py-2 font-medium">NCR Count</th>
-                    <th className="text-right px-4 py-2 font-medium">Defective Qty</th>
+                    <th  className="h-8 text-left px-4 py-2 font-medium text-2xs uppercase tracking-wider text-muted">Vendor</th>
+                    <th  className="h-8 text-right px-4 py-2 font-medium text-2xs uppercase tracking-wider text-muted">NCR Count</th>
+                    <th  className="h-8 text-right px-4 py-2 font-medium text-2xs uppercase tracking-wider text-muted">Defective Qty</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-default">
                   {bySupplier.data.map((row: CopqBySupplier) => (
                     <tr key={row.vendor_id} className="hover:bg-subtle transition-colors">
                       <td className="px-4 py-2 truncate max-w-[250px]">{row.vendor_name}</td>
-                      <td className="px-4 py-2 text-right font-mono tabular-nums">{row.ncr_count}</td>
-                      <td className="px-4 py-2 text-right font-mono tabular-nums">{formatInt(row.defective_qty)}</td>
+                      <td  className="px-4 py-2 text-right font-mono tabular-nums">{row.ncr_count}</td>
+                      <td  className="px-4 py-2 text-right font-mono tabular-nums">{formatInt(row.defective_qty)}</td>
                     </tr>
                   ))}
                 </tbody>

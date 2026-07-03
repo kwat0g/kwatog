@@ -170,23 +170,23 @@ export default function FinanceDashboardPage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="text-left text-muted border-b border-border">
-                        <th className="py-2 px-2 font-medium">Customer</th>
-                        <th className="py-2 px-2 font-medium text-right">1–30</th>
-                        <th className="py-2 px-2 font-medium text-right">31–60</th>
-                        <th className="py-2 px-2 font-medium text-right">61–90</th>
-                        <th className="py-2 px-2 font-medium text-right">91+</th>
-                        <th className="py-2 px-2 font-medium text-right">Total</th>
+                        <th  className="h-8 py-2 px-2 font-medium text-2xs uppercase tracking-wider text-muted">Customer</th>
+                        <th  className="h-8 py-2 px-2 font-medium text-right text-2xs uppercase tracking-wider text-muted">1–30</th>
+                        <th  className="h-8 py-2 px-2 font-medium text-right text-2xs uppercase tracking-wider text-muted">31–60</th>
+                        <th  className="h-8 py-2 px-2 font-medium text-right text-2xs uppercase tracking-wider text-muted">61–90</th>
+                        <th  className="h-8 py-2 px-2 font-medium text-right text-2xs uppercase tracking-wider text-muted">91+</th>
+                        <th  className="h-8 py-2 px-2 font-medium text-right text-2xs uppercase tracking-wider text-muted">Total</th>
                       </tr>
                     </thead>
                     <tbody>
                       {summary.data.top_overdue_customers.map((c) => (
                         <tr key={c.customer_id} className="border-b border-border last:border-0">
                           <td className="py-2 px-2">{c.customer_name}</td>
-                          <td className="py-2 px-2 text-right font-mono tabular-nums">{formatPeso(c.d1_30)}</td>
-                          <td className="py-2 px-2 text-right font-mono tabular-nums">{formatPeso(c.d31_60)}</td>
-                          <td className="py-2 px-2 text-right font-mono tabular-nums">{formatPeso(c.d61_90)}</td>
-                          <td className="py-2 px-2 text-right font-mono tabular-nums">{formatPeso(c.d91_plus)}</td>
-                          <td className="py-2 px-2 text-right font-mono tabular-nums font-medium">{formatPeso(c.total)}</td>
+                          <td  className="py-2 px-2 text-right font-mono tabular-nums">{formatPeso(c.d1_30)}</td>
+                          <td  className="py-2 px-2 text-right font-mono tabular-nums">{formatPeso(c.d31_60)}</td>
+                          <td  className="py-2 px-2 text-right font-mono tabular-nums">{formatPeso(c.d61_90)}</td>
+                          <td  className="py-2 px-2 text-right font-mono tabular-nums">{formatPeso(c.d91_plus)}</td>
+                          <td  className="py-2 px-2 text-right font-mono tabular-nums font-medium">{formatPeso(c.total)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -243,12 +243,12 @@ function AgingPanel({
           {rows.map(([label, value]) => (
             <tr key={label} className="border-b border-border last:border-0">
               <td className="py-1.5 text-muted">{label}</td>
-              <td className="py-1.5 text-right font-mono tabular-nums">{formatPeso(value)}</td>
+              <td  className="py-1.5 text-right font-mono tabular-nums">{formatPeso(value)}</td>
             </tr>
           ))}
           <tr>
             <td className="pt-2 font-medium">Total</td>
-            <td className="pt-2 text-right font-mono tabular-nums font-medium">{formatPeso(buckets.total)}</td>
+            <td  className="pt-2 text-right font-mono tabular-nums font-medium">{formatPeso(buckets.total)}</td>
           </tr>
         </tbody>
       </table>
@@ -381,19 +381,19 @@ function BudgetVsActualPanel({
       <table className="w-full text-sm">
         <thead>
           <tr className="text-left text-muted border-b border-border">
-            <th className="py-1.5 font-medium">Category</th>
-            <th className="py-1.5 font-medium text-right">Budget</th>
-            <th className="py-1.5 font-medium text-right">Actual</th>
-            <th className="py-1.5 font-medium text-right">Util</th>
+            <th  className="h-8 py-1.5 font-medium text-2xs uppercase tracking-wider text-muted">Category</th>
+            <th  className="h-8 py-1.5 font-medium text-right text-2xs uppercase tracking-wider text-muted">Budget</th>
+            <th  className="h-8 py-1.5 font-medium text-right text-2xs uppercase tracking-wider text-muted">Actual</th>
+            <th  className="h-8 py-1.5 font-medium text-right text-2xs uppercase tracking-wider text-muted">Util</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((r) => (
             <tr key={r.category} className="border-b border-border last:border-0">
               <td className="py-1.5 truncate max-w-[160px]">{r.category}</td>
-              <td className="py-1.5 text-right font-mono tabular-nums">{formatPeso(r.budget)}</td>
-              <td className="py-1.5 text-right font-mono tabular-nums">{formatPeso(r.actual)}</td>
-              <td className="py-1.5 text-right">
+              <td  className="py-1.5 text-right font-mono tabular-nums">{formatPeso(r.budget)}</td>
+              <td  className="py-1.5 text-right font-mono tabular-nums">{formatPeso(r.actual)}</td>
+              <td  className="py-1.5 text-right font-mono tabular-nums">
                 <Chip variant={utilizationTone(r.variance_pct)}>
                   {r.variance_pct > 100 && (
                     <AlertTriangle size={12} className="mr-1 inline" aria-hidden="true" />

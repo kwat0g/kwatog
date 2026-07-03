@@ -74,17 +74,17 @@ export default function DisposeDialog({ rma, isOpen, onClose }: Props) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-default text-left text-xs uppercase tracking-wider text-muted">
-                <th className="py-2 pr-3 font-medium">Product</th>
-                <th className="py-2 pr-3 font-medium text-right font-mono">Qty</th>
-                <th className="py-2 pr-3 font-medium">Disposition</th>
-                <th className="py-2 pr-3 font-medium">Notes</th>
+                <th  className="h-8 py-2 pr-3 font-medium text-2xs uppercase tracking-wider text-muted">Product</th>
+                <th  className="h-8 py-2 pr-3 font-medium text-right font-mono text-2xs uppercase tracking-wider text-muted">Qty</th>
+                <th  className="h-8 py-2 pr-3 font-medium text-2xs uppercase tracking-wider text-muted">Disposition</th>
+                <th  className="h-8 py-2 pr-3 font-medium text-2xs uppercase tracking-wider text-muted">Notes</th>
               </tr>
             </thead>
             <tbody>
               {items.map((item) => (
                 <tr key={item.id} className="border-b border-default">
                   <td className="py-2 pr-3">{itemLabel(item)}</td>
-                  <td className="py-2 pr-3 text-right font-mono tabular-nums">
+                  <td  className="py-2 pr-3 text-right font-mono tabular-nums">
                     {formatInt(item.returned_quantity || item.quantity)}
                   </td>
                   <td className="py-2 pr-3">

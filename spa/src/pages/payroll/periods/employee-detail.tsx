@@ -120,12 +120,12 @@ export default function PayrollEmployeeDetailPage() {
                 {earningRows.map((r) => (
                   <tr key={r.label} className="h-8 border-b border-subtle">
                     <td className="px-3">{r.label}</td>
-                    <td className="px-3 text-right font-mono tabular-nums">{formatPeso(r.value)}</td>
+                    <td  className="px-3 text-right font-mono tabular-nums">{formatPeso(r.value)}</td>
                   </tr>
                 ))}
                 <tr className="h-8 border-t border-default">
                   <td className="px-3 font-medium">Gross Pay</td>
-                  <td className="px-3 text-right font-mono tabular-nums font-medium">{formatPeso(data.gross_pay)}</td>
+                  <td  className="px-3 text-right font-mono tabular-nums font-medium">{formatPeso(data.gross_pay)}</td>
                 </tr>
               </tbody>
             </table>
@@ -140,17 +140,17 @@ export default function PayrollEmployeeDetailPage() {
                 {(data.deduction_details ?? []).map((d, i) => (
                   <tr key={i} className="h-8 border-b border-subtle">
                     <td className="px-3">{d.description ?? d.deduction_type_label}</td>
-                    <td className="px-3 text-right font-mono tabular-nums">{formatPeso(d.amount)}</td>
+                    <td  className="px-3 text-right font-mono tabular-nums">{formatPeso(d.amount)}</td>
                   </tr>
                 ))}
                 <tr className="h-8 border-t border-default">
                   <td className="px-3 font-medium">Total Deductions</td>
-                  <td className="px-3 text-right font-mono tabular-nums font-medium">{formatPeso(data.total_deductions)}</td>
+                  <td  className="px-3 text-right font-mono tabular-nums font-medium">{formatPeso(data.total_deductions)}</td>
                 </tr>
                 {Number(data.adjustment_amount) !== 0 && (
                   <tr className="h-8">
                     <td className="px-3 text-xs text-muted">Adjustment carry-over</td>
-                    <td className="px-3 text-right font-mono tabular-nums">{formatPeso(data.adjustment_amount)}</td>
+                    <td  className="px-3 text-right font-mono tabular-nums">{formatPeso(data.adjustment_amount)}</td>
                   </tr>
                 )}
               </tbody>

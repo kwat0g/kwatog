@@ -315,12 +315,12 @@ export default function OeeReportPage() {
               <table className="w-full text-xs">
                 <thead className="bg-subtle">
                   <tr>
-                    <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Code</th>
-                    <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Name</th>
-                    <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Status</th>
-                    <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">OEE</th>
-                    <th className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">Run time</th>
-                    <th className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">Downtime</th>
+                    <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Code</th>
+                    <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Name</th>
+                    <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Status</th>
+                    <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">OEE</th>
+                    <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">Run time</th>
+                    <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">Downtime</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -343,10 +343,10 @@ export default function OeeReportPage() {
                       <td className="px-2.5 py-2 min-w-[280px]">
                         <OeeGauge result={m} compact />
                       </td>
-                      <td className="px-2.5 py-2 text-right font-mono tabular-nums">
+                      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">
                         {fmtMinutes(m.diagnostics.run_time)}
                       </td>
-                      <td className="px-2.5 py-2 text-right font-mono tabular-nums">
+                      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">
                         {fmtMinutes(m.diagnostics.planned_downtime + m.diagnostics.unplanned_downtime)}
                       </td>
                     </tr>

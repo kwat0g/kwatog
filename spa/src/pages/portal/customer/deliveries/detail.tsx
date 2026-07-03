@@ -38,9 +38,9 @@ export default function CustomerDeliveryDetailPage() {
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-border text-muted">
-                <th className="text-left py-2 px-3 font-medium">Part #</th>
-                <th className="text-left py-2 px-3 font-medium">Description</th>
-                <th className="text-right py-2 px-3 font-medium">Qty Delivered</th>
+                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Part #</th>
+                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Description</th>
+                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Qty Delivered</th>
               </tr>
             </thead>
             <tbody>
@@ -48,7 +48,7 @@ export default function CustomerDeliveryDetailPage() {
                 <tr key={i} className="border-b border-border/50">
                   <td className="py-2 px-3 font-mono text-muted">{item.part_number}</td>
                   <td className="py-2 px-3">{item.name}</td>
-                  <td className="py-2 px-3 text-right">{item.quantity_delivered}</td>
+                  <td  className="py-2 px-3 text-right font-mono tabular-nums">{item.quantity_delivered}</td>
                 </tr>
               ))}
             </tbody>

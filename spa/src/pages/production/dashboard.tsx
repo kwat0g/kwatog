@@ -160,9 +160,9 @@ export default function ProductionDashboardPage() {
             <table className="w-full text-xs">
               <thead className="bg-subtle">
                 <tr>
-                  <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Machine</th>
-                  <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Status</th>
-                  <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 w-1/3">OEE</th>
+                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Machine</th>
+                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Status</th>
+                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 w-1/3">OEE</th>
                 </tr>
               </thead>
               <tbody>

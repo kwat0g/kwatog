@@ -218,10 +218,10 @@ export default function EditSalesOrderPage() {
             <table className="w-full text-xs">
               <thead className="bg-subtle">
                 <tr>
-                  <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 w-1/2">Product</th>
-                  <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Quantity</th>
-                  <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Delivery date</th>
-                  <th className="px-2 py-2" />
+                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 w-1/2">Product</th>
+                  <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Quantity</th>
+                  <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Delivery date</th>
+                  <th  className="h-8 px-2 py-2 text-2xs uppercase tracking-wider text-muted font-medium" />
                 </tr>
               </thead>
               <tbody>
@@ -235,7 +235,7 @@ export default function EditSalesOrderPage() {
                         ))}
                       </Select>
                     </td>
-                    <td className="px-2.5 py-1.5 text-right">
+                    <td  className="px-2.5 py-1.5 text-right font-mono tabular-nums">
                       <Input
                         {...register(`items.${i}.quantity` as const)}
                         error={errors.items?.[i]?.quantity?.message}
@@ -243,7 +243,7 @@ export default function EditSalesOrderPage() {
                         className="font-mono text-right"
                       />
                     </td>
-                    <td className="px-2.5 py-1.5 text-right">
+                    <td  className="px-2.5 py-1.5 text-right font-mono tabular-nums">
                       <Input
                         type="date"
                         {...register(`items.${i}.delivery_date` as const)}
@@ -251,7 +251,7 @@ export default function EditSalesOrderPage() {
                         className="font-mono"
                       />
                     </td>
-                    <td className="px-2 py-1.5 text-right">
+                    <td  className="px-2 py-1.5 text-right font-mono tabular-nums">
                       <button
                         type="button"
                         onClick={() => remove(i)}

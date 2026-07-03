@@ -318,14 +318,12 @@ export function DataTable<T>({
           <thead className={cn(stickyHeader && 'sticky top-0 z-10')}>
             <tr className="border-b border-default bg-canvas">
               {selectable && (
-                <th
-                  scope="col"
+                <th scope="col"
                   className={cn(
-                    'px-2.5 w-8 bg-canvas',
+                    'px-2.5 w-8 bg-canvas text-left text-2xs uppercase tracking-wider text-muted font-medium',
                     rowHeight.default,
                     stickyHeader && 'sticky top-0 z-20',
-                  )}
-                >
+                  )}>
                   <Checkbox
                     checked={allOnPageSelected}
                     onChange={toggleAll}
@@ -334,10 +332,9 @@ export function DataTable<T>({
                 </th>
               )}
               {renderExpanded && (
-                <th
-                  scope="col"
+                <th scope="col"
                   className={cn(
-                    'px-1 w-7 bg-canvas',
+                    'px-1 w-7 bg-canvas text-left text-2xs uppercase tracking-wider text-muted font-medium',
                     rowHeight.default,
                     stickyHeader && 'sticky top-0 z-20',
                   )}
@@ -347,10 +344,10 @@ export function DataTable<T>({
               {orderedColumns.map((col) => {
                 const isPinned = col.pinned === 'left';
                 return (
-                  <th
-                    key={col.key}
+                  <th key={col.key}
                     scope="col"
-                    style={isPinned ? { left: pinnedOffsets[col.key] } : undefined}                      className={cn(
+                    style={isPinned ? { left: pinnedOffsets[col.key] } : undefined}
+                    className={cn(
                         'px-2.5 text-2xs uppercase tracking-wider text-muted font-medium select-none bg-canvas',
                         rowHeight.default,
                         alignClass[col.align ?? 'left'],

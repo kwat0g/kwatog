@@ -140,17 +140,17 @@ export default function LoanDetailPage() {
               <table className="w-full text-sm">
                 <thead className="bg-subtle text-2xs uppercase tracking-wider text-muted">
                   <tr>
-                    <th className="h-8 px-4 text-left">Date</th>
-                    <th className="h-8 px-4 text-right">Amount</th>
-                    <th className="h-8 px-4 text-left">Type</th>
-                    <th className="h-8 px-4 text-left">Remarks</th>
+                    <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">Date</th>
+                    <th  className="h-8 px-4 text-right text-2xs uppercase tracking-wider text-muted font-medium">Amount</th>
+                    <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">Type</th>
+                    <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">Remarks</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loan.payments!.map((p) => (
                     <tr key={p.id} className="h-8 border-b border-subtle hover:bg-subtle">
                       <td className="px-4 font-mono">{formatDate(p.payment_date)}</td>
-                      <td className="px-4 text-right font-mono tabular-nums font-medium">{formatPeso(p.amount)}</td>
+                      <td  className="px-4 text-right font-mono tabular-nums font-medium">{formatPeso(p.amount)}</td>
                       <td className="px-4">{p.payment_type.replace('_', ' ')}</td>
                       <td className="px-4 text-muted">{p.remarks ?? '—'}</td>
                     </tr>

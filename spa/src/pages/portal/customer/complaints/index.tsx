@@ -98,13 +98,13 @@ export default function CustomerComplaintsPage() {
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-border text-muted">
-                <th className="text-left py-2 px-3 font-medium">#</th>
-                <th className="text-left py-2 px-3 font-medium">Severity</th>
-                <th className="text-left py-2 px-3 font-medium">Description</th>
-                <th className="text-right py-2 px-3 font-medium">Qty</th>
-                <th className="text-left py-2 px-3 font-medium">Date</th>
-                <th className="text-right py-2 px-3 font-medium">Status</th>
-                <th className="text-right py-2 px-3 font-medium">8D</th>
+                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">#</th>
+                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Severity</th>
+                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Description</th>
+                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Qty</th>
+                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Date</th>
+                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Status</th>
+                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">8D</th>
               </tr>
             </thead>
             <tbody>
@@ -119,16 +119,16 @@ export default function CustomerComplaintsPage() {
                     }`}>{c.severity}</span>
                   </td>
                   <td className="py-2.5 px-3 max-w-xs truncate">{c.description}</td>
-                  <td className="py-2.5 px-3 text-right">{c.affected_quantity}</td>
+                  <td  className="py-2.5 px-3 text-right font-mono tabular-nums">{c.affected_quantity}</td>
                   <td className="py-2.5 px-3 text-muted">{c.received_date ?? '—'}</td>
-                  <td className="py-2.5 px-3 text-right">
+                  <td  className="py-2.5 px-3 text-right font-mono tabular-nums">
                     <span className={`inline-block px-2 py-0.5 rounded-full text-2xs font-medium uppercase ${
                       c.status === 'closed' ? 'bg-success/10 text-success' :
                       c.status === 'resolved' ? 'bg-accent/10 text-accent' :
                       'bg-warning/10 text-warning'
                     }`}>{c.status}</span>
                   </td>
-                  <td className="py-2.5 px-3 text-right">
+                  <td  className="py-2.5 px-3 text-right font-mono tabular-nums">
                     {(c.status === 'resolved' || c.status === 'closed') && (
                       <button
                         onClick={() => open8d(c.id)}

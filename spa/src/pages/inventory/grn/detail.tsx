@@ -95,12 +95,12 @@ export default function GrnDetailPage() {
         <Panel title="Line items">
           <table className="w-full text-xs">
             <thead><tr className="text-2xs uppercase tracking-wider text-muted">
-              <th className="text-left py-1">Item</th>
-              <th>Location</th>
-              <th className="text-right">Received</th>
-              <th className="text-right">Accepted</th>
-              <th className="text-right">Unit cost</th>
-              <th className="text-right">Total</th>
+              <th  className="h-8 text-left py-1 text-2xs uppercase tracking-wider text-muted font-medium">Item</th>
+              <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Location</th>
+              <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium">Received</th>
+              <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium">Accepted</th>
+              <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium">Unit cost</th>
+              <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium">Total</th>
             </tr></thead>
             <tbody>
               {data.items?.map((l) => (
@@ -110,10 +110,10 @@ export default function GrnDetailPage() {
                     <div className="text-2xs text-muted">{l.item?.name}</div>
                   </td>
                   <td className="font-mono">{l.location?.full_code}</td>
-                  <td className="text-right font-mono tabular-nums">{Number(l.quantity_received).toFixed(3)}</td>
-                  <td className="text-right font-mono tabular-nums">{Number(l.quantity_accepted).toFixed(3)}</td>
-                  <td className="text-right font-mono tabular-nums">{Number(l.unit_cost).toFixed(4)}</td>
-                  <td className="text-right font-mono tabular-nums">{(Number(l.quantity_received) * Number(l.unit_cost)).toFixed(2)}</td>
+                  <td  className="text-right font-mono tabular-nums">{Number(l.quantity_received).toFixed(3)}</td>
+                  <td  className="text-right font-mono tabular-nums">{Number(l.quantity_accepted).toFixed(3)}</td>
+                  <td  className="text-right font-mono tabular-nums">{Number(l.unit_cost).toFixed(4)}</td>
+                  <td  className="text-right font-mono tabular-nums">{(Number(l.quantity_received) * Number(l.unit_cost)).toFixed(2)}</td>
                 </tr>
               ))}
             </tbody>

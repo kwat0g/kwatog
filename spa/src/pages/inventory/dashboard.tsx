@@ -48,10 +48,10 @@ export default function InventoryDashboardPage() {
                     <table className="w-full text-xs">
                       <thead>
                         <tr className="text-2xs uppercase tracking-wider text-muted">
-                          <th className="text-left py-1">Item</th>
-                          <th className="text-right">Available</th>
-                          <th className="text-right">Reorder</th>
-                          <th className="text-left">Chain</th>
+                          <th  className="h-8 text-left py-1 text-2xs uppercase tracking-wider text-muted font-medium">Item</th>
+                          <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium">Available</th>
+                          <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium">Reorder</th>
+                          <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium">Chain</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -61,8 +61,8 @@ export default function InventoryDashboardPage() {
                               <div className="font-mono">{a.code}</div>
                               <div className="text-2xs text-muted">{a.name}</div>
                             </td>
-                            <td className="text-right font-mono tabular-nums text-danger-fg">{Number(a.available).toFixed(3)}</td>
-                            <td className="text-right font-mono tabular-nums">{Number(a.reorder_point).toFixed(3)}</td>
+                            <td  className="text-right font-mono tabular-nums text-danger-fg">{Number(a.available).toFixed(3)}</td>
+                            <td  className="text-right font-mono tabular-nums">{Number(a.reorder_point).toFixed(3)}</td>
                             <td>
                               {a.open_pr
                                 ? <Chip variant="warning">PR {a.open_pr.number}</Chip>
@@ -93,9 +93,9 @@ export default function InventoryDashboardPage() {
               <table className="w-full text-xs">
                 <thead>
                   <tr className="text-2xs uppercase tracking-wider text-muted">
-                    <th className="text-left py-1">Item</th>
-                    <th className="text-right">Quantity</th>
-                    <th className="text-right">Total value</th>
+                    <th  className="h-8 text-left py-1 text-2xs uppercase tracking-wider text-muted font-medium">Item</th>
+                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium">Quantity</th>
+                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium">Total value</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -105,8 +105,8 @@ export default function InventoryDashboardPage() {
                   {data.top_consumed_materials.map((m) => (
                     <tr key={m.id} className="h-8 border-t border-subtle">
                       <td><Link to={`/inventory/items/${m.id}`} className="font-mono text-accent">{m.code}</Link> {m.name}</td>
-                      <td className="text-right font-mono tabular-nums">{Number(m.qty).toFixed(3)} {m.unit_of_measure}</td>
-                      <td className="text-right font-mono tabular-nums">{formatPeso(m.total_value)}</td>
+                      <td  className="text-right font-mono tabular-nums">{Number(m.qty).toFixed(3)} {m.unit_of_measure}</td>
+                      <td  className="text-right font-mono tabular-nums">{formatPeso(m.total_value)}</td>
                     </tr>
                   ))}
                 </tbody>

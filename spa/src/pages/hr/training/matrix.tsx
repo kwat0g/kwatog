@@ -167,13 +167,13 @@ export default function TrainingMatrixPage() {
             {skillCategories.length > 1 && (
               <thead>
                 <tr>
-                  <th className="sticky left-0 z-20 bg-canvas" />
-                  <th className="sticky left-0 z-20 bg-canvas" />
+                  <th  className="h-8 sticky left-0 z-20 bg-canvas text-2xs uppercase tracking-wider text-muted font-medium" />
+                  <th  className="h-8 sticky left-0 z-20 bg-canvas text-2xs uppercase tracking-wider text-muted font-medium" />
                   {skillCategories.map((group) => (
-                    <th
+                    <th 
                       key={group.category}
                       colSpan={group.skills.length}
-                      className="px-1 py-1 text-center text-2xs uppercase tracking-wider text-muted font-medium border-b border-default bg-canvas"
+                      className="h-8 px-1 py-1 text-center text-2xs uppercase tracking-wider text-muted font-medium border-b border-default bg-canvas"
                     >
                       {group.category}
                     </th>
@@ -183,16 +183,16 @@ export default function TrainingMatrixPage() {
             )}
             <thead>
               <tr>
-                <th className="sticky left-0 z-20 bg-canvas px-2 py-2 text-left font-medium text-muted min-w-[180px]">
+                <th  className="h-8 sticky left-0 z-20 bg-canvas px-2 py-2 text-left font-medium text-muted min-w-[180px] text-2xs uppercase tracking-wider">
                   Employee
                 </th>
-                <th className="sticky left-[180px] z-20 bg-canvas px-2 py-2 text-left font-medium text-muted min-w-[120px]">
+                <th  className="h-8 sticky left-[180px] z-20 bg-canvas px-2 py-2 text-left font-medium text-muted min-w-[120px] text-2xs uppercase tracking-wider">
                   Department
                 </th>
                 {data.skills.map((skill) => (
-                  <th
+                  <th 
                     key={skill.id}
-                    className="px-1 py-2 text-center font-medium text-muted min-w-[80px] border-b border-default"
+                    className="h-8 px-1 py-2 text-center font-medium text-muted min-w-[80px] border-b border-default text-2xs uppercase tracking-wider"
                   >
                     <div className="writing-mode-vertical whitespace-nowrap -rotate-45 origin-bottom-left h-12 flex items-end">
                       <span className="truncate max-w-[100px]" title={skill.name}>

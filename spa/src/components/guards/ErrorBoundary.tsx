@@ -27,7 +27,7 @@ export class ErrorBoundary extends Component<Props, State> {
       if (this.props.fallback) return this.props.fallback;
       return (
         <div className="flex flex-col items-center justify-center min-h-[400px] px-5 text-center">
-          <div className="text-4xl mb-3">⚠</div>
+          <div className="text-2xl mb-3">⚠</div>
           <h2 className="text-lg font-medium text-primary mb-1">Something went wrong</h2>
           <p className="text-sm text-muted mb-4 max-w-md">
             {this.state.error?.message || 'An unexpected error occurred in this module.'}

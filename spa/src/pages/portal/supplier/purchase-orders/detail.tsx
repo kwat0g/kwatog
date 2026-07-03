@@ -263,12 +263,12 @@ export default function SupplierPurchaseOrderDetailPage() {
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-border text-muted">
-                <th className="text-left py-2 px-3 font-medium">Part #</th>
-                <th className="text-left py-2 px-3 font-medium">Description</th>
-                <th className="text-right py-2 px-3 font-medium">Ordered</th>
-                <th className="text-right py-2 px-3 font-medium">Received</th>
-                <th className="text-right py-2 px-3 font-medium">Unit Price</th>
-                <th className="text-right py-2 px-3 font-medium">Total</th>
+                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Part #</th>
+                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Description</th>
+                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Ordered</th>
+                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Received</th>
+                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Unit Price</th>
+                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Total</th>
               </tr>
             </thead>
             <tbody>
@@ -276,10 +276,10 @@ export default function SupplierPurchaseOrderDetailPage() {
                 <tr key={item.id} className="border-b border-border/50">
                   <td className="py-2 px-3 font-mono text-muted">{item.part_number}</td>
                   <td className="py-2 px-3">{item.name}</td>
-                  <td className="py-2 px-3 text-right">{item.quantity_ordered}</td>
-                  <td className="py-2 px-3 text-right">{item.quantity_received}</td>
-                  <td className="py-2 px-3 text-right font-mono">{formatPeso(item.unit_price)}</td>
-                  <td className="py-2 px-3 text-right font-mono">{formatPeso(item.total_price)}</td>
+                  <td  className="py-2 px-3 text-right font-mono tabular-nums">{item.quantity_ordered}</td>
+                  <td  className="py-2 px-3 text-right font-mono tabular-nums">{item.quantity_received}</td>
+                  <td  className="py-2 px-3 text-right font-mono tabular-nums">{formatPeso(item.unit_price)}</td>
+                  <td  className="py-2 px-3 text-right font-mono tabular-nums">{formatPeso(item.total_price)}</td>
                 </tr>
               ))}
             </tbody>
@@ -318,8 +318,8 @@ export default function SupplierPurchaseOrderDetailPage() {
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-border text-muted">
-                <th className="text-left py-2 px-3 font-medium">GRN #</th>
-                <th className="text-left py-2 px-3 font-medium">Received Date</th>
+                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">GRN #</th>
+                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Received Date</th>
               </tr>
             </thead>
             <tbody>
@@ -340,23 +340,23 @@ export default function SupplierPurchaseOrderDetailPage() {
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-border text-muted">
-                <th className="text-left py-2 px-3 font-medium">Bill #</th>
-                <th className="text-right py-2 px-3 font-medium">Amount</th>
-                <th className="text-right py-2 px-3 font-medium">Paid</th>
-                <th className="text-right py-2 px-3 font-medium">Balance</th>
-                <th className="text-left py-2 px-3 font-medium">Due</th>
-                <th className="text-right py-2 px-3 font-medium">Status</th>
+                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Bill #</th>
+                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Amount</th>
+                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Paid</th>
+                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Balance</th>
+                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Due</th>
+                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Status</th>
               </tr>
             </thead>
             <tbody>
               {po.bills.map((bill) => (
                 <tr key={bill.id} className="border-b border-border/50">
                   <td className="py-2 px-3 font-mono text-accent">{bill.bill_number}</td>
-                  <td className="py-2 px-3 text-right font-mono">{formatPeso(bill.total_amount)}</td>
-                  <td className="py-2 px-3 text-right font-mono">{formatPeso(bill.paid_amount)}</td>
-                  <td className="py-2 px-3 text-right font-mono">{formatPeso(bill.balance)}</td>
+                  <td  className="py-2 px-3 text-right font-mono tabular-nums">{formatPeso(bill.total_amount)}</td>
+                  <td  className="py-2 px-3 text-right font-mono tabular-nums">{formatPeso(bill.paid_amount)}</td>
+                  <td  className="py-2 px-3 text-right font-mono tabular-nums">{formatPeso(bill.balance)}</td>
                   <td className="py-2 px-3 text-muted">{bill.due_date ?? '—'}</td>
-                  <td className="py-2 px-3 text-right">
+                  <td  className="py-2 px-3 text-right font-mono tabular-nums">
                     <span className={`inline-block px-2 py-0.5 rounded-full text-2xs font-medium uppercase ${
                       bill.status === 'paid' ? 'bg-success/10 text-success' :
                       bill.status === 'overdue' ? 'bg-danger/10 text-danger' : 'bg-warning/10 text-warning'

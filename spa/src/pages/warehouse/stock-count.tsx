@@ -232,14 +232,14 @@ export default function StockCountPage() {
                       <table className="w-full text-xs">
                         <thead>
                           <tr className="text-2xs uppercase tracking-wider text-muted">
-                            <th className="text-left py-1 font-medium w-32">Location</th>
-                            <th className="text-left font-medium">Item</th>
-                            <th className="text-right font-medium">System</th>
-                            <th className="text-right font-medium">Counted</th>
-                            <th className="text-right font-medium">Variance</th>
-                            <th className="text-right font-medium">%</th>
-                            <th className="text-left font-medium">Status</th>
-                            <th />
+                            <th  className="h-8 text-left py-1 font-medium w-32 text-2xs uppercase tracking-wider text-muted">Location</th>
+                            <th  className="h-8 text-left font-medium text-2xs uppercase tracking-wider text-muted">Item</th>
+                            <th  className="h-8 text-right font-medium text-2xs uppercase tracking-wider text-muted">System</th>
+                            <th  className="h-8 text-right font-medium text-2xs uppercase tracking-wider text-muted">Counted</th>
+                            <th  className="h-8 text-right font-medium text-2xs uppercase tracking-wider text-muted">Variance</th>
+                            <th  className="h-8 text-right font-medium text-2xs uppercase tracking-wider text-muted">%</th>
+                            <th  className="h-8 text-left font-medium text-2xs uppercase tracking-wider text-muted">Status</th>
+                            <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium" />
                           </tr>
                         </thead>
                         <tbody>
@@ -251,8 +251,8 @@ export default function StockCountPage() {
                                   ? <><span className="font-mono">{item.item.code}</span> <span className="text-muted">{item.item.name}</span></>
                                   : <span className="text-muted">—</span>}
                               </td>
-                              <td className="text-right font-mono tabular-nums">{Number(item.system_quantity).toFixed(3)}</td>
-                              <td className="text-right font-mono tabular-nums">
+                              <td  className="text-right font-mono tabular-nums">{Number(item.system_quantity).toFixed(3)}</td>
+                              <td  className="text-right font-mono tabular-nums">
                                 {item.counted_quantity !== null ? Number(item.counted_quantity).toFixed(3) : <span className="text-muted">—</span>}
                               </td>
                               <td className={`text-right font-mono tabular-nums ${Math.abs(Number(item.variance)) > 0.001 ? 'text-warning-fg' : ''}`}>
@@ -262,7 +262,7 @@ export default function StockCountPage() {
                                 {item.counted_quantity !== null ? `${Number(item.variance_percent).toFixed(1)}%` : ''}
                               </td>
                               <td><Chip variant={itemStatusVariant[item.status]}>{item.status}</Chip></td>
-                              <td className="text-right">
+                              <td  className="text-right font-mono tabular-nums">
                                 {activeSession.status === 'in_progress' && item.status === 'pending' && canManage && (
                                   <Button size="sm" variant="secondary" onClick={() => setCountModalItem(item)}>Count</Button>
                                 )}

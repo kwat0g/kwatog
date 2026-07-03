@@ -186,12 +186,12 @@ export default function InvoiceDetailPage() {
             <table className="w-full text-sm">
               <thead className="text-2xs uppercase tracking-wider text-muted">
                 <tr className="border-b border-default bg-subtle">
-                  <th className="h-8 px-2.5 text-left">#</th>
-                  <th className="h-8 px-2.5 text-left">Description</th>
-                  <th className="h-8 px-2.5 text-left">Account</th>
-                  <th className="h-8 px-2.5 text-right">Qty</th>
-                  <th className="h-8 px-2.5 text-right">Unit price</th>
-                  <th className="h-8 px-2.5 text-right">Total</th>
+                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">#</th>
+                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Description</th>
+                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Account</th>
+                  <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">Qty</th>
+                  <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">Unit price</th>
+                  <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">Total</th>
                 </tr>
               </thead>
               <tbody>
@@ -200,14 +200,14 @@ export default function InvoiceDetailPage() {
                     <td className="px-2.5 text-muted font-mono tabular-nums">{String(idx + 1).padStart(2, '0')}</td>
                     <td className="px-2.5">{i.description}</td>
                     <td className="px-2.5 text-muted text-xs">{i.revenue_account ? <span><span className="font-mono">{i.revenue_account.code}</span> · {i.revenue_account.name}</span> : '—'}</td>
-                    <td className="px-2.5 text-right font-mono tabular-nums">{i.quantity}{i.unit ? ` ${i.unit}` : ''}</td>
-                    <td className="px-2.5 text-right font-mono tabular-nums">{formatPeso(i.unit_price)}</td>
-                    <td className="px-2.5 text-right font-mono tabular-nums font-medium">{formatPeso(i.total)}</td>
+                    <td  className="px-2.5 text-right font-mono tabular-nums">{i.quantity}{i.unit ? ` ${i.unit}` : ''}</td>
+                    <td  className="px-2.5 text-right font-mono tabular-nums">{formatPeso(i.unit_price)}</td>
+                    <td  className="px-2.5 text-right font-mono tabular-nums font-medium">{formatPeso(i.total)}</td>
                   </tr>
                 ))}
-                <tr className="h-7"><td colSpan={5} className="px-2.5 text-right text-muted">Subtotal</td><td className="px-2.5 text-right font-mono tabular-nums">{formatPeso(invoice.subtotal)}</td></tr>
-                {invoice.is_vatable && <tr className="h-7"><td colSpan={5} className="px-2.5 text-right text-muted">VAT (12%)</td><td className="px-2.5 text-right font-mono tabular-nums">{formatPeso(invoice.vat_amount)}</td></tr>}
-                <tr className="h-8 border-t-2 border-primary font-medium"><td colSpan={5} className="px-2.5 text-right">Total</td><td className="px-2.5 text-right font-mono tabular-nums">{formatPeso(invoice.total_amount)}</td></tr>
+                <tr className="h-7"><td  colSpan={5} className="px-2.5 text-right text-muted font-mono tabular-nums">Subtotal</td><td  className="px-2.5 text-right font-mono tabular-nums">{formatPeso(invoice.subtotal)}</td></tr>
+                {invoice.is_vatable && <tr className="h-7"><td  colSpan={5} className="px-2.5 text-right text-muted font-mono tabular-nums">VAT (12%)</td><td  className="px-2.5 text-right font-mono tabular-nums">{formatPeso(invoice.vat_amount)}</td></tr>}
+                <tr className="h-8 border-t-2 border-primary font-medium"><td  colSpan={5} className="px-2.5 text-right font-mono tabular-nums">Total</td><td  className="px-2.5 text-right font-mono tabular-nums">{formatPeso(invoice.total_amount)}</td></tr>
               </tbody>
             </table>
           </Panel>

@@ -78,12 +78,12 @@ function PrActionQueuePanel({ items }: { items: PrActionItem[] }) {
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-subtle">
-            <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">PR #</th>
-            <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Dept</th>
-            <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Items</th>
-            <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Est. Total</th>
-            <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Urgency</th>
-            <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Waiting</th>
+            <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">PR #</th>
+            <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Dept</th>
+            <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Items</th>
+            <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Est. Total</th>
+            <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Urgency</th>
+            <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Waiting</th>
           </tr>
         </thead>
         <tbody>
@@ -99,14 +99,14 @@ function PrActionQueuePanel({ items }: { items: PrActionItem[] }) {
                 </Link>
               </td>
               <td className="py-1 text-muted text-xs">{pr.department}</td>
-              <td className="py-1 text-right font-mono tabular-nums">{pr.items_count}</td>
-              <td className="py-1 text-right font-mono tabular-nums">₱{pr.estimated_total}</td>
+              <td  className="py-1 text-right font-mono tabular-nums">{pr.items_count}</td>
+              <td  className="py-1 text-right font-mono tabular-nums">₱{pr.estimated_total}</td>
               <td className="py-1">
                 <Chip variant={pr.urgency === 'urgent' ? 'danger' : pr.urgency === 'high' ? 'warning' : 'neutral'}>
                   {pr.urgency}
                 </Chip>
               </td>
-              <td className="py-1 text-right font-mono tabular-nums text-muted">{pr.days_waiting}d</td>
+              <td  className="py-1 text-right font-mono tabular-nums text-muted">{pr.days_waiting}d</td>
             </tr>
           ))}
         </tbody>
@@ -204,10 +204,10 @@ function UpcomingDeliveriesPanel({ items }: { items: UpcomingDelivery[] }) {
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-subtle">
-            <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">PO #</th>
-            <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Vendor</th>
-            <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Expected</th>
-            <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Status</th>
+            <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">PO #</th>
+            <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Vendor</th>
+            <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Expected</th>
+            <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Status</th>
           </tr>
         </thead>
         <tbody>
@@ -223,7 +223,7 @@ function UpcomingDeliveriesPanel({ items }: { items: UpcomingDelivery[] }) {
                 </Link>
               </td>
               <td className="py-1 text-muted text-xs truncate">{d.vendor}</td>
-              <td className="py-1 text-right font-mono tabular-nums text-xs">{d.expected_date ?? '—'}</td>
+              <td  className="py-1 text-right font-mono tabular-nums text-xs">{d.expected_date ?? '—'}</td>
               <td className="py-1">
                 <Chip variant={d.status === 'sent' ? 'info' : d.status === 'approved' ? 'warning' : 'neutral'}>
                   {d.status}

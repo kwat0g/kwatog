@@ -72,7 +72,7 @@ export default function ApplicationTrackPage() {
           <ArrowLeft size={14} /> Back to careers
         </Link>
 
-        <h1 className="text-3xl font-medium tracking-tight text-neutral-900">Track Your Application</h1>
+        <h1 className="text-2xl font-medium tracking-tight text-neutral-900">Track Your Application</h1>
         <p className="mt-2 text-neutral-600">
           Enter the tracking code you received after submitting your application.
         </p>

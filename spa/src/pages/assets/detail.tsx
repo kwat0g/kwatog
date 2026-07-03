@@ -92,17 +92,17 @@ export default function AssetDetailPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-subtle">
-                    <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Period</th>
-                    <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Amount</th>
-                    <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Accumulated</th>
+                    <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Period</th>
+                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Amount</th>
+                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Accumulated</th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.depreciations.map((d) => (
                     <tr key={d.id} className="border-b border-subtle h-8">
                       <td className="font-mono tabular-nums">{d.period_year}-{String(d.period_month).padStart(2, '0')}</td>
-                      <td className="text-right font-mono tabular-nums">₱{d.depreciation_amount}</td>
-                      <td className="text-right font-mono tabular-nums">₱{d.accumulated_after}</td>
+                      <td  className="text-right font-mono tabular-nums">₱{d.depreciation_amount}</td>
+                      <td  className="text-right font-mono tabular-nums">₱{d.accumulated_after}</td>
                     </tr>
                   ))}
                 </tbody>

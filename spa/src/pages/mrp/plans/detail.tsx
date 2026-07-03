@@ -107,24 +107,24 @@ export default function MrpPlanDetailPage() {
               <table className="w-full text-xs">
                 <thead className="bg-subtle">
                   <tr>
-                    <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Item</th>
-                    <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Gross</th>
-                    <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">On hand</th>
-                    <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Reserved</th>
-                    <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">In transit</th>
-                    <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Net</th>
-                    <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Action</th>
+                    <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Item</th>
+                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Gross</th>
+                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">On hand</th>
+                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Reserved</th>
+                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">In transit</th>
+                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Net</th>
+                    <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.diagnostics.map((d) => (
                     <tr key={d.item_id} className="border-t border-subtle hover:bg-subtle">
                       <td className="px-2.5 py-2 font-mono">{d.item_code}</td>
-                      <td className="px-2.5 py-2 text-right font-mono tabular-nums">{d.gross.toFixed(3)}</td>
-                      <td className="px-2.5 py-2 text-right font-mono tabular-nums">{d.on_hand.toFixed(3)}</td>
-                      <td className="px-2.5 py-2 text-right font-mono tabular-nums">{d.reserved.toFixed(3)}</td>
-                      <td className="px-2.5 py-2 text-right font-mono tabular-nums">{d.in_transit.toFixed(3)}</td>
-                      <td className="px-2.5 py-2 text-right font-mono tabular-nums font-medium">{d.net.toFixed(3)}</td>
+                      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{d.gross.toFixed(3)}</td>
+                      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{d.on_hand.toFixed(3)}</td>
+                      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{d.reserved.toFixed(3)}</td>
+                      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{d.in_transit.toFixed(3)}</td>
+                      <td  className="px-2.5 py-2 text-right font-mono tabular-nums font-medium">{d.net.toFixed(3)}</td>
                       <td className="px-2.5 py-2">
                         {d.action === 'pr_created'
                           ? <Chip variant={d.priority === 'urgent' ? 'danger' : 'info'}>PR · {d.priority}</Chip>

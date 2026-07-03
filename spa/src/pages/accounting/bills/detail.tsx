@@ -174,12 +174,12 @@ export default function BillDetailPage() {
             <table className="w-full text-sm">
               <thead className="text-2xs uppercase tracking-wider text-muted">
                 <tr className="border-b border-default bg-subtle">
-                  <th className="h-8 px-2.5 text-left">#</th>
-                  <th className="h-8 px-2.5 text-left">Description</th>
-                  <th className="h-8 px-2.5 text-left">Account</th>
-                  <th className="h-8 px-2.5 text-right">Qty</th>
-                  <th className="h-8 px-2.5 text-right">Unit price</th>
-                  <th className="h-8 px-2.5 text-right">Total</th>
+                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">#</th>
+                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Description</th>
+                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Account</th>
+                  <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">Qty</th>
+                  <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">Unit price</th>
+                  <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">Total</th>
                 </tr>
               </thead>
               <tbody>
@@ -190,14 +190,14 @@ export default function BillDetailPage() {
                     <td className="px-2.5 text-muted text-xs">
                       {i.expense_account ? <span><span className="font-mono">{i.expense_account.code}</span> · {i.expense_account.name}</span> : '—'}
                     </td>
-                    <td className="px-2.5 text-right font-mono tabular-nums">{i.quantity}{i.unit ? ` ${i.unit}` : ''}</td>
-                    <td className="px-2.5 text-right font-mono tabular-nums">{formatPeso(i.unit_price)}</td>
-                    <td className="px-2.5 text-right font-mono tabular-nums font-medium">{formatPeso(i.total)}</td>
+                    <td  className="px-2.5 text-right font-mono tabular-nums">{i.quantity}{i.unit ? ` ${i.unit}` : ''}</td>
+                    <td  className="px-2.5 text-right font-mono tabular-nums">{formatPeso(i.unit_price)}</td>
+                    <td  className="px-2.5 text-right font-mono tabular-nums font-medium">{formatPeso(i.total)}</td>
                   </tr>
                 ))}
-                <tr className="h-7"><td colSpan={5} className="px-2.5 text-right text-muted">Subtotal</td><td className="px-2.5 text-right font-mono tabular-nums">{formatPeso(bill.subtotal)}</td></tr>
-                {bill.is_vatable && <tr className="h-7"><td colSpan={5} className="px-2.5 text-right text-muted">VAT (12%)</td><td className="px-2.5 text-right font-mono tabular-nums">{formatPeso(bill.vat_amount)}</td></tr>}
-                <tr className="h-8 border-t-2 border-primary font-medium"><td colSpan={5} className="px-2.5 text-right">Total</td><td className="px-2.5 text-right font-mono tabular-nums">{formatPeso(bill.total_amount)}</td></tr>
+                <tr className="h-7"><td  colSpan={5} className="px-2.5 text-right text-muted font-mono tabular-nums">Subtotal</td><td  className="px-2.5 text-right font-mono tabular-nums">{formatPeso(bill.subtotal)}</td></tr>
+                {bill.is_vatable && <tr className="h-7"><td  colSpan={5} className="px-2.5 text-right text-muted font-mono tabular-nums">VAT (12%)</td><td  className="px-2.5 text-right font-mono tabular-nums">{formatPeso(bill.vat_amount)}</td></tr>}
+                <tr className="h-8 border-t-2 border-primary font-medium"><td  colSpan={5} className="px-2.5 text-right font-mono tabular-nums">Total</td><td  className="px-2.5 text-right font-mono tabular-nums">{formatPeso(bill.total_amount)}</td></tr>
               </tbody>
             </table>
           </Panel>

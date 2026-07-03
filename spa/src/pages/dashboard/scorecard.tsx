@@ -165,7 +165,7 @@ export default function ScorecardPage() {
         {scorecardQ.data && scorecardQ.data.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {scorecardQ.data.map((item) => (
-              <KpiCard key={item.definition.code} item={item} year={year} month={month} />
+              <KpiCard key={item.definition.code} item={item} />
             ))}
           </div>
         )}
@@ -174,7 +174,7 @@ export default function ScorecardPage() {
   );
 }
 
-function KpiCard({ item, year, month }: { item: KpiScorecardItem; year: number; month: number }) {
+function KpiCard({ item }: { item: KpiScorecardItem }) {
   const { definition: def, snapshot } = item;
   const moduleLink = MODULE_LINKS[def.module];
 

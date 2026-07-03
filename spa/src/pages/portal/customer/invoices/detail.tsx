@@ -75,19 +75,19 @@ export default function CustomerInvoiceDetailPage() {
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-border text-muted">
-                <th className="text-left py-2 px-3 font-medium">Description</th>
-                <th className="text-right py-2 px-3 font-medium">Qty</th>
-                <th className="text-right py-2 px-3 font-medium">Unit Price</th>
-                <th className="text-right py-2 px-3 font-medium">Total</th>
+                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Description</th>
+                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Qty</th>
+                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Unit Price</th>
+                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Total</th>
               </tr>
             </thead>
             <tbody>
               {invoice.items.map((item, i) => (
                 <tr key={i} className="border-b border-border/50">
                   <td className="py-2 px-3">{item.description}</td>
-                  <td className="py-2 px-3 text-right font-mono tabular-nums">{item.quantity}</td>
-                  <td className="py-2 px-3 text-right font-mono tabular-nums">{formatPeso(item.unit_price)}</td>
-                  <td className="py-2 px-3 text-right font-mono tabular-nums">{formatPeso(item.total_price)}</td>
+                  <td  className="py-2 px-3 text-right font-mono tabular-nums">{item.quantity}</td>
+                  <td  className="py-2 px-3 text-right font-mono tabular-nums">{formatPeso(item.unit_price)}</td>
+                  <td  className="py-2 px-3 text-right font-mono tabular-nums">{formatPeso(item.total_price)}</td>
                 </tr>
               ))}
             </tbody>
@@ -100,9 +100,9 @@ export default function CustomerInvoiceDetailPage() {
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-border text-muted">
-                <th className="text-left py-2 px-3 font-medium">Date</th>
-                <th className="text-left py-2 px-3 font-medium">Method</th>
-                <th className="text-right py-2 px-3 font-medium">Amount</th>
+                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Date</th>
+                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Method</th>
+                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Amount</th>
               </tr>
             </thead>
             <tbody>
@@ -110,7 +110,7 @@ export default function CustomerInvoiceDetailPage() {
                 <tr key={i} className="border-b border-border/50">
                   <td className="py-2 px-3 text-muted">{p.paid_at ?? '—'}</td>
                   <td className="py-2 px-3 capitalize">{p.payment_method}</td>
-                  <td className="py-2 px-3 text-right font-mono tabular-nums">{formatPeso(p.amount)}</td>
+                  <td  className="py-2 px-3 text-right font-mono tabular-nums">{formatPeso(p.amount)}</td>
                 </tr>
               ))}
             </tbody>

@@ -104,14 +104,14 @@ export default function SupplierStatementOfAccountPage() {
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-border text-muted">
-                  <th className="text-left px-4 py-2 font-medium">Bill #</th>
-                  <th className="text-left px-4 py-2 font-medium">PO</th>
-                  <th className="text-left px-4 py-2 font-medium">Date</th>
-                  <th className="text-left px-4 py-2 font-medium">Due Date</th>
-                  <th className="text-right px-4 py-2 font-medium">Total</th>
-                  <th className="text-right px-4 py-2 font-medium">Balance</th>
-                  <th className="text-center px-4 py-2 font-medium">Status</th>
-                  <th className="text-center px-4 py-2 font-medium">Bucket</th>
+                  <th  className="h-8 text-left px-4 py-2 font-medium text-2xs uppercase tracking-wider text-muted">Bill #</th>
+                  <th  className="h-8 text-left px-4 py-2 font-medium text-2xs uppercase tracking-wider text-muted">PO</th>
+                  <th  className="h-8 text-left px-4 py-2 font-medium text-2xs uppercase tracking-wider text-muted">Date</th>
+                  <th  className="h-8 text-left px-4 py-2 font-medium text-2xs uppercase tracking-wider text-muted">Due Date</th>
+                  <th  className="h-8 text-right px-4 py-2 font-medium text-2xs uppercase tracking-wider text-muted">Total</th>
+                  <th  className="h-8 text-right px-4 py-2 font-medium text-2xs uppercase tracking-wider text-muted">Balance</th>
+                  <th  className="h-8 text-center px-4 py-2 font-medium text-2xs uppercase tracking-wider text-muted">Status</th>
+                  <th  className="h-8 text-center px-4 py-2 font-medium text-2xs uppercase tracking-wider text-muted">Bucket</th>
                 </tr>
               </thead>
               <tbody>
@@ -121,8 +121,8 @@ export default function SupplierStatementOfAccountPage() {
                     <td className="px-4 py-2.5 text-muted">{bill.purchase_order?.po_number ?? '—'}</td>
                     <td className="px-4 py-2.5 text-muted">{bill.date ?? '—'}</td>
                     <td className="px-4 py-2.5 text-muted">{bill.due_date ?? '—'}</td>
-                    <td className="px-4 py-2.5 text-right">{bill.total_amount}</td>
-                    <td className="px-4 py-2.5 text-right font-medium">{bill.balance}</td>
+                    <td  className="px-4 py-2.5 text-right font-mono tabular-nums">{bill.total_amount}</td>
+                    <td  className="px-4 py-2.5 text-right font-medium font-mono tabular-nums">{bill.balance}</td>
                     <td className="px-4 py-2.5 text-center">
                       <Chip variant={chipVariantForStatus(bill.status)}>{bill.status}</Chip>
                     </td>

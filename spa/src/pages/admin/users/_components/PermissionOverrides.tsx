@@ -129,22 +129,22 @@ export function PermissionOverrides({
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-default">
-              <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">
+              <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">
                 Permission
               </th>
-              <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">
+              <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">
                 Type
               </th>
-              <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">
+              <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">
                 Granted by
               </th>
-              <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">
+              <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">
                 Reason
               </th>
-              <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">
+              <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">
                 Expires
               </th>
-              <th className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium" />
+              <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium" />
             </tr>
           </thead>
           <tbody>
@@ -177,7 +177,7 @@ export function PermissionOverrides({
                 <td className="px-2.5 font-mono tabular-nums text-secondary">
                   {o.expires_at ? formatDateTime(o.expires_at) : 'No expiry'}
                 </td>
-                <td className="px-2.5 text-right" onClick={(e) => e.stopPropagation()}>
+                <td  className="px-2.5 text-right font-mono tabular-nums" onClick={(e) => e.stopPropagation()}>
                   <CanDo permission="admin.users.manage_permissions">
                     <Button
                       variant="ghost"

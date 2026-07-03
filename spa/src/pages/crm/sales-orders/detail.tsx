@@ -193,13 +193,13 @@ export default function SalesOrderDetailPage() {
             <table className="w-full text-xs">
               <thead className="bg-subtle">
                 <tr>
-                  <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 w-12">#</th>
-                  <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Product</th>
-                  <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Qty</th>
-                  <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Unit price</th>
-                  <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Total</th>
-                  <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Delivered</th>
-                  <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Delivery</th>
+                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 w-12">#</th>
+                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Product</th>
+                  <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Qty</th>
+                  <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Unit price</th>
+                  <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Total</th>
+                  <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Delivered</th>
+                  <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Delivery</th>
                 </tr>
               </thead>
               <tbody>
@@ -210,28 +210,28 @@ export default function SalesOrderDetailPage() {
                       <div className="font-mono">{item.product?.part_number}</div>
                       <div className="text-xs text-muted">{item.product?.name}</div>
                     </td>
-                    <td className="px-2.5 py-2 text-right font-mono tabular-nums">{formatDecimal(item.quantity)}</td>
-                    <td className="px-2.5 py-2 text-right font-mono tabular-nums">{formatPeso(item.unit_price)}</td>
-                    <td className="px-2.5 py-2 text-right font-mono tabular-nums font-medium">{formatPeso(item.total)}</td>
-                    <td className="px-2.5 py-2 text-right font-mono tabular-nums">{formatDecimal(item.quantity_delivered)}</td>
-                    <td className="px-2.5 py-2 text-right font-mono tabular-nums">{item.delivery_date}</td>
+                    <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{formatDecimal(item.quantity)}</td>
+                    <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{formatPeso(item.unit_price)}</td>
+                    <td  className="px-2.5 py-2 text-right font-mono tabular-nums font-medium">{formatPeso(item.total)}</td>
+                    <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{formatDecimal(item.quantity_delivered)}</td>
+                    <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{item.delivery_date}</td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
                 <tr className="border-t border-default bg-subtle">
-                  <td className="px-2.5 py-2 text-right text-muted text-2xs uppercase" colSpan={4}>Subtotal</td>
-                  <td className="px-2.5 py-2 text-right font-mono tabular-nums">{formatPeso(data.subtotal)}</td>
+                  <td  className="px-2.5 py-2 text-right text-muted text-2xs uppercase font-mono tabular-nums" colSpan={4}>Subtotal</td>
+                  <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{formatPeso(data.subtotal)}</td>
                   <td colSpan={2} />
                 </tr>
                 <tr className="border-t border-subtle bg-subtle">
-                  <td className="px-2.5 py-2 text-right text-muted text-2xs uppercase" colSpan={4}>VAT (12%)</td>
-                  <td className="px-2.5 py-2 text-right font-mono tabular-nums">{formatPeso(data.vat_amount)}</td>
+                  <td  className="px-2.5 py-2 text-right text-muted text-2xs uppercase font-mono tabular-nums" colSpan={4}>VAT (12%)</td>
+                  <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{formatPeso(data.vat_amount)}</td>
                   <td colSpan={2} />
                 </tr>
                 <tr className="border-t border-default bg-subtle">
-                  <td className="px-2.5 py-2 text-right text-muted text-2xs uppercase font-medium" colSpan={4}>Total</td>
-                  <td className="px-2.5 py-2 text-right font-mono tabular-nums font-medium text-primary">{formatPeso(data.total_amount)}</td>
+                  <td  className="px-2.5 py-2 text-right text-muted text-2xs uppercase font-medium font-mono tabular-nums" colSpan={4}>Total</td>
+                  <td  className="px-2.5 py-2 text-right font-mono tabular-nums font-medium text-primary">{formatPeso(data.total_amount)}</td>
                   <td colSpan={2} />
                 </tr>
               </tfoot>

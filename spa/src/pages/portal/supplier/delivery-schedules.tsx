@@ -233,16 +233,16 @@ export default function SupplierDeliverySchedulesPage() {
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b border-border text-muted">
-                      <th className="text-left px-2 py-1 font-medium">Product</th>
-                      <th className="text-right px-2 py-1 font-medium">Qty</th>
-                      <th className="text-left px-2 py-1 font-medium">Notes</th>
+                      <th  className="h-8 text-left px-2 py-1 font-medium text-2xs uppercase tracking-wider text-muted">Product</th>
+                      <th  className="h-8 text-right px-2 py-1 font-medium text-2xs uppercase tracking-wider text-muted">Qty</th>
+                      <th  className="h-8 text-left px-2 py-1 font-medium text-2xs uppercase tracking-wider text-muted">Notes</th>
                     </tr>
                   </thead>
                   <tbody>
                     {s.lines.map((line, idx) => (
                       <tr key={idx} className="border-b border-border/30">
                         <td className="px-2 py-1.5">{line.product_name}</td>
-                        <td className="px-2 py-1.5 text-right font-medium">{line.quantity}</td>
+                        <td  className="px-2 py-1.5 text-right font-medium font-mono tabular-nums">{line.quantity}</td>
                         <td className="px-2 py-1.5 text-muted">{line.notes ?? '—'}</td>
                       </tr>
                     ))}

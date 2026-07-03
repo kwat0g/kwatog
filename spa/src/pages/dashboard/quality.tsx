@@ -102,11 +102,11 @@ function InspectionQueuePanel({ items }: { items: InspectionItem[] }) {
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-subtle">
-            <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Inspection</th>
-            <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Stage</th>
-            <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Product</th>
-            <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Qty</th>
-            <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Waiting</th>
+            <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Inspection</th>
+            <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Stage</th>
+            <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Product</th>
+            <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Qty</th>
+            <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Waiting</th>
           </tr>
         </thead>
         <tbody>
@@ -127,8 +127,8 @@ function InspectionQueuePanel({ items }: { items: InspectionItem[] }) {
                   <Chip variant={stageVariant}>{ins.stage}</Chip>
                 </td>
                 <td className="py-1 text-muted text-xs truncate max-w-[120px]">{ins.product}</td>
-                <td className="py-1 text-right font-mono tabular-nums text-xs">{ins.qty}</td>
-                <td className="py-1 text-right font-mono tabular-nums text-xs text-muted">{ins.waiting_since}</td>
+                <td  className="py-1 text-right font-mono tabular-nums text-xs">{ins.qty}</td>
+                <td  className="py-1 text-right font-mono tabular-nums text-xs text-muted">{ins.waiting_since}</td>
               </tr>
             );
           })}
@@ -204,10 +204,10 @@ function NcrStatusPanel({ items }: { items: NcrItem[] }) {
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-subtle">
-            <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">NCR</th>
-            <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Severity</th>
-            <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Customer</th>
-            <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Status</th>
+            <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">NCR</th>
+            <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Severity</th>
+            <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Customer</th>
+            <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Status</th>
           </tr>
         </thead>
         <tbody>

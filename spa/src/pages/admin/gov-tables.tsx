@@ -106,17 +106,17 @@ function AgencyTable({ agency }: { agency: ContributionAgency }) {
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="border-b border-default bg-canvas">
-                <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Min</th>
-                <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Max</th>
-                <th className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">
+                <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Min</th>
+                <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Max</th>
+                <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">
                   {isBir ? 'Fixed tax' : 'EE share'}
                 </th>
-                <th className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">
+                <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">
                   {isBir ? 'Rate on excess' : 'ER share'}
                 </th>
-                <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Effective</th>
-                <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Status</th>
-                <th className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">Actions</th>
+                <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Effective</th>
+                <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Status</th>
+                <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -124,10 +124,10 @@ function AgencyTable({ agency }: { agency: ContributionAgency }) {
                 <tr key={row.id} className="h-8 border-b border-subtle hover:bg-subtle">
                   <td className="px-2.5 font-mono tabular-nums">{formatDecimal(row.bracket_min)}</td>
                   <td className="px-2.5 font-mono tabular-nums">{formatDecimal(row.bracket_max)}</td>
-                  <td className="px-2.5 text-right font-mono tabular-nums">
+                  <td  className="px-2.5 text-right font-mono tabular-nums">
                     {rateLike ? `${(Number(row.ee_amount) * 100).toFixed(2)}%` : formatDecimal(row.ee_amount)}
                   </td>
-                  <td className="px-2.5 text-right font-mono tabular-nums">
+                  <td  className="px-2.5 text-right font-mono tabular-nums">
                     {agency === 'pagibig' || agency === 'philhealth'
                       ? `${(Number(row.er_amount) * 100).toFixed(2)}%`
                       : isBir
@@ -140,7 +140,7 @@ function AgencyTable({ agency }: { agency: ContributionAgency }) {
                       {row.is_active ? 'Active' : 'Inactive'}
                     </Chip>
                   </td>
-                  <td className="px-2.5 text-right">
+                  <td  className="px-2.5 text-right font-mono tabular-nums">
                     <div className="flex items-center justify-end gap-1">
                       <Button size="sm" variant="ghost" icon={<Pencil size={12} />}
                         onClick={() => setEditing(row)}>Edit</Button>

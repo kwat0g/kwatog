@@ -112,7 +112,7 @@ export default function JobPostingDetailPage() {
 
         {posting && (
           <>
-            <h1 className="text-3xl font-medium tracking-tight text-neutral-900">{posting.title}</h1>
+            <h1 className="text-2xl font-medium tracking-tight text-neutral-900">{posting.title}</h1>
             <div className="mt-3 flex flex-wrap gap-4 text-sm text-neutral-600">
               <span className="flex items-center gap-1.5">
                 <MapPin size={14} /> {posting.department.name}

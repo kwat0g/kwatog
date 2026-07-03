@@ -115,10 +115,10 @@ export default function MoldDetailPage() {
               <table className="w-full text-xs">
                 <thead className="bg-subtle">
                   <tr>
-                    <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Date</th>
-                    <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Event</th>
-                    <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Description</th>
-                    <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Shot count</th>
+                    <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Date</th>
+                    <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Event</th>
+                    <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Description</th>
+                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Shot count</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -127,7 +127,7 @@ export default function MoldDetailPage() {
                       <td className="px-2.5 py-2 font-mono">{h.event_date}</td>
                       <td className="px-2.5 py-2 font-mono">{h.event_type}</td>
                       <td className="px-2.5 py-2 text-muted">{h.description ?? '—'}</td>
-                      <td className="px-2.5 py-2 text-right font-mono tabular-nums">{formatInt(h.shot_count_at_event)}</td>
+                      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{formatInt(h.shot_count_at_event)}</td>
                     </tr>
                   ))}
                 </tbody>

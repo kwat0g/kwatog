@@ -23,9 +23,9 @@ export default function CustomerDeliveriesPage() {
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-border text-muted">
-              <th className="text-left py-2 px-3 font-medium">DR #</th>
-              <th className="text-left py-2 px-3 font-medium">Delivery Date</th>
-              <th className="text-right py-2 px-3 font-medium">Status</th>
+              <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">DR #</th>
+              <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Delivery Date</th>
+              <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Status</th>
             </tr>
           </thead>
           <tbody>
@@ -37,7 +37,7 @@ export default function CustomerDeliveriesPage() {
                   </Link>
                 </td>
                 <td className="py-2.5 px-3 text-muted">{d.delivered_at ?? '—'}</td>
-                <td className="py-2.5 px-3 text-right">
+                <td  className="py-2.5 px-3 text-right font-mono tabular-nums">
                   <Chip variant={chipVariantForStatus(d.status)}>{d.status}</Chip>
                 </td>
               </tr>

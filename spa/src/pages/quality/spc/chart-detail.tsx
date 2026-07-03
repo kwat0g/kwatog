@@ -23,9 +23,7 @@ import {
   ReferenceLine,
   ReferenceArea,
   ResponsiveContainer,
-  Scatter,
-  ScatterChart,
-  ZAxis,
+
 } from 'recharts';
 import { spcApi } from '@/api/quality/spc';
 import { Button } from '@/components/ui/Button';
@@ -35,7 +33,7 @@ import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
-import type { SpcControlChart, SpcDataPoint, SpcAlert, SpcChartStatus } from '@/types/quality/spc';
+import type { SpcDataPoint, SpcAlert, SpcChartStatus } from '@/types/quality/spc';
 
 const STATUS_CHIP: Record<SpcChartStatus, ChipVariant> = {
   active: 'success',
@@ -165,7 +163,7 @@ function XBarChart({
             domain={['auto', 'auto']}
             tickFormatter={(v: number) => v.toFixed(2)}
           />
-          {renderTooltip && <RechartsTooltip content={renderTooltip} />}
+          {renderTooltip && <RechartsTooltip content={renderTooltip as any} />}
 
           {/* Zone shading (3 zones above and below CL) */}
           {cl !== null && oneSigma !== null && (

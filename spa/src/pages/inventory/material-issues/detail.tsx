@@ -59,11 +59,11 @@ export default function MaterialIssueDetailPage() {
           <table className="w-full text-xs">
             <thead className="bg-subtle">
               <tr>
-                <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Item</th>
-                <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Location</th>
-                <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Qty issued</th>
-                <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Unit cost</th>
-                <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Total</th>
+                <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Item</th>
+                <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Location</th>
+                <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Qty issued</th>
+                <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Unit cost</th>
+                <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Total</th>
               </tr>
             </thead>
             <tbody>
@@ -74,11 +74,11 @@ export default function MaterialIssueDetailPage() {
                     <div className="text-muted">{line.item?.name ?? '—'}</div>
                   </td>
                   <td className="px-2.5 py-2 font-mono">{line.location?.code ?? '—'}</td>
-                  <td className="px-2.5 py-2 text-right font-mono tabular-nums">
+                  <td  className="px-2.5 py-2 text-right font-mono tabular-nums">
                     {Number(line.quantity_issued).toFixed(4)} {line.item?.unit_of_measure}
                   </td>
-                  <td className="px-2.5 py-2 text-right font-mono tabular-nums">{formatPeso(line.unit_cost)}</td>
-                  <td className="px-2.5 py-2 text-right font-mono tabular-nums font-medium">{formatPeso(line.total_cost)}</td>
+                  <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{formatPeso(line.unit_cost)}</td>
+                  <td  className="px-2.5 py-2 text-right font-mono tabular-nums font-medium">{formatPeso(line.total_cost)}</td>
                 </tr>
               ))}
             </tbody>

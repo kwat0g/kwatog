@@ -146,10 +146,10 @@ function LowStockAlertsPanel({ items }: { items: LowStockItem[] }) {
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-subtle">
-            <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Item</th>
-            <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">On Hand</th>
-            <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Reorder</th>
-            <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Shortage</th>
+            <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Item</th>
+            <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">On Hand</th>
+            <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Reorder</th>
+            <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Shortage</th>
           </tr>
         </thead>
         <tbody>
@@ -165,9 +165,9 @@ function LowStockAlertsPanel({ items }: { items: LowStockItem[] }) {
                 </Link>
                 <span className="text-muted ml-1 text-xs">{s.item_name}</span>
               </td>
-              <td className="py-1 text-right font-mono tabular-nums text-xs">{s.current_stock}</td>
-              <td className="py-1 text-right font-mono tabular-nums text-xs">{s.reorder_point}</td>
-              <td className="py-1 text-right font-mono tabular-nums text-xs text-danger">{s.shortage}</td>
+              <td  className="py-1 text-right font-mono tabular-nums text-xs">{s.current_stock}</td>
+              <td  className="py-1 text-right font-mono tabular-nums text-xs">{s.reorder_point}</td>
+              <td  className="py-1 text-right font-mono tabular-nums text-xs text-danger">{s.shortage}</td>
             </tr>
           ))}
         </tbody>

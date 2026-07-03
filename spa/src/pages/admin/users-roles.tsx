@@ -65,30 +65,30 @@ function UsersTab() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-default text-left text-2xs uppercase tracking-wider text-text-subtle">
-                <th className="py-2 pr-3 font-medium">Name</th>
-                <th className="py-2 pr-3 font-medium">Email</th>
-                <th className="py-2 pr-3 font-medium">Role</th>
-                <th className="py-2 pr-3 font-medium">Status</th>
-                <th className="py-2 font-medium">Created</th>
+              <tr className="border-b border-default text-left">
+                <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Name</th>
+                <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Email</th>
+                <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Role</th>
+                <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Status</th>
+                <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Created</th>
               </tr>
             </thead>
             <tbody>
               {data.data.map((u: any) => (
-                <tr key={u.id} className="border-b border-default last:border-0 hover:bg-elevated/50">
-                  <td className="py-2 pr-3">
+                <tr key={u.id} className="h-8 border-b border-subtle last:border-0 hover:bg-subtle">
+                  <td className="px-2.5">
                     <Link to={`/admin/users/${u.id}`} className="text-accent hover:underline font-medium">
                       {u.name}
                     </Link>
                   </td>
-                  <td className="py-2 pr-3 text-secondary">{u.email}</td>
-                  <td className="py-2 pr-3">{u.role?.name ?? <span className="text-text-subtle">—</span>}</td>
-                  <td className="py-2 pr-3">
+                  <td className="px-2.5 text-secondary">{u.email}</td>
+                  <td className="px-2.5">{u.role?.name ?? <span className="text-subtle">—</span>}</td>
+                  <td className="px-2.5">
                     <Chip variant={u.is_active === false ? 'danger' : 'success'} >
                       {u.is_active === false ? 'Inactive' : 'Active'}
                     </Chip>
                   </td>
-                  <td className="py-2 text-secondary">{u.created_at?.slice(0, 10)}</td>
+                  <td className="px-2.5 text-secondary">{u.created_at?.slice(0, 10)}</td>
                 </tr>
               ))}
             </tbody>
@@ -123,30 +123,30 @@ function RolesTab() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-default text-left text-2xs uppercase tracking-wider text-text-subtle">
-                <th className="py-2 pr-3 font-medium">Name</th>
-                <th className="py-2 pr-3 font-medium">Slug</th>
-                <th className="py-2 pr-3 font-medium">Permissions</th>
-                <th className="py-2 pr-3 font-medium">Type</th>
-                <th className="py-2 font-medium">Last Modified</th>
+              <tr className="border-b border-default text-left">
+                <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Name</th>
+                <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Slug</th>
+                <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Permissions</th>
+                <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Type</th>
+                <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Last Modified</th>
               </tr>
             </thead>
             <tbody>
               {data.data.map((r: any) => (
-                <tr key={r.id} className="border-b border-default last:border-0 hover:bg-elevated/50">
-                  <td className="py-2 pr-3">
+                <tr key={r.id} className="h-8 border-b border-subtle last:border-0 hover:bg-subtle">
+                  <td className="px-2.5">
                     <Link to={`/admin/roles/${r.id}/permissions`} className="text-accent hover:underline font-medium">
                       {r.name}
                     </Link>
                   </td>
-                  <td className="py-2 pr-3 text-secondary font-mono text-xs">{r.slug}</td>
-                  <td className="py-2 pr-3">{r.permissions_count ?? '—'}</td>
-                  <td className="py-2 pr-3">
+                  <td className="px-2.5 text-secondary font-mono">{r.slug}</td>
+                  <td className="px-2.5 font-mono tabular-nums">{r.permissions_count ?? '—'}</td>
+                  <td className="px-2.5">
                     <Chip variant={r.is_system ? 'info' : 'neutral'} >
                       {r.is_system ? 'System' : 'Custom'}
                     </Chip>
                   </td>
-                  <td className="py-2 text-secondary text-xs">
+                  <td className="px-2.5 text-secondary">
                     {r.last_modified_by ? `${r.last_modified_by} · ${r.last_modified_at?.slice(0, 10)}` : '—'}
                   </td>
                 </tr>

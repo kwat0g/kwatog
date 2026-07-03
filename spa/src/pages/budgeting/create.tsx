@@ -196,12 +196,12 @@ export default function BudgetCreatePage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-default text-left text-xs uppercase tracking-wider text-muted">
-                <th className="py-2 pr-3 min-w-[180px] sticky left-0 bg-canvas">Account</th>
+                <th  className="h-8 py-2 pr-3 min-w-[180px] sticky left-0 bg-canvas text-2xs uppercase tracking-wider text-muted font-medium">Account</th>
                 {MONTHS.map((m) => (
-                  <th key={m.key} className="py-2 pr-2 text-right font-mono w-[60px]">{m.label}</th>
+                  <th  key={m.key} className="h-8 py-2 pr-2 text-right font-mono w-[60px] text-2xs uppercase tracking-wider text-muted font-medium">{m.label}</th>
                 ))}
-                <th className="py-2 pr-3 text-right w-[80px]">Annual</th>
-                <th className="py-2 w-[40px]"></th>
+                <th  className="h-8 py-2 pr-3 text-right w-[80px] text-2xs uppercase tracking-wider text-muted font-medium">Annual</th>
+                <th  className="h-8 py-2 w-[40px] text-2xs uppercase tracking-wider text-muted font-medium"></th>
               </tr>
             </thead>
             <tbody>
@@ -230,7 +230,7 @@ export default function BudgetCreatePage() {
                       />
                     </td>
                   ))}
-                  <td className="py-1.5 pr-3 text-right font-mono tabular-nums font-medium">
+                  <td  className="py-1.5 pr-3 text-right font-mono tabular-nums font-medium">
                     ₱{(calcAnnual(li) / 1_000).toFixed(0)}K
                   </td>
                   <td className="py-1.5">

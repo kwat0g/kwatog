@@ -199,13 +199,13 @@ export default function CreateGrnPage() {
               <table className="w-full text-xs">
                 <thead>
                   <tr className="text-2xs uppercase tracking-wider text-muted">
-                    <th className="text-left py-1 font-medium">Item</th>
-                    <th className="text-right font-medium">Ordered</th>
-                    <th className="text-right font-medium">Remaining</th>
-                    <th className="text-right font-medium">Receive qty</th>
-                    <th className="text-right font-medium">Unit cost</th>
-                    <th className="text-left font-medium">Location</th>
-                    <th />
+                    <th  className="h-8 text-left py-1 font-medium text-2xs uppercase tracking-wider text-muted">Item</th>
+                    <th  className="h-8 text-right font-medium text-2xs uppercase tracking-wider text-muted">Ordered</th>
+                    <th  className="h-8 text-right font-medium text-2xs uppercase tracking-wider text-muted">Remaining</th>
+                    <th  className="h-8 text-right font-medium text-2xs uppercase tracking-wider text-muted">Receive qty</th>
+                    <th  className="h-8 text-right font-medium text-2xs uppercase tracking-wider text-muted">Unit cost</th>
+                    <th  className="h-8 text-left font-medium text-2xs uppercase tracking-wider text-muted">Location</th>
+                    <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium" />
                   </tr>
                 </thead>
                 <tbody>
@@ -215,9 +215,9 @@ export default function CreateGrnPage() {
                         <span className="font-mono">{line.item_code}</span>
                         <div className="text-2xs text-muted">{line.item_name}</div>
                       </td>
-                      <td className="text-right pt-2 font-mono tabular-nums">{Number(line.ordered).toFixed(2)}</td>
-                      <td className="text-right pt-2 font-mono tabular-nums">{Number(line.remaining).toFixed(2)}</td>
-                      <td className="text-right">
+                      <td  className="text-right pt-2 font-mono tabular-nums">{Number(line.ordered).toFixed(2)}</td>
+                      <td  className="text-right pt-2 font-mono tabular-nums">{Number(line.remaining).toFixed(2)}</td>
+                      <td  className="text-right font-mono tabular-nums">
                         <input
                           className={`h-7 w-24 px-2 rounded-sm border text-right font-mono tabular-nums ${errors.itemErrors[i]?.quantity ? 'border-danger' : 'border-default'}`}
                           type="text"
@@ -229,7 +229,7 @@ export default function CreateGrnPage() {
                           <div className="text-2xs text-danger-fg mt-0.5">{errors.itemErrors[i].quantity}</div>
                         )}
                       </td>
-                      <td className="text-right">
+                      <td  className="text-right font-mono tabular-nums">
                         <input
                           className="h-7 w-24 px-2 rounded-sm border border-default text-right font-mono tabular-nums"
                           type="text"
@@ -253,7 +253,7 @@ export default function CreateGrnPage() {
                           <div className="text-2xs text-danger-fg mt-0.5">{errors.itemErrors[i].location}</div>
                         )}
                       </td>
-                      <td className="pt-1.5 text-right">
+                      <td  className="pt-1.5 text-right font-mono tabular-nums">
                         <button
                           type="button"
                           onClick={() => setItems(items.filter((_, k) => k !== i))}

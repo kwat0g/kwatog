@@ -155,16 +155,16 @@ export default function DeliverySchedulesPage() {
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b border-border text-muted">
-                      <th className="text-left py-1 px-2 font-medium">Product</th>
-                      <th className="text-right py-1 px-2 font-medium">Qty</th>
-                      <th className="text-left py-1 px-2 font-medium">Notes</th>
+                      <th  className="h-8 text-left py-1 px-2 font-medium text-2xs uppercase tracking-wider text-muted">Product</th>
+                      <th  className="h-8 text-right py-1 px-2 font-medium text-2xs uppercase tracking-wider text-muted">Qty</th>
+                      <th  className="h-8 text-left py-1 px-2 font-medium text-2xs uppercase tracking-wider text-muted">Notes</th>
                     </tr>
                   </thead>
                   <tbody>
                     {s.lines.map((line, li) => (
                       <tr key={li} className="border-b border-border/50">
                         <td className="py-1.5 px-2">{line.product_name}</td>
-                        <td className="py-1.5 px-2 text-right font-mono tabular-nums">{line.quantity}</td>
+                        <td  className="py-1.5 px-2 text-right font-mono tabular-nums">{line.quantity}</td>
                         <td className="py-1.5 px-2 text-muted">{line.notes ?? '—'}</td>
                       </tr>
                     ))}

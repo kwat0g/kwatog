@@ -227,10 +227,10 @@ export default function WorkOrderDetailPage() {
                   <table className="w-full text-xs">
                     <thead className="bg-subtle">
                       <tr>
-                        <th className="px-2 py-1.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Item</th>
-                        <th className="px-2 py-1.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">GRN</th>
-                        <th className="px-2 py-1.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Material lot</th>
-                        <th className="px-2 py-1.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Supplier ref</th>
+                        <th  className="h-8 px-2 py-1.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Item</th>
+                        <th  className="h-8 px-2 py-1.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">GRN</th>
+                        <th  className="h-8 px-2 py-1.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Material lot</th>
+                        <th  className="h-8 px-2 py-1.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Supplier ref</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -291,10 +291,10 @@ export default function WorkOrderDetailPage() {
               <table className="w-full text-xs">
                 <thead className="bg-subtle">
                   <tr>
-                    <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Item</th>
-                    <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">BOM qty</th>
-                    <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Issued</th>
-                    <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Variance</th>
+                    <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Item</th>
+                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">BOM qty</th>
+                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Issued</th>
+                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Variance</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -304,9 +304,9 @@ export default function WorkOrderDetailPage() {
                         <div className="font-mono">{m.item?.code}</div>
                         <div className="text-muted">{m.item?.name}</div>
                       </td>
-                      <td className="px-2.5 py-2 text-right font-mono tabular-nums">{Number(m.bom_quantity).toFixed(3)}</td>
-                      <td className="px-2.5 py-2 text-right font-mono tabular-nums">{Number(m.actual_quantity_issued).toFixed(3)}</td>
-                      <td className="px-2.5 py-2 text-right font-mono tabular-nums">{Number(m.variance).toFixed(3)}</td>
+                      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{Number(m.bom_quantity).toFixed(3)}</td>
+                      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{Number(m.actual_quantity_issued).toFixed(3)}</td>
+                      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{Number(m.variance).toFixed(3)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -321,11 +321,11 @@ export default function WorkOrderDetailPage() {
               <table className="w-full text-xs">
                 <thead className="bg-subtle">
                   <tr>
-                    <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Recorded</th>
-                    <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Batch</th>
-                    <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Good</th>
-                    <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Reject</th>
-                    <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Defects</th>
+                    <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Recorded</th>
+                    <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Batch</th>
+                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Good</th>
+                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Reject</th>
+                    <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Defects</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -333,8 +333,8 @@ export default function WorkOrderDetailPage() {
                     <tr key={o.id} className="border-t border-subtle">
                       <td className="px-2.5 py-2 font-mono">{o.recorded_at?.slice(0, 16)}</td>
                       <td className="px-2.5 py-2 font-mono">{o.batch_code ?? '—'}</td>
-                      <td className="px-2.5 py-2 text-right font-mono tabular-nums">{o.good_count}</td>
-                      <td className="px-2.5 py-2 text-right font-mono tabular-nums">{o.reject_count}</td>
+                      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{o.good_count}</td>
+                      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{o.reject_count}</td>
                       <td className="px-2.5 py-2 text-xs">
                         {o.defects?.length
                           ? o.defects.map((d) => `${d.defect_type?.code} ×${d.count}`).join(', ')
@@ -441,20 +441,20 @@ export default function WorkOrderDetailPage() {
             <table className="w-full text-xs">
               <thead className="bg-subtle">
                 <tr>
-                  <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 w-14">#</th>
-                  <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Operation</th>
-                  <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Status</th>
-                  <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Operator</th>
-                  <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Machine</th>
-                  <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Qty progress</th>
-                  <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Start</th>
-                  <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">End</th>
+                  <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 w-14">#</th>
+                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Operation</th>
+                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Status</th>
+                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Operator</th>
+                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Machine</th>
+                  <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Qty progress</th>
+                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Start</th>
+                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">End</th>
                 </tr>
               </thead>
               <tbody>
                 {operations.data.map((op) => (
                   <tr key={op.id} className="border-t border-subtle">
-                    <td className="px-2.5 py-2 text-right font-mono tabular-nums">{op.sequence}</td>
+                    <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{op.sequence}</td>
                     <td className="px-2.5 py-2">{op.operation_name}</td>
                     <td className="px-2.5 py-2">
                       <Chip variant={OP_STATUS_CHIP[op.status]}>{OP_STATUS_LABEL[op.status]}</Chip>
@@ -467,7 +467,7 @@ export default function WorkOrderDetailPage() {
                     <td className="px-2.5 py-2 font-mono">
                       {op.machine?.machine_code ?? <span className="text-muted">—</span>}
                     </td>
-                    <td className="px-2.5 py-2 text-right font-mono tabular-nums">
+                    <td  className="px-2.5 py-2 text-right font-mono tabular-nums">
                       {formatInt(op.qty_completed)} / {formatInt(op.qty_planned)}
                     </td>
                     <td className="px-2.5 py-2 font-mono">{op.actual_start?.slice(0, 16) ?? '—'}</td>

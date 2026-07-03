@@ -183,12 +183,12 @@ export default function EmployeeDirectoryPage() {
             <table className="w-full border-collapse text-xs">
               <thead className="bg-subtle">
                 <tr>
-                  <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Name</th>
-                  <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Position</th>
-                  <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Department</th>
-                  <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Email</th>
-                  <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Mobile</th>
-                  <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Status</th>
+                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Name</th>
+                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Position</th>
+                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Department</th>
+                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Email</th>
+                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Mobile</th>
+                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Status</th>
                 </tr>
               </thead>
               <tbody>

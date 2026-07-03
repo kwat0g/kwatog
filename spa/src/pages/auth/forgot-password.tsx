@@ -59,7 +59,7 @@ export default function ForgotPasswordPage() {
           <Mail size={12} className="text-landing-accent" />
           Reset password
         </p>
-        <h1 className="mt-3 font-display text-3xl font-medium tracking-tight text-landing-text">
+        <h1 className="mt-3 font-display text-2xl font-medium tracking-tight text-landing-text">
           Forgot your password?
         </h1>
         <p className="mt-1.5 text-[13px] text-landing-muted">

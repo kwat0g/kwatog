@@ -370,9 +370,9 @@ export default function DeliveryDetailPage() {
               <table className="w-full text-xs">
                 <thead className="bg-subtle">
                   <tr>
-                    <th className="px-2.5 py-2 text-left text-2xs uppercase tracking-wider text-muted font-medium">Inspection</th>
-                    <th className="px-2.5 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium">Qty</th>
-                    <th className="px-2.5 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium">Unit price</th>
+                    <th  className="h-8 px-2.5 py-2 text-left text-2xs uppercase tracking-wider text-muted font-medium">Inspection</th>
+                    <th  className="h-8 px-2.5 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium">Qty</th>
+                    <th  className="h-8 px-2.5 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium">Unit price</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -385,8 +385,8 @@ export default function DeliveryDetailPage() {
                           </Link>
                         ) : <span className="text-muted">—</span>}
                       </td>
-                      <td className="px-2.5 py-2 text-right font-mono tabular-nums">{i.quantity}</td>
-                      <td className="px-2.5 py-2 text-right font-mono tabular-nums">{i.unit_price}</td>
+                      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{i.quantity}</td>
+                      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{i.unit_price}</td>
                     </tr>
                   ))}
                 </tbody>

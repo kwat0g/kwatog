@@ -68,10 +68,10 @@ function Section({ title, rows, total }: { title: string; rows: { code: string; 
           {rows.map((r) => (
             <tr key={r.code} className="h-7 border-b border-subtle">
               <td className="px-2.5"><span className="font-mono text-muted">{r.code}</span> {r.name}</td>
-              <td className="px-2.5 text-right font-mono tabular-nums">{formatPeso(r.amount)}</td>
+              <td  className="px-2.5 text-right font-mono tabular-nums">{formatPeso(r.amount)}</td>
             </tr>
           ))}
-          <tr className="h-8 border-t-2 border-primary font-medium"><td className="px-2.5">Total</td><td className="px-2.5 text-right font-mono tabular-nums">{formatPeso(total)}</td></tr>
+          <tr className="h-8 border-t-2 border-primary font-medium"><td className="px-2.5">Total</td><td  className="px-2.5 text-right font-mono tabular-nums">{formatPeso(total)}</td></tr>
         </tbody>
       </table>
     </div>

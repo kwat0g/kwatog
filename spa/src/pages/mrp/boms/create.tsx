@@ -135,11 +135,11 @@ export default function CreateBomPage() {
             <table className="w-full text-xs">
               <thead className="bg-subtle">
                 <tr>
-                  <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 w-2/5">Item</th>
-                  <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Qty / unit</th>
-                  <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">UOM</th>
-                  <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Waste %</th>
-                  <th className="px-2 py-2" />
+                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 w-2/5">Item</th>
+                  <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Qty / unit</th>
+                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">UOM</th>
+                  <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Waste %</th>
+                  <th  className="h-8 px-2 py-2 text-2xs uppercase tracking-wider text-muted font-medium" />
                 </tr>
               </thead>
               <tbody>
@@ -158,7 +158,7 @@ export default function CreateBomPage() {
                         ))}
                       </Select>
                     </td>
-                    <td className="px-2.5 py-1.5 text-right">
+                    <td  className="px-2.5 py-1.5 text-right font-mono tabular-nums">
                       <Input
                         {...register(`items.${i}.quantity_per_unit` as const)}
                         error={errors.items?.[i]?.quantity_per_unit?.message}
@@ -174,7 +174,7 @@ export default function CreateBomPage() {
                         className="font-mono"
                       />
                     </td>
-                    <td className="px-2.5 py-1.5 text-right">
+                    <td  className="px-2.5 py-1.5 text-right font-mono tabular-nums">
                       <Input
                         {...register(`items.${i}.waste_factor` as const)}
                         error={errors.items?.[i]?.waste_factor?.message}
@@ -182,7 +182,7 @@ export default function CreateBomPage() {
                         className="font-mono text-right"
                       />
                     </td>
-                    <td className="px-2 py-1.5 text-right">
+                    <td  className="px-2 py-1.5 text-right font-mono tabular-nums">
                       <button
                         type="button"
                         onClick={() => remove(i)}

@@ -24,10 +24,10 @@ export default function CustomerOrdersPage() {
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-border text-muted">
-              <th className="text-left py-2 px-3 font-medium">Order #</th>
-              <th className="text-left py-2 px-3 font-medium">Date</th>
-              <th className="text-right py-2 px-3 font-medium">Amount</th>
-              <th className="text-right py-2 px-3 font-medium">Status</th>
+              <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Order #</th>
+              <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Date</th>
+              <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Amount</th>
+              <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Status</th>
             </tr>
           </thead>
           <tbody>
@@ -39,9 +39,9 @@ export default function CustomerOrdersPage() {
                   </Link>
                 </td>
                 <td className="py-2.5 px-3 text-muted">{order.date ?? '—'}</td>
-                <td className="py-2.5 px-3 text-right font-mono">{formatPeso(order.total_amount)}</td>
+                <td  className="py-2.5 px-3 text-right font-mono tabular-nums">{formatPeso(order.total_amount)}</td>
 
-                <td className="py-2.5 px-3 text-right">
+                <td  className="py-2.5 px-3 text-right font-mono tabular-nums">
                   <Chip variant={chipVariantForStatus(order.status)}>{order.status.replace(/_/g, ' ')}</Chip>
                 </td>
               </tr>

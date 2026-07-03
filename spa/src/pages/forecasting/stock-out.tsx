@@ -118,16 +118,16 @@ export default function StockOutProjectionPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-2xs uppercase tracking-wide text-muted bg-elevated/50 border-b border-default">
-                    <th className="px-4 py-2">Item</th>
-                    <th className="px-4 py-2 text-right">On hand</th>
-                    <th className="px-4 py-2 text-right">Safety</th>
-                    <th className="px-4 py-2 text-right">Daily demand</th>
-                    <th className="px-4 py-2">Source</th>
-                    <th className="px-4 py-2 text-right">Days until stock-out</th>
-                    <th className="px-4 py-2">Order by</th>
-                    <th className="px-4 py-2 text-right">Suggested qty</th>
-                    <th className="px-4 py-2">Risk</th>
-                    <th className="px-4 py-2 text-right" />
+                    <th  className="h-8 px-4 py-2 text-2xs uppercase tracking-wider text-muted font-medium">Item</th>
+                    <th  className="h-8 px-4 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium">On hand</th>
+                    <th  className="h-8 px-4 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium">Safety</th>
+                    <th  className="h-8 px-4 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium">Daily demand</th>
+                    <th  className="h-8 px-4 py-2 text-2xs uppercase tracking-wider text-muted font-medium">Source</th>
+                    <th  className="h-8 px-4 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium">Days until stock-out</th>
+                    <th  className="h-8 px-4 py-2 text-2xs uppercase tracking-wider text-muted font-medium">Order by</th>
+                    <th  className="h-8 px-4 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium">Suggested qty</th>
+                    <th  className="h-8 px-4 py-2 text-2xs uppercase tracking-wider text-muted font-medium">Risk</th>
+                    <th  className="h-8 px-4 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium" />
                   </tr>
                 </thead>
                 <tbody>
@@ -137,13 +137,13 @@ export default function StockOutProjectionPage() {
                         <div className="font-medium text-primary">{r.code}</div>
                         <div className="text-2xs text-muted truncate max-w-[260px]">{r.name}</div>
                       </td>
-                      <td className="px-4 py-2 text-right tabular-nums">
+                      <td  className="px-4 py-2 text-right tabular-nums font-mono">
                         {r.available.toFixed(2)} <span className="text-2xs text-muted">{r.unit_of_measure}</span>
                       </td>
-                      <td className="px-4 py-2 text-right tabular-nums text-muted">{r.safety_stock.toFixed(2)}</td>
-                      <td className="px-4 py-2 text-right tabular-nums">{r.daily_demand.toFixed(2)}</td>
+                      <td  className="px-4 py-2 text-right tabular-nums text-muted font-mono">{r.safety_stock.toFixed(2)}</td>
+                      <td  className="px-4 py-2 text-right tabular-nums font-mono">{r.daily_demand.toFixed(2)}</td>
                       <td className="px-4 py-2 text-2xs text-muted">{SOURCE_LABEL[r.demand_source] ?? r.demand_source}</td>
-                      <td className="px-4 py-2 text-right tabular-nums">
+                      <td  className="px-4 py-2 text-right tabular-nums font-mono">
                         {r.days_until_stockout === null ? '—' : (
                           <span className={r.days_until_stockout <= r.lead_time_days ? 'text-danger font-medium' : ''}>
                             {r.days_until_stockout}d
@@ -153,13 +153,13 @@ export default function StockOutProjectionPage() {
                       <td className="px-4 py-2 text-2xs">
                         {r.reorder_date ? formatDate(r.reorder_date) : '—'}
                       </td>
-                      <td className="px-4 py-2 text-right tabular-nums">
+                      <td  className="px-4 py-2 text-right tabular-nums font-mono">
                         {r.suggested_qty !== null ? r.suggested_qty.toFixed(2) : '—'}
                       </td>
                       <td className="px-4 py-2">
                         <Chip variant={RISK_VARIANT[r.risk]}>{RISK_LABEL[r.risk]}</Chip>
                       </td>
-                      <td className="px-4 py-2 text-right">
+                      <td  className="px-4 py-2 text-right font-mono tabular-nums">
                         <Link to="/purchasing/purchase-requests/create">
                           <Button size="sm" variant="ghost">Create PR</Button>
                         </Link>

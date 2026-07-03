@@ -250,19 +250,19 @@ export default function AdminUserDetailPage() {
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-default">
-                  <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">
+                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">
                     When
                   </th>
-                  <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">
+                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">
                     Status
                   </th>
-                  <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">
+                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">
                     IP
                   </th>
-                  <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">
+                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">
                     User Agent
                   </th>
-                  <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">
+                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">
                     Reason
                   </th>
                 </tr>

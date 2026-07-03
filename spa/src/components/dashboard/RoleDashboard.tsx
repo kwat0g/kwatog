@@ -149,10 +149,10 @@ function RolePanels({ envelope }: { envelope: DashboardEnvelope }) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-subtle">
-                <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Code</th>
-                <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Name</th>
-                <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Status</th>
-                <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Active WO</th>
+                <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Code</th>
+                <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Name</th>
+                <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Status</th>
+                <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Active WO</th>
               </tr>
             </thead>
             <tbody>
@@ -161,7 +161,7 @@ function RolePanels({ envelope }: { envelope: DashboardEnvelope }) {
                   <td className="font-mono">{m.code}</td>
                   <td className="text-muted">{m.name}</td>
                   <td><Chip variant={chipVariantForStatus(m.status)}>{m.status}</Chip></td>
-                  <td className="text-right font-mono">{m.has_active_wo ? '✓' : '—'}</td>
+                  <td  className="text-right font-mono tabular-nums">{m.has_active_wo ? '✓' : '—'}</td>
                 </tr>
               ))}
             </tbody>

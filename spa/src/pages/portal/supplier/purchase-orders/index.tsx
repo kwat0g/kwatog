@@ -24,11 +24,11 @@ export default function SupplierPurchaseOrdersPage() {
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-border text-muted">
-              <th className="text-left py-2 px-3 font-medium">PO #</th>
-              <th className="text-left py-2 px-3 font-medium">Date</th>
-              <th className="text-right py-2 px-3 font-medium">Amount</th>
-              <th className="text-left py-2 px-3 font-medium">Expected Delivery</th>
-              <th className="text-right py-2 px-3 font-medium">Status</th>
+              <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">PO #</th>
+              <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Date</th>
+              <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Amount</th>
+              <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Expected Delivery</th>
+              <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Status</th>
             </tr>
           </thead>
           <tbody>
@@ -40,9 +40,9 @@ export default function SupplierPurchaseOrdersPage() {
                   </Link>
                 </td>
                 <td className="py-2.5 px-3 text-muted">{po.date ?? '—'}</td>
-                <td className="py-2.5 px-3 text-right font-mono tabular-nums">{formatPeso(po.total_amount)}</td>
+                <td  className="py-2.5 px-3 text-right font-mono tabular-nums">{formatPeso(po.total_amount)}</td>
                 <td className="py-2.5 px-3 text-muted">{po.expected_delivery_date ?? '—'}</td>
-                <td className="py-2.5 px-3 text-right">
+                <td  className="py-2.5 px-3 text-right font-mono tabular-nums">
                   <Chip variant={chipVariantForStatus(po.status)}>{po.status.replace(/_/g, ' ')}</Chip>
                 </td>
               </tr>

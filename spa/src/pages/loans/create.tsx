@@ -143,17 +143,17 @@ export default function CreateLoanPage() {
               <table className="w-full text-sm">
                 <thead className="text-2xs uppercase tracking-wider text-muted">
                   <tr className="border-b border-default">
-                    <th className="h-7 px-3 text-left">#</th>
-                    <th className="h-7 px-3 text-right">Amount</th>
-                    <th className="h-7 px-3 text-right">Remaining</th>
+                    <th  className="h-8 px-3 text-left text-2xs uppercase tracking-wider text-muted font-medium">#</th>
+                    <th  className="h-8 px-3 text-right text-2xs uppercase tracking-wider text-muted font-medium">Amount</th>
+                    <th  className="h-8 px-3 text-right text-2xs uppercase tracking-wider text-muted font-medium">Remaining</th>
                   </tr>
                 </thead>
                 <tbody>
                   {schedule.slice(0, 12).map((s) => (
                     <tr key={s.period} className="h-7 border-b border-subtle">
                       <td className="px-3 text-muted font-mono tabular-nums">{String(s.period).padStart(2, '0')}</td>
-                      <td className="px-3 text-right font-mono tabular-nums">{formatPeso(s.amount)}</td>
-                      <td className="px-3 text-right font-mono tabular-nums text-muted">{formatPeso(s.remaining_after)}</td>
+                      <td  className="px-3 text-right font-mono tabular-nums">{formatPeso(s.amount)}</td>
+                      <td  className="px-3 text-right font-mono tabular-nums text-muted">{formatPeso(s.remaining_after)}</td>
                     </tr>
                   ))}
                   {schedule.length > 12 && (

@@ -200,60 +200,62 @@ export default function AdminUsersIndexPage() {
         searchPlaceholder="Search by name or email…"
       />
 
-      {usersQuery.isLoading && !data && <SkeletonTable columns={6} rows={10} />}
+      <div className="p-5 space-y-4">
+        {usersQuery.isLoading && !data && <SkeletonTable columns={6} rows={10} />}
 
-      {usersQuery.isError && (
-        <EmptyState
-          icon="alert-circle"
-          title="Failed to load users"
-          description="An error occurred while loading the user list."
-          action={
-            <Button variant="secondary" onClick={() => usersQuery.refetch()}>
-              Retry
-            </Button>
-          }
-        />
-      )}
+        {usersQuery.isError && (
+          <EmptyState
+            icon="alert-circle"
+            title="Failed to load users"
+            description="An error occurred while loading the user list."
+            action={
+              <Button variant="secondary" onClick={() => usersQuery.refetch()}>
+                Retry
+              </Button>
+            }
+          />
+        )}
 
-      {data && data.data.length === 0 && (
-        <EmptyState
-          icon="inbox"
-          title="No users found"
-          description={
-            filters.search
-              ? `No users match "${filters.search}". Try a different search.`
-              : 'No users match the current filters.'
-          }
-        />
-      )}
+        {data && data.data.length === 0 && (
+          <EmptyState
+            icon="inbox"
+            title="No users found"
+            description={
+              filters.search
+                ? `No users match "${filters.search}". Try a different search.`
+                : 'No users match the current filters.'
+            }
+          />
+        )}
 
-      {data && data.data.length > 0 && (
-        <DataTable
-          columns={columns}
-          data={data.data}
-          meta={data.meta}
-          onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
-          onSort={(sort, direction) => setFilters((f) => ({ ...f, sort, direction, page: 1 }))}
-          currentSort={filters.sort}
-          currentDirection={filters.direction}
-          onRowClick={(row) => navigate(`/admin/users/${row.id}`)}
-          selectable={can('admin.users.manage')}
-          bulkActions={
-            can('admin.users.manage')
-              ? [
-                  {
-                    label: 'Change role',
-                    variant: 'secondary',
-                    onClick: (rows) => {
-                      setSelectedRows(rows);
-                      openBulkRoleModal();
+        {data && data.data.length > 0 && (
+          <DataTable
+            columns={columns}
+            data={data.data}
+            meta={data.meta}
+            onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+            onSort={(sort, direction) => setFilters((f) => ({ ...f, sort, direction, page: 1 }))}
+            currentSort={filters.sort}
+            currentDirection={filters.direction}
+            onRowClick={(row) => navigate(`/admin/users/${row.id}`)}
+            selectable={can('admin.users.manage')}
+            bulkActions={
+              can('admin.users.manage')
+                ? [
+                    {
+                      label: 'Change role',
+                      variant: 'secondary',
+                      onClick: (rows) => {
+                        setSelectedRows(rows);
+                        openBulkRoleModal();
+                      },
                     },
-                  },
-                ]
-              : undefined
-          }
-        />
-      )}
+                  ]
+                : undefined
+            }
+          />
+        )}
+      </div>
 
       <Modal
         isOpen={bulkRoleModalOpen}

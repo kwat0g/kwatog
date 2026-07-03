@@ -92,13 +92,13 @@ export default function DepartmentBudgetDetailPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-default text-left text-xs uppercase tracking-wider text-muted">
-                    <th className="py-2 pr-3 sticky left-0 bg-canvas">Account</th>
+                    <th  className="h-8 py-2 pr-3 sticky left-0 bg-canvas text-2xs uppercase tracking-wider text-muted font-medium">Account</th>
                     {MONTHS.map((m) => (
-                      <th key={m} className="py-2 pr-3 text-right font-mono">{m}</th>
+                      <th  key={m} className="h-8 py-2 pr-3 text-right font-mono text-2xs uppercase tracking-wider text-muted font-medium">{m}</th>
                     ))}
-                    <th className="py-2 pr-3 text-right">Annual</th>
-                    <th className="py-2 pr-3 text-right">Actual</th>
-                    <th className="py-2 text-right">Variance</th>
+                    <th  className="h-8 py-2 pr-3 text-right text-2xs uppercase tracking-wider text-muted font-medium">Annual</th>
+                    <th  className="h-8 py-2 pr-3 text-right text-2xs uppercase tracking-wider text-muted font-medium">Actual</th>
+                    <th  className="h-8 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium">Variance</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -111,13 +111,13 @@ export default function DepartmentBudgetDetailPage() {
                       {MONTHS.map((m) => {
                         const monthVal = li[m.toLowerCase() as keyof typeof li] as number;
                         return (
-                          <td key={m} className="py-2 pr-3 text-right font-mono">
+                          <td  key={m} className="py-2 pr-3 text-right font-mono tabular-nums">
                             {monthVal > 0 ? `₱${(monthVal / 1000).toFixed(0)}K` : '-'}
                           </td>
                         );
                       })}
-                      <td className="py-2 pr-3 text-right font-mono font-medium">₱{(li.annual_total / 1000).toFixed(0)}K</td>
-                      <td className="py-2 pr-3 text-right font-mono">₱{(li.actual_total / 1000).toFixed(0)}K</td>
+                      <td  className="py-2 pr-3 text-right font-mono font-medium tabular-nums">₱{(li.annual_total / 1000).toFixed(0)}K</td>
+                      <td  className="py-2 pr-3 text-right font-mono tabular-nums">₱{(li.actual_total / 1000).toFixed(0)}K</td>
                       <td className={cn(
                         'py-2 text-right font-mono',
                         li.variance < 0 ? 'text-danger-fg' : 'text-success-fg'

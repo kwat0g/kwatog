@@ -150,13 +150,13 @@ export default function StockCardPage() {
             <table className="w-full border-collapse text-xs">
               <thead className="bg-subtle">
                 <tr>
-                  <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Date</th>
-                  <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Reference</th>
-                  <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Movement</th>
-                  <th className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">In</th>
-                  <th className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">Out</th>
-                  <th className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">Unit cost (₱)</th>
-                  <th className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">Balance</th>
+                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Date</th>
+                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Reference</th>
+                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Movement</th>
+                  <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">In</th>
+                  <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">Out</th>
+                  <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">Unit cost (₱)</th>
+                  <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">Balance</th>
                 </tr>
               </thead>
               <tbody>
@@ -175,14 +175,14 @@ export default function StockCardPage() {
                       )}
                     </td>
                     <td className="px-2.5">{row.movement_type}</td>
-                    <td className="px-2.5 text-right font-mono tabular-nums">
+                    <td  className="px-2.5 text-right font-mono tabular-nums">
                       {Number(row.in) > 0 ? fmtNum(row.in) : '—'}
                     </td>
-                    <td className="px-2.5 text-right font-mono tabular-nums">
+                    <td  className="px-2.5 text-right font-mono tabular-nums">
                       {Number(row.out) > 0 ? fmtNum(row.out) : '—'}
                     </td>
-                    <td className="px-2.5 text-right font-mono tabular-nums">{fmtMoney(row.unit_cost)}</td>
-                    <td className="px-2.5 text-right font-mono tabular-nums font-medium">{fmtNum(row.balance)}</td>
+                    <td  className="px-2.5 text-right font-mono tabular-nums">{fmtMoney(row.unit_cost)}</td>
+                    <td  className="px-2.5 text-right font-mono tabular-nums font-medium">{fmtNum(row.balance)}</td>
                   </tr>
                 ))}
               </tbody>

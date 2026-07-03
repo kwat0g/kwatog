@@ -353,13 +353,13 @@ export default function ReturnRequestDetailPage() {
             <table className="w-full text-sm mt-2">
               <thead>
                 <tr className="border-b border-default text-left text-2xs uppercase tracking-wider text-muted">
-                  <th className="py-2 pr-3 font-medium">Product</th>
-                  <th className="py-2 pr-3 font-medium text-right">Qty</th>
-                  <th className="py-2 pr-3 font-medium text-right">Returned</th>
-                  <th className="py-2 pr-3 font-medium text-right">Unit Price</th>
-                  <th className="py-2 pr-3 font-medium">Condition</th>
-                  <th className="py-2 pr-3 font-medium">Reason</th>
-                  <th className="py-2 pr-3 font-medium">Disposition</th>
+                  <th  className="h-8 py-2 pr-3 font-medium text-2xs uppercase tracking-wider text-muted">Product</th>
+                  <th  className="h-8 py-2 pr-3 font-medium text-right text-2xs uppercase tracking-wider text-muted">Qty</th>
+                  <th  className="h-8 py-2 pr-3 font-medium text-right text-2xs uppercase tracking-wider text-muted">Returned</th>
+                  <th  className="h-8 py-2 pr-3 font-medium text-right text-2xs uppercase tracking-wider text-muted">Unit Price</th>
+                  <th  className="h-8 py-2 pr-3 font-medium text-2xs uppercase tracking-wider text-muted">Condition</th>
+                  <th  className="h-8 py-2 pr-3 font-medium text-2xs uppercase tracking-wider text-muted">Reason</th>
+                  <th  className="h-8 py-2 pr-3 font-medium text-2xs uppercase tracking-wider text-muted">Disposition</th>
                 </tr>
               </thead>
               <tbody>
@@ -372,9 +372,9 @@ export default function ReturnRequestDetailPage() {
                           ? `${item.item.code} — ${item.item.name}`
                           : '—'}
                     </td>
-                    <td className="py-2 pr-3 text-right font-mono tabular-nums">{formatInt(item.quantity)}</td>
-                    <td className="py-2 pr-3 text-right font-mono tabular-nums">{formatInt(item.returned_quantity)}</td>
-                    <td className="py-2 pr-3 text-right font-mono tabular-nums">{formatPeso(item.unit_price)}</td>
+                    <td  className="py-2 pr-3 text-right font-mono tabular-nums">{formatInt(item.quantity)}</td>
+                    <td  className="py-2 pr-3 text-right font-mono tabular-nums">{formatInt(item.returned_quantity)}</td>
+                    <td  className="py-2 pr-3 text-right font-mono tabular-nums">{formatPeso(item.unit_price)}</td>
                     <td className="py-2 pr-3">{CONDITION_LABELS[item.condition ?? ''] || item.condition || '—'}</td>
                     <td className="py-2 pr-3">{item.reason || '—'}</td>
                     <td className="py-2 pr-3">

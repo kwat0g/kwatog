@@ -245,11 +245,11 @@ export default function WarehousePage() {
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="text-2xs uppercase tracking-wider text-muted">
-                      <th className="text-left py-1 font-medium">Code</th>
-                      <th className="text-left font-medium">Rack</th>
-                      <th className="text-left font-medium">Bin</th>
-                      <th className="text-left font-medium">Status</th>
-                      <th />
+                      <th  className="h-8 text-left py-1 font-medium text-2xs uppercase tracking-wider text-muted">Code</th>
+                      <th  className="h-8 text-left font-medium text-2xs uppercase tracking-wider text-muted">Rack</th>
+                      <th  className="h-8 text-left font-medium text-2xs uppercase tracking-wider text-muted">Bin</th>
+                      <th  className="h-8 text-left font-medium text-2xs uppercase tracking-wider text-muted">Status</th>
+                      <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium" />
                     </tr>
                   </thead>
                   <tbody>
@@ -261,7 +261,7 @@ export default function WarehousePage() {
                         <td>
                           <Chip variant={l.is_active ? 'success' : 'neutral'}>{l.is_active ? 'active' : 'inactive'}</Chip>
                         </td>
-                        <td className="text-right">
+                        <td  className="text-right font-mono tabular-nums">
                           {canManage && (
                             <div className="hidden group-hover:flex justify-end gap-0.5">
                               <IconBtn label={`Edit ${l.code}`} onClick={() => setLocModal({ mode: 'edit', existing: l })}>

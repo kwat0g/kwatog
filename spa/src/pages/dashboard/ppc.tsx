@@ -203,10 +203,10 @@ function MachineUtilPanel({ machines }: { machines: MachineRow[] }) {
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-subtle">
-            <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Code</th>
-            <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Name</th>
-            <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Status</th>
-            <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Active WO</th>
+            <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Code</th>
+            <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Name</th>
+            <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Status</th>
+            <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Active WO</th>
           </tr>
         </thead>
         <tbody>
@@ -217,7 +217,7 @@ function MachineUtilPanel({ machines }: { machines: MachineRow[] }) {
               <td>
                 <Chip variant={machineStatusVariant(m.status)}>{m.status}</Chip>
               </td>
-              <td className="text-right font-mono" aria-label={m.has_active_wo ? 'Has active work order' : 'No active work order'}>
+              <td  className="text-right font-mono tabular-nums" aria-label={m.has_active_wo ? 'Has active work order' : 'No active work order'}>
                 {m.has_active_wo ? '✓' : '—'}
               </td>
             </tr>
@@ -289,9 +289,9 @@ function ProductionGanttPanel({ rows }: { rows: ProductionGanttRow[] }) {
         <table className="w-full text-xs border-collapse">
           <thead>
             <tr>
-              <th className="text-left pr-2 py-1 text-2xs uppercase tracking-wider text-muted font-medium">Machine</th>
+              <th  className="h-8 text-left pr-2 py-1 text-2xs uppercase tracking-wider text-muted font-medium">Machine</th>
               {days.map((d) => (
-                <th key={d} className="text-center px-1 py-1 text-2xs uppercase tracking-wider text-muted font-medium">
+                <th  key={d} className="h-8 text-center px-1 py-1 text-2xs uppercase tracking-wider text-muted font-medium">
                   {new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short' })}
                 </th>
               ))}
@@ -340,10 +340,10 @@ function MrpShortagesPanel({ shortages }: { shortages: MrpShortage[] }) {
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-subtle">
-            <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Item</th>
-            <th className="text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Qty</th>
-            <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Urgency</th>
-            <th className="text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">PR</th>
+            <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Item</th>
+            <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Qty</th>
+            <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Urgency</th>
+            <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">PR</th>
           </tr>
         </thead>
         <tbody>
@@ -353,7 +353,7 @@ function MrpShortagesPanel({ shortages }: { shortages: MrpShortage[] }) {
                 <span className="font-mono text-xs">{s.item_code}</span>
                 <span className="text-muted ml-1">{s.item_name}</span>
               </td>
-              <td className="text-right font-mono tabular-nums py-1">{s.shortage}</td>
+              <td  className="text-right font-mono tabular-nums py-1">{s.shortage}</td>
               <td className="py-1">
                 <Chip variant={s.urgency === 'urgent' ? 'danger' : s.urgency === 'high' ? 'warning' : 'neutral'}>
                   {s.urgency}
@@ -391,9 +391,9 @@ function MachineAvailabilityGrid({ rows }: { rows: GanttRow[] }) {
         <table className="w-full text-xs border-collapse">
           <thead>
             <tr>
-              <th className="text-left pr-2 py-1 text-2xs uppercase tracking-wider text-muted font-medium">Machine</th>
+              <th  className="h-8 text-left pr-2 py-1 text-2xs uppercase tracking-wider text-muted font-medium">Machine</th>
               {days.map(([date, label]) => (
-                <th key={date} className="text-center px-1 py-1 text-2xs uppercase tracking-wider text-muted font-medium">{label}</th>
+                <th  key={date} className="h-8 text-center px-1 py-1 text-2xs uppercase tracking-wider text-muted font-medium">{label}</th>
               ))}
             </tr>
           </thead>
