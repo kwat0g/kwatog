@@ -74,7 +74,7 @@ class PayrollPeriodLifecycleTest extends TestCase
         ], $user);
 
         $this->expectException(\RuntimeException::class);
-        $svc->finalize($period);
+        $svc->finalize($period, $user);
     }
 
     public function test_approve_then_finalize_sets_correct_status(): void
@@ -88,10 +88,13 @@ class PayrollPeriodLifecycleTest extends TestCase
             'payroll_date' => '2026-05-15', 'is_first_half' => true,
         ], $user);
 
-        $approved = $svc->approve($period);
+        // REC-04 — approve/finalize now take an actor. This period was never
+        // computed (computed_by is null), so the maker-checker guard does not
+        // trigger; a single user can drive the transition here.
+        $approved = $svc->approve($period, $user);
         $this->assertSame(PayrollPeriodStatus::Approved, $approved->status);
 
-        $finalized = $svc->finalize($approved);
+        $finalized = $svc->finalize($approved, $user);
         $this->assertSame(PayrollPeriodStatus::Finalized, $finalized->status);
     }
 }

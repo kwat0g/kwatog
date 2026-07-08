@@ -64,6 +64,11 @@ class ProcessPayrollJob implements ShouldQueue, ShouldBeUnique
         }
 
         $period->status = PayrollPeriodStatus::Processing;
+        // REC-04 — record the maker (HR user who clicked Compute) so approve()
+        // can enforce maker-checker: the computer may not also approve.
+        if ($this->triggeredBy !== null) {
+            $period->computed_by = $this->triggeredBy;
+        }
         $period->save();
 
         $employees = $periods->availableEmployees($period);

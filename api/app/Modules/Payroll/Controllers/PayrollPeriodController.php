@@ -8,6 +8,7 @@ use App\Modules\Payroll\Jobs\ProcessPayrollJob;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Payroll\Requests\CreatePayrollPeriodRequest;
 use App\Modules\Payroll\Requests\RunThirteenthMonthRequest;
+use App\Modules\Payroll\Requests\VoidPayrollPeriodRequest;
 use App\Modules\Payroll\Resources\PayrollPeriodResource;
 use App\Modules\Payroll\Services\PayrollPeriodService;
 use App\Modules\Payroll\Services\ThirteenthMonthService;
@@ -58,21 +59,42 @@ class PayrollPeriodController
             ->setStatusCode(202);
     }
 
-    public function approve(PayrollPeriod $period): PayrollPeriodResource
+    /**
+     * REC-04 — approve is the maker-checker gate. The service rejects an actor
+     * who computed this same run (unless they hold self_approve_override),
+     * surfaced here as 422 so the SPA toast shows the reason cleanly.
+     */
+    public function approve(PayrollPeriod $period, Request $request): JsonResponse
     {
-        return new PayrollPeriodResource($this->service->approve($period));
+        try {
+            $approved = $this->service->approve($period, $request->user());
+        } catch (RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'data' => (new PayrollPeriodResource($approved))->resolve(),
+        ]);
     }
 
-    public function finalize(PayrollPeriod $period): PayrollPeriodResource
+    public function finalize(PayrollPeriod $period, Request $request): JsonResponse
     {
-        $period = $this->service->finalize($period);
+        try {
+            $period = $this->service->finalize($period, $request->user());
+        } catch (RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
         // Dispatch GL posting job (Task 29). Wrapped in a class_exists check
         // so this controller still loads if PostPayrollToGlJob hasn't been
         // created yet.
         if (class_exists(\App\Modules\Payroll\Jobs\PostPayrollToGlJob::class)) {
             \App\Modules\Payroll\Jobs\PostPayrollToGlJob::dispatch($period);
         }
-        return new PayrollPeriodResource($period);
+
+        return response()->json([
+            'data' => (new PayrollPeriodResource($period))->resolve(),
+        ]);
     }
 
     /**
@@ -138,6 +160,29 @@ class PayrollPeriodController
         return response()->json([
             'data'    => (new PayrollPeriodResource($updated))->resolve(),
             'message' => 'Period unlocked. You can re-run compute.',
+        ]);
+    }
+
+    /**
+     * REC-01 — POST /payroll-periods/{period}/void
+     *
+     * The one sanctioned correction for a bad *finalized* run. Delegates to
+     * PayrollPeriodService::void(), which reverses any GL posting via a
+     * balanced mirror JE, transitions the period to Voided, and writes an
+     * audit row + PayrollPeriodVoided event. Actor is recorded as voided_by.
+     * Service throws on any non-finalized status, surfaced here as 422.
+     */
+    public function void(VoidPayrollPeriodRequest $request, PayrollPeriod $period): JsonResponse
+    {
+        try {
+            $voided = $this->service->void($period, $request->user(), $request->validated()['reason']);
+        } catch (RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'data'    => (new PayrollPeriodResource($voided))->resolve(),
+            'message' => 'Period voided. Any GL posting was reversed; you can recompute or create a replacement period.',
         ]);
     }
 

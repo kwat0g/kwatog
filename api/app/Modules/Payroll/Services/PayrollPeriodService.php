@@ -90,7 +90,7 @@ class PayrollPeriodService
     {
         $period = $period
             ->loadCount('payrolls')
-            ->load(['creator', 'payrolls.employee', 'bankFileRecords.generator', 'adjustments', 'disbursementProofs.uploader', 'disburser']);
+            ->load(['creator', 'payrolls.employee', 'bankFileRecords.generator', 'adjustments', 'disbursementProofs.uploader', 'disburser', 'voider', 'computer', 'approver', 'finalizer']);
         $period->summary = $this->summary($period);
 
         // Pull the journal entry number (if posted) without a full JE relation,
@@ -213,7 +213,7 @@ class PayrollPeriodService
             ->get();
     }
 
-    public function approve(PayrollPeriod $period): PayrollPeriod
+    public function approve(PayrollPeriod $period, User $actor): PayrollPeriod
     {
         if ($period->status !== PayrollPeriodStatus::Draft) {
             throw new RuntimeException('Only draft periods can be approved.');
@@ -224,9 +224,41 @@ class PayrollPeriodService
             throw new RuntimeException("Cannot approve: {$failed} employee(s) failed computation. Resolve first.");
         }
 
-        $period->status = PayrollPeriodStatus::Approved;
-        $period->save();
-        return $period->fresh();
+        // REC-04 — maker-checker Segregation of Duties. The HR user who computed
+        // this run (computed_by, stamped by ProcessPayrollJob) may NOT also
+        // approve it — a second set of eyes is required on a ₱-material batch.
+        // system_admin (and any holder of self_approve_override) may bypass.
+        if ($period->computed_by !== null
+            && $period->computed_by === $actor->id
+            && ! $actor->hasPermission('payroll.periods.self_approve_override')) {
+            throw new RuntimeException('Maker-checker: the person who computed this payroll cannot also approve it. A different approver is required.');
+        }
+
+        return DB::transaction(function () use ($period, $actor) {
+            $previous = $period->status?->value;
+
+            // status + attribution columns are non-fillable / service-only.
+            // Single save() → one audit row per the repo's audit-hygiene rule.
+            $period->forceFill([
+                'status'      => PayrollPeriodStatus::Approved->value,
+                'approved_by' => $actor->id,
+                'approved_at' => now(),
+            ])->save();
+
+            AuditLog::create([
+                'user_id'    => $actor->id,
+                'action'     => 'payroll.period.approve',
+                'model_type' => PayrollPeriod::class,
+                'model_id'   => $period->id,
+                'old_values' => ['status' => $previous],
+                'new_values' => ['status' => PayrollPeriodStatus::Approved->value, 'approved_by' => $actor->id],
+                'ip_address' => request()?->ip(),
+                'user_agent' => request()?->userAgent(),
+                'created_at' => now(),
+            ]);
+
+            return $period->fresh();
+        });
     }
 
     public function markDisbursed(PayrollPeriod $period, User $user): PayrollPeriod
@@ -366,7 +398,7 @@ class PayrollPeriodService
         ];
     }
 
-    public function finalize(PayrollPeriod $period): PayrollPeriod
+    public function finalize(PayrollPeriod $period, User $actor): PayrollPeriod
     {
         if ($period->status !== PayrollPeriodStatus::Approved) {
             throw new RuntimeException('Only approved periods can be finalized.');
@@ -384,9 +416,29 @@ class PayrollPeriodService
         // P3.5 — wrap the status mutation in a transaction so any DB write
         // that throws rolls back atomically, matching other lifecycle methods.
         // The event is fired AFTER commit so listeners see persisted state.
-        $fresh = DB::transaction(function () use ($period) {
-            $period->status = PayrollPeriodStatus::Finalized;
-            $period->save();
+        // REC-04 — no self-approve block here (approve() already enforced the
+        // second set of eyes); we only record the finalizer for attribution.
+        $fresh = DB::transaction(function () use ($period, $actor) {
+            $previous = $period->status?->value;
+
+            $period->forceFill([
+                'status'       => PayrollPeriodStatus::Finalized->value,
+                'finalized_by' => $actor->id,
+                'finalized_at' => now(),
+            ])->save();
+
+            AuditLog::create([
+                'user_id'    => $actor->id,
+                'action'     => 'payroll.period.finalize',
+                'model_type' => PayrollPeriod::class,
+                'model_id'   => $period->id,
+                'old_values' => ['status' => $previous],
+                'new_values' => ['status' => PayrollPeriodStatus::Finalized->value, 'finalized_by' => $actor->id],
+                'ip_address' => request()?->ip(),
+                'user_agent' => request()?->userAgent(),
+                'created_at' => now(),
+            ]);
+
             return $period->fresh();
         });
 

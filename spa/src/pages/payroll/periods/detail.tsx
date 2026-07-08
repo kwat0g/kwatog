@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Play, CheckCircle2, Lock, LockOpen, Download, AlertCircle, Upload, Eye, Trash2, Banknote } from 'lucide-react';
+import { Play, CheckCircle2, Lock, LockOpen, Download, AlertCircle, Upload, Eye, Trash2, Banknote, Ban } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { periodsApi } from '@/api/payroll/periods';
 import { payrollsApi, type PayrollListParams } from '@/api/payroll/payrolls';
@@ -33,6 +33,7 @@ const periodStatusVariant = (status: string | null | undefined): ChipVariant => 
     case 'approved':  return 'info';
     case 'processing': return 'info';
     case 'draft':     return 'warning';
+    case 'voided':    return 'danger';
     default:          return 'neutral';
   }
 };
@@ -124,6 +125,19 @@ export default function PayrollPeriodDetailPage() {
       toast.error(err.response?.data?.message ?? 'Failed to unlock period.'),
   });
 
+  // REC-01 — Void a finalized period (reverses GL posting, transitions to Voided).
+  const [showVoidModal, setShowVoidModal] = useState(false);
+  const voidMutation = useMutation({
+    mutationFn: (reason: string) => periodsApi.void(id!, reason),
+    onSuccess: () => {
+      toast.success('Period voided — any GL posting was reversed.');
+      setShowVoidModal(false);
+      qc.invalidateQueries({ queryKey: ['payroll-period', id] });
+    },
+    onError: (err: { response?: { data?: { message?: string } } }) =>
+      toast.error(err.response?.data?.message ?? 'Failed to void period.'),
+  });
+
   // Force refetch when computation finishes (status flips back to draft).
   useEffect(() => {
     if (period && period.status !== 'processing') qc.invalidateQueries({ queryKey: ['payrolls', payrollFilters] });
@@ -169,6 +183,8 @@ export default function PayrollPeriodDetailPage() {
   const canUploadProof = can('payroll.periods.finalize') && (period.status === 'finalized' || period.status === 'disbursed');
   // H-8 — Force-unlock only surfaces when the period is stuck at Processing.
   const canForceUnlock = can('payroll.periods.force_unlock') && period.status === 'processing';
+  // REC-01 — Void only a finalized (not yet disbursed) period.
+  const canVoid = can('payroll.periods.void') && period.status === 'finalized';
   const isProc = period.status === 'processing';
 
   const columns: Column<Payroll>[] = [
@@ -204,7 +220,12 @@ export default function PayrollPeriodDetailPage() {
     <div>
       <PageHeader
         title={period.label}
-        subtitle={<>Payroll date <span className="font-mono">{formatDate(period.payroll_date)}</span> · created by {period.creator?.name ?? '—'}</>}
+        subtitle={<>Payroll date <span className="font-mono">{formatDate(period.payroll_date)}</span> · created by {period.creator?.name ?? '—'}
+          {/* REC-04 — maker-checker attribution trail. */}
+          {period.computer?.name && <> · computed by {period.computer.name}</>}
+          {period.approver?.name && <> · approved by {period.approver.name}</>}
+          {period.finalizer?.name && <> · finalized by {period.finalizer.name}</>}
+        </>}
                backTo="/payroll/periods" backLabel="Payroll"
         breadcrumbs={[
           { label: 'Payroll', href: "/payroll/periods" },
@@ -282,6 +303,13 @@ export default function PayrollPeriodDetailPage() {
                 Mark as Disbursed
               </Button>
             )}
+            {canVoid && (
+              <Button variant="danger" size="sm" icon={<Ban size={14} />}
+                onClick={() => setShowVoidModal(true)}
+                disabled={voidMutation.isPending} loading={voidMutation.isPending}>
+                Void
+              </Button>
+            )}
           </>
         }
         bottom={<ChainHeader steps={chainSteps} />}
@@ -296,6 +324,19 @@ export default function PayrollPeriodDetailPage() {
             <StatCard label="Total Deductions" value={formatPeso(summary?.total_deductions ?? 0)} />
             <StatCard label="Total Net"        value={formatPeso(summary?.total_net ?? 0)} />
           </div>
+
+          {period.status === 'voided' && (
+            <div className="flex items-start gap-2 px-3 py-2 mb-4 bg-danger-bg text-danger-fg rounded-md text-xs">
+              <Ban size={14} className="mt-0.5 shrink-0" />
+              <div>
+                <span className="font-medium">This period was voided</span>
+                {period.voided_at && <> on <span className="font-mono">{formatDate(period.voided_at)}</span></>}
+                {period.voider?.name && <> by {period.voider.name}</>}
+                {period.gl_entry_number ? ' — its GL posting was reversed.' : '.'}
+                {period.void_reason && <div className="mt-0.5 text-primary/80">Reason: {period.void_reason}</div>}
+              </div>
+            </div>
+          )}
 
           {summary && summary.failed_count > 0 && (
             <div className="flex items-center gap-2 px-3 py-2 mb-4 bg-danger-bg text-danger-fg rounded-md text-xs">
@@ -457,6 +498,15 @@ export default function PayrollPeriodDetailPage() {
         variant="warning"
         confirmLabel="Mark Disbursed"
         pending={markDisbursedMutation.isPending}
+      />
+
+      {/* REC-01 — Void modal: requires a reason (min 5 chars) for the audit trail. */}
+      <VoidPeriodModal
+        open={showVoidModal}
+        onClose={() => setShowVoidModal(false)}
+        onConfirm={(reason) => voidMutation.mutate(reason)}
+        pending={voidMutation.isPending}
+        hasGlPosting={!!period.gl_entry_number}
       />
     </div>
   );
@@ -729,6 +779,68 @@ function UploadProofModal({
         <Button variant="primary" onClick={() => mutation.mutate()}
           disabled={!file || mutation.isPending} loading={mutation.isPending}>
           {mutation.isPending ? 'Uploading…' : 'Upload'}
+        </Button>
+      </div>
+    </Modal>
+  );
+}
+
+/**
+ * REC-01 — Modal to void a finalized period. A substantive reason (min 5
+ * chars) is mandatory and written to the audit trail; the backend reverses
+ * any GL posting via a balanced mirror journal entry.
+ */
+function VoidPeriodModal({
+  open, onClose, onConfirm, pending, hasGlPosting,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onConfirm: (reason: string) => void;
+  pending: boolean;
+  hasGlPosting: boolean;
+}) {
+  const [reason, setReason] = useState('');
+
+  // Reset the field each time the modal opens so a prior draft never leaks in.
+  useEffect(() => {
+    if (open) setReason('');
+  }, [open]);
+
+  const tooShort = reason.trim().length < 5;
+
+  return (
+    <Modal isOpen={open} onClose={onClose} size="md" title="Void payroll period">
+      <div className="space-y-3 py-3">
+        <div className="flex items-start gap-2 px-3 py-2 bg-danger-bg text-danger-fg rounded-md text-xs">
+          <Ban size={14} className="mt-0.5 shrink-0" />
+          <span>
+            Voiding transitions this period to <strong>Voided</strong>.
+            {hasGlPosting
+              ? ' Its GL posting will be reversed with a balanced mirror journal entry — no ledger rows are deleted.'
+              : ' No GL posting exists yet, so only the period status changes.'}
+            {' '}This is recorded against your account. Use it only to correct a bad finalized run.
+          </span>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-primary mb-1">
+            Reason <span className="text-danger-fg">*</span>
+          </label>
+          <textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            rows={3}
+            placeholder="e.g. Backdated OT for E. Cruz was missing; recomputing this half."
+            className="block w-full rounded-md border border-default bg-canvas px-3 py-2 text-sm text-primary placeholder:text-muted focus:border-accent focus:outline-none"
+          />
+          <p className="mt-1 text-2xs text-muted">Minimum 5 characters — stored in the audit log.</p>
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-2 pt-3 border-t border-default">
+        <Button variant="secondary" onClick={onClose} disabled={pending}>Cancel</Button>
+        <Button variant="danger" onClick={() => onConfirm(reason.trim())}
+          disabled={tooShort || pending} loading={pending}>
+          {pending ? 'Voiding…' : 'Void period'}
         </Button>
       </div>
     </Modal>

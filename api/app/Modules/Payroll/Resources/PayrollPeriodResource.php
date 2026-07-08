@@ -35,9 +35,36 @@ class PayrollPeriodResource extends JsonResource
             'auto_created_at'     => optional($this->auto_created_at)->toIso8601String(),
             'employee_count'      => (int) ($this->payrolls_count ?? 0),
 
+            // REC-01 — void audit trail (populated once a finalized period is
+            // voided). voider name is eager-loaded when available.
+            'voided_at'           => optional($this->voided_at)->toIso8601String(),
+            'void_reason'         => $this->void_reason,
+            'voider'              => $this->whenLoaded('voider', fn () => [
+                'id'   => $this->voider?->hash_id,
+                'name' => $this->voider?->name,
+            ]),
+
             'creator'             => $this->whenLoaded('creator', fn () => [
                 'id'   => $this->creator?->hash_id,
                 'name' => $this->creator?->name,
+            ]),
+
+            // REC-04 — maker-checker attribution. computer = HR maker who ran
+            // Compute; approver/finalizer = the checker(s) who signed off.
+            // Timestamps are ISO8601; user refs never leak the integer id.
+            'approved_at'         => optional($this->approved_at)->toIso8601String(),
+            'finalized_at'        => optional($this->finalized_at)->toIso8601String(),
+            'computer'            => $this->whenLoaded('computer', fn () => [
+                'id'   => $this->computer?->hash_id,
+                'name' => $this->computer?->name,
+            ]),
+            'approver'            => $this->whenLoaded('approver', fn () => [
+                'id'   => $this->approver?->hash_id,
+                'name' => $this->approver?->name,
+            ]),
+            'finalizer'           => $this->whenLoaded('finalizer', fn () => [
+                'id'   => $this->finalizer?->hash_id,
+                'name' => $this->finalizer?->name,
             ]),
 
             // Optional summary block — attached as a dynamic attribute by

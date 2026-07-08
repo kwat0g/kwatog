@@ -37,6 +37,11 @@ export const periodsApi = {
     client
       .post<ApiSuccess<PayrollPeriod>>(`/payroll-periods/${id}/force-unlock`, { reason: reason ?? '' })
       .then((r) => r.data.data),
+  // REC-01 — void a finalized period (reverses GL, transitions to Voided).
+  void: (id: string, reason: string) =>
+    client
+      .post<ApiSuccess<PayrollPeriod>>(`/payroll-periods/${id}/void`, { reason })
+      .then((r) => r.data.data),
   bankFileUrl: (id: string) => `/api/v1/payroll-periods/${id}/bank-file`,
   runThirteenthMonth: (year: number, payroll_date?: string) =>
     client

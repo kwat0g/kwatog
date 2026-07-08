@@ -62,6 +62,10 @@ if (class_exists(PayrollPeriodController::class)) {
             // reset status. POST (not PATCH) — recovery action with side
             // effects (audit log row).
             Route::post('/{period}/force-unlock',    [PayrollPeriodController::class, 'forceUnlock'])->middleware('permission:payroll.periods.force_unlock');
+            // REC-01 — void a finalized period (reverses GL, transitions to
+            // Voided). POST — irreversible-intent action with side effects
+            // (JE reversal + audit row). Finance-gated, separate from finalize.
+            Route::post('/{period}/void',            [PayrollPeriodController::class, 'void'])->middleware('permission:payroll.periods.void');
         });
 
         // ADV1 — Disbursement proof CRUD (linked to a period).

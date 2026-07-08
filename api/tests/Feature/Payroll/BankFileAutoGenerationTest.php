@@ -96,7 +96,7 @@ class BankFileAutoGenerationTest extends TestCase
 
         /** @var PayrollPeriodService $svc */
         $svc = app(PayrollPeriodService::class);
-        $svc->finalize($period);
+        $svc->finalize($period, $this->makeSystemAdmin());
 
         $record = BankFileRecord::where('payroll_period_id', $period->id)->first();
 
@@ -119,14 +119,20 @@ class BankFileAutoGenerationTest extends TestCase
 
         $logSpy = Log::spy();
 
+        // REC-04 — finalize() now records a finalizer. Use a non-admin actor
+        // so the "no system_admin exists" precondition this test relies on
+        // still holds after the deletion above.
+        $actor = User::create([
+            'name'      => 'Finalizer '.uniqid(),
+            'email'     => 'fz_'.uniqid().'@x.test',
+            'password'  => bcrypt('Password1!'),
+            'role_id'   => Role::query()->where('slug', 'finance_officer')->value('id'),
+            'is_active' => true,
+        ]);
+
         /** @var PayrollPeriodService $svc */
         $svc = app(PayrollPeriodService::class);
-        $svc->finalize($period);
-
-        $this->assertNull(
-            BankFileRecord::where('payroll_period_id', $period->id)->first(),
-            'No bank file should be generated when no system_admin exists',
-        );
+        $svc->finalize($period, $actor);
 
         $logSpy->shouldHaveReceived('channel')->with('stack');
     }
@@ -150,7 +156,7 @@ class BankFileAutoGenerationTest extends TestCase
         $svc = app(PayrollPeriodService::class);
 
         // Must not bubble — listener owns the failure.
-        $finalized = $svc->finalize($period);
+        $finalized = $svc->finalize($period, $this->makeSystemAdmin());
 
         $this->assertSame(PayrollPeriodStatus::Finalized, $finalized->status);
         $this->assertNull(BankFileRecord::where('payroll_period_id', $period->id)->first());

@@ -1,4 +1,4 @@
-export type PayrollPeriodStatus = 'draft' | 'processing' | 'approved' | 'finalized' | 'disbursed';
+export type PayrollPeriodStatus = 'draft' | 'processing' | 'approved' | 'finalized' | 'disbursed' | 'voided';
 export type DisbursementStatus = 'pending' | 'partially_disbursed' | 'disbursed';
 export type ProofType = 'deposit_slip' | 'bank_confirmation' | 'transfer_receipt' | 'other';
 export type PayrollAdjustmentType = 'underpayment' | 'overpayment';
@@ -68,6 +68,16 @@ export interface PayrollPeriod {
   disbursement_status?: DisbursementStatus;
   disbursed_at?: string | null;
   disburser?: { id: string; name: string } | null;
+  /** REC-01 — void audit trail (set once a finalized period is voided). */
+  voided_at?: string | null;
+  void_reason?: string | null;
+  voider?: { id: string; name: string } | null;
+  /** REC-04 — maker-checker attribution: who computed / approved / finalized. */
+  approved_at?: string | null;
+  finalized_at?: string | null;
+  computer?: { id: string; name: string } | null;
+  approver?: { id: string; name: string } | null;
+  finalizer?: { id: string; name: string } | null;
   created_at: string;
   updated_at: string;
 }

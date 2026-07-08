@@ -97,7 +97,7 @@ class PayrollPeriodEventsTest extends TestCase
         $svc    = app(PayrollPeriodService::class);
         $period = $this->makeApprovedPeriod();
 
-        $svc->finalize($period);
+        $svc->finalize($period, $this->makeUser());
 
         Event::assertDispatched(PayrollPeriodFinalized::class, 1);
     }
@@ -110,7 +110,7 @@ class PayrollPeriodEventsTest extends TestCase
         $svc    = app(PayrollPeriodService::class);
         $period = $this->makeApprovedPeriod();
 
-        $svc->finalize($period);
+        $svc->finalize($period, $this->makeUser());
 
         Event::assertNotDispatched(PayrollPeriodDisbursed::class);
     }
@@ -124,7 +124,7 @@ class PayrollPeriodEventsTest extends TestCase
         $svc    = app(PayrollPeriodService::class);
         $period = $this->makeApprovedPeriod();
 
-        $result = $svc->finalize($period);
+        $result = $svc->finalize($period, $this->makeUser());
 
         $this->assertSame(PayrollPeriodStatus::Finalized, $result->status);
         $this->assertDatabaseHas('payroll_periods', [
@@ -142,7 +142,7 @@ class PayrollPeriodEventsTest extends TestCase
         $svc    = app(PayrollPeriodService::class);
         $period = $this->makeApprovedPeriod();
 
-        $svc->finalize($period);
+        $svc->finalize($period, $this->makeUser());
 
         Event::assertDispatched(
             PayrollPeriodFinalized::class,

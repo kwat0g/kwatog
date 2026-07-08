@@ -94,6 +94,17 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'payroll.periods.compute',     'name' => 'Compute Payroll'],
                 ['slug' => 'payroll.periods.approve',     'name' => 'Approve Payroll'],
                 ['slug' => 'payroll.periods.finalize',    'name' => 'Finalize Payroll'],
+                // REC-01 — void a finalized period (reverses GL posting, transitions
+                // to Voided). Finance-only: granted via module('payroll') to
+                // finance_officer; hr_officer's explicit payroll list omits it,
+                // preserving the compute/approve vs finalize/void SoD boundary.
+                ['slug' => 'payroll.periods.void',        'name' => 'Void Payroll Period'],
+                // REC-04 — maker-checker override. Normally the person who
+                // COMPUTED a run may not APPROVE it (second set of eyes on a
+                // ₱-material 200-employee batch). This slug bypasses that guard.
+                // Granted ONLY to system_admin (via wildcard); deliberately
+                // excepted from finance_officer's module('payroll') below.
+                ['slug' => 'payroll.periods.self_approve_override', 'name' => 'Bypass Payroll Maker-Checker'],
                 // H-8 — admin escape hatch for periods stuck at Processing because
                 // the payroll job worker crashed before its finally block ran.
                 ['slug' => 'payroll.periods.force_unlock', 'name' => 'Force-unlock Payroll Period'],
@@ -408,9 +419,12 @@ class RolePermissionSeeder extends Seeder
                     [
                         'payroll.view',
                         'payroll.payslip.view_all',
+                        // REC-04 — hr_officer is the MAKER: creates + computes a
+                        // payroll run but does NOT approve it. payroll.periods.approve
+                        // was removed here so the person who computes cannot also
+                        // sign off — approval is finance_officer's (checker) job.
                         'payroll.periods.create',
                         'payroll.periods.compute',
-                        'payroll.periods.approve',
                         'payroll.adjustments.create',
                         'payroll.thirteenth_month.run',
                         'payroll.anomalies.review',
@@ -426,7 +440,12 @@ class RolePermissionSeeder extends Seeder
                 'name' => 'Finance Officer',
                 'description' => 'Manages payroll finalization, accounting, vendor & customer ledgers.',
                 'permissions' => array_merge(
-                    $this->module('payroll'),
+                    // REC-04 — finance_officer is the CHECKER (approve +
+                    // finalize + void) but is still bound by maker-checker:
+                    // except self_approve_override so even Finance cannot
+                    // approve a run it personally computed. Only system_admin
+                    // (wildcard) may bypass.
+                    $this->module('payroll', except: ['payroll.periods.self_approve_override']),
                     $this->module('accounting', except: ['accounting.journal.self_post_override']),
                     $this->module('budgeting'),
                     $this->module('loans'),

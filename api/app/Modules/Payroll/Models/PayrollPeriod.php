@@ -46,6 +46,8 @@ class PayrollPeriod extends Model
         'is_auto_created'     => 'boolean',
         'auto_created_at'     => 'datetime',
         'voided_at'           => 'datetime',
+        'approved_at'         => 'datetime',
+        'finalized_at'        => 'datetime',
     ];
 
     public function payrolls(): HasMany
@@ -81,6 +83,24 @@ class PayrollPeriod extends Model
     public function voider(): BelongsTo
     {
         return $this->belongsTo(User::class, 'voided_by');
+    }
+
+    // REC-04 — maker-checker attribution. computer() is the HR user who clicked
+    // Compute; approver()/finalizer() are the checker(s) who signed off. These
+    // let the resource surface WHO did each step for the audit trail.
+    public function computer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'computed_by');
+    }
+
+    public function approver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function finalizer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'finalized_by');
     }
 
     public function scopeNotFinalized(Builder $q): Builder
