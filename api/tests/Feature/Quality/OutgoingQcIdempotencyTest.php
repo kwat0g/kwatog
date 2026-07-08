@@ -136,8 +136,9 @@ class OutgoingQcIdempotencyTest extends TestCase
     // ─── Test 2: WO without sales_order_id skipped ───────────────────────────
 
     /**
-     * The listener skips internal/rework WOs (no sales_order_id).
-     * Calling handle() twice on such a WO must create zero inspections.
+     * The listener skips genuinely internal WOs (no sales_order_id AND no
+     * parent_ncr_id — see REC-07). Calling handle() twice on such a WO must
+     * create zero inspections.
      */
     public function test_wo_without_sales_order_id_creates_no_inspection(): void
     {
@@ -145,6 +146,7 @@ class OutgoingQcIdempotencyTest extends TestCase
             'wo_number'         => 'WO-TEST-P37-INTERNAL',
             'product_id'        => $this->product->id,
             'sales_order_id'    => null,
+            'parent_ncr_id'     => null,
             'quantity_target'   => 50,
             'quantity_produced' => 50,
             'quantity_good'     => 48,

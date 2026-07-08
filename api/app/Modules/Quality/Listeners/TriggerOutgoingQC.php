@@ -39,9 +39,16 @@ class TriggerOutgoingQC implements ShouldQueue
     {
         try {
             $wo = $event->workOrder;
-            // Only trigger when the WO is tied to a customer order. Internal
-            // rework / replacement WOs already inherit the parent's flow.
-            if (! $wo->sales_order_id) return;
+            // REC-07 — Trigger outgoing QC when the WO is tied to a customer
+            // order OR when it is a rework/replacement WO born from an NCR
+            // (parent_ncr_id set). The latter case was previously skipped on
+            // the false assumption that rework WOs "inherit the parent's
+            // flow" — they do not, so reworked parts shipped without any
+            // re-measurement (IATF §8.7.1.4 violation). A rework WO carries
+            // its own id, so the (stage, entity_type, entity_id) unique index
+            // still yields a distinct inspection; no SO fulfilment state is
+            // touched, only re-verification is enforced.
+            if (! $wo->sales_order_id && ! $wo->parent_ncr_id) return;
 
             $productId = $wo->product_id;
             $batchQty  = max(1, (int) ($wo->quantity_good ?: $wo->quantity_produced ?: 0));
