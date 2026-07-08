@@ -27,6 +27,8 @@ const InvoiceDetailPage      = lazy(() => import('@/pages/accounting/invoices/de
 const TrialBalancePage       = lazy(() => import('@/pages/accounting/trial-balance'));
 const IncomeStatementPage    = lazy(() => import('@/pages/accounting/income-statement'));
 const BalanceSheetPage       = lazy(() => import('@/pages/accounting/balance-sheet'));
+const ArAgingPage            = lazy(() => import('@/pages/accounting/ar-aging'));
+const ApAgingPage            = lazy(() => import('@/pages/accounting/ap-aging'));
 
 export const accountingRoutes = (
   <>
@@ -86,6 +88,10 @@ export const accountingRoutes = (
         element={<PermissionGuard permission="accounting.statements.view"><IncomeStatementPage /></PermissionGuard>} />
       <Route path="/accounting/balance-sheet"
         element={<PermissionGuard permission="accounting.statements.view"><BalanceSheetPage /></PermissionGuard>} />
+      <Route path="/accounting/ar-aging"
+        element={<PermissionGuard permission="accounting.statements.view"><ArAgingPage /></PermissionGuard>} />
+      <Route path="/accounting/ap-aging"
+        element={<PermissionGuard permission="accounting.statements.view"><ApAgingPage /></PermissionGuard>} />
     </Route>
   </>
 );

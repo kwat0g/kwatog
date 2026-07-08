@@ -207,6 +207,8 @@ export default function FinanceDashboardPage() {
                   <Link to="/accounting/trial-balance" className="text-sm text-link hover:underline">Trial Balance →</Link>
                   <Link to="/accounting/income-statement" className="text-sm text-link hover:underline">Income Statement →</Link>
                   <Link to="/accounting/balance-sheet" className="text-sm text-link hover:underline">Balance Sheet →</Link>
+                  <Link to="/accounting/ar-aging" className="text-sm text-link hover:underline">AR Aging →</Link>
+                  <Link to="/accounting/ap-aging" className="text-sm text-link hover:underline">AP Aging →</Link>
                 </div>
               </Panel>
             )}

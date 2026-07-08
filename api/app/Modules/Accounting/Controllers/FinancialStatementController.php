@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Controllers;
 
+use App\Modules\Accounting\Services\BillService;
+use App\Modules\Accounting\Services\InvoiceService;
 use App\Modules\Accounting\Services\Statements\BalanceSheetService;
 use App\Modules\Accounting\Services\Statements\IncomeStatementService;
 use App\Modules\Accounting\Services\Statements\TrialBalanceService;
@@ -18,6 +20,8 @@ class FinancialStatementController
         private readonly TrialBalanceService $trialBalance,
         private readonly IncomeStatementService $incomeStatement,
         private readonly BalanceSheetService $balanceSheet,
+        private readonly InvoiceService $invoices,
+        private readonly BillService $bills,
     ) {}
 
     public function trialBalance(Request $request): JsonResponse|StreamedResponse
@@ -72,6 +76,54 @@ class FinancialStatementController
             $rows[] = ['Total Equity', '', '', $data['equity']['total']];
             return $this->csv("balance-sheet-{$asOf->toDateString()}.csv",
                 ['Section', 'Code', 'Name', 'Amount'], $rows);
+        }
+        return response()->json(['data' => $data]);
+    }
+
+    /**
+     * REC-15 — AR aging (receivables). Buckets + per-customer breakdown as of
+     * a date. The InvoiceService computes this on every finance-dashboard load;
+     * this simply exposes it as a first-class, exportable report.
+     */
+    public function arAging(Request $request): JsonResponse|StreamedResponse
+    {
+        $asOf = $request->filled('as_of')
+            ? Carbon::parse((string) $request->query('as_of'))
+            : now();
+        $data = $this->invoices->aging($asOf);
+
+        if ($request->query('format') === 'csv') {
+            $rows = array_map(fn ($r) => [
+                $r['customer_name'], $r['current'], $r['d1_30'], $r['d31_60'],
+                $r['d61_90'], $r['d91_plus'], $r['total'],
+            ], $data['by_customer']);
+            $b = $data['buckets'];
+            $rows[] = ['TOTAL', $b['current'], $b['d1_30'], $b['d31_60'], $b['d61_90'], $b['d91_plus'], $b['total']];
+            return $this->csv("ar-aging-{$asOf->toDateString()}.csv",
+                ['Customer', 'Current', '1-30', '31-60', '61-90', '91+', 'Total'], $rows);
+        }
+        return response()->json(['data' => $data]);
+    }
+
+    /**
+     * REC-15 — AP aging (payables). Buckets + per-vendor breakdown as of a date.
+     */
+    public function apAging(Request $request): JsonResponse|StreamedResponse
+    {
+        $asOf = $request->filled('as_of')
+            ? Carbon::parse((string) $request->query('as_of'))
+            : now();
+        $data = $this->bills->aging($asOf);
+
+        if ($request->query('format') === 'csv') {
+            $rows = array_map(fn ($r) => [
+                $r['vendor_name'], $r['current'], $r['d1_30'], $r['d31_60'],
+                $r['d61_90'], $r['d91_plus'], $r['total'],
+            ], $data['by_vendor']);
+            $b = $data['buckets'];
+            $rows[] = ['TOTAL', $b['current'], $b['d1_30'], $b['d31_60'], $b['d61_90'], $b['d91_plus'], $b['total']];
+            return $this->csv("ap-aging-{$asOf->toDateString()}.csv",
+                ['Vendor', 'Current', '1-30', '31-60', '61-90', '91+', 'Total'], $rows);
         }
         return response()->json(['data' => $data]);
     }

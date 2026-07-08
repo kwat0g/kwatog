@@ -93,6 +93,10 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
         Route::get('/trial-balance/pdf', [PdfController::class, 'trialBalance'])    ->middleware('permission:accounting.statements.view');
         Route::get('/income-statement/pdf',[PdfController::class, 'incomeStatement'])->middleware('permission:accounting.statements.view');
         Route::get('/balance-sheet/pdf', [PdfController::class, 'balanceSheet'])    ->middleware('permission:accounting.statements.view');
+        // REC-15 — AR/AP aging reports (JSON + ?format=csv). Finance report,
+        // gated with the statements permission (CFO monthly deliverable).
+        Route::get('/ar-aging', [FinancialStatementController::class, 'arAging']) ->middleware('permission:accounting.statements.view');
+        Route::get('/ap-aging', [FinancialStatementController::class, 'apAging']) ->middleware('permission:accounting.statements.view');
     });
 
     Route::get('/dashboard/finance', [FinanceDashboardController::class, 'summary'])

@@ -322,6 +322,24 @@ export interface BalanceSheet {
   balanced: boolean;
 }
 
+// ─── AR / AP Aging (REC-15) ───────────────────
+export interface ArAgingRow extends AgingBuckets {
+  customer_id: string;
+  customer_name: string;
+}
+export interface ApAgingRow extends AgingBuckets {
+  vendor_id: string;
+  vendor_name: string;
+}
+export interface ArAging {
+  buckets: AgingBuckets;
+  by_customer: ArAgingRow[];
+}
+export interface ApAging {
+  buckets: AgingBuckets;
+  by_vendor: ApAgingRow[];
+}
+
 // ─── Dashboard ────────────────────────────────
 export interface AgingBuckets {
   current: string;
