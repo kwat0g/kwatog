@@ -10,6 +10,8 @@ import { Plus, X } from 'lucide-react';
 import { vendorsApi } from '@/api/accounting/vendors';
 import { accountsApi } from '@/api/accounting/accounts';
 import { billsApi } from '@/api/accounting/bills';
+import { purchaseOrdersApi } from '@/api/purchasing/purchase-orders';
+import type { PurchaseOrderStatus, ThreeWayMatchResult } from '@/types/purchasing';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -25,6 +27,8 @@ import type { ApiValidationError } from '@/types';
 
 const itemSchema = z.object({
   expense_account_id: z.string().min(1, 'Required'),
+  // REC-02 — hidden PO item FK; empty for manually added free-text lines.
+  item_id:            z.string().optional().or(z.literal('')),
   description:        z.string().min(1, 'Required').max(200),
   quantity:           z.coerce.number().positive('> 0'),
   unit:               z.string().max(20).optional().or(z.literal('')),
@@ -34,6 +38,9 @@ const itemSchema = z.object({
 const schema = z.object({
   bill_number: z.string().min(1).max(50),
   vendor_id:   z.string().min(1, 'Vendor is required'),
+  // REC-02 — optional PO link; when set, the backend runs the 3-way match.
+  purchase_order_id: z.string().optional().or(z.literal('')),
+  allow_override:    z.boolean().default(false),
   date:        z.string().min(1, 'Date is required'),
   due_date:    z.string().optional().or(z.literal('')),
   is_vatable:  z.boolean().default(true),
@@ -41,6 +48,10 @@ const schema = z.object({
   items:       z.array(itemSchema).min(1, 'At least one item'),
 });
 type FormValues = z.infer<typeof schema>;
+
+// REC-02 — statuses at which a PO can be billed (sent to supplier / receiving
+// in progress / fully received). Draft/pending/cancelled/closed are excluded.
+const BILLABLE_PO_STATUSES: PurchaseOrderStatus[] = ['sent', 'partially_received', 'received'];
 
 export default function CreateBillPage() {
   const navigate = useNavigate();
@@ -56,20 +67,62 @@ export default function CreateBillPage() {
     queryKey: ['accounting', 'accounts', 'expense'],
     queryFn: () => accountsApi.list({ per_page: 200, type: 'expense', is_active: true }),
   });
+  // REC-02 — billable POs for the optional link selector. The API filters
+  // `status` by exact match only, so we fetch broadly and narrow client-side
+  // to the billable statuses.
+  const { data: posResp } = useQuery({
+    queryKey: ['purchasing', 'purchase-orders', 'billable'],
+    queryFn: () => purchaseOrdersApi.list({ per_page: 200 }),
+  });
   const vendors = useMemo(() => vendorsResp?.data ?? [], [vendorsResp]);
   const accounts = accountsResp?.data ?? [];
+  const pos = useMemo(
+    () => (posResp?.data ?? []).filter((po) => BILLABLE_PO_STATUSES.includes(po.status)),
+    [posResp],
+  );
 
   const { register, control, handleSubmit, watch, setError, setValue, getValues, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      bill_number: '', vendor_id: presetVendor, date: new Date().toISOString().slice(0, 10),
+      bill_number: '', vendor_id: presetVendor, purchase_order_id: '', allow_override: false,
+      date: new Date().toISOString().slice(0, 10),
       due_date: '', is_vatable: true, remarks: '',
-      items: [{ expense_account_id: '', description: '', quantity: 1, unit: '', unit_price: 0 }],
+      items: [{ expense_account_id: '', item_id: '', description: '', quantity: 1, unit: '', unit_price: 0 }],
     },
   });
-  const { fields, append, remove } = useFieldArray({ control, name: 'items' });
+  const { fields, append, remove, replace } = useFieldArray({ control, name: 'items' });
   const items = watch('items');
   const isVatable = watch('is_vatable');
+  const purchaseOrderId = watch('purchase_order_id');
+
+  // REC-02 — when a PO is picked, fetch it and prefill the vendor + line items
+  // (one bill line per PO item, carrying the item_id FK for match alignment).
+  const { data: selectedPo } = useQuery({
+    queryKey: ['purchasing', 'purchase-orders', purchaseOrderId],
+    queryFn: () => purchaseOrdersApi.show(purchaseOrderId as string),
+    enabled: !!purchaseOrderId,
+  });
+  useEffect(() => {
+    if (!purchaseOrderId || !selectedPo || selectedPo.id !== purchaseOrderId) return;
+    // Prefill vendor from the PO (leave user free to change it afterward).
+    if (selectedPo.vendor?.id) setValue('vendor_id', selectedPo.vendor.id, { shouldValidate: true, shouldDirty: true });
+    const poItems = selectedPo.items ?? [];
+    if (poItems.length > 0) {
+      replace(poItems.map((pi) => {
+        const remaining = Number(pi.quantity_remaining);
+        const qty = remaining > 0 ? remaining : Number(pi.quantity);
+        return {
+          expense_account_id: '',
+          item_id: pi.item?.id ?? '',
+          description: pi.description || pi.item?.name || '',
+          quantity: qty,
+          unit: pi.unit ?? '',
+          unit_price: Number(pi.unit_price),
+        };
+      }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPo, purchaseOrderId]);
 
   // Auto-fill due_date when vendor changes (use payment_terms_days). Use
   // setValue (RHF API) so the field is properly tracked; the previous
@@ -99,12 +152,15 @@ export default function CreateBillPage() {
     mutationFn: (d: FormValues) => billsApi.create({
       bill_number: d.bill_number,
       vendor_id:   d.vendor_id,
+      purchase_order_id: d.purchase_order_id || undefined,
+      allow_override: d.purchase_order_id ? d.allow_override : undefined,
       date:        d.date,
       due_date:    d.due_date || undefined,
       is_vatable:  d.is_vatable,
       remarks:     d.remarks || undefined,
       items: d.items.map((it) => ({
         expense_account_id: it.expense_account_id,
+        item_id:            it.item_id || undefined,
         description:        it.description,
         quantity:           String(it.quantity),
         unit:               it.unit || undefined,
@@ -116,10 +172,26 @@ export default function CreateBillPage() {
       toast.success(`Bill ${b.bill_number} recorded.`);
       navigate(`/accounting/bills/${b.id}`);
     },
-    onError: (e: AxiosError<ApiValidationError>) => {
-      if (e.response?.status === 422 && e.response.data?.errors) {
-        Object.entries(e.response.data.errors).forEach(([f, msgs]) => setError(f as keyof FormValues, { type: 'server', message: (msgs as string[])[0] }));
-      } else toast.error(e.response?.data?.message ?? 'Failed to create bill.');
+    onError: (e: AxiosError<ApiValidationError & { code?: string; three_way_match?: ThreeWayMatchResult }>) => {
+      const data = e.response?.data;
+      // REC-02 — the 3-way match block is a 422 with a non-standard body:
+      // { message, code: 'three_way_match_blocked', three_way_match: {...} }.
+      // Surface it distinctly and list the blocking lines instead of trying to
+      // map it onto form fields.
+      if (e.response?.status === 422 && data?.code === 'three_way_match_blocked') {
+        const blocked = (data.three_way_match?.lines ?? []).filter((l) => l.severity === 'block');
+        const detail = blocked.length
+          ? blocked.map((l) => l.item_code ?? l.description).join(', ')
+          : '';
+        toast.error(
+          `3-way match blocked by variance — review variances or enable override${detail ? ` (${detail})` : ''}.`,
+          { duration: 6000 },
+        );
+        return;
+      }
+      if (e.response?.status === 422 && data?.errors) {
+        Object.entries(data.errors).forEach(([f, msgs]) => setError(f as keyof FormValues, { type: 'server', message: (msgs as string[])[0] }));
+      } else toast.error(data?.message ?? 'Failed to create bill.');
     },
   });
 
@@ -129,6 +201,10 @@ export default function CreateBillPage() {
       <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-5xl mx-auto px-5 py-4 space-y-4">
         <Panel title="Header">
           <div className="grid grid-cols-3 gap-3">
+            <Select label="Purchase order" {...register('purchase_order_id')} error={errors.purchase_order_id?.message} helper="Link a PO to run the 3-way match. Leave blank for a free-text bill.">
+              <option value="">— None (free-text bill) —</option>
+              {pos.map((po) => <option key={po.id} value={po.id}>{po.po_number}{po.vendor ? ` · ${po.vendor.name}` : ''}</option>)}
+            </Select>
             <Select label="Vendor" required {...register('vendor_id')} error={errors.vendor_id?.message}>
               <option value="">— Select vendor —</option>
               {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
@@ -136,9 +212,18 @@ export default function CreateBillPage() {
             <Input label="Vendor bill no." required {...register('bill_number')} error={errors.bill_number?.message} />
             <Input label="Date" type="date" required {...register('date')} error={errors.date?.message} />
             <Input label="Due date" type="date" {...register('due_date')} error={errors.due_date?.message} />
-            <div className="flex items-end col-span-2">
+            <div className="flex items-end">
               <Switch label="VAT-able (12%)" {...register('is_vatable')} />
             </div>
+            {purchaseOrderId && (
+              <div className="col-span-3">
+                <Switch
+                  label="Allow override"
+                  description="Post the bill even if the 3-way match flags a blocking variance. The override is recorded in the audit trail."
+                  {...register('allow_override')}
+                />
+              </div>
+            )}
             <Textarea label="Remarks" rows={2} className="col-span-3" {...register('remarks')} error={errors.remarks?.message} />
           </div>
         </Panel>
@@ -159,6 +244,8 @@ export default function CreateBillPage() {
               const lineTotal = ((Number(it.quantity) || 0) * (Number(it.unit_price) || 0)).toFixed(2);
               return (
                 <div key={field.id} className="grid grid-cols-12 gap-2 px-2.5 py-1.5 border-b border-subtle items-start">
+                  {/* REC-02 — hidden PO item FK carried through to the payload. */}
+                  <input type="hidden" {...register(`items.${idx}.item_id` as const)} />
                   <div className="col-span-3"><Input {...register(`items.${idx}.description` as const)} /></div>
                   <div className="col-span-3">
                     <Select {...register(`items.${idx}.expense_account_id` as const)}>
@@ -185,7 +272,7 @@ export default function CreateBillPage() {
             })}
           </div>
           <div className="flex items-center justify-between mt-3">
-            <Button type="button" variant="secondary" size="sm" icon={<Plus size={14} />} onClick={() => append({ expense_account_id: '', description: '', quantity: 1, unit: '', unit_price: 0 })}>
+            <Button type="button" variant="secondary" size="sm" icon={<Plus size={14} />} onClick={() => append({ expense_account_id: '', item_id: '', description: '', quantity: 1, unit: '', unit_price: 0 })}>
               Add line
             </Button>
             <div className="text-sm font-mono tabular-nums">

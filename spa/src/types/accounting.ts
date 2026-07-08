@@ -149,10 +149,19 @@ export interface Bill {
   items?: BillItem[];
   payments?: BillPayment[];
   journal_entry?: { id: string; entry_number: string; status: JournalEntryStatus } | null;
+  // REC-02 — 3-way match linkage (present when the bill is tied to a PO).
+  purchase_order?: { id: string; po_number: string } | null;
+  has_variances?: boolean;
+  three_way_overridden?: boolean;
+  three_way_override_reason?: string | null;
+  /** Endpoint to fetch the full match snapshot; only set when the bill has a PO. */
+  three_way_match_url?: string | null;
 }
 
 export interface CreateBillItemData {
   expense_account_id: string;
+  /** REC-02 — PO item FK so the backend can align bill lines to PO lines. */
+  item_id?: string;
   description: string;
   quantity: string;
   unit?: string;
@@ -161,6 +170,10 @@ export interface CreateBillItemData {
 export interface CreateBillData {
   bill_number: string;
   vendor_id: string;
+  /** REC-02 — links the bill to a PO to trigger 3-way match. */
+  purchase_order_id?: string;
+  /** REC-02 — post despite blocking variances (audit-trailed). */
+  allow_override?: boolean;
   date: string;
   due_date?: string;
   is_vatable?: boolean;

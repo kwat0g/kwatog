@@ -9,9 +9,10 @@ import { onFormInvalid } from '@/lib/formErrors';
 import { Printer, Receipt, Ban } from 'lucide-react';
 import { billsApi } from '@/api/accounting/bills';
 import { accountsApi } from '@/api/accounting/accounts';
+import { threeWayMatchApi } from '@/api/purchasing/purchase-orders';
 import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
-import { EmptyState } from '@/components/ui/EmptyState';
+import type { ChipVariant } from '@/components/ui/Chip';import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Input } from '@/components/ui/Input';
@@ -35,6 +36,16 @@ const paymentSchema = z.object({
   reference_number: z.string().max(50).optional().or(z.literal('')),
 });
 type PaymentFormValues = z.infer<typeof paymentSchema>;
+
+// REC-02 — 3-way match per-line status → chip variant/label.
+type MatchLineStatus = 'matched' | 'qty_variance' | 'price_variance' | 'both' | 'grn_short';
+const MATCH_LINE_CHIP: Record<MatchLineStatus, { variant: ChipVariant; label: string }> = {
+  matched:        { variant: 'success', label: 'Matched' },
+  qty_variance:   { variant: 'warning', label: 'Qty variance' },
+  price_variance: { variant: 'warning', label: 'Price variance' },
+  both:           { variant: 'warning', label: 'Qty + price' },
+  grn_short:      { variant: 'danger',  label: 'GRN short' },
+};
 
 function buildBillChain(bill: { status: string; amount_paid: string; balance: string; date: string; payments?: Array<{ payment_date: string }> }): ChainStep[] {
   const isCancelled = bill.status === 'cancelled';
@@ -68,6 +79,14 @@ export default function BillDetailPage() {
     queryKey: ['accounting', 'accounts', 'cash'],
     queryFn: () => accountsApi.list({ per_page: 50, type: 'asset' }),
     enabled: showPay,
+  });
+
+  // REC-02 — lazy-load the 3-way match snapshot (only when the bill has a PO).
+  const hasMatch = !!bill?.three_way_match_url;
+  const { data: match, isLoading: matchLoading, isError: matchError, refetch: refetchMatch } = useQuery({
+    queryKey: ['purchasing', 'three-way-match', id],
+    queryFn: () => threeWayMatchApi.forBill(id),
+    enabled: !!id && hasMatch,
   });
 
   const { register, handleSubmit, formState: { errors }, reset } = useForm<PaymentFormValues>({
@@ -115,6 +134,12 @@ export default function BillDetailPage() {
             <span className="font-mono">{bill.bill_number}</span>
             <Chip variant={chipVariantForStatus(bill.status)}>{bill.status}</Chip>
             {bill.is_overdue && <Chip variant="danger">overdue</Chip>}
+            {hasMatch && (
+              bill.has_variances
+                ? <Chip variant="warning">Has variances</Chip>
+                : <Chip variant="success">Matched</Chip>
+            )}
+            {bill.three_way_overridden && <Chip variant="purple">Overridden</Chip>}
           </div>
         }
         backTo="/accounting/bills"
@@ -162,6 +187,14 @@ export default function BillDetailPage() {
               <div><dt className="text-2xs uppercase tracking-wider text-muted mb-0.5">Date</dt><dd className="font-mono">{formatDate(bill.date)}</dd></div>
               <div><dt className="text-2xs uppercase tracking-wider text-muted mb-0.5">Due date</dt><dd className="font-mono">{formatDate(bill.due_date)}</dd></div>
               <div><dt className="text-2xs uppercase tracking-wider text-muted mb-0.5">VAT</dt><dd>{bill.is_vatable ? 'Yes (12%)' : 'No'}</dd></div>
+              {bill.purchase_order && (
+                <div><dt className="text-2xs uppercase tracking-wider text-muted mb-0.5">Purchase order</dt>
+                  <dd><a className="text-accent hover:underline font-mono" href={`/purchasing/purchase-orders/${bill.purchase_order.id}`}>{bill.purchase_order.po_number}</a></dd>
+                </div>
+              )}
+              {bill.three_way_overridden && bill.three_way_override_reason && (
+                <div className="col-span-3"><dt className="text-2xs uppercase tracking-wider text-muted mb-0.5">Override reason</dt><dd className="text-warning-fg">{bill.three_way_override_reason}</dd></div>
+              )}
               {bill.journal_entry && (
                 <div className="col-span-2"><dt className="text-2xs uppercase tracking-wider text-muted mb-0.5">Journal entry</dt>
                   <dd><a className="text-accent hover:underline font-mono" href={`/accounting/journal-entries/${bill.journal_entry.id}`}>{bill.journal_entry.entry_number}</a> · {bill.journal_entry.status}</dd>
@@ -220,6 +253,58 @@ export default function BillDetailPage() {
             </ul>
           )}
         </Panel>
+
+        {hasMatch && (
+          <Panel title="3-way match" className="col-span-3">
+            {matchLoading ? (
+              <p className="text-sm text-muted">Loading match snapshot…</p>
+            ) : matchError ? (
+              <EmptyState icon="alert-circle" title="Failed to load match" action={<Button variant="secondary" size="sm" onClick={() => refetchMatch()}>Retry</Button>} />
+            ) : !match || match.lines.length === 0 ? (
+              <p className="text-sm text-muted">No match snapshot available.</p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="text-2xs uppercase tracking-wider text-muted">
+                  <tr className="border-b border-default bg-subtle">
+                    <th className="h-8 px-2.5 text-left font-medium">Item</th>
+                    <th className="h-8 px-2.5 text-right font-medium">PO qty</th>
+                    <th className="h-8 px-2.5 text-right font-medium">PO price</th>
+                    <th className="h-8 px-2.5 text-right font-medium">GRN accepted</th>
+                    <th className="h-8 px-2.5 text-right font-medium">Bill qty</th>
+                    <th className="h-8 px-2.5 text-right font-medium">Bill price</th>
+                    <th className="h-8 px-2.5 text-right font-medium">Qty var</th>
+                    <th className="h-8 px-2.5 text-right font-medium">Price var</th>
+                    <th className="h-8 px-2.5 text-left font-medium">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {match.lines.map((l, idx) => {
+                    const chip = MATCH_LINE_CHIP[l.status];
+                    const isBlock = l.severity === 'block';
+                    return (
+                      <tr key={`${l.item_id}-${idx}`} className={`h-8 border-b border-subtle ${isBlock ? 'bg-danger-bg/30' : ''}`}>
+                        <td className="px-2.5">
+                          {l.item_code && <span className="font-mono text-xs text-muted mr-1">{l.item_code}</span>}
+                          {l.description}
+                        </td>
+                        <td className="px-2.5 text-right font-mono tabular-nums">{l.po_quantity}</td>
+                        <td className="px-2.5 text-right font-mono tabular-nums">{formatPeso(l.po_unit_price)}</td>
+                        <td className="px-2.5 text-right font-mono tabular-nums">{l.grn_quantity_accepted}</td>
+                        <td className="px-2.5 text-right font-mono tabular-nums">{l.bill_quantity}</td>
+                        <td className="px-2.5 text-right font-mono tabular-nums">{formatPeso(l.bill_unit_price)}</td>
+                        <td className="px-2.5 text-right font-mono tabular-nums">{l.quantity_variance_pct.toFixed(2)}%</td>
+                        <td className="px-2.5 text-right font-mono tabular-nums">{l.price_variance_pct.toFixed(2)}%</td>
+                        <td className="px-2.5">
+                          <Chip variant={isBlock ? 'danger' : chip.variant}>{chip.label}</Chip>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </Panel>
+        )}
       </div>
 
       <Modal isOpen={showPay} onClose={() => setShowPay(false)} title={`Record payment for ${bill.bill_number}`} size="sm">
