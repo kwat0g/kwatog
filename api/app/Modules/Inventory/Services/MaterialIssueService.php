@@ -86,13 +86,26 @@ class MaterialIssueService
                     $qty  = $item->convertToBase($qty, (string) $row['issued_uom_code']);
                 }
 
+                // REC-08 — nonconforming stock held under MRB physically sits in
+                // a Quarantine (or Scrap) zone location. Never issuable.
+                $loc = WarehouseLocation::query()->with('zone')->find($locId);
+                $zoneType = $loc?->zone?->zone_type;
+                $zoneValue = $zoneType instanceof \App\Modules\Inventory\Enums\WarehouseZoneType
+                    ? $zoneType->value
+                    : (string) $zoneType;
+                if (in_array($zoneValue, [
+                    \App\Modules\Inventory\Enums\WarehouseZoneType::Quarantine->value,
+                    \App\Modules\Inventory\Enums\WarehouseZoneType::Scrap->value,
+                ], true)) {
+                    throw new RuntimeException("Cannot issue stock from a {$zoneValue} location (item held under MRB).");
+                }
+
                 $level = StockLevel::query()
                     ->where('item_id', $itemId)->where('location_id', $locId)
                     ->lockForUpdate()->first();
                 if (! $level) {
                     throw new RuntimeException("No stock at item={$itemId} location={$locId}.");
-                }
-                $unitCost = (string) $level->weighted_avg_cost;
+                }                $unitCost = (string) $level->weighted_avg_cost;
                 $lineTotal = bcmul($qty, $unitCost, 4);
 
                 $mvmt = $this->movements->move(new StockMovementInput(

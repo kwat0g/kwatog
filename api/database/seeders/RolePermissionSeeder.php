@@ -172,6 +172,9 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'inventory.stock_count.view',    'name' => 'View Stock Count Sessions'],
                 ['slug' => 'inventory.stock_count.manage',  'name' => 'Create / Complete Stock Count Sessions'],
                 ['slug' => 'inventory.picking.view',        'name' => 'View Picking Lists'],
+                // REC-08 — Material Review Board (hold/quarantine nonconforming stock)
+                ['slug' => 'inventory.mrb.view',            'name' => 'View Material Review Board Records'],
+                ['slug' => 'inventory.mrb.manage',          'name' => 'Hold / Release Nonconforming Stock (MRB)'],
             ],
 
             // Purchasing
@@ -539,6 +542,9 @@ class RolePermissionSeeder extends Seeder
                         'inventory.stock_count.view',
                         'inventory.stock_count.manage',
                         'inventory.picking.view',
+                        // REC-08 — warehouse raises/releases MRB holds.
+                        'inventory.mrb.view',
+                        'inventory.mrb.manage',
                         'forecasting.view',
                         'return_management.view',
                         'dashboard.warehouse.view',
@@ -554,6 +560,10 @@ class RolePermissionSeeder extends Seeder
                     [
                         'return_management.view',
                         'dashboard.quality.view',
+                        // REC-08 — QC can quarantine/release nonconforming stock via MRB.
+                        'inventory.view',
+                        'inventory.mrb.view',
+                        'inventory.mrb.manage',
                     ],
                 ),
             ],

@@ -147,6 +147,7 @@ const SECTIONS: NavSection[] = [
       { to: '/inventory/items',           label: 'Items',           icon: Boxes,          feature: 'inventory', permission: 'inventory.view', badgeKey: 'low_stock' },
       { to: '/inventory/grn',             label: 'Receiving (GRN)', icon: Package,        feature: 'inventory', permission: 'inventory.view' },
       { to: '/inventory/material-issues', label: 'Issuance',        icon: FileEdit,       feature: 'inventory', permission: 'inventory.view' },
+      { to: '/inventory/mrb',             label: 'MRB / Quarantine',icon: AlertTriangle,  feature: 'inventory', permission: 'inventory.mrb.view' },
       { to: '/inventory/stock-levels',    label: 'Stock Levels',    icon: BarChart2,      feature: 'inventory', permission: 'inventory.view' },
       { to: '/inventory/movements',       label: 'Movements',       icon: ArrowLeftRight, feature: 'inventory', permission: 'inventory.view' },
     ],

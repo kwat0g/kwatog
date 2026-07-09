@@ -188,6 +188,57 @@ export interface MaterialIssueSlip {
   created_at: string;
 }
 
+// REC-08 — Material Review Board (MRB) / quarantine workflow.
+export type MrbStatus = 'held' | 'released' | 'scrapped' | 'returned';
+export type MrbDisposition = 'scrap' | 'rework' | 'use_as_is' | 'return_to_supplier';
+
+export interface MrbLocation {
+  id: string;
+  code: string;
+  full_code: string;
+  zone: string | null;
+  zone_type: string | null;
+}
+
+export interface MrbRecord {
+  id: string;
+  mrb_number: string;
+  status: MrbStatus;
+  status_label: string;
+  disposition: string | null;
+  quantity: string;
+  item: { id: string; code: string; name: string; unit_of_measure: string } | null;
+  ncr: { id: string; ncr_number: string } | null;
+  inspection: { id: string } | null;
+  source_location: MrbLocation | null;
+  quarantine_location: MrbLocation | null;
+  release_location: MrbLocation | null;
+  hold_movement_id: string | null;
+  release_movement_id: string | null;
+  held_by: string | null;
+  held_at: string | null;
+  released_by: string | null;
+  released_at: string | null;
+  notes: string | null;
+  created_at: string | null;
+}
+
+export interface CreateMrbData {
+  item_id: string;
+  quantity: string;
+  source_location_id: string;
+  quarantine_location_id?: string;
+  ncr_id?: string;
+  inspection_id?: string;
+  notes?: string;
+}
+
+export interface ReleaseMrbData {
+  disposition: MrbDisposition;
+  target_location_id?: string;
+  notes?: string;
+}
+
 export interface InventoryDashboard {
   total_stock_value: string;
   items_below_reorder: number;

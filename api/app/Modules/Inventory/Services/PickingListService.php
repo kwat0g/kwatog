@@ -126,6 +126,13 @@ class PickingListService
         $stockLevels = StockLevel::query()
             ->where('item_id', $itemId)
             ->whereRaw('(quantity - reserved_quantity) > 0')
+            // REC-08 — never suggest quarantine/scrap-zone stock (held under MRB).
+            ->whereHas('location.zone', function ($q) {
+                $q->whereNotIn('zone_type', [
+                    \App\Modules\Inventory\Enums\WarehouseZoneType::Quarantine->value,
+                    \App\Modules\Inventory\Enums\WarehouseZoneType::Scrap->value,
+                ]);
+            })
             ->with('location.zone.warehouse')
             ->leftJoinSub($expirySub, 'expiry_info', function ($join) {
                 $join->on('stock_levels.location_id', '=', 'expiry_info.location_id');
@@ -203,6 +210,10 @@ class PickingListService
             ->where('item_id', $itemId)
             ->whereNotNull('expiry_date')
             ->whereNotNull('to_location_id')
-            ->groupBy('to_location_id');
+            ->groupBy('to_location_id')
+            // Return the underlying base query to honour the declared return type
+            // (StockMovement::query() is an Eloquent builder). Latent until the
+            // picking path was first exercised by a test (REC-08).
+            ->getQuery();
     }
 }

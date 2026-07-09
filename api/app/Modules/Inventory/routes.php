@@ -7,6 +7,7 @@ use App\Modules\Inventory\Controllers\InventoryDashboardController;
 use App\Modules\Inventory\Controllers\ItemCategoryController;
 use App\Modules\Inventory\Controllers\ItemController;
 use App\Modules\Inventory\Controllers\MaterialIssueSlipController;
+use App\Modules\Inventory\Controllers\MrbController;
 use App\Modules\Inventory\Controllers\StockAdjustmentController;
 use App\Modules\Inventory\Controllers\StockCardController;
 use App\Modules\Inventory\Controllers\StockCountController;
@@ -113,6 +114,12 @@ Route::middleware(['auth:sanctum', 'feature:inventory'])->prefix('inventory')->g
     Route::get('/material-issues',        [MaterialIssueSlipController::class, 'index'])->middleware('permission:inventory.view');
     Route::get('/material-issues/{materialIssueSlip}', [MaterialIssueSlipController::class, 'show'])->middleware('permission:inventory.view');
     Route::post('/material-issues',       [MaterialIssueSlipController::class, 'store'])->middleware('permission:inventory.issue.create');
+
+    /* ─── REC-08 — Material Review Board (hold / quarantine nonconforming stock) ─── */
+    Route::get('/mrb',                 [MrbController::class, 'index'])->middleware('permission:inventory.mrb.view');
+    Route::get('/mrb/{mrb}',           [MrbController::class, 'show'])->middleware('permission:inventory.mrb.view');
+    Route::post('/mrb',                [MrbController::class, 'store'])->middleware('permission:inventory.mrb.manage');
+    Route::post('/mrb/{mrb}/release',  [MrbController::class, 'release'])->middleware('permission:inventory.mrb.manage');
 
     /* ─── Dashboard ─── */
     Route::get('/dashboard', [InventoryDashboardController::class, 'index'])->middleware('permission:inventory.view');

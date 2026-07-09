@@ -30,6 +30,7 @@ class DocumentSequenceService
         'work_order'    => ['prefix' => 'WO',   'reset' => 'monthly', 'pad' => 4],
         'ncr'           => ['prefix' => 'NCR',  'reset' => 'monthly', 'pad' => 4],
         'grn'           => ['prefix' => 'GRN',  'reset' => 'monthly', 'pad' => 4],
+        'mrb'           => ['prefix' => 'MRB',  'reset' => 'monthly', 'pad' => 4],
         'sales_order'   => ['prefix' => 'SO',   'reset' => 'monthly', 'pad' => 4],
         'mrp_plan'      => ['prefix' => 'MRP',  'reset' => 'monthly', 'pad' => 4],
         'leave_request' => ['prefix' => 'LR',   'reset' => 'monthly', 'pad' => 4],

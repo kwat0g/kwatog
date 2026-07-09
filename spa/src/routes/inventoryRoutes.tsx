@@ -21,6 +21,8 @@ const GrnDetailPage             = lazy(() => import('@/pages/inventory/grn/detai
 const MaterialIssuesListPage    = lazy(() => import('@/pages/inventory/material-issues'));
 const CreateMaterialIssuePage   = lazy(() => import('@/pages/inventory/material-issues/create'));
 const MaterialIssueDetailPage   = lazy(() => import('@/pages/inventory/material-issues/detail'));
+const MrbListPage               = lazy(() => import('@/pages/inventory/mrb'));
+const MrbDetailPage             = lazy(() => import('@/pages/inventory/mrb/detail'));
 
 // Series F / Task F3 — per-item stock card
 const StockCardPage = lazy(() => import('@/pages/inventory/items/stock-card'));
@@ -88,6 +90,12 @@ export const inventoryRoutes = (
         element={<PermissionGuard permission="inventory.issue.create"><CreateMaterialIssuePage /></PermissionGuard>} />
       <Route path="/inventory/material-issues/:id"
         element={<PermissionGuard permission="inventory.view"><MaterialIssueDetailPage /></PermissionGuard>} />
+
+      {/* REC-08 — Material Review Board / quarantine workflow */}
+      <Route path="/inventory/mrb"
+        element={<PermissionGuard permission="inventory.mrb.view"><MrbListPage /></PermissionGuard>} />
+      <Route path="/inventory/mrb/:id"
+        element={<PermissionGuard permission="inventory.mrb.view"><MrbDetailPage /></PermissionGuard>} />
     </Route>
   </>
 );
