@@ -16,6 +16,8 @@ enum StockMovementType: string
     case Scrap             = 'scrap';
     case ReturnToVendor    = 'return_to_vendor';
     case CycleCount        = 'cycle_count';
+    // REC-05 — opening stock loaded at go-live with an explicit cost basis.
+    case Opening           = 'opening';
 
     public static function values(): array
     {
@@ -29,6 +31,7 @@ enum StockMovementType: string
             self::GrnReceipt,
             self::ProductionReceipt,
             self::AdjustmentIn,
+            self::Opening, // seeds stock at a destination with a cost basis
             self::Transfer, // adds to destination
             self::CycleCount, // can be either; service decides direction by sign
         ], true);

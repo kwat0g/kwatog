@@ -12,6 +12,7 @@ use App\Modules\Accounting\Controllers\FinanceDashboardController;
 use App\Modules\Accounting\Controllers\FinancialStatementController;
 use App\Modules\Accounting\Controllers\InvoiceController;
 use App\Modules\Accounting\Controllers\JournalEntryController;
+use App\Modules\Accounting\Controllers\OpeningBalanceController;
 use App\Modules\Accounting\Controllers\PdfController;
 use App\Modules\Accounting\Controllers\VendorController;
 use Illuminate\Support\Facades\Route;
@@ -45,6 +46,14 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
         Route::patch('/{journalEntry}/post',  [JournalEntryController::class, 'post'])  ->middleware('permission:accounting.journal.post');
         Route::post('/{journalEntry}/reverse',[JournalEntryController::class, 'reverse'])->middleware('permission:accounting.journal.reverse');
         Route::get('/{journalEntry}/pdf',     [PdfController::class, 'journalEntry'])   ->middleware('permission:accounting.journal.view');
+    });
+
+    /* ─── REC-05 — go-live opening balances + TB reconciliation ─── */
+    Route::prefix('accounting/opening-balances')->group(function () {
+        Route::post('/gl',       [OpeningBalanceController::class, 'postGl'])   ->middleware('permission:accounting.opening_balance.manage');
+        Route::post('/stock',    [OpeningBalanceController::class, 'postStock'])->middleware('permission:accounting.opening_balance.manage');
+        // TB match is a reconciliation report — statements-view is enough.
+        Route::post('/tb-match', [OpeningBalanceController::class, 'tbMatch'])  ->middleware('permission:accounting.statements.view');
     });
 
     /* ─── Vendors + Bills + Bill Payments ────────────── */
