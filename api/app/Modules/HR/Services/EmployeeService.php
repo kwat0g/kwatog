@@ -25,21 +25,21 @@ class EmployeeService
     {
         $query = Employee::query()->with(['department', 'position']);
 
-        // Row-level filtering. Admin/HR see all. Department Head sees only their dept.
-        // Plain employees see only themselves.
+        // REC-11 — centralized, permission-driven row-level scope. Tiers:
+        // hr.employees.view_sensitive (HR/admin) → all; hr.employees.view
+        // (dept head) → own department + self; neither (plain employee) →
+        // self only. Resolves from grants + the user's linked employee, NOT
+        // role-slug equality, so a forgotten block can never leak a dept's rows.
         if ($user) {
-            $roleSlug = $user->role?->slug;
-            $isAdmin = $roleSlug === 'system_admin';
-            $isHr = $user->hasPermission('hr.employees.view_sensitive') || $user->hasPermission('hr.employees.create');
-            if (! $isAdmin && ! $isHr) {
-                $employeeId = $user->employee_id;
-                if ($roleSlug === 'department_head') {
-                    $deptId = Employee::query()->whereKey($employeeId)->value('department_id');
-                    if ($deptId) $query->where('department_id', $deptId);
-                } else {
-                    $query->whereKey($employeeId);
-                }
-            }
+            \App\Common\Support\DepartmentScope::apply(
+                $query,
+                $user,
+                viewAllPermission: 'hr.employees.view_sensitive',
+                departmentPermission: 'hr.employees.view',
+                deptColumn: 'department_id',
+                selfColumn: 'id',
+                selfId: $user->employee_id,
+            );
         }
 
         if (!empty($filters['search'])) {
