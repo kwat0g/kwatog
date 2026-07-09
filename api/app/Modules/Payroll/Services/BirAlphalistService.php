@@ -9,6 +9,17 @@ use Illuminate\Support\Facades\DB;
 
 class BirAlphalistService
 {
+    /*
+     * REC-06 scope note — DAT/eBIRForms deferral (DO NOT fabricate):
+     * The BIR Alphalist `.DAT` deliverable (fixed field order, header/trailer
+     * records, control totals, ATC codes) and the eBIRForms XML are NOT
+     * implemented here. The authoritative BIR DAT/ATC specification is not
+     * present in this repo, and a guessed layout would produce a file that
+     * looks official but fails eBIRForms validation — worse than an honest CSV
+     * for a tax filing. This service therefore emits a plain per-employee CSV.
+     * The DAT/XML encoders are deferred pending the official BIR spec sheet.
+     */
+
     /**
      * Aggregate all finalized/disbursed regular payroll rows for a given year
      * and return an array suitable for CSV export.

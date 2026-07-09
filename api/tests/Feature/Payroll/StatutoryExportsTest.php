@@ -178,4 +178,92 @@ class StatutoryExportsTest extends TestCase
         $this->assertStringContainsString('50000.00', $csv); // 2 periods x 25000
         $this->assertStringContainsString('2000.00', $csv);  // 2 periods x 1000
     }
+
+    // ─── REC-06 additions ────────────────────────────────────────────────
+
+    private function userWithRole(string $slug): \App\Modules\Auth\Models\User
+    {
+        return \App\Modules\Auth\Models\User::create([
+            'name' => 'T', 'email' => 't_'.substr(uniqid(), -8).'@x.test',
+            'password' => bcrypt('Password1!'),
+            'role_id' => \App\Modules\Auth\Models\Role::query()->where('slug', $slug)->value('id'),
+        ]);
+    }
+
+    public function test_sss_r3_route_downloads_for_a_finalized_period(): void
+    {
+        $emp = Employee::factory()->create(['last_name' => 'Dela Cruz', 'sss_no' => '34-1234567-8']);
+        $period = $this->finalizedPeriod('2025-07-01', '2025-07-15');
+        Payroll::factory()->create([
+            'employee_id' => $emp->id, 'payroll_period_id' => $period->id,
+            'sss_ee' => 1000.00, 'sss_er' => 2000.00,
+            'gross_pay' => 20000.00, 'net_pay' => 19000.00, 'error_message' => null,
+        ]);
+
+        $res = $this->actingAs($this->userWithRole('finance_officer'))
+            ->get("/api/v1/payroll/statutory/sss-r3/{$period->hash_id}")
+            ->assertStatus(200);
+
+        $this->assertStringContainsString('attachment', (string) $res->headers->get('content-disposition'));
+        $this->assertStringContainsString('SSS-R3', (string) $res->headers->get('content-disposition'));
+    }
+
+    public function test_sss_r3_route_requires_authentication(): void
+    {
+        $period = $this->finalizedPeriod('2025-08-01', '2025-08-15');
+
+        // Unauthenticated → 401. NOTE: like the other statutory routes, once
+        // authenticated this is gated only by `payroll.view`, which selfService()
+        // grants to every role — see the REC-06 security follow-up (statutory
+        // exports expose company-wide PII to any staff member).
+        $this->get("/api/v1/payroll/statutory/sss-r3/{$period->hash_id}")
+            ->assertStatus(401);
+    }
+
+    public function test_1601c_splits_taxable_and_exempt_and_reconciles(): void
+    {
+        $emp = Employee::factory()->create(['last_name' => 'Aquino']);
+        $period = $this->finalizedPeriod('2025-09-01', '2025-09-15');
+        // gross 30000; exempt statutory EE = 900+400+200 = 1500; taxable = 28500.
+        Payroll::factory()->create([
+            'employee_id' => $emp->id, 'payroll_period_id' => $period->id,
+            'gross_pay' => 30000.00, 'withholding_tax' => 1500.00,
+            'sss_ee' => 900.00, 'philhealth_ee' => 400.00, 'pagibig_ee' => 200.00,
+            'net_pay' => 27000.00, 'total_deductions' => 3000.00, 'error_message' => null,
+        ]);
+
+        $data = app(\App\Modules\Payroll\Services\Statutory\Bir1601CService::class)->generate(2025, 9);
+
+        $this->assertSame(30000.00, $data['total_compensation']);
+        $this->assertSame(1500.00, $data['non_taxable_compensation']);
+        $this->assertSame(28500.00, $data['taxable_compensation']);
+        // Reconciliation identity: taxable + exempt == total.
+        $this->assertSame(
+            round($data['taxable_compensation'] + $data['non_taxable_compensation'], 2),
+            $data['total_compensation'],
+        );
+        // Monthly tax_due mirrors withheld (annualization deferred to 1604-CF).
+        $this->assertSame($data['total_withheld'], $data['tax_due']);
+    }
+
+    public function test_1601c_csv_includes_the_split_columns(): void
+    {
+        $emp = Employee::factory()->create(['last_name' => 'Bautista']);
+        $period = $this->finalizedPeriod('2025-10-01', '2025-10-15');
+        Payroll::factory()->create([
+            'employee_id' => $emp->id, 'payroll_period_id' => $period->id,
+            'gross_pay' => 30000.00, 'withholding_tax' => 1500.00,
+            'sss_ee' => 900.00, 'philhealth_ee' => 400.00, 'pagibig_ee' => 200.00,
+            'net_pay' => 27000.00, 'error_message' => null,
+        ]);
+
+        $csv = $this->actingAs($this->userWithRole('finance_officer'))
+            ->get('/api/v1/payroll/statutory/1601c?year=2025&month=10')
+            ->assertStatus(200)->getContent();
+
+        $this->assertStringContainsString('Taxable Compensation', $csv);
+        $this->assertStringContainsString('Non-Taxable Compensation', $csv);
+        $this->assertStringContainsString('28500.00', $csv);
+        $this->assertStringContainsString('1500.00', $csv);
+    }
 }

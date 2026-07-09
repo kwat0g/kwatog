@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace App\Modules\Payroll\Controllers;
 
+use App\Modules\Payroll\Exports\Government\SssR3Export;
+use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Payroll\Services\Statutory\Bir1601CService;
 use App\Modules\Payroll\Services\Statutory\Bir1604CfService;
 use App\Modules\Payroll\Services\Statutory\PagibigMcrfService;
 use App\Modules\Payroll\Services\Statutory\PhilhealthRf1Service;
 use Illuminate\Http\Request;
+use Maatwebsite\Excel\Facades\Excel;
 use Symfony\Component\HttpFoundation\Response;
 
 class StatutoryExportController
@@ -57,5 +60,24 @@ class StatutoryExportController
         $year = (int) $request->query('year', now()->year);
 
         return $this->csv($service->toCsv($service->generate($year)), sprintf('BIR-1604-CF-%04d.csv', $year));
+    }
+
+    /**
+     * REC-06 — SSS R-3 (Contribution Collection List). Unlike the other
+     * statutory exports (which aggregate by calendar month/year), the SSS R-3
+     * exporter is per-PayrollPeriod and produces a Maatwebsite Excel workbook,
+     * so the period is resolved via route-model binding here rather than
+     * year/month query params. The exporter guards status internally
+     * (finalized/disbursed only); a missing period yields a clean 404 from the
+     * binding.
+     */
+    public function sssR3(Request $request, PayrollPeriod $period): Response
+    {
+        abort_unless($request->user()?->can('payroll.view'), 403);
+
+        return Excel::download(
+            new SssR3Export($period),
+            sprintf('SSS-R3-%s.xlsx', $period->period_start?->format('Y-m') ?? 'period'),
+        );
     }
 }

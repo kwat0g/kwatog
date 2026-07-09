@@ -119,6 +119,9 @@ if (class_exists(PayrollPeriodController::class)) {
             Route::get('/rf1', [StatutoryExportController::class, 'philhealthRf1']);
             Route::get('/mcrf', [StatutoryExportController::class, 'pagibigMcrf']);
             Route::get('/1604cf', [StatutoryExportController::class, 'bir1604cf']);
+            // REC-06 — SSS R-3 is per-period (Maatwebsite Excel download), so it
+            // binds a {period} rather than taking year/month query params.
+            Route::get('/sss-r3/{period}', [StatutoryExportController::class, 'sssR3']);
         });
     });
 }
