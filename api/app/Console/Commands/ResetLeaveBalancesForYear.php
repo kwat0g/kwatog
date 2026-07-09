@@ -49,17 +49,40 @@ class ResetLeaveBalancesForYear extends Command
         DB::transaction(function () use ($year, $prior, $types, $employees, &$created) {
             foreach ($employees as $emp) {
                 foreach ($types as $lt) {
-                    $priorRow = EmployeeLeaveBalance::query()
+                    // REC-10 — consume the year-end disposition (single source
+                    // of truth) rather than re-reading the prior raw remaining.
+                    // ProcessYearEndLeave already decided convert/carry/forfeit;
+                    // we only seed next year from days_carried. This makes the
+                    // two mechanisms order-independent — no double-handling.
+                    $disp = DB::table('year_end_leave_dispositions')
                         ->where('employee_id', $emp->id)
                         ->where('leave_type_id', $lt->id)
                         ->where('year', $prior)
                         ->first();
 
-                    $carried = 0.0;
-                    if ($priorRow && $lt->is_convertible_year_end) {
-                        // Conversion path: convert remaining to credits at conversion_rate.
-                        // We just carry the numeric remaining; payroll handles cash conversion.
-                        $carried = (float) $priorRow->remaining * (float) ($lt->conversion_rate ?: 1.0);
+                    if ($disp) {
+                        $carried = (float) $disp->days_carried;
+                    } else {
+                        // Fallback: the year-end job never ran for this
+                        // (employee, type, prior year). Carry the raw remaining
+                        // so balances aren't silently lost, but warn loudly —
+                        // this path risks the pre-REC-10 double-handling and
+                        // should not happen when the Dec-31 job succeeds.
+                        $priorRow = EmployeeLeaveBalance::query()
+                            ->where('employee_id', $emp->id)
+                            ->where('leave_type_id', $lt->id)
+                            ->where('year', $prior)
+                            ->first();
+                        $carried = 0.0;
+                        if ($priorRow && (float) $priorRow->remaining > 0) {
+                            $carried = (float) $priorRow->remaining
+                                * ($lt->is_convertible_year_end ? (float) ($lt->conversion_rate ?: 1.0) : 1.0);
+                            \Illuminate\Support\Facades\Log::warning(
+                                'ResetLeaveBalancesForYear: no year-end disposition found; '
+                                .'falling back to raw remaining carry-forward.',
+                                ['employee_id' => $emp->id, 'leave_type_id' => $lt->id, 'prior_year' => $prior]
+                            );
+                        }
                     }
 
                     $total = (float) $lt->default_balance + $carried;

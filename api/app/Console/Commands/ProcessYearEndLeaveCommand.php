@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
-use App\Models\User;
+use App\Modules\Auth\Models\User;
 use App\Modules\Leave\Jobs\ProcessYearEndLeave;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;

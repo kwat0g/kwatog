@@ -18,7 +18,7 @@ class LeaveType extends Model
         'name', 'code', 'default_balance',
         'is_paid', 'requires_document',
         'is_convertible_on_separation', 'is_convertible_year_end',
-        'conversion_rate', 'is_active',
+        'conversion_rate', 'max_carryover_days', 'is_active',
     ];
 
     protected $casts = [
@@ -28,6 +28,7 @@ class LeaveType extends Model
         'is_convertible_on_separation' => 'boolean',
         'is_convertible_year_end'      => 'boolean',
         'conversion_rate'              => 'decimal:2',
+        'max_carryover_days'           => 'decimal:1',
         'is_active'                    => 'boolean',
     ];
 
