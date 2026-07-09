@@ -624,4 +624,56 @@ class PayrollCalculatorServiceTest extends TestCase
         $this->assertSame('10000.00', $payroll->basic_pay);
         $this->assertSame('10000.00', $payroll->gross_pay);
     }
+
+    /**
+     * REC-09 — OT premium must stack the DOLE day-type multiplier with the
+     * correct OT premium: +25% on an ordinary day, +30% on any premium day
+     * (rest day / holiday). A flat 1.25 under-paid every premium-day OT
+     * (e.g. rest-day OT at 1.25×1.30 = 1.625× instead of the lawful 1.69×).
+     *
+     * hourly = 20000 / 22 / 8 ≈ 113.6364; 4 OT hours per case.
+     *
+     * @dataProvider otDayTypeProvider
+     */
+    public function test_overtime_premium_stacks_day_type_factor(float $dayTypeRate, bool $isRestDay, string $expectedOt): void
+    {
+        $emp = $this->makeEmployee(); // 20,000 monthly
+        $period = $this->makePeriod(false, '2026-04-16', '2026-04-30'); // 2nd half: no gov deductions
+
+        Attendance::create([
+            'employee_id'       => $emp->id,
+            'date'              => '2026-04-16',
+            'time_in'           => '2026-04-16 08:00:00',
+            'time_out'          => '2026-04-16 20:00:00',
+            'regular_hours'     => '8.00',
+            'overtime_hours'    => '4.00',
+            'night_diff_hours'  => '0.00',
+            'tardiness_minutes' => 0,
+            'undertime_minutes' => 0,
+            'is_rest_day'       => $isRestDay,
+            'day_type_rate'     => number_format($dayTypeRate, 2, '.', ''),
+            'status'            => 'present',
+        ]);
+
+        $payroll = $this->calc->computeForEmployee($period, $emp);
+
+        $this->assertSame($expectedOt, $payroll->overtime_pay,
+            "OT pay for day_type_rate={$dayTypeRate} must apply the correct stacked premium.");
+    }
+
+    /** @return array<string, array{0: float, 1: bool, 2: string}> */
+    public static function otDayTypeProvider(): array
+    {
+        // hourly ≈ 113.6363 (truncating bcdiv); expected = service's stepwise
+        // round2 of 4 × hourly × premium × day_type_rate. Factors are exact
+        // DOLE (rest 1.69×, special+rest 1.95×, reg-holiday 2.60×, +rest 3.38×);
+        // the sub-centavo values below are the engine's rounded output.
+        return [
+            'ordinary day (+25%)'    => [1.00, false, '568.19'],   // × 1.25 × 1.00
+            'rest day (+30%)'        => [1.30, true,  '768.20'],   // × 1.30 × 1.30 (=1.69×)
+            'special + rest day'     => [1.50, true,  '886.38'],   // × 1.30 × 1.50 (=1.95×)
+            'regular holiday'        => [2.00, false, '1181.84'],  // × 1.30 × 2.00 (=2.60×)
+            'regular holiday + rest' => [2.60, true,  '1536.39'],  // × 1.30 × 2.60 (=3.38×)
+        ];
+    }
 }

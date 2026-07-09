@@ -59,7 +59,13 @@ class PayrollCalculatorService
 {
     private const DAYS_PER_MONTH = '22';
     private const HOURS_PER_DAY  = '8';
-    private const OT_PREMIUM     = '1.25';
+    // REC-09 — DOLE OT premium is +25% of the hourly rate on an ordinary day
+    // but +30% on any premium day (rest day / holiday). Both stack on TOP of
+    // the day_type_rate the DTR engine already resolved. Using a flat 1.25 for
+    // premium days under-paid every rest-day/holiday OT (e.g. rest-day OT paid
+    // 1.25×1.30 = 1.625× instead of the statutory 1.30×1.30 = 1.69×).
+    private const OT_PREMIUM_ORDINARY = '1.25';
+    private const OT_PREMIUM_PREMIUM  = '1.30';
     private const ND_PREMIUM     = '0.10';
 
     public function __construct(
@@ -279,9 +285,15 @@ class PayrollCalculatorService
             // Holiday with no regular work but the employee was paid (regular holiday rule):
             // day_type_rate stays at 1.0, regular_hours = 8 (from DTR engine), already covered.
 
-            // Overtime: hours × hourly × 1.25 × rate (rate already holds holiday multiplier)
+            // Overtime (REC-09): hours × hourly × dayRate × OT premium, where
+            // the OT premium is 1.25 on an ordinary day (rate == 1.0) and 1.30
+            // on any premium day (rest day / holiday, rate > 1.0). `rate`
+            // already carries the day-type multiplier resolved by the DTR.
             if (bccomp($otHrs, '0', 2) > 0) {
-                $otPay = Money::add($otPay, Money::mul(Money::mul(Money::mul($otHrs, $hourlyRate), self::OT_PREMIUM), $rate));
+                $otPremium = bccomp($rate, '1.00', 4) > 0
+                    ? self::OT_PREMIUM_PREMIUM
+                    : self::OT_PREMIUM_ORDINARY;
+                $otPay = Money::add($otPay, Money::mul(Money::mul(Money::mul($otHrs, $hourlyRate), $otPremium), $rate));
             }
 
             // Night differential: hours × hourly × 0.10 (additive premium)
