@@ -147,6 +147,21 @@ Route::middleware(['auth:sanctum', 'session.timeout', 'password.expired'])
     });
 
 /*
+ * REC-03 — master-data CSV import (go-live cutover). Gated by a single
+ * migration-capability permission; the entity's own module data is created by
+ * the importer, but only trusted migration staff hold this slug.
+ */
+Route::middleware(['auth:sanctum', 'session.timeout', 'password.expired', 'permission:admin.import.manage'])
+    ->prefix('imports')
+    ->group(function (): void {
+        Route::get('/',                    [\App\Common\Controllers\ImportController::class, 'entities']);
+        Route::get('/batches',             [\App\Common\Controllers\ImportController::class, 'index']);
+        Route::post('/{entity}/dry-run',   [\App\Common\Controllers\ImportController::class, 'dryRun']);
+        Route::post('/{entity}/commit',    [\App\Common\Controllers\ImportController::class, 'commit']);
+        Route::post('/batches/{batch}/rollback', [\App\Common\Controllers\ImportController::class, 'rollback']);
+    });
+
+/*
  * Series E (E2) — Scheduled-export CRUD. Anyone with the view permission can
  * list + create their own; ownership-or-admin enforced inside the controller
  * for show/update/destroy.

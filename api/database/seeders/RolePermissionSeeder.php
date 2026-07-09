@@ -32,6 +32,8 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'admin.scheduled_exports.view', 'name' => 'View Scheduled Exports'],
                 // Series F — Task F7: company-wide activity feed.
                 ['slug' => 'admin.activity.view',          'name' => 'View System Activity Feed'],
+                // REC-03 — master-data CSV import (go-live cutover capability).
+                ['slug' => 'admin.import.manage',          'name' => 'Import Master Data (CSV)'],
                 // T2.0 — Edge module: manage factory-floor devices and tokens.
                 ['slug' => 'admin.edge_devices.manage',    'name' => 'Manage Edge Devices'],
             ],
