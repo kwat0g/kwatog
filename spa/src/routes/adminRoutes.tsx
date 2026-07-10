@@ -10,6 +10,8 @@ const RolePermissionsPage = lazy(() => import('@/pages/admin/roles/permissions')
 const PermissionSearchPage = lazy(() => import('@/pages/admin/roles/permission-search'));
 const SettingsPage = lazy(() => import('@/pages/admin/settings'));
 const AuditLogsPage = lazy(() => import('@/pages/admin/audit-logs'));
+// REC-03 — master-data CSV import
+const ImportsPage = lazy(() => import('@/pages/admin/imports'));
 
 // Admin > Scheduled exports (Series E — Task E2)
 const ScheduledExportsPage = lazy(() => import('@/pages/admin/scheduled-exports'));
@@ -84,6 +86,14 @@ export const adminRoutes = (
       element={
         <PermissionGuard permission="admin.settings.manage">
           <SettingsPage />
+        </PermissionGuard>
+      }
+    />
+    <Route
+      path="/admin/imports"
+      element={
+        <PermissionGuard permission="admin.import.manage">
+          <ImportsPage />
         </PermissionGuard>
       }
     />

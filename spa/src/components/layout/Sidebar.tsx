@@ -49,6 +49,7 @@ import {
   Star,
   Coins,
   Monitor,
+  Upload,
   type LucideIcon,
 } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo } from 'react';
@@ -223,6 +224,7 @@ const SECTIONS: NavSection[] = [
       { to: '/admin/roles',        label: 'Roles',        icon: ShieldCheck,  permission: 'admin.roles.manage' },
       { to: '/admin/audit-logs',   label: 'Audit Logs',   icon: FileText,     permission: 'admin.audit_logs.view' },
       { to: '/admin/settings',     label: 'Settings',     icon: SettingsIcon, permission: 'admin.settings.manage' },
+      { to: '/admin/imports',      label: 'Import Data',  icon: Upload,       permission: 'admin.import.manage' },
       { to: '/admin/sessions',     label: 'Sessions',     icon: Monitor,      permission: 'admin.settings.manage' },
       { to: '/admin/depreciation', label: 'Depreciation', icon: BarChart2,    permission: 'assets.depreciation.view' },
     ],
