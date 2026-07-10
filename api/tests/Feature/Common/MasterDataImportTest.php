@@ -93,6 +93,41 @@ class MasterDataImportTest extends TestCase
         $this->assertNotNull($item->category_id);
     }
 
+    public function test_customers_and_vendors_import(): void
+    {
+        $custCsv = "name,code,email,payment_terms_days\n"
+                 ."Toyota Motor Phils,TMP,ap@toyota.test,45\n"
+                 ."Honda Cars Phils,HCP,,30\n";
+        $this->actingAs($this->admin())
+            ->post('/api/v1/imports/customers/commit', ['file' => $this->csv($custCsv)])
+            ->assertStatus(201)
+            ->assertJsonPath('data.imported', 2);
+        $this->assertSame(2, \App\Modules\Accounting\Models\Customer::query()->count());
+        $toyota = \App\Modules\Accounting\Models\Customer::query()->where('code', 'TMP')->firstOrFail();
+        $this->assertSame(45, (int) $toyota->payment_terms_days);
+
+        $venCsv = "name,contact_person,payment_terms_days\n"
+                ."Mitsui Resins,J. Sato,60\n"
+                ."Cavite Molds Inc,,30\n";
+        $this->actingAs($this->admin())
+            ->post('/api/v1/imports/vendors/commit', ['file' => $this->csv($venCsv)])
+            ->assertStatus(201)
+            ->assertJsonPath('data.imported', 2);
+        $this->assertSame(2, \App\Modules\Accounting\Models\Vendor::query()->count());
+    }
+
+    public function test_duplicate_customer_name_rejects_whole_batch(): void
+    {
+        \App\Modules\Accounting\Models\Customer::create(['name' => 'Toyota Motor Phils', 'is_active' => true]);
+        $csv = "name\nNissan Phils\nToyota Motor Phils\n"; // 2nd row dup
+
+        $this->actingAs($this->admin())
+            ->post('/api/v1/imports/customers/commit', ['file' => $this->csv($csv)])
+            ->assertStatus(422);
+        // All-or-nothing: Nissan must NOT have been created either.
+        $this->assertSame(1, \App\Modules\Accounting\Models\Customer::query()->count());
+    }
+
     public function test_batch_rollback_deletes_imported_records(): void
     {
         $good = "code,name,type,normal_balance\n1000,Cash,asset,debit\n3000,Equity,equity,credit\n";

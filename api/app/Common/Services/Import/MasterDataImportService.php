@@ -7,6 +7,8 @@ namespace App\Common\Services\Import;
 use App\Common\Models\ImportBatch;
 use App\Common\Models\ImportBatchRecord;
 use App\Modules\Accounting\Imports\AccountImporter;
+use App\Modules\Accounting\Imports\CustomerImporter;
+use App\Modules\Accounting\Imports\VendorImporter;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Imports\ItemImporter;
 use Illuminate\Http\UploadedFile;
@@ -30,8 +32,10 @@ class MasterDataImportService
 {
     /** @var array<string, class-string<EntityImporter>> */
     private const REGISTRY = [
-        'coa'   => AccountImporter::class,
-        'items' => ItemImporter::class,
+        'coa'       => AccountImporter::class,
+        'items'     => ItemImporter::class,
+        'customers' => CustomerImporter::class,
+        'vendors'   => VendorImporter::class,
     ];
 
     /** @return array<int, string> */
