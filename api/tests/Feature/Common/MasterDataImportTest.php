@@ -128,6 +128,42 @@ class MasterDataImportTest extends TestCase
         $this->assertSame(1, \App\Modules\Accounting\Models\Customer::query()->count());
     }
 
+    public function test_employees_import_resolves_department_and_position(): void
+    {
+        $dept = \App\Modules\HR\Models\Department::create(['name' => 'Production', 'code' => 'PRD']);
+
+        $csv = "first_name,last_name,birth_date,gender,civil_status,department,position,employment_type,pay_type,date_hired,basic_monthly_salary,sss_no\n"
+             ."Juan,Dela Cruz,1990-01-15,male,single,PRD,Operator,regular,monthly,2025-01-06,20000.00,34-1234567-8\n"
+             ."Maria,Santos,1992-03-20,female,married,PRD,Line Lead,regular,monthly,2024-06-01,25000.00,34-7654321-0\n";
+
+        $this->actingAs($this->admin())
+            ->post('/api/v1/imports/employees/commit', ['file' => $this->csv($csv)])
+            ->assertStatus(201)
+            ->assertJsonPath('data.imported', 2);
+
+        $this->assertSame(2, \App\Modules\HR\Models\Employee::query()->count());
+        $juan = \App\Modules\HR\Models\Employee::query()->where('last_name', 'Dela Cruz')->firstOrFail();
+        $this->assertSame($dept->id, $juan->department_id);
+        $this->assertNotNull($juan->employee_no); // generated
+        $this->assertSame('34-1234567-8', $juan->sss_no); // encrypted round-trips
+        // Position auto-created within the department.
+        $this->assertSame(2, \App\Modules\HR\Models\Position::query()->where('department_id', $dept->id)->count());
+    }
+
+    public function test_employee_import_rejects_bad_enum_and_imports_nothing(): void
+    {
+        \App\Modules\HR\Models\Department::create(['name' => 'Production', 'code' => 'PRD']);
+        // Second row has an invalid pay_type → whole batch rejected.
+        $csv = "first_name,last_name,birth_date,gender,civil_status,department,position,employment_type,pay_type,date_hired,basic_monthly_salary\n"
+             ."Juan,Dela Cruz,1990-01-15,male,single,PRD,Operator,regular,monthly,2025-01-06,20000.00\n"
+             ."Bad,Row,1990-01-15,male,single,PRD,Operator,regular,weekly,2025-01-06,20000.00\n";
+
+        $this->actingAs($this->admin())
+            ->post('/api/v1/imports/employees/commit', ['file' => $this->csv($csv)])
+            ->assertStatus(422);
+        $this->assertSame(0, \App\Modules\HR\Models\Employee::query()->count());
+    }
+
     public function test_batch_rollback_deletes_imported_records(): void
     {
         $good = "code,name,type,normal_balance\n1000,Cash,asset,debit\n3000,Equity,equity,credit\n";

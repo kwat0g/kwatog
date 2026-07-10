@@ -10,6 +10,7 @@ use App\Modules\Accounting\Imports\AccountImporter;
 use App\Modules\Accounting\Imports\CustomerImporter;
 use App\Modules\Accounting\Imports\VendorImporter;
 use App\Modules\Auth\Models\User;
+use App\Modules\HR\Imports\EmployeeImporter;
 use App\Modules\Inventory\Imports\ItemImporter;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -36,6 +37,7 @@ class MasterDataImportService
         'items'     => ItemImporter::class,
         'customers' => CustomerImporter::class,
         'vendors'   => VendorImporter::class,
+        'employees' => EmployeeImporter::class,
     ];
 
     /** @return array<int, string> */

@@ -79,4 +79,8 @@ export const IMPORT_SCHEMAS: Record<string, { required: string[]; optional: stri
     required: ['name'],
     optional: ['contact_person', 'email', 'phone', 'address', 'tin', 'payment_terms_days'],
   },
+  employees: {
+    required: ['first_name', 'last_name', 'birth_date', 'gender', 'civil_status', 'department', 'position', 'employment_type', 'pay_type', 'date_hired'],
+    optional: ['employee_no', 'middle_name', 'suffix', 'mobile_number', 'email', 'street_address', 'city', 'province', 'basic_monthly_salary', 'daily_rate', 'sss_no', 'philhealth_no', 'pagibig_no', 'tin', 'bank_name', 'bank_account_no', 'date_regularized'],
+  },
 };
