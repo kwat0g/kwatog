@@ -20,7 +20,7 @@ class BirAlphalistController
      */
     public function download(Request $request): Response
     {
-        abort_unless($request->user()?->can('payroll.view'), 403);
+        abort_unless($request->user()?->can('payroll.statutory.export'), 403);
 
         $year = (int) $request->query('year', now()->year);
         $data = $this->service->generate($year);

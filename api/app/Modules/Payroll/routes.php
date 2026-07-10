@@ -111,10 +111,12 @@ if (class_exists(PayrollPeriodController::class)) {
 
         // ─── BIR 2316 Alphalist export (Task 6) ──────────────────
         Route::get('/payroll/bir-alphalist', [BirAlphalistController::class, 'download'])
-            ->middleware('permission:payroll.view');
+            ->middleware('permission:payroll.statutory.export');
 
         // ─── Statutory remittance exports (OGAMI-102/103) ─────────
-        Route::prefix('payroll/statutory')->middleware('permission:payroll.view')->group(function () {
+        // REC-06 follow-up — company-wide PII: gate on payroll.statutory.export,
+        // NOT payroll.view (which selfService grants to every role).
+        Route::prefix('payroll/statutory')->middleware('permission:payroll.statutory.export')->group(function () {
             Route::get('/1601c', [StatutoryExportController::class, 'bir1601c']);
             Route::get('/rf1', [StatutoryExportController::class, 'philhealthRf1']);
             Route::get('/mcrf', [StatutoryExportController::class, 'pagibigMcrf']);

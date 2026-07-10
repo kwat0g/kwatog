@@ -212,12 +212,29 @@ class StatutoryExportsTest extends TestCase
     {
         $period = $this->finalizedPeriod('2025-08-01', '2025-08-15');
 
-        // Unauthenticated → 401. NOTE: like the other statutory routes, once
-        // authenticated this is gated only by `payroll.view`, which selfService()
-        // grants to every role — see the REC-06 security follow-up (statutory
-        // exports expose company-wide PII to any staff member).
         $this->get("/api/v1/payroll/statutory/sss-r3/{$period->hash_id}")
             ->assertStatus(401);
+    }
+
+    /**
+     * REC-06 follow-up — statutory/alphalist exports carry company-wide PII and
+     * are now gated by payroll.statutory.export, NOT payroll.view (which
+     * selfService grants to every role). A plain employee holds payroll.view
+     * for their own payslip but must be denied the company-wide exports.
+     */
+    public function test_statutory_exports_denied_to_plain_employee_with_only_payroll_view(): void
+    {
+        $employee = \App\Modules\Auth\Models\User::factory()->create([
+            'role_id' => \App\Modules\Auth\Models\Role::query()->where('slug', 'employee')->value('id'),
+        ]);
+        $this->assertTrue($employee->can('payroll.view'), 'employee should still see own payslip');
+        $this->assertFalse($employee->can('payroll.statutory.export'), 'but NOT company-wide exports');
+
+        $period = $this->finalizedPeriod('2025-09-01', '2025-09-15');
+
+        $this->actingAs($employee)->get('/api/v1/payroll/statutory/1601c?year=2025&month=9')->assertStatus(403);
+        $this->actingAs($employee)->get('/api/v1/payroll/bir-alphalist?year=2025')->assertStatus(403);
+        $this->actingAs($employee)->get("/api/v1/payroll/statutory/sss-r3/{$period->hash_id}")->assertStatus(403);
     }
 
     public function test_1601c_splits_taxable_and_exempt_and_reconciles(): void

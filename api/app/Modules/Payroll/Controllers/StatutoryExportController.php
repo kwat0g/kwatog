@@ -26,7 +26,7 @@ class StatutoryExportController
 
     public function bir1601c(Request $request, Bir1601CService $service): Response
     {
-        abort_unless($request->user()?->can('payroll.view'), 403);
+        abort_unless($request->user()?->can('payroll.statutory.export'), 403);
         $year  = (int) $request->query('year', now()->year);
         $month = (int) $request->query('month', now()->month);
         $data  = $service->generate($year, $month);
@@ -36,7 +36,7 @@ class StatutoryExportController
 
     public function philhealthRf1(Request $request, PhilhealthRf1Service $service): Response
     {
-        abort_unless($request->user()?->can('payroll.view'), 403);
+        abort_unless($request->user()?->can('payroll.statutory.export'), 403);
         $year  = (int) $request->query('year', now()->year);
         $month = (int) $request->query('month', now()->month);
 
@@ -46,7 +46,7 @@ class StatutoryExportController
 
     public function pagibigMcrf(Request $request, PagibigMcrfService $service): Response
     {
-        abort_unless($request->user()?->can('payroll.view'), 403);
+        abort_unless($request->user()?->can('payroll.statutory.export'), 403);
         $year  = (int) $request->query('year', now()->year);
         $month = (int) $request->query('month', now()->month);
 
@@ -56,7 +56,7 @@ class StatutoryExportController
 
     public function bir1604cf(Request $request, Bir1604CfService $service): Response
     {
-        abort_unless($request->user()?->can('payroll.view'), 403);
+        abort_unless($request->user()?->can('payroll.statutory.export'), 403);
         $year = (int) $request->query('year', now()->year);
 
         return $this->csv($service->toCsv($service->generate($year)), sprintf('BIR-1604-CF-%04d.csv', $year));
@@ -73,7 +73,7 @@ class StatutoryExportController
      */
     public function sssR3(Request $request, PayrollPeriod $period): Response
     {
-        abort_unless($request->user()?->can('payroll.view'), 403);
+        abort_unless($request->user()?->can('payroll.statutory.export'), 403);
 
         return Excel::download(
             new SssR3Export($period),

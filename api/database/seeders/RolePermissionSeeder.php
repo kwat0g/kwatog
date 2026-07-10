@@ -113,6 +113,11 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'payroll.adjustments.create',  'name' => 'Create Payroll Adjustment'],
                 ['slug' => 'payroll.payslip.view_all',    'name' => 'View Any Payslip'],
                 ['slug' => 'payroll.thirteenth_month.run', 'name' => 'Run 13th Month Pay'],
+                // REC-06 follow-up — statutory/alphalist exports carry
+                // company-wide PII (every employee's TIN/SSS#/compensation), so
+                // they need a dedicated grant. payroll.view is granted to every
+                // role via selfService() (own payslip) and must NOT gate these.
+                ['slug' => 'payroll.statutory.export',    'name' => 'Export Statutory / Alphalist Files (company-wide PII)'],
                 // T1.8 — CSV import of SSS / PhilHealth / Pag-IBIG / BIR brackets.
                 ['slug' => 'payroll.gov_tables.manage',   'name' => 'Import Government Contribution Tables (CSV)'],
             ],
@@ -427,6 +432,8 @@ class RolePermissionSeeder extends Seeder
                     [
                         'payroll.view',
                         'payroll.payslip.view_all',
+                        // REC-06 follow-up — HR files SSS/PhilHealth/BIR remittances.
+                        'payroll.statutory.export',
                         // REC-04 — hr_officer is the MAKER: creates + computes a
                         // payroll run but does NOT approve it. payroll.periods.approve
                         // was removed here so the person who computes cannot also
