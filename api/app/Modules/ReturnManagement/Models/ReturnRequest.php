@@ -111,14 +111,15 @@ class ReturnRequest extends Model
         return $this->belongsTo(Vendor::class);
     }
 
-    public function creditNote(): BelongsTo
-    {
-        return $this->belongsTo(Invoice::class, 'credit_note_id');
-    }
-
     public function creditMemo(): BelongsTo
     {
         return $this->belongsTo(Invoice::class, 'credit_memo_id');
+    }
+
+    // REC-13 — the real credit note (replaces the legacy negative-invoice memo).
+    public function creditNote(): BelongsTo
+    {
+        return $this->belongsTo(\App\Modules\Accounting\Models\CreditNote::class, 'credit_note_id');
     }
 
     public function stockMovement(): BelongsTo

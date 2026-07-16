@@ -161,6 +161,9 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'accounting.invoices.create',      'name' => 'Create Invoices'],
                 ['slug' => 'accounting.invoices.update',      'name' => 'Update / Cancel Invoices'],
                 ['slug' => 'accounting.invoices.collect',     'name' => 'Record Collections'],
+                // REC-13 — AR/AP credit notes.
+                ['slug' => 'accounting.credit_notes.view',    'name' => 'View Credit Notes'],
+                ['slug' => 'accounting.credit_notes.manage',  'name' => 'Create / Finalize / Apply Credit Notes'],
                 // Statements
                 ['slug' => 'accounting.statements.view',      'name' => 'View Financial Statements'],
                 ['slug' => 'accounting.statements.export',    'name' => 'Export Statements (CSV/PDF)'],

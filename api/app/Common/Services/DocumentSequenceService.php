@@ -38,6 +38,8 @@ class DocumentSequenceService
         'pr'            => ['prefix' => 'PR',   'reset' => 'monthly', 'pad' => 4],
         'delivery'      => ['prefix' => 'DR',   'reset' => 'monthly', 'pad' => 4],
         'bill'          => ['prefix' => 'BILL', 'reset' => 'monthly', 'pad' => 4],
+        // REC-13 — credit notes get distinct BIR document numbering.
+        'credit_note'   => ['prefix' => 'CN',   'reset' => 'monthly', 'pad' => 4],
         'official_receipt' => ['prefix' => 'OR', 'reset' => 'monthly', 'pad' => 4],
         'bank_payment'  => ['prefix' => 'BPAY', 'reset' => 'monthly', 'pad' => 4],
         'loan'          => ['prefix' => 'LN',   'reset' => 'monthly', 'pad' => 4],

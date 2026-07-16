@@ -22,6 +22,14 @@ class DispositionTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // REC-13 — a customer return now posts a real credit note to the GL,
+        // which needs the chart of accounts (AR 1100, VAT-out 2060, revenue 4010).
+        $this->seed(\Database\Seeders\ChartOfAccountsSeeder::class);
+    }
+
     private function makeUser(): User
     {
         return User::factory()->create();
@@ -142,7 +150,7 @@ class DispositionTest extends TestCase
         $this->assertSame(8, $ncr->affected_quantity);
     }
 
-    public function test_dispose_creates_credit_memo_for_customer_return(): void
+    public function test_dispose_creates_credit_note_for_customer_return(): void
     {
         $by = $this->makeUser();
         $customer = $this->makeCustomer();
@@ -158,13 +166,22 @@ class DispositionTest extends TestCase
             ],
         ], $by);
 
-        $this->assertNotNull($result->credit_memo_id);
+        // REC-13 — a REAL credit note (positive amounts, GL-posted), not a
+        // negative-invoice hack.
+        $this->assertNotNull($result->credit_note_id);
 
-        $creditMemo = Invoice::find($result->credit_memo_id);
-        $this->assertNotNull($creditMemo);
-        $this->assertSame($customer->id, $creditMemo->customer_id);
-        $this->assertTrue((float) $creditMemo->subtotal < 0, 'Credit memo subtotal should be negative');
-        $this->assertStringContains("RMA {$rma->rma_number}", $creditMemo->remarks);
+        $creditNote = \App\Modules\Accounting\Models\CreditNote::find($result->credit_note_id);
+        $this->assertNotNull($creditNote);
+        $this->assertSame($customer->id, $creditNote->customer_id);
+        $this->assertSame('customer', $creditNote->type->value);
+        $this->assertSame('finalized', $creditNote->status->value);
+        $this->assertTrue((float) $creditNote->total_amount > 0, 'Credit note total should be positive');
+        $this->assertNotNull($creditNote->journal_entry_id, 'Credit note must post to the GL');
+        $this->assertSame($invoice->id, $creditNote->invoice_id);
+
+        // The posted JE must balance (subledger↔GL reconciliation).
+        $je = \App\Modules\Accounting\Models\JournalEntry::find($creditNote->journal_entry_id);
+        $this->assertSame((string) $je->total_debit, (string) $je->total_credit);
     }
 
     public function test_dispose_rejects_non_inspected_rma(): void

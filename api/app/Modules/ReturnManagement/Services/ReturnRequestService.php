@@ -29,6 +29,7 @@ class ReturnRequestService
         private readonly \App\Modules\Inventory\Services\StockMovementService $stockMovements,
         private readonly ApprovalService $approvals,
         private readonly InspectionService $inspections,
+        private readonly \App\Modules\Accounting\Services\CreditNoteService $creditNotes,
     ) {}
 
     /**
@@ -292,12 +293,13 @@ class ReturnRequestService
 
             $rma->update(['disposition_status' => 'disposed']);
 
-            // Auto credit memo for customer returns
+            // Auto credit note for customer returns (REC-13 — a real, GL-posting
+            // credit note replaces the old negative-invoice hack).
             if ($rma->type === ReturnRequestType::CustomerReturn && $rma->invoice_id) {
                 $creditTotal = $rma->items->sum(fn ($i) => (float) $i->total);
                 if ($creditTotal > 0) {
-                    $creditMemo = $this->createCreditMemo($rma, $creditTotal, $by);
-                    $rma->update(['credit_memo_id' => $creditMemo->id]);
+                    $creditNote = $this->createCreditNote($rma, (float) $creditTotal, $by);
+                    $rma->update(['credit_note_id' => $creditNote->id]);
                 }
             }
 
@@ -306,23 +308,32 @@ class ReturnRequestService
     }
 
     /**
-     * Create a credit memo (negative invoice) for a customer return.
+     * REC-13 — create + finalize a real customer credit note for a customer
+     * return. Posts a VAT-reversing journal entry (DR Sales Revenue + VAT
+     * Output, CR AR) so the subledger and GL stay reconciled. The credited
+     * amount is the returned line total (VAT is added on top by the service).
      */
-    private function createCreditMemo(ReturnRequest $rma, float $amount, User $by): \App\Modules\Accounting\Models\Invoice
+    private function createCreditNote(ReturnRequest $rma, float $amount, User $by): \App\Modules\Accounting\Models\CreditNote
     {
-        return \App\Modules\Accounting\Models\Invoice::create([
-            'invoice_number' => $this->sequences->generate('invoice'),
-            'customer_id'    => $rma->customer_id,
-            'status'         => 'finalized',
-            'subtotal'       => -abs($amount),
-            'vat_amount'     => -abs(round($amount * 0.12, 2)),
-            'total_amount'   => -abs(round($amount * 1.12, 2)),
-            'balance'        => -abs(round($amount * 1.12, 2)),
-            'date'           => now()->toDateString(),
-            'due_date'       => now()->toDateString(),
-            'remarks'        => "Credit memo for RMA {$rma->rma_number}",
-            'created_by'     => $by->id,
-        ]);
+        $revenueAccountId = \App\Modules\Accounting\Models\Account::query()
+            ->where('code', '4010')->value('id');
+
+        $cn = $this->creditNotes->create([
+            'type'              => 'customer',
+            'customer_id'       => $rma->customer_id,
+            'invoice_id'        => $rma->invoice_id,
+            'return_request_id' => $rma->id,
+            'date'              => now()->toDateString(),
+            'is_vatable'        => true,
+            'reason'            => "Customer return — RMA {$rma->rma_number}",
+            'lines'             => [[
+                'account_id'  => $revenueAccountId,
+                'description' => "Returned goods — RMA {$rma->rma_number}",
+                'amount'      => number_format($amount, 2, '.', ''),
+            ]],
+        ], $by);
+
+        return $this->creditNotes->finalize($cn, $by);
     }
 
     /**

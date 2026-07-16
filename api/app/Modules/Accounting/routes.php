@@ -7,6 +7,7 @@ use App\Modules\Accounting\Controllers\AccountingPeriodController;
 use App\Modules\Accounting\Controllers\BillController;
 use App\Modules\Accounting\Controllers\BudgetController;
 use App\Modules\Accounting\Controllers\BudgetTransferController;
+use App\Modules\Accounting\Controllers\CreditNoteController;
 use App\Modules\Accounting\Controllers\CustomerController;
 use App\Modules\Accounting\Controllers\FinanceDashboardController;
 use App\Modules\Accounting\Controllers\FinancialStatementController;
@@ -54,6 +55,15 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
         Route::post('/stock',    [OpeningBalanceController::class, 'postStock'])->middleware('permission:accounting.opening_balance.manage');
         // TB match is a reconciliation report — statements-view is enough.
         Route::post('/tb-match', [OpeningBalanceController::class, 'tbMatch'])  ->middleware('permission:accounting.statements.view');
+    });
+
+    /* ─── REC-13 — Credit notes (AR + AP) ────────────── */
+    Route::prefix('accounting/credit-notes')->group(function () {
+        Route::get('/',                  [CreditNoteController::class, 'index'])   ->middleware('permission:accounting.credit_notes.view');
+        Route::get('/{creditNote}',      [CreditNoteController::class, 'show'])    ->middleware('permission:accounting.credit_notes.view');
+        Route::post('/',                 [CreditNoteController::class, 'store'])   ->middleware('permission:accounting.credit_notes.manage');
+        Route::post('/{creditNote}/finalize', [CreditNoteController::class, 'finalize'])->middleware('permission:accounting.credit_notes.manage');
+        Route::post('/{creditNote}/apply',    [CreditNoteController::class, 'apply'])   ->middleware('permission:accounting.credit_notes.manage');
     });
 
     /* ─── Vendors + Bills + Bill Payments ────────────── */
