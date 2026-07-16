@@ -18,6 +18,7 @@ use App\Modules\Accounting\Models\CreditNoteApplication;
 use App\Modules\Accounting\Models\CreditNoteLine;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Auth\Models\User;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -44,6 +45,43 @@ class CreditNoteService
         private readonly JournalEntryService $journals,
         private readonly AccountingPeriodService $periods,
     ) {}
+
+    /**
+     * Paginated list with optional type/status/party filters.
+     *
+     * @param array<string, mixed> $filters
+     */
+    public function list(array $filters): LengthAwarePaginator
+    {
+        $q = CreditNote::query()->with(['customer:id,name', 'vendor:id,name', 'invoice:id,invoice_number', 'bill:id,bill_number']);
+
+        if (! empty($filters['type'])) {
+            $q->where('type', $filters['type']);
+        }
+        if (! empty($filters['status'])) {
+            $q->where('status', $filters['status']);
+        }
+        if (! empty($filters['customer_id'])) {
+            $cid = HashIdFilter::decode((string) $filters['customer_id'], \App\Modules\Accounting\Models\Customer::class);
+            if ($cid) $q->where('customer_id', $cid);
+        }
+        if (! empty($filters['vendor_id'])) {
+            $vid = HashIdFilter::decode((string) $filters['vendor_id'], \App\Modules\Accounting\Models\Vendor::class);
+            if ($vid) $q->where('vendor_id', $vid);
+        }
+
+        return $q->orderByDesc('date')->orderByDesc('id')
+            ->paginate(min((int) ($filters['per_page'] ?? 25), 100));
+    }
+
+    public function show(CreditNote $cn): CreditNote
+    {
+        return $cn->load([
+            'customer:id,name', 'vendor:id,name',
+            'invoice:id,invoice_number', 'bill:id,bill_number',
+            'lines', 'applications.invoice:id,invoice_number', 'applications.bill:id,bill_number',
+        ]);
+    }
 
     /**
      * Create a DRAFT credit note.

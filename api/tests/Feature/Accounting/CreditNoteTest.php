@@ -175,4 +175,28 @@ class CreditNoteTest extends TestCase
         // Unauthenticated → 401.
         $this->postJson('/api/v1/accounting/credit-notes', [])->assertStatus(401);
     }
+
+    public function test_index_and_show_return_credit_notes(): void
+    {
+        $by = $this->admin();
+        $customer = Customer::create(['name' => 'Acme', 'payment_terms_days' => 30]);
+        $cn = $this->svc->finalize($this->svc->create([
+            'type' => 'customer', 'date' => now()->toDateString(), 'is_vatable' => true,
+            'customer_id' => $customer->id,
+            'lines' => [['account_id' => $this->revenueAccountId(), 'description' => 'Credit', 'amount' => '300.00']],
+        ], $by), $by);
+
+        // index — the GET path that would fatal if list() were missing.
+        $this->actingAs($by)
+            ->getJson('/api/v1/accounting/credit-notes')
+            ->assertStatus(200)
+            ->assertJsonPath('data.0.credit_note_number', $cn->credit_note_number);
+
+        // show — exercises show() + relation loading.
+        $this->actingAs($by)
+            ->getJson("/api/v1/accounting/credit-notes/{$cn->hash_id}")
+            ->assertStatus(200)
+            ->assertJsonPath('data.total_amount', '336.00')
+            ->assertJsonPath('data.customer.name', 'Acme');
+    }
 }
