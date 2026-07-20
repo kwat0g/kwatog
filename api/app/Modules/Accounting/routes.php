@@ -8,6 +8,7 @@ use App\Modules\Accounting\Controllers\BillController;
 use App\Modules\Accounting\Controllers\BudgetController;
 use App\Modules\Accounting\Controllers\BudgetTransferController;
 use App\Modules\Accounting\Controllers\CreditNoteController;
+use App\Modules\Accounting\Controllers\CurrencyController;
 use App\Modules\Accounting\Controllers\CustomerController;
 use App\Modules\Accounting\Controllers\FinanceDashboardController;
 use App\Modules\Accounting\Controllers\FinancialStatementController;
@@ -64,6 +65,16 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
         Route::post('/',                 [CreditNoteController::class, 'store'])   ->middleware('permission:accounting.credit_notes.manage');
         Route::post('/{creditNote}/finalize', [CreditNoteController::class, 'finalize'])->middleware('permission:accounting.credit_notes.manage');
         Route::post('/{creditNote}/apply',    [CreditNoteController::class, 'apply'])   ->middleware('permission:accounting.credit_notes.manage');
+    });
+
+    /* ─── REC-12 — multi-currency (FX rates + JPY parent-pack translation) ─── */
+    Route::prefix('accounting/currency')->group(function () {
+        Route::get('/fx-rates',  [CurrencyController::class, 'listRates']) ->middleware('permission:accounting.statements.view');
+        Route::post('/fx-rates', [CurrencyController::class, 'storeRate']) ->middleware('permission:accounting.fx.manage');
+        // Translated parent-pack statements — read-side, statements-view is enough.
+        Route::get('/trial-balance',    [CurrencyController::class, 'trialBalance'])    ->middleware('permission:accounting.statements.view');
+        Route::get('/income-statement', [CurrencyController::class, 'incomeStatement']) ->middleware('permission:accounting.statements.view');
+        Route::get('/balance-sheet',    [CurrencyController::class, 'balanceSheet'])    ->middleware('permission:accounting.statements.view');
     });
 
     /* ─── Vendors + Bills + Bill Payments ────────────── */

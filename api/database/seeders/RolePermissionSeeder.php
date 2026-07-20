@@ -167,6 +167,9 @@ class RolePermissionSeeder extends Seeder
                 // Statements
                 ['slug' => 'accounting.statements.view',      'name' => 'View Financial Statements'],
                 ['slug' => 'accounting.statements.export',    'name' => 'Export Statements (CSV/PDF)'],
+                // REC-12 — multi-currency: view translated (JPY) statements + manage FX rates.
+                ['slug' => 'accounting.currency.view',        'name' => 'View Translated (Foreign-Currency) Statements'],
+                ['slug' => 'accounting.currency.manage',      'name' => 'Manage FX Rates'],
                 // REC-05 — go-live opening balances (GL + stock). Finance-only
                 // via module('accounting'); a migration-time capability.
                 ['slug' => 'accounting.opening_balance.manage', 'name' => 'Load Opening Balances'],
