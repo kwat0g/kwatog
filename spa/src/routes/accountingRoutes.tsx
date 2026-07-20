@@ -33,6 +33,9 @@ const ApAgingPage            = lazy(() => import('@/pages/accounting/ap-aging'))
 const OpeningBalancesPage    = lazy(() => import('@/pages/accounting/opening-balances'));
 // REC-14 — accounting period close/reopen
 const AccountingPeriodsPage  = lazy(() => import('@/pages/accounting/periods'));
+// REC-13 — AR/AP credit notes
+const CreditNotesPage        = lazy(() => import('@/pages/accounting/credit-notes'));
+const CreditNoteDetailPage   = lazy(() => import('@/pages/accounting/credit-notes/detail'));
 
 export const accountingRoutes = (
   <>
@@ -100,6 +103,10 @@ export const accountingRoutes = (
         element={<PermissionGuard permission="accounting.opening_balance.manage"><OpeningBalancesPage /></PermissionGuard>} />
       <Route path="/accounting/periods"
         element={<PermissionGuard permission="accounting.periods.view"><AccountingPeriodsPage /></PermissionGuard>} />
+      <Route path="/accounting/credit-notes"
+        element={<PermissionGuard permission="accounting.credit_notes.view"><CreditNotesPage /></PermissionGuard>} />
+      <Route path="/accounting/credit-notes/:id"
+        element={<PermissionGuard permission="accounting.credit_notes.view"><CreditNoteDetailPage /></PermissionGuard>} />
     </Route>
   </>
 );

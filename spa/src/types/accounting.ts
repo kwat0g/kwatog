@@ -379,3 +379,59 @@ export interface FinanceDashboardSummary {
   }> | null;
   revenue_forecast?: import('./forecasting-dashboard').ForecastPanelData;
 }
+
+// ─── REC-13 — Credit notes (AR/AP) ─────────────────────────
+export type CreditNoteType = 'customer' | 'supplier';
+export type CreditNoteStatus = 'draft' | 'finalized' | 'applied' | 'void';
+
+export interface CreditNoteLine {
+  id: string | null;
+  description: string;
+  amount: string;
+}
+export interface CreditNoteApplicationRow {
+  id: string;
+  invoice_id: string | null;
+  bill_id: string | null;
+  amount: string;
+  created_at: string | null;
+}
+export interface CreditNote {
+  id: string;
+  credit_note_number: string | null;
+  type: CreditNoteType;
+  type_label: string;
+  status: CreditNoteStatus;
+  status_label: string;
+  date: string;
+  is_vatable: boolean;
+  subtotal: string;
+  vat_amount: string;
+  total_amount: string;
+  applied_amount: string;
+  balance: string;
+  reason: string | null;
+  customer?: { id: string; name: string } | null;
+  vendor?: { id: string; name: string } | null;
+  invoice?: { id: string; invoice_number: string } | null;
+  bill?: { id: string; bill_number: string } | null;
+  lines?: CreditNoteLine[];
+  applications?: CreditNoteApplicationRow[];
+  created_at?: string;
+}
+export interface CreateCreditNoteData {
+  type: CreditNoteType;
+  date: string;
+  is_vatable?: boolean;
+  reason?: string;
+  customer_id?: string;
+  vendor_id?: string;
+  invoice_id?: string;
+  bill_id?: string;
+  lines: Array<{ account_id: string; description: string; amount: string }>;
+}
+export interface ApplyCreditNoteData {
+  amount: string;
+  invoice_id?: string;
+  bill_id?: string;
+}

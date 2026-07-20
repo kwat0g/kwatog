@@ -181,6 +181,7 @@ const SECTIONS: NavSection[] = [
       { to: '/accounting/journal-entries', label: 'Journal Entries',   icon: BookOpen,      feature: 'accounting', permission: 'accounting.journal.view' },
       { to: '/accounting/invoices',        label: 'Invoices (AR)',     icon: FileText,      feature: 'accounting', permission: 'accounting.invoices.view' },
       { to: '/accounting/bills',           label: 'Bills (AP)',        icon: Receipt,       feature: 'accounting', permission: 'accounting.bills.view' },
+      { to: '/accounting/credit-notes',    label: 'Credit Notes',      icon: Receipt,       feature: 'accounting', permission: 'accounting.credit_notes.view' },
       { to: '/accounting/vendors',         label: 'Vendors',           icon: Store,         feature: 'accounting', permission: 'accounting.vendors.view' },
       { to: '/accounting/opening-balances', label: 'Opening Balances', icon: Landmark,      feature: 'accounting', permission: 'accounting.opening_balance.manage' },
       { to: '/accounting/periods',         label: 'Periods',           icon: CalendarClock, feature: 'accounting', permission: 'accounting.periods.view' },
