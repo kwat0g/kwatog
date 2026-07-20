@@ -36,6 +36,9 @@ const AccountingPeriodsPage  = lazy(() => import('@/pages/accounting/periods'));
 // REC-13 — AR/AP credit notes
 const CreditNotesPage        = lazy(() => import('@/pages/accounting/credit-notes'));
 const CreditNoteDetailPage   = lazy(() => import('@/pages/accounting/credit-notes/detail'));
+// REC-12 — multi-currency (FX rates + JPY parent-pack translation)
+const FxRatesPage            = lazy(() => import('@/pages/accounting/fx-rates'));
+const ParentPackPage         = lazy(() => import('@/pages/accounting/parent-pack'));
 
 export const accountingRoutes = (
   <>
@@ -107,6 +110,10 @@ export const accountingRoutes = (
         element={<PermissionGuard permission="accounting.credit_notes.view"><CreditNotesPage /></PermissionGuard>} />
       <Route path="/accounting/credit-notes/:id"
         element={<PermissionGuard permission="accounting.credit_notes.view"><CreditNoteDetailPage /></PermissionGuard>} />
+      <Route path="/accounting/fx-rates"
+        element={<PermissionGuard permission="accounting.statements.view"><FxRatesPage /></PermissionGuard>} />
+      <Route path="/accounting/parent-pack"
+        element={<PermissionGuard permission="accounting.statements.view"><ParentPackPage /></PermissionGuard>} />
     </Route>
   </>
 );
