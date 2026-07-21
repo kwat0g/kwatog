@@ -49,7 +49,12 @@ const NOTIFICATION_TYPES: Array<{ key: string; label: string; description: strin
   { key: 'approval_escalation',         label: 'Approval escalation',         description: 'An approval you are responsible for has been escalated due to timeout.' },
 ];
 
-type Pref = { notification_type: string; channel: 'in_app' | 'email'; enabled: boolean };
+type Channel = 'in_app' | 'email' | 'digest';
+type Pref = { notification_type: string; channel: Channel; enabled: boolean };
+
+// REC-06 — the daily digest is a single global opt-in row (type '*', channel
+// 'digest') consumed by NotificationDigestService's scheduled 07:05 run.
+const DIGEST_TYPE = '*';
 
 export default function NotificationPreferencesPage() {
   const qc = useQueryClient();
@@ -67,15 +72,17 @@ export default function NotificationPreferencesPage() {
     onError: () => toast.error('Failed to save preferences. Please try again.'),
   });
 
-  const isEnabled = (type: string, channel: Pref['channel']) =>
-    data?.find(p => p.notification_type === type && p.channel === channel)?.enabled ?? true;
+  const isEnabled = (type: string, channel: Channel) =>
+    // In-app/email default ON when no row exists; digest is opt-in so defaults OFF.
+    data?.find(p => p.notification_type === type && p.channel === channel)?.enabled
+      ?? (channel !== 'digest');
 
-  const onToggle = (type: string, channel: Pref['channel'], enabled: boolean) => {
+  const onToggle = (type: string, channel: Channel, enabled: boolean) => {
     upsert.mutate([{ notification_type: type, channel, enabled }]);
   };
 
   // Switch is a controlled <input type="checkbox"> — onChange yields an event.
-  const handleSwitch = (type: string, channel: Pref['channel']) =>
+  const handleSwitch = (type: string, channel: Channel) =>
     (e: ChangeEvent<HTMLInputElement>) => onToggle(type, channel, e.target.checked);
 
   if (isLoading) {
@@ -92,7 +99,22 @@ export default function NotificationPreferencesPage() {
   return (
     <div>
       <PageHeader title="Notification Preferences" backTo="/self-service" backLabel="Dashboard" />
-      <div className="px-5 py-4">
+      <div className="px-5 py-4 space-y-4">
+        {/* REC-06 — daily email digest opt-in (global, all unread types). */}
+        <div className="rounded-md border border-default px-3 py-3 flex items-center justify-between">
+          <div className="pr-4">
+            <div className="text-sm font-medium">Daily email digest</div>
+            <div className="text-xs text-muted">
+              Get one email each morning summarizing your unread notifications. Read state is left untouched.
+            </div>
+          </div>
+          <Switch
+            checked={isEnabled(DIGEST_TYPE, 'digest')}
+            onChange={handleSwitch(DIGEST_TYPE, 'digest')}
+            aria-label="Enable daily email digest"
+          />
+        </div>
+
         <div className="rounded-md border border-default overflow-hidden">
           <div className="grid grid-cols-12 px-3 py-2 border-b border-default bg-subtle text-[10px] uppercase tracking-wider text-muted font-medium">
             <div className="col-span-8">Type</div>
