@@ -23,6 +23,8 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'admin.roles.manage',       'name' => 'Manage Roles & Permissions'],
                 ['slug' => 'admin.settings.manage',    'name' => 'Manage System Settings'],
                 ['slug' => 'admin.audit_logs.view',    'name' => 'View Audit Logs'],
+                // REC-01 — view the Segregation-of-Duties matrix + violation report.
+                ['slug' => 'admin.sod.view',           'name' => 'View Segregation-of-Duties Matrix'],
                 ['slug' => 'admin.users.manage',       'name' => 'Manage Users'],
                 // Series R — Task R2: per-user permission overrides.
                 ['slug' => 'admin.users.manage_permissions', 'name' => 'Manage Per-User Permission Overrides'],

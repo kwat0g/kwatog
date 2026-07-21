@@ -83,6 +83,12 @@ Route::prefix('admin')
         Route::get('audit-logs/{id}',    [\App\Modules\Admin\Controllers\AuditLogController::class, 'show'])
             ->middleware('permission:admin.audit_logs.view')
             ->whereNumber('id');
+
+        // REC-01 — Segregation-of-Duties matrix + "who violates SoD today" report.
+        Route::get('sod/matrix',     [\App\Modules\Admin\Controllers\SodController::class, 'index'])
+            ->middleware('permission:admin.sod.view');
+        Route::get('sod/violations', [\App\Modules\Admin\Controllers\SodController::class, 'violations'])
+            ->middleware('permission:admin.sod.view');
     });
 
 Route::prefix('admin')
