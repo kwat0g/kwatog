@@ -59,6 +59,12 @@ Customer complaint → RMA → Shipment Lot LOT-… → Batch BATCH-… → QC i
 > lot SL-TW-0234, QC-passed on receipt. One click, full genealogy — that is the
 > IATF 16949 traceability requirement."
 
+**Verified search terms (all three resolve to the full trace — try any):**
+- Batch: `BATCH-20260709-0001` → machine IMM-01, mold M-WB-001, 9955 good / 45 rejected, passed outgoing QC, 2 shipment lots
+- Shipment lot: `LOT-20260709-0002`
+- Material lot: `MLOT-20260703-01` → GRN-20260704-0001, supplier lot SL-TW-0234
+
+
 Then **Return Management** (`/return-management`) — open the RMA → disposition → **Credit Note** (`/accounting/credit-notes`) reduces AR. *ADV12.*
 
 ---

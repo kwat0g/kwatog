@@ -40,6 +40,7 @@ class GoldenPathDemoSeeder extends Seeder
     public function run(): void
     {
         $this->section('batch numbers (ADV3)', fn () => $this->seedBatchNumbers());
+        $this->section('hero trace linkage (ADV3)', fn () => $this->hardenHeroTrace());
         $this->section('shipment lots (ADV3)', fn () => $this->seedShipmentLots());
         $this->section('delivery proofs (ADV7)', fn () => $this->seedDeliveryProofs());
         $this->section('disbursement proof (ADV1)', fn () => $this->seedDisbursement());
@@ -104,6 +105,85 @@ class GoldenPathDemoSeeder extends Seeder
             $n++;
         }
         $this->command?->info("  Stamped {$n} work-order batch numbers.");
+    }
+
+    /**
+     * ADV3 — make ONE work order a fully record-backed "hero" trace so the
+     * flagship demo search resolves end-to-end (not narrated): real machine +
+     * mold + output qty, a real GRN line whose material_lot_number matches the
+     * WO's material_lot_references, and a passed outgoing QC inspection.
+     */
+    private function hardenHeroTrace(): void
+    {
+        $wo = WorkOrder::whereNotNull('batch_number')->orderBy('id')->first();
+        if (! $wo) {
+            $this->command?->warn('  No batch WO; skipping hero trace.');
+            return;
+        }
+
+        $machineId = DB::table('machines')->min('id');
+        $moldId    = DB::table('molds')->min('id');
+        $grn       = DB::table('goods_receipt_notes')->orderBy('id')->first();
+        $grnItem   = $grn ? DB::table('grn_items')->where('goods_receipt_note_id', $grn->id)->orderBy('id')->first() : null;
+
+        // Point the WO's material trace at the REAL GRN line, and stamp that
+        // GRN line with the matching lot so a material-lot search also resolves.
+        $matLot   = 'MLOT-' . Carbon::parse($grn->received_date ?? now())->format('Ymd') . '-01';
+        $supLot   = 'SL-TW-0234';
+        if ($grnItem) {
+            DB::table('grn_items')->where('id', $grnItem->id)->update([
+                'material_lot_number'    => $matLot,
+                'supplier_lot_reference' => $supLot,
+                'updated_at'             => now(),
+            ]);
+        }
+
+        $wo->forceFill([
+            'machine_id'   => $wo->machine_id ?? $machineId,
+            'mold_id'      => $wo->mold_id ?? $moldId,
+            'quantity_good'     => max((int) $wo->quantity_good, 9955),
+            'quantity_rejected' => max((int) $wo->quantity_rejected, 45),
+            'material_lot_references' => [[
+                'item_id'                => $grnItem->item_id ?? null,
+                'item_code'              => 'RESIN-ABS',
+                'item_name'              => 'Resin A (ABS)',
+                'grn_number'             => $grn->grn_number ?? null,
+                'material_lot_number'    => $matLot,
+                'supplier_lot_reference' => $supLot,
+                'quantity_used'          => 150,
+            ]],
+        ])->save();
+
+        // Passed outgoing QC inspection linked to the WO (trace forward leg).
+        $exists = DB::table('inspections')
+            ->where('entity_type', 'work_order')->where('entity_id', $wo->id)
+            ->where('stage', 'outgoing')->exists();
+        if (! $exists) {
+            $specId = DB::table('inspection_specs')->where('product_id', $wo->product_id)->value('id');
+            DB::table('inspections')->insert([
+                'inspection_number'  => 'QC-' . Carbon::now()->format('Ym') . '-9001',
+                'stage'              => 'outgoing',
+                'status'             => 'passed',
+                'product_id'         => $wo->product_id,
+                'inspection_spec_id' => $specId,
+                'entity_type'        => 'work_order',
+                'entity_id'          => $wo->id,
+                'batch_quantity'     => 10000,
+                'sample_size'        => 200,
+                'aql_code'           => 'II',
+                'accept_count'       => 200,
+                'reject_count'       => 0,
+                'defect_count'       => 0,
+                'inspector_id'       => $this->admin()?->id,
+                'started_at'         => Carbon::now()->subHours(2),
+                'completed_at'       => Carbon::now()->subHour(),
+                'notes'              => 'Demo — AQL 0.65 Level II outgoing inspection, accepted.',
+                'created_at'         => now(),
+                'updated_at'         => now(),
+            ]);
+        }
+
+        $this->command?->info("  Hardened hero trace on {$wo->batch_number} (machine/mold/GRN/QC linked).");
     }
 
     /** ADV3 — one shipment lot per delivery, tied to the delivery's work orders. */
