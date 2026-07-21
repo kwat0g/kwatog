@@ -90,9 +90,9 @@ class PerformanceReviewTest extends TestCase
         $cycle->forceFill(['status' => ReviewCycleStatus::Active->value])->save();
 
         $response = $this->actingAs($this->hrUser)->postJson('/api/v1/hr/performance-reviews', [
-            'review_cycle_id' => $cycle->id,
-            'employee_id'     => $this->subjectEmp->id,
-            'reviewer_id'     => $this->reviewerEmp->id,
+            'review_cycle_id' => $cycle->hash_id,
+            'employee_id'     => $this->subjectEmp->hash_id,
+            'reviewer_id'     => $this->reviewerEmp->hash_id,
         ]);
 
         $response->assertStatus(201);
