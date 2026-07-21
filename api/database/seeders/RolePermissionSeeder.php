@@ -62,6 +62,10 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'hr.directory.view',               'name' => 'View Employee Directory'],
                 // Task SS2 — Finance leg of employee bank-account change approval.
                 ['slug' => 'hr.profile_updates.finance_review', 'name' => 'Approve Employee Bank-Account Changes (Finance)'],
+                // REC-03 — salary-adjustment maker-checker gate.
+                ['slug' => 'hr.salary_adjustments.view',    'name' => 'View Salary Adjustments'],
+                ['slug' => 'hr.salary_adjustments.request', 'name' => 'Request Salary Adjustment (maker)'],
+                ['slug' => 'hr.salary_adjustments.act',     'name' => 'Approve / Reject Salary Adjustment (checker)'],
                 // REC-02 — SoD override: approve a profile-change request you submitted.
                 ['slug' => 'hr.profile_updates.self_review_override', 'name' => 'Review Own Profile-Change Request (SoD override)'],
                 // T3.4 — Training matrix + certification expiry alerts.
@@ -430,9 +434,13 @@ class RolePermissionSeeder extends Seeder
                 'name' => 'HR Officer',
                 'description' => 'Manages employees, attendance, leave; sees sensitive HR data.',
                 'permissions' => array_merge(
-                    // REC-02 — hr_officer is a MAKER of profile-change reviews but
-                    // cannot self-approve a request they submitted (override withheld).
-                    $this->module('hr', except: ['hr.profile_updates.self_review_override']),
+                    // REC-02/03 — hr_officer is a MAKER: requests salary adjustments
+                    // and reviews profile changes, but cannot approve either kind of
+                    // request they themselves submitted (overrides + .act withheld).
+                    $this->module('hr', except: [
+                        'hr.profile_updates.self_review_override',
+                        'hr.salary_adjustments.act',
+                    ]),
                     $this->module('attendance'),
                     $this->module('leave'),
                     $this->module('hr_separation'),
@@ -515,6 +523,10 @@ class RolePermissionSeeder extends Seeder
                         'dashboard.view_bottlenecks',
                         'forecasting.view',
                         'return_management.view',
+                        // REC-03 — production_manager is the step-1 checker on the
+                        // salary_adjustment chain.
+                        'hr.salary_adjustments.view',
+                        'hr.salary_adjustments.act',
                     ],
                 ),
             ],

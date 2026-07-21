@@ -204,6 +204,7 @@ const SECTIONS: NavSection[] = [
       { to: '/hr/departments',  label: 'Departments', icon: Building2,   feature: 'hr',         permission: 'hr.departments.view' },
       { to: '/hr/attendance',   label: 'Attendance',  icon: Clock4,      feature: 'attendance', permission: 'attendance.view', badgeKey: 'leaves' },
       { to: '/hr/leaves',       label: 'Leave',       icon: CalendarDays, feature: 'leave',     permission: 'leave.view' },
+      { to: '/hr/salary-adjustments', label: 'Salary Adjustments', icon: Coins, feature: 'hr', permission: 'hr.salary_adjustments.view' },
       { to: '/payroll/periods', label: 'Payroll',     icon: Wallet,      feature: 'payroll',    permission: 'payroll.view', badgeKey: 'payroll' },
       { to: '/payroll/statutory', label: 'Statutory Exports', icon: FileText, feature: 'payroll', permission: 'payroll.view' },
       { to: '/hr/succession-plans',      label: 'Succession',          icon: UserPlus,    feature: 'hr', permission: 'hr.succession.manage' },

@@ -11,6 +11,14 @@ class WorkflowSeeder extends Seeder
 {
     public function run(): void
     {
+        // Enforcement status (REC-03 audit). Workflows are ENFORCED only when a
+        // service calls ApprovalService::submit() for that workflow_type:
+        //   ENFORCED: leave_request, purchase_request, purchase_order, payroll,
+        //             return_request, company_loan/cash_advance, salary_adjustment.
+        //   RESERVED (defined, not yet wired to a submit() path — do NOT present
+        //             these as working approvals): department_transfer, asset_disposal,
+        //             separation_clearance, maintenance_request, 8d_report,
+        //             bill_payment, work_order, ncr. Wire or drop before pilot.
         $workflows = [
             [
                 'workflow_type' => 'leave_request',

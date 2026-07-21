@@ -13,6 +13,7 @@ const EditEmployeePage = lazy(() => import('@/pages/hr/employees/edit'));
 
 // HR > Profile Change Requests (Task U3 — HR review queue)
 const ProfileUpdateRequestsPage = lazy(() => import('@/pages/hr/profile-update-requests'));
+const SalaryAdjustmentsPage = lazy(() => import('@/pages/hr/salary-adjustments'));
 
 // Series F / Task F5 — Employee directory + org chart
 const EmployeeDirectoryPage = lazy(() => import('@/pages/hr/directory'));
@@ -93,6 +94,10 @@ export const hrRoutes = (
       <Route
         path="/hr/profile-update-requests"
         element={<PermissionGuard permission="hr.employees.view"><ProfileUpdateRequestsPage /></PermissionGuard>}
+      />
+      <Route
+        path="/hr/salary-adjustments"
+        element={<PermissionGuard permission="hr.salary_adjustments.view"><SalaryAdjustmentsPage /></PermissionGuard>}
       />
       {/* Series F / Task F5 — Employee directory + org chart */}
       <Route
