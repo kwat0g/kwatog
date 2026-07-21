@@ -105,4 +105,22 @@ class NotificationControllerTest extends TestCase
 
         $response->assertNotFound();
     }
+
+    /** REC-06 — the digest channel is now accepted (was rejected by in:in_app,email). */
+    public function test_digest_channel_preference_is_accepted(): void
+    {
+        $response = $this->actingAs($this->user)->putJson('/api/v1/notification-preferences', [
+            'preferences' => [
+                ['notification_type' => '*', 'channel' => 'digest', 'enabled' => true],
+            ],
+        ]);
+
+        $response->assertOk();
+        $this->assertDatabaseHas('notification_preferences', [
+            'user_id'           => $this->user->id,
+            'notification_type' => '*',
+            'channel'           => 'digest',
+            'enabled'           => true,
+        ]);
+    }
 }

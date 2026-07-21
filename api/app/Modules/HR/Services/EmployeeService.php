@@ -157,6 +157,11 @@ class EmployeeService
     public function update(Employee $employee, array $data): Employee
     {
         return DB::transaction(function () use ($employee, $data) {
+            // REC-03 — pay can ONLY change through the maker-checker SalaryAdjustment
+            // gate (SalaryAdjustmentService). Strip salary fields here so a direct
+            // employee edit can never bypass approval, even if a caller supplies them.
+            unset($data['basic_monthly_salary'], $data['daily_rate']);
+
             $original = $employee->only([
                 'department_id', 'position_id', 'basic_monthly_salary', 'daily_rate', 'employment_type', 'pay_type',
             ]);

@@ -20,6 +20,13 @@ use Illuminate\Support\Facades\DB;
  */
 class ProfileUpdateRequestService
 {
+    /**
+     * REC-02 — SoD override. A reviewer may not approve a profile-change
+     * request they submitted unless they hold this permission (system_admin
+     * always does). Withheld from hr_officer via seeder `except`.
+     */
+    private const SELF_REVIEW_OVERRIDE_PERMISSION = 'hr.profile_updates.self_review_override';
+
     /** Whitelist of contact/address fields — single HR approval. */
     private const ALLOWED_FIELDS = [
         'mobile_number',
@@ -96,6 +103,8 @@ class ProfileUpdateRequestService
     public function approve(ProfileUpdateRequest $request, User $reviewer, ?string $remarks = null): ProfileUpdateRequest
     {
         abort_unless($request->status === 'pending', 422, 'Request is not awaiting HR review.');
+        // REC-02 — a reviewer cannot approve a request they submitted.
+        $this->assertNotSelfReviewing($request, $reviewer);
 
         return DB::transaction(function () use ($request, $reviewer, $remarks) {
             $request->update([
@@ -124,6 +133,8 @@ class ProfileUpdateRequestService
     {
         abort_unless($request->requires_finance, 422, 'This request does not require Finance review.');
         abort_unless($request->status === 'pending_finance', 422, 'Request is not awaiting Finance review.');
+        // REC-02 — a Finance reviewer cannot approve a request they submitted.
+        $this->assertNotSelfReviewing($request, $reviewer);
 
         return DB::transaction(function () use ($request, $reviewer, $remarks) {
             $this->applyChanges($request);
@@ -158,6 +169,23 @@ class ProfileUpdateRequestService
         ]);
 
         return $request->fresh(['employee', 'reviewer', 'financeReviewer']);
+    }
+
+    /**
+     * REC-02 — block a reviewer from acting on a request they submitted.
+     * A null requested_by cannot trigger the guard.
+     */
+    private function assertNotSelfReviewing(ProfileUpdateRequest $request, User $reviewer): void
+    {
+        if ($request->requested_by === null || (int) $request->requested_by !== (int) $reviewer->id) {
+            return; // different reviewer, or unknown submitter — allowed.
+        }
+
+        if ($reviewer->hasPermission(self::SELF_REVIEW_OVERRIDE_PERMISSION)) {
+            return; // explicit override.
+        }
+
+        abort(403, 'You cannot review a profile-change request you submitted. A different reviewer must act (segregation of duties).');
     }
 
     /**

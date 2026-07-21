@@ -23,6 +23,8 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'admin.roles.manage',       'name' => 'Manage Roles & Permissions'],
                 ['slug' => 'admin.settings.manage',    'name' => 'Manage System Settings'],
                 ['slug' => 'admin.audit_logs.view',    'name' => 'View Audit Logs'],
+                // REC-01 — view the Segregation-of-Duties matrix + violation report.
+                ['slug' => 'admin.sod.view',           'name' => 'View Segregation-of-Duties Matrix'],
                 ['slug' => 'admin.users.manage',       'name' => 'Manage Users'],
                 // Series R — Task R2: per-user permission overrides.
                 ['slug' => 'admin.users.manage_permissions', 'name' => 'Manage Per-User Permission Overrides'],
@@ -62,6 +64,12 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'hr.directory.view',               'name' => 'View Employee Directory'],
                 // Task SS2 — Finance leg of employee bank-account change approval.
                 ['slug' => 'hr.profile_updates.finance_review', 'name' => 'Approve Employee Bank-Account Changes (Finance)'],
+                // REC-03 — salary-adjustment maker-checker gate.
+                ['slug' => 'hr.salary_adjustments.view',    'name' => 'View Salary Adjustments'],
+                ['slug' => 'hr.salary_adjustments.request', 'name' => 'Request Salary Adjustment (maker)'],
+                ['slug' => 'hr.salary_adjustments.act',     'name' => 'Approve / Reject Salary Adjustment (checker)'],
+                // REC-02 — SoD override: approve a profile-change request you submitted.
+                ['slug' => 'hr.profile_updates.self_review_override', 'name' => 'Review Own Profile-Change Request (SoD override)'],
                 // T3.4 — Training matrix + certification expiry alerts.
                 ['slug' => 'hr.trainings.view',              'name' => 'View Training Catalog'],
                 ['slug' => 'hr.trainings.manage',            'name' => 'Manage Training Catalog'],
@@ -405,6 +413,8 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'budgeting.view',    'name' => 'View Budgets & Reports'],
                 ['slug' => 'budgeting.manage',  'name' => 'Create / Edit / Submit Budgets'],
                 ['slug' => 'budgeting.approve', 'name' => 'Approve / Reject Budgets & Transfers'],
+                // REC-02 — SoD override: approve a budget transfer you requested.
+                ['slug' => 'budgeting.transfers.self_approve_override', 'name' => 'Approve Own Budget Transfer (SoD override)'],
             ],
         ];
     }
@@ -426,7 +436,13 @@ class RolePermissionSeeder extends Seeder
                 'name' => 'HR Officer',
                 'description' => 'Manages employees, attendance, leave; sees sensitive HR data.',
                 'permissions' => array_merge(
-                    $this->module('hr'),
+                    // REC-02/03 — hr_officer is a MAKER: requests salary adjustments
+                    // and reviews profile changes, but cannot approve either kind of
+                    // request they themselves submitted (overrides + .act withheld).
+                    $this->module('hr', except: [
+                        'hr.profile_updates.self_review_override',
+                        'hr.salary_adjustments.act',
+                    ]),
                     $this->module('attendance'),
                     $this->module('leave'),
                     $this->module('hr_separation'),
@@ -468,7 +484,9 @@ class RolePermissionSeeder extends Seeder
                     // (wildcard) may bypass.
                     $this->module('payroll', except: ['payroll.periods.self_approve_override']),
                     $this->module('accounting', except: ['accounting.journal.self_post_override']),
-                    $this->module('budgeting'),
+                    // REC-02 — finance_officer approves transfers but cannot self-approve
+                    // one they requested (override withheld → system_admin only).
+                    $this->module('budgeting', except: ['budgeting.transfers.self_approve_override']),
                     $this->module('loans'),
                     $this->module('assets'),
                     $this->module('crm_commissions'),
@@ -507,6 +525,10 @@ class RolePermissionSeeder extends Seeder
                         'dashboard.view_bottlenecks',
                         'forecasting.view',
                         'return_management.view',
+                        // REC-03 — production_manager is the step-1 checker on the
+                        // salary_adjustment chain.
+                        'hr.salary_adjustments.view',
+                        'hr.salary_adjustments.act',
                     ],
                 ),
             ],

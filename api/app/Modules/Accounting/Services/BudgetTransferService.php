@@ -6,10 +6,17 @@ namespace App\Modules\Accounting\Services;
 
 use App\Modules\Accounting\Models\BudgetLineItem;
 use App\Modules\Accounting\Models\BudgetTransfer;
+use App\Modules\Auth\Models\User;
 use Illuminate\Support\Facades\DB;
 
 class BudgetTransferService
 {
+    /**
+     * REC-02 — SoD override. The requester of a transfer may not approve it
+     * unless they hold this permission (system_admin always does, since
+     * hasPermission() short-circuits for admin). Withheld from finance_officer.
+     */
+    private const SELF_APPROVE_OVERRIDE_PERMISSION = 'budgeting.transfers.self_approve_override';
     /**
      * Request a budget transfer between line items.
      */
@@ -41,6 +48,9 @@ class BudgetTransferService
      */
     public function approve(BudgetTransfer $transfer, int $approvedBy): BudgetTransfer
     {
+        // REC-02 — maker-checker: the requester cannot approve their own transfer.
+        $this->assertNotSelfApproving($transfer, $approvedBy);
+
         return DB::transaction(function () use ($transfer, $approvedBy): BudgetTransfer {
             if ($transfer->status !== 'pending') {
                 throw new \RuntimeException('Transfer is not pending.');
@@ -49,11 +59,12 @@ class BudgetTransferService
             $fromLine = $transfer->fromLineItem;
             $toLine   = $transfer->toLineItem;
 
-            // Deduct from source by distributing across months proportionally
-            $this->adjustLineItemAmount($fromLine, -$transfer->amount);
+            // Deduct from source by distributing across months proportionally.
+            // Cast: `amount` is a decimal:2 cast (string) — adjustLineItemAmount wants float.
+            $this->adjustLineItemAmount($fromLine, -(float) $transfer->amount);
 
             // Add to target
-            $this->adjustLineItemAmount($toLine, $transfer->amount);
+            $this->adjustLineItemAmount($toLine, (float) $transfer->amount);
 
             $transfer->update([
                 'status'      => 'approved',
@@ -72,6 +83,24 @@ class BudgetTransferService
     {
         $transfer->update(['status' => 'rejected']);
         return $transfer->fresh();
+    }
+
+    /**
+     * REC-02 — block the requester from approving their own transfer.
+     * A null requested_by (legacy) cannot trigger the guard.
+     */
+    private function assertNotSelfApproving(BudgetTransfer $transfer, int $approvedBy): void
+    {
+        if ($transfer->requested_by === null || (int) $transfer->requested_by !== $approvedBy) {
+            return; // different approver, or unknown requester — allowed.
+        }
+
+        $actor = User::find($approvedBy);
+        if ($actor && $actor->hasPermission(self::SELF_APPROVE_OVERRIDE_PERMISSION)) {
+            return; // explicit override.
+        }
+
+        abort(403, 'You cannot approve a budget transfer you requested. A different user must approve it (segregation of duties).');
     }
 
     /**

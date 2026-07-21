@@ -48,6 +48,7 @@ import {
   UserPlus,
   Star,
   Coins,
+  ShieldAlert,
   Monitor,
   Upload,
   type LucideIcon,
@@ -79,7 +80,8 @@ interface NavItem {
   /**
    * Optional role allowlist. When set, only users whose role.slug is in this
    * array see the item regardless of permission. Used to hide high-volume
-   * operational pages from roles that never need them directly.
+   * operational pages from roles that never need them directly. RESERVED:
+   * enforced in isVisible() but no item currently sets it (system_admin bypasses).
    */
   roles?: string[];
 }
@@ -204,6 +206,7 @@ const SECTIONS: NavSection[] = [
       { to: '/hr/departments',  label: 'Departments', icon: Building2,   feature: 'hr',         permission: 'hr.departments.view' },
       { to: '/hr/attendance',   label: 'Attendance',  icon: Clock4,      feature: 'attendance', permission: 'attendance.view', badgeKey: 'leaves' },
       { to: '/hr/leaves',       label: 'Leave',       icon: CalendarDays, feature: 'leave',     permission: 'leave.view' },
+      { to: '/hr/salary-adjustments', label: 'Salary Adjustments', icon: Coins, feature: 'hr', permission: 'hr.salary_adjustments.view' },
       { to: '/payroll/periods', label: 'Payroll',     icon: Wallet,      feature: 'payroll',    permission: 'payroll.view', badgeKey: 'payroll' },
       { to: '/payroll/statutory', label: 'Statutory Exports', icon: FileText, feature: 'payroll', permission: 'payroll.view' },
       { to: '/hr/succession-plans',      label: 'Succession',          icon: UserPlus,    feature: 'hr', permission: 'hr.succession.manage' },
@@ -233,6 +236,7 @@ const SECTIONS: NavSection[] = [
       { to: '/admin/users',        label: 'Users',        icon: Users2,       permission: 'admin.users.manage' },
       { to: '/admin/roles',        label: 'Roles',        icon: ShieldCheck,  permission: 'admin.roles.manage' },
       { to: '/admin/audit-logs',   label: 'Audit Logs',   icon: FileText,     permission: 'admin.audit_logs.view' },
+      { to: '/admin/sod',          label: 'Segregation of Duties', icon: ShieldAlert, permission: 'admin.sod.view' },
       { to: '/admin/settings',     label: 'Settings',     icon: SettingsIcon, permission: 'admin.settings.manage' },
       { to: '/admin/imports',      label: 'Import Data',  icon: Upload,       permission: 'admin.import.manage' },
       { to: '/admin/sessions',     label: 'Sessions',     icon: Monitor,      permission: 'admin.settings.manage' },
@@ -269,12 +273,17 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
   // Polish Task S2 — dynamic badge counts for every gated nav item.
   const { getBadge } = useBadges();
 
+  // system_admin bypasses the permission gate, mirroring usePermission().can()'s
+  // isAdmin short-circuit — otherwise an admin with an empty permission set would
+  // see a thinner menu than the pages they can actually open.
+  const isAdmin = roleSlug === 'system_admin';
+
   const isVisible = useCallback((item: NavItem) => {
     if (item.feature && features && !features.has(item.feature)) return false;
-    if (item.permission && permissions && !permissions.has(item.permission)) return false;
-    if (item.roles && roleSlug && !item.roles.includes(roleSlug)) return false;
+    if (!isAdmin && item.permission && permissions && !permissions.has(item.permission)) return false;
+    if (!isAdmin && item.roles && roleSlug && !item.roles.includes(roleSlug)) return false;
     return true;
-  }, [features, permissions, roleSlug]);
+  }, [features, permissions, roleSlug, isAdmin]);
 
   // Filter sections to only those with visible items so the active-section
   // detection and collapsed-rail dividers don't reference hidden groups.

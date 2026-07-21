@@ -14,6 +14,7 @@ import { DonutBreakdown } from '@/components/charts';
 import { client } from '@/api/client';
 import type { ApiSuccess } from '@/types';
 import type { ForecastPanelData } from '@/types/forecasting-dashboard';
+import { formatPeso } from '@/lib/formatNumber';
 
 /**
  * Task D4 — HR Officer dashboard.
@@ -48,6 +49,13 @@ interface HrDashboardData {
     };
     pending_my_action: { leave_requests: number; profile_updates: number; clearances: number; total: number };
     headcount_forecast: ForecastPanelData;
+    // REC-05 — present only for HR users with payroll.view.
+    payroll_summary?: {
+      latest_period: { id: string; label: string; status: string; payroll_date: string | null } | null;
+      employees_on_run: number;
+      net_pay_total: string;
+      pending_salary_adjustments: number;
+    };
   };
 }
 
@@ -163,6 +171,11 @@ export default function HrDashboard() {
               formatValue={(v) => String(v)}
               unitLabel="employees"
             />
+
+            {/* Row 7 — Payroll snapshot (visible only when payroll.view is granted) */}
+            {q.data.panels.payroll_summary && (
+              <PayrollSummaryPanel data={q.data.panels.payroll_summary} />
+            )}
           </>
         )}
       </div>
@@ -473,6 +486,68 @@ function PendingLeavesPanel({
           ))}
         </div>
       )}
+    </Panel>
+  );
+}
+
+const PAYROLL_STATUS_CHIP: Record<string, 'info' | 'warning' | 'success' | 'danger'> = {
+  draft: 'info',
+  processing: 'warning',
+  approved: 'info',
+  finalized: 'success',
+  disbursed: 'success',
+  voided: 'danger',
+};
+
+function PayrollSummaryPanel({
+  data,
+}: {
+  data: NonNullable<HrDashboardData['panels']['payroll_summary']>;
+}) {
+  return (
+    <Panel
+      title="Payroll Snapshot"
+      actions={
+        <Link className="text-xs text-link hover:underline" to="/payroll/periods">
+          Payroll →
+        </Link>
+      }
+    >
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+        <div className="border border-default rounded-md px-3 py-2">
+          <div className="text-xs text-muted">Latest Period</div>
+          <div className="text-sm font-medium mt-0.5">
+            {data.latest_period ? data.latest_period.label : '—'}
+          </div>
+          {data.latest_period && (
+            <div className="mt-1">
+              <Chip variant={PAYROLL_STATUS_CHIP[data.latest_period.status] ?? 'info'}>
+                {data.latest_period.status}
+              </Chip>
+            </div>
+          )}
+        </div>
+        <div className="border border-default rounded-md px-3 py-2">
+          <div className="text-xs text-muted">Employees on Run</div>
+          <div className="text-lg font-mono tabular-nums mt-0.5">{data.employees_on_run}</div>
+        </div>
+        <div className="border border-default rounded-md px-3 py-2">
+          <div className="text-xs text-muted">Net Pay (period)</div>
+          <div className="text-lg font-mono tabular-nums mt-0.5">{formatPeso(data.net_pay_total)}</div>
+        </div>
+        <div className="border border-default rounded-md px-3 py-2">
+          <div className="text-xs text-muted">Pending Salary Adjustments</div>
+          <div className="text-lg font-mono tabular-nums mt-0.5">
+            {data.pending_salary_adjustments > 0 ? (
+              <Link to="/hr/salary-adjustments" className="text-link hover:underline">
+                {data.pending_salary_adjustments}
+              </Link>
+            ) : (
+              0
+            )}
+          </div>
+        </div>
+      </div>
     </Panel>
   );
 }

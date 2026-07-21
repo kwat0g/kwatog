@@ -29,7 +29,11 @@ class HrDashboardService
 
     public function hr(User $user): array
     {
-        return Cache::remember("dashboard:hr:{$user->id}", self::CACHE_TTL, function () use ($user) {
+        // REC-05 — payroll KPIs are gated: only HR users who can see payroll get
+        // them, so the cache key is split by that capability.
+        $canPayroll = $user->hasPermission('payroll.view');
+
+        return Cache::remember("dashboard:hr:{$user->id}:" . ($canPayroll ? 'p' : 'n'), self::CACHE_TTL, function () use ($user, $canPayroll) {
             $headcount         = $this->safeCount('employees', fn ($q) => $q->where('status', 'active'));
             $onLeaveToday      = $this->safeCount('leave_requests', fn ($q) => $q
                 ->where('status', 'approved')
@@ -38,6 +42,24 @@ class HrDashboardService
             $pendingLeave      = $this->safeCount('leave_requests', fn ($q) => $q->whereIn('status', ['pending_dept', 'pending_hr', 'pending']));
             $pendingSeparation = $this->safeCount('clearances',     fn ($q) => $q->whereIn('status', ['pending', 'in_progress', 'completed']));
 
+            $panels = [
+                'by_department'      => $this->headcountByDepartment(),
+                'recent_hires'       => $this->recentHires(),
+                'pending_leaves'     => $this->pendingLeaves(),
+                'attendance_summary' => $this->hrAttendanceSummary(),
+                'probation_alerts'   => $this->hrProbationAlerts(),
+                'leave_calendar_week'=> $this->hrLeaveCalendarWeek(),
+                'hr_calendar_events' => $this->hrCalendarEvents(),
+                'pending_my_action'  => $this->hrPendingMyAction($user),
+                'headcount_forecast' => $this->forecastingService->headcountForecast(),
+            ];
+
+            // REC-05 — surface a payroll signal on the HR dashboard for HR users
+            // who can view payroll (the brief expected "HR sees payroll KPIs").
+            if ($canPayroll) {
+                $panels['payroll_summary'] = $this->hrPayrollSummary();
+            }
+
             return [
                 'kpis' => [
                     $this->kpi('Active Headcount', (string) $headcount,        'count'),
@@ -45,19 +67,48 @@ class HrDashboardService
                     $this->kpi('Pending Leave',    (string) $pendingLeave,     'count'),
                     $this->kpi('Open Clearances',  (string) $pendingSeparation, 'count'),
                 ],
-                'panels' => [
-                    'by_department'      => $this->headcountByDepartment(),
-                    'recent_hires'       => $this->recentHires(),
-                    'pending_leaves'     => $this->pendingLeaves(),
-                    'attendance_summary' => $this->hrAttendanceSummary(),
-                    'probation_alerts'   => $this->hrProbationAlerts(),
-                    'leave_calendar_week'=> $this->hrLeaveCalendarWeek(),
-                    'hr_calendar_events' => $this->hrCalendarEvents(),
-                    'pending_my_action'  => $this->hrPendingMyAction($user),
-                    'headcount_forecast' => $this->forecastingService->headcountForecast(),
-                ],
+                'panels' => $panels,
             ];
         });
+    }
+
+    /**
+     * REC-05 — payroll snapshot for the HR dashboard: latest period + its status,
+     * employees on that run, its net-pay total, and pending salary adjustments.
+     *
+     * @return array{latest_period: ?array{id: string, label: string, status: string, payroll_date: ?string}, employees_on_run: int, net_pay_total: string, pending_salary_adjustments: int}
+     */
+    private function hrPayrollSummary(): array
+    {
+        $latest = null;
+        $employeesOnRun = 0;
+        $netPayTotal = '0';
+
+        if (Schema::hasTable('payroll_periods')) {
+            $row = DB::table('payroll_periods')->orderByDesc('id')->first();
+            if ($row) {
+                $latest = [
+                    'id'           => app('hashids')->encode((int) $row->id),
+                    'label'        => trim(($row->period_start ?? '').' – '.($row->period_end ?? '')),
+                    'status'       => (string) $row->status,
+                    'payroll_date' => $row->payroll_date ?? null,
+                ];
+
+                if (Schema::hasTable('payrolls')) {
+                    $employeesOnRun = (int) DB::table('payrolls')->where('payroll_period_id', $row->id)->count();
+                    $netPayTotal    = (string) (DB::table('payrolls')->where('payroll_period_id', $row->id)->sum('net_pay') ?? 0);
+                }
+            }
+        }
+
+        $pendingAdjustments = $this->safeCount('salary_adjustments', fn ($q) => $q->where('status', 'pending'));
+
+        return [
+            'latest_period'              => $latest,
+            'employees_on_run'           => $employeesOnRun,
+            'net_pay_total'              => $netPayTotal,
+            'pending_salary_adjustments' => $pendingAdjustments,
+        ];
     }
 
     public function employee(User $user): array

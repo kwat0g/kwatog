@@ -16,6 +16,7 @@ class DatabaseSeeder extends Seeder
             AdminUserSeeder::class,        // Task 9
             WorkflowSeeder::class,         // Task 11
             SettingsSeeder::class,         // Task 12
+            SodConflictRuleSeeder::class,  // REC-01 — SoD conflict matrix
 
             // Sprint 2 — Hire to Retire (Part 1).
             DepartmentSeeder::class,       // Task 13

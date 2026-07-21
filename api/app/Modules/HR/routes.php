@@ -78,6 +78,17 @@ Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function 
             ->middleware('permission:hr.separation.initiate');
     });
 
+    // REC-03 — salary-adjustment maker-checker gate. Salary changes flow through
+    // approval; direct employee edits can no longer change pay.
+    Route::get('/salary-adjustments', [\App\Modules\HR\Controllers\SalaryAdjustmentController::class, 'index'])
+        ->middleware('permission:hr.salary_adjustments.view');
+    Route::get('/salary-adjustments/{salaryAdjustment}', [\App\Modules\HR\Controllers\SalaryAdjustmentController::class, 'show'])
+        ->middleware('permission:hr.salary_adjustments.view');
+    Route::post('/employees/{employee}/salary-adjustments', [\App\Modules\HR\Controllers\SalaryAdjustmentController::class, 'store'])
+        ->middleware('permission:hr.salary_adjustments.request');
+    Route::patch('/salary-adjustments/{salaryAdjustment}/act', [\App\Modules\HR\Controllers\SalaryAdjustmentController::class, 'act'])
+        ->middleware('permission:hr.salary_adjustments.act');
+
     // T3.4.A — Employee training records (admin assign / complete / cancel).
     Route::get('/employees/{employee}/trainings',  [\App\Modules\HR\Controllers\EmployeeTrainingController::class, 'index'])
         ->middleware('permission:hr.employees.trainings.view');

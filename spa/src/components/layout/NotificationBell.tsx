@@ -8,9 +8,9 @@
  *     when unread
  *   - "View all" footer link to /notifications
  *
- * Polls every 30s while mounted so the count stays roughly fresh without
- * needing a WebSocket. Real-time push (Reverb) is a separate follow-up
- * once the broadcast event ships from the backend.
+ * Delivery is BOTH: polls every 30s while mounted AND subscribes to Reverb via
+ * useNotificationRealtime() (private user.{id} channel, notification.created) —
+ * the websocket pops a toast + invalidates the query; the poll is the fallback.
  */
 import { useEffect, useRef, useState } from 'react';
 import { Bell } from 'lucide-react';

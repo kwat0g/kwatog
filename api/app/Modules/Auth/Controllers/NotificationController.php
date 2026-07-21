@@ -77,7 +77,10 @@ class NotificationController
         $data = $request->validate([
             'preferences'                       => ['required', 'array'],
             'preferences.*.notification_type'   => ['required', 'string', 'max:100'],
-            'preferences.*.channel'             => ['required', 'in:in_app,email'],
+            // REC-06 — `digest` is the opt-in for the daily unread-notification
+            // email (NotificationDigestService, scheduled 07:05). Previously the
+            // channel was rejected here, making the digest unreachable via API.
+            'preferences.*.channel'             => ['required', 'in:in_app,email,digest'],
             'preferences.*.enabled'             => ['required', 'boolean'],
         ]);
         $this->service->updatePreferences($request->user(), $data['preferences']);
