@@ -321,11 +321,12 @@ class PurchaseOrderService
      * OGAMI-002 — block a PO approver who is also the creator of the PO's vendor.
      *
      * This is a guard against a single user both onboarding a supplier and
-     * approving spend to that supplier. It is dormant unless the `vendors` table
-     * carries a `created_by` column AND that column is populated — neither is true
-     * today, so this check currently never fires (see report). When the column is
-     * added, the guard activates automatically. The `purchasing.po.sod_override`
-     * permission is an explicit escape hatch (system_admin always passes).
+     * approving spend to that supplier. ACTIVE: migration 0222 added
+     * `vendors.created_by` and VendorService populates it, so the guard fires for
+     * any vendor created after that migration. Legacy vendors with a null
+     * `created_by` stay exempt (unknown creator → cannot self-approve). The
+     * `purchasing.po.sod_override` permission is an explicit escape hatch
+     * (system_admin always passes).
      */
     private function assertVendorSod(PurchaseOrder $po, User $by): void
     {

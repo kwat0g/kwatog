@@ -79,7 +79,8 @@ interface NavItem {
   /**
    * Optional role allowlist. When set, only users whose role.slug is in this
    * array see the item regardless of permission. Used to hide high-volume
-   * operational pages from roles that never need them directly.
+   * operational pages from roles that never need them directly. RESERVED:
+   * enforced in isVisible() but no item currently sets it (system_admin bypasses).
    */
   roles?: string[];
 }
@@ -270,12 +271,17 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
   // Polish Task S2 — dynamic badge counts for every gated nav item.
   const { getBadge } = useBadges();
 
+  // system_admin bypasses the permission gate, mirroring usePermission().can()'s
+  // isAdmin short-circuit — otherwise an admin with an empty permission set would
+  // see a thinner menu than the pages they can actually open.
+  const isAdmin = roleSlug === 'system_admin';
+
   const isVisible = useCallback((item: NavItem) => {
     if (item.feature && features && !features.has(item.feature)) return false;
-    if (item.permission && permissions && !permissions.has(item.permission)) return false;
-    if (item.roles && roleSlug && !item.roles.includes(roleSlug)) return false;
+    if (!isAdmin && item.permission && permissions && !permissions.has(item.permission)) return false;
+    if (!isAdmin && item.roles && roleSlug && !item.roles.includes(roleSlug)) return false;
     return true;
-  }, [features, permissions, roleSlug]);
+  }, [features, permissions, roleSlug, isAdmin]);
 
   // Filter sections to only those with visible items so the active-section
   // detection and collapsed-rail dividers don't reference hidden groups.
