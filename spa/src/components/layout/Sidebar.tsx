@@ -128,6 +128,11 @@ const SECTIONS: NavSection[] = [
       { to: '/production/schedule',    label: 'Schedule (Gantt)', icon: CalendarClock, feature: 'production', permission: 'production.schedule.view' },
       { to: '/production/routings',    label: 'Routings',         icon: Route,         feature: 'production', permission: 'production.routings.view' },
       { to: '/production/oee',         label: 'OEE Report',       icon: Activity,      feature: 'production', permission: 'production.dashboard.view' },
+    ],
+  },
+  {
+    label: 'Production Planning (MRP)',
+    items: [
       { to: '/mrp/plans',              label: 'MRP Plans',        icon: Layers,        feature: 'mrp', permission: 'mrp.plans.view' },
       { to: '/mrp/boms',               label: 'Bill of Materials', icon: ListTree,     feature: 'mrp', permission: 'mrp.boms.view' },
       { to: '/mrp/machines',           label: 'Machines',         icon: Cpu,           feature: 'mrp', permission: 'mrp.machines.view' },
