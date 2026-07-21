@@ -73,7 +73,7 @@ Then **Return Management** (`/return-management`) — open the RMA → dispositi
 Click through, one line each:
 - **Budgeting** (`/budgeting`) — FY2026 per-department allocated/spent/%. Maintenance sits at 🔴 **98% critical**. *ADV9.*
 - **Forecasting › Demand** (`/forecasting/demand`) — moving-average projection; **Stock-out** page → projected stock-out date → Create PR. *ADV11.*
-- **Warehouse Map** (`/inventory/warehouse-map`) — bin-level, color-coded; **Stock Count** freezes a zone, variance → sign-off. *ADV8.*
+- **Warehouse Map** (`/inventory/warehouse-map`) — bin-level, color-coded; **Stock Count** (`/inventory/stock-count`) freezes a zone, variance → sign-off. *ADV8.*
 - **B2B Portals** — open `/portal/supplier` in a second tab: supplier sees only their own POs (separate auth guard, cross-guard isolation is tested). *ADV10.*
 - **Admin › Roles** — create a "Line Supervisor" role live, grant 4 permissions, note dynamic RBAC. *ADV4.*
 
@@ -99,3 +99,10 @@ Click through, one line each:
 ## If something looks empty mid-demo
 Re-run the seeder (idempotent, safe):
 `docker compose exec api php artisan db:seed --class=GoldenPathDemoSeeder`
+
+## Fallback if the app won't run on demo day
+`docs/defense-screenshots/` holds captured stills of all 16 showcase screens
+(regenerate with `node scripts/defense-smoke-walk.js` from the `spa/` dir). All
+16 were browser-verified to render — no blank, 404, or error-boundary pages.
+Every showcase URL in this script is the real registered route (warehouse
+screens live under `/inventory/*`, not `/warehouse/*`).

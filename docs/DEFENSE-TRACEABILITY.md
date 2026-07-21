@@ -73,7 +73,7 @@
 - **Demo proof:** driver marks delivered → uploads signed DR photo → customer-confirm gated on proof.
 
 ### ADV8 — Warehouse Management System
-- **Screens:** `/inventory/warehouse-map`, `/warehouse/stock-count`, `/warehouse/transfers`, `/warehouse/picking`, `/dashboard/warehouse`
+- **Screens:** `/inventory/warehouse-map`, `/inventory/stock-count`, `/inventory/transfer-orders`, `/inventory/picking`, `/dashboard/warehouse`
 - **Routes:** stock-count sessions, transfer orders, picking lists, stock adjustments (Inventory `routes.php`)
 - **Backend:** `StockCountSession`/`StockCountItem`, `TransferOrder`, bin-level locations, `PickingListService`
 - **Tests:** `Feature/Inventory/QuarantineMrbTest` (MRB hold), stock-count + transfer coverage
