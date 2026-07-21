@@ -62,6 +62,8 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'hr.directory.view',               'name' => 'View Employee Directory'],
                 // Task SS2 — Finance leg of employee bank-account change approval.
                 ['slug' => 'hr.profile_updates.finance_review', 'name' => 'Approve Employee Bank-Account Changes (Finance)'],
+                // REC-02 — SoD override: approve a profile-change request you submitted.
+                ['slug' => 'hr.profile_updates.self_review_override', 'name' => 'Review Own Profile-Change Request (SoD override)'],
                 // T3.4 — Training matrix + certification expiry alerts.
                 ['slug' => 'hr.trainings.view',              'name' => 'View Training Catalog'],
                 ['slug' => 'hr.trainings.manage',            'name' => 'Manage Training Catalog'],
@@ -405,6 +407,8 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'budgeting.view',    'name' => 'View Budgets & Reports'],
                 ['slug' => 'budgeting.manage',  'name' => 'Create / Edit / Submit Budgets'],
                 ['slug' => 'budgeting.approve', 'name' => 'Approve / Reject Budgets & Transfers'],
+                // REC-02 — SoD override: approve a budget transfer you requested.
+                ['slug' => 'budgeting.transfers.self_approve_override', 'name' => 'Approve Own Budget Transfer (SoD override)'],
             ],
         ];
     }
@@ -426,7 +430,9 @@ class RolePermissionSeeder extends Seeder
                 'name' => 'HR Officer',
                 'description' => 'Manages employees, attendance, leave; sees sensitive HR data.',
                 'permissions' => array_merge(
-                    $this->module('hr'),
+                    // REC-02 — hr_officer is a MAKER of profile-change reviews but
+                    // cannot self-approve a request they submitted (override withheld).
+                    $this->module('hr', except: ['hr.profile_updates.self_review_override']),
                     $this->module('attendance'),
                     $this->module('leave'),
                     $this->module('hr_separation'),
@@ -468,7 +474,9 @@ class RolePermissionSeeder extends Seeder
                     // (wildcard) may bypass.
                     $this->module('payroll', except: ['payroll.periods.self_approve_override']),
                     $this->module('accounting', except: ['accounting.journal.self_post_override']),
-                    $this->module('budgeting'),
+                    // REC-02 — finance_officer approves transfers but cannot self-approve
+                    // one they requested (override withheld → system_admin only).
+                    $this->module('budgeting', except: ['budgeting.transfers.self_approve_override']),
                     $this->module('loans'),
                     $this->module('assets'),
                     $this->module('crm_commissions'),
