@@ -12,6 +12,7 @@ import { Panel } from '@/components/ui/Panel';
 import { Chip } from '@/components/ui/Chip';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { LinkButton } from '@/components/ui/LinkButton';
 import type { ForecastPanelData, TrendDirection, ForecastPoint } from '@/types/forecasting-dashboard';
 
 interface Props {
@@ -71,12 +72,9 @@ export function ForecastPanel({
           title="Failed to load forecast"
           action={
             onRetry ? (
-              <button
-                onClick={onRetry}
-                className="text-sm text-accent hover:underline cursor-pointer"
-              >
+              <LinkButton onClick={onRetry} className="text-sm">
                 Retry
-              </button>
+              </LinkButton>
             ) : undefined
           }
         />

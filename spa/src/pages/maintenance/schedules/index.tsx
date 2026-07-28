@@ -85,20 +85,26 @@ export default function MaintenanceSchedulesListPage() {
       align: 'right' as const,
       cell: (r: MaintenanceSchedule) => (
         <div className="flex justify-end gap-1">
-          <button
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            iconOnly
+            icon={<Pencil size={14} />}
+            aria-label="Edit schedule"
             onClick={(e) => { e.stopPropagation(); navigate(`/maintenance/schedules/${r.id}/edit`); }}
-            className="p-1.5 text-muted hover:text-text hover:bg-elevated rounded-sm"
-            aria-label="Edit"
-          >
-            <Pencil size={13} />
-          </button>
-          <button
+            className="text-muted hover:text-primary"
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            iconOnly
+            icon={<Trash2 size={14} />}
+            aria-label="Delete schedule"
             onClick={(e) => { e.stopPropagation(); setDeleteTarget(r.id); }}
-            className="p-1.5 text-muted hover:text-danger hover:bg-elevated rounded-sm"
-            aria-label="Delete"
-          >
-            <Trash2 size={13} />
-          </button>
+            className="text-muted hover:text-danger"
+          />
         </div>
       ),
     }] : []),

@@ -75,15 +75,17 @@ export default function ApprovedSuppliersPage() {
     { key: 'name', header: 'Name', cell: (r) => r.item.name },
     { key: 'vendor', header: 'Vendor', cell: (r) => r.vendor.name },
     { key: 'preferred', header: 'Preferred', cell: (r) => (
-      <button
+      <Button
         type="button"
+        variant="ghost"
+        size="sm"
+        iconOnly
+        icon={r.is_preferred ? <Star size={14} fill="currentColor" className="text-accent" /> : <StarOff size={14} />}
+        aria-label={r.is_preferred ? 'Unmark preferred' : 'Mark as preferred'}
         onClick={() => togglePreferred.mutate(r)}
         disabled={!canManage || togglePreferred.isPending}
-        className="text-text-muted hover:text-accent disabled:opacity-50"
-        aria-label={r.is_preferred ? 'Unmark preferred' : 'Mark as preferred'}
-      >
-        {r.is_preferred ? <Star size={16} fill="currentColor" className="text-accent" /> : <StarOff size={16} />}
-      </button>
+        className="text-muted hover:text-accent"
+      />
     ) },
     { key: 'lead', header: 'Lead time', align: 'right', cell: (r) => <NumCell>{r.lead_time_days}d</NumCell> },
     { key: 'price', header: 'Last price', align: 'right', cell: (r) => <NumCell>{r.last_price ? formatPeso(r.last_price) : '—'}</NumCell> },
@@ -101,14 +103,16 @@ export default function ApprovedSuppliersPage() {
       header: '',
       align: 'right' as const,
       cell: (r: ApprovedSupplier) => (
-        <button
+        <Button
           type="button"
-          onClick={() => setConfirmDelete(r)}
-          className="p-1.5 text-text-muted hover:text-danger hover:bg-elevated rounded-sm transition-colors"
+          variant="ghost"
+          size="sm"
+          iconOnly
+          icon={<Trash2 size={14} />}
           aria-label="Remove approved supplier"
-        >
-          <Trash2 size={14} />
-        </button>
+          onClick={() => setConfirmDelete(r)}
+          className="text-muted hover:text-danger"
+        />
       ),
     }] : []),
   ];

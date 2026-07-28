@@ -4,6 +4,11 @@ import { conditionReadingsApi } from '@/api/maintenance/conditionReadings';
 import { machinesApi } from '@/api/mrp/machines';
 import toast from 'react-hot-toast';
 import { AlertTriangle, CheckCircle2, Thermometer } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
+import { Textarea } from '@/components/ui/Textarea';
+import { SkeletonBlock } from '@/components/ui/Skeleton';
 import type { ConditionMetric, ConditionReadingResult, MachineHealthSnapshot } from '@/types/maintenance';
 import type { Machine } from '@/types/mrp';
 
@@ -12,7 +17,7 @@ const METRICS: { value: ConditionMetric; label: string; unit: string; placeholde
   { value: 'vibration',   label: 'Vibration',   unit: 'mm/s',    placeholder: 'e.g. 4.2' },
   { value: 'pressure',    label: 'Pressure',    unit: 'bar',     placeholder: 'e.g. 8.0' },
   { value: 'current',     label: 'Current',     unit: 'amp',     placeholder: 'e.g. 120' },
-  { value: 'oil_quality', label: 'Oil Quality',  unit: 'percent', placeholder: 'e.g. 85' },
+  { value: 'oil_quality', label: 'Oil quality',  unit: 'percent', placeholder: 'e.g. 85' },
 ];
 
 export default function MobileConditionReading() {
@@ -72,7 +77,7 @@ export default function MobileConditionReading() {
     <div className="space-y-4">
       <h1 className="text-lg font-medium flex items-center gap-2">
         <Thermometer className="w-5 h-5" />
-        Condition Reading
+        Condition reading
       </h1>
 
       {/* Form */}
@@ -84,100 +89,88 @@ export default function MobileConditionReading() {
         className="rounded-md border border-default bg-canvas p-4 space-y-4"
       >
         {/* Machine selector */}
-        <div>
-          <label htmlFor="machine_select" className="block text-sm font-medium text-secondary mb-1">
-            Machine
-          </label>
-          {machinesLoading ? (
-            <div className="h-12 rounded-md bg-elevated animate-pulse" />
-          ) : (
-            <select
-              id="machine_select"
-              value={machineId}
-              onChange={e => {
-                setMachineId(e.target.value);
-                setLastResult(null);
-              }}
-              className="w-full rounded-md border border-default bg-canvas px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent min-h-[44px]"
-            >
-              <option value="">Select a machine...</option>
-              {machines.map(m => (
-                <option key={m.id} value={m.id}>
-                  {m.machine_code} — {m.name}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
-
-        {/* Metric selector */}
-        <div>
-          <label htmlFor="metric_select" className="block text-sm font-medium text-secondary mb-1">
-            Reading Type
-          </label>
-          <select
-            id="metric_select"
-            value={metric}
-            onChange={e => setMetric(e.target.value as ConditionMetric)}
-            className="w-full rounded-md border border-default bg-canvas px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent min-h-[44px]"
+        {machinesLoading ? (
+          <SkeletonBlock className="h-11 rounded-md" />
+        ) : (
+          <Select
+            id="machine_select"
+            label="Machine"
+            fieldSize="lg"
+            value={machineId}
+            onChange={e => {
+              setMachineId(e.target.value);
+              setLastResult(null);
+            }}
           >
-            {METRICS.map(m => (
-              <option key={m.value} value={m.value}>
-                {m.label} ({m.unit})
+            <option value="">Select a machine…</option>
+            {machines.map(m => (
+              <option key={m.id} value={m.id}>
+                {m.machine_code} — {m.name}
               </option>
             ))}
-          </select>
-        </div>
+          </Select>
+        )}
+
+        {/* Metric selector */}
+        <Select
+          id="metric_select"
+          label="Reading type"
+          fieldSize="lg"
+          value={metric}
+          onChange={e => setMetric(e.target.value as ConditionMetric)}
+        >
+          {METRICS.map(m => (
+            <option key={m.value} value={m.value}>
+              {m.label} ({m.unit})
+            </option>
+          ))}
+        </Select>
 
         {/* Value input */}
-        <div>
-          <label htmlFor="reading_value" className="block text-sm font-medium text-secondary mb-1">
-            Value ({selectedMetricInfo?.unit})
-          </label>
-          <input
-            id="reading_value"
-            type="number"
-            inputMode="decimal"
-            step="0.001"
-            value={value}
-            onChange={e => setValue(e.target.value)}
-            placeholder={selectedMetricInfo?.placeholder}
-            className="w-full rounded-md border border-default bg-canvas px-4 py-4 text-2xl font-mono tabular-nums text-center focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent"
-          />
-        </div>
+        <Input
+          id="reading_value"
+          label={`Value (${selectedMetricInfo?.unit})`}
+          fieldSize="xl"
+          type="number"
+          inputMode="decimal"
+          step="0.001"
+          value={value}
+          onChange={e => setValue(e.target.value)}
+          placeholder={selectedMetricInfo?.placeholder}
+          className="text-center font-mono tabular-nums"
+        />
 
         {/* Notes */}
-        <div>
-          <label htmlFor="reading_notes" className="block text-sm font-medium text-secondary mb-1">
-            Notes (optional)
-          </label>
-          <textarea
-            id="reading_notes"
-            value={notes}
-            onChange={e => setNotes(e.target.value)}
-            rows={2}
-            placeholder="Observations..."
-            className="w-full rounded-md border border-default bg-canvas px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent resize-none"
-          />
-        </div>
+        <Textarea
+          id="reading_notes"
+          label="Notes (optional)"
+          value={notes}
+          onChange={e => setNotes(e.target.value)}
+          rows={2}
+          placeholder="Observations…"
+          className="resize-none"
+        />
 
-        <button
+        <Button
           type="submit"
-          disabled={!canSubmit || mutation.isPending}
-          className="w-full min-h-[52px] rounded-md bg-accent hover:bg-accent-hover disabled:bg-elevated text-white font-medium text-base transition-colors focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
+          variant="primary"
+          size="xl"
+          className="w-full"
+          disabled={!canSubmit}
+          loading={mutation.isPending}
         >
-          {mutation.isPending ? 'Recording...' : 'Record Reading'}
-        </button>
+          {mutation.isPending ? 'Recording…' : 'Record reading'}
+        </Button>
       </form>
 
       {/* Alert banner for triggered WO */}
       {lastResult?.triggered && (
-        <div className="rounded-md border-2 border-danger bg-danger-bg p-4" role="alert">
+        <div className="rounded-md border border-danger bg-danger-bg p-4" role="alert">
           <div className="flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 text-danger flex-shrink-0 mt-0.5" />
             <div>
               <div className="text-sm font-medium text-danger">
-                Threshold Breached
+                Threshold breached
               </div>
               <p className="text-sm text-danger mt-1">
                 {lastResult.reason}
@@ -210,7 +203,7 @@ export default function MobileConditionReading() {
       {/* Health snapshot for selected machine */}
       {machineId && healthData && (
         <div className="rounded-md border border-default bg-canvas p-4">
-          <h2 className="text-base font-medium mb-3">Current Health Status</h2>
+          <h2 className="text-base font-medium mb-3">Current health status</h2>
           <div className="space-y-2">
             {(healthData as MachineHealthSnapshot[]).map(snap => (
               <div

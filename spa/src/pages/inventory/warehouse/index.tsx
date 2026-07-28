@@ -362,14 +362,16 @@ export default function WarehousePage() {
 
 function IconBtn({ children, label, danger, onClick }: { children: React.ReactNode; label: string; danger?: boolean; onClick: () => void }) {
   return (
-    <button
+    <Button
       type="button"
-      onClick={onClick}
+      variant="ghost"
+      size="sm"
+      iconOnly
+      icon={children}
       aria-label={label}
-      className={`p-1 rounded-sm transition-colors text-text-muted ${danger ? 'hover:text-danger' : 'hover:text-primary'} hover:bg-canvas`}
-    >
-      {children}
-    </button>
+      onClick={onClick}
+      className={danger ? 'text-muted hover:text-danger' : 'text-muted hover:text-primary'}
+    />
   );
 }
 

@@ -38,6 +38,7 @@ import { oeeApi } from '@/api/production/oee';
 import { formatDate } from '@/lib/formatDate';
 import type { MachineOeeRow } from '@/types/production';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { Input } from '@/components/ui/Input';
 import { cn } from '@/lib/cn';
 
 type Preset = 'today' | 'week' | 'month' | 'custom';
@@ -161,18 +162,22 @@ export default function OeeReportPage() {
         </div>
         {preset === 'custom' && (
           <div className="flex items-center gap-2 text-xs">
-            <input
+            <Input
+              fieldSize="sm"
               type="date"
+              aria-label="From date"
               value={custom.from}
               onChange={(e) => setCustom((c) => ({ ...c, from: e.target.value }))}
-              className="h-7 px-2 rounded-md border border-default bg-canvas text-sm font-mono"
+              className="font-mono"
             />
             <span className="text-muted">→</span>
-            <input
+            <Input
+              fieldSize="sm"
               type="date"
+              aria-label="To date"
               value={custom.to}
               onChange={(e) => setCustom((c) => ({ ...c, to: e.target.value }))}
-              className="h-7 px-2 rounded-md border border-default bg-canvas text-sm font-mono"
+              className="font-mono"
             />
           </div>
         )}

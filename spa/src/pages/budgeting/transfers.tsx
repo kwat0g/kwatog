@@ -165,20 +165,26 @@ export default function BudgetTransfersPage() {
       key: 'actions', header: '',
       cell: (r) => r.status === 'pending' && can('budgeting.manage') ? (
         <div className="flex gap-1">
-          <button
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            iconOnly
+            icon={<Check size={14} />}
+            aria-label="Approve transfer"
             onClick={() => setConfirmApprove(r.id)}
-            title="Approve"
-            className="p-1 rounded text-muted hover:text-success hover:bg-success/10 transition-colors"
-          >
-            <Check size={14} />
-          </button>
-          <button
+            className="text-muted hover:text-success"
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            iconOnly
+            icon={<X size={14} />}
+            aria-label="Reject transfer"
             onClick={() => setConfirmReject(r.id)}
-            title="Reject"
-            className="p-1 rounded text-muted hover:text-danger hover:bg-danger/10 transition-colors"
-          >
-            <X size={14} />
-          </button>
+            className="text-muted hover:text-danger"
+          />
         </div>
       ) : null,
     },

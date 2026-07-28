@@ -13,6 +13,7 @@ import { DataTable, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
+import { LinkButton } from '@/components/ui/LinkButton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
@@ -67,7 +68,7 @@ export default function PrTemplatesListPage() {
 
   const columns: Column<PurchaseRequestTemplate>[] = [
     { key: 'name', header: 'Name', cell: (r) => (
-      <button className="font-medium text-accent hover:underline cursor-pointer" onClick={() => navigate(`/purchasing/pr-templates/${r.id}`)}>{r.name}</button>
+      <LinkButton className="font-medium text-left" onClick={() => navigate(`/purchasing/pr-templates/${r.id}`)}>{r.name}</LinkButton>
     )},
     { key: 'department', header: 'Department', cell: (r) => r.department?.name ?? '—' },
     { key: 'items', header: 'Items', cell: (r) => `${r.items.length} line(s)` },
@@ -78,16 +79,37 @@ export default function PrTemplatesListPage() {
     { key: 'created', header: 'Created', cell: (r) => r.created_at ? formatDate(r.created_at) : '—' },
     { key: 'actions', header: '', cell: (r) => (
       <div className="flex items-center gap-1">
-        <button title="Use template" onClick={() => useTemplate.mutate(r)} className="p-1.5 rounded hover:bg-subtle text-muted hover:text-accent transition-colors">
-          <Copy size={14} />
-        </button>
-        <button title="Edit" onClick={() => navigate(`/purchasing/pr-templates/${r.id}/edit`)} className="p-1.5 rounded hover:bg-subtle text-muted hover:text-accent transition-colors">
-          <Pencil size={14} />
-        </button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          iconOnly
+          icon={<Copy size={14} />}
+          aria-label="Use template"
+          onClick={() => useTemplate.mutate(r)}
+          className="text-muted hover:text-accent"
+        />
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          iconOnly
+          icon={<Pencil size={14} />}
+          aria-label="Edit template"
+          onClick={() => navigate(`/purchasing/pr-templates/${r.id}/edit`)}
+          className="text-muted hover:text-primary"
+        />
         {can('purchasing.pr.create') && (
-          <button title="Delete" onClick={() => setDeleteId(r.id)} className="p-1.5 rounded hover:bg-subtle text-muted hover:text-danger transition-colors">
-            <Trash2 size={14} />
-          </button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            iconOnly
+            icon={<Trash2 size={14} />}
+            aria-label="Delete template"
+            onClick={() => setDeleteId(r.id)}
+            className="text-muted hover:text-danger"
+          />
         )}
       </div>
     )},

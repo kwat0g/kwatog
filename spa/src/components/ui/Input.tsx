@@ -9,12 +9,14 @@ const shellSize: Record<FieldSize, string> = {
   sm: 'h-7',
   md: 'h-8',
   lg: 'h-11',
+  xl: 'h-14',
 };
 
 const textSize: Record<FieldSize, string> = {
   sm: 'px-2 text-xs',
   md: 'px-3 text-sm',
   lg: 'px-3 text-base',
+  xl: 'px-4 text-xl',
 };
 
 export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'prefix'> {

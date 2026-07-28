@@ -164,9 +164,17 @@ export default function PrTemplateFormPage() {
                   <Input type="number" min="0" step="0.01" placeholder="Est. price" value={line.estimated_unit_price} onChange={(e) => updateLine(line.key, 'estimated_unit_price', e.target.value)} />
                 </div>
                 <div className="col-span-1 pt-1">
-                  <button onClick={() => removeLine(line.key)} className="p-1.5 rounded hover:bg-subtle text-muted hover:text-danger transition-colors" disabled={lines.length <= 1}>
-                    <Trash2 size={14} />
-                  </button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    iconOnly
+                    icon={<Trash2 size={14} />}
+                    aria-label="Remove line"
+                    onClick={() => removeLine(line.key)}
+                    disabled={lines.length <= 1}
+                    className="text-muted hover:text-danger"
+                  />
                 </div>
               </div>
             ))}

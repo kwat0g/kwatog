@@ -7,6 +7,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { StatCard } from '@/components/ui/StatCard';
+import { LinkButton } from '@/components/ui/LinkButton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatPeso } from '@/lib/formatNumber';
 
@@ -30,7 +31,7 @@ export default function ProcurementChainPage() {
     <div>
       <PageHeader title="Procurement Chain" />
       <EmptyState icon="alert-circle" title="Failed to load chain data"
-        action={<button className="text-accent hover:underline text-sm" onClick={() => refetch()}>Retry</button>} />
+        action={<LinkButton className="text-sm" onClick={() => refetch()}>Retry</LinkButton>} />
     </div>
   );
 

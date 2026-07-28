@@ -20,6 +20,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Input } from '@/components/ui/Input';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { LinkButton } from '@/components/ui/LinkButton';
 import { formatPeso } from '@/lib/formatNumber';
 import type { ApiValidationError } from '@/types';
 import type {
@@ -177,14 +178,14 @@ function RequestList({
                 {r.status === 'pending' ? 'Pending approval' : r.status ?? '—'}
               </Chip>
               {onCancel && r.status === 'pending' && (
-                <button
-                  type="button"
+                <LinkButton
+                  tone="danger"
                   onClick={() => onCancel(r.id)}
-                  className="text-2xs text-danger hover:underline"
+                  className="text-2xs"
                   aria-label="Cancel this overtime request"
                 >
                   Cancel
-                </button>
+                </LinkButton>
               )}
             </div>
           </div>

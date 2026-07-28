@@ -13,6 +13,8 @@ import toast from 'react-hot-toast';
 import { schedulerApi } from '@/api/mrp/scheduler';
 import { machinesApi } from '@/api/mrp/machines';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
@@ -95,32 +97,31 @@ export default function ProductionSchedulePage() {
         actions={
           <div className="flex items-center gap-1.5 flex-wrap">
             {/* Date range */}
-            <input
+            <Input
               type="date"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
-              className="h-8 px-2 text-xs rounded-md border border-default bg-canvas font-mono"
+              className="font-mono"
               aria-label="From date"
             />
             <span className="text-muted text-xs">→</span>
-            <input
+            <Input
               type="date"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
-              className="h-8 px-2 text-xs rounded-md border border-default bg-canvas font-mono"
+              className="font-mono"
               aria-label="To date"
             />
-            {/* View mode */}
-            <select
+            <SegmentedControl
+              label="View mode"
               value={viewMode}
-              onChange={(e) => setViewMode(e.target.value as 'Day' | 'Week' | 'Month')}
-              className="h-8 px-2 text-xs rounded-md border border-default bg-canvas"
-              aria-label="View mode"
-            >
-              <option value="Day">Day</option>
-              <option value="Week">Week</option>
-              <option value="Month">Month</option>
-            </select>
+              onChange={setViewMode}
+              options={[
+                { value: 'Day', label: 'Day' },
+                { value: 'Week', label: 'Week' },
+                { value: 'Month', label: 'Month' },
+              ]}
+            />
             {canRun && (
               <Button size="sm" variant="secondary" icon={<Play size={14} />}
                 onClick={() => run.mutate()} loading={run.isPending}>

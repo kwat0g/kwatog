@@ -37,7 +37,7 @@ export default function SodMatrixPage() {
       <div className="px-5 py-4 space-y-8">
         {/* Violation report — the audit artifact, shown first. */}
         <section>
-          <h2 className="text-sm font-semibold mb-2">Who violates SoD today</h2>
+          <h2 className="text-sm font-medium mb-2">Who violates SoD today</h2>
           {violations.isLoading && <SkeletonTable columns={3} rows={3} />}
           {violations.isError && (
             <EmptyState
@@ -82,7 +82,7 @@ export default function SodMatrixPage() {
 
         {/* The matrix itself. */}
         <section>
-          <h2 className="text-sm font-semibold mb-2">Conflict matrix</h2>
+          <h2 className="text-sm font-medium mb-2">Conflict matrix</h2>
           {matrix.isLoading && <SkeletonTable columns={4} rows={6} />}
           {matrix.isError && (
             <EmptyState

@@ -91,7 +91,7 @@ export function ReasonDialog({
           </div>
           <div className="space-y-1.5 flex-1">
             <h2 className="text-md font-medium text-primary">{title}</h2>
-            {description && <div className="text-sm text-text-muted">{description}</div>}
+            {description && <div className="text-sm text-muted">{description}</div>}
           </div>
         </div>
         <div className="mt-4">
@@ -106,7 +106,7 @@ export function ReasonDialog({
             error={error}
             autoFocus
           />
-          <div className="mt-1 text-2xs text-text-muted text-right tabular-nums">
+          <div className="mt-1 text-2xs text-muted text-right tabular-nums">
             {trimmed.length}/{maxLength}
           </div>
         </div>

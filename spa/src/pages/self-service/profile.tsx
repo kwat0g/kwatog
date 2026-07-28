@@ -25,6 +25,7 @@ import { Input } from '@/components/ui/Input';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { LinkButton } from '@/components/ui/LinkButton';
 import type { ApiValidationError } from '@/types';
 import type { ProfileUpdateRequestRecord, SelfServiceProfile } from '@/types/self-service';
 
@@ -345,13 +346,9 @@ function EditableBlock({
       <div className="px-3 py-2 border-b border-subtle flex items-center justify-between">
         <span className="text-2xs uppercase tracking-wider text-muted font-medium">{title}</span>
         {!editing && (
-          <button
-            type="button"
-            onClick={startEdit}
-            className="inline-flex items-center gap-1 text-xs text-accent hover:underline"
-          >
-            <Pencil size={12} /> Edit
-          </button>
+          <LinkButton onClick={startEdit} icon={<Pencil size={12} />} className="text-xs">
+            Edit
+          </LinkButton>
         )}
       </div>
 
@@ -459,13 +456,9 @@ function BankBlock({
           Bank account · HR + Finance approval
         </span>
         {!pending && (
-          <button
-            type="button"
-            onClick={() => { setError(null); setOpen(true); }}
-            className="text-xs text-accent hover:underline"
-          >
+          <LinkButton onClick={() => { setError(null); setOpen(true); }} className="text-xs">
             Request update
-          </button>
+          </LinkButton>
         )}
       </div>
       <dl className="divide-y divide-subtle">

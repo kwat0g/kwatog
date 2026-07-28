@@ -12,6 +12,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { Textarea } from '@/components/ui/Textarea';
+import { LinkButton } from '@/components/ui/LinkButton';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDateTime } from '@/lib/formatDate';
 import type { PayrollAnomalyFlag, PayrollAnomalyType } from '@/types/payroll';
@@ -81,12 +82,9 @@ export function AnomalyReviewPanel({ periodId }: Props) {
             ? 'Showing resolved anomalies (audit trail).'
             : 'Unresolved anomalies must be reviewed before payroll can be finalised.'}
         </span>
-        <button
-          onClick={() => setShowResolved((v) => !v)}
-          className="text-muted hover:text-primary underline-offset-2 hover:underline"
-        >
+        <LinkButton tone="muted" onClick={() => setShowResolved((v) => !v)}>
           {showResolved ? 'Show unresolved' : 'Show resolved'}
-        </button>
+        </LinkButton>
       </div>
 
       {isLoading && !data && <div className="px-3 pb-3"><SkeletonTable columns={1} rows={3} /></div>}

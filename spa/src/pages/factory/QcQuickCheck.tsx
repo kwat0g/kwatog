@@ -2,6 +2,11 @@ import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { factoryApi } from '@/api/factory';
 import toast from 'react-hot-toast';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
+import { Textarea } from '@/components/ui/Textarea';
+import { SkeletonBlock } from '@/components/ui/Skeleton';
 import type { WorkOrder } from '@/types/production';
 
 export default function QcQuickCheck() {
@@ -83,39 +88,35 @@ export default function QcQuickCheck() {
 
   return (
     <div className="space-y-5 touch-manipulation">
-      <h1 className="text-lg font-medium">Quick QC Check</h1>
+      <h1 className="text-lg font-medium">Quick QC check</h1>
 
       {/* Work Order selection */}
-      <div className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-canvas dark:bg-zinc-900 p-4 space-y-4">
-        <div>
-          <label htmlFor="wo_select" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-            Work Order
-          </label>
-          {ordersLoading ? (
-            <div className="h-12 rounded-md bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
-          ) : (
-            <select
-              id="wo_select"
-              value={selectedWoId}
-              onChange={e => {
-                setSelectedWoId(e.target.value);
-                setShowFailPrompt(false);
-              }}
-              className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-canvas dark:bg-zinc-800 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 min-h-[44px]"
-            >
-              <option value="">Select a work order...</option>
-              {orders.map(wo => (
-                <option key={wo.id} value={wo.id}>
-                  {wo.wo_number} — {wo.product?.name ?? 'Unknown'}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
+      <div className="rounded-md border border-default bg-canvas p-4 space-y-4">
+        {ordersLoading ? (
+          <SkeletonBlock className="h-11 rounded-md" />
+        ) : (
+          <Select
+            id="wo_select"
+            label="Work order"
+            fieldSize="lg"
+            value={selectedWoId}
+            onChange={e => {
+              setSelectedWoId(e.target.value);
+              setShowFailPrompt(false);
+            }}
+          >
+            <option value="">Select a work order…</option>
+            {orders.map(wo => (
+              <option key={wo.id} value={wo.id}>
+                {wo.wo_number} — {wo.product?.name ?? 'Unknown'}
+              </option>
+            ))}
+          </Select>
+        )}
 
         {selectedWo && (
-          <div className="text-xs text-zinc-500 bg-zinc-50 dark:bg-zinc-800/50 rounded p-2">
-            <span className="font-medium">{selectedWo.product?.part_number}</span>
+          <div className="text-xs text-muted bg-subtle rounded-md p-2">
+            <span className="font-medium text-secondary">{selectedWo.product?.part_number}</span>
             {' '}&middot;{' '}
             Machine: {selectedWo.machine?.name ?? 'N/A'}
             {' '}&middot;{' '}
@@ -123,88 +124,80 @@ export default function QcQuickCheck() {
           </div>
         )}
 
-        <div>
-          <label htmlFor="sample_size" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-            Sample Size
-          </label>
-          <input
-            id="sample_size"
-            type="number"
-            inputMode="numeric"
-            min="1"
-            value={sampleSize}
-            onChange={e => setSampleSize(e.target.value)}
-            placeholder="e.g. 5"
-            className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-canvas dark:bg-zinc-800 px-4 py-4 text-xl font-mono tabular-nums text-center focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-          />
-        </div>
+        <Input
+          id="sample_size"
+          label="Sample size"
+          fieldSize="xl"
+          type="number"
+          inputMode="numeric"
+          min="1"
+          value={sampleSize}
+          onChange={e => setSampleSize(e.target.value)}
+          placeholder="e.g. 5"
+          className="text-center font-mono tabular-nums"
+        />
 
-        <div>
-          <label htmlFor="defects_found" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-            Defects Found
-          </label>
-          <input
-            id="defects_found"
-            type="number"
-            inputMode="numeric"
-            min="0"
-            value={defectsFound}
-            onChange={e => setDefectsFound(e.target.value)}
-            placeholder="0"
-            className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-canvas dark:bg-zinc-800 px-4 py-4 text-xl font-mono tabular-nums text-center focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-          />
-        </div>
+        <Input
+          id="defects_found"
+          label="Defects found"
+          fieldSize="xl"
+          type="number"
+          inputMode="numeric"
+          min="0"
+          value={defectsFound}
+          onChange={e => setDefectsFound(e.target.value)}
+          placeholder="0"
+          className="text-center font-mono tabular-nums"
+        />
 
-        <div>
-          <label htmlFor="qc_notes" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-            Notes (optional)
-          </label>
-          <textarea
-            id="qc_notes"
-            value={notes}
-            onChange={e => setNotes(e.target.value)}
-            rows={2}
-            placeholder="Visual observations..."
-            className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-canvas dark:bg-zinc-800 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"
-          />
-        </div>
+        <Textarea
+          id="qc_notes"
+          label="Notes (optional)"
+          value={notes}
+          onChange={e => setNotes(e.target.value)}
+          rows={2}
+          placeholder="Visual observations…"
+          className="resize-none"
+        />
 
         {/* Fail prompt for defect description */}
         {showFailPrompt && (
-          <div className="rounded-md border-2 border-danger bg-danger-bg p-3">
-            <label htmlFor="defect_desc" className="block text-sm font-medium text-danger mb-1">
-              Describe the defect
-            </label>
-            <textarea
+          <div className="rounded-md border border-danger bg-danger-bg p-3">
+            <Textarea
               id="defect_desc"
+              label="Describe the defect"
               value={defectDescription}
               onChange={e => setDefectDescription(e.target.value)}
               rows={2}
               autoFocus
               placeholder="What failed? (e.g. flash on parting line, short shot, burn marks)"
-              className="w-full rounded-md border border-red-300 dark:border-red-700 bg-canvas dark:bg-zinc-800 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 resize-none"
+              className="resize-none"
             />
           </div>
         )}
 
         {/* Action buttons */}
         <div className="grid grid-cols-2 gap-3 pt-2">
-          <button
+          <Button
             type="button"
+            variant="success"
+            size="xl"
             onClick={handlePass}
-            disabled={!canSubmit || mutation.isPending}
-            className="min-h-[56px] rounded-md bg-success hover:bg-success/90 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 text-white font-medium text-lg transition-colors focus:outline-none focus:ring-2 focus:ring-success focus:ring-offset-2"
+            disabled={!canSubmit}
+            loading={mutation.isPending}
           >
-            {mutation.isPending ? '...' : 'PASS'}
-          </button>
-          <button
+            PASS
+          </Button>
+          <Button
             type="button"
+            variant="danger"
+            size="xl"
             onClick={handleFail}
-            disabled={!canSubmit || mutation.isPending}
-            className="min-h-[56px] rounded-md bg-danger hover:bg-danger/90 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 text-white font-medium text-lg transition-colors focus:outline-none focus:ring-2 focus:ring-danger focus:ring-offset-2"
+            disabled={!canSubmit}
+            loading={mutation.isPending}
           >
-            {mutation.isPending ? '...' : 'FAIL'}
-          </button>
+            FAIL
+          </Button>
         </div>
       </div>
     </div>

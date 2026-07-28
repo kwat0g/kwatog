@@ -19,6 +19,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { Textarea } from '@/components/ui/Textarea';
 
 const MONTHS = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -156,17 +157,15 @@ function ReopenModal({
         <p className="text-xs text-muted">
           Reopening a closed month is audited. State why — this is stored on the period and shown to reviewers.
         </p>
-        <div>
-          <label className="block text-xs font-medium text-primary mb-1">Reason <span className="text-danger-fg">*</span></label>
-          <textarea
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            rows={3}
-            placeholder="e.g. Backdated supplier invoice received after close."
-            className="block w-full rounded-md border border-default bg-canvas px-3 py-2 text-sm text-primary placeholder:text-muted focus:border-accent focus:outline-none"
-          />
-          <p className="mt-1 text-2xs text-muted">Minimum 3 characters.</p>
-        </div>
+        <Textarea
+          label="Reason"
+          required
+          helper="Minimum 3 characters."
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          rows={3}
+          placeholder="e.g. Backdated supplier invoice received after close."
+        />
       </div>
       <div className="flex justify-end gap-2 pt-3 border-t border-default">
         <Button variant="secondary" onClick={onClose} disabled={pending}>Cancel</Button>

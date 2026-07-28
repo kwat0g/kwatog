@@ -6,6 +6,10 @@ import { itemsApi } from '@/api/inventory/items';
 import toast from 'react-hot-toast';
 import { ArrowLeft, Plus, Trash2, Play, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { BottomSheet } from '@/components/ui/BottomSheet';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
+import { Textarea } from '@/components/ui/Textarea';
 import type { SparePartUsage } from '@/types/maintenance';
 import type { Item } from '@/types/inventory';
 import { client } from '@/api/client';
@@ -114,13 +118,9 @@ export default function MobileWorkOrderDetail() {
     return (
       <div className="py-12 text-center" role="alert">
         <div className="text-danger mb-2">Could not load work order.</div>
-        <button
-          type="button"
-          onClick={() => refetch()}
-          className="text-sm underline min-h-[44px] px-3 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 rounded"
-        >
+        <Button type="button" variant="secondary" onClick={() => refetch()}>
           Try again
-        </button>
+        </Button>
       </div>
     );
   }
@@ -180,30 +180,34 @@ export default function MobileWorkOrderDetail() {
 
       {/* Start button */}
       {canStart && !isTerminal && (
-        <button
+        <Button
           type="button"
+          variant="success"
+          size="xl"
+          className="w-full"
+          icon={<Play className="w-5 h-5" />}
           onClick={() => startMutation.mutate()}
-          disabled={startMutation.isPending}
-          className="w-full min-h-[52px] rounded-md bg-success hover:bg-success/90 disabled:bg-elevated text-white font-medium text-base transition-colors focus:outline-none focus:ring-2 focus:ring-success focus:ring-offset-2 inline-flex items-center justify-center gap-2"
+          loading={startMutation.isPending}
         >
-          <Play className="w-5 h-5" />
-          {startMutation.isPending ? 'Starting...' : 'Start Work'}
-        </button>
+          {startMutation.isPending ? 'Starting…' : 'Start work'}
+        </Button>
       )}
 
       {/* Parts Used section */}
       {!isTerminal && (
         <div className="rounded-md border border-default bg-canvas p-4">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-base font-medium">Parts Used</h2>
-            <button
+            <h2 className="text-base font-medium">Parts used</h2>
+            <Button
               type="button"
+              variant="ghost"
+              size="lg"
+              icon={<Plus className="w-4 h-4" />}
               onClick={() => setShowPartSheet(true)}
-              className="inline-flex items-center gap-1 text-sm text-accent min-h-[44px] px-3 rounded focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
+              className="text-accent"
             >
-              <Plus className="w-4 h-4" />
               Add
-            </button>
+            </Button>
           </div>
 
           {wo.spare_parts && wo.spare_parts.length > 0 ? (
@@ -240,7 +244,7 @@ export default function MobileWorkOrderDetail() {
       {/* Read-only parts for terminal states */}
       {isTerminal && wo.spare_parts && wo.spare_parts.length > 0 && (
         <div className="rounded-md border border-default bg-canvas p-4">
-          <h2 className="text-base font-medium mb-3">Parts Used</h2>
+          <h2 className="text-base font-medium mb-3">Parts used</h2>
           <div className="space-y-2">
             {wo.spare_parts.map((sp: SparePartUsage) => (
               <div
@@ -271,53 +275,48 @@ export default function MobileWorkOrderDetail() {
           }}
           className="rounded-md border border-default bg-canvas p-4 space-y-4"
         >
-          <h2 className="text-base font-medium">Complete Work Order</h2>
+          <h2 className="text-base font-medium">Complete work order</h2>
 
-          <div>
-            <label htmlFor="remarks" className="block text-sm font-medium text-secondary mb-1">
-              Work Performed
-            </label>
-            <textarea
-              id="remarks"
-              value={remarks}
-              onChange={e => setRemarks(e.target.value)}
-              rows={3}
-              placeholder="Describe what was done..."
-              className="w-full rounded-md border border-default bg-canvas px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent resize-none"
-            />
-          </div>
+          <Textarea
+            id="remarks"
+            label="Work performed"
+            value={remarks}
+            onChange={e => setRemarks(e.target.value)}
+            rows={3}
+            placeholder="Describe what was done…"
+            className="resize-none"
+          />
 
-          <div>
-            <label htmlFor="downtime" className="block text-sm font-medium text-secondary mb-1">
-              Downtime (minutes)
-            </label>
-            <input
-              id="downtime"
-              type="number"
-              inputMode="numeric"
-              min="0"
-              value={downtimeMinutes}
-              onChange={e => setDowntimeMinutes(e.target.value)}
-              placeholder="0"
-              className="w-full rounded-md border border-default bg-canvas px-4 py-4 text-2xl font-mono tabular-nums text-center focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent"
-            />
-          </div>
+          <Input
+            id="downtime"
+            label="Downtime (minutes)"
+            fieldSize="xl"
+            type="number"
+            inputMode="numeric"
+            min="0"
+            value={downtimeMinutes}
+            onChange={e => setDowntimeMinutes(e.target.value)}
+            placeholder="0"
+            className="text-center font-mono tabular-nums"
+          />
 
-          <button
+          <Button
             type="submit"
-            disabled={completeMutation.isPending}
-            className="w-full min-h-[52px] rounded-md bg-accent hover:bg-accent-hover disabled:bg-elevated text-white font-medium text-base transition-colors focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 inline-flex items-center justify-center gap-2"
+            variant="primary"
+            size="xl"
+            className="w-full"
+            icon={<CheckCircle2 className="w-5 h-5" />}
+            loading={completeMutation.isPending}
           >
-            <CheckCircle2 className="w-5 h-5" />
-            {completeMutation.isPending ? 'Completing...' : 'Complete Work Order'}
-          </button>
+            {completeMutation.isPending ? 'Completing…' : 'Complete work order'}
+          </Button>
         </form>
       )}
 
       {/* Activity log */}
       {wo.logs && wo.logs.length > 0 && (
         <div className="rounded-md border border-default bg-canvas p-4">
-          <h2 className="text-base font-medium mb-3">Activity Log</h2>
+          <h2 className="text-base font-medium mb-3">Activity log</h2>
           <div className="space-y-2">
             {wo.logs.map(log => (
               <div key={log.id} className="text-sm">
@@ -342,26 +341,22 @@ export default function MobileWorkOrderDetail() {
           setPartQty('');
           setPartLocationId('');
         }}
-        title="Add Spare Part"
+        title="Add spare part"
       >
         <div className="space-y-4">
           {/* Item search */}
           {!selectedItem ? (
             <>
-              <div>
-                <label htmlFor="part_search" className="block text-sm font-medium text-secondary mb-1">
-                  Search spare parts
-                </label>
-                <input
-                  id="part_search"
-                  type="text"
-                  value={partSearch}
-                  onChange={e => setPartSearch(e.target.value)}
-                  placeholder="Search items…"
-                  autoFocus
-                  className="w-full rounded-md border border-default bg-canvas px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent"
-                />
-              </div>
+              <Input
+                id="part_search"
+                label="Search spare parts"
+                fieldSize="lg"
+                type="text"
+                value={partSearch}
+                onChange={e => setPartSearch(e.target.value)}
+                placeholder="Search items…"
+                autoFocus
+              />
 
               {itemsData?.data && itemsData.data.length > 0 && (
                 <div className="space-y-1 max-h-[40vh] overflow-y-auto">
@@ -391,63 +386,63 @@ export default function MobileWorkOrderDetail() {
                   <div className="text-sm font-medium">{selectedItem.name}</div>
                   <div className="text-xs text-muted">{selectedItem.code}</div>
                 </div>
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="lg"
+                  iconOnly
+                  icon={<Trash2 className="w-4 h-4" />}
+                  aria-label="Clear selected part"
                   onClick={() => {
                     setSelectedItem(null);
                     setPartLocationId('');
                     setPartQty('');
                   }}
-                  className="text-muted hover:text-danger min-h-[44px] min-w-[44px] flex items-center justify-center rounded focus:outline-none focus:ring-2 focus:ring-danger"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Location picker */}
-              <div>
-                <label htmlFor="part_location" className="block text-sm font-medium text-secondary mb-1">
-                  Source Location
-                </label>
-                <select
-                  id="part_location"
-                  value={partLocationId}
-                  onChange={e => setPartLocationId(e.target.value)}
-                  className="w-full rounded-md border border-default bg-canvas px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent min-h-[44px]"
-                >
-                  <option value="">Select location...</option>
-                  {stockData?.data?.map(
-                    (sl: { id: string; location: { id: string; code: string }; quantity_on_hand: string }) => (
-                      <option key={sl.location.id} value={sl.location.id}>
-                        {sl.location.code} (Qty: {sl.quantity_on_hand})
-                      </option>
-                    ),
-                  )}
-                </select>
-              </div>
-
-              {/* Quantity */}
-              <div>
-                <label htmlFor="part_qty" className="block text-sm font-medium text-secondary mb-1">
-                  Quantity ({selectedItem.unit_of_measure})
-                </label>
-                <input
-                  id="part_qty"
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  step="0.01"
-                  value={partQty}
-                  onChange={e => setPartQty(e.target.value)}
-                  placeholder="0"
-                  className="w-full rounded-md border border-default bg-canvas px-4 py-4 text-xl font-mono tabular-nums text-center focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent"
+                  className="text-muted hover:text-danger"
                 />
               </div>
 
+              {/* Location picker */}
+              <Select
+                id="part_location"
+                label="Source location"
+                fieldSize="lg"
+                value={partLocationId}
+                onChange={e => setPartLocationId(e.target.value)}
+              >
+                <option value="">Select location…</option>
+                {stockData?.data?.map(
+                  (sl: { id: string; location: { id: string; code: string }; quantity_on_hand: string }) => (
+                    <option key={sl.location.id} value={sl.location.id}>
+                      {sl.location.code} (Qty: {sl.quantity_on_hand})
+                    </option>
+                  ),
+                )}
+              </Select>
+
+              {/* Quantity */}
+              <Input
+                id="part_qty"
+                label={`Quantity (${selectedItem.unit_of_measure})`}
+                fieldSize="xl"
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="0.01"
+                value={partQty}
+                onChange={e => setPartQty(e.target.value)}
+                placeholder="0"
+                className="text-center font-mono tabular-nums"
+              />
+
               {/* Submit */}
-              <button
+              <Button
                 type="button"
-                disabled={!canAddPart || sparePartMutation.isPending}
+                variant="primary"
+                size="xl"
+                className="w-full"
+                disabled={!canAddPart}
+                loading={sparePartMutation.isPending}
                 onClick={() => {
                   if (!canAddPart) return;
                   sparePartMutation.mutate({
@@ -456,10 +451,9 @@ export default function MobileWorkOrderDetail() {
                     quantity: partQty,
                   });
                 }}
-                className="w-full min-h-[52px] rounded-md bg-accent hover:bg-accent-hover disabled:bg-elevated text-white font-medium text-base transition-colors focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
               >
-                {sparePartMutation.isPending ? 'Recording...' : 'Add Part'}
-              </button>
+                {sparePartMutation.isPending ? 'Recording…' : 'Add part'}
+              </Button>
             </>
           )}
         </div>

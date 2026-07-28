@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { Select } from '@/components/ui/Select';
 import { Panel } from '@/components/ui/Panel';
+import { Checkbox } from '@/components/ui/Checkbox';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { onFormInvalid } from '@/lib/formErrors';
 import toast from 'react-hot-toast';
@@ -166,10 +167,7 @@ export default function PostingCreatePage() {
               <Input label="Deadline" {...register('closes_at')} type="date" />
             </div>
 
-            <div className="flex items-center gap-2">
-              <input type="checkbox" id="show_salary" {...register('show_salary')} className="h-4 w-4 rounded border-default text-accent" />
-              <label htmlFor="show_salary" className="text-sm">Show salary range on public listing</label>
-            </div>
+            <Checkbox id="show_salary" label="Show salary range on public listing" {...register('show_salary')} />
           </div>
         </Panel>
 

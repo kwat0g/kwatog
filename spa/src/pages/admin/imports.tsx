@@ -20,6 +20,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatDate } from '@/lib/formatDate';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { LinkButton } from '@/components/ui/LinkButton';
 
 const batchStatusVariant = (s: string): ChipVariant =>
   s === 'committed' ? 'success' : 'neutral';
@@ -229,12 +230,14 @@ export default function ImportsPage() {
                       <Td mono className="text-muted text-xs">{b.created_at ? formatDate(b.created_at) : '—'}</Td>
                       <Td align="right">
                         {b.status === 'committed' && (
-                          <button
+                          <LinkButton
+                            tone="muted"
                             onClick={() => setRollbackTarget(b)}
-                            className="inline-flex items-center gap-1 text-xs text-muted hover:text-danger-fg"
+                            icon={<Undo2 size={13} />}
+                            className="text-xs hover:text-danger"
                           >
-                            <Undo2 size={13} /> Roll back
-                          </button>
+                            Roll back
+                          </LinkButton>
                         )}
                       </Td>
                     </tr>

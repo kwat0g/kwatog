@@ -10,6 +10,7 @@ import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
+import { LinkButton } from '@/components/ui/LinkButton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import type { Shipment, ShipmentStatus } from '@/types/supplyChain';
@@ -32,13 +33,12 @@ export default function ShipmentsListPage() {
   const columns: Column<Shipment>[] = [
     { key: 'shipment_number', header: 'Shipment',
       cell: (r) => (
-        <button
-          type="button"
-          className="font-mono text-accent hover:underline text-left"
+        <LinkButton
+          className="font-mono text-left"
           onClick={() => navigate(`/supply-chain/shipments/${r.id}`)}
         >
           {r.shipment_number}
-        </button>
+        </LinkButton>
       ) },
     { key: 'po', header: 'PO',
       cell: (r) => r.purchase_order ? <span className="font-mono">{r.purchase_order.po_number}</span> : <span className="text-muted">—</span> },

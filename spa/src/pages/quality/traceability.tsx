@@ -50,15 +50,16 @@ export default function TraceabilityPage() {
 
       <div className="px-5 pt-4">
         <form onSubmit={onSubmit} className="flex items-center gap-2 max-w-2xl">
-          <div className="flex-1 flex items-center h-9 rounded-md border border-default bg-canvas focus-within:ring-2 focus-within:ring-accent focus-within:border-accent">
-            <Search size={14} className="ml-2 text-text-subtle" />
+          <div className="flex-1 flex items-center h-8 rounded-md border border-default bg-canvas px-2.5 transition-colors duration-fast focus-within:ring-2 focus-within:ring-accent focus-within:border-accent">
+            <Search size={14} className="text-muted shrink-0" aria-hidden />
             <input
               autoFocus
               type="text"
               value={term}
               onChange={(e) => setTerm(e.target.value)}
               placeholder="BATCH-…, LOT-…, or supplier material lot"
-              className="flex-1 h-full px-2 bg-transparent text-sm outline-none placeholder:text-text-subtle font-mono"
+              aria-label="Batch, lot, or material lot number"
+              className="flex-1 min-w-0 h-full px-2 bg-transparent text-sm outline-none placeholder:text-text-subtle font-mono"
             />
           </div>
           <Button type="submit" variant="primary" size="sm" loading={isFetching} disabled={!term.trim()}>

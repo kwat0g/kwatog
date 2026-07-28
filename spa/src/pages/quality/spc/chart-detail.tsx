@@ -31,6 +31,7 @@ import { Chip, type ChipVariant } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
+import { Input } from '@/components/ui/Input';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import type { SpcDataPoint, SpcAlert, SpcChartStatus } from '@/types/quality/spc';
@@ -298,12 +299,14 @@ function AlertItem({
       </div>
       {!alert.resolved_at && canManage && (
         <div className="mt-2 flex items-center gap-2">
-          <input
+          <Input
+            fieldSize="sm"
             type="text"
             placeholder="Notes (optional)"
+            aria-label="Acknowledgement notes"
+            containerClassName="flex-1"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            className="flex-1 px-2 py-1 text-xs border border-default rounded-md bg-canvas focus:outline-none focus:ring-2 focus:ring-accent"
           />
           <Button
             variant="secondary"

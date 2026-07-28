@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { formatDateTime } from '@/lib/formatDate';
 import type { EightDReportData } from '@/types/b2b';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { LinkButton } from '@/components/ui/LinkButton';
 
 export default function CustomerComplaintsPage() {
   const queryClient = useQueryClient();
@@ -135,13 +136,14 @@ export default function CustomerComplaintsPage() {
                   </Td>
                   <Td align="right" mono>
                     {(c.status === 'resolved' || c.status === 'closed') && (
-                      <button
+                      <LinkButton
                         onClick={() => open8d(c.id)}
-                        className="inline-flex items-center gap-1 text-accent hover:underline text-2xs"
-                        title="View 8D Report"
+                        icon={<FileText size={12} />}
+                        className="text-2xs"
+                        title="View 8D report"
                       >
-                        <FileText size={12} /> 8D
-                      </button>
+                        8D
+                      </LinkButton>
                     )}
                   </Td>
                 </tr>

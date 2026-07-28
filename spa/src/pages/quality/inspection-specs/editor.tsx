@@ -33,6 +33,7 @@ import { productsApi } from '@/api/crm/products';
 import { inspectionSpecsApi, type SpcResult } from '@/api/quality/inspectionSpecs';
 import type { UpsertInspectionSpecData } from '@/types/quality';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { Checkbox } from '@/components/ui/Checkbox';
 
 const itemSchema = z.object({
   parameter_name:  z.string().min(1, 'Parameter name is required').max(150),
@@ -312,22 +313,23 @@ export default function InspectionSpecEditorPage() {
                       />
                     </Td>
                     <Td align="center">
-                      <input
-                        type="checkbox"
+                      <Checkbox
+                        aria-label="Critical characteristic"
                         {...register(`items.${i}.is_critical` as const)}
-                        className="rounded border-default"
                       />
                     </Td>
                     <Td align="right" mono>
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="sm"
+                        iconOnly
+                        icon={<Trash2 size={14} />}
+                        aria-label="Remove parameter"
                         onClick={() => remove(i)}
                         disabled={fields.length === 1}
-                        className="p-1.5 text-text-muted hover:text-danger hover:bg-elevated rounded-sm disabled:opacity-40 disabled:cursor-not-allowed"
-                        aria-label="Remove parameter"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                        className="text-muted hover:text-danger"
+                      />
                     </Td>
                   </tr>
                 ))}

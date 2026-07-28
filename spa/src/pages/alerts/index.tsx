@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonTable } from '@/components/ui/Skeleton';
+import { LinkButton } from '@/components/ui/LinkButton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDateTime } from '@/lib/formatDate';
@@ -129,12 +130,13 @@ export default function AlertsListPage() {
         <span className="text-2xs text-text-subtle ml-2">
           Showing {filters.is_dismissed ? 'dismissed' : 'active'} alerts
         </span>
-        <button
+        <LinkButton
+          tone="muted"
           onClick={() => setFilters((f) => ({ ...f, is_dismissed: !f.is_dismissed, page: 1 }))}
-          className="ml-auto text-xs text-muted hover:text-default underline-offset-2 hover:underline"
+          className="ml-auto text-xs"
         >
           {filters.is_dismissed ? 'Show active' : 'Show dismissed'}
-        </button>
+        </LinkButton>
       </div>
 
       {isLoading && !data && <SkeletonTable columns={1} rows={6} />}

@@ -229,17 +229,19 @@ export default function NotificationsListPage() {
                               </span>
                             </span>
                             {isUnread && (
-                              <button
+                              <Button
                                 type="button"
+                                variant="ghost"
+                                size="sm"
+                                iconOnly
+                                icon={<Eye size={14} />}
+                                aria-label="Mark as read"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   markRead.mutate(n.id);
                                 }}
-                                className="ml-auto shrink-0 p-1 rounded hover:bg-subtle text-muted hover:text-primary transition-colors"
-                                aria-label="Mark as read"
-                              >
-                                <Eye size={12} />
-                              </button>
+                                className="ml-auto shrink-0 text-muted hover:text-primary"
+                              />
                             )}
                           </button>
                         </li>

@@ -17,6 +17,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { DataTable, NumCell, StackedCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonTable } from '@/components/ui/Skeleton';
+import { LinkButton } from '@/components/ui/LinkButton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatDateTime } from '@/lib/formatDate';
 import type { ScheduledExport } from '@/types/exports';
@@ -108,14 +109,16 @@ export default function ScheduledExportsPage() {
       key: 'is_active',
       header: 'Status',
       cell: (row) => (
-        <button
-          className="text-xs underline-offset-2 hover:underline"
+        <LinkButton
+          tone="muted"
+          className="text-xs hover:no-underline"
+          aria-label={row.is_active ? 'Pause this export' : 'Resume this export'}
           onClick={() => toggleMutation.mutate(row)}
         >
           <Chip variant={row.is_active ? 'success' : 'neutral'}>
             {row.is_active ? 'Active' : 'Paused'}
           </Chip>
-        </button>
+        </LinkButton>
       ),
     },
     {

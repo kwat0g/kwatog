@@ -173,9 +173,16 @@ export default function RecordOutputPage() {
                       {...register(`defects.${i}.count`)} error={errors.defects?.[i]?.count?.message}
                       className="w-24 font-mono text-right"
                     />
-                    <button type="button" onClick={() => remove(i)} className="p-1.5 text-text-muted hover:text-danger" aria-label="Remove">
-                      <Trash2 size={14} />
-                    </button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      iconOnly
+                      icon={<Trash2 size={14} />}
+                      aria-label="Remove line"
+                      onClick={() => remove(i)}
+                      className="text-muted hover:text-danger"
+                    />
                   </div>
                 ))}
               </div>

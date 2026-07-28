@@ -13,6 +13,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { cn } from '@/lib/cn';
 import type { TrainingMatrixCell, TrainingMatrixCellStatus } from '@/types/hr';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { LinkButton } from '@/components/ui/LinkButton';
 
 const STATUS_COLORS: Record<TrainingMatrixCellStatus, string> = {
   trained: 'bg-success-bg border-success',
@@ -202,13 +203,12 @@ export default function TrainingMatrixPage() {
               {data.rows.map((row) => (
                 <tr key={row.employee_id} className={trCls}>
                   <Td className="sticky left-0 z-10 bg-canvas border-b border-subtle min-w-[180px]">
-                    <button
-                      type="button"
-                      className="text-accent hover:underline text-left cursor-pointer"
+                    <LinkButton
+                      className="text-left"
                       onClick={() => navigate(`/hr/employees/${row.employee_id}`)}
                     >
                       {row.employee_name}
-                    </button>
+                    </LinkButton>
                   </Td>
                   <Td className="sticky left-[180px] z-10 bg-canvas border-b border-subtle text-muted min-w-[120px]">
                     {row.department || '—'}

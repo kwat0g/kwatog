@@ -14,6 +14,7 @@ import { StatCard } from '@/components/ui/StatCard';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { LinkButton } from '@/components/ui/LinkButton';
 import { BarComparison } from '@/components/charts';
 
 /* ─── Types ─── */
@@ -98,12 +99,9 @@ export function CopqWidget() {
           title="Failed to load COPQ data"
           description="Could not retrieve cost of poor quality metrics."
           action={
-            <button
-              onClick={() => refetch()}
-              className="text-sm text-link hover:underline"
-            >
+            <LinkButton onClick={() => refetch()} className="text-sm">
               Retry
-            </button>
+            </LinkButton>
           }
         />
       </Panel>

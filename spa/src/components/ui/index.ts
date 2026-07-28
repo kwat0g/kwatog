@@ -19,6 +19,7 @@ export { EmptyState } from './EmptyState';
 export { FileInput, type FileInputProps } from './FileInput';
 export { FilterBar, type FilterConfig, type FilterOption } from './FilterBar';
 export { Input, type InputProps } from './Input';
+export { LinkButton } from './LinkButton';
 export { MaskedInput, type MaskedInputProps } from './MaskedInput';
 export { Modal } from './Modal';
 export { Panel } from './Panel';

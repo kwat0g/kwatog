@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
 import { returnManagementApi } from '@/api/returnManagement';
 import type { ReturnRequest, ReturnRequestItem, DispositionType, DispositionPayload } from '@/types/returnManagement';
 import { formatInt } from '@/lib/formatNumber';
@@ -89,21 +91,23 @@ export default function DisposeDialog({ rma, isOpen, onClose }: Props) {
                     {formatInt(item.returned_quantity || item.quantity)}
                   </Td>
                   <Td>
-                    <select
-                      className="input w-full"
+                    <Select
+                      fieldSize="sm"
+                      aria-label="Disposition"
                       value={dispositions[item.id]?.disposition ?? 'restock'}
                       onChange={(e) => updateItem(item.id, 'disposition', e.target.value)}
                     >
                       {DISPOSITION_OPTIONS.map((opt) => (
                         <option key={opt.value} value={opt.value}>{opt.label}</option>
                       ))}
-                    </select>
+                    </Select>
                   </Td>
                   <Td>
-                    <input
+                    <Input
+                      fieldSize="sm"
                       type="text"
-                      className="input w-full"
-                      placeholder="Optional notes..."
+                      aria-label="Notes"
+                      placeholder="Optional notes…"
                       value={dispositions[item.id]?.notes ?? ''}
                       onChange={(e) => updateItem(item.id, 'notes', e.target.value)}
                       maxLength={500}

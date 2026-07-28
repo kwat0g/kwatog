@@ -4,6 +4,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { factoryApi } from '@/api/factory';
 import toast from 'react-hot-toast';
 import { ArrowLeft } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { Textarea } from '@/components/ui/Textarea';
 import type { WorkOrderOutput } from '@/types/production';
 import { formatTime } from '@/lib/formatDate';
 
@@ -107,67 +110,60 @@ export default function RecordOutput() {
         }}
         className="rounded-md border border-default bg-canvas p-4 space-y-4"
       >
-        <h2 className="text-base font-medium">Record Output</h2>
+        <h2 className="text-lg font-medium">Record output</h2>
 
-        <div>
-          <label htmlFor="good_count" className="block text-sm font-medium text-secondary mb-1">
-            Good Quantity
-          </label>
-          <input
-            id="good_count"
-            type="number"
-            inputMode="numeric"
-            min="0"
-            value={goodCount}
-            onChange={e => setGoodCount(e.target.value)}
-            placeholder="0"
-            className="w-full rounded-md border border-default bg-canvas px-4 py-4 text-2xl font-mono tabular-nums text-center focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent"
-          />
-        </div>
+        <Input
+          id="good_count"
+          label="Good quantity"
+          fieldSize="xl"
+          type="number"
+          inputMode="numeric"
+          min="0"
+          value={goodCount}
+          onChange={e => setGoodCount(e.target.value)}
+          placeholder="0"
+          className="text-center font-mono tabular-nums"
+        />
 
-        <div>
-          <label htmlFor="reject_count" className="block text-sm font-medium text-secondary mb-1">
-            Reject Quantity
-          </label>
-          <input
-            id="reject_count"
-            type="number"
-            inputMode="numeric"
-            min="0"
-            value={rejectCount}
-            onChange={e => setRejectCount(e.target.value)}
-            placeholder="0"
-            className="w-full rounded-md border border-default bg-canvas px-4 py-4 text-2xl font-mono tabular-nums text-center focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent"
-          />
-        </div>
+        <Input
+          id="reject_count"
+          label="Reject quantity"
+          fieldSize="xl"
+          type="number"
+          inputMode="numeric"
+          min="0"
+          value={rejectCount}
+          onChange={e => setRejectCount(e.target.value)}
+          placeholder="0"
+          className="text-center font-mono tabular-nums"
+        />
 
-        <div>
-          <label htmlFor="remarks" className="block text-sm font-medium text-secondary mb-1">
-            Notes (optional)
-          </label>
-          <textarea
-            id="remarks"
-            value={remarks}
-            onChange={e => setRemarks(e.target.value)}
-            rows={2}
-            placeholder="Any observations..."
-            className="w-full rounded-md border border-default bg-canvas px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent resize-none"
-          />
-        </div>
+        <Textarea
+          id="remarks"
+          label="Notes (optional)"
+          value={remarks}
+          onChange={e => setRemarks(e.target.value)}
+          rows={2}
+          placeholder="Any observations…"
+          className="resize-none"
+        />
 
-        <button
+        <Button
           type="submit"
-          disabled={!canSubmit || mutation.isPending}
-          className="w-full min-h-[52px] rounded-md bg-accent hover:bg-accent-hover disabled:bg-elevated disabled:text-muted text-accent-fg font-medium text-base transition-colors focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
+          variant="primary"
+          size="xl"
+          className="w-full"
+          disabled={!canSubmit}
+          loading={mutation.isPending}
         >
-          {mutation.isPending ? 'Recording...' : 'Record Output'}
-        </button>
+          {mutation.isPending ? 'Recording…' : 'Record output'}
+        </Button>
       </form>
 
       {/* Recent Outputs */}
       {outputs && outputs.length > 0 && (
         <div className="space-y-2">
-          <h3 className="text-sm font-medium text-muted">Recent Outputs</h3>
+          <h3 className="text-sm font-medium text-muted">Recent outputs</h3>
           {outputs.slice(0, 5).map((output: WorkOrderOutput) => (
             <div
               key={output.id}

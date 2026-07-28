@@ -337,15 +337,17 @@ export default function RoutingEditorPage() {
                       </div>
                     </Td>
                     <Td align="right" mono>
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="sm"
+                        iconOnly
+                        icon={<Trash2 size={14} />}
+                        aria-label="Remove operation"
                         onClick={() => remove(i)}
                         disabled={fields.length === 1}
-                        className="p-1.5 text-text-muted hover:text-danger hover:bg-elevated rounded-sm disabled:opacity-40 disabled:cursor-not-allowed"
-                        aria-label="Remove operation"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                        className="text-muted hover:text-danger"
+                      />
                     </Td>
                   </tr>
                 ))}

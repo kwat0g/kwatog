@@ -26,6 +26,7 @@ import { forecastingApi } from '@/api/forecasting';
 import { usePermission } from '@/hooks/usePermission';
 import type { ForecastMethod, DemandForecast } from '@/types/forecasting';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { Checkbox } from '@/components/ui/Checkbox';
 
 const METHOD_LABELS: Record<ForecastMethod, string> = {
   moving_avg: 'Simple moving average',
@@ -256,19 +257,18 @@ export default function DemandForecastingPage() {
               </div>
             </div>
             <div className="md:col-span-6 flex flex-wrap items-center gap-3 justify-end">
-              <label className="mr-auto flex items-center gap-2 rounded-md border border-default px-3 py-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={selectedProduct?.include_forecast_in_mrp ?? false}
-                  disabled={!productId || !canManage || mrpInclusionM.isPending}
-                  onChange={(event) => mrpInclusionM.mutate(event.target.checked)}
-                  className="h-4 w-4 accent-[var(--color-accent)]"
-                />
-                <span>
-                  <span className="font-medium text-primary">Include forecast in MRP</span>
-                  <span className="ml-2 text-xs text-muted">Advisory only; no PR is created.</span>
-                </span>
-              </label>
+              <Checkbox
+                className="mr-auto rounded-md border border-default px-3 py-2"
+                checked={selectedProduct?.include_forecast_in_mrp ?? false}
+                disabled={!productId || !canManage || mrpInclusionM.isPending}
+                onChange={(event) => mrpInclusionM.mutate(event.target.checked)}
+                label={
+                  <>
+                    <span className="font-medium text-primary">Include forecast in MRP</span>
+                    <span className="ml-2 text-xs text-muted">Advisory only; no PR is created.</span>
+                  </>
+                }
+              />
               <Button
                 onClick={() => recomputeM.mutate()}
                 disabled={!productId || !canManage || recomputeM.isPending}

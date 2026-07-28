@@ -17,6 +17,7 @@ import { Bell } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Tooltip } from '@/components/ui/Tooltip';
+import { LinkButton } from '@/components/ui/LinkButton';
 import { cn } from '@/lib/cn';
 import { notificationsApi, type NotificationRow } from '@/api/notifications';
 import { notificationMeta, timeAgo } from '@/lib/notificationMeta';
@@ -117,13 +118,9 @@ export function NotificationBell() {
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted font-mono tabular-nums">{unread} unread</span>
               {unread > 0 && (
-                <button
-                  type="button"
-                  onClick={() => { markAllMutation.mutate(); }}
-                  className="text-2xs text-accent hover:underline"
-                >
+                <LinkButton onClick={() => { markAllMutation.mutate(); }} className="text-2xs">
                   Mark all read
-                </button>
+                </LinkButton>
               )}
             </div>
           </div>

@@ -76,22 +76,26 @@ export default function ItemsListPage() {
       align: 'right' as const,
       cell: (r: Item) => (
         <div className="flex justify-end gap-1">
-          <button
+          <Button
             type="button"
-            onClick={() => navigate(`/inventory/items/${r.id}/edit`)}
-            className="p-1.5 text-text-muted hover:text-primary hover:bg-elevated rounded-sm transition-colors"
+            variant="ghost"
+            size="sm"
+            iconOnly
+            icon={<Pencil size={14} />}
             aria-label={`Edit ${r.code}`}
-          >
-            <Pencil size={14} />
-          </button>
-          <button
+            onClick={() => navigate(`/inventory/items/${r.id}/edit`)}
+            className="text-muted hover:text-primary"
+          />
+          <Button
             type="button"
-            onClick={() => setConfirmDelete(r)}
-            className="p-1.5 text-text-muted hover:text-danger hover:bg-elevated rounded-sm transition-colors"
+            variant="ghost"
+            size="sm"
+            iconOnly
+            icon={<Trash2 size={14} />}
             aria-label={`Delete ${r.code}`}
-          >
-            <Trash2 size={14} />
-          </button>
+            onClick={() => setConfirmDelete(r)}
+            className="text-muted hover:text-danger"
+          />
         </div>
       ),
     }] : []),
@@ -165,7 +169,7 @@ export default function ItemsListPage() {
           confirmDelete ? (
             <>
               <span className="font-mono font-medium text-primary">{confirmDelete.code}</span>{' '}
-              <span className="text-text-muted">— {confirmDelete.name}</span>
+              <span className="text-muted">— {confirmDelete.name}</span>
               <br />
               Deletion fails if there is existing stock or movement history; deactivate instead in that case.
             </>

@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
-import { Plus, X } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { creditNotesApi, type CreditNoteListParams } from '@/api/accounting/credit-notes';
 import { accountsApi } from '@/api/accounting/accounts';
 import { customersApi } from '@/api/accounting/customers';
@@ -20,6 +20,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { SkeletonTable } from '@/components/ui/Skeleton';
+import { Checkbox } from '@/components/ui/Checkbox';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
@@ -168,9 +169,7 @@ function CreateCreditNoteModal({ onClose, onCreated }: { onClose: () => void; on
           </Select>
           <Input label="Date" type="date" required {...register('date')} error={errors.date?.message} />
           <div className="flex items-end">
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" {...register('is_vatable')} /> VAT-able (12%)
-            </label>
+            <Checkbox label="VAT-able (12%)" {...register('is_vatable')} />
           </div>
           {type === 'customer' ? (
             <Select label="Customer" required containerClassName="col-span-2" {...register('customer_id')} error={errors.customer_id?.message}>
@@ -204,7 +203,8 @@ function CreateCreditNoteModal({ onClose, onCreated }: { onClose: () => void; on
               <div className="col-span-4"><Input {...register(`lines.${idx}.description` as const)} error={errors.lines?.[idx]?.description?.message} /></div>
               <div className="col-span-2"><Input type="number" step="0.01" min="0" className="font-mono tabular-nums text-right" {...numberInputProps()} {...register(`lines.${idx}.amount` as const)} error={errors.lines?.[idx]?.amount?.message} /></div>
               <div className="col-span-1 flex justify-end pt-1.5">
-                {fields.length > 1 && <button type="button" className="text-muted hover:text-danger-fg" onClick={() => remove(idx)}><X size={14} /></button>}
+                {fields.length > 1 && <Button type="button" variant="ghost" size="sm" iconOnly icon={<Trash2 size={14} />}
+                  aria-label="Remove line" onClick={() => remove(idx)} className="text-muted hover:text-danger" />}
               </div>
             </div>
           ))}

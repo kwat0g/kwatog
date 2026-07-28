@@ -225,14 +225,16 @@ export default function CreateMaterialIssuePage() {
                 </div>
                 <div className="col-span-1 flex justify-end pt-1">
                   {fields.length > 1 && (
-                    <button
+                    <Button
                       type="button"
-                      onClick={() => remove(idx)}
-                      className="p-1 text-muted hover:text-danger-fg hover:bg-elevated rounded-sm"
+                      variant="ghost"
+                      size="sm"
+                      iconOnly
+                      icon={<Trash2 size={14} />}
                       aria-label="Remove line"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                      onClick={() => remove(idx)}
+                      className="text-muted hover:text-danger"
+                    />
                   )}
                 </div>
               </div>

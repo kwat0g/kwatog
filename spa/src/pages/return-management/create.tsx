@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
-import { Plus, X } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { returnManagementApi } from '@/api/returnManagement';
 import { productsApi } from '@/api/crm/products';
 import { customersApi } from '@/api/accounting/customers';
@@ -302,13 +302,16 @@ export default function CreateReturnRequestPage() {
                     />
                   </div>
                   <div className="col-span-1 flex justify-end pt-1.5">
-                    <button
+                    <Button
                       type="button"
-                      className="text-muted hover:text-danger-fg"
+                      variant="ghost"
+                      size="sm"
+                      iconOnly
+                      icon={<Trash2 size={14} />}
+                      aria-label="Remove line"
                       onClick={() => remove(idx)}
-                    >
-                      <X size={14} />
-                    </button>
+                      className="text-muted hover:text-danger"
+                    />
                   </div>
                 </div>
               ))}

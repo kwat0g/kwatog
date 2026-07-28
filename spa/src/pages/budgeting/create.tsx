@@ -209,24 +209,27 @@ export default function BudgetCreatePage() {
               {lineItems.map((li, i) => (
                 <tr key={i} className={trCls}>
                   <Td className="sticky left-0 bg-canvas">
-                    <select
+                    <Select
+                      fieldSize="sm"
+                      aria-label="Account"
                       value={li.account_id}
                       onChange={(e) => updateLineItem(i, 'account_id', Number(e.target.value))}
-                      className="w-full text-sm border border-default rounded px-2 py-1 bg-canvas focus:outline-none focus:ring-1 focus:ring-accent"
                     >
-                      <option value={0}>Select account...</option>
+                      <option value={0}>Select account…</option>
                       {(accounts?.data ?? []).map((acct: { id: string; code: string; name: string }) => (
                         <option key={acct.id} value={acct.id}>{acct.code} — {acct.name}</option>
                       ))}
-                    </select>
+                    </Select>
                   </Td>
                   {MONTHS.map((m) => (
                     <Td key={m.key}>
-                      <input
+                      <Input
+                        fieldSize="sm"
                         type="number"
+                        aria-label={`${m.label} amount`}
+                        className="text-right font-mono tabular-nums"
                         value={li[m.key]}
                         onChange={(e) => updateLineItem(i, m.key, Number(e.target.value) || 0)}
-                        className="w-full text-right text-xs font-mono border border-default rounded px-1 py-1 bg-canvas focus:outline-none focus:ring-1 focus:ring-accent"
                         placeholder="0"
                       />
                     </Td>
@@ -235,13 +238,17 @@ export default function BudgetCreatePage() {
                     ₱{(calcAnnual(li) / 1_000).toFixed(0)}K
                   </Td>
                   <Td>
-                    <button
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      iconOnly
+                      icon={<Trash2 size={14} />}
                       onClick={() => removeLineItem(i)}
-                      className="p-1 text-muted hover:text-danger transition-colors"
                       title="Remove line"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                      aria-label="Remove line"
+                      className="text-muted hover:text-danger"
+                    />
                   </Td>
                 </tr>
               ))}

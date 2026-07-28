@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
+import { LinkButton } from '@/components/ui/LinkButton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { onFormInvalid, applyServerValidationErrors } from '@/lib/formErrors';
 
@@ -280,17 +281,16 @@ export default function CreateDeliveryPage() {
             ))}
           </div>
 
-          <button
-            type="button"
+          <LinkButton
             onClick={() =>
               append({ sales_order_item_id: '', quantity: 1, inspection_id: '' })
             }
             disabled={!selectedSoId}
-            className="mt-2 inline-flex items-center gap-1.5 text-xs text-accent hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
+            icon={<Plus size={14} />}
+            className="mt-2 text-xs"
           >
-            <Plus size={14} />
             Add delivery line
-          </button>
+          </LinkButton>
         </fieldset>
 
         {/* ── Notes ── */}

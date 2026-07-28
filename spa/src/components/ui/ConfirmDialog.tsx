@@ -74,7 +74,7 @@ export function ConfirmDialog({
           <div className="space-y-1.5">
             <h2 className="text-md font-medium text-primary">{title}</h2>
             {description && (
-              <div className="text-sm text-text-muted">{description}</div>
+              <div className="text-sm text-muted">{description}</div>
             )}
           </div>
         </div>

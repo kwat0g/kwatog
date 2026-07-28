@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/Input';
 import { Panel } from '@/components/ui/Panel';
 import { Select } from '@/components/ui/Select';
 import { SkeletonTable } from '@/components/ui/Skeleton';
+import { Checkbox } from '@/components/ui/Checkbox';
 import { formatDate } from '@/lib/formatDate';
 import { usePermission } from '@/hooks/usePermission';
 import { cn } from '@/lib/cn';
@@ -104,8 +105,8 @@ export default function ItemQualityPlansPage() {
                   </Select>
                   <Input placeholder="Unit" value={parameter.unit_of_measure ?? ''} onChange={(e) => updateParameter(index, { unit_of_measure: e.target.value })} />
                   <Input type="number" step="any" placeholder="Min" value={parameter.tolerance_min ?? ''} onChange={(e) => updateParameter(index, { tolerance_min: e.target.value === '' ? null : Number(e.target.value) })} />
-                  <div className="flex gap-1"><Input type="number" step="any" placeholder="Max" value={parameter.tolerance_max ?? ''} onChange={(e) => updateParameter(index, { tolerance_max: e.target.value === '' ? null : Number(e.target.value) })} /><button type="button" aria-label="Remove parameter" disabled={parameters.length === 1} onClick={() => setParameters((p) => p.filter((_, i) => i !== index))} className="text-muted hover:text-danger disabled:opacity-30"><Trash2 size={14} /></button></div>
-                  <label className="col-span-2 text-xs flex items-center gap-2"><input type="checkbox" checked={parameter.is_critical} onChange={(e) => updateParameter(index, { is_critical: e.target.checked })} /> Critical characteristic</label>
+                  <div className="flex gap-1"><Input type="number" step="any" placeholder="Max" value={parameter.tolerance_max ?? ''} onChange={(e) => updateParameter(index, { tolerance_max: e.target.value === '' ? null : Number(e.target.value) })} /><Button type="button" variant="ghost" size="sm" iconOnly icon={<Trash2 size={14} />} aria-label="Remove parameter" disabled={parameters.length === 1} onClick={() => setParameters((p) => p.filter((_, i) => i !== index))} className="text-muted hover:text-danger" /></div>
+                  <Checkbox className="col-span-2" label="Critical characteristic" checked={parameter.is_critical} onChange={(e) => updateParameter(index, { is_critical: e.target.checked })} />
                 </div>
               ))}
             </div>

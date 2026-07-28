@@ -77,22 +77,26 @@ export default function ProductsListPage() {
       align: 'right' as const,
       cell: (r: Product) => (
         <div className="flex justify-end gap-1">
-          <button
+          <Button
             type="button"
-            onClick={() => navigate(`/crm/products/${r.id}/edit`)}
-            className="p-1.5 text-text-muted hover:text-primary hover:bg-elevated rounded-sm transition-colors"
+            variant="ghost"
+            size="sm"
+            iconOnly
+            icon={<Pencil size={14} />}
             aria-label={`Edit ${r.part_number}`}
-          >
-            <Pencil size={14} />
-          </button>
-          <button
+            onClick={() => navigate(`/crm/products/${r.id}/edit`)}
+            className="text-muted hover:text-primary"
+          />
+          <Button
             type="button"
-            onClick={() => setConfirmDelete(r)}
-            className="p-1.5 text-text-muted hover:text-danger hover:bg-elevated rounded-sm transition-colors"
+            variant="ghost"
+            size="sm"
+            iconOnly
+            icon={<Trash2 size={14} />}
             aria-label={`Delete ${r.part_number}`}
-          >
-            <Trash2 size={14} />
-          </button>
+            onClick={() => setConfirmDelete(r)}
+            className="text-muted hover:text-danger"
+          />
         </div>
       ),
     }] : []),
@@ -163,7 +167,7 @@ export default function ProductsListPage() {
           confirmDelete ? (
             <>
               <span className="font-mono font-medium text-primary">{confirmDelete.part_number}</span>{' '}
-              <span className="text-text-muted">— {confirmDelete.name}</span>
+              <span className="text-muted">— {confirmDelete.name}</span>
               <br />
               Deletion fails if the product appears on any sales order. Deactivate instead in that case.
             </>

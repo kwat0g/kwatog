@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
-import { Plus, X, Scale, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, Scale, CheckCircle2, AlertCircle } from 'lucide-react';
 import { accountsApi } from '@/api/accounting/accounts';
 import { openingBalancesApi, type TbMatchResult } from '@/api/accounting/opening-balances';
 import { Button } from '@/components/ui/Button';
@@ -131,9 +131,16 @@ export default function OpeningBalancesPage() {
                 </div>
                 <div className="col-span-1 flex justify-end pt-1">
                   {fields.length > 2 && (
-                    <button type="button" className="text-muted hover:text-danger-fg" onClick={() => remove(idx)}>
-                      <X size={14} />
-                    </button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      iconOnly
+                      icon={<Trash2 size={14} />}
+                      aria-label="Remove line"
+                      onClick={() => remove(idx)}
+                      className="text-muted hover:text-danger"
+                    />
                   )}
                 </div>
               </div>

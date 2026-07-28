@@ -17,6 +17,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
+import { FileInput } from '@/components/ui/FileInput';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import type { DocumentCategory } from '@/types/quality/document';
@@ -219,17 +220,12 @@ export default function DocumentDetailPage() {
           {showRevisionForm && (
             <Panel title="Publish new revision">
               <div className="space-y-3">
-                <div>
-                  <label className="block text-xs font-medium text-secondary mb-1">
-                    Document file <span className="text-danger">*</span>
-                  </label>
-                  <input
-                    ref={fileRef}
-                    type="file"
-                    accept=".pdf,.doc,.docx,.xls,.xlsx"
-                    className="block w-full text-sm text-secondary file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border file:border-default file:text-xs file:font-medium file:bg-elevated file:text-primary hover:file:bg-subtle"
-                  />
-                </div>
+                <FileInput
+                  ref={fileRef}
+                  label="Document file"
+                  required
+                  accept=".pdf,.doc,.docx,.xls,.xlsx"
+                />
                 <Input
                   label="Effective date"
                   type="date"

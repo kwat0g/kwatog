@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
-import { Plus, X } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { accountsApi } from '@/api/accounting/accounts';
 import { journalEntriesApi } from '@/api/accounting/journal-entries';
 import { Button } from '@/components/ui/Button';
@@ -149,9 +149,16 @@ export default function CreateJournalEntryPage() {
                 </div>
                 <div className="col-span-1 flex justify-end pt-1">
                   {fields.length > 2 && (
-                    <button type="button" className="text-muted hover:text-danger-fg" onClick={() => remove(idx)}>
-                      <X size={14} />
-                    </button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      iconOnly
+                      icon={<Trash2 size={14} />}
+                      aria-label="Remove line"
+                      onClick={() => remove(idx)}
+                      className="text-muted hover:text-danger"
+                    />
                   )}
                 </div>
               </div>

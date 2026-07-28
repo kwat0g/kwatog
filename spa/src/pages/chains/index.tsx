@@ -23,6 +23,7 @@ import { Chip, type ChipVariant } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Spinner } from '@/components/ui/Spinner';
 import { Input } from '@/components/ui/Input';
+import { LinkButton } from '@/components/ui/LinkButton';
 import { ChainHeader, LinkedRecords, ActivityStream } from '@/components/chain';
 import { useChainProgress } from '@/hooks/useChainProgress';
 import type { SalesOrderStatus } from '@/types/crm';
@@ -162,9 +163,9 @@ function ChainPicker({ onPick }: { onPick: (id: string) => void }) {
         ) : bottlenecks.isError ? (
           <div className="py-4">
             <EmptyState icon="alert-circle" title="Couldn’t load bottlenecks" description="Try refreshing." action={
-              <button type="button" onClick={() => bottlenecks.refetch()} className="inline-flex items-center gap-1.5 text-sm text-accent hover:underline">
-                <RotateCcw size={13} /> Retry
-              </button>
+              <LinkButton onClick={() => bottlenecks.refetch()} icon={<RotateCcw size={13} />} className="text-sm">
+                Retry
+              </LinkButton>
             } />
           </div>
         ) : !bottlenecks.data || bottlenecks.data.total === 0 ? (
@@ -234,9 +235,9 @@ function ChainDetail({ id, onClear }: { id: string; onClear: () => void }) {
         title="Couldn’t load that order"
         description="It may have been removed, or you may not have access."
         action={
-          <button type="button" onClick={onClear} className="inline-flex items-center gap-1.5 text-sm text-accent hover:underline">
-            <ArrowRight size={13} className="rotate-180" /> Back to search
-          </button>
+          <LinkButton onClick={onClear} icon={<ArrowRight size={13} className="rotate-180" />} className="text-sm">
+            Back to search
+          </LinkButton>
         }
       />
     );

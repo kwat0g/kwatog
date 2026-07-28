@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
-import { Plus, X } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { vendorsApi } from '@/api/accounting/vendors';
 import { accountsApi } from '@/api/accounting/accounts';
 import { billsApi } from '@/api/accounting/bills';
@@ -264,7 +264,8 @@ export default function CreateBillPage() {
                   <div className="col-span-1 pt-1.5 text-right font-mono tabular-nums text-sm">{formatPeso(lineTotal)}</div>
                   <div className="col-span-1 flex justify-end pt-1.5">
                     {fields.length > 1 && (
-                      <button type="button" className="text-muted hover:text-danger-fg" onClick={() => remove(idx)}><X size={14} /></button>
+                      <Button type="button" variant="ghost" size="sm" iconOnly icon={<Trash2 size={14} />}
+                        aria-label="Remove line" onClick={() => remove(idx)} className="text-muted hover:text-danger" />
                     )}
                   </div>
                 </div>

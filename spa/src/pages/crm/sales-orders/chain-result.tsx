@@ -3,6 +3,7 @@ import { AlertTriangle, CheckCircle, ExternalLink, Info, Package, ShoppingCart }
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { Modal } from '@/components/ui/Modal';
+import { LinkButton } from '@/components/ui/LinkButton';
 import { formatInt } from '@/lib/formatNumber';
 import type { SoChainResult, SoChainResultWo } from '@/types/crm';
 
@@ -218,13 +219,9 @@ export function ChainErrorPanel({ error, onDismiss }: ChainErrorPanelProps) {
             <p className="text-sm text-muted mt-1">{error.message}</p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={onDismiss}
-          className="text-muted hover:text-primary text-xs"
-        >
+        <LinkButton tone="muted" onClick={onDismiss} className="text-xs">
           Dismiss
-        </button>
+        </LinkButton>
       </div>
 
       {error.errors && Object.keys(error.errors).length > 0 && (

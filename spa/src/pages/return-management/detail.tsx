@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Panel } from '@/components/ui/Panel';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 import { Chip, type ChipVariant } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ReasonDialog } from '@/components/ui/ReasonDialog';
@@ -429,9 +430,9 @@ export default function ReturnRequestDetailPage() {
       >
         <div className="space-y-3">
           <p className="text-sm text-muted">Select the warehouse location for stock movement:</p>
-          <input
-            className="input w-full"
-            placeholder="Location ID (optional)"
+          <Input
+            label="Location ID (optional)"
+            placeholder="e.g. WH-A-01"
             value={locationId}
             onChange={(e) => setLocationId(e.target.value)}
           />

@@ -19,6 +19,7 @@ import { formatDateTime } from '@/lib/formatDate';
 import type { ChainStep } from '@/types/chain';
 import type { MaintenanceWorkOrderStatus } from '@/types/maintenance';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { Input } from '@/components/ui/Input';
 import { cn } from '@/lib/cn';
 
 const STATUS_FLOW: MaintenanceWorkOrderStatus[] = ['open', 'assigned', 'in_progress', 'completed'];
@@ -191,9 +192,14 @@ export default function MaintenanceWorkOrderDetailPage() {
       <Modal isOpen={completeOpen} onClose={() => setCompleteOpen(false)} size="sm" title="Complete work order">
         <div className="py-3 space-y-3">
           <Textarea label="Remarks (optional)" value={completeRemarks} onChange={(e) => setCompleteRemarks(e.target.value)} rows={3} />
-          <label className="text-xs text-muted font-medium block">Downtime (minutes)</label>
-          <input type="number" min={0} value={completeDowntime} onChange={(e) => setCompleteDowntime(Number(e.target.value))}
-            className="h-8 px-3 rounded-md border border-default bg-canvas text-sm w-full" />
+          <Input
+            label="Downtime (minutes)"
+            type="number"
+            min={0}
+            value={completeDowntime}
+            onChange={(e) => setCompleteDowntime(Number(e.target.value))}
+            className="font-mono tabular-nums"
+          />
         </div>
         <div className="flex justify-end gap-2 pt-3 border-t border-default">
           <Button variant="secondary" onClick={() => setCompleteOpen(false)}>Cancel</Button>

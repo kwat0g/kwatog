@@ -2,8 +2,9 @@ import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 import { Spinner } from './Spinner';
 
-type Variant = 'primary' | 'secondary' | 'danger' | 'ghost';
-type Size = 'sm' | 'md' | 'lg';
+type Variant = 'primary' | 'secondary' | 'danger' | 'success' | 'ghost';
+/** `xl` is the touch target for the factory kiosk and mobile pages (52px). */
+type Size = 'sm' | 'md' | 'lg' | 'xl';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
@@ -18,12 +19,14 @@ const sizeClasses: Record<Size, string> = {
   sm: 'h-7 px-2.5 text-xs',
   md: 'h-8 px-3 text-sm',
   lg: 'h-9 px-4 text-sm',
+  xl: 'h-[52px] px-5 text-lg gap-2',
 };
 
 const iconOnlySizeClasses: Record<Size, string> = {
   sm: 'h-7 w-7 text-xs',
   md: 'h-8 w-8 text-sm',
   lg: 'h-9 w-9 text-sm',
+  xl: 'h-[52px] w-[52px] text-lg',
 };
 
 const variantClasses: Record<Variant, string> = {
@@ -33,6 +36,8 @@ const variantClasses: Record<Variant, string> = {
     'border border-default bg-canvas text-primary hover:bg-elevated active:scale-[0.98]',
   danger:
     'bg-danger text-white font-medium hover:opacity-90 active:scale-[0.98]',
+  success:
+    'bg-success text-white font-medium hover:opacity-90 active:scale-[0.98]',
   ghost:
     'bg-transparent text-primary hover:bg-elevated active:scale-[0.98]',
 };
@@ -55,7 +60,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         )}
         {...rest}
       >
-        {loading ? <Spinner size={size === 'lg' ? 'md' : 'sm'} /> : icon}
+        {loading ? <Spinner size={size === 'sm' || size === 'md' ? 'sm' : 'md'} /> : icon}
         {children}
       </button>
     );

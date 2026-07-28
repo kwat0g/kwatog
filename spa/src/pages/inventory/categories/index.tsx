@@ -109,7 +109,7 @@ export default function ItemCategoriesPage() {
       header: 'Name',
       cell: (r) => (
         <span style={{ paddingLeft: r.depth * 16 }} className="inline-flex items-center gap-1.5">
-          {r.depth > 0 && <span className="text-text-muted">└</span>}
+          {r.depth > 0 && <span className="text-muted">└</span>}
           <span className="font-medium">{r.name}</span>
         </span>
       ),
@@ -117,7 +117,7 @@ export default function ItemCategoriesPage() {
     {
       key: 'parent',
       header: 'Parent',
-      cell: (r) => r.parent_name ?? <span className="text-text-muted">—</span>,
+      cell: (r) => r.parent_name ?? <span className="text-muted">—</span>,
     },
     {
       key: 'actions',
@@ -126,8 +126,13 @@ export default function ItemCategoriesPage() {
       cell: (r) =>
         canManage ? (
           <div className="flex justify-end gap-1">
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="sm"
+              iconOnly
+              icon={<Pencil size={14} />}
+              aria-label={`Edit ${r.name}`}
               onClick={() => {
                 const node = findById(tree.data ?? [], r.id);
                 if (node) {
@@ -135,19 +140,18 @@ export default function ItemCategoriesPage() {
                   setFormOpen(true);
                 }
               }}
-              className="p-1.5 text-text-muted hover:text-primary hover:bg-elevated rounded-sm transition-colors"
-              aria-label={`Edit ${r.name}`}
-            >
-              <Pencil size={14} />
-            </button>
-            <button
+              className="text-muted hover:text-primary"
+            />
+            <Button
               type="button"
-              onClick={() => setConfirmDelete(r)}
-              className="p-1.5 text-text-muted hover:text-danger hover:bg-elevated rounded-sm transition-colors"
+              variant="ghost"
+              size="sm"
+              iconOnly
+              icon={<Trash2 size={14} />}
               aria-label={`Delete ${r.name}`}
-            >
-              <Trash2 size={14} />
-            </button>
+              onClick={() => setConfirmDelete(r)}
+              className="text-muted hover:text-danger"
+            />
           </div>
         ) : null,
     },

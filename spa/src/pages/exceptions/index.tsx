@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonTable } from '@/components/ui/Skeleton';
+import { Checkbox } from '@/components/ui/Checkbox';
 import { formatRelative } from '@/lib/formatDate';
 
 export default function ExceptionWorkbenchPage() {
@@ -47,7 +48,7 @@ export default function ExceptionWorkbenchPage() {
         </div>
         {items.length === 0 ? <EmptyState icon="check-circle" title="No active exceptions" /> : <div className="rounded-md border border-default bg-canvas divide-y divide-subtle">
           {items.map((item) => <div key={item.id} className="p-3 flex items-start gap-3">
-            <input aria-label={`Select ${item.title}`} type="checkbox" className="mt-1" checked={selected.has(item.id)} onChange={() => toggle(item.id)} />
+            <Checkbox aria-label={`Select ${item.title}`} className="mt-1" checked={selected.has(item.id)} onChange={() => toggle(item.id)} />
             <div className="min-w-0 flex-1"><div className="flex gap-2 items-center flex-wrap"><span className="text-sm font-medium">{item.title}</span><Chip variant={item.priority === 'critical' ? 'danger' : item.priority === 'high' ? 'warning' : 'info'}>{item.priority}</Chip>{item.is_overdue && <Chip variant="danger">overdue</Chip>}<Chip>{item.task_state}</Chip></div><p className="text-xs text-muted mt-1">{item.description}</p><p className="text-2xs text-text-subtle mt-1">{item.assigned_to ? `Assigned to ${item.assigned_to.name}` : 'Unassigned'}{item.due_at ? ` · Due ${formatRelative(item.due_at)}` : ''}</p></div>
             <Button aria-label="Open source record" size="sm" variant="secondary" onClick={() => navigate(item.link)}><ExternalLink size={12} /></Button>
           </div>)}

@@ -27,6 +27,8 @@ import { formatPeso } from '@/lib/formatNumber';
 import { formatDate, formatRelative } from '@/lib/formatDate';
 import type { DisbursementProof, Payroll, PayrollPeriod } from '@/types/payroll';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { Textarea } from '@/components/ui/Textarea';
+import { FileInput } from '@/components/ui/FileInput';
 
 const periodStatusVariant = (status: string | null | undefined): ChipVariant => {
   switch (status) {
@@ -687,14 +689,17 @@ function DisbursementProofCard({ proof, periodId }: { proof: DisbursementProof; 
         >
           <Eye size={14} />
         </button>
-        <button
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          iconOnly
+          icon={<Trash2 size={14} />}
+          aria-label="Delete proof"
           onClick={() => setShowDeleteConfirm(true)}
           disabled={deleteMutation.isPending}
-          className="inline-flex items-center justify-center h-8 w-8 rounded hover:bg-danger-bg text-muted hover:text-danger-fg transition-colors"
-          title="Delete proof"
-        >
-          <Trash2 size={14} />
-        </button>
+          className="text-muted hover:text-danger"
+        />
       </div>
       <ConfirmDialog
         isOpen={showDeleteConfirm}
@@ -755,16 +760,13 @@ function UploadProofModal({
           <option value="other">Other</option>
         </Select>
 
-        <div>
-          <label className="block text-xs font-medium text-primary mb-1">File (PDF, JPG, PNG — max 10MB)</label>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".pdf,.jpg,.jpeg,.png"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            className="block w-full text-xs text-muted file:mr-3 file:py-1 file:px-3 file:rounded file:border file:border-default file:text-xs file:bg-elevated file:text-primary hover:file:bg-strong"
-          />
-        </div>
+        <FileInput
+          ref={fileInputRef}
+          label="File"
+          helper="PDF, JPG, or PNG — max 10MB"
+          accept=".pdf,.jpg,.jpeg,.png"
+          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+        />
 
         <div className="grid grid-cols-2 gap-3">
           <Input label="Bank name" value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="e.g. BDO Unibank" />
@@ -827,17 +829,15 @@ function VoidPeriodModal({
           </span>
         </div>
         <div>
-          <label className="block text-xs font-medium text-primary mb-1">
-            Reason <span className="text-danger-fg">*</span>
-          </label>
-          <textarea
+          <Textarea
+            label="Reason"
+            required
+            helper="Minimum 5 characters — stored in the audit log."
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             rows={3}
             placeholder="e.g. Backdated OT for E. Cruz was missing; recomputing this half."
-            className="block w-full rounded-md border border-default bg-canvas px-3 py-2 text-sm text-primary placeholder:text-muted focus:border-accent focus:outline-none"
           />
-          <p className="mt-1 text-2xs text-muted">Minimum 5 characters — stored in the audit log.</p>
         </div>
       </div>
 

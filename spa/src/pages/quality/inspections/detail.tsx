@@ -28,6 +28,7 @@ import { LinkedRecords } from '@/components/chain/LinkedRecords';
 import { usePermission } from '@/hooks/usePermission';
 import type { InspectionMeasurement, InspectionStatus } from '@/types/quality';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { Input } from '@/components/ui/Input';
 import { cn } from '@/lib/cn';
 
 const STATUS_CHIP: Record<InspectionStatus, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
@@ -374,11 +375,14 @@ export default function InspectionDetailPage() {
                           {m.parameter_type === 'visual' ? (
                             <span className="text-muted text-2xs">N/A</span>
                           ) : (
-                            <input
+                            <Input
+                              fieldSize="sm"
                               type="number"
                               step="any"
                               disabled={isTerminal}
-                              className="w-24 px-2 py-1 text-right font-mono tabular-nums border border-default rounded-md bg-canvas focus:outline-none focus:ring-2 focus:ring-accent"
+                              aria-label="Measured value"
+                              containerClassName="inline-flex w-24"
+                              className="text-right font-mono tabular-nums"
                               value={draft.measured_value}
                               onChange={(e) =>
                                 updateDraft(m.id, { measured_value: e.target.value })

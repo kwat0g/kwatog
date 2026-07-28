@@ -24,6 +24,8 @@ import { usePermission } from '@/hooks/usePermission';
 import { useChainProgress } from '@/hooks/useChainProgress';
 import type { DeliveryStatus, DeliveryProofType } from '@/types/supplyChain';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { Textarea } from '@/components/ui/Textarea';
+import { LinkButton } from '@/components/ui/LinkButton';
 
 const STATUS_CHIP: Record<DeliveryStatus, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
   scheduled: 'neutral', loading: 'info', in_transit: 'info',
@@ -317,14 +319,14 @@ export default function DeliveryDetailPage() {
                       </div>
                       {p.notes && <div className="mt-1 text-muted line-clamp-2">{p.notes}</div>}
                       {canEdit && (
-                        <button
-                          type="button"
+                        <LinkButton
+                          tone="danger"
                           onClick={() => setDeleteProofId(p.id)}
-                          className="mt-1.5 inline-flex items-center gap-1 text-2xs text-danger hover:underline"
+                          icon={<Trash2 size={12} />}
+                          className="mt-1.5 text-2xs"
                         >
-                          <Trash2 size={12} />
                           Remove
-                        </button>
+                        </LinkButton>
                       )}
                     </div>
                   </li>
@@ -541,35 +543,26 @@ export default function DeliveryDetailPage() {
               ? `${proofs.length} proof file${proofs.length === 1 ? '' : 's'} attached. Capture the receiver's details to finalize the delivery and create a draft invoice.`
               : 'At least one proof must be uploaded first.'}
           </p>
-          <div>
-            <label className="text-2xs uppercase tracking-wider text-muted block mb-1">Received by</label>
-            <input
-              type="text"
-              value={receiverName}
-              onChange={(e) => setReceiverName(e.target.value)}
-              placeholder="e.g. Maria Santos"
-              className="w-full text-sm rounded-md border border-default bg-canvas px-3 py-2"
-            />
-          </div>
-          <div>
-            <label className="text-2xs uppercase tracking-wider text-muted block mb-1">Position</label>
-            <input
-              type="text"
-              value={receiverPosition}
-              onChange={(e) => setReceiverPosition(e.target.value)}
-              placeholder="e.g. Purchasing Officer"
-              className="w-full text-sm rounded-md border border-default bg-canvas px-3 py-2"
-            />
-          </div>
-          <div>
-            <label className="text-2xs uppercase tracking-wider text-muted block mb-1">Remarks (optional)</label>
-            <textarea
-              value={confirmRemarks}
-              onChange={(e) => setConfirmRemarks(e.target.value)}
-              rows={3}
-              className="w-full text-sm rounded-md border border-default bg-canvas px-3 py-2"
-            />
-          </div>
+          <Input
+            label="Received by"
+            type="text"
+            value={receiverName}
+            onChange={(e) => setReceiverName(e.target.value)}
+            placeholder="e.g. Maria Santos"
+          />
+          <Input
+            label="Position"
+            type="text"
+            value={receiverPosition}
+            onChange={(e) => setReceiverPosition(e.target.value)}
+            placeholder="e.g. Purchasing Officer"
+          />
+          <Textarea
+            label="Remarks (optional)"
+            value={confirmRemarks}
+            onChange={(e) => setConfirmRemarks(e.target.value)}
+            rows={3}
+          />
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="secondary" onClick={() => setConfirmModalOpen(false)}>Cancel</Button>
             <Button

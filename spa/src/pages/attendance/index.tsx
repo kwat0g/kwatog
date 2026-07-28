@@ -10,6 +10,7 @@ import { DataTable, NumCell, StackedCell, type Column } from '@/components/ui/Da
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
+import { Input } from '@/components/ui/Input';
 import { formatTime } from '@/lib/formatDate';
 import { formatInt } from '@/lib/formatNumber';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -129,20 +130,24 @@ export default function AttendancePage() {
       <div className="px-5 py-2 flex gap-3 text-sm border-b border-default">
         <label className="flex items-center gap-2">
           <span className="text-muted text-xs">From</span>
-          <input
+          <Input
+            fieldSize="sm"
             type="date"
+            aria-label="From date"
             value={(filters.from as string) ?? ''}
             onChange={(e) => setFilters((f) => ({ ...f, from: e.target.value, page: 1 }))}
-            className="h-7 px-2 rounded-md border border-default bg-canvas text-xs font-mono focus:ring-2 focus:ring-accent"
+            className="font-mono"
           />
         </label>
         <label className="flex items-center gap-2">
           <span className="text-muted text-xs">To</span>
-          <input
+          <Input
+            fieldSize="sm"
             type="date"
+            aria-label="To date"
             value={(filters.to as string) ?? ''}
             onChange={(e) => setFilters((f) => ({ ...f, to: e.target.value, page: 1 }))}
-            className="h-7 px-2 rounded-md border border-default bg-canvas text-xs font-mono focus:ring-2 focus:ring-accent"
+            className="font-mono"
           />
         </label>
       </div>

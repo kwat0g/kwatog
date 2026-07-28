@@ -16,6 +16,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Panel } from '@/components/ui/Panel';
 import { Select } from '@/components/ui/Select';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
+import { Textarea } from '@/components/ui/Textarea';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import type { ShipmentDocumentType, ShipmentStatus } from '@/types/supplyChain';
@@ -299,14 +300,16 @@ export default function ShipmentDetailPage() {
                         </button>
                       )}
                       {canManage && (
-                        <button
+                        <Button
                           type="button"
+                          variant="ghost"
+                          size="sm"
+                          iconOnly
+                          icon={<Trash2 size={14} />}
+                          aria-label="Remove document"
                           onClick={() => setDeleteDocId(doc.id)}
-                          className="text-danger hover:opacity-70"
-                          title="Remove document"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                          className="text-muted hover:text-danger"
+                        />
                       )}
                     </div>
                   </li>
@@ -429,16 +432,13 @@ export default function ShipmentDetailPage() {
         title={`Mark as ${pendingStatus?.replace('_', ' ') ?? ''}`}
       >
         <div className="space-y-3">
-          <div>
-            <label className="text-2xs uppercase tracking-wider text-muted block mb-1">Note (optional)</label>
-            <textarea
-              value={statusNote}
-              onChange={(e) => setStatusNote(e.target.value)}
-              rows={3}
-              placeholder="Add a note about this status change…"
-              className="w-full text-sm rounded-md border border-default bg-canvas px-3 py-2"
-            />
-          </div>
+          <Textarea
+            label="Note (optional)"
+            value={statusNote}
+            onChange={(e) => setStatusNote(e.target.value)}
+            rows={3}
+            placeholder="Add a note about this status change…"
+          />
           <div className="flex justify-end gap-2 pt-2">
             <Button
               variant="secondary"
