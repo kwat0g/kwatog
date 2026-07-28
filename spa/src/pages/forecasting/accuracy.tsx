@@ -161,7 +161,7 @@ export default function ForecastAccuracyPage() {
             <div className="p-4"><SkeletonBlock className="h-[300px]" /></div>
           ) : chartData.length === 0 ? (
             <EmptyState
-              icon="bar-chart-2"
+              icon="bar-chart"
               title="No reconciled data"
               description={`No forecast periods with actuals for ${year}.`}
             />

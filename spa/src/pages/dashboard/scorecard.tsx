@@ -4,11 +4,11 @@ import { Link } from 'react-router-dom';
 import { TrendingUp, TrendingDown, Minus, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
-import { PageHeader } from '@/components/layout/PageHeader';
 import { Panel } from '@/components/ui/Panel';
 import { Button } from '@/components/ui/Button';
+import { Select } from '@/components/ui/Select';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { SkeletonDetail } from '@/components/ui/Skeleton';
+import { DashboardShell, KpiGrid } from '@/components/dashboard/DashboardShell';
 import { usePermission } from '@/hooks/usePermission';
 import { formatInt, formatPeso } from '@/lib/formatNumber';
 import { kpiApi } from '@/api/kpi';
@@ -96,81 +96,61 @@ export default function ScorecardPage() {
   }, []);
 
   return (
-    <div>
-      <PageHeader
-        title="KPI Scorecard"
-        subtitle="Monthly performance indicators across all modules."
-        refreshingQueryKey={['kpi', 'scorecard', year, month]}
-        actions={
-          <div className="flex items-center gap-2">
-            <select
-              value={month}
-              onChange={(e) => setMonth(Number(e.target.value))}
-              className="h-8 rounded-md border border-default bg-canvas px-2 text-sm text-primary focus:outline-none focus:ring-1 focus:ring-accent"
-              aria-label="Month"
+    <DashboardShell<KpiScorecardItem[]>
+      title="KPI Scorecard"
+      subtitle="Monthly performance indicators across all modules."
+      query={scorecardQ}
+      refreshingQueryKey={['kpi', 'scorecard', year, month]}
+      kpiCount={8}
+      actions={
+        <div className="flex items-center gap-2">
+          <Select
+            value={month}
+            onChange={(e) => setMonth(Number(e.target.value))}
+            aria-label="Month"
+          >
+            {MONTHS.map((m, i) => (
+              <option key={i} value={i + 1}>{m}</option>
+            ))}
+          </Select>
+          <Select
+            value={year}
+            onChange={(e) => setYear(Number(e.target.value))}
+            aria-label="Year"
+          >
+            {yearOptions.map((y) => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </Select>
+          {can('dashboard.admin.view') && (
+            <Button
+              variant="secondary"
+              onClick={() => computeMut.mutate()}
+              loading={computeMut.isPending}
+              icon={<RefreshCw size={14} />}
             >
-              {MONTHS.map((m, i) => (
-                <option key={i} value={i + 1}>{m}</option>
-              ))}
-            </select>
-            <select
-              value={year}
-              onChange={(e) => setYear(Number(e.target.value))}
-              className="h-8 rounded-md border border-default bg-canvas px-2 text-sm text-primary focus:outline-none focus:ring-1 focus:ring-accent"
-              aria-label="Year"
-            >
-              {yearOptions.map((y) => (
-                <option key={y} value={y}>{y}</option>
-              ))}
-            </select>
-            {can('dashboard.admin.view') && (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => computeMut.mutate()}
-                disabled={computeMut.isPending}
-              >
-                <RefreshCw size={14} className={computeMut.isPending ? 'animate-spin' : ''} />
-                {computeMut.isPending ? 'Computing...' : 'Compute KPIs'}
-              </Button>
-            )}
-          </div>
-        }
-      />
-
-      <div className="px-5 py-4">
-        {scorecardQ.isLoading && !scorecardQ.data && <SkeletonDetail />}
-
-        {scorecardQ.isError && (
-          <EmptyState
-            icon="alert-circle"
-            title="Failed to load scorecard"
-            description="Could not fetch KPI data. Please try again."
-            action={
-              <Button variant="secondary" onClick={() => scorecardQ.refetch()}>
-                Retry
-              </Button>
-            }
-          />
-        )}
-
-        {scorecardQ.data && scorecardQ.data.length === 0 && (
+              {computeMut.isPending ? 'Computing…' : 'Compute KPIs'}
+            </Button>
+          )}
+        </div>
+      }
+    >
+      {(items) =>
+        items.length === 0 ? (
           <EmptyState
             icon="bar-chart"
             title="No KPIs defined"
             description="KPI definitions have not been configured yet."
           />
-        )}
-
-        {scorecardQ.data && scorecardQ.data.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {scorecardQ.data.map((item) => (
+        ) : (
+          <KpiGrid count={4}>
+            {items.map((item) => (
               <KpiCard key={item.definition.code} item={item} />
             ))}
-          </div>
-        )}
-      </div>
-    </div>
+          </KpiGrid>
+        )
+      }
+    </DashboardShell>
   );
 }
 

@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Button } from '@/components/ui/Button';
 import { Panel } from '@/components/ui/Panel';
 import { StatCard } from '@/components/ui/StatCard';
 import { Chip } from '@/components/ui/Chip';
-import { PageHeader } from '@/components/layout/PageHeader';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { Th, Td, tableCls, trCls } from '@/components/ui/table-cells';
 import { client } from '@/api/client';
+import { DashboardShell, KpiGrid, PanelRow } from '@/components/dashboard/DashboardShell';
 import { ChainBottleneckWidget } from '@/components/dashboard/ChainBottleneckWidget';
 import { StockOutPanel } from '@/components/dashboard/StockOutPanel';
 import { DemandForecastPanel } from '@/components/dashboard/DemandForecastPanel';
@@ -62,71 +62,51 @@ export default function PlantManagerDashboard() {
     placeholderData: (prev) => prev,
   });
 
-  // Compute chart data from existing panels
-  const machineStatusData = q.data ? (() => {
-    const statusCounts: Record<string, number> = {};
-    q.data.panels.machine_util.forEach(m => {
-      statusCounts[m.status] = (statusCounts[m.status] || 0) + 1;
-    });
-    const colorMap: Record<string, string> = {
-      running: 'var(--success)',
-      idle: 'var(--warning)',
-      setup: 'var(--info)',
-      breakdown: 'var(--danger)',
-      down: 'var(--danger)',
-      stopped: 'var(--text-muted)',
-    };
-    return Object.entries(statusCounts).map(([name, value]) => ({
-      name,
-      value,
-      color: colorMap[name] ?? 'var(--text-muted)',
-    }));
-  })() : [];
-
   return (
-    <div>
-      <PageHeader
-        title="Plant Manager Dashboard"
-        subtitle="Production, quality, and financial overview."
-        actions={
-          <div className="inline-flex rounded-md border border-default overflow-hidden text-sm" role="group" aria-label="Time range">
-            {(['today', 'week', 'month', 'quarter'] as const).map((r) => (
-              <button
-                key={r}
-                type="button"
-                onClick={() => setRange(r)}
-                className={`px-3 py-1.5 capitalize transition-colors duration-fast ${
-                  range === r ? 'bg-accent text-accent-fg' : 'bg-canvas text-secondary hover:bg-elevated'
-                }`}
-                aria-pressed={range === r}
-              >
-                {r}
-              </button>
-            ))}
-          </div>
-        }
-      />
-      <div className="px-5 py-4 space-y-4">
-        {q.isLoading && !q.data && <SkeletonDetail />}
+    <DashboardShell<PlantManagerData>
+      title="Plant Manager Dashboard"
+      subtitle="Production, quality, and financial overview."
+      query={q}
+      refreshingQueryKey={['dashboard', 'plant-manager', range]}
+      actions={
+        <SegmentedControl
+          label="Time range"
+          value={range}
+          onChange={setRange}
+          size="sm"
+          options={[
+            { value: 'today', label: 'Today' },
+            { value: 'week', label: 'Week' },
+            { value: 'month', label: 'Month' },
+            { value: 'quarter', label: 'Quarter' },
+          ]}
+        />
+      }
+    >
+      {(data) => {
+        const machineStatusCounts: Record<string, number> = {};
+        data.panels.machine_util.forEach((m) => {
+          machineStatusCounts[m.status] = (machineStatusCounts[m.status] || 0) + 1;
+        });
+        const colorMap: Record<string, string> = {
+          running: 'var(--success)',
+          idle: 'var(--warning)',
+          setup: 'var(--info)',
+          breakdown: 'var(--danger)',
+          down: 'var(--danger)',
+          stopped: 'var(--text-muted)',
+        };
+        const machineStatusData = Object.entries(machineStatusCounts).map(([name, value]) => ({
+          name,
+          value,
+          color: colorMap[name] ?? 'var(--text-muted)',
+        }));
 
-        {q.isError && (
-          <EmptyState
-            icon="alert-circle"
-            title="Failed to load plant dashboard"
-            description="We couldn't reach the plant manager dashboard."
-            action={
-              <Button variant="secondary" onClick={() => q.refetch()}>
-                Retry
-              </Button>
-            }
-          />
-        )}
-
-        {q.data && (
+        return (
           <>
             {/* Row 1 — KPIs */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-              {q.data.kpis.map((kpi) => (
+            <KpiGrid count={data.kpis.length}>
+              {data.kpis.map((kpi) => (
                 <StatCard
                   key={kpi.label}
                   label={kpi.label}
@@ -134,71 +114,69 @@ export default function PlantManagerDashboard() {
                   helper={kpi.unit === 'PHP' ? 'PHP' : kpi.unit === 'pct' ? 'yield' : kpi.unit}
                 />
               ))}
-            </div>
+            </KpiGrid>
 
             {/* KPI Scorecard strip */}
             <KpiStrip codes={['oee', 'dppm', 'first_pass_yield', 'on_time_delivery']} />
 
             {/* Row 2 — Chain stage breakdown */}
             <Panel title="Order-to-Cash Chain" actions={<Link className="text-xs text-link hover:underline" to="/approvals">View board →</Link>}>
-              <StageBar stages={q.data.panels.chain_stages} />
+              <StageBar stages={data.panels.chain_stages} />
             </Panel>
 
             {/* Row 3 — Machine utilization + defect pareto */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              <MachineUtilPanel machines={q.data.panels.machine_util} />
-              <DefectParetoPanel defects={q.data.panels.defect_pareto} />
-            </div>
+            <PanelRow>
+              <MachineUtilPanel machines={data.panels.machine_util} />
+              <DefectParetoPanel defects={data.panels.defect_pareto} />
+            </PanelRow>
 
             {/* Row 4 — Alerts + financial snapshot */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              <AlertsPanel alerts={q.data.panels.alerts} />
-              <FinancialSnapshotPanel snapshot={q.data.panels.financial_snapshot} />
-            </div>
+            <PanelRow>
+              <AlertsPanel alerts={data.panels.alerts} />
+              <FinancialSnapshotPanel snapshot={data.panels.financial_snapshot} />
+            </PanelRow>
 
             {/* Row 4.5 — Chart visualizations */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <PanelRow>
               <Panel title="Machine Status Breakdown">
                 {machineStatusData.length === 0 ? (
-                  <p className="text-sm text-muted">No machine data available.</p>
+                  <EmptyState size="compact" icon="cpu" title="No machines" description="No machine data available." />
                 ) : (
                   <DonutBreakdown
                     data={machineStatusData}
                     centerLabel="Machines"
-                    centerValue={String(q.data.panels.machine_util.length)}
+                    centerValue={String(data.panels.machine_util.length)}
                   />
                 )}
               </Panel>
               <Panel title="Top Defects">
-                {q.data.panels.defect_pareto.length === 0 ? (
-                  <p className="text-sm text-muted">No defects recorded.</p>
+                {data.panels.defect_pareto.length === 0 ? (
+                  <EmptyState size="compact" icon="check-circle" title="No defects" description="No defects recorded this period." />
                 ) : (
                   <BarComparison
-                    data={q.data.panels.defect_pareto.slice(0, 8).map(d => ({ label: d.code, count: d.count }))}
+                    data={data.panels.defect_pareto.slice(0, 8).map((d) => ({ label: d.code, count: d.count }))}
                     bars={[{ dataKey: 'count', color: 'var(--danger)', label: 'Defects' }]}
                     xKey="label"
                     height={180}
                   />
                 )}
               </Panel>
-            </div>
+            </PanelRow>
 
             {/* Row 5: Forecasting */}
             {can('forecasting.view') && (
-              <div className="grid grid-cols-2 gap-3">
+              <PanelRow>
                 <StockOutPanel title="Stock-out Risk Forecast" horizonDays={30} hideWhenEmpty />
                 <DemandForecastPanel hideWhenEmpty />
-              </div>
+              </PanelRow>
             )}
 
             {/* Bottleneck widget */}
-            {can('dashboard.view_bottlenecks') && (
-              <ChainBottleneckWidget hideWhenEmpty />
-            )}
+            {can('dashboard.view_bottlenecks') && <ChainBottleneckWidget hideWhenEmpty />}
           </>
-        )}
-      </div>
-    </div>
+        );
+      }}
+    </DashboardShell>
   );
 }
 
@@ -206,7 +184,9 @@ export default function PlantManagerDashboard() {
 
 function StageBar({ stages }: { stages: PlantManagerData['panels']['chain_stages'] }) {
   if (stages.length === 0) {
-    return <p className="text-sm text-muted">No active orders in the pipeline.</p>;
+    return (
+      <EmptyState size="compact" icon="inbox" title="Order pipeline empty" description="No active orders in the pipeline." />
+    );
   }
   const colorMap: Record<string, string> = {
     success: 'bg-success',
@@ -249,7 +229,7 @@ function MachineUtilPanel({ machines }: { machines: PlantManagerData['panels']['
   return (
     <Panel title="Machine Utilization" actions={<Link className="text-xs text-link hover:underline" to="/mrp/machines">Open machines →</Link>}>
       {machines.length === 0 ? (
-        <p className="text-sm text-muted">No machines configured.</p>
+        <EmptyState size="compact" icon="cpu" title="No machines" description="No machines are configured yet." />
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
           {machines.map((m) => (
@@ -275,7 +255,7 @@ function DefectParetoPanel({ defects }: { defects: PlantManagerData['panels']['d
   if (defects.length === 0) {
     return (
       <Panel title="Defect Pareto (top 8)">
-        <p className="text-sm text-muted">No defects recorded.</p>
+        <EmptyState size="compact" icon="check-circle" title="No defects" description="No defects recorded this period." />
       </Panel>
     );
   }
@@ -319,7 +299,7 @@ function AlertsPanel({ alerts }: { alerts: PlantManagerData['panels']['alerts'] 
       actions={<Link className="text-xs text-link hover:underline" to="/alerts">All alerts →</Link>}
     >
       {alerts.length === 0 ? (
-        <p className="text-sm text-muted">No active alerts.</p>
+        <EmptyState size="compact" icon="bell-off" title="All clear" description="No active alerts." />
       ) : (
         <ul className="divide-y divide-subtle">
           {alerts.map((a, i) => (
@@ -352,23 +332,28 @@ function FinancialSnapshotPanel({
   ];
   return (
     <Panel title="Financial Snapshot" actions={<Link className="text-xs text-link hover:underline" to="/accounting">Accounting →</Link>}>
-      <table className="w-full text-sm">
+      <table className={tableCls}>
+        <caption className="sr-only">Financial snapshot</caption>
+        <thead className="sr-only">
+          <tr>
+            <Th>Metric</Th>
+            <Th align="right">Amount</Th>
+          </tr>
+        </thead>
         <tbody>
           {rows.map((r) => (
-            <tr key={r.label} className="border-b border-border last:border-0">
-              <td className="py-1.5 text-muted">{r.label}</td>
-              <td  className="py-1.5 text-right font-mono tabular-nums">
-                <Link to={r.href} className="font-mono tabular-nums hover:underline">
+            <tr key={r.label} className={trCls}>
+              <Td className="text-muted">{r.label}</Td>
+              <Td align="right" mono>
+                <Link to={r.href} className="hover:underline">
                   {formatPeso(r.value)}
                 </Link>
-              </td>
+              </Td>
             </tr>
           ))}
-          <tr>
-            <td className="pt-2 text-muted">Draft JEs</td>
-            <td  className="pt-2 text-right font-mono tabular-nums">
-              {snapshot.je_draft_count}
-            </td>
+          <tr className="h-8">
+            <Td className="text-muted">Draft JEs</Td>
+            <Td align="right" mono>{snapshot.je_draft_count}</Td>
           </tr>
         </tbody>
       </table>

@@ -161,7 +161,7 @@ export function CopqWidget() {
           </div>
         ) : (
           <EmptyState
-            icon="bar-chart-2"
+            icon="bar-chart"
             title="No historical data"
             description="COPQ trend data will appear after the monthly snapshot runs."
           />

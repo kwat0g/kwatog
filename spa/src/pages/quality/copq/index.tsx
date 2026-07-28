@@ -144,7 +144,7 @@ export default function CopqAnalyticsPage() {
             />
           )}
           {trend.data && trend.data.length === 0 && (
-            <EmptyState icon="bar-chart-2" title="No COPQ data" description="No cost data recorded yet." />
+            <EmptyState icon="bar-chart" title="No COPQ data" description="No cost data recorded yet." />
           )}
           {trend.data && trend.data.length > 0 && (
             <ResponsiveContainer width="100%" height={280}>

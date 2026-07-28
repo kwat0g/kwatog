@@ -9,13 +9,12 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { dashboardsApi } from '@/api/dashboards';
 import { kpiLink } from '@/lib/dashboardLinks';
-import { PageHeader } from '@/components/layout/PageHeader';
 import { StatCard } from '@/components/ui/StatCard';
 import { Panel } from '@/components/ui/Panel';
-import { SkeletonBlock, SkeletonDetail } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Button } from '@/components/ui/Button';
+import { Th, Td, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { StockOutPanel } from '@/components/dashboard/StockOutPanel';
+import { DashboardShell, KpiGrid, PanelRow } from '@/components/dashboard/DashboardShell';
 import { DonutBreakdown } from '@/components/charts';
 import { usePermission } from '@/hooks/usePermission';
 import { KpiStrip } from '@/components/dashboard/KpiStrip';
@@ -142,20 +141,20 @@ function LowStockAlertsPanel({ items }: { items: LowStockItem[] }) {
   }
 
   return (
-    <Panel title="Low Stock Alerts" meta={items.length.toString()}>
-      <table className="w-full text-sm">
+    <Panel title="Low Stock Alerts" meta={items.length.toString()} noPadding bodyClassName="px-1.5 pb-2">
+      <table className={tableCls}>
         <thead>
-          <tr className="border-b border-subtle">
-            <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Item</th>
-            <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">On Hand</th>
-            <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Reorder</th>
-            <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Shortage</th>
+          <tr className={theadTrCls}>
+            <Th>Item</Th>
+            <Th align="right">On Hand</Th>
+            <Th align="right">Reorder</Th>
+            <Th align="right">Shortage</Th>
           </tr>
         </thead>
         <tbody>
           {items.map((s) => (
-            <tr key={s.item_code} className="border-b border-subtle h-7">
-              <td className="py-1">
+            <tr key={s.item_code} className={trCls}>
+              <Td>
                 <Link
                   to={`/inventory/items/${s.item_code}`}
                   className="text-link hover:underline font-mono text-xs"
@@ -164,10 +163,10 @@ function LowStockAlertsPanel({ items }: { items: LowStockItem[] }) {
                   {s.item_code}
                 </Link>
                 <span className="text-muted ml-1 text-xs">{s.item_name}</span>
-              </td>
-              <td  className="py-1 text-right font-mono tabular-nums text-xs">{s.current_stock}</td>
-              <td  className="py-1 text-right font-mono tabular-nums text-xs">{s.reorder_point}</td>
-              <td  className="py-1 text-right font-mono tabular-nums text-xs text-danger">{s.shortage}</td>
+              </Td>
+              <Td align="right" mono>{s.current_stock}</Td>
+              <Td align="right" mono>{s.reorder_point}</Td>
+              <Td align="right" mono className="text-danger">{s.shortage}</Td>
             </tr>
           ))}
         </tbody>
@@ -226,99 +225,75 @@ export default function WarehouseDashboard() {
   const { can } = usePermission();
   const q = useQuery({
     queryKey: ['dashboard', 'warehouse'],
-    queryFn: () => dashboardsApi.warehouse(),
+    queryFn: () => dashboardsApi.warehouse<WarehouseDashboardData>(),
     refetchInterval: 60_000,
   });
 
-  // Compute chart data
-  const zoneUtilChartData = (q.data as unknown as WarehouseDashboardData)?.panels?.zone_utilization?.map(z => ({
-    name: z.name,
-    value: z.percent,
-    color: z.percent >= 90 ? 'var(--danger)' : z.percent >= 75 ? 'var(--warning)' : 'var(--success)',
-  })) ?? [];
-
-  /* ─── LOADING ─── */
-  if (q.isLoading && !q.data) {
-    return (
-      <div>
-        <PageHeader title="Warehouse Dashboard" subtitle="Inventory & logistics" />
-        <div className="px-5 py-4 space-y-4">
-          <div className="grid grid-cols-4 gap-2">
-            {[1, 2, 3, 4].map((i) => <SkeletonBlock key={i} className="h-16 rounded-md" />)}
-          </div>
-          <SkeletonDetail />
-        </div>
-      </div>
-    );
-  }
-
-  /* ─── ERROR ─── */
-  if (q.isError || !q.data) {
-    return (
-      <div>
-        <PageHeader title="Warehouse Dashboard" subtitle="Inventory & logistics" />
-        <div className="px-5 py-4">
-          <EmptyState
-            icon="alert-circle"
-            title="Failed to load dashboard"
-            action={<Button variant="secondary" onClick={() => q.refetch()}>Retry</Button>}
-          />
-        </div>
-      </div>
-    );
-  }
-
-  const { kpis, panels } = q.data as unknown as WarehouseDashboardData;
-
   return (
-    <div>
-      <PageHeader title="Warehouse Dashboard" subtitle="Live · refreshes every 60s" />
+    <DashboardShell<WarehouseDashboardData>
+      title="Warehouse Dashboard"
+      subtitle="Live · refreshes every 60s"
+      query={q}
+      refreshingQueryKey={['dashboard', 'warehouse']}
+    >
+      {({ kpis, panels }) => {
+        const zoneUtilChartData =
+          panels?.zone_utilization?.map((z) => ({
+            name: z.name,
+            value: z.percent,
+            color: z.percent >= 90 ? 'var(--danger)' : z.percent >= 75 ? 'var(--warning)' : 'var(--success)',
+          })) ?? [];
 
-      <div className="px-5 py-4 space-y-4">
-        {/* ── Row 1: KPIs ── */}
-        <section className="grid grid-cols-4 gap-2">
-          {kpis.map((k) => (
-            <StatCard
-              key={k.label}
-              label={k.label}
-              value={k.unit === 'PHP' ? `₱ ${k.value}` : k.value}
-              helper={k.unit !== 'PHP' && k.unit !== 'count' ? k.unit : undefined}
-              linkTo={kpiLink(k.label)}
-            />
-          ))}
-        </section>
+        return (
+          <>
+            {/* ── Row 1: KPIs ── */}
+            <KpiGrid count={kpis.length}>
+              {kpis.map((k) => (
+                <StatCard
+                  key={k.label}
+                  label={k.label}
+                  value={k.unit === 'PHP' ? `₱ ${k.value}` : k.value}
+                  helper={k.unit !== 'PHP' && k.unit !== 'count' ? k.unit : undefined}
+                  linkTo={kpiLink(k.label)}
+                />
+              ))}
+            </KpiGrid>
 
-        {/* KPI Scorecard strip */}
-        <KpiStrip codes={['inventory_turnover', 'supplier_quality']} />
+            {/* KPI Scorecard strip */}
+            <KpiStrip codes={['inventory_turnover', 'supplier_quality']} />
 
-        {/* ── Row 2: Incoming + Outgoing queue ── */}
-        <div className="grid grid-cols-2 gap-4">
-          <IncomingQueuePanel items={panels?.incoming_queue ?? []} />
-          <OutgoingQueuePanel items={panels?.outgoing_queue ?? []} />
-        </div>
+            {/* ── Row 2: Incoming + Outgoing queue ── */}
+            <PanelRow>
+              <IncomingQueuePanel items={panels?.incoming_queue ?? []} />
+              <OutgoingQueuePanel items={panels?.outgoing_queue ?? []} />
+            </PanelRow>
 
-        {/* ── Row 3: Low Stock Alerts + Zone Utilisation ── */}
-        <div className="grid grid-cols-2 gap-4">
-          <LowStockAlertsPanel items={panels?.low_stock_alerts ?? []} />
-          <ZoneUtilizationPanel items={panels?.zone_utilization ?? []} />
-        </div>
+            {/* ── Row 3: Low Stock Alerts + Zone Utilisation ── */}
+            <PanelRow>
+              <LowStockAlertsPanel items={panels?.low_stock_alerts ?? []} />
+              <ZoneUtilizationPanel items={panels?.zone_utilization ?? []} />
+            </PanelRow>
 
-        {/* ── Row 3.5: Chart visualizations ── */}
-        <Panel title="Zone Capacity Distribution">
-          {zoneUtilChartData.length === 0 ? (
-            <EmptyState icon="inbox" title="No zones" description="No warehouse zone data available." />
-          ) : (
-            <DonutBreakdown
-              data={zoneUtilChartData}
-              centerLabel="Avg Util"
-              centerValue={`${Math.round(zoneUtilChartData.reduce((sum, i) => sum + i.value, 0) / zoneUtilChartData.length)}%`}
-            />
-          )}
-        </Panel>
+            {/* ── Row 4: Zone capacity chart ── */}
+            <Panel title="Zone Capacity Distribution">
+              {zoneUtilChartData.length === 0 ? (
+                <EmptyState icon="inbox" title="No zones" description="No warehouse zone data available." />
+              ) : (
+                <DonutBreakdown
+                  data={zoneUtilChartData}
+                  centerLabel="Avg Util"
+                  centerValue={`${Math.round(
+                    zoneUtilChartData.reduce((sum, i) => sum + i.value, 0) / zoneUtilChartData.length,
+                  )}%`}
+                />
+              )}
+            </Panel>
 
-        {/* ── Row 4: Stock-out forecast ── */}
-        {can('forecasting.view') && <StockOutPanel horizonDays={30} hideWhenEmpty />}
-      </div>
-    </div>
+            {/* ── Row 5: Stock-out forecast ── */}
+            {can('forecasting.view') && <StockOutPanel horizonDays={30} hideWhenEmpty />}
+          </>
+        );
+      }}
+    </DashboardShell>
   );
 }

@@ -559,7 +559,7 @@ function VariancePanel({
 
         {!compareToId && (
           <EmptyState
-            icon="bar-chart-2"
+            icon="bar-chart"
             title="No period selected"
             description="Pick a previous payroll period from the dropdown to compare."
           />

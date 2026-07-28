@@ -1,12 +1,10 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Button } from '@/components/ui/Button';
 import { Panel } from '@/components/ui/Panel';
 import { StatCard } from '@/components/ui/StatCard';
 import { Chip } from '@/components/ui/Chip';
-import { PageHeader } from '@/components/layout/PageHeader';
+import { DashboardShell, KpiGrid, PanelRow } from '@/components/dashboard/DashboardShell';
 import { SparkLine } from '@/components/charts/SparkLine';
 import {
   dashboardsApi,
@@ -46,63 +44,46 @@ export default function AdminDashboard() {
   });
 
   return (
-    <div>
-      <PageHeader
-        title="System Administrator"
-        subtitle="Platform health, security events, and account monitoring."
-      />
+    <DashboardShell<AdminDashboardData>
+      title="System Administrator"
+      subtitle="Platform health, security events, and account monitoring."
+      query={q}
+      refreshingQueryKey={['dashboard', 'admin']}
+    >
+      {({ kpis, panels }) => (
+        <>
+          {/* Row 1 — 4 system KPI stat cards */}
+          <KpiGrid count={kpis.length}>
+            {kpis.map((kpi) => (
+              <StatCard
+                key={kpi.label}
+                label={kpi.label}
+                value={<span className={kpiAccent[kpi.unit as KpiUnit] ?? 'text-primary'}>{kpi.value}</span>}
+                helper={kpi.unit}
+              />
+            ))}
+          </KpiGrid>
 
-      <div className="px-5 py-4 space-y-4">
-        {q.isLoading && !q.data && <SkeletonDetail />}
+          {/* Row 2 — Active sessions + Account security */}
+          <PanelRow>
+            <ActiveSessionsPanel data={panels.active_sessions} />
+            <AccountSecurityPanel data={panels.account_security} />
+          </PanelRow>
 
-        {q.isError && (
-          <EmptyState
-            icon="alert-circle"
-            title="Failed to load admin dashboard"
-            description="Could not reach the admin dashboard endpoint."
-            action={<Button variant="secondary" onClick={() => q.refetch()}>Retry</Button>}
-          />
-        )}
+          {/* Row 3 — Auth events */}
+          <AuthEventsPanel data={panels.auth_events} />
 
-        {q.data && (
-          <>
-            {/* Row 1 — 4 system KPI stat cards */}
-            <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-              {q.data.kpis.map((kpi) => (
-                <StatCard
-                  key={kpi.label}
-                  label={kpi.label}
-                  value={
-                    <span className={kpiAccent[kpi.unit as KpiUnit] ?? 'text-primary'}>
-                      {kpi.value}
-                    </span>
-                  }
-                  helper={kpi.unit}
-                />
-              ))}
-            </div>
+          {/* Row 4 — Queue health + Open alerts */}
+          <PanelRow>
+            <QueueHealthPanel data={panels.queue_health} />
+            <OpenAlertsPanel data={panels.open_alerts} />
+          </PanelRow>
 
-            {/* Row 2 — Active sessions + Account security */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              <ActiveSessionsPanel data={q.data.panels.active_sessions} />
-              <AccountSecurityPanel data={q.data.panels.account_security} />
-            </div>
-
-            {/* Row 3 — Auth events */}
-            <AuthEventsPanel data={q.data.panels.auth_events} />
-
-            {/* Row 4 — Queue health + Open alerts */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              <QueueHealthPanel data={q.data.panels.queue_health} />
-              <OpenAlertsPanel data={q.data.panels.open_alerts} />
-            </div>
-
-            {/* Row 5 — Audit trail */}
-            <AuditTrailPanel events={q.data.panels.recent_audit} />
-          </>
-        )}
-      </div>
-    </div>
+          {/* Row 5 — Audit trail */}
+          <AuditTrailPanel events={panels.recent_audit} />
+        </>
+      )}
+    </DashboardShell>
   );
 }
 
@@ -120,7 +101,7 @@ function ActiveSessionsPanel({
       actions={<Link className="text-xs text-link hover:underline" to="/admin/users">Manage users →</Link>}
     >
       {data.sessions.length === 0 ? (
-        <p className="text-sm text-muted">No active sessions in the last 30 minutes.</p>
+        <EmptyState size="compact" icon="monitor" title="Nobody signed in" description="No active sessions in the last 30 minutes." />
       ) : (
         <div className="space-y-0">
           {data.sessions.map((s: AdminSession, i: number) => (
@@ -274,7 +255,7 @@ function AuthEventsPanel({
         <div className="lg:col-span-2">
           <div className="text-2xs uppercase tracking-wider text-muted mb-2">Recent failures</div>
           {data.recent_failures.length === 0 ? (
-            <p className="text-sm text-muted">No failed logins in the last 24h.</p>
+            <EmptyState size="compact" icon="shield" title="No failed logins" description="No failed sign-in attempts in the last 24h." />
           ) : (
             <div className="space-y-0">
               {data.recent_failures.map((f: AdminFailedLogin, i: number) => (
@@ -346,7 +327,7 @@ function QueueHealthPanel({
       )}
 
       {data.failed_jobs === 0 && data.pending_jobs === 0 && (
-        <p className="text-sm text-muted">Queue is clear.</p>
+        <EmptyState size="compact" icon="check-circle" title="Queue is clear" description="No pending or failed jobs." />
       )}
     </Panel>
   );
@@ -389,7 +370,7 @@ function OpenAlertsPanel({
       )}
 
       {data.items.length === 0 ? (
-        <p className="text-sm text-muted">No open alerts.</p>
+        <EmptyState size="compact" icon="bell-off" title="All clear" description="No open system alerts." />
       ) : (
         <div className="space-y-0">
           {data.items.map((alert: AdminAlert) => (
@@ -427,7 +408,7 @@ function AuditTrailPanel({ events }: { events: AdminAuditEvent[] }) {
       actions={<Link className="text-xs text-link hover:underline" to="/admin/audit-logs">Full log →</Link>}
     >
       {events.length === 0 ? (
-        <p className="text-sm text-muted">No recent audit events.</p>
+        <EmptyState size="compact" icon="file-text" title="No audit events" description="Recent record changes will appear here." />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6">
           {events.map((e: AdminAuditEvent, i: number) => (

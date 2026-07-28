@@ -1,13 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, CalendarClock, ClipboardList } from 'lucide-react';
-import { PageHeader } from '@/components/layout/PageHeader';
 import { Panel } from '@/components/ui/Panel';
 import { StatCard } from '@/components/ui/StatCard';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { SkeletonDetail } from '@/components/ui/Skeleton';
-import { Button } from '@/components/ui/Button';
+import { Th, Td, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { DashboardShell, KpiGrid, PanelRow } from '@/components/dashboard/DashboardShell';
 import { financeDashboardApi } from '@/api/accounting/dashboard';
 import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
@@ -35,158 +34,119 @@ export default function FinanceDashboardPage() {
     refetchInterval: 60_000,
   });
 
-  // Compute chart data from aging buckets
-  const arAgingChartData = summary.data ? [
-    { label: 'Current', amount: parseFloat(summary.data.ar_aging_summary.current) },
-    { label: '1-30d', amount: parseFloat(summary.data.ar_aging_summary.d1_30) },
-    { label: '31-60d', amount: parseFloat(summary.data.ar_aging_summary.d31_60) },
-    { label: '61-90d', amount: parseFloat(summary.data.ar_aging_summary.d61_90) },
-    { label: '90+d', amount: parseFloat(summary.data.ar_aging_summary.d91_plus) },
-  ] : [];
-
-  const apAgingChartData = summary.data ? [
-    { label: 'Current', amount: parseFloat(summary.data.ap_aging_summary.current) },
-    { label: '1-30d', amount: parseFloat(summary.data.ap_aging_summary.d1_30) },
-    { label: '31-60d', amount: parseFloat(summary.data.ap_aging_summary.d31_60) },
-    { label: '61-90d', amount: parseFloat(summary.data.ap_aging_summary.d61_90) },
-    { label: '90+d', amount: parseFloat(summary.data.ap_aging_summary.d91_plus) },
-  ] : [];
+  type FinanceSummary = NonNullable<typeof summary.data>;
 
   return (
-    <div>
-      <PageHeader
-        title="Finance Officer Dashboard"
-        subtitle="Liquidity, receivables, payables, payroll, and budget hygiene at a glance."
-      />
+    <DashboardShell<FinanceSummary>
+      title="Finance Officer Dashboard"
+      subtitle="Liquidity, receivables, payables, payroll, and budget hygiene at a glance."
+      query={summary}
+      refreshingQueryKey={['dashboard', 'finance']}
+    >
+      {(data) => {
+        const arAgingChartData = [
+          { label: 'Current', amount: parseFloat(data.ar_aging_summary.current) },
+          { label: '1-30d', amount: parseFloat(data.ar_aging_summary.d1_30) },
+          { label: '31-60d', amount: parseFloat(data.ar_aging_summary.d31_60) },
+          { label: '61-90d', amount: parseFloat(data.ar_aging_summary.d61_90) },
+          { label: '90+d', amount: parseFloat(data.ar_aging_summary.d91_plus) },
+        ];
+        const apAgingChartData = [
+          { label: 'Current', amount: parseFloat(data.ap_aging_summary.current) },
+          { label: '1-30d', amount: parseFloat(data.ap_aging_summary.d1_30) },
+          { label: '31-60d', amount: parseFloat(data.ap_aging_summary.d31_60) },
+          { label: '61-90d', amount: parseFloat(data.ap_aging_summary.d61_90) },
+          { label: '90+d', amount: parseFloat(data.ap_aging_summary.d91_plus) },
+        ];
 
-      <div className="px-5 py-4 space-y-4">
-        {summary.isLoading && !summary.data && <SkeletonDetail />}
-
-        {summary.isError && (
-          <EmptyState
-            icon="alert-circle"
-            title="Failed to load finance dashboard"
-            description="We couldn't reach the finance summary endpoint."
-            action={
-              <Button variant="secondary" onClick={() => summary.refetch()}>
-                Retry
-              </Button>
-            }
-          />
-        )}
-
-        {summary.data && (
+        return (
           <>
             {/* Row 1 — Headline KPIs. */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-              <StatCard
-                label="Cash on hand"
-                value={formatPeso(summary.data.cash_balance)}
-                linkTo="/accounting/coa"
-              />
-              <StatCard
-                label="AR outstanding"
-                value={formatPeso(summary.data.ar_outstanding)}
-                linkTo="/accounting/invoices"
-              />
-              <StatCard
-                label="AP outstanding"
-                value={formatPeso(summary.data.ap_outstanding)}
-                linkTo="/accounting/bills"
-              />
-              <StatCard
-                label="Revenue (MTD)"
-                value={formatPeso(summary.data.revenue_mtd)}
-                linkTo="/accounting/income-statement"
-              />
-            </div>
+            <KpiGrid count={4}>
+              <StatCard label="Cash on hand" value={formatPeso(data.cash_balance)} linkTo="/accounting/coa" />
+              <StatCard label="AR outstanding" value={formatPeso(data.ar_outstanding)} linkTo="/accounting/invoices" />
+              <StatCard label="AP outstanding" value={formatPeso(data.ap_outstanding)} linkTo="/accounting/bills" />
+              <StatCard label="Revenue (MTD)" value={formatPeso(data.revenue_mtd)} linkTo="/accounting/income-statement" />
+            </KpiGrid>
 
             {/* KPI Scorecard strip */}
             <KpiStrip codes={['copq_pct_revenue', 'ar_aging_60d', 'budget_utilization']} />
 
             {/* Row 2 — AR / AP aging side by side. */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              <AgingPanel title="AR aging" buckets={summary.data.ar_aging_summary} listHref="/accounting/invoices" />
-              <AgingPanel title="AP aging" buckets={summary.data.ap_aging_summary} listHref="/accounting/bills" />
-            </div>
+            <PanelRow>
+              <AgingPanel title="AR aging" buckets={data.ar_aging_summary} listHref="/accounting/invoices" />
+              <AgingPanel title="AP aging" buckets={data.ap_aging_summary} listHref="/accounting/bills" />
+            </PanelRow>
 
             {/* Row 3 — Payroll pipeline + unposted JEs + AP due this week. */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-              <PayrollPipelinePanel pipeline={summary.data.payroll_pipeline} />
-              <UnpostedJesPanel data={summary.data.unposted_jes} />
-              <ApDueThisWeekPanel data={summary.data.ap_due_this_week} />
-            </div>
+            <PanelRow cols={3}>
+              <PayrollPipelinePanel pipeline={data.payroll_pipeline} />
+              <UnpostedJesPanel data={data.unposted_jes} />
+              <ApDueThisWeekPanel data={data.ap_due_this_week} />
+            </PanelRow>
 
             {/* Row 4 — Budget vs Actual + Recent JEs. */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              <BudgetVsActualPanel rows={summary.data.budget_vs_actual_top ?? null} />
-              <RecentJesPanel entries={summary.data.recent_journal_entries} />
-            </div>
+            <PanelRow>
+              <BudgetVsActualPanel rows={data.budget_vs_actual_top ?? null} />
+              <RecentJesPanel entries={data.recent_journal_entries} />
+            </PanelRow>
 
             {/* Row 4.5 — Chart visualizations */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <PanelRow>
               <Panel title="AR Aging Distribution">
-                {arAgingChartData.length === 0 ? (
-                  <p className="text-sm text-muted">No AR aging data available.</p>
-                ) : (
-                  <BarComparison
-                    data={arAgingChartData}
-                    bars={[{ dataKey: 'amount', color: 'var(--info)', label: 'Amount' }]}
-                    xKey="label"
-                    height={180}
-                    formatValue={(v) => formatPeso(String(v))}
-                  />
-                )}
+                <BarComparison
+                  data={arAgingChartData}
+                  bars={[{ dataKey: 'amount', color: 'var(--info)', label: 'Amount' }]}
+                  xKey="label"
+                  height={180}
+                  formatValue={(v) => formatPeso(String(v))}
+                />
               </Panel>
               <Panel title="AP Aging Distribution">
-                {apAgingChartData.length === 0 ? (
-                  <p className="text-sm text-muted">No AP aging data available.</p>
-                ) : (
-                  <BarComparison
-                    data={apAgingChartData}
-                    bars={[{ dataKey: 'amount', color: 'var(--warning)', label: 'Amount' }]}
-                    xKey="label"
-                    height={180}
-                    formatValue={(v) => formatPeso(String(v))}
-                  />
-                )}
+                <BarComparison
+                  data={apAgingChartData}
+                  bars={[{ dataKey: 'amount', color: 'var(--warning)', label: 'Amount' }]}
+                  xKey="label"
+                  height={180}
+                  formatValue={(v) => formatPeso(String(v))}
+                />
               </Panel>
-            </div>
+            </PanelRow>
 
             {/* Row 5 — Revenue forecast */}
             <ForecastPanel
-              data={summary.data.revenue_forecast}
-              isLoading={summary.isLoading}
-              isError={summary.isError}
+              data={data.revenue_forecast}
+              isLoading={false}
+              isError={false}
               title="Revenue Forecast (6 months)"
               formatValue={(v) => formatPeso(String(v))}
               unitLabel="PHP"
             />
 
             {/* Row 6 — Top overdue customers. */}
-            {summary.data.top_overdue_customers.length > 0 && (
-              <Panel title="Top overdue customers">
+            {data.top_overdue_customers.length > 0 && (
+              <Panel title="Top overdue customers" noPadding bodyClassName="px-1.5 pb-2">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                  <table className={tableCls}>
                     <thead>
-                      <tr className="text-left text-muted border-b border-border">
-                        <th  className="h-8 py-2 px-2 font-medium text-2xs uppercase tracking-wider text-muted">Customer</th>
-                        <th  className="h-8 py-2 px-2 font-medium text-right text-2xs uppercase tracking-wider text-muted">1–30</th>
-                        <th  className="h-8 py-2 px-2 font-medium text-right text-2xs uppercase tracking-wider text-muted">31–60</th>
-                        <th  className="h-8 py-2 px-2 font-medium text-right text-2xs uppercase tracking-wider text-muted">61–90</th>
-                        <th  className="h-8 py-2 px-2 font-medium text-right text-2xs uppercase tracking-wider text-muted">91+</th>
-                        <th  className="h-8 py-2 px-2 font-medium text-right text-2xs uppercase tracking-wider text-muted">Total</th>
+                      <tr className={theadTrCls}>
+                        <Th>Customer</Th>
+                        <Th align="right">1–30</Th>
+                        <Th align="right">31–60</Th>
+                        <Th align="right">61–90</Th>
+                        <Th align="right">91+</Th>
+                        <Th align="right">Total</Th>
                       </tr>
                     </thead>
                     <tbody>
-                      {summary.data.top_overdue_customers.map((c) => (
-                        <tr key={c.customer_id} className="border-b border-border last:border-0">
-                          <td className="py-2 px-2">{c.customer_name}</td>
-                          <td  className="py-2 px-2 text-right font-mono tabular-nums">{formatPeso(c.d1_30)}</td>
-                          <td  className="py-2 px-2 text-right font-mono tabular-nums">{formatPeso(c.d31_60)}</td>
-                          <td  className="py-2 px-2 text-right font-mono tabular-nums">{formatPeso(c.d61_90)}</td>
-                          <td  className="py-2 px-2 text-right font-mono tabular-nums">{formatPeso(c.d91_plus)}</td>
-                          <td  className="py-2 px-2 text-right font-mono tabular-nums font-medium">{formatPeso(c.total)}</td>
+                      {data.top_overdue_customers.map((c) => (
+                        <tr key={c.customer_id} className={trCls}>
+                          <Td>{c.customer_name}</Td>
+                          <Td align="right" mono>{formatPeso(c.d1_30)}</Td>
+                          <Td align="right" mono>{formatPeso(c.d31_60)}</Td>
+                          <Td align="right" mono>{formatPeso(c.d61_90)}</Td>
+                          <Td align="right" mono>{formatPeso(c.d91_plus)}</Td>
+                          <Td align="right" mono className="font-medium">{formatPeso(c.total)}</Td>
                         </tr>
                       ))}
                     </tbody>
@@ -213,9 +173,9 @@ export default function FinanceDashboardPage() {
               </Panel>
             )}
           </>
-        )}
-      </div>
-    </div>
+        );
+      }}
+    </DashboardShell>
   );
 }
 
@@ -240,17 +200,24 @@ function AgingPanel({
       title={title}
       actions={<Link className="text-xs text-link hover:underline" to={listHref}>Open list →</Link>}
     >
-      <table className="w-full text-sm">
+      <table className={tableCls}>
+        <caption className="sr-only">{title} buckets</caption>
+        <thead className="sr-only">
+          <tr>
+            <Th>Bucket</Th>
+            <Th align="right">Amount</Th>
+          </tr>
+        </thead>
         <tbody>
           {rows.map(([label, value]) => (
-            <tr key={label} className="border-b border-border last:border-0">
-              <td className="py-1.5 text-muted">{label}</td>
-              <td  className="py-1.5 text-right font-mono tabular-nums">{formatPeso(value)}</td>
+            <tr key={label} className={trCls}>
+              <Td className="text-muted">{label}</Td>
+              <Td align="right" mono>{formatPeso(value)}</Td>
             </tr>
           ))}
-          <tr>
-            <td className="pt-2 font-medium">Total</td>
-            <td  className="pt-2 text-right font-mono tabular-nums font-medium">{formatPeso(buckets.total)}</td>
+          <tr className="h-8">
+            <Td className="font-medium">Total</Td>
+            <Td align="right" mono className="font-medium">{formatPeso(buckets.total)}</Td>
           </tr>
         </tbody>
       </table>
@@ -266,7 +233,7 @@ function PayrollPipelinePanel({
   if (!pipeline || pipeline.total === 0) {
     return (
       <Panel title="Payroll pipeline (last 90 days)">
-        <p className="text-sm text-muted">No payroll periods in the last 90 days.</p>
+        <EmptyState size="compact" icon="calendar" title="No payroll runs" description="No payroll periods in the last 90 days." />
       </Panel>
     );
   }
@@ -342,7 +309,7 @@ function ApDueThisWeekPanel({
         <div className="font-mono tabular-nums font-medium">{formatPeso(data?.total ?? '0')}</div>
       </div>
       {items.length === 0 ? (
-        <p className="text-sm text-muted">No bills due in the next 7 days.</p>
+        <EmptyState size="compact" icon="check-circle" title="Nothing due" description="No bills due in the next 7 days." />
       ) : (
         <ul className="text-sm divide-y divide-border">
           {items.map((it) => (
@@ -371,7 +338,7 @@ function BudgetVsActualPanel({
   if (rows === null || rows.length === 0) {
     return (
       <Panel title="Budget vs Actual (top variances)">
-        <p className="text-sm text-muted">No budget data for the current fiscal year.</p>
+        <EmptyState size="compact" icon="bar-chart" title="No budget data" description="No budget is set for the current fiscal year." />
       </Panel>
     );
   }
@@ -380,29 +347,29 @@ function BudgetVsActualPanel({
       title="Budget vs Actual (top variances)"
       actions={<Link className="text-xs text-link hover:underline" to="/budgeting/budget-vs-actual">Open →</Link>}
     >
-      <table className="w-full text-sm">
+      <table className={tableCls}>
         <thead>
-          <tr className="text-left text-muted border-b border-border">
-            <th  className="h-8 py-1.5 font-medium text-2xs uppercase tracking-wider text-muted">Category</th>
-            <th  className="h-8 py-1.5 font-medium text-right text-2xs uppercase tracking-wider text-muted">Budget</th>
-            <th  className="h-8 py-1.5 font-medium text-right text-2xs uppercase tracking-wider text-muted">Actual</th>
-            <th  className="h-8 py-1.5 font-medium text-right text-2xs uppercase tracking-wider text-muted">Util</th>
+          <tr className={theadTrCls}>
+            <Th>Category</Th>
+            <Th align="right">Budget</Th>
+            <Th align="right">Actual</Th>
+            <Th align="right">Util</Th>
           </tr>
         </thead>
         <tbody>
           {rows.map((r) => (
-            <tr key={r.category} className="border-b border-border last:border-0">
-              <td className="py-1.5 truncate max-w-[160px]">{r.category}</td>
-              <td  className="py-1.5 text-right font-mono tabular-nums">{formatPeso(r.budget)}</td>
-              <td  className="py-1.5 text-right font-mono tabular-nums">{formatPeso(r.actual)}</td>
-              <td  className="py-1.5 text-right font-mono tabular-nums">
+            <tr key={r.category} className={trCls}>
+              <Td className="truncate max-w-[160px]">{r.category}</Td>
+              <Td align="right" mono>{formatPeso(r.budget)}</Td>
+              <Td align="right" mono>{formatPeso(r.actual)}</Td>
+              <Td align="right">
                 <Chip variant={utilizationTone(r.variance_pct)}>
                   {r.variance_pct > 100 && (
                     <AlertTriangle size={12} className="mr-1 inline" aria-hidden="true" />
                   )}
                   {r.variance_pct.toFixed(1)}%
                 </Chip>
-              </td>
+              </Td>
             </tr>
           ))}
         </tbody>
@@ -422,7 +389,7 @@ function RecentJesPanel({
       actions={<Link className="text-xs text-link hover:underline" to="/accounting/journal-entries">Open →</Link>}
     >
       {entries.length === 0 ? (
-        <p className="text-sm text-muted">No journal entries yet.</p>
+        <EmptyState size="compact" icon="file-text" title="No journal entries" description="Posted entries will appear here." />
       ) : (
         <ul className="text-sm divide-y divide-border">
           {entries.slice(0, 6).map((je) => (

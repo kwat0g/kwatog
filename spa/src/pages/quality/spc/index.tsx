@@ -195,7 +195,7 @@ export default function SpcChartsListPage() {
       {/* ─── EMPTY STATE ─── */}
       {data && data.data.length === 0 && (
         <EmptyState
-          icon="bar-chart-2"
+          icon="bar-chart"
           title="No control charts yet"
           description="Create an SPC control chart to start monitoring process stability for a product dimension."
         />

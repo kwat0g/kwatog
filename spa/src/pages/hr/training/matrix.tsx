@@ -153,7 +153,7 @@ export default function TrainingMatrixPage() {
       {data && data.rows.length === 0 && (
         <div className="px-5 py-5">
           <EmptyState
-            icon="grid-3x3"
+            icon="grid"
             title="No data"
             description="No active employees or skills found for the selected filters."
           />

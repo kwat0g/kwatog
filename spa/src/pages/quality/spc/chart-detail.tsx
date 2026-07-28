@@ -495,7 +495,7 @@ export default function SpcChartDetailPage() {
           ) : (
             <Panel title={`${chartTypeLabel} Chart`}>
               <EmptyState
-                icon="bar-chart-2"
+                icon="bar-chart"
                 title="No data points yet"
                 description="Data points are recorded automatically from inspections. Run inspections to populate the chart."
               />

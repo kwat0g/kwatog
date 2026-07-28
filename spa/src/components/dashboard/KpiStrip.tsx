@@ -3,6 +3,7 @@ import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { kpiApi } from '@/api/kpi';
 import { cn } from '@/lib/cn';
+import { kpiGridCols } from './DashboardShell';
 import type { KpiScorecardItem } from '@/types/dashboard/kpi';
 
 const UNIT_SUFFIX: Record<string, string> = {
@@ -54,7 +55,7 @@ export function KpiStrip({ codes, className }: KpiStripProps) {
 
   if (isLoading || !data) {
     return (
-      <div className={cn('grid gap-3', className)} style={{ gridTemplateColumns: `repeat(${codes.length}, minmax(0, 1fr))` }}>
+      <div className={cn('grid gap-3', kpiGridCols(codes.length), className)}>
         {codes.map((c) => (
           <div key={c} className="h-[72px] bg-surface border border-default rounded-md animate-pulse" />
         ))}
@@ -69,7 +70,7 @@ export function KpiStrip({ codes, className }: KpiStripProps) {
   if (filtered.length === 0) return null;
 
   return (
-    <div className={cn('grid gap-3', className)} style={{ gridTemplateColumns: `repeat(${filtered.length}, minmax(0, 1fr))` }}>
+    <div className={cn('grid gap-3', kpiGridCols(filtered.length), className)}>
       {filtered.map((item) => {
         const snap = item.snapshot;
         const val = snap ? `${parseFloat(snap.actual_value).toLocaleString()}${UNIT_SUFFIX[item.definition.unit] ?? ''}` : '—';

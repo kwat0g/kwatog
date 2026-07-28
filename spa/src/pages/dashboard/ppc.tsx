@@ -15,13 +15,14 @@ import { Link } from 'react-router-dom';
 import { dashboardsApi } from '@/api/dashboards';
 import { chainApi } from '@/api/chain';
 import type { ChainBottleneckGroup, ChainBottleneckRow, ChainBottlenecks } from '@/types/chain';
-import { PageHeader } from '@/components/layout/PageHeader';
 import { StatCard } from '@/components/ui/StatCard';
 import { Panel } from '@/components/ui/Panel';
 import { Chip } from '@/components/ui/Chip';
-import { SkeletonBlock, SkeletonDetail } from '@/components/ui/Skeleton';
+import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
+import { Th, Td, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { DashboardShell, KpiGrid, PanelRow } from '@/components/dashboard/DashboardShell';
 import { usePermission } from '@/hooks/usePermission';
 import { chainStageLink, alertRefLink, kpiLink } from '@/lib/dashboardLinks';
 import { StockOutPanel } from '@/components/dashboard/StockOutPanel';
@@ -103,7 +104,7 @@ interface PpcDashboardData {
 
 function KpiRow({ kpis }: { kpis: PpcKpi[] }) {
   return (
-    <section className="grid grid-cols-4 gap-2">
+    <KpiGrid count={kpis.length}>
       {kpis.map((k) => (
         <StatCard
           key={k.label}
@@ -113,7 +114,7 @@ function KpiRow({ kpis }: { kpis: PpcKpi[] }) {
           linkTo={kpiLink(k.label)}
         />
       ))}
-    </section>
+    </KpiGrid>
   );
 }
 
@@ -199,27 +200,27 @@ function MachineUtilPanel({ machines }: { machines: MachineRow[] }) {
   }
 
   return (
-    <Panel title="Machine utilisation">
-      <table className="w-full text-sm">
+    <Panel title="Machine utilisation" noPadding bodyClassName="px-1.5 pb-2">
+      <table className={tableCls}>
         <thead>
-          <tr className="border-b border-subtle">
-            <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Code</th>
-            <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Name</th>
-            <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Status</th>
-            <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Active WO</th>
+          <tr className={theadTrCls}>
+            <Th>Code</Th>
+            <Th>Name</Th>
+            <Th>Status</Th>
+            <Th align="right">Active WO</Th>
           </tr>
         </thead>
         <tbody>
           {machines.map((m) => (
-            <tr key={m.id} className="border-b border-subtle h-7">
-              <td className="font-mono">{m.code}</td>
-              <td className="text-muted">{m.name}</td>
-              <td>
+            <tr key={m.id} className={trCls}>
+              <Td mono>{m.code}</Td>
+              <Td className="text-muted">{m.name}</Td>
+              <Td>
                 <Chip variant={machineStatusVariant(m.status)}>{m.status}</Chip>
-              </td>
-              <td  className="text-right font-mono tabular-nums" aria-label={m.has_active_wo ? 'Has active work order' : 'No active work order'}>
+              </Td>
+              <Td align="right" mono aria-label={m.has_active_wo ? 'Has active work order' : 'No active work order'}>
                 {m.has_active_wo ? '✓' : '—'}
-              </td>
+              </Td>
             </tr>
           ))}
         </tbody>
@@ -289,11 +290,11 @@ function ProductionGanttPanel({ rows }: { rows: ProductionGanttRow[] }) {
         <table className="w-full text-xs border-collapse">
           <thead>
             <tr>
-              <th  className="h-8 text-left pr-2 py-1 text-2xs uppercase tracking-wider text-muted font-medium">Machine</th>
+              <Th className="pr-2">Machine</Th>
               {days.map((d) => (
-                <th  key={d} className="h-8 text-center px-1 py-1 text-2xs uppercase tracking-wider text-muted font-medium">
+                <Th key={d} align="center" className="px-1">
                   {new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short' })}
-                </th>
+                </Th>
               ))}
             </tr>
           </thead>
@@ -336,34 +337,34 @@ function MrpShortagesPanel({ shortages }: { shortages: MrpShortage[] }) {
   }
 
   return (
-    <Panel title="MRP Shortages" meta={shortages.length.toString()}>
-      <table className="w-full text-sm">
+    <Panel title="MRP Shortages" meta={shortages.length.toString()} noPadding bodyClassName="px-1.5 pb-2">
+      <table className={tableCls}>
         <thead>
-          <tr className="border-b border-subtle">
-            <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Item</th>
-            <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Qty</th>
-            <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Urgency</th>
-            <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">PR</th>
+          <tr className={theadTrCls}>
+            <Th>Item</Th>
+            <Th align="right">Qty</Th>
+            <Th>Urgency</Th>
+            <Th>PR</Th>
           </tr>
         </thead>
         <tbody>
           {shortages.map((s) => (
-            <tr key={s.item_code} className="border-b border-subtle h-7">
-              <td className="py-1">
+            <tr key={s.item_code} className={trCls}>
+              <Td>
                 <span className="font-mono text-xs">{s.item_code}</span>
                 <span className="text-muted ml-1">{s.item_name}</span>
-              </td>
-              <td  className="text-right font-mono tabular-nums py-1">{s.shortage}</td>
-              <td className="py-1">
+              </Td>
+              <Td align="right" mono>{s.shortage}</Td>
+              <Td>
                 <Chip variant={s.urgency === 'urgent' ? 'danger' : s.urgency === 'high' ? 'warning' : 'neutral'}>
                   {s.urgency}
                 </Chip>
-              </td>
-              <td className="py-1">
+              </Td>
+              <Td>
                 <Chip variant={s.pr_status === 'pending' ? 'warning' : 'neutral'}>
                   {s.pr_status ?? '—'}
                 </Chip>
-              </td>
+              </Td>
             </tr>
           ))}
         </tbody>
@@ -391,9 +392,9 @@ function MachineAvailabilityGrid({ rows }: { rows: GanttRow[] }) {
         <table className="w-full text-xs border-collapse">
           <thead>
             <tr>
-              <th  className="h-8 text-left pr-2 py-1 text-2xs uppercase tracking-wider text-muted font-medium">Machine</th>
+              <Th className="pr-2">Machine</Th>
               {days.map(([date, label]) => (
-                <th  key={date} className="h-8 text-center px-1 py-1 text-2xs uppercase tracking-wider text-muted font-medium">{label}</th>
+                <Th key={date} align="center" className="px-1">{label}</Th>
               ))}
             </tr>
           </thead>
@@ -483,27 +484,9 @@ export default function PpcDashboard() {
 
   const q = useQuery({
     queryKey: ['dashboard', 'ppc'],
-    queryFn: () => dashboardsApi.ppc(),
+    queryFn: () => dashboardsApi.ppc<PpcDashboardData>(),
     refetchInterval: 60_000,
   });
-
-  // Compute chart data
-  const woStatusChartData = (q.data as unknown as PpcDashboardData)?.panels?.wo_status_breakdown?.map(i => ({
-    name: i.status.replace(/_/g, ' '),
-    value: i.count,
-    color: i.status === 'completed' ? 'var(--success)' : i.status === 'in_progress' ? 'var(--info)' : 'var(--warning)',
-  })) ?? [];
-
-  const machineUtilChartData = (q.data as unknown as PpcDashboardData)?.panels?.machine_util ? (() => {
-    const statusCounts: Record<string, number> = {};
-    (q.data as unknown as PpcDashboardData).panels.machine_util.forEach(m => {
-      statusCounts[m.status] = (statusCounts[m.status] || 0) + 1;
-    });
-    return Object.entries(statusCounts).map(([name, value]) => ({
-      label: name,
-      count: value,
-    }));
-  })() : [];
 
   const bottlenecks = useQuery({
     queryKey: ['chain-bottlenecks', 'ppc_head'],
@@ -513,127 +496,120 @@ export default function PpcDashboard() {
     staleTime: 60_000,
   });
 
-  /* ─── LOADING ─── */
-  if (q.isLoading && !q.data) {
-    return (
-      <div>
-        <PageHeader title="PPC Dashboard" subtitle="Production Planning & Control" />
-        <div className="px-5 py-4 space-y-4">
-          <div className="grid grid-cols-4 gap-2">
-            {[1, 2, 3, 4].map((i) => <SkeletonBlock key={i} className="h-16 rounded-md" />)}
-          </div>
-          <SkeletonDetail />
-        </div>
-      </div>
-    );
-  }
-
-  /* ─── ERROR ─── */
-  if (q.isError || !q.data) {
-    return (
-      <div>
-        <PageHeader title="PPC Dashboard" subtitle="Production Planning & Control" />
-        <div className="px-5 py-4">
-          <EmptyState
-            icon="alert-circle"
-            title="Failed to load dashboard"
-            action={<Button variant="secondary" onClick={() => q.refetch()}>Retry</Button>}
-          />
-        </div>
-      </div>
-    );
-  }
-
-  const { kpis, panels } = q.data as unknown as PpcDashboardData;
-
   return (
-    <div>
-      <PageHeader title="PPC Dashboard" subtitle="Live · refreshes every 60s" />
+    <DashboardShell<PpcDashboardData>
+      title="PPC Dashboard"
+      subtitle="Live · refreshes every 60s"
+      query={q}
+      refreshingQueryKey={['dashboard', 'ppc']}
+    >
+      {({ kpis, panels }) => {
+        const woStatusChartData =
+          panels?.wo_status_breakdown?.map((i) => ({
+            name: i.status.replace(/_/g, ' '),
+            value: i.count,
+            color:
+              i.status === 'completed' ? 'var(--success)'
+              : i.status === 'in_progress' ? 'var(--info)'
+              : 'var(--warning)',
+          })) ?? [];
 
-      <div className="px-5 py-4 space-y-4">
-        {/* ── Row 1: KPIs ── */}
-        <KpiRow kpis={kpis} />
+        const machineStatusCounts: Record<string, number> = {};
+        (panels?.machine_util ?? []).forEach((m) => {
+          machineStatusCounts[m.status] = (machineStatusCounts[m.status] || 0) + 1;
+        });
+        const machineUtilChartData = Object.entries(machineStatusCounts).map(([label, count]) => ({
+          label,
+          count,
+        }));
 
-        {/* KPI Scorecard strip */}
-        <KpiStrip codes={['oee', 'wo_completion_rate', 'on_time_delivery', 'first_pass_yield']} />
+        return (
+          <>
+            {/* ── Row 1: KPIs ── */}
+            <KpiRow kpis={kpis} />
 
-        {/* ── Row 2: Chain stages + Alerts ── */}
-        <div className="grid grid-cols-2 gap-4">
-          {Array.isArray(panels?.chain_stages) && panels.chain_stages.length > 0 ? (
-            <ChainStagePanel stages={panels.chain_stages} />
-          ) : (
-            <Panel title="Active orders by chain stage">
-              <EmptyState icon="inbox" title="Order pipeline empty" description="No active orders in any stage." />
-            </Panel>
-          )}
+            {/* KPI Scorecard strip */}
+            <KpiStrip codes={['oee', 'wo_completion_rate', 'on_time_delivery', 'first_pass_yield']} />
 
-          {Array.isArray(panels?.alerts) && panels.alerts.length > 0 ? (
-            <AlertsPanel alerts={panels.alerts} />
-          ) : (
-            <Panel title="Alerts">
-              <EmptyState icon="bell-off" title="All clear" description="No active alerts." />
-            </Panel>
-          )}
-        </div>
+            {/* ── Row 2: Chain stages + Alerts ── */}
+            <PanelRow>
+              {Array.isArray(panels?.chain_stages) && panels.chain_stages.length > 0 ? (
+                <ChainStagePanel stages={panels.chain_stages} />
+              ) : (
+                <Panel title="Active orders by chain stage">
+                  <EmptyState icon="inbox" title="Order pipeline empty" description="No active orders in any stage." />
+                </Panel>
+              )}
 
-        {/* ── Row 3: Machine utilisation (full width) ── */}
-        <MachineUtilPanel machines={panels?.machine_util ?? []} />
+              {Array.isArray(panels?.alerts) && panels.alerts.length > 0 ? (
+                <AlertsPanel alerts={panels.alerts} />
+              ) : (
+                <Panel title="Alerts">
+                  <EmptyState icon="bell-off" title="All clear" description="No active alerts." />
+                </Panel>
+              )}
+            </PanelRow>
 
-        {/* ── Row 4: D3 — MRP meta + Production Gantt (2-col grid) ── */}
-        <div className="grid grid-cols-2 gap-4">
-          <MrpMetaPanel
-            lastRun={panels?.mrp_last_run ?? '—'}
-            unplanned={panels?.unplanned_wos ?? 0}
-          />
-          <ProductionGanttPanel rows={panels?.production_gantt ?? []} />
-        </div>
+            {/* ── Row 3: Machine utilisation (full width) ── */}
+            <MachineUtilPanel machines={panels?.machine_util ?? []} />
 
-        {/* ── Row 5: D3 — MRP Shortages + Machine Availability (2-col grid) ── */}
-        <div className="grid grid-cols-2 gap-4">
-          <MrpShortagesPanel shortages={panels?.mrp_shortages ?? []} />
-          <MachineAvailabilityGrid rows={panels?.machine_availability ?? []} />
-        </div>
-
-        {/* ── Row 6: D3 — WO Status Breakdown (full width) ── */}
-        <WoStatusBreakdownPanel items={panels?.wo_status_breakdown ?? []} />
-
-        {/* ── Row 6.5: Chart visualizations ── */}
-        <div className="grid grid-cols-2 gap-4">
-          <Panel title="WO Status Distribution">
-            {woStatusChartData.length === 0 ? (
-              <EmptyState icon="inbox" title="No work orders" description="No work order data available." />
-            ) : (
-              <DonutBreakdown
-                data={woStatusChartData}
-                centerLabel="Total WOs"
-                centerValue={String(woStatusChartData.reduce((sum, i) => sum + i.value, 0))}
+            {/* ── Row 4: D3 — MRP meta + Production Gantt ── */}
+            <PanelRow>
+              <MrpMetaPanel
+                lastRun={panels?.mrp_last_run ?? '—'}
+                unplanned={panels?.unplanned_wos ?? 0}
               />
-            )}
-          </Panel>
-          <Panel title="Machine Status Distribution">
-            {machineUtilChartData.length === 0 ? (
-              <EmptyState icon="cpu" title="No machines" description="No machine data available." />
-            ) : (
-              <BarComparison
-                data={machineUtilChartData}
-                bars={[{ dataKey: 'count', color: 'var(--accent)', label: 'Machines' }]}
-                xKey="label"
-                height={180}
-              />
-            )}
-          </Panel>
-        </div>
+              <ProductionGanttPanel rows={panels?.production_gantt ?? []} />
+            </PanelRow>
 
-        {/* ── Row 7: Demand Forecast + Stock-out Risk ── */}
-        <div className="grid grid-cols-2 gap-4">
-          <DemandForecastPanel hideWhenEmpty />
-          <StockOutPanel horizonDays={60} hideWhenEmpty />
-        </div>
+            {/* ── Row 5: D3 — MRP Shortages + Machine Availability ── */}
+            <PanelRow>
+              <MrpShortagesPanel shortages={panels?.mrp_shortages ?? []} />
+              <MachineAvailabilityGrid rows={panels?.machine_availability ?? []} />
+            </PanelRow>
 
-        {/* ── Row 8: Chain bottleneck widget (gated by permission, Series C — Task C5) ── */}
-        {can('dashboard.view_bottlenecks') && renderBottleneckWidget(bottlenecks)}
-      </div>
-    </div>
+            {/* ── Row 6: D3 — WO Status Breakdown (full width) ── */}
+            <WoStatusBreakdownPanel items={panels?.wo_status_breakdown ?? []} />
+
+            {/* ── Row 6.5: Chart visualizations ── */}
+            <PanelRow>
+              <Panel title="WO Status Distribution">
+                {woStatusChartData.length === 0 ? (
+                  <EmptyState icon="inbox" title="No work orders" description="No work order data available." />
+                ) : (
+                  <DonutBreakdown
+                    data={woStatusChartData}
+                    centerLabel="Total WOs"
+                    centerValue={String(woStatusChartData.reduce((sum, i) => sum + i.value, 0))}
+                  />
+                )}
+              </Panel>
+              <Panel title="Machine Status Distribution">
+                {machineUtilChartData.length === 0 ? (
+                  <EmptyState icon="cpu" title="No machines" description="No machine data available." />
+                ) : (
+                  <BarComparison
+                    data={machineUtilChartData}
+                    bars={[{ dataKey: 'count', color: 'var(--accent)', label: 'Machines' }]}
+                    xKey="label"
+                    height={180}
+                  />
+                )}
+              </Panel>
+            </PanelRow>
+
+            {/* ── Row 7: Demand Forecast + Stock-out Risk ── */}
+            <PanelRow>
+              <DemandForecastPanel hideWhenEmpty />
+              <StockOutPanel horizonDays={60} hideWhenEmpty />
+            </PanelRow>
+
+            {/* ── Row 8: Chain bottleneck widget (gated by permission, Series C — Task C5) ── */}
+            {can('dashboard.view_bottlenecks') && renderBottleneckWidget(bottlenecks)}
+          </>
+        );
+      }}
+    </DashboardShell>
   );
 }
 

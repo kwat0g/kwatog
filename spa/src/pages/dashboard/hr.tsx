@@ -1,13 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 
-import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Button } from '@/components/ui/Button';
 import { Panel } from '@/components/ui/Panel';
 import { StatCard } from '@/components/ui/StatCard';
 import { Chip } from '@/components/ui/Chip';
-import { PageHeader } from '@/components/layout/PageHeader';
+import { DashboardShell, KpiGrid, PanelRow } from '@/components/dashboard/DashboardShell';
 import { ForecastPanel } from '@/components/dashboard/ForecastPanel';
 import { KpiStrip } from '@/components/dashboard/KpiStrip';
 import { DonutBreakdown } from '@/components/charts';
@@ -67,80 +65,66 @@ export default function HrDashboard() {
     refetchInterval: 60_000,
   });
 
-  // Compute chart data from existing panels
-  const departmentDonutData = q.data?.panels.by_department.map(d => ({
-    name: d.label,
-    value: d.count,
-    color: 'var(--accent)',
-  })).slice(0, 6) ?? [];
-
-  const attendanceDonutData = q.data ? [
-    { name: 'Present', value: q.data.panels.attendance_summary.present, color: 'var(--success)' },
-    { name: 'Late', value: q.data.panels.attendance_summary.late, color: 'var(--warning)' },
-    { name: 'Absent', value: q.data.panels.attendance_summary.absent, color: 'var(--danger)' },
-    { name: 'On Leave', value: q.data.panels.attendance_summary.on_leave, color: 'var(--info)' },
-  ].filter(i => i.value > 0) : [];
-
   return (
-    <div>
-      <PageHeader title="HR Officer Dashboard" subtitle="Workforce, attendance, leave, and compliance overview." />
-      <div className="px-5 py-4 space-y-4">
-        {q.isLoading && !q.data && <SkeletonDetail />}
+    <DashboardShell<HrDashboardData>
+      title="HR Officer Dashboard"
+      subtitle="Workforce, attendance, leave, and compliance overview."
+      query={q}
+      refreshingQueryKey={['dashboard', 'hr']}
+    >
+      {({ kpis, panels }) => {
+        const departmentDonutData = panels.by_department
+          .map((d) => ({ name: d.label, value: d.count, color: 'var(--accent)' }))
+          .slice(0, 6);
 
-        {q.isError && (
-          <EmptyState
-            icon="alert-circle"
-            title="Failed to load HR dashboard"
-            description="We couldn't reach the HR dashboard."
-            action={
-              <Button variant="secondary" onClick={() => q.refetch()}>
-                Retry
-              </Button>
-            }
-          />
-        )}
+        const attendanceDonutData = [
+          { name: 'Present', value: panels.attendance_summary.present, color: 'var(--success)' },
+          { name: 'Late', value: panels.attendance_summary.late, color: 'var(--warning)' },
+          { name: 'Absent', value: panels.attendance_summary.absent, color: 'var(--danger)' },
+          { name: 'On Leave', value: panels.attendance_summary.on_leave, color: 'var(--info)' },
+        ].filter((i) => i.value > 0);
 
-        {q.data && (
+        return (
           <>
             {/* Row 1 — KPIs */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-              {q.data.kpis.map((kpi) => (
+            <KpiGrid count={kpis.length}>
+              {kpis.map((kpi) => (
                 <StatCard key={kpi.label} label={kpi.label} value={kpi.value} helper={kpi.unit} />
               ))}
-            </div>
+            </KpiGrid>
 
             {/* KPI Scorecard strip */}
             <KpiStrip codes={['attendance_rate']} />
 
             {/* Row 2 — Attendance summary + pending my action */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              <AttendanceSummaryPanel data={q.data.panels.attendance_summary} />
-              <PendingMyActionPanel data={q.data.panels.pending_my_action} />
-            </div>
+            <PanelRow>
+              <AttendanceSummaryPanel data={panels.attendance_summary} />
+              <PendingMyActionPanel data={panels.pending_my_action} />
+            </PanelRow>
 
             {/* Row 3 — Department headcount + probation alerts */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              <DepartmentHeadcountPanel departments={q.data.panels.by_department} />
-              <ProbationAlertsPanel alerts={q.data.panels.probation_alerts} />
-            </div>
+            <PanelRow>
+              <DepartmentHeadcountPanel departments={panels.by_department} />
+              <ProbationAlertsPanel alerts={panels.probation_alerts} />
+            </PanelRow>
 
             {/* Row 4 — Leave calendar this week + calendar events */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              <LeaveCalendarPanel leaves={q.data.panels.leave_calendar_week} />
-              <CalendarEventsPanel events={q.data.panels.hr_calendar_events} />
-            </div>
+            <PanelRow>
+              <LeaveCalendarPanel leaves={panels.leave_calendar_week} />
+              <CalendarEventsPanel events={panels.hr_calendar_events} />
+            </PanelRow>
 
             {/* Row 5 — Recent hires + pending leaves */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              <RecentHiresPanel hires={q.data.panels.recent_hires} />
-              <PendingLeavesPanel leaves={q.data.panels.pending_leaves} />
-            </div>
+            <PanelRow>
+              <RecentHiresPanel hires={panels.recent_hires} />
+              <PendingLeavesPanel leaves={panels.pending_leaves} />
+            </PanelRow>
 
             {/* Row 5.5 — Chart visualizations */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <PanelRow>
               <Panel title="Department Headcount Breakdown">
                 {departmentDonutData.length === 0 ? (
-                  <p className="text-sm text-muted">No department data available.</p>
+                  <EmptyState size="compact" icon="users" title="No departments" description="No department data available." />
                 ) : (
                   <DonutBreakdown
                     data={departmentDonutData}
@@ -151,7 +135,7 @@ export default function HrDashboard() {
               </Panel>
               <Panel title="Attendance Today Breakdown">
                 {attendanceDonutData.length === 0 ? (
-                  <p className="text-sm text-muted">No attendance data available.</p>
+                  <EmptyState size="compact" icon="calendar" title="No attendance yet" description="No attendance records for today." />
                 ) : (
                   <DonutBreakdown
                     data={attendanceDonutData}
@@ -160,11 +144,11 @@ export default function HrDashboard() {
                   />
                 )}
               </Panel>
-            </div>
+            </PanelRow>
 
             {/* Row 6 — Headcount forecast */}
             <ForecastPanel
-              data={q.data.panels.headcount_forecast}
+              data={panels.headcount_forecast}
               isLoading={false}
               isError={false}
               title="Headcount Forecast"
@@ -173,13 +157,11 @@ export default function HrDashboard() {
             />
 
             {/* Row 7 — Payroll snapshot (visible only when payroll.view is granted) */}
-            {q.data.panels.payroll_summary && (
-              <PayrollSummaryPanel data={q.data.panels.payroll_summary} />
-            )}
+            {panels.payroll_summary && <PayrollSummaryPanel data={panels.payroll_summary} />}
           </>
-        )}
-      </div>
-    </div>
+        );
+      }}
+    </DashboardShell>
   );
 }
 
@@ -201,7 +183,7 @@ function AttendanceSummaryPanel({
   return (
     <Panel title="Attendance Today" actions={<Link className="text-xs text-link hover:underline" to="/hr/attendance">Open →</Link>}>
       {total === 0 ? (
-        <p className="text-sm text-muted">No attendance records for today.</p>
+        <EmptyState size="compact" icon="calendar" title="No attendance yet" description="No attendance records for today." />
       ) : (
         <div className="space-y-2">
           {items.map((i) => (
@@ -237,7 +219,7 @@ function PendingMyActionPanel({
   return (
     <Panel title="My Action Items" actions={<Link className="text-xs text-link hover:underline" to="/approvals">Approvals board →</Link>}>
       {data.total === 0 ? (
-        <p className="text-sm text-muted">No pending items requiring your action.</p>
+        <EmptyState size="compact" icon="check-circle" title="Nothing to action" description="No pending items require your attention." />
       ) : (
         <>
           <div className="text-2xl font-medium font-mono tabular-nums mb-3">{data.total}</div>
@@ -263,7 +245,7 @@ function DepartmentHeadcountPanel({
   if (departments.length === 0) {
     return (
       <Panel title="Headcount by Department">
-        <p className="text-sm text-muted">No department data available.</p>
+        <EmptyState size="compact" icon="users" title="No departments" description="No department data available." />
       </Panel>
     );
   }
@@ -304,7 +286,7 @@ function ProbationAlertsPanel({
       actions={<Link className="text-xs text-link hover:underline" to="/hr/employees">Employees →</Link>}
     >
       {alerts.length === 0 ? (
-        <p className="text-sm text-muted">No probationary employees nearing end of probation.</p>
+        <EmptyState size="compact" icon="check-circle" title="No probation reviews due" description="No probationary employees end probation in the next 30 days." />
       ) : (
         <div className="space-y-1.5 text-sm">
           {alerts.map((a) => (
@@ -337,7 +319,7 @@ function LeaveCalendarPanel({
       actions={<Link className="text-xs text-link hover:underline" to="/hr/leaves">All leaves →</Link>}
     >
       {leaves.length === 0 ? (
-        <p className="text-sm text-muted">No approved leaves this week.</p>
+        <EmptyState size="compact" icon="calendar" title="Everyone in" description="No approved leaves this week." />
       ) : (
         <div className="space-y-1.5 text-sm">
           {leaves.map((l) => (
@@ -430,7 +412,7 @@ function RecentHiresPanel({
   return (
     <Panel title="Recent Hires" actions={<Link className="text-xs text-link hover:underline" to="/hr/employees">All employees →</Link>}>
       {hires.length === 0 ? (
-        <p className="text-sm text-muted">No recent hires.</p>
+        <EmptyState size="compact" icon="user-x" title="No recent hires" description="Nobody has joined in the last 30 days." />
       ) : (
         <div className="space-y-1.5 text-sm">
           {hires.map((h) => (
@@ -466,7 +448,7 @@ function PendingLeavesPanel({
   return (
     <Panel title="Pending Leave Requests" actions={<Link className="text-xs text-link hover:underline" to="/hr/leaves">Leaves →</Link>}>
       {leaves.length === 0 ? (
-        <p className="text-sm text-muted">No pending leave requests.</p>
+        <EmptyState size="compact" icon="check-circle" title="No pending requests" description="Every leave request has been actioned." />
       ) : (
         <div className="space-y-1.5 text-sm">
           {leaves.map((l) => (

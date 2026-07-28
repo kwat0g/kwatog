@@ -9,13 +9,12 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { dashboardsApi } from '@/api/dashboards';
 import { kpiLink } from '@/lib/dashboardLinks';
-import { PageHeader } from '@/components/layout/PageHeader';
 import { StatCard } from '@/components/ui/StatCard';
 import { Panel } from '@/components/ui/Panel';
 import { Chip } from '@/components/ui/Chip';
-import { SkeletonBlock, SkeletonDetail } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Button } from '@/components/ui/Button';
+import { Th, Td, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { DashboardShell, KpiGrid, PanelRow } from '@/components/dashboard/DashboardShell';
 import { ForecastPanel } from '@/components/dashboard/ForecastPanel';
 import { DonutBreakdown, BarComparison } from '@/components/charts';
 import { CopqWidget } from '@/pages/dashboard/widgets/CopqWidget';
@@ -98,23 +97,23 @@ function InspectionQueuePanel({ items }: { items: InspectionItem[] }) {
   }
 
   return (
-    <Panel title="Inspection Queue" meta={items.length.toString()}>
-      <table className="w-full text-sm">
+    <Panel title="Inspection Queue" meta={items.length.toString()} noPadding bodyClassName="px-1.5 pb-2">
+      <table className={tableCls}>
         <thead>
-          <tr className="border-b border-subtle">
-            <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Inspection</th>
-            <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Stage</th>
-            <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Product</th>
-            <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Qty</th>
-            <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Waiting</th>
+          <tr className={theadTrCls}>
+            <Th>Inspection</Th>
+            <Th>Stage</Th>
+            <Th>Product</Th>
+            <Th align="right">Qty</Th>
+            <Th align="right">Waiting</Th>
           </tr>
         </thead>
         <tbody>
           {items.map((ins) => {
             const stageVariant = ins.stage === 'outgoing' ? 'danger' : ins.stage === 'in_process' ? 'warning' : 'info';
             return (
-              <tr key={ins.id} className="border-b border-subtle h-7 hover:bg-subtle/30 transition-colors">
-                <td className="py-1">
+              <tr key={ins.id} className={trCls}>
+                <Td>
                   <Link
                     to={`/quality/inspections/${ins.id}`}
                     className="text-link hover:underline font-mono text-xs"
@@ -122,13 +121,13 @@ function InspectionQueuePanel({ items }: { items: InspectionItem[] }) {
                   >
                     {ins.inspection_number}
                   </Link>
-                </td>
-                <td className="py-1">
+                </Td>
+                <Td>
                   <Chip variant={stageVariant}>{ins.stage}</Chip>
-                </td>
-                <td className="py-1 text-muted text-xs truncate max-w-[120px]">{ins.product}</td>
-                <td  className="py-1 text-right font-mono tabular-nums text-xs">{ins.qty}</td>
-                <td  className="py-1 text-right font-mono tabular-nums text-xs text-muted">{ins.waiting_since}</td>
+                </Td>
+                <Td className="text-muted text-xs truncate max-w-[120px]">{ins.product}</Td>
+                <Td align="right" mono>{ins.qty}</Td>
+                <Td align="right" mono className="text-muted">{ins.waiting_since}</Td>
               </tr>
             );
           })}
@@ -200,22 +199,22 @@ function NcrStatusPanel({ items }: { items: NcrItem[] }) {
   }
 
   return (
-    <Panel title="Open NCRs" meta={items.length.toString()}>
-      <table className="w-full text-sm">
+    <Panel title="Open NCRs" meta={items.length.toString()} noPadding bodyClassName="px-1.5 pb-2">
+      <table className={tableCls}>
         <thead>
-          <tr className="border-b border-subtle">
-            <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">NCR</th>
-            <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Severity</th>
-            <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Customer</th>
-            <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Status</th>
+          <tr className={theadTrCls}>
+            <Th>NCR</Th>
+            <Th>Severity</Th>
+            <Th>Customer</Th>
+            <Th>Status</Th>
           </tr>
         </thead>
         <tbody>
           {items.map((ncr) => {
             const severityVariant = ncr.severity === 'critical' ? 'danger' : ncr.severity === 'major' ? 'warning' : 'info';
             return (
-              <tr key={ncr.id} className="border-b border-subtle h-7 hover:bg-subtle/30 transition-colors">
-                <td className="py-1">
+              <tr key={ncr.id} className={trCls}>
+                <Td>
                   <Link
                     to={`/quality/ncrs/${ncr.id}`}
                     className="text-link hover:underline font-mono text-xs"
@@ -223,14 +222,14 @@ function NcrStatusPanel({ items }: { items: NcrItem[] }) {
                   >
                     {ncr.ncr_number}
                   </Link>
-                </td>
-                <td className="py-1">
+                </Td>
+                <Td>
                   <Chip variant={severityVariant}>{ncr.severity}</Chip>
-                </td>
-                <td className="py-1 text-muted text-xs truncate max-w-[120px]">{ncr.customer}</td>
-                <td className="py-1">
+                </Td>
+                <Td className="text-muted text-xs truncate max-w-[120px]">{ncr.customer}</Td>
+                <Td>
                   <Chip variant={ncr.status === 'open' ? 'danger' : 'warning'}>{ncr.status}</Chip>
-                </td>
+                </Td>
               </tr>
             );
           })}
@@ -301,134 +300,105 @@ function coverageBarClass(pct: number): string {
 export default function QcDashboard() {
   const q = useQuery({
     queryKey: ['dashboard', 'quality'],
-    queryFn: () => dashboardsApi.quality(),
+    queryFn: () => dashboardsApi.quality<QualityDashboardData>(),
     refetchInterval: 60_000,
   });
 
-  // Compute chart data
-  const inspectionStageData = (q.data as unknown as QualityDashboardData)?.panels?.inspection_queue ? (() => {
-    const stageCounts: Record<string, number> = {};
-    (q.data as unknown as QualityDashboardData).panels.inspection_queue.forEach(ins => {
-      stageCounts[ins.stage] = (stageCounts[ins.stage] || 0) + 1;
-    });
-    const colorMap: Record<string, string> = {
-      incoming: 'var(--info)',
-      in_process: 'var(--warning)',
-      outgoing: 'var(--danger)',
-    };
-    return Object.entries(stageCounts).map(([name, value]) => ({
-      name,
-      value,
-      color: colorMap[name] ?? 'var(--text-muted)',
-    }));
-  })() : [];
-
-  /* ─── LOADING ─── */
-  if (q.isLoading && !q.data) {
-    return (
-      <div>
-        <PageHeader title="QC Dashboard" subtitle="Quality control overview" />
-        <div className="px-5 py-4 space-y-4">
-          <div className="grid grid-cols-4 gap-2">
-            {[1, 2, 3, 4].map((i) => <SkeletonBlock key={i} className="h-16 rounded-md" />)}
-          </div>
-          <SkeletonDetail />
-        </div>
-      </div>
-    );
-  }
-
-  /* ─── ERROR ─── */
-  if (q.isError || !q.data) {
-    return (
-      <div>
-        <PageHeader title="QC Dashboard" subtitle="Quality control overview" />
-        <div className="px-5 py-4">
-          <EmptyState
-            icon="alert-circle"
-            title="Failed to load dashboard"
-            action={<Button variant="secondary" onClick={() => q.refetch()}>Retry</Button>}
-          />
-        </div>
-      </div>
-    );
-  }
-
-  const { kpis, panels } = q.data as unknown as QualityDashboardData;
-
   return (
-    <div>
-      <PageHeader title="QC Dashboard" subtitle="Live · refreshes every 60s" />
+    <DashboardShell<QualityDashboardData>
+      title="QC Dashboard"
+      subtitle="Live · refreshes every 60s"
+      query={q}
+      refreshingQueryKey={['dashboard', 'quality']}
+    >
+      {({ kpis, panels }) => {
+        const stageCounts: Record<string, number> = {};
+        (panels?.inspection_queue ?? []).forEach((ins) => {
+          stageCounts[ins.stage] = (stageCounts[ins.stage] || 0) + 1;
+        });
+        const colorMap: Record<string, string> = {
+          incoming: 'var(--info)',
+          in_process: 'var(--warning)',
+          outgoing: 'var(--danger)',
+        };
+        const inspectionStageData = Object.entries(stageCounts).map(([name, value]) => ({
+          name,
+          value,
+          color: colorMap[name] ?? 'var(--text-muted)',
+        }));
 
-      <div className="px-5 py-4 space-y-4">
-        {/* ── Row 1: KPIs ── */}
-        <section className="grid grid-cols-4 gap-2">
-          {kpis.map((k) => (
-            <StatCard
-              key={k.label}
-              label={k.label}
-              value={k.unit === 'PHP' ? `₱ ${k.value}` : k.value}
-              helper={k.unit !== 'PHP' && k.unit !== 'count' ? k.unit : undefined}
-              linkTo={kpiLink(k.label)}
+        return (
+          <>
+            {/* ── Row 1: KPIs ── */}
+            <KpiGrid count={kpis.length}>
+              {kpis.map((k) => (
+                <StatCard
+                  key={k.label}
+                  label={k.label}
+                  value={k.unit === 'PHP' ? `₱ ${k.value}` : k.value}
+                  helper={k.unit !== 'PHP' && k.unit !== 'count' ? k.unit : undefined}
+                  linkTo={kpiLink(k.label)}
+                />
+              ))}
+            </KpiGrid>
+
+            {/* KPI Scorecard strip */}
+            <KpiStrip codes={['dppm', 'first_pass_yield', 'ncr_closure_days', 'copq_pct_revenue']} />
+
+            {/* ── Row 2: Inspection Queue + Defect Pareto ── */}
+            <PanelRow>
+              <InspectionQueuePanel items={panels?.inspection_queue ?? []} />
+              <DefectParetoPanel items={panels?.defect_pareto ?? []} />
+            </PanelRow>
+
+            {/* ── Row 3: Open NCRs + QC Chain Coverage ── */}
+            <PanelRow>
+              <NcrStatusPanel items={panels?.ncr_status ?? []} />
+              <QcChainCoveragePanel coverage={panels?.qc_chain_coverage} />
+            </PanelRow>
+
+            {/* ── Row 4: Charts ── */}
+            <PanelRow>
+              <Panel title="Inspection Queue by Stage">
+                {inspectionStageData.length === 0 ? (
+                  <EmptyState icon="check-circle" title="Queue empty" description="No pending inspections." />
+                ) : (
+                  <DonutBreakdown
+                    data={inspectionStageData}
+                    centerLabel="Total"
+                    centerValue={String(inspectionStageData.reduce((sum, i) => sum + i.value, 0))}
+                  />
+                )}
+              </Panel>
+              <Panel title="Top Defects by Count">
+                {(panels?.defect_pareto ?? []).length === 0 ? (
+                  <EmptyState icon="check-circle" title="No defects" description="No defects recorded." />
+                ) : (
+                  <BarComparison
+                    data={(panels?.defect_pareto ?? []).slice(0, 6).map((d) => ({ label: d.code, count: d.count }))}
+                    bars={[{ dataKey: 'count', color: 'var(--danger)', label: 'Occurrences' }]}
+                    xKey="label"
+                    height={180}
+                  />
+                )}
+              </Panel>
+            </PanelRow>
+
+            {/* ── Row 5: Defect Rate Forecast ── */}
+            <ForecastPanel
+              data={panels?.defect_rate_forecast}
+              isLoading={false}
+              isError={false}
+              title="Defect Rate Forecast (6 months)"
+              formatValue={(v) => `${v.toFixed(1)}%`}
+              unitLabel="%"
             />
-          ))}
-        </section>
 
-        {/* KPI Scorecard strip */}
-        <KpiStrip codes={['dppm', 'first_pass_yield', 'ncr_closure_days', 'copq_pct_revenue']} />
-
-        {/* ── Row 2: Inspection Queue + Defect Pareto ── */}
-        <div className="grid grid-cols-2 gap-4">
-          <InspectionQueuePanel items={panels?.inspection_queue ?? []} />
-          <DefectParetoPanel items={panels?.defect_pareto ?? []} />
-        </div>
-
-        {/* ── Row 3: Open NCRs + QC Chain Coverage ── */}
-        <div className="grid grid-cols-2 gap-4">
-          <NcrStatusPanel items={panels?.ncr_status ?? []} />
-          <QcChainCoveragePanel coverage={panels?.qc_chain_coverage} />
-        </div>
-
-        {/* ── Row 3.5: Chart visualizations ── */}
-        <div className="grid grid-cols-2 gap-4">
-          <Panel title="Inspection Queue by Stage">
-            {inspectionStageData.length === 0 ? (
-              <EmptyState icon="check-circle" title="Queue empty" description="No pending inspections." />
-            ) : (
-              <DonutBreakdown
-                data={inspectionStageData}
-                centerLabel="Total"
-                centerValue={String(inspectionStageData.reduce((sum, i) => sum + i.value, 0))}
-              />
-            )}
-          </Panel>
-          <Panel title="Top Defects by Count">
-            {(panels?.defect_pareto ?? []).length === 0 ? (
-              <EmptyState icon="check-circle" title="No defects" description="No defects recorded." />
-            ) : (
-              <BarComparison
-                data={(panels?.defect_pareto ?? []).slice(0, 6).map(d => ({ label: d.code, count: d.count }))}
-                bars={[{ dataKey: 'count', color: 'var(--danger)', label: 'Occurrences' }]}
-                xKey="label"
-                height={180}
-              />
-            )}
-          </Panel>
-        </div>
-
-        {/* ── Row 4: Defect Rate Forecast ── */}
-        <ForecastPanel
-          data={panels?.defect_rate_forecast}
-          isLoading={false}
-          isError={false}
-          title="Defect Rate Forecast (6 months)"
-          formatValue={(v) => `${v.toFixed(1)}%`}
-          unitLabel="%"
-        />
-
-        {/* ── Row 5: COPQ Widget (dedicated component with trend chart) ── */}
-        <CopqWidget />
-      </div>
-    </div>
+            {/* ── Row 6: COPQ Widget (dedicated component with trend chart) ── */}
+            <CopqWidget />
+          </>
+        );
+      }}
+    </DashboardShell>
   );
 }

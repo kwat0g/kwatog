@@ -9,13 +9,12 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { dashboardsApi } from '@/api/dashboards';
 import { kpiLink } from '@/lib/dashboardLinks';
-import { PageHeader } from '@/components/layout/PageHeader';
 import { StatCard } from '@/components/ui/StatCard';
 import { Panel } from '@/components/ui/Panel';
 import { Chip } from '@/components/ui/Chip';
-import { SkeletonBlock, SkeletonDetail } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Button } from '@/components/ui/Button';
+import { Th, Td, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { DashboardShell, KpiGrid, PanelRow } from '@/components/dashboard/DashboardShell';
 import { StockOutPanel } from '@/components/dashboard/StockOutPanel';
 import { DemandForecastPanel } from '@/components/dashboard/DemandForecastPanel';
 import { DonutBreakdown, BarComparison } from '@/components/charts';
@@ -74,22 +73,22 @@ function PrActionQueuePanel({ items }: { items: PrActionItem[] }) {
   }
 
   return (
-    <Panel title="PR Action Queue" meta={items.length.toString()}>
-      <table className="w-full text-sm">
+    <Panel title="PR Action Queue" meta={items.length.toString()} noPadding bodyClassName="px-1.5 pb-2">
+      <table className={tableCls}>
         <thead>
-          <tr className="border-b border-subtle">
-            <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">PR #</th>
-            <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Dept</th>
-            <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Items</th>
-            <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Est. Total</th>
-            <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Urgency</th>
-            <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Waiting</th>
+          <tr className={theadTrCls}>
+            <Th>PR #</Th>
+            <Th>Dept</Th>
+            <Th align="right">Items</Th>
+            <Th align="right">Est. Total</Th>
+            <Th>Urgency</Th>
+            <Th align="right">Waiting</Th>
           </tr>
         </thead>
         <tbody>
           {items.map((pr) => (
-            <tr key={pr.id} className="border-b border-subtle h-7 hover:bg-subtle/30 transition-colors">
-              <td className="py-1">
+            <tr key={pr.id} className={trCls}>
+              <Td>
                 <Link
                   to={`/purchasing/purchase-requests/${pr.id}`}
                   className="text-link hover:underline font-mono text-xs"
@@ -97,16 +96,16 @@ function PrActionQueuePanel({ items }: { items: PrActionItem[] }) {
                 >
                   {pr.pr_number}
                 </Link>
-              </td>
-              <td className="py-1 text-muted text-xs">{pr.department}</td>
-              <td  className="py-1 text-right font-mono tabular-nums">{pr.items_count}</td>
-              <td  className="py-1 text-right font-mono tabular-nums">₱{pr.estimated_total}</td>
-              <td className="py-1">
+              </Td>
+              <Td className="text-muted text-xs">{pr.department}</Td>
+              <Td align="right" mono>{pr.items_count}</Td>
+              <Td align="right" mono>₱{pr.estimated_total}</Td>
+              <Td>
                 <Chip variant={pr.urgency === 'urgent' ? 'danger' : pr.urgency === 'high' ? 'warning' : 'neutral'}>
                   {pr.urgency}
                 </Chip>
-              </td>
-              <td  className="py-1 text-right font-mono tabular-nums text-muted">{pr.days_waiting}d</td>
+              </Td>
+              <Td align="right" mono className="text-muted">{pr.days_waiting}d</Td>
             </tr>
           ))}
         </tbody>
@@ -200,20 +199,20 @@ function UpcomingDeliveriesPanel({ items }: { items: UpcomingDelivery[] }) {
   }
 
   return (
-    <Panel title="Upcoming Deliveries (7 days)" meta={items.length.toString()}>
-      <table className="w-full text-sm">
+    <Panel title="Upcoming Deliveries (7 days)" meta={items.length.toString()} noPadding bodyClassName="px-1.5 pb-2">
+      <table className={tableCls}>
         <thead>
-          <tr className="border-b border-subtle">
-            <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">PO #</th>
-            <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Vendor</th>
-            <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Expected</th>
-            <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Status</th>
+          <tr className={theadTrCls}>
+            <Th>PO #</Th>
+            <Th>Vendor</Th>
+            <Th align="right">Expected</Th>
+            <Th>Status</Th>
           </tr>
         </thead>
         <tbody>
           {items.map((d) => (
-            <tr key={d.id} className="border-b border-subtle h-7 hover:bg-subtle/30 transition-colors">
-              <td className="py-1">
+            <tr key={d.id} className={trCls}>
+              <Td>
                 <Link
                   to={`/purchasing/purchase-orders/${d.id}`}
                   className="text-link hover:underline font-mono text-xs"
@@ -221,14 +220,14 @@ function UpcomingDeliveriesPanel({ items }: { items: UpcomingDelivery[] }) {
                 >
                   {d.po_number}
                 </Link>
-              </td>
-              <td className="py-1 text-muted text-xs truncate">{d.vendor}</td>
-              <td  className="py-1 text-right font-mono tabular-nums text-xs">{d.expected_date ?? '—'}</td>
-              <td className="py-1">
+              </Td>
+              <Td className="text-muted text-xs truncate">{d.vendor}</Td>
+              <Td align="right" mono>{d.expected_date ?? '—'}</Td>
+              <Td>
                 <Chip variant={d.status === 'sent' ? 'info' : d.status === 'approved' ? 'warning' : 'neutral'}>
                   {d.status}
                 </Chip>
-              </td>
+              </Td>
             </tr>
           ))}
         </tbody>
@@ -242,127 +241,103 @@ function UpcomingDeliveriesPanel({ items }: { items: UpcomingDelivery[] }) {
 export default function PurchasingDashboard() {
   const q = useQuery({
     queryKey: ['dashboard', 'purchasing'],
-    queryFn: () => dashboardsApi.purchasing(),
+    queryFn: () => dashboardsApi.purchasing<PurchasingDashboardData>(),
     refetchInterval: 60_000,
   });
 
-  // Compute chart data
-  const poStatusChartData = (q.data as unknown as PurchasingDashboardData)?.panels?.po_pipeline?.map(i => ({
-    name: i.status.replace(/_/g, ' '),
-    value: i.count,
-    color: i.status === 'received' || i.status === 'closed' ? 'var(--success)' : i.status === 'sent' ? 'var(--info)' : 'var(--warning)',
-  })) ?? [];
-
-  const prStatusChartData = (q.data as unknown as PurchasingDashboardData)?.panels?.pr_action_queue ? (() => {
-    const statusCounts: Record<string, number> = { urgent: 0, high: 0, normal: 0 };
-    (q.data as unknown as PurchasingDashboardData).panels.pr_action_queue.forEach(pr => {
-      statusCounts[pr.urgency] = (statusCounts[pr.urgency] || 0) + 1;
-    });
-    return Object.entries(statusCounts).filter(([, v]) => v > 0).map(([name, value]) => ({
-      label: name,
-      count: value,
-    }));
-  })() : [];
-
-  /* ─── LOADING ─── */
-  if (q.isLoading && !q.data) {
-    return (
-      <div>
-        <PageHeader title="Purchasing Dashboard" subtitle="Procurement overview" />
-        <div className="px-5 py-4 space-y-4">
-          <div className="grid grid-cols-4 gap-2">
-            {[1, 2, 3, 4].map((i) => <SkeletonBlock key={i} className="h-16 rounded-md" />)}
-          </div>
-          <SkeletonDetail />
-        </div>
-      </div>
-    );
-  }
-
-  /* ─── ERROR ─── */
-  if (q.isError || !q.data) {
-    return (
-      <div>
-        <PageHeader title="Purchasing Dashboard" subtitle="Procurement overview" />
-        <div className="px-5 py-4">
-          <EmptyState
-            icon="alert-circle"
-            title="Failed to load dashboard"
-            action={<Button variant="secondary" onClick={() => q.refetch()}>Retry</Button>}
-          />
-        </div>
-      </div>
-    );
-  }
-
-  const { kpis, panels } = q.data as unknown as PurchasingDashboardData;
-
   return (
-    <div>
-      <PageHeader title="Purchasing Dashboard" subtitle="Live · refreshes every 60s" />
+    <DashboardShell<PurchasingDashboardData>
+      title="Purchasing Dashboard"
+      subtitle="Live · refreshes every 60s"
+      query={q}
+      refreshingQueryKey={['dashboard', 'purchasing']}
+    >
+      {({ kpis, panels }) => {
+        const poStatusChartData =
+          panels?.po_pipeline?.map((i) => ({
+            name: i.status.replace(/_/g, ' '),
+            value: i.count,
+            color:
+              i.status === 'received' || i.status === 'closed'
+                ? 'var(--success)'
+                : i.status === 'sent'
+                  ? 'var(--info)'
+                  : 'var(--warning)',
+          })) ?? [];
 
-      <div className="px-5 py-4 space-y-4">
-        {/* ── Row 1: KPIs ── */}
-        <section className="grid grid-cols-4 gap-2">
-          {kpis.map((k) => (
-            <StatCard
-              key={k.label}
-              label={k.label}
-              value={k.unit === 'PHP' ? `₱ ${k.value}` : k.value}
-              helper={k.unit !== 'PHP' && k.unit !== 'count' ? k.unit : undefined}
-              linkTo={kpiLink(k.label)}
-            />
-          ))}
-        </section>
+        const urgencyCounts: Record<string, number> = { urgent: 0, high: 0, normal: 0 };
+        (panels?.pr_action_queue ?? []).forEach((pr) => {
+          urgencyCounts[pr.urgency] = (urgencyCounts[pr.urgency] || 0) + 1;
+        });
+        const prStatusChartData = Object.entries(urgencyCounts)
+          .filter(([, v]) => v > 0)
+          .map(([label, count]) => ({ label, count }));
 
-        {/* KPI Scorecard strip */}
-        <KpiStrip codes={['supplier_quality', 'on_time_delivery']} />
+        return (
+          <>
+            {/* ── Row 1: KPIs ── */}
+            <KpiGrid count={kpis.length}>
+              {kpis.map((k) => (
+                <StatCard
+                  key={k.label}
+                  label={k.label}
+                  value={k.unit === 'PHP' ? `₱ ${k.value}` : k.value}
+                  helper={k.unit !== 'PHP' && k.unit !== 'count' ? k.unit : undefined}
+                  linkTo={kpiLink(k.label)}
+                />
+              ))}
+            </KpiGrid>
 
-        {/* ── Row 2: PR Action Queue + PO Pipeline ── */}
-        <div className="grid grid-cols-2 gap-4">
-          <PrActionQueuePanel items={panels?.pr_action_queue ?? []} />
-          <PoPipelinePanel items={panels?.po_pipeline ?? []} />
-        </div>
+            {/* KPI Scorecard strip */}
+            <KpiStrip codes={['supplier_quality', 'on_time_delivery']} />
 
-        {/* ── Row 3: Supplier Performance + Upcoming Deliveries ── */}
-        <div className="grid grid-cols-2 gap-4">
-          <SupplierPerformancePanel items={panels?.supplier_performance ?? []} />
-          <UpcomingDeliveriesPanel items={panels?.upcoming_deliveries ?? []} />
-        </div>
+            {/* ── Row 2: PR Action Queue + PO Pipeline ── */}
+            <PanelRow>
+              <PrActionQueuePanel items={panels?.pr_action_queue ?? []} />
+              <PoPipelinePanel items={panels?.po_pipeline ?? []} />
+            </PanelRow>
 
-        {/* ── Row 3.5: Chart visualizations ── */}
-        <div className="grid grid-cols-2 gap-4">
-          <Panel title="PO Status Distribution">
-            {poStatusChartData.length === 0 ? (
-              <EmptyState icon="inbox" title="No POs" description="No purchase order data available." />
-            ) : (
-              <DonutBreakdown
-                data={poStatusChartData}
-                centerLabel="Total POs"
-                centerValue={String(poStatusChartData.reduce((sum, i) => sum + i.value, 0))}
-              />
-            )}
-          </Panel>
-          <Panel title="PR Pipeline by Urgency">
-            {prStatusChartData.length === 0 ? (
-              <EmptyState icon="inbox" title="No PRs" description="No pending purchase requests." />
-            ) : (
-              <BarComparison
-                data={prStatusChartData}
-                bars={[{ dataKey: 'count', color: 'var(--warning)', label: 'PRs' }]}
-                xKey="label"
-                height={180}
-              />
-            )}
-          </Panel>
-        </div>
+            {/* ── Row 3: Supplier Performance + Upcoming Deliveries ── */}
+            <PanelRow>
+              <SupplierPerformancePanel items={panels?.supplier_performance ?? []} />
+              <UpcomingDeliveriesPanel items={panels?.upcoming_deliveries ?? []} />
+            </PanelRow>
 
-        {/* ── Row 4: Forecasting ── */}
-        <div className="grid grid-cols-2 gap-4">
-          <StockOutPanel horizonDays={30} hideWhenEmpty />
-          <DemandForecastPanel hideWhenEmpty />
-        </div>
-      </div>
-    </div>
+            {/* ── Row 4: Charts ── */}
+            <PanelRow>
+              <Panel title="PO Status Distribution">
+                {poStatusChartData.length === 0 ? (
+                  <EmptyState icon="inbox" title="No POs" description="No purchase order data available." />
+                ) : (
+                  <DonutBreakdown
+                    data={poStatusChartData}
+                    centerLabel="Total POs"
+                    centerValue={String(poStatusChartData.reduce((sum, i) => sum + i.value, 0))}
+                  />
+                )}
+              </Panel>
+              <Panel title="PR Pipeline by Urgency">
+                {prStatusChartData.length === 0 ? (
+                  <EmptyState icon="inbox" title="No PRs" description="No pending purchase requests." />
+                ) : (
+                  <BarComparison
+                    data={prStatusChartData}
+                    bars={[{ dataKey: 'count', color: 'var(--warning)', label: 'PRs' }]}
+                    xKey="label"
+                    height={180}
+                  />
+                )}
+              </Panel>
+            </PanelRow>
+
+            {/* ── Row 5: Forecasting ── */}
+            <PanelRow>
+              <StockOutPanel horizonDays={30} hideWhenEmpty />
+              <DemandForecastPanel hideWhenEmpty />
+            </PanelRow>
+          </>
+        );
+      }}
+    </DashboardShell>
   );
 }
