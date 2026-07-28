@@ -21,6 +21,7 @@ import { buildDeliveryO2cChain } from '@/lib/chains';
 import { usePermission } from '@/hooks/usePermission';
 import { useChainProgress } from '@/hooks/useChainProgress';
 import type { DeliveryStatus, DeliveryProofType } from '@/types/supplyChain';
+import { Td, Th, tableCls, trCls } from '@/components/ui/table-cells';
 
 const STATUS_CHIP: Record<DeliveryStatus, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
   scheduled: 'neutral', loading: 'info', in_transit: 'info',
@@ -375,26 +376,26 @@ export default function DeliveryDetailPage() {
             {!data.items?.length ? (
               <div className="px-4 py-3 text-xs text-muted">No items.</div>
             ) : (
-              <table className="w-full text-xs">
-                <thead className="bg-subtle">
+              <table className={tableCls}>
+                <thead>
                   <tr>
-                    <th  className="h-8 px-2.5 py-2 text-left text-2xs uppercase tracking-wider text-muted font-medium">Inspection</th>
-                    <th  className="h-8 px-2.5 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium">Qty</th>
-                    <th  className="h-8 px-2.5 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium">Unit price</th>
+                    <Th>Inspection</Th>
+                    <Th align="right">Qty</Th>
+                    <Th align="right">Unit price</Th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.items.map((i) => (
-                    <tr key={i.id} className="border-t border-subtle">
-                      <td className="px-2.5 py-2">
+                    <tr key={i.id} className={trCls}>
+                      <Td>
                         {i.inspection ? (
                           <Link to={`/quality/inspections/${i.inspection.id}`} className="font-mono text-accent hover:underline">
                             {i.inspection.inspection_number}
                           </Link>
                         ) : <span className="text-muted">—</span>}
-                      </td>
-                      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{i.quantity}</td>
-                      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{i.unit_price}</td>
+                      </Td>
+                      <Td align="right" mono>{i.quantity}</Td>
+                      <Td align="right" mono>{i.unit_price}</Td>
                     </tr>
                   ))}
                 </tbody>

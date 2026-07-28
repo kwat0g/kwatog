@@ -6,18 +6,11 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { PageHeader } from '@/components/layout/PageHeader';
-import {
-  BottomSheet,
-  Button,
-  Chip,
-  EmptyState,
-  Input,
-  Select,
-  SkeletonBlock,
-  Textarea,
-} from '@/components/ui';
+import { BottomSheet, Button, Chip, EmptyState, Input, Select, SkeletonBlock, Textarea, Td, Th } from '@/components/ui';
 import { selfServiceApi } from '@/api/self-service';
 import type { SelfServiceLoan, SelfServiceLoansResponse } from '@/types/self-service';
+import { tableCls, theadTrCls } from '@/components/ui/table-cells';
+import { cn } from '@/lib/cn';
 
 const schema = z.object({
   loan_type: z.string().min(1, 'Required'),
@@ -258,20 +251,20 @@ function ApplyLoanSheet({
             </div>
             {preview && preview.schedule.length > 0 && (
               <div className="max-h-36 overflow-y-auto">
-                <table className="w-full text-xs font-mono tabular-nums">
+                <table className={cn(tableCls, 'font-mono tabular-nums')}>
                   <thead>
-                    <tr className="text-muted border-b border-subtle">
-                      <th  className="h-8 text-left py-1 font-normal text-2xs uppercase tracking-wider text-muted font-medium">Period</th>
-                      <th  className="h-8 text-right py-1 font-normal text-2xs uppercase tracking-wider text-muted font-medium">Deduction</th>
-                      <th  className="h-8 text-right py-1 font-normal text-2xs uppercase tracking-wider text-muted font-medium">Balance</th>
+                    <tr className={cn(theadTrCls, 'border-subtle')}>
+                      <Th className="font-normal">Period</Th>
+                      <Th align="right" className="font-normal">Deduction</Th>
+                      <Th align="right" className="font-normal">Balance</Th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-subtle">
                     {preview.schedule.slice(0, 24).map((row) => (
                       <tr key={row.period}>
-                        <td className="py-1">{row.period}</td>
-                        <td  className="text-right py-1 font-mono tabular-nums">₱{row.amount}</td>
-                        <td  className="text-right py-1 text-muted font-mono tabular-nums">₱{row.running_balance}</td>
+                        <Td>{row.period}</Td>
+                        <Td align="right" mono>₱{row.amount}</Td>
+                        <Td align="right" mono className="text-muted">₱{row.running_balance}</Td>
                       </tr>
                     ))}
                   </tbody>

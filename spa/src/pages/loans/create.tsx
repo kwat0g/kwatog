@@ -18,6 +18,8 @@ import { formatPeso } from '@/lib/formatNumber';
 import type { ApiValidationError } from '@/types';
 import { onFormInvalid } from '@/lib/formErrors';
 import type { LoanType } from '@/types/loans';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { cn } from '@/lib/cn';
 
 const schema = z.object({
   employee_id: z.string().min(1, 'Employee is required'),
@@ -140,25 +142,25 @@ export default function CreateLoanPage() {
               <div className="px-3 py-2 bg-subtle text-2xs uppercase tracking-wider text-muted font-medium">
                 Amortization preview
               </div>
-              <table className="w-full text-sm">
-                <thead className="text-2xs uppercase tracking-wider text-muted">
-                  <tr className="border-b border-default">
-                    <th  className="h-8 px-3 text-left text-2xs uppercase tracking-wider text-muted font-medium">#</th>
-                    <th  className="h-8 px-3 text-right text-2xs uppercase tracking-wider text-muted font-medium">Amount</th>
-                    <th  className="h-8 px-3 text-right text-2xs uppercase tracking-wider text-muted font-medium">Remaining</th>
+              <table className={tableCls}>
+                <thead>
+                  <tr className={theadTrCls}>
+                    <Th>#</Th>
+                    <Th align="right">Amount</Th>
+                    <Th align="right">Remaining</Th>
                   </tr>
                 </thead>
                 <tbody>
                   {schedule.slice(0, 12).map((s) => (
-                    <tr key={s.period} className="h-7 border-b border-subtle">
-                      <td className="px-3 text-muted font-mono tabular-nums">{String(s.period).padStart(2, '0')}</td>
-                      <td  className="px-3 text-right font-mono tabular-nums">{formatPeso(s.amount)}</td>
-                      <td  className="px-3 text-right font-mono tabular-nums text-muted">{formatPeso(s.remaining_after)}</td>
+                    <tr key={s.period} className={trCls}>
+                      <Td mono className="text-muted">{String(s.period).padStart(2, '0')}</Td>
+                      <Td align="right" mono>{formatPeso(s.amount)}</Td>
+                      <Td align="right" mono className="text-muted">{formatPeso(s.remaining_after)}</Td>
                     </tr>
                   ))}
                   {schedule.length > 12 && (
-                    <tr className="h-7 text-muted">
-                      <td className="px-3 italic" colSpan={3}>+ {schedule.length - 12} more periods</td>
+                    <tr className={cn(trCls, 'text-muted')}>
+                      <Td className="italic" colSpan={3}>+ {schedule.length - 12} more periods</Td>
                     </tr>
                   )}
                 </tbody>

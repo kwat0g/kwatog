@@ -27,6 +27,7 @@ import { numberInputProps } from '@/lib/numberInput';
 import { onFormInvalid } from '@/lib/formErrors';
 import type { ApiValidationError } from '@/types';
 import type { CreditNoteStatus } from '@/types/accounting';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 const CN_STATUS_CHIP: Record<CreditNoteStatus, ChipVariant> = {
   draft: 'neutral',
@@ -142,15 +143,15 @@ export default function CreditNoteDetailPage() {
         </Panel>
 
         <Panel title="Lines">
-          <table className="w-full text-sm">
-            <thead><tr className="border-b border-default text-2xs uppercase tracking-wider text-muted">
-              <th className="text-left h-8 px-2.5">Description</th><th className="text-right px-2.5">Amount</th>
+          <table className={tableCls}>
+            <thead><tr className={theadTrCls}>
+              <Th>Description</Th><Th align="right">Amount</Th>
             </tr></thead>
             <tbody>
               {(cn.lines ?? []).map((l) => (
-                <tr key={l.id} className="border-b border-subtle">
-                  <td className="px-2.5 py-1.5">{l.description}</td>
-                  <td className="px-2.5 py-1.5 text-right font-mono tabular-nums">{formatPeso(l.amount)}</td>
+                <tr key={l.id} className={trCls}>
+                  <Td>{l.description}</Td>
+                  <Td align="right" mono>{formatPeso(l.amount)}</Td>
                 </tr>
               ))}
             </tbody>
@@ -159,16 +160,16 @@ export default function CreditNoteDetailPage() {
 
         {(cn.applications?.length ?? 0) > 0 && (
           <Panel title="Applications">
-            <table className="w-full text-sm">
-              <thead><tr className="border-b border-default text-2xs uppercase tracking-wider text-muted">
-                <th className="text-left h-8 px-2.5">Applied to</th><th className="text-right px-2.5">Amount</th><th className="text-right px-2.5">Date</th>
+            <table className={tableCls}>
+              <thead><tr className={theadTrCls}>
+                <Th>Applied to</Th><Th align="right">Amount</Th><Th align="right">Date</Th>
               </tr></thead>
               <tbody>
                 {cn.applications!.map((a) => (
-                  <tr key={a.id} className="border-b border-subtle">
-                    <td className="px-2.5 py-1.5 font-mono">{a.invoice_id ?? a.bill_id ?? '—'}</td>
-                    <td className="px-2.5 py-1.5 text-right font-mono tabular-nums">{formatPeso(a.amount)}</td>
-                    <td className="px-2.5 py-1.5 text-right">{a.created_at ? formatDate(a.created_at) : '—'}</td>
+                  <tr key={a.id} className={trCls}>
+                    <Td mono>{a.invoice_id ?? a.bill_id ?? '—'}</Td>
+                    <Td align="right" mono>{formatPeso(a.amount)}</Td>
+                    <Td align="right">{a.created_at ? formatDate(a.created_at) : '—'}</Td>
                   </tr>
                 ))}
               </tbody>

@@ -11,6 +11,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { formatPeso } from '@/lib/formatNumber';
 import type { PipelinePeriod } from '@/types/payroll';
+import { Td, Th, tableCls } from '@/components/ui/table-cells';
 
 const statusVariant = (status: PipelinePeriod['status']): ChipVariant => {
   switch (status) {
@@ -112,16 +113,16 @@ export default function PayrollPipelinePage() {
 
         {/* Pipeline table */}
         <Panel noPadding>
-          <table className="w-full text-xs">
-            <thead className="bg-subtle">
+          <table className={tableCls}>
+            <thead>
               <tr>
-                <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 w-8" />
-                <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Period</th>
-                <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Employees</th>
-                <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Gross</th>
-                <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Net</th>
-                <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 w-32">Status</th>
-                <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 w-24">Action</th>
+                <Th className="w-8" />
+                <Th>Period</Th>
+                <Th align="right">Employees</Th>
+                <Th align="right">Gross</Th>
+                <Th align="right">Net</Th>
+                <Th className="w-32">Status</Th>
+                <Th align="right" className="w-24">Action</Th>
               </tr>
             </thead>
             <tbody>
@@ -152,24 +153,24 @@ function PipelineRow({
       className={`border-t border-subtle ${period.exists ? 'hover:bg-subtle cursor-pointer' : 'opacity-60'} ${period.status === 'draft' ? 'bg-warning-bg/10' : ''}`}
       onClick={handleRowClick}
     >
-      <td className="px-2.5 py-2 text-center">{statusIcon(period.status)}</td>
-      <td className="px-2.5 py-2">
+      <Td align="center">{statusIcon(period.status)}</Td>
+      <Td>
         <div className="font-medium">{period.label}</div>
         {period.is_auto_created && <span className="text-2xs text-muted">auto-created</span>}
-      </td>
-      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">
+      </Td>
+      <Td align="right" mono>
         {period.employee_count > 0 ? period.employee_count : '—'}
-      </td>
-      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">
+      </Td>
+      <Td align="right" mono>
         {Number(period.total_gross) > 0 ? formatPeso(period.total_gross) : '—'}
-      </td>
-      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">
+      </Td>
+      <Td align="right" mono>
         {Number(period.total_net) > 0 ? formatPeso(period.total_net) : '—'}
-      </td>
-      <td className="px-2.5 py-2">
+      </Td>
+      <Td>
         <Chip variant={statusVariant(period.status)}>{period.status_label}</Chip>
-      </td>
-      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">
+      </Td>
+      <Td align="right" mono>
         {period.exists && period.status === 'draft' && (
           <Button
             variant="secondary"
@@ -191,7 +192,7 @@ function PipelineRow({
         {!period.exists && period.status === 'scheduled' && (
           <span className="text-2xs text-muted">{'—'}</span>
         )}
-      </td>
+      </Td>
     </tr>
   );
 }

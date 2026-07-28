@@ -2,21 +2,14 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import {
-  Button,
-  Chip,
-  ConfirmDialog,
-  EmptyState,
-  Panel,
-  Select,
-  SkeletonDetail,
-} from '@/components/ui';
+import { Button, Chip, ConfirmDialog, EmptyState, Panel, Select, SkeletonDetail, Td, Th } from '@/components/ui';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { adminUsersApi } from '@/api/admin/users';
 import { client } from '@/api/client';
 import type { AdminUserDetail } from '@/types/admin';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
 import { PermissionOverrides } from './_components/PermissionOverrides';
+import { tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 interface RoleOption { id: string; name: string }
 interface RolesResponse { data: RoleOption[] }
@@ -247,44 +240,44 @@ export default function AdminUserDetailPage() {
           {user.recent_logins.length === 0 ? (
             <p className="text-sm text-text-subtle">No login attempts recorded.</p>
           ) : (
-            <table className="w-full text-xs">
+            <table className={tableCls}>
               <thead>
-                <tr className="border-b border-default">
-                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">
+                <tr className={theadTrCls}>
+                  <Th>
                     When
-                  </th>
-                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">
+                  </Th>
+                  <Th>
                     Status
-                  </th>
-                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">
+                  </Th>
+                  <Th>
                     IP
-                  </th>
-                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">
+                  </Th>
+                  <Th>
                     User Agent
-                  </th>
-                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">
+                  </Th>
+                  <Th>
                     Reason
-                  </th>
+                  </Th>
                 </tr>
               </thead>
               <tbody>
                 {user.recent_logins.map((evt) => (
-                  <tr key={evt.id} className="h-8 border-b border-subtle">
-                    <td className="px-2.5 font-mono tabular-nums text-secondary">
+                  <tr key={evt.id} className={trCls}>
+                    <Td mono className="text-secondary">
                       {evt.created_at ? formatDateTime(evt.created_at) : '—'}
-                    </td>
-                    <td className="px-2.5">
+                    </Td>
+                    <Td>
                       <Chip variant={evt.status === 'success' ? 'success' : 'danger'}>
                         {evt.status}
                       </Chip>
-                    </td>
-                    <td className="px-2.5 font-mono tabular-nums">{evt.ip_address ?? '—'}</td>
-                    <td className="px-2.5 text-muted">
+                    </Td>
+                    <Td mono>{evt.ip_address ?? '—'}</Td>
+                    <Td className="text-muted">
                       <span className="block max-w-[260px] truncate">
                         {evt.user_agent ?? '—'}
                       </span>
-                    </td>
-                    <td className="px-2.5 text-muted">{evt.reason ?? '—'}</td>
+                    </Td>
+                    <Td className="text-muted">{evt.reason ?? '—'}</Td>
                   </tr>
                 ))}
               </tbody>

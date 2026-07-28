@@ -7,6 +7,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { formatPeso } from '@/lib/formatNumber';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 export default function CustomerOrdersPage() {
   const { data: orders, isLoading, isError, refetch } = useQuery({
@@ -21,29 +22,29 @@ export default function CustomerOrdersPage() {
   return (
     <Panel title="My Orders">
       {orders && orders.length > 0 ? (
-        <table className="w-full text-xs">
+        <table className={tableCls}>
           <thead>
-            <tr className="border-b border-border text-muted">
-              <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Order #</th>
-              <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Date</th>
-              <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Amount</th>
-              <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Status</th>
+            <tr className={theadTrCls}>
+              <Th>Order #</Th>
+              <Th>Date</Th>
+              <Th align="right">Amount</Th>
+              <Th align="right">Status</Th>
             </tr>
           </thead>
           <tbody>
             {orders.map((order) => (
-              <tr key={order.id} className="border-b border-border/50 hover:bg-subtle/50 transition-colors">
-                <td className="py-2.5 px-3">
+              <tr key={order.id} className={trCls}>
+                <Td>
                   <Link to={`/portal/customer/orders/${order.id}`} className="font-mono text-accent hover:underline font-medium">
                     {order.so_number}
                   </Link>
-                </td>
-                <td className="py-2.5 px-3 text-muted">{order.date ?? '—'}</td>
-                <td  className="py-2.5 px-3 text-right font-mono tabular-nums">{formatPeso(order.total_amount)}</td>
+                </Td>
+                <Td className="text-muted">{order.date ?? '—'}</Td>
+                <Td align="right" mono>{formatPeso(order.total_amount)}</Td>
 
-                <td  className="py-2.5 px-3 text-right font-mono tabular-nums">
+                <Td align="right" mono>
                   <Chip variant={chipVariantForStatus(order.status)}>{order.status.replace(/_/g, ' ')}</Chip>
-                </td>
+                </Td>
               </tr>
             ))}
           </tbody>

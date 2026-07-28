@@ -18,6 +18,7 @@ import { Chip } from '@/components/ui/Chip';
 import { forecastingApi } from '@/api/forecasting';
 import type { StockOutRisk } from '@/types/forecasting';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 const RISK_VARIANT: Record<StockOutRisk, 'danger' | 'warning' | 'info' | 'neutral'> = {
   critical: 'danger',
@@ -115,55 +116,55 @@ export default function StockOutProjectionPage() {
             />
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className={tableCls}>
                 <thead>
-                  <tr className="text-left text-2xs uppercase tracking-wide text-muted bg-elevated/50 border-b border-default">
-                    <th  className="h-8 px-4 py-2 text-2xs uppercase tracking-wider text-muted font-medium">Item</th>
-                    <th  className="h-8 px-4 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium">On hand</th>
-                    <th  className="h-8 px-4 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium">Safety</th>
-                    <th  className="h-8 px-4 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium">Daily demand</th>
-                    <th  className="h-8 px-4 py-2 text-2xs uppercase tracking-wider text-muted font-medium">Source</th>
-                    <th  className="h-8 px-4 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium">Days until stock-out</th>
-                    <th  className="h-8 px-4 py-2 text-2xs uppercase tracking-wider text-muted font-medium">Order by</th>
-                    <th  className="h-8 px-4 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium">Suggested qty</th>
-                    <th  className="h-8 px-4 py-2 text-2xs uppercase tracking-wider text-muted font-medium">Risk</th>
-                    <th  className="h-8 px-4 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium" />
+                  <tr className={theadTrCls}>
+                    <Th>Item</Th>
+                    <Th align="right">On hand</Th>
+                    <Th align="right">Safety</Th>
+                    <Th align="right">Daily demand</Th>
+                    <Th>Source</Th>
+                    <Th align="right">Days until stock-out</Th>
+                    <Th>Order by</Th>
+                    <Th align="right">Suggested qty</Th>
+                    <Th>Risk</Th>
+                    <Th align="right" />
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((r) => (
-                    <tr key={r.item_id} className="border-b border-default/50 hover:bg-elevated/30">
-                      <td className="px-4 py-2">
+                    <tr key={r.item_id} className={trCls}>
+                      <Td>
                         <div className="font-medium text-primary">{r.code}</div>
                         <div className="text-2xs text-muted truncate max-w-[260px]">{r.name}</div>
-                      </td>
-                      <td  className="px-4 py-2 text-right tabular-nums font-mono">
+                      </Td>
+                      <Td align="right" mono>
                         {r.available.toFixed(2)} <span className="text-2xs text-muted">{r.unit_of_measure}</span>
-                      </td>
-                      <td  className="px-4 py-2 text-right tabular-nums text-muted font-mono">{r.safety_stock.toFixed(2)}</td>
-                      <td  className="px-4 py-2 text-right tabular-nums font-mono">{r.daily_demand.toFixed(2)}</td>
-                      <td className="px-4 py-2 text-2xs text-muted">{SOURCE_LABEL[r.demand_source] ?? r.demand_source}</td>
-                      <td  className="px-4 py-2 text-right tabular-nums font-mono">
+                      </Td>
+                      <Td align="right" mono className="text-muted">{r.safety_stock.toFixed(2)}</Td>
+                      <Td align="right" mono>{r.daily_demand.toFixed(2)}</Td>
+                      <Td className="text-2xs text-muted">{SOURCE_LABEL[r.demand_source] ?? r.demand_source}</Td>
+                      <Td align="right" mono>
                         {r.days_until_stockout === null ? '—' : (
                           <span className={r.days_until_stockout <= r.lead_time_days ? 'text-danger font-medium' : ''}>
                             {r.days_until_stockout}d
                           </span>
                         )}
-                      </td>
-                      <td className="px-4 py-2 text-2xs">
+                      </Td>
+                      <Td className="text-2xs">
                         {r.reorder_date ? formatDate(r.reorder_date) : '—'}
-                      </td>
-                      <td  className="px-4 py-2 text-right tabular-nums font-mono">
+                      </Td>
+                      <Td align="right" mono>
                         {r.suggested_qty !== null ? r.suggested_qty.toFixed(2) : '—'}
-                      </td>
-                      <td className="px-4 py-2">
+                      </Td>
+                      <Td>
                         <Chip variant={RISK_VARIANT[r.risk]}>{RISK_LABEL[r.risk]}</Chip>
-                      </td>
-                      <td  className="px-4 py-2 text-right font-mono tabular-nums">
+                      </Td>
+                      <Td align="right" mono>
                         <Link to="/purchasing/purchase-requests/create">
                           <Button size="sm" variant="ghost">Create PR</Button>
                         </Link>
-                      </td>
+                      </Td>
                     </tr>
                   ))}
                 </tbody>

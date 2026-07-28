@@ -18,6 +18,8 @@ import { usePermission } from '@/hooks/usePermission';
 import { formatDateTime } from '@/lib/formatDate';
 import type { ChainStep } from '@/types/chain';
 import type { MaintenanceWorkOrderStatus } from '@/types/maintenance';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { cn } from '@/lib/cn';
 
 const STATUS_FLOW: MaintenanceWorkOrderStatus[] = ['open', 'assigned', 'in_progress', 'completed'];
 const STATUS_CHIP: Record<MaintenanceWorkOrderStatus, 'success' | 'warning' | 'info' | 'danger' | 'neutral'> = {
@@ -143,24 +145,24 @@ export default function MaintenanceWorkOrderDetailPage() {
 
           <Panel title="Spare parts" meta={data.spare_parts?.length ? `${data.spare_parts.length}` : undefined}>
             {data.spare_parts && data.spare_parts.length > 0 ? (
-              <table className="w-full text-sm">
+              <table className={tableCls}>
                 <thead>
-                  <tr className="border-b border-subtle">
-                    <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Item</th>
-                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Qty</th>
-                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Unit cost</th>
-                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Total</th>
+                  <tr className={cn(theadTrCls, 'border-subtle')}>
+                    <Th>Item</Th>
+                    <Th align="right">Qty</Th>
+                    <Th align="right">Unit cost</Th>
+                    <Th align="right">Total</Th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.spare_parts.map((sp) => (
-                    <tr key={sp.id} className="border-b border-subtle">
-                      <td className="py-1.5">
+                    <tr key={sp.id} className={trCls}>
+                      <Td>
                         {sp.item ? <span><span className="font-mono">{sp.item.code}</span><span className="ml-2 text-muted">{sp.item.name}</span></span> : '—'}
-                      </td>
-                      <td  className="py-1.5 text-right font-mono tabular-nums">{sp.quantity}</td>
-                      <td  className="py-1.5 text-right font-mono tabular-nums">₱{sp.unit_cost}</td>
-                      <td  className="py-1.5 text-right font-mono tabular-nums font-medium">₱{sp.total_cost}</td>
+                      </Td>
+                      <Td align="right" mono>{sp.quantity}</Td>
+                      <Td align="right" mono>₱{sp.unit_cost}</Td>
+                      <Td align="right" mono className="font-medium">₱{sp.total_cost}</Td>
                     </tr>
                   ))}
                 </tbody>

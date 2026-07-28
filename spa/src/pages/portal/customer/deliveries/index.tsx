@@ -6,6 +6,7 @@ import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 export default function CustomerDeliveriesPage() {
   const { data: deliveries, isLoading, isError, refetch } = useQuery({
@@ -20,26 +21,26 @@ export default function CustomerDeliveriesPage() {
   return (
     <Panel title="Deliveries">
       {deliveries && deliveries.length > 0 ? (
-        <table className="w-full text-xs">
+        <table className={tableCls}>
           <thead>
-            <tr className="border-b border-border text-muted">
-              <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">DR #</th>
-              <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Delivery Date</th>
-              <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Status</th>
+            <tr className={theadTrCls}>
+              <Th>DR #</Th>
+              <Th>Delivery Date</Th>
+              <Th align="right">Status</Th>
             </tr>
           </thead>
           <tbody>
             {deliveries.map((d) => (
-              <tr key={d.id} className="border-b border-border/50 hover:bg-subtle/50 transition-colors">
-                <td className="py-2.5 px-3">
+              <tr key={d.id} className={trCls}>
+                <Td>
                   <Link to={`/portal/customer/deliveries/${d.id}`} className="font-mono text-accent hover:underline">
                     {d.delivery_number}
                   </Link>
-                </td>
-                <td className="py-2.5 px-3 text-muted">{d.delivered_at ?? '—'}</td>
-                <td  className="py-2.5 px-3 text-right font-mono tabular-nums">
+                </Td>
+                <Td className="text-muted">{d.delivered_at ?? '—'}</Td>
+                <Td align="right" mono>
                   <Chip variant={chipVariantForStatus(d.status)}>{d.status}</Chip>
-                </td>
+                </Td>
               </tr>
             ))}
           </tbody>

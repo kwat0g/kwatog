@@ -25,6 +25,7 @@ import { cn } from '@/lib/cn';
 import { formatInt } from '@/lib/formatNumber';
 import type { WorkOrderStatus } from '@/types/production';
 import type { WoOperationStatus } from '@/types/production/routing';
+import { Td, Th, tableCls, trCls } from '@/components/ui/table-cells';
 
 const variant: Record<WorkOrderStatus, 'success' | 'info' | 'warning' | 'danger' | 'neutral'> = {
   planned: 'neutral', confirmed: 'info', in_progress: 'info',
@@ -224,25 +225,25 @@ export default function WorkOrderDetailPage() {
                   <div className="text-2xs uppercase tracking-wider text-muted font-medium mb-2">
                     Material lots used
                   </div>
-                  <table className="w-full text-xs">
-                    <thead className="bg-subtle">
+                  <table className={tableCls}>
+                    <thead>
                       <tr>
-                        <th  className="h-8 px-2 py-1.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Item</th>
-                        <th  className="h-8 px-2 py-1.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">GRN</th>
-                        <th  className="h-8 px-2 py-1.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Material lot</th>
-                        <th  className="h-8 px-2 py-1.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Supplier ref</th>
+                        <Th>Item</Th>
+                        <Th>GRN</Th>
+                        <Th>Material lot</Th>
+                        <Th>Supplier ref</Th>
                       </tr>
                     </thead>
                     <tbody>
                       {data.material_lot_references.map((ref, i) => (
-                        <tr key={`${ref.material_lot_number ?? 'lot'}-${i}`} className="border-t border-subtle">
-                          <td className="px-2 py-1.5">
+                        <tr key={`${ref.material_lot_number ?? 'lot'}-${i}`} className={trCls}>
+                          <Td>
                             <div className="font-mono">{ref.item_code ?? '—'}</div>
                             <div className="text-muted">{ref.item_name ?? ''}</div>
-                          </td>
-                          <td className="px-2 py-1.5 font-mono">{ref.grn_number ?? '—'}</td>
-                          <td className="px-2 py-1.5 font-mono">{ref.material_lot_number ?? '—'}</td>
-                          <td className="px-2 py-1.5 font-mono">{ref.supplier_lot_reference ?? '—'}</td>
+                          </Td>
+                          <Td mono>{ref.grn_number ?? '—'}</Td>
+                          <Td mono>{ref.material_lot_number ?? '—'}</Td>
+                          <Td mono>{ref.supplier_lot_reference ?? '—'}</Td>
                         </tr>
                       ))}
                     </tbody>
@@ -288,25 +289,25 @@ export default function WorkOrderDetailPage() {
 
           <Panel title="Materials" meta={`${data.materials?.length ?? 0} lines`} noPadding>
             {data.materials?.length ? (
-              <table className="w-full text-xs">
-                <thead className="bg-subtle">
+              <table className={tableCls}>
+                <thead>
                   <tr>
-                    <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Item</th>
-                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">BOM qty</th>
-                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Issued</th>
-                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Variance</th>
+                    <Th>Item</Th>
+                    <Th align="right">BOM qty</Th>
+                    <Th align="right">Issued</Th>
+                    <Th align="right">Variance</Th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.materials.map((m) => (
-                    <tr key={m.id} className="border-t border-subtle">
-                      <td className="px-2.5 py-2">
+                    <tr key={m.id} className={trCls}>
+                      <Td>
                         <div className="font-mono">{m.item?.code}</div>
                         <div className="text-muted">{m.item?.name}</div>
-                      </td>
-                      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{Number(m.bom_quantity).toFixed(3)}</td>
-                      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{Number(m.actual_quantity_issued).toFixed(3)}</td>
-                      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{Number(m.variance).toFixed(3)}</td>
+                      </Td>
+                      <Td align="right" mono>{Number(m.bom_quantity).toFixed(3)}</Td>
+                      <Td align="right" mono>{Number(m.actual_quantity_issued).toFixed(3)}</Td>
+                      <Td align="right" mono>{Number(m.variance).toFixed(3)}</Td>
                     </tr>
                   ))}
                 </tbody>
@@ -318,28 +319,28 @@ export default function WorkOrderDetailPage() {
 
           <Panel title="Recent outputs" meta={`${data.outputs?.length ?? 0} entries`} noPadding>
             {data.outputs?.length ? (
-              <table className="w-full text-xs">
-                <thead className="bg-subtle">
+              <table className={tableCls}>
+                <thead>
                   <tr>
-                    <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Recorded</th>
-                    <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Batch</th>
-                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Good</th>
-                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Reject</th>
-                    <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Defects</th>
+                    <Th>Recorded</Th>
+                    <Th>Batch</Th>
+                    <Th align="right">Good</Th>
+                    <Th align="right">Reject</Th>
+                    <Th>Defects</Th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.outputs.map((o) => (
-                    <tr key={o.id} className="border-t border-subtle">
-                      <td className="px-2.5 py-2 font-mono">{o.recorded_at?.slice(0, 16)}</td>
-                      <td className="px-2.5 py-2 font-mono">{o.batch_code ?? '—'}</td>
-                      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{o.good_count}</td>
-                      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{o.reject_count}</td>
-                      <td className="px-2.5 py-2 text-xs">
+                    <tr key={o.id} className={trCls}>
+                      <Td mono>{o.recorded_at?.slice(0, 16)}</Td>
+                      <Td mono>{o.batch_code ?? '—'}</Td>
+                      <Td align="right" mono>{o.good_count}</Td>
+                      <Td align="right" mono>{o.reject_count}</Td>
+                      <Td className="text-xs">
                         {o.defects?.length
                           ? o.defects.map((d) => `${d.defect_type?.code} ×${d.count}`).join(', ')
                           : <span className="text-muted">—</span>}
-                      </td>
+                      </Td>
                     </tr>
                   ))}
                 </tbody>
@@ -438,40 +439,40 @@ export default function WorkOrderDetailPage() {
             <div className="p-4 text-sm text-muted">No operations defined for this work order.</div>
           )}
           {operations.data && operations.data.length > 0 && (
-            <table className="w-full text-xs">
-              <thead className="bg-subtle">
+            <table className={tableCls}>
+              <thead>
                 <tr>
-                  <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 w-14">#</th>
-                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Operation</th>
-                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Status</th>
-                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Operator</th>
-                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Machine</th>
-                  <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Qty progress</th>
-                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Start</th>
-                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">End</th>
+                  <Th align="right" className="w-14">#</Th>
+                  <Th>Operation</Th>
+                  <Th>Status</Th>
+                  <Th>Operator</Th>
+                  <Th>Machine</Th>
+                  <Th align="right">Qty progress</Th>
+                  <Th>Start</Th>
+                  <Th>End</Th>
                 </tr>
               </thead>
               <tbody>
                 {operations.data.map((op) => (
-                  <tr key={op.id} className="border-t border-subtle">
-                    <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{op.sequence}</td>
-                    <td className="px-2.5 py-2">{op.operation_name}</td>
-                    <td className="px-2.5 py-2">
+                  <tr key={op.id} className={trCls}>
+                    <Td align="right" mono>{op.sequence}</Td>
+                    <Td>{op.operation_name}</Td>
+                    <Td>
                       <Chip variant={OP_STATUS_CHIP[op.status]}>{OP_STATUS_LABEL[op.status]}</Chip>
-                    </td>
-                    <td className="px-2.5 py-2">
+                    </Td>
+                    <Td>
                       {op.operator
                         ? `${op.operator.first_name} ${op.operator.last_name}`
                         : <span className="text-muted">—</span>}
-                    </td>
-                    <td className="px-2.5 py-2 font-mono">
+                    </Td>
+                    <Td mono>
                       {op.machine?.machine_code ?? <span className="text-muted">—</span>}
-                    </td>
-                    <td  className="px-2.5 py-2 text-right font-mono tabular-nums">
+                    </Td>
+                    <Td align="right" mono>
                       {formatInt(op.qty_completed)} / {formatInt(op.qty_planned)}
-                    </td>
-                    <td className="px-2.5 py-2 font-mono">{op.actual_start?.slice(0, 16) ?? '—'}</td>
-                    <td className="px-2.5 py-2 font-mono">{op.actual_end?.slice(0, 16) ?? '—'}</td>
+                    </Td>
+                    <Td mono>{op.actual_start?.slice(0, 16) ?? '—'}</Td>
+                    <Td mono>{op.actual_end?.slice(0, 16) ?? '—'}</Td>
                   </tr>
                 ))}
               </tbody>

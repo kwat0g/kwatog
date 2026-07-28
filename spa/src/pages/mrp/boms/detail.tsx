@@ -11,6 +11,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { Td, Th, tableCls, trCls } from '@/components/ui/table-cells';
 
 export default function BomDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -86,29 +87,29 @@ export default function BomDetailPage() {
 
       <div className="px-5 py-4 space-y-4">
         <Panel title="Materials" meta={`${data.item_count} ${data.item_count === 1 ? 'line' : 'lines'}`} noPadding>
-          <table className="w-full text-xs">
-            <thead className="bg-subtle">
+          <table className={tableCls}>
+            <thead>
               <tr>
-                <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 w-12">#</th>
-                <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Item</th>
-                <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Qty / unit</th>
-                <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">UOM</th>
-                <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Waste %</th>
-                <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Effective</th>
+                <Th className="w-12">#</Th>
+                <Th>Item</Th>
+                <Th align="right">Qty / unit</Th>
+                <Th>UOM</Th>
+                <Th align="right">Waste %</Th>
+                <Th align="right">Effective</Th>
               </tr>
             </thead>
             <tbody>
               {data.items?.map((m, i) => (
-                <tr key={m.id} className="border-t border-subtle hover:bg-subtle">
-                  <td className="px-2.5 py-2 font-mono text-muted tabular-nums">{(i + 1).toString().padStart(2, '0')}</td>
-                  <td className="px-2.5 py-2">
+                <tr key={m.id} className={trCls}>
+                  <Td mono className="text-muted">{(i + 1).toString().padStart(2, '0')}</Td>
+                  <Td>
                     <div className="font-mono">{m.item?.code}</div>
                     <div className="text-xs text-muted">{m.item?.name}</div>
-                  </td>
-                  <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{Number(m.quantity_per_unit).toFixed(4)}</td>
-                  <td className="px-2.5 py-2">{m.unit}</td>
-                  <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{Number(m.waste_factor).toFixed(2)}</td>
-                  <td  className="px-2.5 py-2 text-right font-mono tabular-nums font-medium">{Number(m.effective_quantity).toFixed(4)}</td>
+                  </Td>
+                  <Td align="right" mono>{Number(m.quantity_per_unit).toFixed(4)}</Td>
+                  <Td>{m.unit}</Td>
+                  <Td align="right" mono>{Number(m.waste_factor).toFixed(2)}</Td>
+                  <Td align="right" mono className="font-medium">{Number(m.effective_quantity).toFixed(4)}</Td>
                 </tr>
               ))}
             </tbody>

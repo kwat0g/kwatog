@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
 import { kpiLink } from '@/lib/dashboardLinks';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 /**
  * Sprint 4 / Task 37 — Finance dashboard section.
@@ -88,26 +89,26 @@ export function FinanceSection() {
 
       {data.top_overdue_customers.length > 0 && (
         <Panel title="Top overdue customers">
-          <table className="w-full text-sm">
-            <thead className="text-2xs uppercase tracking-wider text-muted">
-              <tr className="border-b border-default">
-                <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Customer</th>
-                <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">1–30</th>
-                <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">31–60</th>
-                <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">61–90</th>
-                <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">91+</th>
-                <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">Total</th>
+          <table className={tableCls}>
+            <thead>
+              <tr className={theadTrCls}>
+                <Th>Customer</Th>
+                <Th align="right">1–30</Th>
+                <Th align="right">31–60</Th>
+                <Th align="right">61–90</Th>
+                <Th align="right">91+</Th>
+                <Th align="right">Total</Th>
               </tr>
             </thead>
             <tbody>
               {data.top_overdue_customers.map((c) => (
-                <tr key={c.customer_id} className="h-7 border-b border-subtle hover:bg-subtle">
-                  <td className="px-2.5"><Link to={`/accounting/customers/${c.customer_id}`} className="text-accent hover:underline">{c.customer_name}</Link></td>
-                  <td  className="px-2.5 text-right font-mono tabular-nums">{formatPeso(c.d1_30)}</td>
-                  <td  className="px-2.5 text-right font-mono tabular-nums">{formatPeso(c.d31_60)}</td>
-                  <td  className="px-2.5 text-right font-mono tabular-nums">{formatPeso(c.d61_90)}</td>
-                  <td  className="px-2.5 text-right font-mono tabular-nums text-danger-fg">{formatPeso(c.d91_plus)}</td>
-                  <td  className="px-2.5 text-right font-mono tabular-nums font-medium">{formatPeso(c.total)}</td>
+                <tr key={c.customer_id} className={trCls}>
+                  <Td><Link to={`/accounting/customers/${c.customer_id}`} className="text-accent hover:underline">{c.customer_name}</Link></Td>
+                  <Td align="right" mono>{formatPeso(c.d1_30)}</Td>
+                  <Td align="right" mono>{formatPeso(c.d31_60)}</Td>
+                  <Td align="right" mono>{formatPeso(c.d61_90)}</Td>
+                  <Td align="right" mono className="text-danger-fg">{formatPeso(c.d91_plus)}</Td>
+                  <Td align="right" mono className="font-medium">{formatPeso(c.total)}</Td>
                 </tr>
               ))}
             </tbody>

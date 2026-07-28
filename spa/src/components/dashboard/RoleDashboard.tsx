@@ -10,6 +10,8 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { alertLink, chainStageLink, kpiLink } from '@/lib/dashboardLinks';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { cn } from '@/lib/cn';
 
 interface ChainStage { key: string; label: string; count: number; percent: number; color?: string }
 interface AlertItem { kind: string; label: string; count: number; severity?: string }
@@ -146,22 +148,22 @@ function RolePanels({ envelope }: { envelope: DashboardEnvelope }) {
 
       {Array.isArray(p.machine_util) && (
         <Panel title="Machine utilisation">
-          <table className="w-full text-sm">
+          <table className={tableCls}>
             <thead>
-              <tr className="border-b border-subtle">
-                <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Code</th>
-                <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Name</th>
-                <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Status</th>
-                <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Active WO</th>
+              <tr className={cn(theadTrCls, 'border-subtle')}>
+                <Th>Code</Th>
+                <Th>Name</Th>
+                <Th>Status</Th>
+                <Th align="right">Active WO</Th>
               </tr>
             </thead>
             <tbody>
               {p.machine_util.map((m: MachineRow) => (
-                <tr key={m.id} className="border-b border-subtle h-7">
-                  <td className="font-mono">{m.code}</td>
-                  <td className="text-muted">{m.name}</td>
-                  <td><Chip variant={chipVariantForStatus(m.status)}>{m.status}</Chip></td>
-                  <td  className="text-right font-mono tabular-nums">{m.has_active_wo ? '✓' : '—'}</td>
+                <tr key={m.id} className={trCls}>
+                  <Td mono>{m.code}</Td>
+                  <Td className="text-muted">{m.name}</Td>
+                  <Td><Chip variant={chipVariantForStatus(m.status)}>{m.status}</Chip></Td>
+                  <Td align="right" mono>{m.has_active_wo ? '✓' : '—'}</Td>
                 </tr>
               ))}
             </tbody>

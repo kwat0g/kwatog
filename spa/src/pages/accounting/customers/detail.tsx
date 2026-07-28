@@ -17,6 +17,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
 import type { Invoice } from '@/types/accounting';
+import { Td, Th, tableCls, trCls } from '@/components/ui/table-cells';
 
 export default function CustomerDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
@@ -127,33 +128,33 @@ export default function CustomerDetailPage() {
             {!priceAgreements || priceAgreements.length === 0 ? (
               <div className="px-3 py-3 text-sm text-muted">No price agreements configured for this customer.</div>
             ) : (
-              <table className="w-full text-xs">
-                <thead className="bg-subtle">
+              <table className={tableCls}>
+                <thead>
                   <tr>
-                    <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Product</th>
-                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Price</th>
-                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Effective from</th>
-                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Effective to</th>
-                    <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Status</th>
+                    <Th>Product</Th>
+                    <Th align="right">Price</Th>
+                    <Th align="right">Effective from</Th>
+                    <Th align="right">Effective to</Th>
+                    <Th>Status</Th>
                   </tr>
                 </thead>
                 <tbody>
                   {priceAgreements.map((pa) => (
-                    <tr key={pa.id} className="border-t border-subtle">
-                      <td className="px-2.5 py-2">
+                    <tr key={pa.id} className={trCls}>
+                      <Td>
                         {pa.product
                           ? <Link to={`/crm/products/${pa.product.id}`} className="font-mono text-accent hover:underline">{pa.product.part_number}</Link>
                           : <span className="text-muted">—</span>}
                         {pa.product && <span className="ml-2 text-muted">{pa.product.name}</span>}
-                      </td>
-                      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">₱ {Number(pa.price).toFixed(2)}</td>
-                      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{pa.effective_from}</td>
-                      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{pa.effective_to}</td>
-                      <td className="px-2.5 py-2">
+                      </Td>
+                      <Td align="right" mono>₱ {Number(pa.price).toFixed(2)}</Td>
+                      <Td align="right" mono>{pa.effective_from}</Td>
+                      <Td align="right" mono>{pa.effective_to}</Td>
+                      <Td>
                         <Chip variant={pa.is_currently_active ? 'success' : 'neutral'}>
                           {pa.is_currently_active ? 'active' : 'expired'}
                         </Chip>
-                      </td>
+                      </Td>
                     </tr>
                   ))}
                 </tbody>
@@ -169,24 +170,24 @@ export default function CustomerDetailPage() {
             {!salesOrdersData || salesOrdersData.data.length === 0 ? (
               <div className="px-3 py-3 text-sm text-muted">No sales orders for this customer.</div>
             ) : (
-              <table className="w-full text-xs">
-                <thead className="bg-subtle">
+              <table className={tableCls}>
+                <thead>
                   <tr>
-                    <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">SO no</th>
-                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Date</th>
-                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Total</th>
-                    <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Status</th>
+                    <Th>SO no</Th>
+                    <Th align="right">Date</Th>
+                    <Th align="right">Total</Th>
+                    <Th>Status</Th>
                   </tr>
                 </thead>
                 <tbody>
                   {salesOrdersData.data.map((so) => (
-                    <tr key={so.id} className="border-t border-subtle">
-                      <td className="px-2.5 py-2">
+                    <tr key={so.id} className={trCls}>
+                      <Td>
                         <Link to={`/crm/sales-orders/${so.id}`} className="font-mono text-accent hover:underline">{so.so_number}</Link>
-                      </td>
-                      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{so.date}</td>
-                      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{formatPeso(so.total_amount)}</td>
-                      <td className="px-2.5 py-2">
+                      </Td>
+                      <Td align="right" mono>{so.date}</Td>
+                      <Td align="right" mono>{formatPeso(so.total_amount)}</Td>
+                      <Td>
                         <Chip variant={
                           so.status === 'delivered' || so.status === 'invoiced' ? 'success'
                           : so.status === 'cancelled' ? 'danger'
@@ -194,7 +195,7 @@ export default function CustomerDetailPage() {
                           : so.status === 'partially_delivered' ? 'warning'
                           : 'neutral'
                         }>{so.status_label}</Chip>
-                      </td>
+                      </Td>
                     </tr>
                   ))}
                 </tbody>

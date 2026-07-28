@@ -9,6 +9,7 @@ import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { formatPeso } from '@/lib/formatNumber';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = window.URL.createObjectURL(blob);
@@ -72,22 +73,22 @@ export default function CustomerInvoiceDetailPage() {
 
       {invoice.items && invoice.items.length > 0 && (
         <Panel title={`Items (${invoice.items.length})`}>
-          <table className="w-full text-xs">
+          <table className={tableCls}>
             <thead>
-              <tr className="border-b border-border text-muted">
-                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Description</th>
-                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Qty</th>
-                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Unit Price</th>
-                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Total</th>
+              <tr className={theadTrCls}>
+                <Th>Description</Th>
+                <Th align="right">Qty</Th>
+                <Th align="right">Unit Price</Th>
+                <Th align="right">Total</Th>
               </tr>
             </thead>
             <tbody>
               {invoice.items.map((item, i) => (
-                <tr key={i} className="border-b border-border/50">
-                  <td className="py-2 px-3">{item.description}</td>
-                  <td  className="py-2 px-3 text-right font-mono tabular-nums">{item.quantity}</td>
-                  <td  className="py-2 px-3 text-right font-mono tabular-nums">{formatPeso(item.unit_price)}</td>
-                  <td  className="py-2 px-3 text-right font-mono tabular-nums">{formatPeso(item.total_price)}</td>
+                <tr key={i} className={trCls}>
+                  <Td>{item.description}</Td>
+                  <Td align="right" mono>{item.quantity}</Td>
+                  <Td align="right" mono>{formatPeso(item.unit_price)}</Td>
+                  <Td align="right" mono>{formatPeso(item.total_price)}</Td>
                 </tr>
               ))}
             </tbody>
@@ -97,20 +98,20 @@ export default function CustomerInvoiceDetailPage() {
 
       {invoice.payments && invoice.payments.length > 0 && (
         <Panel title="Payments Made">
-          <table className="w-full text-xs">
+          <table className={tableCls}>
             <thead>
-              <tr className="border-b border-border text-muted">
-                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Date</th>
-                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Method</th>
-                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Amount</th>
+              <tr className={theadTrCls}>
+                <Th>Date</Th>
+                <Th>Method</Th>
+                <Th align="right">Amount</Th>
               </tr>
             </thead>
             <tbody>
               {invoice.payments.map((p, i) => (
-                <tr key={i} className="border-b border-border/50">
-                  <td className="py-2 px-3 text-muted">{p.paid_at ?? '—'}</td>
-                  <td className="py-2 px-3 capitalize">{p.payment_method}</td>
-                  <td  className="py-2 px-3 text-right font-mono tabular-nums">{formatPeso(p.amount)}</td>
+                <tr key={i} className={trCls}>
+                  <Td className="text-muted">{p.paid_at ?? '—'}</Td>
+                  <Td className="capitalize">{p.payment_method}</Td>
+                  <Td align="right" mono>{formatPeso(p.amount)}</Td>
                 </tr>
               ))}
             </tbody>

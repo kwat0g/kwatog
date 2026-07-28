@@ -15,6 +15,8 @@ import { Input } from '@/components/ui/Input';
 import { Pencil } from 'lucide-react';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { cn } from '@/lib/cn';
 
 export default function AssetDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
@@ -89,20 +91,20 @@ export default function AssetDetailPage() {
         <div className="col-span-2">
           <Panel title="Depreciation history" meta={data.depreciations?.length ? `${data.depreciations.length} months` : undefined}>
             {data.depreciations && data.depreciations.length > 0 ? (
-              <table className="w-full text-sm">
+              <table className={tableCls}>
                 <thead>
-                  <tr className="border-b border-subtle">
-                    <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium py-1">Period</th>
-                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Amount</th>
-                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium py-1">Accumulated</th>
+                  <tr className={cn(theadTrCls, 'border-subtle')}>
+                    <Th>Period</Th>
+                    <Th align="right">Amount</Th>
+                    <Th align="right">Accumulated</Th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.depreciations.map((d) => (
-                    <tr key={d.id} className="border-b border-subtle h-8">
-                      <td className="font-mono tabular-nums">{d.period_year}-{String(d.period_month).padStart(2, '0')}</td>
-                      <td  className="text-right font-mono tabular-nums">₱{d.depreciation_amount}</td>
-                      <td  className="text-right font-mono tabular-nums">₱{d.accumulated_after}</td>
+                    <tr key={d.id} className={trCls}>
+                      <Td mono>{d.period_year}-{String(d.period_month).padStart(2, '0')}</Td>
+                      <Td align="right" mono>₱{d.depreciation_amount}</Td>
+                      <Td align="right" mono>₱{d.accumulated_after}</Td>
                     </tr>
                   ))}
                 </tbody>

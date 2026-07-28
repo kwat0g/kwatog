@@ -215,7 +215,7 @@ function AgingPanel({
               <Td align="right" mono>{formatPeso(value)}</Td>
             </tr>
           ))}
-          <tr className="h-8">
+          <tr className={trCls}>
             <Td className="font-medium">Total</Td>
             <Td align="right" mono className="font-medium">{formatPeso(buckets.total)}</Td>
           </tr>

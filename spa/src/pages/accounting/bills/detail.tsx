@@ -28,6 +28,8 @@ import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
 import { numberInputProps } from '@/lib/numberInput';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { cn } from '@/lib/cn';
 
 const paymentSchema = z.object({
   cash_account_id:  z.string().min(1, 'Required'),
@@ -203,33 +205,33 @@ export default function BillDetailPage() {
           </Panel>
 
           <Panel title="Line items">
-            <table className="w-full text-sm">
-              <thead className="text-2xs uppercase tracking-wider text-muted">
-                <tr className="border-b border-default bg-subtle">
-                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">#</th>
-                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Description</th>
-                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Account</th>
-                  <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">Qty</th>
-                  <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">Unit price</th>
-                  <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">Total</th>
+            <table className={tableCls}>
+              <thead>
+                <tr className={theadTrCls}>
+                  <Th>#</Th>
+                  <Th>Description</Th>
+                  <Th>Account</Th>
+                  <Th align="right">Qty</Th>
+                  <Th align="right">Unit price</Th>
+                  <Th align="right">Total</Th>
                 </tr>
               </thead>
               <tbody>
                 {bill.items?.map((i, idx) => (
-                  <tr key={i.id} className="h-8 border-b border-subtle">
-                    <td className="px-2.5 text-muted font-mono tabular-nums">{String(idx + 1).padStart(2, '0')}</td>
-                    <td className="px-2.5">{i.description}</td>
-                    <td className="px-2.5 text-muted text-xs">
+                  <tr key={i.id} className={trCls}>
+                    <Td mono className="text-muted">{String(idx + 1).padStart(2, '0')}</Td>
+                    <Td>{i.description}</Td>
+                    <Td className="text-muted text-xs">
                       {i.expense_account ? <span><span className="font-mono">{i.expense_account.code}</span> · {i.expense_account.name}</span> : '—'}
-                    </td>
-                    <td  className="px-2.5 text-right font-mono tabular-nums">{i.quantity}{i.unit ? ` ${i.unit}` : ''}</td>
-                    <td  className="px-2.5 text-right font-mono tabular-nums">{formatPeso(i.unit_price)}</td>
-                    <td  className="px-2.5 text-right font-mono tabular-nums font-medium">{formatPeso(i.total)}</td>
+                    </Td>
+                    <Td align="right" mono>{i.quantity}{i.unit ? ` ${i.unit}` : ''}</Td>
+                    <Td align="right" mono>{formatPeso(i.unit_price)}</Td>
+                    <Td align="right" mono className="font-medium">{formatPeso(i.total)}</Td>
                   </tr>
                 ))}
-                <tr className="h-7"><td  colSpan={5} className="px-2.5 text-right text-muted font-mono tabular-nums">Subtotal</td><td  className="px-2.5 text-right font-mono tabular-nums">{formatPeso(bill.subtotal)}</td></tr>
-                {bill.is_vatable && <tr className="h-7"><td  colSpan={5} className="px-2.5 text-right text-muted font-mono tabular-nums">VAT (12%)</td><td  className="px-2.5 text-right font-mono tabular-nums">{formatPeso(bill.vat_amount)}</td></tr>}
-                <tr className="h-8 border-t-2 border-primary font-medium"><td  colSpan={5} className="px-2.5 text-right font-mono tabular-nums">Total</td><td  className="px-2.5 text-right font-mono tabular-nums">{formatPeso(bill.total_amount)}</td></tr>
+                <tr className={trCls}><Td align="right" mono className="text-muted" colSpan={5}>Subtotal</Td><Td align="right" mono>{formatPeso(bill.subtotal)}</Td></tr>
+                {bill.is_vatable && <tr className={trCls}><Td align="right" mono className="text-muted" colSpan={5}>VAT (12%)</Td><Td align="right" mono>{formatPeso(bill.vat_amount)}</Td></tr>}
+                <tr className={cn(trCls, 'border-t-2 border-primary font-medium')}><Td align="right" mono colSpan={5}>Total</Td><Td align="right" mono>{formatPeso(bill.total_amount)}</Td></tr>
               </tbody>
             </table>
           </Panel>
@@ -262,18 +264,18 @@ export default function BillDetailPage() {
             ) : !match || match.lines.length === 0 ? (
               <p className="text-sm text-muted">No match snapshot available.</p>
             ) : (
-              <table className="w-full text-sm">
-                <thead className="text-2xs uppercase tracking-wider text-muted">
-                  <tr className="border-b border-default bg-subtle">
-                    <th className="h-8 px-2.5 text-left font-medium">Item</th>
-                    <th className="h-8 px-2.5 text-right font-medium">PO qty</th>
-                    <th className="h-8 px-2.5 text-right font-medium">PO price</th>
-                    <th className="h-8 px-2.5 text-right font-medium">GRN accepted</th>
-                    <th className="h-8 px-2.5 text-right font-medium">Bill qty</th>
-                    <th className="h-8 px-2.5 text-right font-medium">Bill price</th>
-                    <th className="h-8 px-2.5 text-right font-medium">Qty var</th>
-                    <th className="h-8 px-2.5 text-right font-medium">Price var</th>
-                    <th className="h-8 px-2.5 text-left font-medium">Status</th>
+              <table className={tableCls}>
+                <thead>
+                  <tr className={theadTrCls}>
+                    <Th>Item</Th>
+                    <Th align="right">PO qty</Th>
+                    <Th align="right">PO price</Th>
+                    <Th align="right">GRN accepted</Th>
+                    <Th align="right">Bill qty</Th>
+                    <Th align="right">Bill price</Th>
+                    <Th align="right">Qty var</Th>
+                    <Th align="right">Price var</Th>
+                    <Th>Status</Th>
                   </tr>
                 </thead>
                 <tbody>
@@ -282,20 +284,20 @@ export default function BillDetailPage() {
                     const isBlock = l.severity === 'block';
                     return (
                       <tr key={`${l.item_id}-${idx}`} className={`h-8 border-b border-subtle ${isBlock ? 'bg-danger-bg/30' : ''}`}>
-                        <td className="px-2.5">
+                        <Td>
                           {l.item_code && <span className="font-mono text-xs text-muted mr-1">{l.item_code}</span>}
                           {l.description}
-                        </td>
-                        <td className="px-2.5 text-right font-mono tabular-nums">{l.po_quantity}</td>
-                        <td className="px-2.5 text-right font-mono tabular-nums">{formatPeso(l.po_unit_price)}</td>
-                        <td className="px-2.5 text-right font-mono tabular-nums">{l.grn_quantity_accepted}</td>
-                        <td className="px-2.5 text-right font-mono tabular-nums">{l.bill_quantity}</td>
-                        <td className="px-2.5 text-right font-mono tabular-nums">{formatPeso(l.bill_unit_price)}</td>
-                        <td className="px-2.5 text-right font-mono tabular-nums">{l.quantity_variance_pct.toFixed(2)}%</td>
-                        <td className="px-2.5 text-right font-mono tabular-nums">{l.price_variance_pct.toFixed(2)}%</td>
-                        <td className="px-2.5">
+                        </Td>
+                        <Td align="right" mono>{l.po_quantity}</Td>
+                        <Td align="right" mono>{formatPeso(l.po_unit_price)}</Td>
+                        <Td align="right" mono>{l.grn_quantity_accepted}</Td>
+                        <Td align="right" mono>{l.bill_quantity}</Td>
+                        <Td align="right" mono>{formatPeso(l.bill_unit_price)}</Td>
+                        <Td align="right" mono>{l.quantity_variance_pct.toFixed(2)}%</Td>
+                        <Td align="right" mono>{l.price_variance_pct.toFixed(2)}%</Td>
+                        <Td>
                           <Chip variant={isBlock ? 'danger' : chip.variant}>{chip.label}</Chip>
-                        </td>
+                        </Td>
                       </tr>
                     );
                   })}

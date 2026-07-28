@@ -11,6 +11,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { formatDate } from '@/lib/formatDate';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import type { DeliveryScheduleLine } from '@/types/b2b';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 const MONTH_OPTIONS: string[] = [];
 const now = new Date();
@@ -152,20 +153,20 @@ export default function DeliverySchedulesPage() {
                   <span className="text-xs font-medium">{s.month}</span>
                   <Chip variant={chipVariantForStatus(s.status)}>{s.status}</Chip>
                 </div>
-                <table className="w-full text-xs">
+                <table className={tableCls}>
                   <thead>
-                    <tr className="border-b border-border text-muted">
-                      <th  className="h-8 text-left py-1 px-2 font-medium text-2xs uppercase tracking-wider text-muted">Product</th>
-                      <th  className="h-8 text-right py-1 px-2 font-medium text-2xs uppercase tracking-wider text-muted">Qty</th>
-                      <th  className="h-8 text-left py-1 px-2 font-medium text-2xs uppercase tracking-wider text-muted">Notes</th>
+                    <tr className={theadTrCls}>
+                      <Th>Product</Th>
+                      <Th align="right">Qty</Th>
+                      <Th>Notes</Th>
                     </tr>
                   </thead>
                   <tbody>
                     {s.lines.map((line, li) => (
-                      <tr key={li} className="border-b border-border/50">
-                        <td className="py-1.5 px-2">{line.product_name}</td>
-                        <td  className="py-1.5 px-2 text-right font-mono tabular-nums">{line.quantity}</td>
-                        <td className="py-1.5 px-2 text-muted">{line.notes ?? '—'}</td>
+                      <tr key={li} className={trCls}>
+                        <Td>{line.product_name}</Td>
+                        <Td align="right" mono>{line.quantity}</Td>
+                        <Td className="text-muted">{line.notes ?? '—'}</Td>
                       </tr>
                     ))}
                   </tbody>

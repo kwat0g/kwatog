@@ -19,6 +19,7 @@ import { fromApprovalRecords } from '@/lib/approvals';
 import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
+import { Td, Th, tableCls, trCls } from '@/components/ui/table-cells';
 
 export default function LoanDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
@@ -137,22 +138,22 @@ export default function LoanDetailPage() {
             {(loan.payments?.length ?? 0) === 0 ? (
               <p className="text-xs text-muted px-4 py-4 text-center">No payments yet.</p>
             ) : (
-              <table className="w-full text-sm">
-                <thead className="bg-subtle text-2xs uppercase tracking-wider text-muted">
+              <table className={tableCls}>
+                <thead>
                   <tr>
-                    <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">Date</th>
-                    <th  className="h-8 px-4 text-right text-2xs uppercase tracking-wider text-muted font-medium">Amount</th>
-                    <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">Type</th>
-                    <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">Remarks</th>
+                    <Th>Date</Th>
+                    <Th align="right">Amount</Th>
+                    <Th>Type</Th>
+                    <Th>Remarks</Th>
                   </tr>
                 </thead>
                 <tbody>
                   {loan.payments!.map((p) => (
-                    <tr key={p.id} className="h-8 border-b border-subtle hover:bg-subtle">
-                      <td className="px-4 font-mono">{formatDate(p.payment_date)}</td>
-                      <td  className="px-4 text-right font-mono tabular-nums font-medium">{formatPeso(p.amount)}</td>
-                      <td className="px-4">{p.payment_type.replace('_', ' ')}</td>
-                      <td className="px-4 text-muted">{p.remarks ?? '—'}</td>
+                    <tr key={p.id} className={trCls}>
+                      <Td mono>{formatDate(p.payment_date)}</Td>
+                      <Td align="right" mono className="font-medium">{formatPeso(p.amount)}</Td>
+                      <Td>{p.payment_type.replace('_', ' ')}</Td>
+                      <Td className="text-muted">{p.remarks ?? '—'}</Td>
                     </tr>
                   ))}
                 </tbody>

@@ -29,6 +29,7 @@ import { formatPeso } from '@/lib/formatNumber';
 import { formatMobile, maskByKind } from '@/lib/phFormat';
 import type { ApiValidationError } from '@/types';
 import { onFormInvalid } from '@/lib/formErrors';
+import { Td, Th, tableCls, trCls } from '@/components/ui/table-cells';
 
 const TABS = ['Overview', 'Employment history', 'Attendance', 'Leaves', 'Loans', 'Documents', 'Property', 'Payroll', 'Activity'] as const;
 type Tab = typeof TABS[number];
@@ -338,20 +339,20 @@ function DocumentsTab({ employee }: { employee: any }) {
   if (docs.length === 0) return <EmptyState icon="file-question" title="No documents" />;
   return (
     <Panel title={`Documents (${docs.length})`} noPadding>
-      <table className="w-full text-sm">
-        <thead className="bg-subtle text-2xs uppercase tracking-wider text-muted">
+      <table className={tableCls}>
+        <thead>
           <tr>
-            <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">Type</th>
-            <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">File</th>
-            <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">Uploaded</th>
+            <Th>Type</Th>
+            <Th>File</Th>
+            <Th>Uploaded</Th>
           </tr>
         </thead>
         <tbody>
           {docs.map((d) => (
-            <tr key={d.id} className="h-8 border-b border-subtle hover:bg-subtle">
-              <td className="px-4">{d.document_type}</td>
-              <td className="px-4 font-mono">{d.file_name}</td>
-              <td className="px-4 font-mono">{formatDateTime(d.uploaded_at)}</td>
+            <tr key={d.id} className={trCls}>
+              <Td>{d.document_type}</Td>
+              <Td mono>{d.file_name}</Td>
+              <Td mono>{formatDateTime(d.uploaded_at)}</Td>
             </tr>
           ))}
         </tbody>
@@ -374,28 +375,28 @@ function AttendanceTab({ employeeId }: { employeeId: string }) {
   if (rows.length === 0) return <EmptyState icon="inbox" title="No attendance records yet" />;
   return (
     <Panel title={`Attendance (last ${rows.length} days)`} noPadding>
-      <table className="w-full text-sm">
-        <thead className="bg-subtle text-2xs uppercase tracking-wider text-muted">
+      <table className={tableCls}>
+        <thead>
           <tr>
-            <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">Date</th>
-            <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">In</th>
-            <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">Out</th>
-            <th  className="h-8 px-4 text-right text-2xs uppercase tracking-wider text-muted font-medium">Reg</th>
-            <th  className="h-8 px-4 text-right text-2xs uppercase tracking-wider text-muted font-medium">OT</th>
-            <th  className="h-8 px-4 text-right text-2xs uppercase tracking-wider text-muted font-medium">ND</th>
-            <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">Status</th>
+            <Th>Date</Th>
+            <Th>In</Th>
+            <Th>Out</Th>
+            <Th align="right">Reg</Th>
+            <Th align="right">OT</Th>
+            <Th align="right">ND</Th>
+            <Th>Status</Th>
           </tr>
         </thead>
         <tbody>
           {rows.map((r: any) => (
-            <tr key={r.id} className="h-8 border-b border-subtle hover:bg-subtle">
-              <td className="px-4 font-mono">{formatDate(r.date)}</td>
-              <td className="px-4 font-mono">{r.time_in ? formatTime(r.time_in) : '—'}</td>
-              <td className="px-4 font-mono">{r.time_out ? formatTime(r.time_out) : '—'}</td>
-              <td  className="px-4 text-right font-mono tabular-nums">{r.regular_hours}</td>
-              <td  className="px-4 text-right font-mono tabular-nums">{r.overtime_hours}</td>
-              <td  className="px-4 text-right font-mono tabular-nums">{r.night_diff_hours}</td>
-              <td className="px-4"><Chip variant={chipVariantForStatus(r.status)}>{r.status.replace('_', ' ')}</Chip></td>
+            <tr key={r.id} className={trCls}>
+              <Td mono>{formatDate(r.date)}</Td>
+              <Td mono>{r.time_in ? formatTime(r.time_in) : '—'}</Td>
+              <Td mono>{r.time_out ? formatTime(r.time_out) : '—'}</Td>
+              <Td align="right" mono>{r.regular_hours}</Td>
+              <Td align="right" mono>{r.overtime_hours}</Td>
+              <Td align="right" mono>{r.night_diff_hours}</Td>
+              <Td><Chip variant={chipVariantForStatus(r.status)}>{r.status.replace('_', ' ')}</Chip></Td>
             </tr>
           ))}
         </tbody>
@@ -418,26 +419,26 @@ function LeavesTab({ employeeId }: { employeeId: string }) {
   if (rows.length === 0) return <EmptyState icon="inbox" title="No leave requests yet" />;
   return (
     <Panel title={`Leave requests (${rows.length})`} noPadding>
-      <table className="w-full text-sm">
-        <thead className="bg-subtle text-2xs uppercase tracking-wider text-muted">
+      <table className={tableCls}>
+        <thead>
           <tr>
-            <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">No</th>
-            <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">Type</th>
-            <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">Dates</th>
-            <th  className="h-8 px-4 text-right text-2xs uppercase tracking-wider text-muted font-medium">Days</th>
-            <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">Status</th>
+            <Th>No</Th>
+            <Th>Type</Th>
+            <Th>Dates</Th>
+            <Th align="right">Days</Th>
+            <Th>Status</Th>
           </tr>
         </thead>
         <tbody>
           {rows.map((r: any) => (
-            <tr key={r.id} className="h-8 border-b border-subtle hover:bg-subtle">
-              <td className="px-4">
+            <tr key={r.id} className={trCls}>
+              <Td>
                 <Link to={`/hr/leaves/${r.id}`} className="font-mono text-accent hover:underline">{r.leave_request_no}</Link>
-              </td>
-              <td className="px-4">{r.leave_type?.code}</td>
-              <td className="px-4 font-mono">{formatDate(r.start_date)} → {formatDate(r.end_date)}</td>
-              <td  className="px-4 text-right font-mono tabular-nums">{r.days}</td>
-              <td className="px-4"><Chip variant={chipVariantForStatus(r.status)}>{r.status.replace('_', ' ')}</Chip></td>
+              </Td>
+              <Td>{r.leave_type?.code}</Td>
+              <Td mono>{formatDate(r.start_date)} → {formatDate(r.end_date)}</Td>
+              <Td align="right" mono>{r.days}</Td>
+              <Td><Chip variant={chipVariantForStatus(r.status)}>{r.status.replace('_', ' ')}</Chip></Td>
             </tr>
           ))}
         </tbody>
@@ -460,26 +461,26 @@ function LoansTab({ employeeId }: { employeeId: string }) {
   if (rows.length === 0) return <EmptyState icon="inbox" title="No loans yet" />;
   return (
     <Panel title={`Loans (${rows.length})`} noPadding>
-      <table className="w-full text-sm">
-        <thead className="bg-subtle text-2xs uppercase tracking-wider text-muted">
+      <table className={tableCls}>
+        <thead>
           <tr>
-            <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">Loan no</th>
-            <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">Type</th>
-            <th  className="h-8 px-4 text-right text-2xs uppercase tracking-wider text-muted font-medium">Principal</th>
-            <th  className="h-8 px-4 text-right text-2xs uppercase tracking-wider text-muted font-medium">Balance</th>
-            <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">Status</th>
+            <Th>Loan no</Th>
+            <Th>Type</Th>
+            <Th align="right">Principal</Th>
+            <Th align="right">Balance</Th>
+            <Th>Status</Th>
           </tr>
         </thead>
         <tbody>
           {rows.map((r: any) => (
-            <tr key={r.id} className="h-8 border-b border-subtle hover:bg-subtle">
-              <td className="px-4">
+            <tr key={r.id} className={trCls}>
+              <Td>
                 <Link to={`/hr/loans/${r.id}`} className="font-mono text-accent hover:underline">{r.loan_no}</Link>
-              </td>
-              <td className="px-4">{r.loan_type === 'company_loan' ? 'Company' : 'Cash advance'}</td>
-              <td  className="px-4 text-right font-mono tabular-nums">₱ {r.principal}</td>
-              <td  className="px-4 text-right font-mono tabular-nums">₱ {r.balance}</td>
-              <td className="px-4"><Chip variant={chipVariantForStatus(r.status)}>{r.status}</Chip></td>
+              </Td>
+              <Td>{r.loan_type === 'company_loan' ? 'Company' : 'Cash advance'}</Td>
+              <Td align="right" mono>₱ {r.principal}</Td>
+              <Td align="right" mono>₱ {r.balance}</Td>
+              <Td><Chip variant={chipVariantForStatus(r.status)}>{r.status}</Chip></Td>
             </tr>
           ))}
         </tbody>
@@ -514,24 +515,24 @@ function PropertyTab({ employee }: { employee: any }) {
   if (items.length === 0) return <EmptyState icon="inbox" title="No property issued" />;
   return (
     <Panel title={`Issued property (${items.length})`} noPadding>
-      <table className="w-full text-sm">
-        <thead className="bg-subtle text-2xs uppercase tracking-wider text-muted">
+      <table className={tableCls}>
+        <thead>
           <tr>
-            <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">Item</th>
-            <th  className="h-8 px-4 text-right text-2xs uppercase tracking-wider text-muted font-medium">Qty</th>
-            <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">Issued</th>
-            <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">Returned</th>
-            <th  className="h-8 px-4 text-left text-2xs uppercase tracking-wider text-muted font-medium">Status</th>
+            <Th>Item</Th>
+            <Th align="right">Qty</Th>
+            <Th>Issued</Th>
+            <Th>Returned</Th>
+            <Th>Status</Th>
           </tr>
         </thead>
         <tbody>
           {items.map((p) => (
-            <tr key={p.id} className="h-8 border-b border-subtle hover:bg-subtle">
-              <td className="px-4">{p.item_name}</td>
-              <td  className="px-4 text-right font-mono tabular-nums">{p.quantity}</td>
-              <td className="px-4 font-mono">{formatDate(p.date_issued)}</td>
-              <td className="px-4 font-mono">{p.date_returned ? formatDate(p.date_returned) : '—'}</td>
-              <td className="px-4"><Chip variant={chipVariantForStatus(p.status)}>{p.status}</Chip></td>
+            <tr key={p.id} className={trCls}>
+              <Td>{p.item_name}</Td>
+              <Td align="right" mono>{p.quantity}</Td>
+              <Td mono>{formatDate(p.date_issued)}</Td>
+              <Td mono>{p.date_returned ? formatDate(p.date_returned) : '—'}</Td>
+              <Td><Chip variant={chipVariantForStatus(p.status)}>{p.status}</Chip></Td>
             </tr>
           ))}
         </tbody>

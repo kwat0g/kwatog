@@ -17,6 +17,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
 import { buildGrnChain } from '@/lib/chains';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 export default function GrnDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
@@ -93,28 +94,28 @@ export default function GrnDetailPage() {
           </dl>
         </Panel>
         <Panel title="Line items">
-          <table className="w-full text-xs">
-            <thead><tr className="text-2xs uppercase tracking-wider text-muted">
-              <th  className="h-8 text-left py-1 text-2xs uppercase tracking-wider text-muted font-medium">Item</th>
-              <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Location</th>
-              <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium">Received</th>
-              <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium">Accepted</th>
-              <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium">Unit cost</th>
-              <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium">Total</th>
+          <table className={tableCls}>
+            <thead><tr className={theadTrCls}>
+              <Th>Item</Th>
+              <Th>Location</Th>
+              <Th align="right">Received</Th>
+              <Th align="right">Accepted</Th>
+              <Th align="right">Unit cost</Th>
+              <Th align="right">Total</Th>
             </tr></thead>
             <tbody>
               {data.items?.map((l) => (
-                <tr key={l.id} className="h-8 border-t border-subtle">
-                  <td>
+                <tr key={l.id} className={trCls}>
+                  <Td>
                     <span className="font-mono">{l.item?.code}</span>
                     <div className="text-2xs text-muted">{l.item?.name}</div>
                     <Chip variant={l.item?.quality_plan_ready ? 'success' : 'warning'}>{l.item?.quality_plan_ready ? 'QC plan' : 'fallback QC'}</Chip>
-                  </td>
-                  <td className="font-mono">{l.location?.full_code}</td>
-                  <td  className="text-right font-mono tabular-nums">{Number(l.quantity_received).toFixed(3)}</td>
-                  <td  className="text-right font-mono tabular-nums">{Number(l.quantity_accepted).toFixed(3)}</td>
-                  <td  className="text-right font-mono tabular-nums">{Number(l.unit_cost).toFixed(4)}</td>
-                  <td  className="text-right font-mono tabular-nums">{(Number(l.quantity_received) * Number(l.unit_cost)).toFixed(2)}</td>
+                  </Td>
+                  <Td mono>{l.location?.full_code}</Td>
+                  <Td align="right" mono>{Number(l.quantity_received).toFixed(3)}</Td>
+                  <Td align="right" mono>{Number(l.quantity_accepted).toFixed(3)}</Td>
+                  <Td align="right" mono>{Number(l.unit_cost).toFixed(4)}</Td>
+                  <Td align="right" mono>{(Number(l.quantity_received) * Number(l.unit_cost)).toFixed(2)}</Td>
                 </tr>
               ))}
             </tbody>

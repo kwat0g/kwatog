@@ -37,6 +37,8 @@ import { OeeGaugeChart } from '@/components/charts/OeeGaugeChart';
 import { oeeApi } from '@/api/production/oee';
 import { formatDate } from '@/lib/formatDate';
 import type { MachineOeeRow } from '@/types/production';
+import { Td, Th, tableCls, trCls } from '@/components/ui/table-cells';
+import { cn } from '@/lib/cn';
 
 type Preset = 'today' | 'week' | 'month' | 'custom';
 
@@ -312,43 +314,43 @@ export default function OeeReportPage() {
             {data.machines.length === 0 ? (
               <p className="px-4 py-4 text-sm text-muted">No machines configured.</p>
             ) : (
-              <table className="w-full text-xs">
-                <thead className="bg-subtle">
+              <table className={tableCls}>
+                <thead>
                   <tr>
-                    <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Code</th>
-                    <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Name</th>
-                    <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Status</th>
-                    <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">OEE</th>
-                    <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">Run time</th>
-                    <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">Downtime</th>
+                    <Th>Code</Th>
+                    <Th>Name</Th>
+                    <Th>Status</Th>
+                    <Th>OEE</Th>
+                    <Th align="right">Run time</Th>
+                    <Th align="right">Downtime</Th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.machines.map((m: MachineOeeRow) => (
-                    <tr key={m.machine_id} className="border-t border-subtle align-top">
-                      <td className="px-2.5 py-2 font-mono">
+                    <tr key={m.machine_id} className={cn(trCls, 'align-top')}>
+                      <Td mono>
                         <Link to={`/mrp/machines/${m.machine_id}`} className="text-accent hover:underline">
                           {m.machine_code}
                         </Link>
-                      </td>
-                      <td className="px-2.5 py-2">
+                      </Td>
+                      <Td>
                         <div>{m.name}</div>
                         {m.tonnage != null && (
                           <div className="text-2xs text-muted font-mono tabular-nums">{m.tonnage}t</div>
                         )}
-                      </td>
-                      <td className="px-2.5 py-2">
+                      </Td>
+                      <Td>
                         <Chip variant={machineStatusVariant(m.status)}>{m.status}</Chip>
-                      </td>
-                      <td className="px-2.5 py-2 min-w-[280px]">
+                      </Td>
+                      <Td className="min-w-[280px]">
                         <OeeGauge result={m} compact />
-                      </td>
-                      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">
+                      </Td>
+                      <Td align="right" mono>
                         {fmtMinutes(m.diagnostics.run_time)}
-                      </td>
-                      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">
+                      </Td>
+                      <Td align="right" mono>
                         {fmtMinutes(m.diagnostics.planned_downtime + m.diagnostics.unplanned_downtime)}
-                      </td>
+                      </Td>
                     </tr>
                   ))}
                 </tbody>

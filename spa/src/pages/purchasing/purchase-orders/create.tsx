@@ -22,6 +22,8 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { formatInt } from '@/lib/formatNumber';
 import { numberInputProps } from '@/lib/numberInput';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { cn } from '@/lib/cn';
 
 const lineSchema = z.object({
   item_id: z.string().min(1, 'Item is required.'),
@@ -181,22 +183,22 @@ export default function CreatePurchaseOrderPage() {
           }
         >
           {errors.items?.root && <div className="text-xs text-danger-fg mb-2">{errors.items.root.message}</div>}
-          <table className="w-full text-xs">
+          <table className={tableCls}>
             <thead>
-              <tr className="text-2xs uppercase tracking-wider text-muted">
-                <th  className="h-8 text-left py-1 font-medium text-2xs uppercase tracking-wider text-muted">Item</th>
-                <th  className="h-8 text-left font-medium text-2xs uppercase tracking-wider text-muted">Description</th>
-                <th  className="h-8 text-right font-medium text-2xs uppercase tracking-wider text-muted">Qty</th>
-                <th  className="h-8 font-medium text-2xs uppercase tracking-wider text-muted">Unit</th>
-                <th  className="h-8 text-right font-medium text-2xs uppercase tracking-wider text-muted">Unit price</th>
-                <th  className="h-8 text-right font-medium text-2xs uppercase tracking-wider text-muted">Total</th>
-                <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium" />
+              <tr className={theadTrCls}>
+                <Th>Item</Th>
+                <Th>Description</Th>
+                <Th align="right">Qty</Th>
+                <Th>Unit</Th>
+                <Th align="right">Unit price</Th>
+                <Th align="right">Total</Th>
+                <Th />
               </tr>
             </thead>
             <tbody>
               {fields.map((f, i) => (
-                <tr key={f.id} className="h-9 border-t border-subtle align-top">
-                  <td className="py-1.5">
+                <tr key={f.id} className={cn(trCls, 'align-top')}>
+                  <Td>
                     <select
                       className={`h-7 w-32 px-1 rounded-sm border text-2xs font-mono ${errors.items?.[i]?.item_id ? 'border-danger' : 'border-default'}`}
                       {...register(`items.${i}.item_id` as const)}
@@ -206,36 +208,36 @@ export default function CreatePurchaseOrderPage() {
                         <option key={it.id} value={it.id}>{it.code}</option>
                       ))}
                     </select>
-                  </td>
-                  <td>
+                  </Td>
+                  <Td>
                     <Input className="h-7" {...register(`items.${i}.description` as const)} error={errors.items?.[i]?.description?.message} />
-                  </td>
-                  <td  className="text-right font-mono tabular-nums">
+                  </Td>
+                  <Td align="right" mono>
                     <input
                       className="h-7 w-20 px-2 rounded-sm border border-default text-right font-mono tabular-nums text-xs"
                       type="text"
                       {...numberInputProps()}
                       {...register(`items.${i}.quantity` as const)}
                     />
-                  </td>
-                  <td>
+                  </Td>
+                  <Td>
                     <input
                       className="h-7 w-16 px-2 rounded-sm border border-default text-xs"
                       {...register(`items.${i}.unit` as const)}
                     />
-                  </td>
-                  <td  className="text-right font-mono tabular-nums">
+                  </Td>
+                  <Td align="right" mono>
                     <input
                       className="h-7 w-24 px-2 rounded-sm border border-default text-right font-mono tabular-nums text-xs"
                       type="text"
                       {...numberInputProps()}
                       {...register(`items.${i}.unit_price` as const)}
                     />
-                  </td>
-                  <td  className="text-right font-mono tabular-nums pt-1">
+                  </Td>
+                  <Td align="right" mono>
                     {(Number(watchedItems[i]?.quantity || 0) * Number(watchedItems[i]?.unit_price || 0)).toFixed(2)}
-                  </td>
-                  <td  className="text-right pt-1 font-mono tabular-nums">
+                  </Td>
+                  <Td align="right" mono>
                     {fields.length > 1 && (
                       <button
                         type="button"
@@ -246,25 +248,25 @@ export default function CreatePurchaseOrderPage() {
                         <Trash2 size={12} />
                       </button>
                     )}
-                  </td>
+                  </Td>
                 </tr>
               ))}
-              <tr className="border-t border-default">
-                <td  colSpan={5} className="text-right py-1.5 text-muted font-mono tabular-nums">Subtotal</td>
-                <td  className="text-right font-mono tabular-nums">₱ {subtotal.toFixed(2)}</td>
-                <td />
+              <tr className={trCls}>
+                <Td align="right" mono className="text-muted" colSpan={5}>Subtotal</Td>
+                <Td align="right" mono>₱ {subtotal.toFixed(2)}</Td>
+                <Td />
               </tr>
               {isVatable && (
                 <tr>
-                  <td  colSpan={5} className="text-right py-1 text-muted font-mono tabular-nums">VAT (12%)</td>
-                  <td  className="text-right font-mono tabular-nums">₱ {vat.toFixed(2)}</td>
-                  <td />
+                  <Td align="right" mono className="text-muted" colSpan={5}>VAT (12%)</Td>
+                  <Td align="right" mono>₱ {vat.toFixed(2)}</Td>
+                  <Td />
                 </tr>
               )}
-              <tr className="border-t border-default font-medium">
-                <td  colSpan={5} className="text-right py-2 uppercase text-2xs tracking-wider font-mono tabular-nums">Total</td>
-                <td  className="text-right font-mono tabular-nums">₱ {total.toFixed(2)}</td>
-                <td />
+              <tr className={cn(trCls, 'font-medium')}>
+                <Td align="right" mono className="uppercase text-2xs tracking-wider" colSpan={5}>Total</Td>
+                <Td align="right" mono>₱ {total.toFixed(2)}</Td>
+                <Td />
               </tr>
             </tbody>
           </table>

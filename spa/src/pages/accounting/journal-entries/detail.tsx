@@ -15,6 +15,8 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { cn } from '@/lib/cn';
 
 const STATUS_VARIANT: Record<string, ChipVariant> = {
   draft: 'warning', posted: 'success', reversed: 'neutral',
@@ -120,32 +122,32 @@ export default function JournalEntryDetailPage() {
 
           <Panel title="Lines">
             <div className="border border-default rounded-md overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="text-2xs uppercase tracking-wider text-muted">
-                  <tr className="border-b border-default bg-subtle">
-                    <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">#</th>
-                    <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Account</th>
-                    <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Description</th>
-                    <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">Debit</th>
-                    <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">Credit</th>
+              <table className={tableCls}>
+                <thead>
+                  <tr className={theadTrCls}>
+                    <Th>#</Th>
+                    <Th>Account</Th>
+                    <Th>Description</Th>
+                    <Th align="right">Debit</Th>
+                    <Th align="right">Credit</Th>
                   </tr>
                 </thead>
                 <tbody>
                   {je.lines?.map((l) => (
-                    <tr key={l.line_no} className="h-8 border-b border-subtle">
-                      <td className="px-2.5 text-muted font-mono tabular-nums">{String(l.line_no).padStart(2, '0')}</td>
-                      <td className="px-2.5">
+                    <tr key={l.line_no} className={trCls}>
+                      <Td mono className="text-muted">{String(l.line_no).padStart(2, '0')}</Td>
+                      <Td>
                         {l.account ? <span><span className="font-mono text-muted">{l.account.code}</span> · {l.account.name}</span> : '—'}
-                      </td>
-                      <td className="px-2.5 text-muted">{l.description ?? '—'}</td>
-                      <td  className="px-2.5 text-right font-mono tabular-nums">{Number(l.debit) > 0 ? formatPeso(l.debit) : ''}</td>
-                      <td  className="px-2.5 text-right font-mono tabular-nums">{Number(l.credit) > 0 ? formatPeso(l.credit) : ''}</td>
+                      </Td>
+                      <Td className="text-muted">{l.description ?? '—'}</Td>
+                      <Td align="right" mono>{Number(l.debit) > 0 ? formatPeso(l.debit) : ''}</Td>
+                      <Td align="right" mono>{Number(l.credit) > 0 ? formatPeso(l.credit) : ''}</Td>
                     </tr>
                   ))}
-                  <tr className="h-8 border-t-2 border-primary font-medium">
-                    <td  colSpan={3} className="px-2.5 text-right font-mono tabular-nums">Totals</td>
-                    <td  className="px-2.5 text-right font-mono tabular-nums">{formatPeso(je.total_debit)}</td>
-                    <td  className="px-2.5 text-right font-mono tabular-nums">{formatPeso(je.total_credit)}</td>
+                  <tr className={cn(trCls, 'border-t-2 border-primary font-medium')}>
+                    <Td align="right" mono colSpan={3}>Totals</Td>
+                    <Td align="right" mono>{formatPeso(je.total_debit)}</Td>
+                    <Td align="right" mono>{formatPeso(je.total_credit)}</Td>
                   </tr>
                 </tbody>
               </table>

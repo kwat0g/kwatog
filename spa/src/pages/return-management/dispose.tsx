@@ -6,6 +6,7 @@ import { returnManagementApi } from '@/api/returnManagement';
 import type { ReturnRequest, ReturnRequestItem, DispositionType, DispositionPayload } from '@/types/returnManagement';
 import { formatInt } from '@/lib/formatNumber';
 import toast from 'react-hot-toast';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 const DISPOSITION_OPTIONS: Array<{ value: DispositionType; label: string }> = [
   { value: 'scrap', label: 'Scrap' },
@@ -71,23 +72,23 @@ export default function DisposeDialog({ rma, isOpen, onClose }: Props) {
         </p>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className={tableCls}>
             <thead>
-              <tr className="border-b border-default text-left text-xs uppercase tracking-wider text-muted">
-                <th  className="h-8 py-2 pr-3 font-medium text-2xs uppercase tracking-wider text-muted">Product</th>
-                <th  className="h-8 py-2 pr-3 font-medium text-right font-mono text-2xs uppercase tracking-wider text-muted">Qty</th>
-                <th  className="h-8 py-2 pr-3 font-medium text-2xs uppercase tracking-wider text-muted">Disposition</th>
-                <th  className="h-8 py-2 pr-3 font-medium text-2xs uppercase tracking-wider text-muted">Notes</th>
+              <tr className={theadTrCls}>
+                <Th>Product</Th>
+                <Th align="right" className="font-mono">Qty</Th>
+                <Th>Disposition</Th>
+                <Th>Notes</Th>
               </tr>
             </thead>
             <tbody>
               {items.map((item) => (
-                <tr key={item.id} className="border-b border-default">
-                  <td className="py-2 pr-3">{itemLabel(item)}</td>
-                  <td  className="py-2 pr-3 text-right font-mono tabular-nums">
+                <tr key={item.id} className={trCls}>
+                  <Td>{itemLabel(item)}</Td>
+                  <Td align="right" mono>
                     {formatInt(item.returned_quantity || item.quantity)}
-                  </td>
-                  <td className="py-2 pr-3">
+                  </Td>
+                  <Td>
                     <select
                       className="input w-full"
                       value={dispositions[item.id]?.disposition ?? 'restock'}
@@ -97,8 +98,8 @@ export default function DisposeDialog({ rma, isOpen, onClose }: Props) {
                         <option key={opt.value} value={opt.value}>{opt.label}</option>
                       ))}
                     </select>
-                  </td>
-                  <td className="py-2 pr-3">
+                  </Td>
+                  <Td>
                     <input
                       type="text"
                       className="input w-full"
@@ -107,7 +108,7 @@ export default function DisposeDialog({ rma, isOpen, onClose }: Props) {
                       onChange={(e) => updateItem(item.id, 'notes', e.target.value)}
                       maxLength={500}
                     />
-                  </td>
+                  </Td>
                 </tr>
               ))}
             </tbody>

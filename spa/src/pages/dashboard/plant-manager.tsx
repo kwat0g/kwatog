@@ -351,7 +351,7 @@ function FinancialSnapshotPanel({
               </Td>
             </tr>
           ))}
-          <tr className="h-8">
+          <tr className={trCls}>
             <Td className="text-muted">Draft JEs</Td>
             <Td align="right" mono>{snapshot.je_draft_count}</Td>
           </tr>

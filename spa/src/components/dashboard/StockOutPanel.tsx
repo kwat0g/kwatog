@@ -16,6 +16,8 @@ import { Chip, type ChipVariant } from '@/components/ui/Chip';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { cn } from '@/lib/cn';
 
 interface Props {
   /** Max rows to show. Default 8. */
@@ -105,21 +107,21 @@ export function StockOutPanel({
       bodyClassName="p-0"
     >
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className={tableCls}>
           <thead>
-            <tr className="border-b border-subtle">
-              <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-3 py-1.5">Item</th>
-              <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-3 py-1.5">On Hand</th>
-              <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-3 py-1.5">Safety</th>
-              <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-3 py-1.5">Daily</th>
-              <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-3 py-1.5">Days Left</th>
-              <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-3 py-1.5">Risk</th>
+            <tr className={cn(theadTrCls, 'border-subtle')}>
+              <Th>Item</Th>
+              <Th align="right">On Hand</Th>
+              <Th align="right">Safety</Th>
+              <Th align="right">Daily</Th>
+              <Th align="right">Days Left</Th>
+              <Th align="right">Risk</Th>
             </tr>
           </thead>
           <tbody>
             {atRisk.map((r) => (
-              <tr key={r.item_id} className="border-b border-subtle last:border-b-0 hover:bg-subtle/30 transition-colors">
-                <td className="px-3 py-2">
+              <tr key={r.item_id} className={trCls}>
+                <Td>
                   <Link
                     to={`/inventory/items/${r.code}`}
                     className="text-link hover:underline font-mono text-xs"
@@ -128,11 +130,11 @@ export function StockOutPanel({
                     {r.code}
                   </Link>
                   <span className="text-muted ml-1 text-xs">{r.name}</span>
-                </td>
-                <td  className="px-3 py-2 text-right font-mono tabular-nums text-xs">{r.available}</td>
-                <td  className="px-3 py-2 text-right font-mono tabular-nums text-xs">{r.safety_stock}</td>
-                <td  className="px-3 py-2 text-right font-mono tabular-nums text-xs">{r.daily_demand}</td>
-                <td  className="px-3 py-2 text-right font-mono tabular-nums text-xs">
+                </Td>
+                <Td align="right" mono className="text-xs">{r.available}</Td>
+                <Td align="right" mono className="text-xs">{r.safety_stock}</Td>
+                <Td align="right" mono className="text-xs">{r.daily_demand}</Td>
+                <Td align="right" mono className="text-xs">
                   {r.days_until_stockout != null ? (
                     <span className={r.days_until_stockout <= 3 ? 'text-danger' : r.days_until_stockout <= 7 ? 'text-warning' : ''}>
                       {r.days_until_stockout}
@@ -140,12 +142,12 @@ export function StockOutPanel({
                   ) : (
                     <span className="text-muted">—</span>
                   )}
-                </td>
-                <td  className="px-3 py-2 text-right font-mono tabular-nums">
+                </Td>
+                <Td align="right" mono>
                   <Chip variant={RISK_VARIANT[r.risk]}>
                     {RISK_LABEL[r.risk]}
                   </Chip>
-                </td>
+                </Td>
               </tr>
             ))}
           </tbody>

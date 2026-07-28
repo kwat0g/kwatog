@@ -27,6 +27,7 @@ import { StatCard } from '@/components/ui/StatCard';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatPeso, formatInt } from '@/lib/formatNumber';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 // ─── Helpers ─────────────────────────────────────
 const PESO = (v: number) => formatPeso(v);
@@ -260,26 +261,26 @@ export default function CopqAnalyticsPage() {
           )}
           {byProduct.data && byProduct.data.length > 0 && (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className={tableCls}>
                 <thead>
-                  <tr className="border-b border-default text-xs text-muted uppercase tracking-wider">
-                    <th  className="h-8 text-left px-4 py-2 font-medium text-2xs uppercase tracking-wider text-muted">Product</th>
-                    <th  className="h-8 text-left px-4 py-2 font-medium text-2xs uppercase tracking-wider text-muted">Part No.</th>
-                    <th  className="h-8 text-right px-4 py-2 font-medium text-2xs uppercase tracking-wider text-muted">NCRs</th>
-                    <th  className="h-8 text-right px-4 py-2 font-medium text-2xs uppercase tracking-wider text-muted">Scrap</th>
-                    <th  className="h-8 text-right px-4 py-2 font-medium text-2xs uppercase tracking-wider text-muted">Rework</th>
-                    <th  className="h-8 text-right px-4 py-2 font-medium text-2xs uppercase tracking-wider text-muted">Total</th>
+                  <tr className={theadTrCls}>
+                    <Th>Product</Th>
+                    <Th>Part No.</Th>
+                    <Th align="right">NCRs</Th>
+                    <Th align="right">Scrap</Th>
+                    <Th align="right">Rework</Th>
+                    <Th align="right">Total</Th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-default">
                   {byProduct.data.map((row: CopqByProduct) => (
-                    <tr key={row.product_id} className="hover:bg-subtle transition-colors">
-                      <td className="px-4 py-2 truncate max-w-[200px]">{row.product_name}</td>
-                      <td className="px-4 py-2 font-mono text-xs text-muted">{row.part_number}</td>
-                      <td  className="px-4 py-2 text-right font-mono tabular-nums">{row.ncr_count}</td>
-                      <td  className="px-4 py-2 text-right font-mono tabular-nums text-danger">{PESO(row.scrap_cost)}</td>
-                      <td  className="px-4 py-2 text-right font-mono tabular-nums text-warning">{PESO(row.rework_cost)}</td>
-                      <td  className="px-4 py-2 text-right font-mono tabular-nums font-medium">{PESO(row.total_cost)}</td>
+                    <tr key={row.product_id} className={trCls}>
+                      <Td className="truncate max-w-[200px]">{row.product_name}</Td>
+                      <Td mono className="text-xs text-muted">{row.part_number}</Td>
+                      <Td align="right" mono>{row.ncr_count}</Td>
+                      <Td align="right" mono className="text-danger">{PESO(row.scrap_cost)}</Td>
+                      <Td align="right" mono className="text-warning">{PESO(row.rework_cost)}</Td>
+                      <Td align="right" mono className="font-medium">{PESO(row.total_cost)}</Td>
                     </tr>
                   ))}
                 </tbody>
@@ -305,20 +306,20 @@ export default function CopqAnalyticsPage() {
           )}
           {bySupplier.data && bySupplier.data.length > 0 && (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className={tableCls}>
                 <thead>
-                  <tr className="border-b border-default text-xs text-muted uppercase tracking-wider">
-                    <th  className="h-8 text-left px-4 py-2 font-medium text-2xs uppercase tracking-wider text-muted">Vendor</th>
-                    <th  className="h-8 text-right px-4 py-2 font-medium text-2xs uppercase tracking-wider text-muted">NCR Count</th>
-                    <th  className="h-8 text-right px-4 py-2 font-medium text-2xs uppercase tracking-wider text-muted">Defective Qty</th>
+                  <tr className={theadTrCls}>
+                    <Th>Vendor</Th>
+                    <Th align="right">NCR Count</Th>
+                    <Th align="right">Defective Qty</Th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-default">
                   {bySupplier.data.map((row: CopqBySupplier) => (
-                    <tr key={row.vendor_id} className="hover:bg-subtle transition-colors">
-                      <td className="px-4 py-2 truncate max-w-[250px]">{row.vendor_name}</td>
-                      <td  className="px-4 py-2 text-right font-mono tabular-nums">{row.ncr_count}</td>
-                      <td  className="px-4 py-2 text-right font-mono tabular-nums">{formatInt(row.defective_qty)}</td>
+                    <tr key={row.vendor_id} className={trCls}>
+                      <Td className="truncate max-w-[250px]">{row.vendor_name}</Td>
+                      <Td align="right" mono>{row.ncr_count}</Td>
+                      <Td align="right" mono>{formatInt(row.defective_qty)}</Td>
                     </tr>
                   ))}
                 </tbody>

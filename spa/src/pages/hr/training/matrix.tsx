@@ -12,6 +12,7 @@ import { Tooltip } from '@/components/ui/Tooltip';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { cn } from '@/lib/cn';
 import type { TrainingMatrixCell, TrainingMatrixCellStatus } from '@/types/hr';
+import { Td, Th, tableCls, trCls } from '@/components/ui/table-cells';
 
 const STATUS_COLORS: Record<TrainingMatrixCellStatus, string> = {
   trained: 'bg-success-bg border-success',
@@ -163,51 +164,44 @@ export default function TrainingMatrixPage() {
       {/* Matrix grid */}
       {data && data.rows.length > 0 && data.skills.length > 0 && (
         <div className="px-5 py-4 overflow-x-auto">
-          <table className="w-full border-collapse text-xs">
+          <table className={tableCls}>
             {/* Category header row */}
             {skillCategories.length > 1 && (
               <thead>
                 <tr>
-                  <th  className="h-8 sticky left-0 z-20 bg-canvas text-2xs uppercase tracking-wider text-muted font-medium" />
-                  <th  className="h-8 sticky left-0 z-20 bg-canvas text-2xs uppercase tracking-wider text-muted font-medium" />
+                  <Th className="sticky left-0 z-20 bg-canvas" />
+                  <Th className="sticky left-0 z-20 bg-canvas" />
                   {skillCategories.map((group) => (
-                    <th 
-                      key={group.category}
-                      colSpan={group.skills.length}
-                      className="h-8 px-1 py-1 text-center text-2xs uppercase tracking-wider text-muted font-medium border-b border-default bg-canvas"
-                    >
+                    <Th align="center" className="border-b border-default bg-canvas" key={group.category} colSpan={group.skills.length}>
                       {group.category}
-                    </th>
+                    </Th>
                   ))}
                 </tr>
               </thead>
             )}
             <thead>
               <tr>
-                <th  className="h-8 sticky left-0 z-20 bg-canvas px-2 py-2 text-left font-medium text-muted min-w-[180px] text-2xs uppercase tracking-wider">
+                <Th className="sticky left-0 z-20 bg-canvas min-w-[180px]">
                   Employee
-                </th>
-                <th  className="h-8 sticky left-[180px] z-20 bg-canvas px-2 py-2 text-left font-medium text-muted min-w-[120px] text-2xs uppercase tracking-wider">
+                </Th>
+                <Th className="sticky left-[180px] z-20 bg-canvas min-w-[120px]">
                   Department
-                </th>
+                </Th>
                 {data.skills.map((skill) => (
-                  <th 
-                    key={skill.id}
-                    className="h-8 px-1 py-2 text-center font-medium text-muted min-w-[80px] border-b border-default text-2xs uppercase tracking-wider"
-                  >
+                  <Th align="center" className="min-w-[80px] border-b border-default" key={skill.id}>
                     <div className="writing-mode-vertical whitespace-nowrap -rotate-45 origin-bottom-left h-12 flex items-end">
                       <span className="truncate max-w-[100px]" title={skill.name}>
                         {skill.name}
                       </span>
                     </div>
-                  </th>
+                  </Th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {data.rows.map((row) => (
-                <tr key={row.employee_id} className="hover:bg-elevated/50 transition-colors">
-                  <td className="sticky left-0 z-10 bg-canvas px-2 py-1.5 border-b border-subtle min-w-[180px]">
+                <tr key={row.employee_id} className={trCls}>
+                  <Td className="sticky left-0 z-10 bg-canvas border-b border-subtle min-w-[180px]">
                     <button
                       type="button"
                       className="text-accent hover:underline text-left cursor-pointer"
@@ -215,15 +209,12 @@ export default function TrainingMatrixPage() {
                     >
                       {row.employee_name}
                     </button>
-                  </td>
-                  <td className="sticky left-[180px] z-10 bg-canvas px-2 py-1.5 border-b border-subtle text-muted min-w-[120px]">
+                  </Td>
+                  <Td className="sticky left-[180px] z-10 bg-canvas border-b border-subtle text-muted min-w-[120px]">
                     {row.department || '—'}
-                  </td>
+                  </Td>
                   {row.cells.map((cell, idx) => (
-                    <td
-                      key={data.skills[idx].id}
-                      className="px-0.5 py-0.5 border-b border-subtle text-center"
-                    >
+                    <Td align="center" className="border-b border-subtle" key={data.skills[idx].id}>
                       <Tooltip
                         side="bottom"
                         content={cellTooltipContent(cell, data.skills[idx].name)}
@@ -242,7 +233,7 @@ export default function TrainingMatrixPage() {
                           )}
                         </span>
                       </Tooltip>
-                    </td>
+                    </Td>
                   ))}
                 </tr>
               ))}

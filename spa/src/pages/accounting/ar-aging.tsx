@@ -9,6 +9,8 @@ import { Input } from '@/components/ui/Input';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatPeso } from '@/lib/formatNumber';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { cn } from '@/lib/cn';
 
 export default function ArAgingPage() {
   const [asOf, setAsOf] = useState(new Date().toISOString().slice(0, 10));
@@ -43,38 +45,38 @@ export default function ArAgingPage() {
       {data && data.by_customer.length > 0 && (
         <div className="px-5 py-4">
           <div className="border border-default rounded-md overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="text-2xs uppercase tracking-wider text-muted">
-                <tr className="border-b border-default bg-subtle">
-                  <th className="h-8 px-2.5 text-left  text-2xs uppercase tracking-wider text-muted font-medium">Customer</th>
-                  <th className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">Current</th>
-                  <th className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">1-30</th>
-                  <th className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">31-60</th>
-                  <th className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">61-90</th>
-                  <th className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">91+</th>
-                  <th className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">Total</th>
+            <table className={tableCls}>
+              <thead>
+                <tr className={theadTrCls}>
+                  <Th>Customer</Th>
+                  <Th align="right">Current</Th>
+                  <Th align="right">1-30</Th>
+                  <Th align="right">31-60</Th>
+                  <Th align="right">61-90</Th>
+                  <Th align="right">91+</Th>
+                  <Th align="right">Total</Th>
                 </tr>
               </thead>
               <tbody>
                 {data.by_customer.map((r) => (
-                  <tr key={r.customer_id} className="h-8 border-b border-subtle hover:bg-subtle">
-                    <td className="px-2.5">{r.customer_name}</td>
-                    <td className="px-2.5 text-right font-mono tabular-nums">{formatPeso(r.current)}</td>
-                    <td className="px-2.5 text-right font-mono tabular-nums">{formatPeso(r.d1_30)}</td>
-                    <td className="px-2.5 text-right font-mono tabular-nums">{formatPeso(r.d31_60)}</td>
-                    <td className="px-2.5 text-right font-mono tabular-nums">{formatPeso(r.d61_90)}</td>
-                    <td className={`px-2.5 text-right font-mono tabular-nums${Number(r.d91_plus) > 0 ? ' text-danger-fg font-medium' : ''}`}>{formatPeso(r.d91_plus)}</td>
-                    <td className="px-2.5 text-right font-mono tabular-nums font-medium">{formatPeso(r.total)}</td>
+                  <tr key={r.customer_id} className={trCls}>
+                    <Td>{r.customer_name}</Td>
+                    <Td align="right" mono>{formatPeso(r.current)}</Td>
+                    <Td align="right" mono>{formatPeso(r.d1_30)}</Td>
+                    <Td align="right" mono>{formatPeso(r.d31_60)}</Td>
+                    <Td align="right" mono>{formatPeso(r.d61_90)}</Td>
+                    <Td align="right" mono className={Number(r.d91_plus) > 0 ? ' text-danger-fg font-medium' : ''}>{formatPeso(r.d91_plus)}</Td>
+                    <Td align="right" mono className="font-medium">{formatPeso(r.total)}</Td>
                   </tr>
                 ))}
-                <tr className="h-9 border-t-2 border-primary font-medium">
-                  <td className="px-2.5">TOTAL</td>
-                  <td className="px-2.5 text-right font-mono tabular-nums">{formatPeso(data.buckets.current)}</td>
-                  <td className="px-2.5 text-right font-mono tabular-nums">{formatPeso(data.buckets.d1_30)}</td>
-                  <td className="px-2.5 text-right font-mono tabular-nums">{formatPeso(data.buckets.d31_60)}</td>
-                  <td className="px-2.5 text-right font-mono tabular-nums">{formatPeso(data.buckets.d61_90)}</td>
-                  <td className={`px-2.5 text-right font-mono tabular-nums${Number(data.buckets.d91_plus) > 0 ? ' text-danger-fg' : ''}`}>{formatPeso(data.buckets.d91_plus)}</td>
-                  <td className="px-2.5 text-right font-mono tabular-nums">{formatPeso(data.buckets.total)}</td>
+                <tr className={cn(trCls, 'border-t-2 border-primary font-medium')}>
+                  <Td>TOTAL</Td>
+                  <Td align="right" mono>{formatPeso(data.buckets.current)}</Td>
+                  <Td align="right" mono>{formatPeso(data.buckets.d1_30)}</Td>
+                  <Td align="right" mono>{formatPeso(data.buckets.d31_60)}</Td>
+                  <Td align="right" mono>{formatPeso(data.buckets.d61_90)}</Td>
+                  <Td align="right" mono className={Number(data.buckets.d91_plus) > 0 ? ' text-danger-fg' : ''}>{formatPeso(data.buckets.d91_plus)}</Td>
+                  <Td align="right" mono>{formatPeso(data.buckets.total)}</Td>
                 </tr>
               </tbody>
             </table>

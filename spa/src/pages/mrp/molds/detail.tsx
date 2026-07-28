@@ -9,6 +9,7 @@ import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatInt } from '@/lib/formatNumber';
 import type { MoldStatus } from '@/types/mrp';
+import { Td, Th, tableCls, trCls } from '@/components/ui/table-cells';
 
 const variant: Record<MoldStatus, 'success' | 'neutral' | 'info' | 'danger' | 'warning'> = {
   available: 'success',
@@ -112,22 +113,22 @@ export default function MoldDetailPage() {
             ) : (history.data?.length ?? 0) === 0 ? (
               <div className="px-3 py-3 text-sm text-muted">No history events recorded.</div>
             ) : (
-              <table className="w-full text-xs">
-                <thead className="bg-subtle">
+              <table className={tableCls}>
+                <thead>
                   <tr>
-                    <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Date</th>
-                    <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Event</th>
-                    <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Description</th>
-                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Shot count</th>
+                    <Th>Date</Th>
+                    <Th>Event</Th>
+                    <Th>Description</Th>
+                    <Th align="right">Shot count</Th>
                   </tr>
                 </thead>
                 <tbody>
                   {history.data!.map((h) => (
-                    <tr key={h.id} className="border-t border-subtle">
-                      <td className="px-2.5 py-2 font-mono">{h.event_date}</td>
-                      <td className="px-2.5 py-2 font-mono">{h.event_type}</td>
-                      <td className="px-2.5 py-2 text-muted">{h.description ?? '—'}</td>
-                      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{formatInt(h.shot_count_at_event)}</td>
+                    <tr key={h.id} className={trCls}>
+                      <Td mono>{h.event_date}</Td>
+                      <Td mono>{h.event_type}</Td>
+                      <Td className="text-muted">{h.description ?? '—'}</Td>
+                      <Td align="right" mono>{formatInt(h.shot_count_at_event)}</Td>
                     </tr>
                   ))}
                 </tbody>

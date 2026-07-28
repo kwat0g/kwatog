@@ -16,6 +16,8 @@ import { returnManagementApi } from '@/api/returnManagement';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
 import { formatPeso, formatInt } from '@/lib/formatNumber';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { cn } from '@/lib/cn';
 
 const DisposeDialog = lazy(() => import('./dispose'));
 
@@ -350,38 +352,38 @@ export default function ReturnRequestDetailPage() {
           {!rma.items || rma.items.length === 0 ? (
             <div className="text-muted text-sm py-2">No items.</div>
           ) : (
-            <table className="w-full text-sm mt-2">
+            <table className={cn(tableCls, 'mt-2')}>
               <thead>
-                <tr className="border-b border-default text-left text-2xs uppercase tracking-wider text-muted">
-                  <th  className="h-8 py-2 pr-3 font-medium text-2xs uppercase tracking-wider text-muted">Product</th>
-                  <th  className="h-8 py-2 pr-3 font-medium text-right text-2xs uppercase tracking-wider text-muted">Qty</th>
-                  <th  className="h-8 py-2 pr-3 font-medium text-right text-2xs uppercase tracking-wider text-muted">Returned</th>
-                  <th  className="h-8 py-2 pr-3 font-medium text-right text-2xs uppercase tracking-wider text-muted">Unit Price</th>
-                  <th  className="h-8 py-2 pr-3 font-medium text-2xs uppercase tracking-wider text-muted">Condition</th>
-                  <th  className="h-8 py-2 pr-3 font-medium text-2xs uppercase tracking-wider text-muted">Reason</th>
-                  <th  className="h-8 py-2 pr-3 font-medium text-2xs uppercase tracking-wider text-muted">Disposition</th>
+                <tr className={theadTrCls}>
+                  <Th>Product</Th>
+                  <Th align="right">Qty</Th>
+                  <Th align="right">Returned</Th>
+                  <Th align="right">Unit Price</Th>
+                  <Th>Condition</Th>
+                  <Th>Reason</Th>
+                  <Th>Disposition</Th>
                 </tr>
               </thead>
               <tbody>
                 {rma.items.map((item) => (
-                  <tr key={item.id} className="h-8 border-b border-subtle">
-                    <td className="py-2 pr-3 font-mono">
+                  <tr key={item.id} className={trCls}>
+                    <Td mono>
                       {item.product
                         ? `${item.product.part_number} — ${item.product.name}`
                         : item.item
                           ? `${item.item.code} — ${item.item.name}`
                           : '—'}
-                    </td>
-                    <td  className="py-2 pr-3 text-right font-mono tabular-nums">{formatInt(item.quantity)}</td>
-                    <td  className="py-2 pr-3 text-right font-mono tabular-nums">{formatInt(item.returned_quantity)}</td>
-                    <td  className="py-2 pr-3 text-right font-mono tabular-nums">{formatPeso(item.unit_price)}</td>
-                    <td className="py-2 pr-3">{CONDITION_LABELS[item.condition ?? ''] || item.condition || '—'}</td>
-                    <td className="py-2 pr-3">{item.reason || '—'}</td>
-                    <td className="py-2 pr-3">
+                    </Td>
+                    <Td align="right" mono>{formatInt(item.quantity)}</Td>
+                    <Td align="right" mono>{formatInt(item.returned_quantity)}</Td>
+                    <Td align="right" mono>{formatPeso(item.unit_price)}</Td>
+                    <Td>{CONDITION_LABELS[item.condition ?? ''] || item.condition || '—'}</Td>
+                    <Td>{item.reason || '—'}</Td>
+                    <Td>
                       {item.disposition
                         ? <Chip variant={item.disposition === 'restock' ? 'success' : item.disposition === 'scrap' ? 'danger' : 'warning'}>{item.disposition.replace(/_/g, ' ')}</Chip>
                         : '—'}
-                    </td>
+                    </Td>
                   </tr>
                 ))}
               </tbody>

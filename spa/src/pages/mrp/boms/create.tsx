@@ -25,6 +25,7 @@ import { productsApi } from '@/api/crm/products';
 import { itemsApi } from '@/api/inventory/items';
 import { bomsApi } from '@/api/mrp/boms';
 import type { CreateBomData } from '@/api/mrp/boms';
+import { Td, Th, tableCls, trCls } from '@/components/ui/table-cells';
 
 const itemSchema = z.object({
   item_id:           z.string().min(1, 'Item is required'),
@@ -132,20 +133,20 @@ export default function CreateBomPage() {
         <fieldset className="mb-8">
           <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">Material lines</legend>
           <div className="border border-default rounded-md overflow-hidden">
-            <table className="w-full text-xs">
-              <thead className="bg-subtle">
+            <table className={tableCls}>
+              <thead>
                 <tr>
-                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 w-2/5">Item</th>
-                  <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Qty / unit</th>
-                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">UOM</th>
-                  <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Waste %</th>
-                  <th  className="h-8 px-2 py-2 text-2xs uppercase tracking-wider text-muted font-medium" />
+                  <Th className="w-2/5">Item</Th>
+                  <Th align="right">Qty / unit</Th>
+                  <Th>UOM</Th>
+                  <Th align="right">Waste %</Th>
+                  <Th />
                 </tr>
               </thead>
               <tbody>
                 {fields.map((field, i) => (
-                  <tr key={field.id} className="border-t border-subtle">
-                    <td className="px-2.5 py-1.5">
+                  <tr key={field.id} className={trCls}>
+                    <Td>
                       <Select
                         {...register(`items.${i}.item_id` as const, {
                           onChange: (e) => handleItemPicked(i, e.target.value),
@@ -157,32 +158,32 @@ export default function CreateBomPage() {
                           <option key={it.id} value={it.id}>{it.code} — {it.name}</option>
                         ))}
                       </Select>
-                    </td>
-                    <td  className="px-2.5 py-1.5 text-right font-mono tabular-nums">
+                    </Td>
+                    <Td align="right" mono>
                       <Input
                         {...register(`items.${i}.quantity_per_unit` as const)}
                         error={errors.items?.[i]?.quantity_per_unit?.message}
                         placeholder="0.0000"
                         className="font-mono text-right"
                       />
-                    </td>
-                    <td className="px-2.5 py-1.5">
+                    </Td>
+                    <Td>
                       <Input
                         {...register(`items.${i}.unit` as const)}
                         error={errors.items?.[i]?.unit?.message}
                         placeholder="kg"
                         className="font-mono"
                       />
-                    </td>
-                    <td  className="px-2.5 py-1.5 text-right font-mono tabular-nums">
+                    </Td>
+                    <Td align="right" mono>
                       <Input
                         {...register(`items.${i}.waste_factor` as const)}
                         error={errors.items?.[i]?.waste_factor?.message}
                         placeholder="0.00"
                         className="font-mono text-right"
                       />
-                    </td>
-                    <td  className="px-2 py-1.5 text-right font-mono tabular-nums">
+                    </Td>
+                    <Td align="right" mono>
                       <button
                         type="button"
                         onClick={() => remove(i)}
@@ -192,7 +193,7 @@ export default function CreateBomPage() {
                       >
                         <Trash2 size={14} />
                       </button>
-                    </td>
+                    </Td>
                   </tr>
                 ))}
               </tbody>

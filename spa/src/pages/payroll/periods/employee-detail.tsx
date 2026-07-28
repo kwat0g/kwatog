@@ -13,6 +13,7 @@ import { StatCard } from '@/components/ui/StatCard';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
+import { Td, tableCls, trCls } from '@/components/ui/table-cells';
 
 export default function PayrollEmployeeDetailPage() {
   const { id, eid } = useParams<{ id: string; eid: string }>();
@@ -118,45 +119,45 @@ export default function PayrollEmployeeDetailPage() {
 
         <div className="grid grid-cols-2 gap-4">
           <Panel title="Earnings" noPadding>
-            <table className="w-full text-sm">
+            <table className={tableCls}>
               <tbody>
                 {earningRows.length === 0 && (
-                  <tr><td className="py-3 px-3 text-muted text-xs">No earnings on file.</td></tr>
+                  <tr><Td className="text-muted text-xs">No earnings on file.</Td></tr>
                 )}
                 {earningRows.map((r) => (
-                  <tr key={r.label} className="h-8 border-b border-subtle">
-                    <td className="px-3">{r.label}</td>
-                    <td  className="px-3 text-right font-mono tabular-nums">{formatPeso(r.value)}</td>
+                  <tr key={r.label} className={trCls}>
+                    <Td>{r.label}</Td>
+                    <Td align="right" mono>{formatPeso(r.value)}</Td>
                   </tr>
                 ))}
-                <tr className="h-8 border-t border-default">
-                  <td className="px-3 font-medium">Gross Pay</td>
-                  <td  className="px-3 text-right font-mono tabular-nums font-medium">{formatPeso(data.gross_pay)}</td>
+                <tr className={trCls}>
+                  <Td className="font-medium">Gross Pay</Td>
+                  <Td align="right" mono className="font-medium">{formatPeso(data.gross_pay)}</Td>
                 </tr>
               </tbody>
             </table>
           </Panel>
 
           <Panel title="Deductions" noPadding>
-            <table className="w-full text-sm">
+            <table className={tableCls}>
               <tbody>
                 {(!data.deduction_details || data.deduction_details.length === 0) && (
-                  <tr><td className="py-3 px-3 text-muted text-xs">No deductions for this period.</td></tr>
+                  <tr><Td className="text-muted text-xs">No deductions for this period.</Td></tr>
                 )}
                 {(data.deduction_details ?? []).map((d, i) => (
-                  <tr key={i} className="h-8 border-b border-subtle">
-                    <td className="px-3">{d.description ?? d.deduction_type_label}</td>
-                    <td  className="px-3 text-right font-mono tabular-nums">{formatPeso(d.amount)}</td>
+                  <tr key={i} className={trCls}>
+                    <Td>{d.description ?? d.deduction_type_label}</Td>
+                    <Td align="right" mono>{formatPeso(d.amount)}</Td>
                   </tr>
                 ))}
-                <tr className="h-8 border-t border-default">
-                  <td className="px-3 font-medium">Total Deductions</td>
-                  <td  className="px-3 text-right font-mono tabular-nums font-medium">{formatPeso(data.total_deductions)}</td>
+                <tr className={trCls}>
+                  <Td className="font-medium">Total Deductions</Td>
+                  <Td align="right" mono className="font-medium">{formatPeso(data.total_deductions)}</Td>
                 </tr>
                 {Number(data.adjustment_amount) !== 0 && (
-                  <tr className="h-8">
-                    <td className="px-3 text-xs text-muted">Adjustment carry-over</td>
-                    <td  className="px-3 text-right font-mono tabular-nums">{formatPeso(data.adjustment_amount)}</td>
+                  <tr className={trCls}>
+                    <Td className="text-xs text-muted">Adjustment carry-over</Td>
+                    <Td align="right" mono>{formatPeso(data.adjustment_amount)}</Td>
                   </tr>
                 )}
               </tbody>

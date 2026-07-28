@@ -11,6 +11,7 @@ import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
+import { Td, Th, tableCls, trCls } from '@/components/ui/table-cells';
 
 export default function MrpPlanDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -104,32 +105,32 @@ export default function MrpPlanDetailPage() {
             {data.diagnostics.length === 0 ? (
               <div className="p-4 text-sm text-muted">No materials evaluated (no active BOM).</div>
             ) : (
-              <table className="w-full text-xs">
-                <thead className="bg-subtle">
+              <table className={tableCls}>
+                <thead>
                   <tr>
-                    <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Item</th>
-                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Gross</th>
-                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">On hand</th>
-                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Reserved</th>
-                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">In transit</th>
-                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Net</th>
-                    <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Action</th>
+                    <Th>Item</Th>
+                    <Th align="right">Gross</Th>
+                    <Th align="right">On hand</Th>
+                    <Th align="right">Reserved</Th>
+                    <Th align="right">In transit</Th>
+                    <Th align="right">Net</Th>
+                    <Th>Action</Th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.diagnostics.map((d) => (
-                    <tr key={d.item_id} className="border-t border-subtle hover:bg-subtle">
-                      <td className="px-2.5 py-2 font-mono">{d.item_code}</td>
-                      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{d.gross.toFixed(3)}</td>
-                      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{d.on_hand.toFixed(3)}</td>
-                      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{d.reserved.toFixed(3)}</td>
-                      <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{d.in_transit.toFixed(3)}</td>
-                      <td  className="px-2.5 py-2 text-right font-mono tabular-nums font-medium">{d.net.toFixed(3)}</td>
-                      <td className="px-2.5 py-2">
+                    <tr key={d.item_id} className={trCls}>
+                      <Td mono>{d.item_code}</Td>
+                      <Td align="right" mono>{d.gross.toFixed(3)}</Td>
+                      <Td align="right" mono>{d.on_hand.toFixed(3)}</Td>
+                      <Td align="right" mono>{d.reserved.toFixed(3)}</Td>
+                      <Td align="right" mono>{d.in_transit.toFixed(3)}</Td>
+                      <Td align="right" mono className="font-medium">{d.net.toFixed(3)}</Td>
+                      <Td>
                         {d.action === 'pr_created'
                           ? <Chip variant={d.priority === 'urgent' ? 'danger' : 'info'}>PR · {d.priority}</Chip>
                           : <Chip variant="success">sufficient</Chip>}
-                      </td>
+                      </Td>
                     </tr>
                   ))}
                 </tbody>

@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useState } from 'react';
 import { formatPeso } from '@/lib/formatNumber';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = window.URL.createObjectURL(blob);
@@ -260,26 +261,26 @@ export default function SupplierPurchaseOrderDetailPage() {
       {/* Items */}
       <Panel title={`Items (${po.items?.length ?? 0})`}>
         {po.items && po.items.length > 0 ? (
-          <table className="w-full text-xs">
+          <table className={tableCls}>
             <thead>
-              <tr className="border-b border-border text-muted">
-                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Part #</th>
-                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Description</th>
-                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Ordered</th>
-                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Received</th>
-                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Unit Price</th>
-                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Total</th>
+              <tr className={theadTrCls}>
+                <Th>Part #</Th>
+                <Th>Description</Th>
+                <Th align="right">Ordered</Th>
+                <Th align="right">Received</Th>
+                <Th align="right">Unit Price</Th>
+                <Th align="right">Total</Th>
               </tr>
             </thead>
             <tbody>
               {po.items.map((item) => (
-                <tr key={item.id} className="border-b border-border/50">
-                  <td className="py-2 px-3 font-mono text-muted">{item.part_number}</td>
-                  <td className="py-2 px-3">{item.name}</td>
-                  <td  className="py-2 px-3 text-right font-mono tabular-nums">{item.quantity_ordered}</td>
-                  <td  className="py-2 px-3 text-right font-mono tabular-nums">{item.quantity_received}</td>
-                  <td  className="py-2 px-3 text-right font-mono tabular-nums">{formatPeso(item.unit_price)}</td>
-                  <td  className="py-2 px-3 text-right font-mono tabular-nums">{formatPeso(item.total_price)}</td>
+                <tr key={item.id} className={trCls}>
+                  <Td mono className="text-muted">{item.part_number}</Td>
+                  <Td>{item.name}</Td>
+                  <Td align="right" mono>{item.quantity_ordered}</Td>
+                  <Td align="right" mono>{item.quantity_received}</Td>
+                  <Td align="right" mono>{formatPeso(item.unit_price)}</Td>
+                  <Td align="right" mono>{formatPeso(item.total_price)}</Td>
                 </tr>
               ))}
             </tbody>
@@ -315,18 +316,18 @@ export default function SupplierPurchaseOrderDetailPage() {
       {/* GRNs */}
       {po.goods_receipt_notes && po.goods_receipt_notes.length > 0 && (
         <Panel title="Goods Receipt Notes">
-          <table className="w-full text-xs">
+          <table className={tableCls}>
             <thead>
-              <tr className="border-b border-border text-muted">
-                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">GRN #</th>
-                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Received Date</th>
+              <tr className={theadTrCls}>
+                <Th>GRN #</Th>
+                <Th>Received Date</Th>
               </tr>
             </thead>
             <tbody>
               {po.goods_receipt_notes.map((grn) => (
-                <tr key={grn.id} className="border-b border-border/50">
-                  <td className="py-2 px-3 font-mono">{grn.grn_number}</td>
-                  <td className="py-2 px-3 text-muted">{grn.received_date ?? '—'}</td>
+                <tr key={grn.id} className={trCls}>
+                  <Td mono>{grn.grn_number}</Td>
+                  <Td className="text-muted">{grn.received_date ?? '—'}</Td>
                 </tr>
               ))}
             </tbody>
@@ -337,31 +338,31 @@ export default function SupplierPurchaseOrderDetailPage() {
       {/* Bills */}
       {po.bills && po.bills.length > 0 && (
         <Panel title="Bills / Invoices">
-          <table className="w-full text-xs">
+          <table className={tableCls}>
             <thead>
-              <tr className="border-b border-border text-muted">
-                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Bill #</th>
-                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Amount</th>
-                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Paid</th>
-                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Balance</th>
-                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Due</th>
-                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Status</th>
+              <tr className={theadTrCls}>
+                <Th>Bill #</Th>
+                <Th align="right">Amount</Th>
+                <Th align="right">Paid</Th>
+                <Th align="right">Balance</Th>
+                <Th>Due</Th>
+                <Th align="right">Status</Th>
               </tr>
             </thead>
             <tbody>
               {po.bills.map((bill) => (
-                <tr key={bill.id} className="border-b border-border/50">
-                  <td className="py-2 px-3 font-mono text-accent">{bill.bill_number}</td>
-                  <td  className="py-2 px-3 text-right font-mono tabular-nums">{formatPeso(bill.total_amount)}</td>
-                  <td  className="py-2 px-3 text-right font-mono tabular-nums">{formatPeso(bill.paid_amount)}</td>
-                  <td  className="py-2 px-3 text-right font-mono tabular-nums">{formatPeso(bill.balance)}</td>
-                  <td className="py-2 px-3 text-muted">{bill.due_date ?? '—'}</td>
-                  <td  className="py-2 px-3 text-right font-mono tabular-nums">
+                <tr key={bill.id} className={trCls}>
+                  <Td mono className="text-accent">{bill.bill_number}</Td>
+                  <Td align="right" mono>{formatPeso(bill.total_amount)}</Td>
+                  <Td align="right" mono>{formatPeso(bill.paid_amount)}</Td>
+                  <Td align="right" mono>{formatPeso(bill.balance)}</Td>
+                  <Td className="text-muted">{bill.due_date ?? '—'}</Td>
+                  <Td align="right" mono>
                     <span className={`inline-block px-2 py-0.5 rounded-full text-2xs font-medium uppercase ${
                       bill.status === 'paid' ? 'bg-success/10 text-success' :
                       bill.status === 'overdue' ? 'bg-danger/10 text-danger' : 'bg-warning/10 text-warning'
                     }`}>{bill.status}</span>
-                  </td>
+                  </Td>
                 </tr>
               ))}
             </tbody>

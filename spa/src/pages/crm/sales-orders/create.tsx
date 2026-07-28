@@ -30,6 +30,7 @@ import { productsApi } from '@/api/crm/products';
 import { salesOrdersApi } from '@/api/crm/salesOrders';
 import type { CreateSalesOrderData } from '@/types/crm';
 import { formatPeso } from '@/lib/formatNumber';
+import { Td, Th, tableCls, trCls } from '@/components/ui/table-cells';
 
 const itemSchema = z.object({
   product_id:    z.string().min(1, 'Product is required'),
@@ -179,19 +180,19 @@ export default function CreateSalesOrderPage() {
           <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">Line items</legend>
 
           <div className="border border-default rounded-md overflow-hidden">
-            <table className="w-full text-xs">
-              <thead className="bg-subtle">
+            <table className={tableCls}>
+              <thead>
                 <tr>
-                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 w-1/2">Product</th>
-                  <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Quantity</th>
-                  <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Delivery date</th>
-                  <th  className="h-8 px-2 py-2 text-2xs uppercase tracking-wider text-muted font-medium" />
+                  <Th className="w-1/2">Product</Th>
+                  <Th align="right">Quantity</Th>
+                  <Th align="right">Delivery date</Th>
+                  <Th />
                 </tr>
               </thead>
               <tbody>
                 {fields.map((field, i) => (
-                  <tr key={field.id} className="border-t border-subtle">
-                    <td className="px-2.5 py-1.5">
+                  <tr key={field.id} className={trCls}>
+                    <Td>
                       <Select
                         {...register(`items.${i}.product_id` as const)}
                         error={errors.items?.[i]?.product_id?.message}
@@ -201,24 +202,24 @@ export default function CreateSalesOrderPage() {
                           <option key={p.id} value={p.id}>{p.part_number} — {p.name}</option>
                         ))}
                       </Select>
-                    </td>
-                    <td  className="px-2.5 py-1.5 text-right font-mono tabular-nums">
+                    </Td>
+                    <Td align="right" mono>
                       <Input
                         {...register(`items.${i}.quantity` as const)}
                         error={errors.items?.[i]?.quantity?.message}
                         placeholder="0.00"
                         className="font-mono text-right"
                       />
-                    </td>
-                    <td  className="px-2.5 py-1.5 text-right font-mono tabular-nums">
+                    </Td>
+                    <Td align="right" mono>
                       <Input
                         type="date"
                         {...register(`items.${i}.delivery_date` as const)}
                         error={errors.items?.[i]?.delivery_date?.message}
                         className="font-mono"
                       />
-                    </td>
-                    <td  className="px-2 py-1.5 text-right font-mono tabular-nums">
+                    </Td>
+                    <Td align="right" mono>
                       <button
                         type="button"
                         onClick={() => remove(i)}
@@ -228,7 +229,7 @@ export default function CreateSalesOrderPage() {
                       >
                         <Trash2 size={14} />
                       </button>
-                    </td>
+                    </Td>
                   </tr>
                 ))}
               </tbody>

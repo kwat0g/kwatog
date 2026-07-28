@@ -18,6 +18,7 @@ import { OeeGauge } from '@/components/production/OeeGauge';
 import { BreakdownAlertCard } from '@/components/production/BreakdownAlertCard';
 import { useEcho } from '@/hooks/useEcho';
 import { formatInt } from '@/lib/formatNumber';
+import { Td, Th, tableCls, trCls } from '@/components/ui/table-cells';
 
 export default function ProductionDashboardPage() {
   const qc = useQueryClient();
@@ -157,25 +158,25 @@ export default function ProductionDashboardPage() {
         {/* Row 3: machine util + defect Pareto */}
         <div className="grid gap-4 lg:grid-cols-2">
           <Panel title="Machine utilization (today)" noPadding>
-            <table className="w-full text-xs">
-              <thead className="bg-subtle">
+            <table className={tableCls}>
+              <thead>
                 <tr>
-                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Machine</th>
-                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Status</th>
-                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 w-1/3">OEE</th>
+                  <Th>Machine</Th>
+                  <Th>Status</Th>
+                  <Th className="w-1/3">OEE</Th>
                 </tr>
               </thead>
               <tbody>
                 {data.machine_utilization.map((m) => (
-                  <tr key={m.machine_id} className="border-t border-subtle">
-                    <td className="px-2.5 py-2">
+                  <tr key={m.machine_id} className={trCls}>
+                    <Td>
                       <Link to={`/mrp/machines/${m.machine_id}`} className="font-mono text-accent hover:underline">{m.machine_code}</Link>
                       <div className="text-2xs text-muted">{m.name}</div>
-                    </td>
-                    <td className="px-2.5 py-2">
+                    </Td>
+                    <Td>
                       <Chip variant={m.status === 'running' ? 'success' : m.status === 'breakdown' ? 'danger' : m.status === 'idle' ? 'neutral' : 'info'}>{m.status}</Chip>
-                    </td>
-                    <td className="px-2.5 py-2"><OeeGauge result={m} compact /></td>
+                    </Td>
+                    <Td><OeeGauge result={m} compact /></Td>
                   </tr>
                 ))}
               </tbody>

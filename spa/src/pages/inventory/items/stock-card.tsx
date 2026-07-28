@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/Input';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { StatCard } from '@/components/ui/StatCard';
+import { Td, Th, tableCls, trCls } from '@/components/ui/table-cells';
 
 function todayStr(): string {
   const d = new Date();
@@ -147,25 +148,25 @@ export default function StockCardPage() {
 
           {/* Movement ledger */}
           <div className="overflow-x-auto border border-default rounded-md">
-            <table className="w-full border-collapse text-xs">
-              <thead className="bg-subtle">
+            <table className={tableCls}>
+              <thead>
                 <tr>
-                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Date</th>
-                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Reference</th>
-                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Movement</th>
-                  <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">In</th>
-                  <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">Out</th>
-                  <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">Unit cost (₱)</th>
-                  <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">Balance</th>
+                  <Th>Date</Th>
+                  <Th>Reference</Th>
+                  <Th>Movement</Th>
+                  <Th align="right">In</Th>
+                  <Th align="right">Out</Th>
+                  <Th align="right">Unit cost (₱)</Th>
+                  <Th align="right">Balance</Th>
                 </tr>
               </thead>
               <tbody>
                 {data.rows.map((row) => (
-                  <tr key={row.id} className="h-8 border-t border-subtle hover:bg-subtle">
-                    <td className="px-2.5 font-mono tabular-nums text-muted">
+                  <tr key={row.id} className={trCls}>
+                    <Td mono className="text-muted">
                       {row.date ? row.date.slice(0, 16).replace('T', ' ') : '—'}
-                    </td>
-                    <td className="px-2.5 font-mono">
+                    </Td>
+                    <Td mono>
                       {row.reference_url ? (
                         <Link to={row.reference_url} className="text-accent hover:underline">
                           {row.reference_id ?? row.reference_type}
@@ -173,16 +174,16 @@ export default function StockCardPage() {
                       ) : (
                         <span className="text-muted">{row.reference_id ?? '—'}</span>
                       )}
-                    </td>
-                    <td className="px-2.5">{row.movement_type}</td>
-                    <td  className="px-2.5 text-right font-mono tabular-nums">
+                    </Td>
+                    <Td>{row.movement_type}</Td>
+                    <Td align="right" mono>
                       {Number(row.in) > 0 ? fmtNum(row.in) : '—'}
-                    </td>
-                    <td  className="px-2.5 text-right font-mono tabular-nums">
+                    </Td>
+                    <Td align="right" mono>
                       {Number(row.out) > 0 ? fmtNum(row.out) : '—'}
-                    </td>
-                    <td  className="px-2.5 text-right font-mono tabular-nums">{fmtMoney(row.unit_cost)}</td>
-                    <td  className="px-2.5 text-right font-mono tabular-nums font-medium">{fmtNum(row.balance)}</td>
+                    </Td>
+                    <Td align="right" mono>{fmtMoney(row.unit_cost)}</Td>
+                    <Td align="right" mono className="font-medium">{fmtNum(row.balance)}</Td>
                   </tr>
                 ))}
               </tbody>

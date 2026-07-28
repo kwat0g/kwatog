@@ -16,6 +16,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { formatPeso } from '@/lib/formatNumber';
 import { onFormInvalid } from '@/lib/formErrors';
 import { numberInputProps } from '@/lib/numberInput';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 const lineSchema = z.object({
   account_id: z.string().min(1, 'Account is required'),
@@ -183,30 +184,30 @@ export default function OpeningBalancesPage() {
                 : 'Variances found — the system does not yet match the legacy TB.'}
             </div>
             <div className="border border-default rounded-md overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="text-2xs uppercase tracking-wider text-muted bg-subtle">
-                  <tr className="border-b border-default">
-                    <th className="h-8 px-2.5 text-left">Account</th>
-                    <th className="h-8 px-2.5 text-right">Legacy Dr</th>
-                    <th className="h-8 px-2.5 text-right">Legacy Cr</th>
-                    <th className="h-8 px-2.5 text-right">System Dr</th>
-                    <th className="h-8 px-2.5 text-right">System Cr</th>
-                    <th className="h-8 px-2.5 text-right">Variance</th>
+              <table className={tableCls}>
+                <thead>
+                  <tr className={theadTrCls}>
+                    <Th>Account</Th>
+                    <Th align="right">Legacy Dr</Th>
+                    <Th align="right">Legacy Cr</Th>
+                    <Th align="right">System Dr</Th>
+                    <Th align="right">System Cr</Th>
+                    <Th align="right">Variance</Th>
                   </tr>
                 </thead>
                 <tbody>
                   {match.rows.map((r, i) => {
                     const v = Number(r.variance);
                     return (
-                      <tr key={i} className="border-b border-subtle h-8">
-                        <td className="px-2.5"><span className="font-mono text-xs text-muted">{r.account_code}</span> {r.account_name}</td>
-                        <td className="px-2.5 text-right font-mono tabular-nums">{formatPeso(r.legacy_debit)}</td>
-                        <td className="px-2.5 text-right font-mono tabular-nums">{formatPeso(r.legacy_credit)}</td>
-                        <td className="px-2.5 text-right font-mono tabular-nums">{formatPeso(r.system_debit)}</td>
-                        <td className="px-2.5 text-right font-mono tabular-nums">{formatPeso(r.system_credit)}</td>
-                        <td className={`px-2.5 text-right font-mono tabular-nums ${Math.abs(v) < 0.005 ? 'text-muted' : 'text-danger-fg font-medium'}`}>
+                      <tr key={i} className={trCls}>
+                        <Td><span className="font-mono text-xs text-muted">{r.account_code}</span> {r.account_name}</Td>
+                        <Td align="right" mono>{formatPeso(r.legacy_debit)}</Td>
+                        <Td align="right" mono>{formatPeso(r.legacy_credit)}</Td>
+                        <Td align="right" mono>{formatPeso(r.system_debit)}</Td>
+                        <Td align="right" mono>{formatPeso(r.system_credit)}</Td>
+                        <Td align="right" mono className={Math.abs(v) < 0.005 ? 'text-muted' : 'text-danger-fg font-medium'}>
                           {formatPeso(r.variance)}
-                        </td>
+                        </Td>
                       </tr>
                     );
                   })}

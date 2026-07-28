@@ -27,6 +27,8 @@ import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
 import { numberInputProps } from '@/lib/numberInput';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { cn } from '@/lib/cn';
 
 const collectionSchema = z.object({
   cash_account_id:  z.string().min(1, 'Required'),
@@ -182,31 +184,31 @@ export default function InvoiceDetailPage() {
           </Panel>
 
           <Panel title="Line items">
-            <table className="w-full text-sm">
-              <thead className="text-2xs uppercase tracking-wider text-muted">
-                <tr className="border-b border-default bg-subtle">
-                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">#</th>
-                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Description</th>
-                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Account</th>
-                  <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">Qty</th>
-                  <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">Unit price</th>
-                  <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">Total</th>
+            <table className={tableCls}>
+              <thead>
+                <tr className={theadTrCls}>
+                  <Th>#</Th>
+                  <Th>Description</Th>
+                  <Th>Account</Th>
+                  <Th align="right">Qty</Th>
+                  <Th align="right">Unit price</Th>
+                  <Th align="right">Total</Th>
                 </tr>
               </thead>
               <tbody>
                 {invoice.items?.map((i, idx) => (
-                  <tr key={i.id} className="h-8 border-b border-subtle">
-                    <td className="px-2.5 text-muted font-mono tabular-nums">{String(idx + 1).padStart(2, '0')}</td>
-                    <td className="px-2.5">{i.description}</td>
-                    <td className="px-2.5 text-muted text-xs">{i.revenue_account ? <span><span className="font-mono">{i.revenue_account.code}</span> · {i.revenue_account.name}</span> : '—'}</td>
-                    <td  className="px-2.5 text-right font-mono tabular-nums">{i.quantity}{i.unit ? ` ${i.unit}` : ''}</td>
-                    <td  className="px-2.5 text-right font-mono tabular-nums">{formatPeso(i.unit_price)}</td>
-                    <td  className="px-2.5 text-right font-mono tabular-nums font-medium">{formatPeso(i.total)}</td>
+                  <tr key={i.id} className={trCls}>
+                    <Td mono className="text-muted">{String(idx + 1).padStart(2, '0')}</Td>
+                    <Td>{i.description}</Td>
+                    <Td className="text-muted text-xs">{i.revenue_account ? <span><span className="font-mono">{i.revenue_account.code}</span> · {i.revenue_account.name}</span> : '—'}</Td>
+                    <Td align="right" mono>{i.quantity}{i.unit ? ` ${i.unit}` : ''}</Td>
+                    <Td align="right" mono>{formatPeso(i.unit_price)}</Td>
+                    <Td align="right" mono className="font-medium">{formatPeso(i.total)}</Td>
                   </tr>
                 ))}
-                <tr className="h-7"><td  colSpan={5} className="px-2.5 text-right text-muted font-mono tabular-nums">Subtotal</td><td  className="px-2.5 text-right font-mono tabular-nums">{formatPeso(invoice.subtotal)}</td></tr>
-                {invoice.is_vatable && <tr className="h-7"><td  colSpan={5} className="px-2.5 text-right text-muted font-mono tabular-nums">VAT (12%)</td><td  className="px-2.5 text-right font-mono tabular-nums">{formatPeso(invoice.vat_amount)}</td></tr>}
-                <tr className="h-8 border-t-2 border-primary font-medium"><td  colSpan={5} className="px-2.5 text-right font-mono tabular-nums">Total</td><td  className="px-2.5 text-right font-mono tabular-nums">{formatPeso(invoice.total_amount)}</td></tr>
+                <tr className={trCls}><Td align="right" mono className="text-muted" colSpan={5}>Subtotal</Td><Td align="right" mono>{formatPeso(invoice.subtotal)}</Td></tr>
+                {invoice.is_vatable && <tr className={trCls}><Td align="right" mono className="text-muted" colSpan={5}>VAT (12%)</Td><Td align="right" mono>{formatPeso(invoice.vat_amount)}</Td></tr>}
+                <tr className={cn(trCls, 'border-t-2 border-primary font-medium')}><Td align="right" mono colSpan={5}>Total</Td><Td align="right" mono>{formatPeso(invoice.total_amount)}</Td></tr>
               </tbody>
             </table>
           </Panel>

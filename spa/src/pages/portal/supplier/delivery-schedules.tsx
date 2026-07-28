@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { formatDate } from '@/lib/formatDate';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 interface ScheduleForm {
   purchase_order_id: string;
@@ -230,20 +231,20 @@ export default function SupplierDeliverySchedulesPage() {
                 </p>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full text-xs">
+                <table className={tableCls}>
                   <thead>
-                    <tr className="border-b border-border text-muted">
-                      <th  className="h-8 text-left px-2 py-1 font-medium text-2xs uppercase tracking-wider text-muted">Product</th>
-                      <th  className="h-8 text-right px-2 py-1 font-medium text-2xs uppercase tracking-wider text-muted">Qty</th>
-                      <th  className="h-8 text-left px-2 py-1 font-medium text-2xs uppercase tracking-wider text-muted">Notes</th>
+                    <tr className={theadTrCls}>
+                      <Th>Product</Th>
+                      <Th align="right">Qty</Th>
+                      <Th>Notes</Th>
                     </tr>
                   </thead>
                   <tbody>
                     {s.lines.map((line, idx) => (
-                      <tr key={idx} className="border-b border-border/30">
-                        <td className="px-2 py-1.5">{line.product_name}</td>
-                        <td  className="px-2 py-1.5 text-right font-medium font-mono tabular-nums">{line.quantity}</td>
-                        <td className="px-2 py-1.5 text-muted">{line.notes ?? '—'}</td>
+                      <tr key={idx} className={trCls}>
+                        <Td>{line.product_name}</Td>
+                        <Td align="right" mono className="font-medium">{line.quantity}</Td>
+                        <Td className="text-muted">{line.notes ?? '—'}</Td>
                       </tr>
                     ))}
                   </tbody>

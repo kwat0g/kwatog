@@ -13,6 +13,7 @@ import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { usePermission } from '@/hooks/usePermission';
 import { cn } from '@/lib/cn';
 import type { DirectoryEmployee, OrgChartGroup } from '@/types/directory';
+import { Td, Th, tableCls } from '@/components/ui/table-cells';
 
 type ViewMode = 'grid' | 'list' | 'org';
 
@@ -180,15 +181,15 @@ export default function EmployeeDirectoryPage() {
       {data && data.data.length > 0 && view === 'list' && (
         <div className="px-5 py-4">
           <div className="border border-default rounded-md overflow-hidden">
-            <table className="w-full border-collapse text-xs">
-              <thead className="bg-subtle">
+            <table className={tableCls}>
+              <thead>
                 <tr>
-                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Name</th>
-                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Position</th>
-                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Department</th>
-                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Email</th>
-                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Mobile</th>
-                  <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Status</th>
+                  <Th>Name</Th>
+                  <Th>Position</Th>
+                  <Th>Department</Th>
+                  <Th>Email</Th>
+                  <Th>Mobile</Th>
+                  <Th>Status</Th>
                 </tr>
               </thead>
               <tbody>
@@ -201,21 +202,21 @@ export default function EmployeeDirectoryPage() {
                       canViewFull ? 'hover:bg-subtle cursor-pointer' : '',
                     )}
                   >
-                    <td className="px-2.5">
+                    <Td>
                       <div className="font-medium">{e.full_name}</div>
                       <div className="text-2xs text-muted font-mono">{e.employee_no}</div>
-                    </td>
-                    <td className="px-2.5 text-secondary">{e.position?.title ?? '—'}</td>
-                    <td className="px-2.5 text-secondary">{e.department?.name ?? '—'}</td>
-                    <td className="px-2.5 font-mono">{e.email ?? '—'}</td>
-                    <td className="px-2.5 font-mono tabular-nums">{e.mobile_number ?? '—'}</td>
-                    <td className="px-2.5">
+                    </Td>
+                    <Td className="text-secondary">{e.position?.title ?? '—'}</Td>
+                    <Td className="text-secondary">{e.department?.name ?? '—'}</Td>
+                    <Td mono>{e.email ?? '—'}</Td>
+                    <Td mono>{e.mobile_number ?? '—'}</Td>
+                    <Td>
                       {e.status && (
                         <Chip variant={chipVariantForStatus(e.status)}>
                           {e.status.replace('_', ' ')}
                         </Chip>
                       )}
-                    </td>
+                    </Td>
                   </tr>
                 ))}
               </tbody>

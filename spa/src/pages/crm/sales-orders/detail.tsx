@@ -20,6 +20,8 @@ import { formatPeso, formatInt, formatDecimal } from '@/lib/formatNumber';
 import { useChainProgress } from '@/hooks/useChainProgress';
 import { ChainResultModal, ChainErrorPanel } from './chain-result';
 import type { SalesOrderStatus, SoChainResult } from '@/types/crm';
+import { Td, Th, tableCls, trCls } from '@/components/ui/table-cells';
+import { cn } from '@/lib/cn';
 
 const statusVariant: Record<SalesOrderStatus, 'success' | 'info' | 'warning' | 'neutral' | 'danger'> = {
   draft: 'neutral',
@@ -190,49 +192,49 @@ export default function SalesOrderDetailPage() {
           </Panel>
 
           <Panel title="Line items" meta={`${data.item_count} ${data.item_count === 1 ? 'line' : 'lines'}`} noPadding>
-            <table className="w-full text-xs">
-              <thead className="bg-subtle">
+            <table className={tableCls}>
+              <thead>
                 <tr>
-                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 w-12">#</th>
-                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Product</th>
-                  <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Qty</th>
-                  <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Unit price</th>
-                  <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Total</th>
-                  <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Delivered</th>
-                  <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Delivery</th>
+                  <Th className="w-12">#</Th>
+                  <Th>Product</Th>
+                  <Th align="right">Qty</Th>
+                  <Th align="right">Unit price</Th>
+                  <Th align="right">Total</Th>
+                  <Th align="right">Delivered</Th>
+                  <Th align="right">Delivery</Th>
                 </tr>
               </thead>
               <tbody>
                 {data.items?.map((item, i) => (
-                  <tr key={item.id} className="border-t border-subtle hover:bg-subtle">
-                    <td className="px-2.5 py-2 font-mono text-muted tabular-nums">{(i + 1).toString().padStart(2, '0')}</td>
-                    <td className="px-2.5 py-2">
+                  <tr key={item.id} className={trCls}>
+                    <Td mono className="text-muted">{(i + 1).toString().padStart(2, '0')}</Td>
+                    <Td>
                       <div className="font-mono">{item.product?.part_number}</div>
                       <div className="text-xs text-muted">{item.product?.name}</div>
-                    </td>
-                    <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{formatDecimal(item.quantity)}</td>
-                    <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{formatPeso(item.unit_price)}</td>
-                    <td  className="px-2.5 py-2 text-right font-mono tabular-nums font-medium">{formatPeso(item.total)}</td>
-                    <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{formatDecimal(item.quantity_delivered)}</td>
-                    <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{item.delivery_date}</td>
+                    </Td>
+                    <Td align="right" mono>{formatDecimal(item.quantity)}</Td>
+                    <Td align="right" mono>{formatPeso(item.unit_price)}</Td>
+                    <Td align="right" mono className="font-medium">{formatPeso(item.total)}</Td>
+                    <Td align="right" mono>{formatDecimal(item.quantity_delivered)}</Td>
+                    <Td align="right" mono>{item.delivery_date}</Td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
-                <tr className="border-t border-default bg-subtle">
-                  <td  className="px-2.5 py-2 text-right text-muted text-2xs uppercase font-mono tabular-nums" colSpan={4}>Subtotal</td>
-                  <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{formatPeso(data.subtotal)}</td>
-                  <td colSpan={2} />
+                <tr className={cn(trCls, 'bg-subtle')}>
+                  <Td align="right" mono className="text-muted text-2xs uppercase" colSpan={4}>Subtotal</Td>
+                  <Td align="right" mono>{formatPeso(data.subtotal)}</Td>
+                  <Td colSpan={2} />
                 </tr>
-                <tr className="border-t border-subtle bg-subtle">
-                  <td  className="px-2.5 py-2 text-right text-muted text-2xs uppercase font-mono tabular-nums" colSpan={4}>VAT (12%)</td>
-                  <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{formatPeso(data.vat_amount)}</td>
-                  <td colSpan={2} />
+                <tr className={cn(trCls, 'bg-subtle')}>
+                  <Td align="right" mono className="text-muted text-2xs uppercase" colSpan={4}>VAT (12%)</Td>
+                  <Td align="right" mono>{formatPeso(data.vat_amount)}</Td>
+                  <Td colSpan={2} />
                 </tr>
-                <tr className="border-t border-default bg-subtle">
-                  <td  className="px-2.5 py-2 text-right text-muted text-2xs uppercase font-medium font-mono tabular-nums" colSpan={4}>Total</td>
-                  <td  className="px-2.5 py-2 text-right font-mono tabular-nums font-medium text-primary">{formatPeso(data.total_amount)}</td>
-                  <td colSpan={2} />
+                <tr className={cn(trCls, 'bg-subtle')}>
+                  <Td align="right" mono className="text-muted text-2xs uppercase font-medium" colSpan={4}>Total</Td>
+                  <Td align="right" mono className="font-medium text-primary">{formatPeso(data.total_amount)}</Td>
+                  <Td colSpan={2} />
                 </tr>
               </tfoot>
             </table>

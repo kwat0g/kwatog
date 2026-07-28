@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { formatPeso } from '@/lib/formatNumber';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 const BUCKET_LABELS: Record<string, string> = {
   current: 'Current',
@@ -72,32 +73,32 @@ export default function StatementOfAccountPage() {
       {/* Open Invoices */}
       <Panel title={`Open Invoices (${soa.open_invoices.length})`}>
         {soa.open_invoices.length > 0 ? (
-          <table className="w-full text-xs">
+          <table className={tableCls}>
             <thead>
-              <tr className="border-b border-border text-muted">
-                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Invoice #</th>
-                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Date</th>
-                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Due Date</th>
-                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Amount</th>
-                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Balance</th>
-                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Status</th>
+              <tr className={theadTrCls}>
+                <Th>Invoice #</Th>
+                <Th>Date</Th>
+                <Th>Due Date</Th>
+                <Th align="right">Amount</Th>
+                <Th align="right">Balance</Th>
+                <Th align="right">Status</Th>
               </tr>
             </thead>
             <tbody>
               {soa.open_invoices.map((inv) => (
-                <tr key={inv.id} className="border-b border-border/50 hover:bg-subtle/50 transition-colors">
-                  <td className="py-2 px-3">
+                <tr key={inv.id} className={trCls}>
+                  <Td>
                     <Link to={`/portal/customer/invoices/${inv.id}`} className="font-mono text-accent hover:underline">
                       {inv.invoice_number}
                     </Link>
-                  </td>
-                  <td className="py-2 px-3 text-muted">{inv.date ?? '—'}</td>
-                  <td className="py-2 px-3 text-muted">{inv.due_date ?? '—'}</td>
-                  <td  className="py-2 px-3 text-right font-mono tabular-nums">{formatPeso(inv.total_amount)}</td>
-                  <td  className="py-2 px-3 text-right font-mono tabular-nums">{formatPeso(inv.balance)}</td>
-                  <td  className="py-2 px-3 text-right font-mono tabular-nums">
+                  </Td>
+                  <Td className="text-muted">{inv.date ?? '—'}</Td>
+                  <Td className="text-muted">{inv.due_date ?? '—'}</Td>
+                  <Td align="right" mono>{formatPeso(inv.total_amount)}</Td>
+                  <Td align="right" mono>{formatPeso(inv.balance)}</Td>
+                  <Td align="right" mono>
                     <Chip variant={chipVariantForStatus(inv.status)}>{inv.status}</Chip>
-                  </td>
+                  </Td>
                 </tr>
               ))}
             </tbody>

@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { formatPeso } from '@/lib/formatNumber';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 export default function CustomerOrderDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -54,24 +55,24 @@ export default function CustomerOrderDetailPage() {
       {/* Items */}
       <Panel title={`Items (${order.items?.length ?? 0})`}>
         {order.items && order.items.length > 0 ? (
-          <table className="w-full text-xs">
+          <table className={tableCls}>
             <thead>
-              <tr className="border-b border-border text-muted">
-                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Part #</th>
-                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Description</th>
-                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Qty</th>
-                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Unit Price</th>
-                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Total</th>
+              <tr className={theadTrCls}>
+                <Th>Part #</Th>
+                <Th>Description</Th>
+                <Th align="right">Qty</Th>
+                <Th align="right">Unit Price</Th>
+                <Th align="right">Total</Th>
               </tr>
             </thead>
             <tbody>
               {order.items.map((item) => (
-                <tr key={item.id} className="border-b border-border/50">
-                  <td className="py-2 px-3 font-mono text-muted">{item.part_number}</td>
-                  <td className="py-2 px-3">{item.name}</td>
-                  <td  className="py-2 px-3 text-right font-mono tabular-nums">{item.quantity}</td>
-                  <td  className="py-2 px-3 text-right font-mono tabular-nums">{formatPeso(item.unit_price)}</td>
-                  <td  className="py-2 px-3 text-right font-mono tabular-nums">{formatPeso(item.total_price)}</td>
+                <tr key={item.id} className={trCls}>
+                  <Td mono className="text-muted">{item.part_number}</Td>
+                  <Td>{item.name}</Td>
+                  <Td align="right" mono>{item.quantity}</Td>
+                  <Td align="right" mono>{formatPeso(item.unit_price)}</Td>
+                  <Td align="right" mono>{formatPeso(item.total_price)}</Td>
                 </tr>
               ))}
             </tbody>
@@ -84,26 +85,26 @@ export default function CustomerOrderDetailPage() {
       {/* Work Orders */}
       {order.work_orders && order.work_orders.length > 0 && (
         <Panel title="Work Orders">
-          <table className="w-full text-xs">
+          <table className={tableCls}>
             <thead>
-              <tr className="border-b border-border text-muted">
-                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">WO #</th>
-                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Target</th>
-                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Produced</th>
-                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Start</th>
-                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Status</th>
+              <tr className={theadTrCls}>
+                <Th>WO #</Th>
+                <Th align="right">Target</Th>
+                <Th align="right">Produced</Th>
+                <Th>Start</Th>
+                <Th align="right">Status</Th>
               </tr>
             </thead>
             <tbody>
               {order.work_orders.map((wo) => (
-                <tr key={wo.id} className="border-b border-border/50">
-                  <td className="py-2 px-3 font-mono">{wo.wo_number}</td>
-                  <td  className="py-2 px-3 text-right font-mono tabular-nums">{wo.quantity_target}</td>
-                  <td  className="py-2 px-3 text-right font-mono tabular-nums">{wo.quantity_produced}</td>
-                  <td className="py-2 px-3 text-muted">{wo.planned_start ?? '—'}</td>
-                  <td  className="py-2 px-3 text-right font-mono tabular-nums">
+                <tr key={wo.id} className={trCls}>
+                  <Td mono>{wo.wo_number}</Td>
+                  <Td align="right" mono>{wo.quantity_target}</Td>
+                  <Td align="right" mono>{wo.quantity_produced}</Td>
+                  <Td className="text-muted">{wo.planned_start ?? '—'}</Td>
+                  <Td align="right" mono>
                     <Chip variant={chipVariantForStatus(wo.status)}>{wo.status}</Chip>
-                  </td>
+                  </Td>
                 </tr>
               ))}
             </tbody>

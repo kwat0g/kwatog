@@ -9,6 +9,7 @@ import { Panel } from '@/components/ui/Panel';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 export default function SupplierDashboardPage() {
   const { data: dashboard, isLoading, isError, refetch } = useQuery({
@@ -65,28 +66,28 @@ export default function SupplierDashboardPage() {
         </Link>
       }>
         {dashboard?.recent_pos && dashboard.recent_pos.length > 0 ? (
-          <table className="w-full text-xs">
+          <table className={tableCls}>
             <thead>
-              <tr className="border-b border-border text-muted">
-                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">PO #</th>
-                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Date</th>
-                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Amount</th>
-                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Status</th>
+              <tr className={theadTrCls}>
+                <Th>PO #</Th>
+                <Th>Date</Th>
+                <Th align="right">Amount</Th>
+                <Th align="right">Status</Th>
               </tr>
             </thead>
             <tbody>
               {dashboard.recent_pos.map((po) => (
-                <tr key={po.id} className="border-b border-border/50 hover:bg-subtle/50 transition-colors">
-                  <td className="py-2 px-3">
+                <tr key={po.id} className={trCls}>
+                  <Td>
                     <Link to={`/portal/supplier/purchase-orders/${po.id}`} className="font-mono text-accent hover:underline">
                       {po.po_number}
                     </Link>
-                  </td>
-                  <td className="py-2 px-3 text-muted">{po.date ?? '—'}</td>
-                  <td  className="py-2 px-3 text-right font-mono tabular-nums">{formatPeso(po.total_amount)}</td>
-                  <td  className="py-2 px-3 text-right font-mono tabular-nums">
+                  </Td>
+                  <Td className="text-muted">{po.date ?? '—'}</Td>
+                  <Td align="right" mono>{formatPeso(po.total_amount)}</Td>
+                  <Td align="right" mono>
                     <Chip variant="neutral">{po.status}</Chip>
-                  </td>
+                  </Td>
                 </tr>
               ))}
             </tbody>
@@ -103,30 +104,30 @@ export default function SupplierDashboardPage() {
         </Link>
       }>
         {dashboard?.recent_invoices && dashboard.recent_invoices.length > 0 ? (
-          <table className="w-full text-xs">
+          <table className={tableCls}>
             <thead>
-              <tr className="border-b border-border text-muted">
-                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Invoice #</th>
-                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Date</th>
-                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Amount</th>
-                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Status</th>
+              <tr className={theadTrCls}>
+                <Th>Invoice #</Th>
+                <Th>Date</Th>
+                <Th align="right">Amount</Th>
+                <Th align="right">Status</Th>
               </tr>
             </thead>
             <tbody>
               {dashboard.recent_invoices.map((inv) => (
-                <tr key={inv.id} className="border-b border-border/50 hover:bg-subtle/50 transition-colors">
-                  <td className="py-2 px-3">
+                <tr key={inv.id} className={trCls}>
+                  <Td>
                     <Link to={`/portal/supplier/invoices/${inv.id}`} className="font-mono text-accent hover:underline">
                       {inv.invoice_number}
                     </Link>
-                  </td>
-                  <td className="py-2 px-3 text-muted">{inv.date ?? '—'}</td>
-                  <td  className="py-2 px-3 text-right font-mono tabular-nums">{formatPeso(inv.total_amount)}</td>
-                  <td  className="py-2 px-3 text-right font-mono tabular-nums">
+                  </Td>
+                  <Td className="text-muted">{inv.date ?? '—'}</Td>
+                  <Td align="right" mono>{formatPeso(inv.total_amount)}</Td>
+                  <Td align="right" mono>
                     <Chip variant={inv.status === 'paid' ? 'success' : inv.status === 'overdue' ? 'danger' : 'warning'}>
                       {inv.status}
                     </Chip>
-                  </td>
+                  </Td>
                 </tr>
               ))}
             </tbody>

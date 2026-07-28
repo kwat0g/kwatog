@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
-import { Button, Chip, EmptyState, SkeletonTable } from '@/components/ui';
+import { Button, Chip, EmptyState, SkeletonTable, Td, Th } from '@/components/ui';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { sodApi, type SodSeverity } from '@/api/admin/sod';
+import { tableCls, theadTrCls } from '@/components/ui/table-cells';
 
 const SEVERITY_CHIP: Record<SodSeverity, 'danger' | 'warning' | 'info'> = {
   high: 'danger',
@@ -95,13 +96,13 @@ export default function SodMatrixPage() {
           )}
           {matrix.data && (
             <div className="border border-default rounded-md bg-canvas overflow-hidden">
-              <table className="w-full text-sm">
+              <table className={tableCls}>
                 <thead>
-                  <tr className="border-b border-default text-left text-xs text-muted">
-                    <th className="px-4 py-2 font-medium">Conflict</th>
-                    <th className="px-4 py-2 font-medium">Permission A</th>
-                    <th className="px-4 py-2 font-medium">Permission B</th>
-                    <th className="px-4 py-2 font-medium">Severity</th>
+                  <tr className={theadTrCls}>
+                    <Th>Conflict</Th>
+                    <Th>Permission A</Th>
+                    <Th>Permission B</Th>
+                    <Th>Severity</Th>
                   </tr>
                 </thead>
                 <tbody>
@@ -110,17 +111,17 @@ export default function SodMatrixPage() {
                       key={rule.id}
                       className={`border-b border-default last:border-0 ${rule.active ? '' : 'opacity-50'}`}
                     >
-                      <td className="px-4 py-2">
+                      <Td>
                         <div className="font-medium">{rule.name}</div>
                         {rule.rationale && (
                           <div className="text-xs text-muted mt-0.5">{rule.rationale}</div>
                         )}
-                      </td>
-                      <td className="px-4 py-2 font-mono tabular-nums text-xs">{rule.permission_a.slug}</td>
-                      <td className="px-4 py-2 font-mono tabular-nums text-xs">{rule.permission_b.slug}</td>
-                      <td className="px-4 py-2">
+                      </Td>
+                      <Td mono className="text-xs">{rule.permission_a.slug}</Td>
+                      <Td mono className="text-xs">{rule.permission_b.slug}</Td>
+                      <Td>
                         <Chip variant={SEVERITY_CHIP[rule.severity]}>{rule.severity}</Chip>
-                      </td>
+                      </Td>
                     </tr>
                   ))}
                 </tbody>

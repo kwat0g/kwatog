@@ -7,6 +7,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { formatPeso } from '@/lib/formatNumber';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 export default function SupplierPurchaseOrdersPage() {
   const { data: pos, isLoading, isError, refetch } = useQuery({
@@ -21,30 +22,30 @@ export default function SupplierPurchaseOrdersPage() {
   return (
     <Panel title="Purchase Orders">
       {pos && pos.length > 0 ? (
-        <table className="w-full text-xs">
+        <table className={tableCls}>
           <thead>
-            <tr className="border-b border-border text-muted">
-              <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">PO #</th>
-              <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Date</th>
-              <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Amount</th>
-              <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Expected Delivery</th>
-              <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Status</th>
+            <tr className={theadTrCls}>
+              <Th>PO #</Th>
+              <Th>Date</Th>
+              <Th align="right">Amount</Th>
+              <Th>Expected Delivery</Th>
+              <Th align="right">Status</Th>
             </tr>
           </thead>
           <tbody>
             {pos.map((po) => (
-              <tr key={po.id} className="border-b border-border/50 hover:bg-subtle/50 transition-colors">
-                <td className="py-2.5 px-3">
+              <tr key={po.id} className={trCls}>
+                <Td>
                   <Link to={`/portal/supplier/purchase-orders/${po.id}`} className="font-mono text-accent hover:underline font-medium">
                     {po.po_number}
                   </Link>
-                </td>
-                <td className="py-2.5 px-3 text-muted">{po.date ?? '—'}</td>
-                <td  className="py-2.5 px-3 text-right font-mono tabular-nums">{formatPeso(po.total_amount)}</td>
-                <td className="py-2.5 px-3 text-muted">{po.expected_delivery_date ?? '—'}</td>
-                <td  className="py-2.5 px-3 text-right font-mono tabular-nums">
+                </Td>
+                <Td className="text-muted">{po.date ?? '—'}</Td>
+                <Td align="right" mono>{formatPeso(po.total_amount)}</Td>
+                <Td className="text-muted">{po.expected_delivery_date ?? '—'}</Td>
+                <Td align="right" mono>
                   <Chip variant={chipVariantForStatus(po.status)}>{po.status.replace(/_/g, ' ')}</Chip>
-                </td>
+                </Td>
               </tr>
             ))}
           </tbody>

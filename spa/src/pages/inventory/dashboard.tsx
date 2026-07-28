@@ -9,6 +9,7 @@ import { StatCard } from '@/components/ui/StatCard';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { formatPeso } from '@/lib/formatNumber';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 const movementChip = (t: string): 'success' | 'info' | 'warning' | 'danger' | 'neutral' => {
   if (t === 'grn_receipt' || t === 'production_receipt' || t === 'adjustment_in') return 'success';
@@ -45,31 +46,31 @@ export default function InventoryDashboardPage() {
                 {data.low_stock_alerts.length === 0
                   ? <div className="text-sm text-muted px-1">All items are above reorder point.</div>
                   : (
-                    <table className="w-full text-xs">
+                    <table className={tableCls}>
                       <thead>
-                        <tr className="text-2xs uppercase tracking-wider text-muted">
-                          <th  className="h-8 text-left py-1 text-2xs uppercase tracking-wider text-muted font-medium">Item</th>
-                          <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium">Available</th>
-                          <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium">Reorder</th>
-                          <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium">Chain</th>
+                        <tr className={theadTrCls}>
+                          <Th>Item</Th>
+                          <Th align="right">Available</Th>
+                          <Th align="right">Reorder</Th>
+                          <Th>Chain</Th>
                         </tr>
                       </thead>
                       <tbody>
                         {data.low_stock_alerts.map((a) => (
-                          <tr key={a.code} className="h-8 border-t border-subtle">
-                            <td>
+                          <tr key={a.code} className={trCls}>
+                            <Td>
                               <div className="font-mono">{a.code}</div>
                               <div className="text-2xs text-muted">{a.name}</div>
-                            </td>
-                            <td  className="text-right font-mono tabular-nums text-danger-fg">{Number(a.available).toFixed(3)}</td>
-                            <td  className="text-right font-mono tabular-nums">{Number(a.reorder_point).toFixed(3)}</td>
-                            <td>
+                            </Td>
+                            <Td align="right" mono className="text-danger-fg">{Number(a.available).toFixed(3)}</Td>
+                            <Td align="right" mono>{Number(a.reorder_point).toFixed(3)}</Td>
+                            <Td>
                               {a.open_pr
                                 ? <Chip variant="warning">PR {a.open_pr.number}</Chip>
                                 : a.open_po
                                   ? <Chip variant="info">PO {a.open_po.number}</Chip>
                                   : <Chip variant="danger">No PR</Chip>}
-                            </td>
+                            </Td>
                           </tr>
                         ))}
                       </tbody>
@@ -90,23 +91,23 @@ export default function InventoryDashboardPage() {
               </Panel>
             </div>
             <Panel title="Top consumed materials (30 days)">
-              <table className="w-full text-xs">
+              <table className={tableCls}>
                 <thead>
-                  <tr className="text-2xs uppercase tracking-wider text-muted">
-                    <th  className="h-8 text-left py-1 text-2xs uppercase tracking-wider text-muted font-medium">Item</th>
-                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium">Quantity</th>
-                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium">Total value</th>
+                  <tr className={theadTrCls}>
+                    <Th>Item</Th>
+                    <Th align="right">Quantity</Th>
+                    <Th align="right">Total value</Th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.top_consumed_materials.length === 0 && (
-                    <tr><td className="text-muted py-2" colSpan={3}>No issuance in last 30 days.</td></tr>
+                    <tr><Td className="text-muted" colSpan={3}>No issuance in last 30 days.</Td></tr>
                   )}
                   {data.top_consumed_materials.map((m) => (
-                    <tr key={m.id} className="h-8 border-t border-subtle">
-                      <td><Link to={`/inventory/items/${m.id}`} className="font-mono text-accent">{m.code}</Link> {m.name}</td>
-                      <td  className="text-right font-mono tabular-nums">{Number(m.qty).toFixed(3)} {m.unit_of_measure}</td>
-                      <td  className="text-right font-mono tabular-nums">{formatPeso(m.total_value)}</td>
+                    <tr key={m.id} className={trCls}>
+                      <Td><Link to={`/inventory/items/${m.id}`} className="font-mono text-accent">{m.code}</Link> {m.name}</Td>
+                      <Td align="right" mono>{Number(m.qty).toFixed(3)} {m.unit_of_measure}</Td>
+                      <Td align="right" mono>{formatPeso(m.total_value)}</Td>
                     </tr>
                   ))}
                 </tbody>

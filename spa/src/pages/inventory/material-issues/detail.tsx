@@ -11,6 +11,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import type { MaterialIssueStatus } from '@/types/inventory';
+import { Td, Th, tableCls, trCls } from '@/components/ui/table-cells';
 
 const statusVariant = (s: MaterialIssueStatus) => {
   if (s === 'issued')    return 'info' as const;
@@ -56,29 +57,29 @@ export default function MaterialIssueDetailPage() {
 
       <div className="px-5 pb-4 space-y-4">
         <Panel title="Line items" meta={`${data.items?.length ?? 0} lines`} noPadding>
-          <table className="w-full text-xs">
-            <thead className="bg-subtle">
+          <table className={tableCls}>
+            <thead>
               <tr>
-                <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Item</th>
-                <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Location</th>
-                <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Qty issued</th>
-                <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Unit cost</th>
-                <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Total</th>
+                <Th>Item</Th>
+                <Th>Location</Th>
+                <Th align="right">Qty issued</Th>
+                <Th align="right">Unit cost</Th>
+                <Th align="right">Total</Th>
               </tr>
             </thead>
             <tbody>
               {(data.items ?? []).map((line) => (
-                <tr key={line.id} className="border-t border-subtle hover:bg-subtle">
-                  <td className="px-2.5 py-2">
+                <tr key={line.id} className={trCls}>
+                  <Td>
                     <div className="font-mono">{line.item?.code ?? '—'}</div>
                     <div className="text-muted">{line.item?.name ?? '—'}</div>
-                  </td>
-                  <td className="px-2.5 py-2 font-mono">{line.location?.code ?? '—'}</td>
-                  <td  className="px-2.5 py-2 text-right font-mono tabular-nums">
+                  </Td>
+                  <Td mono>{line.location?.code ?? '—'}</Td>
+                  <Td align="right" mono>
                     {Number(line.quantity_issued).toFixed(4)} {line.item?.unit_of_measure}
-                  </td>
-                  <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{formatPeso(line.unit_cost)}</td>
-                  <td  className="px-2.5 py-2 text-right font-mono tabular-nums font-medium">{formatPeso(line.total_cost)}</td>
+                  </Td>
+                  <Td align="right" mono>{formatPeso(line.unit_cost)}</Td>
+                  <Td align="right" mono className="font-medium">{formatPeso(line.total_cost)}</Td>
                 </tr>
               ))}
             </tbody>

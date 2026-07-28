@@ -19,6 +19,7 @@ import { Panel } from '@/components/ui/Panel';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Spinner } from '@/components/ui/Spinner';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 const TABS: Tab[] = [
   { key: 'users', label: 'Users', to: '/admin/users-roles?tab=users' },
@@ -63,32 +64,32 @@ function UsersTab() {
     <div className="space-y-4">
       <Panel title="Users" actions={<Link to="/admin/users" className="text-sm text-accent hover:underline">View all →</Link>}>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className={tableCls}>
             <thead>
-              <tr className="border-b border-default text-left">
-                <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Name</th>
-                <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Email</th>
-                <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Role</th>
-                <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Status</th>
-                <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Created</th>
+              <tr className={theadTrCls}>
+                <Th>Name</Th>
+                <Th>Email</Th>
+                <Th>Role</Th>
+                <Th>Status</Th>
+                <Th>Created</Th>
               </tr>
             </thead>
             <tbody>
               {data.data.map((u: any) => (
-                <tr key={u.id} className="h-8 border-b border-subtle last:border-0 hover:bg-subtle">
-                  <td className="px-2.5">
+                <tr key={u.id} className={trCls}>
+                  <Td>
                     <Link to={`/admin/users/${u.id}`} className="text-accent hover:underline font-medium">
                       {u.name}
                     </Link>
-                  </td>
-                  <td className="px-2.5 text-secondary">{u.email}</td>
-                  <td className="px-2.5">{u.role?.name ?? <span className="text-text-subtle">—</span>}</td>
-                  <td className="px-2.5">
+                  </Td>
+                  <Td className="text-secondary">{u.email}</Td>
+                  <Td>{u.role?.name ?? <span className="text-text-subtle">—</span>}</Td>
+                  <Td>
                     <Chip variant={u.is_active === false ? 'danger' : 'success'} >
                       {u.is_active === false ? 'Inactive' : 'Active'}
                     </Chip>
-                  </td>
-                  <td className="px-2.5 text-secondary">{u.created_at?.slice(0, 10)}</td>
+                  </Td>
+                  <Td className="text-secondary">{u.created_at?.slice(0, 10)}</Td>
                 </tr>
               ))}
             </tbody>
@@ -121,34 +122,34 @@ function RolesTab() {
     <div className="space-y-4">
       <Panel title="Roles" actions={<Link to="/admin/roles" className="text-sm text-accent hover:underline">View all →</Link>}>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className={tableCls}>
             <thead>
-              <tr className="border-b border-default text-left">
-                <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Name</th>
-                <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Slug</th>
-                <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Permissions</th>
-                <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Type</th>
-                <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Last Modified</th>
+              <tr className={theadTrCls}>
+                <Th>Name</Th>
+                <Th>Slug</Th>
+                <Th>Permissions</Th>
+                <Th>Type</Th>
+                <Th>Last Modified</Th>
               </tr>
             </thead>
             <tbody>
               {data.data.map((r: any) => (
-                <tr key={r.id} className="h-8 border-b border-subtle last:border-0 hover:bg-subtle">
-                  <td className="px-2.5">
+                <tr key={r.id} className={trCls}>
+                  <Td>
                     <Link to={`/admin/roles/${r.id}/permissions`} className="text-accent hover:underline font-medium">
                       {r.name}
                     </Link>
-                  </td>
-                  <td className="px-2.5 text-secondary font-mono">{r.slug}</td>
-                  <td className="px-2.5 font-mono tabular-nums">{r.permissions_count ?? '—'}</td>
-                  <td className="px-2.5">
+                  </Td>
+                  <Td mono className="text-secondary">{r.slug}</Td>
+                  <Td mono>{r.permissions_count ?? '—'}</Td>
+                  <Td>
                     <Chip variant={r.is_system ? 'info' : 'neutral'} >
                       {r.is_system ? 'System' : 'Custom'}
                     </Chip>
-                  </td>
-                  <td className="px-2.5 text-secondary">
+                  </Td>
+                  <Td className="text-secondary">
                     {r.last_modified_by ? `${r.last_modified_by} · ${r.last_modified_at?.slice(0, 10)}` : '—'}
-                  </td>
+                  </Td>
                 </tr>
               ))}
             </tbody>

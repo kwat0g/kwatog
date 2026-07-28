@@ -6,6 +6,7 @@ import { Panel } from '@/components/ui/Panel';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 export default function CustomerDeliveryDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -35,20 +36,20 @@ export default function CustomerDeliveryDetailPage() {
       {/* Items */}
       {delivery.items && delivery.items.length > 0 && (
         <Panel title={`Items (${delivery.items.length})`}>
-          <table className="w-full text-xs">
+          <table className={tableCls}>
             <thead>
-              <tr className="border-b border-border text-muted">
-                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Part #</th>
-                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Description</th>
-                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Qty Delivered</th>
+              <tr className={theadTrCls}>
+                <Th>Part #</Th>
+                <Th>Description</Th>
+                <Th align="right">Qty Delivered</Th>
               </tr>
             </thead>
             <tbody>
               {delivery.items.map((item, i) => (
-                <tr key={i} className="border-b border-border/50">
-                  <td className="py-2 px-3 font-mono text-muted">{item.part_number}</td>
-                  <td className="py-2 px-3">{item.name}</td>
-                  <td  className="py-2 px-3 text-right font-mono tabular-nums">{item.quantity_delivered}</td>
+                <tr key={i} className={trCls}>
+                  <Td mono className="text-muted">{item.part_number}</Td>
+                  <Td>{item.name}</Td>
+                  <Td align="right" mono>{item.quantity_delivered}</Td>
                 </tr>
               ))}
             </tbody>

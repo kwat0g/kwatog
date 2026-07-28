@@ -10,6 +10,8 @@ import { Input } from '@/components/ui/Input';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatPeso } from '@/lib/formatNumber';
+import { Td, tableCls, trCls } from '@/components/ui/table-cells';
+import { cn } from '@/lib/cn';
 
 export default function BalanceSheetPage() {
   const [asOf, setAsOf] = useState(new Date().toISOString().slice(0, 10));
@@ -59,16 +61,16 @@ function Section({ title, rows, total }: { title: string; rows: { code: string; 
   return (
     <div className="border border-default rounded-md overflow-hidden">
       <div className="px-2.5 py-1.5 bg-subtle text-2xs uppercase tracking-wider text-muted font-medium border-b border-default">{title}</div>
-      <table className="w-full text-sm">
+      <table className={tableCls}>
         <tbody>
-          {rows.length === 0 && <tr className="h-7"><td className="px-2.5 text-muted italic" colSpan={2}>No movement</td></tr>}
+          {rows.length === 0 && <tr className={trCls}><Td className="text-muted italic" colSpan={2}>No movement</Td></tr>}
           {rows.map((r) => (
-            <tr key={r.code} className="h-7 border-b border-subtle">
-              <td className="px-2.5"><span className="font-mono text-muted">{r.code}</span> {r.name}</td>
-              <td  className="px-2.5 text-right font-mono tabular-nums">{formatPeso(r.amount)}</td>
+            <tr key={r.code} className={trCls}>
+              <Td><span className="font-mono text-muted">{r.code}</span> {r.name}</Td>
+              <Td align="right" mono>{formatPeso(r.amount)}</Td>
             </tr>
           ))}
-          <tr className="h-8 border-t-2 border-primary font-medium"><td className="px-2.5">Total</td><td  className="px-2.5 text-right font-mono tabular-nums">{formatPeso(total)}</td></tr>
+          <tr className={cn(trCls, 'border-t-2 border-primary font-medium')}><Td>Total</Td><Td align="right" mono>{formatPeso(total)}</Td></tr>
         </tbody>
       </table>
     </div>

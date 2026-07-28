@@ -21,7 +21,7 @@ import { Chip } from '@/components/ui/Chip';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
-import { Th, Td, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { DashboardShell, KpiGrid, PanelRow } from '@/components/dashboard/DashboardShell';
 import { usePermission } from '@/hooks/usePermission';
 import { chainStageLink, alertRefLink, kpiLink } from '@/lib/dashboardLinks';
@@ -287,7 +287,7 @@ function ProductionGanttPanel({ rows }: { rows: ProductionGanttRow[] }) {
   return (
     <Panel title="Production Gantt (7-day)">
       <div className="overflow-x-auto">
-        <table className="w-full text-xs border-collapse">
+        <table className={tableCls}>
           <thead>
             <tr>
               <Th className="pr-2">Machine</Th>
@@ -300,22 +300,17 @@ function ProductionGanttPanel({ rows }: { rows: ProductionGanttRow[] }) {
           </thead>
           <tbody>
             {machines.map((m) => (
-              <tr key={m} className="border-t border-subtle">
-                <td className="pr-2 py-1.5 font-mono text-xs">{m}</td>
+              <tr key={m} className={trCls}>
+                <Td mono className="text-xs">{m}</Td>
                 {days.map((d) => {
                   const cell = rows.find((r) => r.machine === m && r.day === d);
                   const cls = cell?.status === 'running' ? 'bg-info/30'
                     : cell?.status === 'planned' ? 'bg-warning/20'
                     : 'bg-subtle/30';
                   return (
-                    <td
-                      key={`${m}-${d}`}
-                      className={`text-center px-1 py-1.5 rounded-sm ${cls}`}
-                      title={cell?.wo_number ?? undefined}
-                      aria-label={`${m} on ${d}: ${cell?.status ?? 'available'}${cell?.wo_number ? ` (${cell.wo_number})` : ''}`}
-                    >
+                    <Td align="center" className={` rounded-sm ${cls}`} key={`${m}-${d}`} title={cell?.wo_number ?? undefined} aria-label={`${m} on ${d}: ${cell?.status ?? 'available'}${cell?.wo_number ? ` (${cell.wo_number})` : ''}`}>
                       {cell?.status === 'running' ? '▶' : cell?.status === 'planned' ? '○' : '·'}
-                    </td>
+                    </Td>
                   );
                 })}
               </tr>
@@ -389,7 +384,7 @@ function MachineAvailabilityGrid({ rows }: { rows: GanttRow[] }) {
   return (
     <Panel title="Machine Availability (7-day)">
       <div className="overflow-x-auto">
-        <table className="w-full text-xs border-collapse">
+        <table className={tableCls}>
           <thead>
             <tr>
               <Th className="pr-2">Machine</Th>
@@ -400,21 +395,17 @@ function MachineAvailabilityGrid({ rows }: { rows: GanttRow[] }) {
           </thead>
           <tbody>
             {machines.map((m) => (
-              <tr key={m} className="border-t border-subtle">
-                <td className="pr-2 py-1.5 font-mono text-xs">{m}</td>
+              <tr key={m} className={trCls}>
+                <Td mono className="text-xs">{m}</Td>
                 {days.map(([date]) => {
                   const cell = rows.find((r) => r.machine === m && r.date === date);
                   const cls = cell?.status === 'available' ? 'bg-success/20'
                     : cell?.status === 'busy' ? 'bg-info/30'
                     : 'bg-danger/20';
                   return (
-                    <td
-                      key={`${m}-${date}`}
-                      className={`text-center px-1 py-1.5 rounded-sm ${cls}`}
-                      aria-label={`${m} on ${date}: ${cell?.status ?? 'unknown'}`}
-                    >
+                    <Td align="center" className={` rounded-sm ${cls}`} key={`${m}-${date}`} aria-label={`${m} on ${date}: ${cell?.status ?? 'unknown'}`}>
                       {cell?.status === 'available' ? '✓' : cell?.status === 'busy' ? '●' : '✗'}
-                    </td>
+                    </Td>
                   );
                 })}
               </tr>

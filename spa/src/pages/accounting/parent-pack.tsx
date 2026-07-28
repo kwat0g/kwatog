@@ -10,6 +10,8 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatDecimal } from '@/lib/formatNumber';
 import type { TranslatedLine } from '@/types/accounting';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { cn } from '@/lib/cn';
 
 type Tab = 'balance-sheet' | 'income-statement' | 'trial-balance';
 
@@ -169,26 +171,26 @@ function TranslatedTrialBalance({ from, to, currency }: { from: string; to: stri
     <div className="px-5 py-4 space-y-3">
       <RateBadges closing={data.closing_rate} />
       <div className="border border-default rounded-md overflow-hidden">
-        <table className="w-full text-sm">
+        <table className={tableCls}>
           <thead>
-            <tr className="h-8 bg-subtle text-2xs uppercase tracking-wider text-muted border-b border-default">
-              <th className="px-2.5 text-left">Account</th>
-              <th className="px-2.5 text-right">Debit ({currency})</th>
-              <th className="px-2.5 text-right">Credit ({currency})</th>
+            <tr className={theadTrCls}>
+              <Th>Account</Th>
+              <Th align="right">Debit ({currency})</Th>
+              <Th align="right">Credit ({currency})</Th>
             </tr>
           </thead>
           <tbody>
             {data.accounts.map((a) => (
-              <tr key={a.code} className="h-7 border-b border-subtle">
-                <td className="px-2.5"><span className="font-mono text-muted">{a.code}</span> {a.name}</td>
-                <td className="px-2.5 text-right font-mono tabular-nums">{formatDecimal(a.debit_total)}</td>
-                <td className="px-2.5 text-right font-mono tabular-nums">{formatDecimal(a.credit_total)}</td>
+              <tr key={a.code} className={trCls}>
+                <Td><span className="font-mono text-muted">{a.code}</span> {a.name}</Td>
+                <Td align="right" mono>{formatDecimal(a.debit_total)}</Td>
+                <Td align="right" mono>{formatDecimal(a.credit_total)}</Td>
               </tr>
             ))}
-            <tr className="h-8 border-t-2 border-primary font-medium">
-              <td className="px-2.5">Totals</td>
-              <td className="px-2.5 text-right font-mono tabular-nums">{formatDecimal(data.totals.debit)}</td>
-              <td className="px-2.5 text-right font-mono tabular-nums">{formatDecimal(data.totals.credit)}</td>
+            <tr className={cn(trCls, 'border-t-2 border-primary font-medium')}>
+              <Td>Totals</Td>
+              <Td align="right" mono>{formatDecimal(data.totals.debit)}</Td>
+              <Td align="right" mono>{formatDecimal(data.totals.credit)}</Td>
             </tr>
           </tbody>
         </table>
@@ -207,21 +209,21 @@ function TransSection({ title, rows, total, currency, highlightCode }: {
   return (
     <div className="border border-default rounded-md overflow-hidden">
       <div className="px-2.5 py-1.5 bg-subtle text-2xs uppercase tracking-wider text-muted font-medium border-b border-default">{title}</div>
-      <table className="w-full text-sm">
+      <table className={tableCls}>
         <tbody>
-          {rows.length === 0 && <tr className="h-7"><td className="px-2.5 text-muted italic" colSpan={2}>No movement</td></tr>}
+          {rows.length === 0 && <tr className={trCls}><Td className="text-muted italic" colSpan={2}>No movement</Td></tr>}
           {rows.map((r) => (
             <tr key={r.code ?? r.name} className={'h-7 border-b border-subtle' + (r.code === highlightCode ? ' bg-warning-subtle' : '')}>
-              <td className="px-2.5">
+              <Td>
                 {r.code && <span className="font-mono text-muted">{r.code}</span>} {r.name}
                 <span className="block text-2xs text-muted">PHP {formatDecimal(r.amount_php)} @ {Number(r.rate_applied).toFixed(6)}</span>
-              </td>
-              <td className="px-2.5 text-right font-mono tabular-nums align-top">{currency} {formatDecimal(r.amount)}</td>
+              </Td>
+              <Td align="right" mono className="align-top">{currency} {formatDecimal(r.amount)}</Td>
             </tr>
           ))}
-          <tr className="h-8 border-t-2 border-primary font-medium">
-            <td className="px-2.5">Total</td>
-            <td className="px-2.5 text-right font-mono tabular-nums">{currency} {formatDecimal(total)}</td>
+          <tr className={cn(trCls, 'border-t-2 border-primary font-medium')}>
+            <Td>Total</Td>
+            <Td align="right" mono>{currency} {formatDecimal(total)}</Td>
           </tr>
         </tbody>
       </table>

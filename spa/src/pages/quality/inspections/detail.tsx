@@ -26,6 +26,8 @@ import { ChainHeader } from '@/components/chain/ChainHeader';
 import { LinkedRecords } from '@/components/chain/LinkedRecords';
 import { usePermission } from '@/hooks/usePermission';
 import type { InspectionMeasurement, InspectionStatus } from '@/types/quality';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { cn } from '@/lib/cn';
 
 const STATUS_CHIP: Record<InspectionStatus, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
   draft: 'neutral',
@@ -326,24 +328,24 @@ export default function InspectionDetailPage() {
               meta={`${grouped[idx].length} parameter${grouped[idx].length === 1 ? '' : 's'}`}
               noPadding
             >
-              <table className="w-full text-xs">
-                <thead className="bg-subtle">
+              <table className={tableCls}>
+                <thead>
                   <tr>
-                    <th  className="h-8 px-2.5 py-2 text-left text-2xs uppercase tracking-wider text-muted font-medium">
+                    <Th>
                       Parameter
-                    </th>
-                    <th  className="h-8 px-2.5 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium">
+                    </Th>
+                    <Th align="right">
                       Nominal
-                    </th>
-                    <th  className="h-8 px-2.5 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium">
+                    </Th>
+                    <Th align="right">
                       Tolerance
-                    </th>
-                    <th  className="h-8 px-2.5 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium">
+                    </Th>
+                    <Th align="right">
                       Measured
-                    </th>
-                    <th  className="h-8 px-2.5 py-2 text-center text-2xs uppercase tracking-wider text-muted font-medium">
+                    </Th>
+                    <Th align="center">
                       Pass
-                    </th>
+                    </Th>
                   </tr>
                 </thead>
                 <tbody>
@@ -355,19 +357,19 @@ export default function InspectionDetailPage() {
                         ? `${m.tolerance_min ?? '−∞'} … ${m.tolerance_max ?? '+∞'}`
                         : '—';
                     return (
-                      <tr key={m.id} className="border-t border-subtle">
-                        <td className="px-2.5 py-2">
+                      <tr key={m.id} className={trCls}>
+                        <Td>
                           <div className="flex items-center gap-2">
                             <span>{m.parameter_name}</span>
                             {m.is_critical && <Chip variant="danger">Critical</Chip>}
                             <span className="text-2xs uppercase text-muted">{m.parameter_type}</span>
                           </div>
-                        </td>
-                        <td  className="px-2.5 py-2 text-right font-mono tabular-nums">
+                        </Td>
+                        <Td align="right" mono>
                           {m.nominal_value ?? '—'} {m.unit_of_measure ?? ''}
-                        </td>
-                        <td  className="px-2.5 py-2 text-right font-mono tabular-nums">{numericTol}</td>
-                        <td  className="px-2.5 py-2 text-right font-mono tabular-nums">
+                        </Td>
+                        <Td align="right" mono>{numericTol}</Td>
+                        <Td align="right" mono>
                           {m.parameter_type === 'visual' ? (
                             <span className="text-muted text-2xs">N/A</span>
                           ) : (
@@ -382,8 +384,8 @@ export default function InspectionDetailPage() {
                               }
                             />
                           )}
-                        </td>
-                        <td className="px-2.5 py-2 text-center">
+                        </Td>
+                        <Td align="center">
                           {m.parameter_type === 'visual' ? (
                             <select
                               disabled={isTerminal}
@@ -407,7 +409,7 @@ export default function InspectionDetailPage() {
                           ) : (
                             <Chip variant="danger">Fail</Chip>
                           )}
-                        </td>
+                        </Td>
                       </tr>
                     );
                   })}
@@ -454,15 +456,15 @@ export default function InspectionDetailPage() {
           {/* SPC Capability indices for this spec */}
           {data.spec && spc.data && Object.keys(spc.data).length > 0 && (
             <Panel title="SPC capability indices" meta={`${Object.keys(spc.data).length} dimension${Object.keys(spc.data).length === 1 ? '' : 's'}`}>
-              <table className="w-full text-xs mt-2">
+              <table className={cn(tableCls, 'mt-2')}>
                 <thead>
-                  <tr className="border-b border-default text-left text-muted">
-                    <th  className="h-8 py-1.5 pr-3 font-medium text-2xs uppercase tracking-wider text-muted">Dimension</th>
-                    <th  className="h-8 py-1.5 pr-3 text-right font-medium text-2xs uppercase tracking-wider text-muted">Mean</th>
-                    <th  className="h-8 py-1.5 pr-3 text-right font-medium text-2xs uppercase tracking-wider text-muted">Cp</th>
-                    <th  className="h-8 py-1.5 pr-3 text-right font-medium text-2xs uppercase tracking-wider text-muted">Cpk</th>
-                    <th  className="h-8 py-1.5 pr-3 text-right font-medium text-2xs uppercase tracking-wider text-muted">n</th>
-                    <th  className="h-8 py-1.5 font-medium text-2xs uppercase tracking-wider text-muted">Rating</th>
+                  <tr className={theadTrCls}>
+                    <Th>Dimension</Th>
+                    <Th align="right">Mean</Th>
+                    <Th align="right">Cp</Th>
+                    <Th align="right">Cpk</Th>
+                    <Th align="right">n</Th>
+                    <Th>Rating</Th>
                   </tr>
                 </thead>
                 <tbody>
@@ -470,13 +472,13 @@ export default function InspectionDetailPage() {
                     const variant = item.cpk >= 1.67 ? 'success' : item.cpk >= 1.33 ? 'info' : item.cpk >= 1.0 ? 'warning' : 'danger';
                     const label = item.cpk >= 1.67 ? 'Excellent' : item.cpk >= 1.33 ? 'Capable' : item.cpk >= 1.0 ? 'Marginal' : 'Not capable';
                     return (
-                      <tr key={item.parameter_name} className="border-b border-subtle">
-                        <td className="py-1.5 pr-3">{item.parameter_name}{item.unit ? ` (${item.unit})` : ''}</td>
-                        <td  className="py-1.5 pr-3 text-right font-mono tabular-nums">{item.mean.toFixed(3)}</td>
-                        <td  className="py-1.5 pr-3 text-right font-mono tabular-nums">{item.cp.toFixed(2)}</td>
-                        <td  className="py-1.5 pr-3 text-right font-mono tabular-nums font-medium">{item.cpk.toFixed(2)}</td>
-                        <td  className="py-1.5 pr-3 text-right font-mono tabular-nums text-muted">{item.sample_count}</td>
-                        <td className="py-1.5"><Chip variant={variant}>{label}</Chip></td>
+                      <tr key={item.parameter_name} className={trCls}>
+                        <Td>{item.parameter_name}{item.unit ? ` (${item.unit})` : ''}</Td>
+                        <Td align="right" mono>{item.mean.toFixed(3)}</Td>
+                        <Td align="right" mono>{item.cp.toFixed(2)}</Td>
+                        <Td align="right" mono className="font-medium">{item.cpk.toFixed(2)}</Td>
+                        <Td align="right" mono className="text-muted">{item.sample_count}</Td>
+                        <Td><Chip variant={variant}>{label}</Chip></Td>
                       </tr>
                     );
                   })}

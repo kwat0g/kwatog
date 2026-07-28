@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { formatDateTime } from '@/lib/formatDate';
 import type { EightDReportData } from '@/types/b2b';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 export default function CustomerComplaintsPage() {
   const queryClient = useQueryClient();
@@ -95,40 +96,40 @@ export default function CustomerComplaintsPage() {
       {/* Complaints list */}
       <Panel title="Your Complaints">
         {complaints && complaints.length > 0 ? (
-          <table className="w-full text-xs">
+          <table className={tableCls}>
             <thead>
-              <tr className="border-b border-border text-muted">
-                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">#</th>
-                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Severity</th>
-                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Description</th>
-                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Qty</th>
-                <th  className="h-8 text-left py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Date</th>
-                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">Status</th>
-                <th  className="h-8 text-right py-2 px-3 font-medium text-2xs uppercase tracking-wider text-muted">8D</th>
+              <tr className={theadTrCls}>
+                <Th>#</Th>
+                <Th>Severity</Th>
+                <Th>Description</Th>
+                <Th align="right">Qty</Th>
+                <Th>Date</Th>
+                <Th align="right">Status</Th>
+                <Th align="right">8D</Th>
               </tr>
             </thead>
             <tbody>
               {complaints.map((c) => (
-                <tr key={c.id} className="border-b border-border/50 hover:bg-subtle/50 transition-colors">
-                  <td className="py-2.5 px-3 font-mono text-muted">{c.complaint_number}</td>
-                  <td className="py-2.5 px-3">
+                <tr key={c.id} className={trCls}>
+                  <Td mono className="text-muted">{c.complaint_number}</Td>
+                  <Td>
                     <span className={`inline-block px-2 py-0.5 rounded-full text-2xs font-medium ${
                       c.severity === 'critical' ? 'bg-danger/10 text-danger' :
                       c.severity === 'major' ? 'bg-warning/10 text-warning' :
                       'bg-subtle text-muted'
                     }`}>{c.severity}</span>
-                  </td>
-                  <td className="py-2.5 px-3 max-w-xs truncate">{c.description}</td>
-                  <td  className="py-2.5 px-3 text-right font-mono tabular-nums">{c.affected_quantity}</td>
-                  <td className="py-2.5 px-3 text-muted">{c.received_date ?? '—'}</td>
-                  <td  className="py-2.5 px-3 text-right font-mono tabular-nums">
+                  </Td>
+                  <Td className="max-w-xs truncate">{c.description}</Td>
+                  <Td align="right" mono>{c.affected_quantity}</Td>
+                  <Td className="text-muted">{c.received_date ?? '—'}</Td>
+                  <Td align="right" mono>
                     <span className={`inline-block px-2 py-0.5 rounded-full text-2xs font-medium uppercase ${
                       c.status === 'closed' ? 'bg-success/10 text-success' :
                       c.status === 'resolved' ? 'bg-accent/10 text-accent' :
                       'bg-warning/10 text-warning'
                     }`}>{c.status}</span>
-                  </td>
-                  <td  className="py-2.5 px-3 text-right font-mono tabular-nums">
+                  </Td>
+                  <Td align="right" mono>
                     {(c.status === 'resolved' || c.status === 'closed') && (
                       <button
                         onClick={() => open8d(c.id)}
@@ -138,7 +139,7 @@ export default function CustomerComplaintsPage() {
                         <FileText size={12} /> 8D
                       </button>
                     )}
-                  </td>
+                  </Td>
                 </tr>
               ))}
             </tbody>

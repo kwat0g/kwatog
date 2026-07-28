@@ -21,6 +21,7 @@ import { formatPeso } from '@/lib/formatNumber';
 import { fromApprovalRecords } from '@/lib/approvals';
 import type { PurchaseRequest, PurchaseRequestStatus } from '@/types/purchasing';
 import type { ChainStep } from '@/types/chain';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 const errMsg = (e: unknown, fallback: string) =>
   (e instanceof AxiosError ? e.response?.data?.message : undefined) ?? fallback;
@@ -146,27 +147,27 @@ export default function PurchaseRequestDetailPage() {
             </dl>
           </Panel>
           <Panel title="Line items">
-            <table className="w-full text-xs">
-              <thead><tr className="text-2xs uppercase tracking-wider text-muted">
-                <th  className="h-8 text-left py-1 text-2xs uppercase tracking-wider text-muted font-medium">Item</th>
-                <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Description</th>
-                <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium">Qty</th>
-                <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Unit</th>
-                <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium">Est. price</th>
-                <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium">Total</th>
+            <table className={tableCls}>
+              <thead><tr className={theadTrCls}>
+                <Th>Item</Th>
+                <Th>Description</Th>
+                <Th align="right">Qty</Th>
+                <Th>Unit</Th>
+                <Th align="right">Est. price</Th>
+                <Th align="right">Total</Th>
               </tr></thead>
               <tbody>
                 {data.items?.map((l) => (
-                  <tr key={l.id} className="h-8 border-t border-subtle">
-                    <td className="font-mono">{l.item?.code ?? '—'}</td>
-                    <td>{l.description}</td>
-                    <td  className="text-right font-mono tabular-nums">{Number(l.quantity).toFixed(2)}</td>
-                    <td>{l.unit}</td>
-                    <td  className="text-right font-mono tabular-nums">{l.estimated_unit_price ? Number(l.estimated_unit_price).toFixed(2) : '—'}</td>
-                    <td  className="text-right font-mono tabular-nums font-medium">
+                  <tr key={l.id} className={trCls}>
+                    <Td mono>{l.item?.code ?? '—'}</Td>
+                    <Td>{l.description}</Td>
+                    <Td align="right" mono>{Number(l.quantity).toFixed(2)}</Td>
+                    <Td>{l.unit}</Td>
+                    <Td align="right" mono>{l.estimated_unit_price ? Number(l.estimated_unit_price).toFixed(2) : '—'}</Td>
+                    <Td align="right" mono className="font-medium">
                       {l.estimated_total}
                       {l.suggested_vendor && <div className="text-2xs text-muted mt-0.5">Vendor: {l.suggested_vendor.name}</div>}
-                    </td>
+                    </Td>
                   </tr>
                 ))}
               </tbody>

@@ -25,6 +25,7 @@ import { customersApi } from '@/api/accounting/customers';
 import { forecastingApi } from '@/api/forecasting';
 import { usePermission } from '@/hooks/usePermission';
 import type { ForecastMethod, DemandForecast } from '@/types/forecasting';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 const METHOD_LABELS: Record<ForecastMethod, string> = {
   moving_avg: 'Simple moving average',
@@ -332,50 +333,50 @@ export default function DemandForecastingPage() {
         {/* Forecast rows */}
         <Panel title="Forecast rows" noPadding>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className={tableCls}>
               <thead>
-                <tr className="text-left text-2xs uppercase tracking-wide text-muted bg-elevated/50 border-b border-default">
-                  <th  className="h-8 px-4 py-2 text-2xs uppercase tracking-wider text-muted font-medium">Period</th>
-                  <th  className="h-8 px-4 py-2 text-2xs uppercase tracking-wider text-muted font-medium">Method</th>
-                  <th  className="h-8 px-4 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium">Forecast qty</th>
-                  <th  className="h-8 px-4 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium">Confidence</th>
-                  <th  className="h-8 px-4 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium">Actual</th>
-                  <th  className="h-8 px-4 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium">Variance</th>
-                  <th  className="h-8 px-4 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium" />
+                <tr className={theadTrCls}>
+                  <Th>Period</Th>
+                  <Th>Method</Th>
+                  <Th align="right">Forecast qty</Th>
+                  <Th align="right">Confidence</Th>
+                  <Th align="right">Actual</Th>
+                  <Th align="right">Variance</Th>
+                  <Th align="right" />
                 </tr>
               </thead>
               <tbody>
                 {!productId ? (
-                  <tr><td colSpan={7} className="px-4 py-4 text-center text-muted">Select a product.</td></tr>
+                  <tr><Td align="center" className="text-muted" colSpan={7}>Select a product.</Td></tr>
                 ) : forecastsQ.isLoading ? (
-                  <tr><td colSpan={7} className="px-4 py-4"><SkeletonBlock className="h-6" /></td></tr>
+                  <tr><Td colSpan={7}><SkeletonBlock className="h-6" /></Td></tr>
                 ) : (forecastsQ.data ?? []).length === 0 ? (
-                  <tr><td colSpan={7} className="px-4 py-4 text-center text-muted">No forecasts yet — click <em>Recompute</em>.</td></tr>
+                  <tr><Td align="center" className="text-muted" colSpan={7}>No forecasts yet — click <em>Recompute</em>.</Td></tr>
                 ) : (forecastsQ.data ?? []).map((f) => (
-                  <tr key={f.id} className="border-b border-default/50">
-                    <td className="px-4 py-2">{MONTH_NAMES[f.forecast_month - 1]} {f.forecast_year}</td>
-                    <td className="px-4 py-2">
+                  <tr key={f.id} className={trCls}>
+                    <Td>{MONTH_NAMES[f.forecast_month - 1]} {f.forecast_year}</Td>
+                    <Td>
                       <Chip variant="neutral">{METHOD_LABELS[f.method]}</Chip>
-                    </td>
-                    <td  className="px-4 py-2 text-right tabular-nums font-mono">{f.forecasted_quantity.toFixed(2)}</td>
-                    <td  className="px-4 py-2 text-right tabular-nums font-mono">
+                    </Td>
+                    <Td align="right" mono>{f.forecasted_quantity.toFixed(2)}</Td>
+                    <Td align="right" mono>
                       {f.confidence_level !== null ? `${f.confidence_level.toFixed(0)}%` : '—'}
-                    </td>
-                    <td  className="px-4 py-2 text-right tabular-nums text-muted font-mono">
+                    </Td>
+                    <Td align="right" mono className="text-muted">
                       {f.actual_quantity !== null ? f.actual_quantity.toFixed(2) : '—'}
-                    </td>
-                    <td  className="px-4 py-2 text-right tabular-nums font-mono">
+                    </Td>
+                    <Td align="right" mono>
                       {f.variance !== null ? (
                         <span className={f.variance < 0 ? 'text-danger' : 'text-success'}>
                           {f.variance > 0 ? '+' : ''}{f.variance.toFixed(2)}
                         </span>
                       ) : '—'}
-                    </td>
-                    <td  className="px-4 py-2 text-right font-mono tabular-nums">
+                    </Td>
+                    <Td align="right" mono>
                       {canManage && (
                         <Button size="sm" variant="ghost" onClick={() => openManual(f)}>Override</Button>
                       )}
-                    </td>
+                    </Td>
                   </tr>
                 ))}
               </tbody>

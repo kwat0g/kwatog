@@ -16,6 +16,8 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { numberInputProps } from '@/lib/numberInput';
 import type { ApiValidationError, ApiSuccess } from '@/types';
 import type { CreateGrnData } from '@/types/inventory';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { cn } from '@/lib/cn';
 
 interface Line {
   purchase_order_item_id: string;
@@ -196,28 +198,28 @@ export default function CreateGrnPage() {
             {items.length === 0 ? (
               <div className="text-sm text-muted">No outstanding lines on this PO.</div>
             ) : (
-              <table className="w-full text-xs">
+              <table className={tableCls}>
                 <thead>
-                  <tr className="text-2xs uppercase tracking-wider text-muted">
-                    <th  className="h-8 text-left py-1 font-medium text-2xs uppercase tracking-wider text-muted">Item</th>
-                    <th  className="h-8 text-right font-medium text-2xs uppercase tracking-wider text-muted">Ordered</th>
-                    <th  className="h-8 text-right font-medium text-2xs uppercase tracking-wider text-muted">Remaining</th>
-                    <th  className="h-8 text-right font-medium text-2xs uppercase tracking-wider text-muted">Receive qty</th>
-                    <th  className="h-8 text-right font-medium text-2xs uppercase tracking-wider text-muted">Unit cost</th>
-                    <th  className="h-8 text-left font-medium text-2xs uppercase tracking-wider text-muted">Location</th>
-                    <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium" />
+                  <tr className={theadTrCls}>
+                    <Th>Item</Th>
+                    <Th align="right">Ordered</Th>
+                    <Th align="right">Remaining</Th>
+                    <Th align="right">Receive qty</Th>
+                    <Th align="right">Unit cost</Th>
+                    <Th>Location</Th>
+                    <Th />
                   </tr>
                 </thead>
                 <tbody>
                   {items.map((line, i) => (
-                    <tr key={line.purchase_order_item_id} className="h-9 border-t border-subtle align-top">
-                      <td className="pt-2">
+                    <tr key={line.purchase_order_item_id} className={cn(trCls, 'align-top')}>
+                      <Td>
                         <span className="font-mono">{line.item_code}</span>
                         <div className="text-2xs text-muted">{line.item_name}</div>
-                      </td>
-                      <td  className="text-right pt-2 font-mono tabular-nums">{Number(line.ordered).toFixed(2)}</td>
-                      <td  className="text-right pt-2 font-mono tabular-nums">{Number(line.remaining).toFixed(2)}</td>
-                      <td  className="text-right font-mono tabular-nums">
+                      </Td>
+                      <Td align="right" mono>{Number(line.ordered).toFixed(2)}</Td>
+                      <Td align="right" mono>{Number(line.remaining).toFixed(2)}</Td>
+                      <Td align="right" mono>
                         <input
                           className={`h-7 w-24 px-2 rounded-sm border text-right font-mono tabular-nums ${errors.itemErrors[i]?.quantity ? 'border-danger' : 'border-default'}`}
                           type="text"
@@ -228,8 +230,8 @@ export default function CreateGrnPage() {
                         {errors.itemErrors[i]?.quantity && (
                           <div className="text-2xs text-danger-fg mt-0.5">{errors.itemErrors[i].quantity}</div>
                         )}
-                      </td>
-                      <td  className="text-right font-mono tabular-nums">
+                      </Td>
+                      <Td align="right" mono>
                         <input
                           className="h-7 w-24 px-2 rounded-sm border border-default text-right font-mono tabular-nums"
                           type="text"
@@ -237,8 +239,8 @@ export default function CreateGrnPage() {
                           {...numberInputProps()}
                           onChange={(e) => setItems(items.map((it, k) => k === i ? { ...it, unit_cost: e.target.value } : it))}
                         />
-                      </td>
-                      <td>
+                      </Td>
+                      <Td>
                         <select
                           className={`h-7 w-44 px-1 rounded-sm border text-2xs ${errors.itemErrors[i]?.location ? 'border-danger' : 'border-default'}`}
                           value={line.location_id}
@@ -252,8 +254,8 @@ export default function CreateGrnPage() {
                         {errors.itemErrors[i]?.location && (
                           <div className="text-2xs text-danger-fg mt-0.5">{errors.itemErrors[i].location}</div>
                         )}
-                      </td>
-                      <td  className="pt-1.5 text-right font-mono tabular-nums">
+                      </Td>
+                      <Td align="right" mono>
                         <button
                           type="button"
                           onClick={() => setItems(items.filter((_, k) => k !== i))}
@@ -262,7 +264,7 @@ export default function CreateGrnPage() {
                         >
                           <Trash2 size={12} />
                         </button>
-                      </td>
+                      </Td>
                     </tr>
                   ))}
                 </tbody>

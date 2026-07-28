@@ -27,6 +27,7 @@ import { SkeletonBlock, SkeletonTable } from '@/components/ui/Skeleton';
 import { StatCard } from '@/components/ui/StatCard';
 import { forecastingApi } from '@/api/forecasting';
 import type { ProductAccuracy } from '@/types/forecasting';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -229,55 +230,40 @@ export default function ForecastAccuracyPage() {
             />
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className={tableCls}>
                 <thead>
-                  <tr className="text-left text-2xs uppercase tracking-wide text-muted bg-elevated/50 border-b border-default">
-                    <th 
-                      className="h-8 px-4 py-2 cursor-pointer select-none text-2xs uppercase tracking-wider text-muted font-medium"
-                      onClick={() => toggleSort('part_number')}
-                    >
+                  <tr className={theadTrCls}>
+                    <Th className="cursor-pointer select-none" onClick={() => toggleSort('part_number')}>
                       Part #{sortIndicator('part_number')}
-                    </th>
-                    <th 
-                      className="h-8 px-4 py-2 cursor-pointer select-none text-2xs uppercase tracking-wider text-muted font-medium"
-                      onClick={() => toggleSort('name')}
-                    >
+                    </Th>
+                    <Th className="cursor-pointer select-none" onClick={() => toggleSort('name')}>
                       Product{sortIndicator('name')}
-                    </th>
-                    <th 
-                      className="h-8 px-4 py-2 text-right cursor-pointer select-none text-2xs uppercase tracking-wider text-muted font-medium"
-                      onClick={() => toggleSort('mape')}
-                    >
+                    </Th>
+                    <Th align="right" className="cursor-pointer select-none" onClick={() => toggleSort('mape')}>
                       MAPE %{sortIndicator('mape')}
-                    </th>
-                    <th 
-                      className="h-8 px-4 py-2 text-right cursor-pointer select-none text-2xs uppercase tracking-wider text-muted font-medium"
-                      onClick={() => toggleSort('bias')}
-                    >
+                    </Th>
+                    <Th align="right" className="cursor-pointer select-none" onClick={() => toggleSort('bias')}>
                       Bias %{sortIndicator('bias')}
-                    </th>
-                    <th 
-                      className="h-8 px-4 py-2 text-right cursor-pointer select-none text-2xs uppercase tracking-wider text-muted font-medium"
-                      onClick={() => toggleSort('periods_evaluated')}
-                    >
+                    </Th>
+                    <Th align="right" className="cursor-pointer select-none" onClick={() => toggleSort('periods_evaluated')}>
                       Periods{sortIndicator('periods_evaluated')}
-                    </th>
+                    </Th>
                   </tr>
                 </thead>
                 <tbody>
                   {sortedProducts.map((p: ProductAccuracy) => (
-                    <tr key={p.product_id} className="border-b border-default/50 hover:bg-elevated/30">
-                      <td className="px-4 py-2 font-mono text-xs tabular-nums">{p.part_number}</td>
-                      <td className="px-4 py-2 text-primary">{p.name}</td>
-                      <td  className="px-4 py-2 text-right font-mono tabular-nums">
+                    <tr key={p.product_id} className={trCls}>
+                      <Td mono className="text-xs">{p.part_number}</Td>
+                      <Td className="text-primary">{p.name}</Td>
+                      <Td align="right" mono>
                         <span className={p.mape <= 15 ? 'text-success' : p.mape <= 30 ? 'text-warning' : 'text-danger'}>
                           {p.mape.toFixed(1)}%
                         </span>
-                      </td>
-                      <td  className="px-4 py-2 text-right font-mono tabular-nums">
+                      </Td>
+                      <Td align="right" mono>
                         {p.bias > 0 ? '+' : ''}{p.bias.toFixed(1)}%
-                      </td>
-                      <td  className="px-4 py-2 text-right font-mono tabular-nums">{p.periods_evaluated}</td>
+                      </Td>
+                      <Td align="right" mono>{p.periods_evaluated}</Td>
                     </tr>
                   ))}
                 </tbody>

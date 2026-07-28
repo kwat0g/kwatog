@@ -20,6 +20,7 @@ import { userOverridesApi } from '@/api/admin/user-overrides';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDateTime } from '@/lib/formatDate';
 import type { ApiValidationError } from '@/types';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import type {
   CreateUserPermissionOverrideData,
   PermissionOverrideType,
@@ -126,40 +127,40 @@ export function PermissionOverrides({
       )}
 
       {canManage && list.data && list.data.length > 0 && (
-        <table className="w-full text-xs">
+        <table className={tableCls}>
           <thead>
-            <tr className="border-b border-default">
-              <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">
+            <tr className={theadTrCls}>
+              <Th>
                 Permission
-              </th>
-              <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">
+              </Th>
+              <Th>
                 Type
-              </th>
-              <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">
+              </Th>
+              <Th>
                 Granted by
-              </th>
-              <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">
+              </Th>
+              <Th>
                 Reason
-              </th>
-              <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">
+              </Th>
+              <Th>
                 Expires
-              </th>
-              <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium" />
+              </Th>
+              <Th align="right" />
             </tr>
           </thead>
           <tbody>
             {list.data.map((o) => (
-              <tr key={o.id} className="h-8 border-b border-subtle hover:bg-subtle">
-                <td className="px-2.5">
+              <tr key={o.id} className={trCls}>
+                <Td>
                   <div className="font-medium">{o.permission.name}</div>
                   <div className="text-xs font-mono text-muted">{o.permission.slug}</div>
-                </td>
-                <td className="px-2.5">
+                </Td>
+                <Td>
                   <Chip variant={o.type === 'grant' ? 'success' : 'danger'}>
                     {o.type === 'grant' ? 'Granted' : 'Revoked'}
                   </Chip>
-                </td>
-                <td className="px-2.5">
+                </Td>
+                <Td>
                   {o.granted_by ? (
                     <span>
                       {o.granted_by.name}{' '}
@@ -168,16 +169,16 @@ export function PermissionOverrides({
                   ) : (
                     <span className="text-muted">—</span>
                   )}
-                </td>
-                <td className="px-2.5 text-muted">
+                </Td>
+                <Td className="text-muted">
                   <Tooltip content={o.reason}>
                     <span className="block max-w-[260px] truncate">{o.reason}</span>
                   </Tooltip>
-                </td>
-                <td className="px-2.5 font-mono tabular-nums text-secondary">
+                </Td>
+                <Td mono className="text-secondary">
                   {o.expires_at ? formatDateTime(o.expires_at) : 'No expiry'}
-                </td>
-                <td  className="px-2.5 text-right font-mono tabular-nums" onClick={(e) => e.stopPropagation()}>
+                </Td>
+                <Td align="right" mono onClick={(e) => e.stopPropagation()}>
                   <CanDo permission="admin.users.manage_permissions">
                     <Button
                       variant="ghost"
@@ -189,7 +190,7 @@ export function PermissionOverrides({
                       Remove
                     </Button>
                   </CanDo>
-                </td>
+                </Td>
               </tr>
             ))}
           </tbody>

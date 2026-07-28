@@ -18,6 +18,7 @@ import { Modal } from '@/components/ui/Modal';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 const MONTHS = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -72,30 +73,30 @@ export default function AccountingPeriodsPage() {
           )}
           {periods.length > 0 && (
             <div className="border border-default rounded-md overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="text-2xs uppercase tracking-wider text-muted bg-subtle">
-                  <tr className="border-b border-default">
-                    <th className="h-8 px-2.5 text-left">Period</th>
-                    <th className="h-8 px-2.5 text-left">Status</th>
-                    <th className="h-8 px-2.5 text-left">Closed</th>
-                    <th className="h-8 px-2.5 text-left">Reopened</th>
-                    <th className="h-8 px-2.5 text-left">Reopen reason</th>
-                    <th className="h-8 px-2.5 text-right" />
+              <table className={tableCls}>
+                <thead>
+                  <tr className={theadTrCls}>
+                    <Th>Period</Th>
+                    <Th>Status</Th>
+                    <Th>Closed</Th>
+                    <Th>Reopened</Th>
+                    <Th>Reopen reason</Th>
+                    <Th align="right" />
                   </tr>
                 </thead>
                 <tbody>
                   {periods.map((p) => (
-                    <tr key={p.id} className="border-b border-subtle h-9">
-                      <td className="px-2.5 font-mono tabular-nums">{MONTHS[p.month]} {p.year}</td>
-                      <td className="px-2.5"><Chip variant={statusVariant(p.status)}>{p.status_label}</Chip></td>
-                      <td className="px-2.5 text-xs text-muted">
+                    <tr key={p.id} className={trCls}>
+                      <Td mono>{MONTHS[p.month]} {p.year}</Td>
+                      <Td><Chip variant={statusVariant(p.status)}>{p.status_label}</Chip></Td>
+                      <Td className="text-xs text-muted">
                         {p.closed_at ? <>{formatDate(p.closed_at)}{p.closed_by?.name ? ` · ${p.closed_by.name}` : ''}</> : '—'}
-                      </td>
-                      <td className="px-2.5 text-xs text-muted">
+                      </Td>
+                      <Td className="text-xs text-muted">
                         {p.reopened_at ? <>{formatDate(p.reopened_at)}{p.reopened_by?.name ? ` · ${p.reopened_by.name}` : ''}</> : '—'}
-                      </td>
-                      <td className="px-2.5 text-xs text-muted max-w-[220px] truncate">{p.reopen_reason ?? '—'}</td>
-                      <td className="px-2.5 text-right">
+                      </Td>
+                      <Td className="text-xs text-muted max-w-[220px] truncate">{p.reopen_reason ?? '—'}</Td>
+                      <Td align="right">
                         {canManage && p.status !== 'closed' && (
                           <Button variant="secondary" size="sm" icon={<Lock size={13} />} onClick={() => setCloseTarget(p)}>
                             Close
@@ -106,7 +107,7 @@ export default function AccountingPeriodsPage() {
                             Reopen
                           </Button>
                         )}
-                      </td>
+                      </Td>
                     </tr>
                   ))}
                 </tbody>

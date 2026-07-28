@@ -9,6 +9,7 @@ import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { cn } from '@/lib/cn';
 import { formatPeso } from '@/lib/formatNumber';
 import type { BudgetVsActual, BudgetVsActualRow } from '@/types/budgeting';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 export default function BudgetVsActualPage() {
   const [groupBy, setGroupBy] = useState<string>('department');
@@ -117,14 +118,14 @@ export default function BudgetVsActualPage() {
           {/* Grouped Summary */}
           <Panel title="Summary by Group">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className={tableCls}>
                 <thead>
-                  <tr className="border-b border-default text-left text-xs uppercase tracking-wider text-muted">
-                    <th  className="h-8 py-2 pr-4 text-2xs uppercase tracking-wider text-muted font-medium">Group</th>
-                    <th  className="h-8 py-2 pr-4 text-right text-2xs uppercase tracking-wider text-muted font-medium">Budgeted</th>
-                    <th  className="h-8 py-2 pr-4 text-right text-2xs uppercase tracking-wider text-muted font-medium">Actual</th>
-                    <th  className="h-8 py-2 pr-4 text-right text-2xs uppercase tracking-wider text-muted font-medium">Variance</th>
-                    <th  className="h-8 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium">%</th>
+                  <tr className={theadTrCls}>
+                    <Th>Group</Th>
+                    <Th align="right">Budgeted</Th>
+                    <Th align="right">Actual</Th>
+                    <Th align="right">Variance</Th>
+                    <Th align="right">%</Th>
                   </tr>
                 </thead>
                 <tbody>
@@ -132,21 +133,21 @@ export default function BudgetVsActualPage() {
                     const variance = group.budgeted - group.actual;
                     const pct = group.budgeted > 0 ? (variance / group.budgeted * 100) : 0;
                     return (
-                      <tr key={key} className="border-b border-default/50 hover:bg-elevated/50 transition-colors">
-                        <td className="py-2.5 pr-4 font-medium">{key}</td>
-                        <td  className="py-2.5 pr-4 text-right font-mono tabular-nums">₱{(group.budgeted / 1_000_000).toFixed(2)}M</td>
-                        <td  className="py-2.5 pr-4 text-right font-mono tabular-nums">₱{(group.actual / 1_000_000).toFixed(2)}M</td>
-                        <td className={cn('py-2.5 pr-4 text-right font-mono', variance < 0 ? 'text-danger-fg' : 'text-success-fg')}>
+                      <tr key={key} className={trCls}>
+                        <Td className="font-medium">{key}</Td>
+                        <Td align="right" mono>₱{(group.budgeted / 1_000_000).toFixed(2)}M</Td>
+                        <Td align="right" mono>₱{(group.actual / 1_000_000).toFixed(2)}M</Td>
+                        <Td align="right" mono className={cn(variance < 0 ? 'text-danger-fg' : 'text-success-fg')}>
                           {variance >= 0 ? '+' : ''}₱{(Math.abs(variance) / 1_000_000).toFixed(2)}M
-                        </td>
-                        <td  className="py-2.5 text-right font-mono tabular-nums">
+                        </Td>
+                        <Td align="right" mono>
                           <span className={cn(
                             'inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium',
                             pct < 0 ? 'text-danger-fg bg-danger-bg' : 'text-success-fg bg-success-bg'
                           )}>
                             {pct >= 0 ? '+' : ''}{pct.toFixed(1)}%
                           </span>
-                        </td>
+                        </Td>
                       </tr>
                     );
                   })}
@@ -158,40 +159,40 @@ export default function BudgetVsActualPage() {
           {/* Detail Rows */}
           <Panel title="Line Item Detail">
             <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
-              <table className="w-full text-sm">
+              <table className={tableCls}>
                 <thead className="sticky top-0 bg-canvas">
-                  <tr className="border-b border-default text-left text-xs uppercase tracking-wider text-muted">
-                    <th  className="h-8 py-2 pr-3 text-2xs uppercase tracking-wider text-muted font-medium">Account</th>
-                    <th  className="h-8 py-2 pr-3 text-2xs uppercase tracking-wider text-muted font-medium">Department</th>
-                    <th  className="h-8 py-2 pr-3 text-right text-2xs uppercase tracking-wider text-muted font-medium">Budgeted</th>
-                    <th  className="h-8 py-2 pr-3 text-right text-2xs uppercase tracking-wider text-muted font-medium">Actual</th>
-                    <th  className="h-8 py-2 pr-3 text-right text-2xs uppercase tracking-wider text-muted font-medium">Variance</th>
-                    <th  className="h-8 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium">%</th>
+                  <tr className={theadTrCls}>
+                    <Th>Account</Th>
+                    <Th>Department</Th>
+                    <Th align="right">Budgeted</Th>
+                    <Th align="right">Actual</Th>
+                    <Th align="right">Variance</Th>
+                    <Th align="right">%</Th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.rows.map((row, i) => {
                     const isOver = row.variance < 0;
                     return (
-                      <tr key={i} className="border-b border-default/50 hover:bg-elevated/50 transition-colors">
-                        <td className="py-2 pr-3">
+                      <tr key={i} className={trCls}>
+                        <Td>
                           <span className="font-medium">{row.account_code}</span>
                           <span className="ml-1 text-muted text-xs">{row.account_name}</span>
-                        </td>
-                        <td className="py-2 pr-3 text-secondary">{row.department}</td>
-                        <td  className="py-2 pr-3 text-right font-mono tabular-nums">₱{(row.budgeted / 1000).toFixed(0)}K</td>
-                        <td  className="py-2 pr-3 text-right font-mono tabular-nums">₱{(row.actual / 1000).toFixed(0)}K</td>
-                        <td className={cn('py-2 pr-3 text-right font-mono', isOver ? 'text-danger-fg' : 'text-success-fg')}>
+                        </Td>
+                        <Td className="text-secondary">{row.department}</Td>
+                        <Td align="right" mono>₱{(row.budgeted / 1000).toFixed(0)}K</Td>
+                        <Td align="right" mono>₱{(row.actual / 1000).toFixed(0)}K</Td>
+                        <Td align="right" mono className={cn(isOver ? 'text-danger-fg' : 'text-success-fg')}>
                           {row.variance >= 0 ? '+' : ''}{row.variance >= 0 ? '₱' : '-₱'}{(Math.abs(row.variance) / 1000).toFixed(0)}K
-                        </td>
-                        <td  className="py-2 text-right font-mono tabular-nums">
+                        </Td>
+                        <Td align="right" mono>
                           <span className={cn(
                             'inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium',
                             row.variance_pct < 0 ? 'text-danger-fg bg-danger-bg' : 'text-success-fg bg-success-bg'
                           )}>
                             {row.variance_pct >= 0 ? '+' : ''}{row.variance_pct}%
                           </span>
-                        </td>
+                        </Td>
                       </tr>
                     );
                   })}

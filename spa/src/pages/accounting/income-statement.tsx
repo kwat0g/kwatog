@@ -9,6 +9,8 @@ import { Input } from '@/components/ui/Input';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatPeso } from '@/lib/formatNumber';
+import { Td, tableCls, trCls } from '@/components/ui/table-cells';
+import { cn } from '@/lib/cn';
 
 export default function IncomeStatementPage() {
   const today = new Date();
@@ -46,15 +48,15 @@ export default function IncomeStatementPage() {
       {data && (
         <div className="px-5 py-4">
           <div className="border border-default rounded-md overflow-hidden max-w-3xl">
-            <table className="w-full text-sm">
+            <table className={tableCls}>
               <tbody>
                 <Section label="REVENUE" rows={data.revenue.accounts} totalLabel="Total Revenue" total={data.revenue.total} />
                 {data.cogs.accounts.length > 0 && <Section label="COST OF GOODS SOLD" rows={data.cogs.accounts} totalLabel="Total COGS" total={data.cogs.total} />}
-                <tr className="h-9 border-t-2 border-primary font-medium"><td className="px-2.5">GROSS PROFIT</td><td  className="px-2.5 text-right font-mono tabular-nums">{formatPeso(data.gross_profit)}</td></tr>
+                <tr className={cn(trCls, 'border-t-2 border-primary font-medium')}><Td>GROSS PROFIT</Td><Td align="right" mono>{formatPeso(data.gross_profit)}</Td></tr>
                 <Section label="OPERATING EXPENSES" rows={data.operating_expenses.accounts} totalLabel="Total OpEx" total={data.operating_expenses.total} />
-                <tr className="h-10 border-t-2 border-primary border-b-2 border-primary font-medium">
-                  <td className="px-2.5 text-base">NET INCOME</td>
-                  <td className={'px-2.5 text-right font-mono tabular-nums text-base ' + (Number(data.net_income) >= 0 ? 'text-success-fg' : 'text-danger-fg')}>{formatPeso(data.net_income)}</td>
+                <tr className={cn(trCls, 'border-t-2 border-primary font-medium')}>
+                  <Td className="text-base">NET INCOME</Td>
+                  <Td align="right" mono className={' text-base ' + (Number(data.net_income) >= 0 ? 'text-success-fg' : 'text-danger-fg')}>{formatPeso(data.net_income)}</Td>
                 </tr>
               </tbody>
             </table>
@@ -68,14 +70,14 @@ export default function IncomeStatementPage() {
 function Section({ label, rows, totalLabel, total }: { label: string; rows: { code: string; name: string; amount: string }[]; totalLabel: string; total: string }) {
   return (
     <>
-      <tr><td colSpan={2} className="px-2.5 py-1.5 bg-subtle text-2xs uppercase tracking-wider text-muted font-medium">{label}</td></tr>
+      <tr><Td className="bg-subtle text-2xs uppercase tracking-wider text-muted font-medium" colSpan={2}>{label}</Td></tr>
       {rows.map((r) => (
-        <tr key={r.code} className="h-7 border-b border-subtle">
-          <td className="px-2.5 pl-6"><span className="font-mono text-muted">{r.code}</span> · {r.name}</td>
-          <td  className="px-2.5 text-right font-mono tabular-nums">{formatPeso(r.amount)}</td>
+        <tr key={r.code} className={trCls}>
+          <Td><span className="font-mono text-muted">{r.code}</span> · {r.name}</Td>
+          <Td align="right" mono>{formatPeso(r.amount)}</Td>
         </tr>
       ))}
-      <tr className="h-7 border-b border-default font-medium"><td className="px-2.5">{totalLabel}</td><td  className="px-2.5 text-right font-mono tabular-nums">{formatPeso(total)}</td></tr>
+      <tr className={cn(trCls, 'font-medium')}><Td>{totalLabel}</Td><Td align="right" mono>{formatPeso(total)}</Td></tr>
     </>
   );
 }

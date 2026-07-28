@@ -13,6 +13,7 @@ import { SkeletonDetail } from '@/components/ui/Skeleton';
 import toast from 'react-hot-toast';
 import { Plus, Trash2 } from 'lucide-react';
 import type { FiscalYear } from '@/types/budgeting';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 const MONTHS = [
   { key: 'jan', label: 'Jan' }, { key: 'feb', label: 'Feb' }, { key: 'mar', label: 'Mar' },
@@ -193,21 +194,21 @@ export default function BudgetCreatePage() {
         }
       >
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className={tableCls}>
             <thead>
-              <tr className="border-b border-default text-left text-xs uppercase tracking-wider text-muted">
-                <th  className="h-8 py-2 pr-3 min-w-[180px] sticky left-0 bg-canvas text-2xs uppercase tracking-wider text-muted font-medium">Account</th>
+              <tr className={theadTrCls}>
+                <Th className="min-w-[180px] sticky left-0 bg-canvas">Account</Th>
                 {MONTHS.map((m) => (
-                  <th  key={m.key} className="h-8 py-2 pr-2 text-right font-mono w-[60px] text-2xs uppercase tracking-wider text-muted font-medium">{m.label}</th>
+                  <Th align="right" className="font-mono w-[60px]" key={m.key}>{m.label}</Th>
                 ))}
-                <th  className="h-8 py-2 pr-3 text-right w-[80px] text-2xs uppercase tracking-wider text-muted font-medium">Annual</th>
-                <th  className="h-8 py-2 w-[40px] text-2xs uppercase tracking-wider text-muted font-medium"></th>
+                <Th align="right" className="w-[80px]">Annual</Th>
+                <Th className="w-[40px]"></Th>
               </tr>
             </thead>
             <tbody>
               {lineItems.map((li, i) => (
-                <tr key={i} className="border-b border-default/50 hover:bg-elevated/50 transition-colors">
-                  <td className="py-1.5 pr-3 sticky left-0 bg-canvas">
+                <tr key={i} className={trCls}>
+                  <Td className="sticky left-0 bg-canvas">
                     <select
                       value={li.account_id}
                       onChange={(e) => updateLineItem(i, 'account_id', Number(e.target.value))}
@@ -218,9 +219,9 @@ export default function BudgetCreatePage() {
                         <option key={acct.id} value={acct.id}>{acct.code} — {acct.name}</option>
                       ))}
                     </select>
-                  </td>
+                  </Td>
                   {MONTHS.map((m) => (
-                    <td key={m.key} className="py-1.5 pr-2">
+                    <Td key={m.key}>
                       <input
                         type="number"
                         value={li[m.key]}
@@ -228,12 +229,12 @@ export default function BudgetCreatePage() {
                         className="w-full text-right text-xs font-mono border border-default rounded px-1 py-1 bg-canvas focus:outline-none focus:ring-1 focus:ring-accent"
                         placeholder="0"
                       />
-                    </td>
+                    </Td>
                   ))}
-                  <td  className="py-1.5 pr-3 text-right font-mono tabular-nums font-medium">
+                  <Td align="right" mono className="font-medium">
                     ₱{(calcAnnual(li) / 1_000).toFixed(0)}K
-                  </td>
-                  <td className="py-1.5">
+                  </Td>
+                  <Td>
                     <button
                       onClick={() => removeLineItem(i)}
                       className="p-1 text-muted hover:text-danger transition-colors"
@@ -241,7 +242,7 @@ export default function BudgetCreatePage() {
                     >
                       <Trash2 size={14} />
                     </button>
-                  </td>
+                  </Td>
                 </tr>
               ))}
             </tbody>

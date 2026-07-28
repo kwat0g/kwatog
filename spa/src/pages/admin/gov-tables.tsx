@@ -14,6 +14,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { formatDecimal } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
 import type { ContributionAgency, GovernmentTable } from '@/types/payroll';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 const AGENCIES: { key: ContributionAgency; label: string; help: string }[] = [
   { key: 'sss',        label: 'SSS',        help: 'Flat peso amounts per bracket. EE = employee share, ER = employer share.' },
@@ -103,44 +104,44 @@ function AgencyTable({ agency }: { agency: ContributionAgency }) {
       {data && data.length === 0 && <EmptyState icon="inbox" title="No brackets seeded for this agency" />}
       {data && data.length > 0 && (
         <div className="border border-default rounded-md overflow-hidden">
-          <table className="w-full border-collapse text-sm">
+          <table className={tableCls}>
             <thead>
-              <tr className="border-b border-default bg-canvas">
-                <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Min</th>
-                <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Max</th>
-                <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">
+              <tr className={theadTrCls}>
+                <Th>Min</Th>
+                <Th>Max</Th>
+                <Th align="right">
                   {isBir ? 'Fixed tax' : 'EE share'}
-                </th>
-                <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">
+                </Th>
+                <Th align="right">
                   {isBir ? 'Rate on excess' : 'ER share'}
-                </th>
-                <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Effective</th>
-                <th  className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Status</th>
-                <th  className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">Actions</th>
+                </Th>
+                <Th>Effective</Th>
+                <Th>Status</Th>
+                <Th align="right">Actions</Th>
               </tr>
             </thead>
             <tbody>
               {data.map((row) => (
-                <tr key={row.id} className="h-8 border-b border-subtle hover:bg-subtle">
-                  <td className="px-2.5 font-mono tabular-nums">{formatDecimal(row.bracket_min)}</td>
-                  <td className="px-2.5 font-mono tabular-nums">{formatDecimal(row.bracket_max)}</td>
-                  <td  className="px-2.5 text-right font-mono tabular-nums">
+                <tr key={row.id} className={trCls}>
+                  <Td mono>{formatDecimal(row.bracket_min)}</Td>
+                  <Td mono>{formatDecimal(row.bracket_max)}</Td>
+                  <Td align="right" mono>
                     {rateLike ? `${(Number(row.ee_amount) * 100).toFixed(2)}%` : formatDecimal(row.ee_amount)}
-                  </td>
-                  <td  className="px-2.5 text-right font-mono tabular-nums">
+                  </Td>
+                  <Td align="right" mono>
                     {agency === 'pagibig' || agency === 'philhealth'
                       ? `${(Number(row.er_amount) * 100).toFixed(2)}%`
                       : isBir
                         ? `${(Number(row.er_amount) * 100).toFixed(2)}%`
                         : formatDecimal(row.er_amount)}
-                  </td>
-                  <td className="px-2.5 font-mono">{formatDate(row.effective_date)}</td>
-                  <td className="px-2.5">
+                  </Td>
+                  <Td mono>{formatDate(row.effective_date)}</Td>
+                  <Td>
                     <Chip variant={row.is_active ? 'success' : 'neutral'}>
                       {row.is_active ? 'Active' : 'Inactive'}
                     </Chip>
-                  </td>
-                  <td  className="px-2.5 text-right font-mono tabular-nums">
+                  </Td>
+                  <Td align="right" mono>
                     <div className="flex items-center justify-end gap-1">
                       <Button size="sm" variant="ghost" icon={<Pencil size={12} />}
                         onClick={() => setEditing(row)}>Edit</Button>
@@ -154,7 +155,7 @@ function AgencyTable({ agency }: { agency: ContributionAgency }) {
                           disabled={activate.isPending}>Activate</Button>
                       )}
                     </div>
-                  </td>
+                  </Td>
                 </tr>
               ))}
             </tbody>

@@ -14,6 +14,7 @@ import { cn } from '@/lib/cn';
 import { formatPeso } from '@/lib/formatNumber';
 import { Plus } from 'lucide-react';
 import type { BudgetOverview } from '@/types/budgeting';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 export default function BudgetOverviewPage() {
   const { can } = usePermission();
@@ -126,37 +127,37 @@ export default function BudgetOverviewPage() {
           meta={<Chip variant={overview.utilization_pct >= 80 ? 'warning' : 'success'}>{overview.utilization_pct}% overall</Chip>}
         >
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className={tableCls}>
               <thead>
-                <tr className="border-b border-default text-left text-xs uppercase tracking-wider text-muted">
-                  <th  className="h-8 py-2 pr-4 text-2xs uppercase tracking-wider text-muted font-medium">Department</th>
-                  <th  className="h-8 py-2 pr-4 text-right text-2xs uppercase tracking-wider text-muted font-medium">Allocated</th>
-                  <th  className="h-8 py-2 pr-4 text-right text-2xs uppercase tracking-wider text-muted font-medium">Spent</th>
-                  <th  className="h-8 py-2 pr-4 text-right text-2xs uppercase tracking-wider text-muted font-medium">%</th>
-                  <th  className="h-8 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium">Status</th>
+                <tr className={theadTrCls}>
+                  <Th>Department</Th>
+                  <Th align="right">Allocated</Th>
+                  <Th align="right">Spent</Th>
+                  <Th align="right">%</Th>
+                  <Th align="right">Status</Th>
                 </tr>
               </thead>
               <tbody>
                 {overview.by_department.map((dept, i) => (
-                  <tr key={i} className="border-b border-default/50 hover:bg-elevated/50 transition-colors">
-                    <td className="py-2.5 pr-4 font-medium">
+                  <tr key={i} className={trCls}>
+                    <Td className="font-medium">
                       <Link to={`/budgeting/departments/${encodeURIComponent(dept.department)}`} className="hover:text-accent transition-colors">
                         {dept.department}
                       </Link>
-                    </td>
-                    <td  className="py-2.5 pr-4 text-right font-mono tabular-nums">₱ {(dept.allocated / 1_000_000).toFixed(1)}M</td>
-                    <td  className="py-2.5 pr-4 text-right font-mono tabular-nums">₱ {(dept.spent / 1_000_000).toFixed(1)}M</td>
-                    <td  className="py-2.5 pr-4 text-right font-mono tabular-nums">
+                    </Td>
+                    <Td align="right" mono>₱ {(dept.allocated / 1_000_000).toFixed(1)}M</Td>
+                    <Td align="right" mono>₱ {(dept.spent / 1_000_000).toFixed(1)}M</Td>
+                    <Td align="right" mono>
                       <span className={cn('inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium font-mono tabular-nums', getStatusColor(dept.pct))}>
                         {dept.pct}%
                       </span>
-                    </td>
-                    <td  className="py-2.5 text-right font-mono tabular-nums">
+                    </Td>
+                    <Td align="right" mono>
                       <span className="inline-flex items-center gap-1.5 text-xs">
                         <span className={cn('h-1.5 w-1.5 rounded-full', getStatusDot(dept.pct))} />
                         {getStatusLabel(dept.pct)}
                       </span>
-                    </td>
+                    </Td>
                   </tr>
                 ))}
               </tbody>
@@ -187,44 +188,44 @@ export default function BudgetOverviewPage() {
       >
         {budgetList && budgetList.data.length > 0 ? (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className={tableCls}>
               <thead>
-                <tr className="border-b border-default text-left text-xs uppercase tracking-wider text-muted">
-                  <th  className="h-8 py-2 pr-4 text-2xs uppercase tracking-wider text-muted font-medium">Name</th>
-                  <th  className="h-8 py-2 pr-4 text-2xs uppercase tracking-wider text-muted font-medium">Type</th>
-                  <th  className="h-8 py-2 pr-4 text-right text-2xs uppercase tracking-wider text-muted font-medium">Allocated</th>
-                  <th  className="h-8 py-2 pr-4 text-right text-2xs uppercase tracking-wider text-muted font-medium">Spent</th>
-                  <th  className="h-8 py-2 pr-4 text-right text-2xs uppercase tracking-wider text-muted font-medium">Available</th>
-                  <th  className="h-8 py-2 pr-4 text-center text-2xs uppercase tracking-wider text-muted font-medium">%</th>
-                  <th  className="h-8 py-2 text-center text-2xs uppercase tracking-wider text-muted font-medium">Status</th>
+                <tr className={theadTrCls}>
+                  <Th>Name</Th>
+                  <Th>Type</Th>
+                  <Th align="right">Allocated</Th>
+                  <Th align="right">Spent</Th>
+                  <Th align="right">Available</Th>
+                  <Th align="center">%</Th>
+                  <Th align="center">Status</Th>
                 </tr>
               </thead>
               <tbody>
                 {budgetList.data.map((budget) => (
-                  <tr key={budget.id} className="border-b border-default/50 hover:bg-elevated/50 transition-colors">
-                    <td className="py-2.5 pr-4">
+                  <tr key={budget.id} className={trCls}>
+                    <Td>
                       <Link to={`/budgeting/${budget.id}`} className="font-medium hover:text-accent transition-colors">
                         {budget.name}
                       </Link>
                       {budget.department && (
                         <span className="ml-2 text-xs text-muted">{budget.department.name}</span>
                       )}
-                    </td>
-                    <td className="py-2.5 pr-4">
+                    </Td>
+                    <Td>
                       <Chip variant="neutral">{budget.budget_type}</Chip>
-                    </td>
-                    <td  className="py-2.5 pr-4 text-right font-mono tabular-nums">₱ {(budget.total_allocated / 1_000).toFixed(0)}K</td>
-                    <td  className="py-2.5 pr-4 text-right font-mono tabular-nums">₱ {(budget.total_spent / 1_000).toFixed(0)}K</td>
-                    <td  className="py-2.5 pr-4 text-right font-mono tabular-nums">₱ {(budget.available / 1_000).toFixed(0)}K</td>
-                    <td className="py-2.5 pr-4 text-center">
+                    </Td>
+                    <Td align="right" mono>₱ {(budget.total_allocated / 1_000).toFixed(0)}K</Td>
+                    <Td align="right" mono>₱ {(budget.total_spent / 1_000).toFixed(0)}K</Td>
+                    <Td align="right" mono>₱ {(budget.available / 1_000).toFixed(0)}K</Td>
+                    <Td align="center">
                       <span className={cn(
                         'inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium font-mono tabular-nums',
                         getStatusColor(budget.utilization_pct)
                       )}>
                         {budget.utilization_pct}%
                       </span>
-                    </td>
-                    <td className="py-2.5 text-center">
+                    </Td>
+                    <Td align="center">
                       <Chip variant={
                         budget.status === 'active' ? 'success' :
                         budget.status === 'draft' ? 'neutral' :
@@ -232,7 +233,7 @@ export default function BudgetOverviewPage() {
                       }>
                         {budget.status}
                       </Chip>
-                    </td>
+                    </Td>
                   </tr>
                 ))}
               </tbody>

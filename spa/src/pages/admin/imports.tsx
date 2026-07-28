@@ -19,6 +19,7 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatDate } from '@/lib/formatDate';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 const batchStatusVariant = (s: string): ChipVariant =>
   s === 'committed' ? 'success' : 'neutral';
@@ -161,18 +162,18 @@ export default function ImportsPage() {
           {errorRows.length > 0 ? (
             <Panel title={`Row errors (${errorRows.length})`}>
               <div className="border border-default rounded-md overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="text-2xs uppercase tracking-wider text-muted bg-subtle">
-                    <tr className="border-b border-default">
-                      <th className="h-8 px-2.5 text-left w-20">Row</th>
-                      <th className="h-8 px-2.5 text-left">Message</th>
+                <table className={tableCls}>
+                  <thead>
+                    <tr className={theadTrCls}>
+                      <Th className="w-20">Row</Th>
+                      <Th>Message</Th>
                     </tr>
                   </thead>
                   <tbody>
                     {errorRows.map((e, i) => (
-                      <tr key={i} className="border-b border-subtle h-8">
-                        <td className="px-2.5 font-mono tabular-nums">{e.row}</td>
-                        <td className="px-2.5 text-danger-fg">{e.message}</td>
+                      <tr key={i} className={trCls}>
+                        <Td mono>{e.row}</Td>
+                        <Td className="text-danger-fg">{e.message}</Td>
                       </tr>
                     ))}
                   </tbody>
@@ -205,28 +206,28 @@ export default function ImportsPage() {
           )}
           {batchesQ.data && batchesQ.data.length > 0 && (
             <div className="border border-default rounded-md overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="text-2xs uppercase tracking-wider text-muted bg-subtle">
-                  <tr className="border-b border-default">
-                    <th className="h-8 px-2.5 text-left">Entity</th>
-                    <th className="h-8 px-2.5 text-left">File</th>
-                    <th className="h-8 px-2.5 text-left">Status</th>
-                    <th className="h-8 px-2.5 text-right">Imported</th>
-                    <th className="h-8 px-2.5 text-left">By</th>
-                    <th className="h-8 px-2.5 text-left">When</th>
-                    <th className="h-8 px-2.5" />
+              <table className={tableCls}>
+                <thead>
+                  <tr className={theadTrCls}>
+                    <Th>Entity</Th>
+                    <Th>File</Th>
+                    <Th>Status</Th>
+                    <Th align="right">Imported</Th>
+                    <Th>By</Th>
+                    <Th>When</Th>
+                    <Th />
                   </tr>
                 </thead>
                 <tbody>
                   {batchesQ.data.map((b) => (
-                    <tr key={b.id} className="border-b border-subtle h-9">
-                      <td className="px-2.5 font-mono">{b.entity_type}</td>
-                      <td className="px-2.5 text-muted truncate max-w-[180px]">{b.filename ?? '—'}</td>
-                      <td className="px-2.5"><Chip variant={batchStatusVariant(b.status)}>{b.status}</Chip></td>
-                      <td className="px-2.5 text-right font-mono tabular-nums">{b.imported_rows}/{b.total_rows}</td>
-                      <td className="px-2.5 text-muted">{b.created_by ?? '—'}</td>
-                      <td className="px-2.5 text-muted font-mono text-xs">{b.created_at ? formatDate(b.created_at) : '—'}</td>
-                      <td className="px-2.5 text-right">
+                    <tr key={b.id} className={trCls}>
+                      <Td mono>{b.entity_type}</Td>
+                      <Td className="text-muted truncate max-w-[180px]">{b.filename ?? '—'}</Td>
+                      <Td><Chip variant={batchStatusVariant(b.status)}>{b.status}</Chip></Td>
+                      <Td align="right" mono>{b.imported_rows}/{b.total_rows}</Td>
+                      <Td className="text-muted">{b.created_by ?? '—'}</Td>
+                      <Td mono className="text-muted text-xs">{b.created_at ? formatDate(b.created_at) : '—'}</Td>
+                      <Td align="right">
                         {b.status === 'committed' && (
                           <button
                             onClick={() => setRollbackTarget(b)}
@@ -235,7 +236,7 @@ export default function ImportsPage() {
                             <Undo2 size={13} /> Roll back
                           </button>
                         )}
-                      </td>
+                      </Td>
                     </tr>
                   ))}
                 </tbody>

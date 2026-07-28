@@ -23,6 +23,7 @@ import { formatDate } from '@/lib/formatDate';
 import { numberInputProps } from '@/lib/numberInput';
 import { onFormInvalid } from '@/lib/formErrors';
 import type { StockCountItem } from '@/types/warehouse';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 const statusVariant: Record<string, 'warning' | 'success' | 'info' | 'danger' | 'neutral'> = {
   draft: 'neutral', in_progress: 'warning', completed: 'success', cancelled: 'danger',
@@ -229,40 +230,40 @@ export default function StockCountPage() {
                   {/* Count items table */}
                   {items.length > 0 && (
                     <Panel title={`Items (${items.length})`}>
-                      <table className="w-full text-xs">
+                      <table className={tableCls}>
                         <thead>
-                          <tr className="text-2xs uppercase tracking-wider text-muted">
-                            <th  className="h-8 text-left py-1 font-medium w-32 text-2xs uppercase tracking-wider text-muted">Location</th>
-                            <th  className="h-8 text-left font-medium text-2xs uppercase tracking-wider text-muted">Item</th>
-                            <th  className="h-8 text-right font-medium text-2xs uppercase tracking-wider text-muted">System</th>
-                            <th  className="h-8 text-right font-medium text-2xs uppercase tracking-wider text-muted">Counted</th>
-                            <th  className="h-8 text-right font-medium text-2xs uppercase tracking-wider text-muted">Variance</th>
-                            <th  className="h-8 text-right font-medium text-2xs uppercase tracking-wider text-muted">%</th>
-                            <th  className="h-8 text-left font-medium text-2xs uppercase tracking-wider text-muted">Status</th>
-                            <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium" />
+                          <tr className={theadTrCls}>
+                            <Th className="w-32">Location</Th>
+                            <Th>Item</Th>
+                            <Th align="right">System</Th>
+                            <Th align="right">Counted</Th>
+                            <Th align="right">Variance</Th>
+                            <Th align="right">%</Th>
+                            <Th>Status</Th>
+                            <Th />
                           </tr>
                         </thead>
                         <tbody>
                           {items.map((item) => (
-                            <tr key={item.id} className="h-8 border-t border-subtle">
-                              <td className="font-mono">{item.location?.full_code ?? '—'}</td>
-                              <td>
+                            <tr key={item.id} className={trCls}>
+                              <Td mono>{item.location?.full_code ?? '—'}</Td>
+                              <Td>
                                 {item.item
                                   ? <><span className="font-mono">{item.item.code}</span> <span className="text-muted">{item.item.name}</span></>
                                   : <span className="text-muted">—</span>}
-                              </td>
-                              <td  className="text-right font-mono tabular-nums">{Number(item.system_quantity).toFixed(3)}</td>
-                              <td  className="text-right font-mono tabular-nums">
+                              </Td>
+                              <Td align="right" mono>{Number(item.system_quantity).toFixed(3)}</Td>
+                              <Td align="right" mono>
                                 {item.counted_quantity !== null ? Number(item.counted_quantity).toFixed(3) : <span className="text-muted">—</span>}
-                              </td>
-                              <td className={`text-right font-mono tabular-nums ${Math.abs(Number(item.variance)) > 0.001 ? 'text-warning-fg' : ''}`}>
+                              </Td>
+                              <Td align="right" mono className={Math.abs(Number(item.variance)) > 0.001 ? 'text-warning-fg' : ''}>
                                 {item.counted_quantity !== null ? (Number(item.variance) > 0 ? '+' : '') + Number(item.variance).toFixed(3) : '—'}
-                              </td>
-                              <td className={`text-right font-mono tabular-nums ${Math.abs(Number(item.variance_percent)) > 2 ? 'text-danger-fg' : ''}`}>
+                              </Td>
+                              <Td align="right" mono className={Math.abs(Number(item.variance_percent)) > 2 ? 'text-danger-fg' : ''}>
                                 {item.counted_quantity !== null ? `${Number(item.variance_percent).toFixed(1)}%` : ''}
-                              </td>
-                              <td><Chip variant={itemStatusVariant[item.status]}>{item.status}</Chip></td>
-                              <td  className="text-right font-mono tabular-nums">
+                              </Td>
+                              <Td><Chip variant={itemStatusVariant[item.status]}>{item.status}</Chip></Td>
+                              <Td align="right" mono>
                                 {activeSession.status === 'in_progress' && item.status === 'pending' && canManage && (
                                   <Button size="sm" variant="secondary" onClick={() => setCountModalItem(item)}>Count</Button>
                                 )}
@@ -272,7 +273,7 @@ export default function StockCountPage() {
                                 {item.status === 'counted' && Math.abs(Number(item.variance_percent)) <= 2 && (
                                   <span className="text-2xs text-muted">Auto</span>
                                 )}
-                              </td>
+                              </Td>
                             </tr>
                           ))}
                         </tbody>

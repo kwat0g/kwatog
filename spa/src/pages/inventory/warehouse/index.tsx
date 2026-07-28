@@ -22,6 +22,8 @@ import { onFormInvalid } from '@/lib/formErrors';
 import { usePermission } from '@/hooks/usePermission';
 import type { ApiValidationError } from '@/types';
 import type { Warehouse, WarehouseLocation, WarehouseZone } from '@/types/inventory';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { cn } from '@/lib/cn';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Schemas
@@ -242,26 +244,26 @@ export default function WarehousePage() {
               {!zone || locations.length === 0 ? (
                 <div className="text-sm text-muted">No locations yet.</div>
               ) : (
-                <table className="w-full text-xs">
+                <table className={tableCls}>
                   <thead>
-                    <tr className="text-2xs uppercase tracking-wider text-muted">
-                      <th  className="h-8 text-left py-1 font-medium text-2xs uppercase tracking-wider text-muted">Code</th>
-                      <th  className="h-8 text-left font-medium text-2xs uppercase tracking-wider text-muted">Rack</th>
-                      <th  className="h-8 text-left font-medium text-2xs uppercase tracking-wider text-muted">Bin</th>
-                      <th  className="h-8 text-left font-medium text-2xs uppercase tracking-wider text-muted">Status</th>
-                      <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium" />
+                    <tr className={theadTrCls}>
+                      <Th>Code</Th>
+                      <Th>Rack</Th>
+                      <Th>Bin</Th>
+                      <Th>Status</Th>
+                      <Th />
                     </tr>
                   </thead>
                   <tbody>
                     {locations.map((l) => (
-                      <tr key={l.id} className="h-8 border-t border-subtle group">
-                        <td className="font-mono">{l.code}</td>
-                        <td>{l.rack ?? <span className="text-muted">—</span>}</td>
-                        <td>{l.bin ?? <span className="text-muted">—</span>}</td>
-                        <td>
+                      <tr key={l.id} className={cn(trCls, 'group')}>
+                        <Td mono>{l.code}</Td>
+                        <Td>{l.rack ?? <span className="text-muted">—</span>}</Td>
+                        <Td>{l.bin ?? <span className="text-muted">—</span>}</Td>
+                        <Td>
                           <Chip variant={l.is_active ? 'success' : 'neutral'}>{l.is_active ? 'active' : 'inactive'}</Chip>
-                        </td>
-                        <td  className="text-right font-mono tabular-nums">
+                        </Td>
+                        <Td align="right" mono>
                           {canManage && (
                             <div className="hidden group-hover:flex justify-end gap-0.5">
                               <IconBtn label={`Edit ${l.code}`} onClick={() => setLocModal({ mode: 'edit', existing: l })}>
@@ -272,7 +274,7 @@ export default function WarehousePage() {
                               </IconBtn>
                             </div>
                           )}
-                        </td>
+                        </Td>
                       </tr>
                     ))}
                   </tbody>

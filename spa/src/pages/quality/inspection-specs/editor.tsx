@@ -32,6 +32,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { productsApi } from '@/api/crm/products';
 import { inspectionSpecsApi, type SpcResult } from '@/api/quality/inspectionSpecs';
 import type { UpsertInspectionSpecData } from '@/types/quality';
+import { Td, Th, tableCls, trCls } from '@/components/ui/table-cells';
 
 const itemSchema = z.object({
   parameter_name:  z.string().min(1, 'Parameter name is required').max(150),
@@ -245,30 +246,30 @@ export default function InspectionSpecEditorPage() {
         <fieldset className="mb-8">
           <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">Parameters</legend>
           <div className="border border-default rounded-md overflow-hidden">
-            <table className="w-full text-xs">
-              <thead className="bg-subtle">
+            <table className={tableCls}>
+              <thead>
                 <tr>
-                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 w-1/4">Parameter</th>
-                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Type</th>
-                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">UOM</th>
-                  <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Nominal</th>
-                  <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Min</th>
-                  <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Max</th>
-                  <th  className="h-8 text-center text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Critical?</th>
-                  <th  className="h-8 px-2 py-2 text-2xs uppercase tracking-wider text-muted font-medium" />
+                  <Th className="w-1/4">Parameter</Th>
+                  <Th>Type</Th>
+                  <Th>UOM</Th>
+                  <Th align="right">Nominal</Th>
+                  <Th align="right">Min</Th>
+                  <Th align="right">Max</Th>
+                  <Th align="center">Critical?</Th>
+                  <Th />
                 </tr>
               </thead>
               <tbody>
                 {fields.map((field, i) => (
-                  <tr key={field.id} className="border-t border-subtle">
-                    <td className="px-2.5 py-1.5">
+                  <tr key={field.id} className={trCls}>
+                    <Td>
                       <Input
                         {...register(`items.${i}.parameter_name` as const)}
                         error={errors.items?.[i]?.parameter_name?.message}
                         placeholder="e.g. Shaft OD"
                       />
-                    </td>
-                    <td className="px-2.5 py-1.5">
+                    </Td>
+                    <Td>
                       <Select
                         {...register(`items.${i}.parameter_type` as const)}
                         error={errors.items?.[i]?.parameter_type?.message}
@@ -277,47 +278,47 @@ export default function InspectionSpecEditorPage() {
                         <option value="visual">Visual</option>
                         <option value="functional">Functional</option>
                       </Select>
-                    </td>
-                    <td className="px-2.5 py-1.5">
+                    </Td>
+                    <Td>
                       <Input
                         {...register(`items.${i}.unit_of_measure` as const)}
                         error={errors.items?.[i]?.unit_of_measure?.message}
                         placeholder="mm"
                         className="font-mono"
                       />
-                    </td>
-                    <td  className="px-2.5 py-1.5 text-right font-mono tabular-nums">
+                    </Td>
+                    <Td align="right" mono>
                       <Input
                         {...register(`items.${i}.nominal_value` as const)}
                         error={errors.items?.[i]?.nominal_value?.message}
                         placeholder="0.0000"
                         className="font-mono text-right"
                       />
-                    </td>
-                    <td  className="px-2.5 py-1.5 text-right font-mono tabular-nums">
+                    </Td>
+                    <Td align="right" mono>
                       <Input
                         {...register(`items.${i}.tolerance_min` as const)}
                         error={errors.items?.[i]?.tolerance_min?.message}
                         placeholder="0.0000"
                         className="font-mono text-right"
                       />
-                    </td>
-                    <td  className="px-2.5 py-1.5 text-right font-mono tabular-nums">
+                    </Td>
+                    <Td align="right" mono>
                       <Input
                         {...register(`items.${i}.tolerance_max` as const)}
                         error={errors.items?.[i]?.tolerance_max?.message}
                         placeholder="0.0000"
                         className="font-mono text-right"
                       />
-                    </td>
-                    <td className="px-2.5 py-1.5 text-center">
+                    </Td>
+                    <Td align="center">
                       <input
                         type="checkbox"
                         {...register(`items.${i}.is_critical` as const)}
                         className="rounded border-default"
                       />
-                    </td>
-                    <td  className="px-2 py-1.5 text-right font-mono tabular-nums">
+                    </Td>
+                    <Td align="right" mono>
                       <button
                         type="button"
                         onClick={() => remove(i)}
@@ -327,7 +328,7 @@ export default function InspectionSpecEditorPage() {
                       >
                         <Trash2 size={14} />
                       </button>
-                    </td>
+                    </Td>
                   </tr>
                 ))}
               </tbody>
@@ -355,15 +356,15 @@ export default function InspectionSpecEditorPage() {
               Process Capability (SPC)
             </h3>
             <div className="border border-default rounded-md overflow-hidden">
-              <table className="w-full text-xs">
-                <thead className="bg-subtle">
+              <table className={tableCls}>
+                <thead>
                   <tr>
-                    <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Parameter</th>
-                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 font-mono">Cp</th>
-                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 font-mono">Cpk</th>
-                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 font-mono">Mean</th>
-                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 font-mono">σ</th>
-                    <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">n</th>
+                    <Th>Parameter</Th>
+                    <Th align="right" className="font-mono">Cp</Th>
+                    <Th align="right" className="font-mono">Cpk</Th>
+                    <Th align="right" className="font-mono">Mean</Th>
+                    <Th align="right" className="font-mono">σ</Th>
+                    <Th align="right">n</Th>
                   </tr>
                 </thead>
                 <tbody>
@@ -372,26 +373,26 @@ export default function InspectionSpecEditorPage() {
                     const cpColor = item.cp >= 1.33 ? 'text-success' : item.cp >= 1.0 ? 'text-warning' : 'text-danger';
                     const cpkColor = item.cpk >= 1.33 ? 'text-success' : item.cpk >= 1.0 ? 'text-warning' : 'text-danger';
                     return (
-                      <tr key={id} className="border-t border-subtle">
-                        <td className="px-2.5 py-2">
+                      <tr key={id} className={trCls}>
+                        <Td>
                           {item.parameter_name}
                           {item.unit && <span className="ml-1 text-muted">({item.unit})</span>}
-                        </td>
-                        <td className={`text-right px-2.5 py-2 font-mono tabular-nums ${cpColor}`}>
+                        </Td>
+                        <Td align="right" mono className={cpColor}>
                           {item.cp.toFixed(3)}
-                        </td>
-                        <td className={`text-right px-2.5 py-2 font-mono tabular-nums ${cpkColor}`}>
+                        </Td>
+                        <Td align="right" mono className={cpkColor}>
                           {item.cpk.toFixed(3)}
-                        </td>
-                        <td  className="text-right px-2.5 py-2 font-mono tabular-nums">
+                        </Td>
+                        <Td align="right" mono>
                           {item.mean.toFixed(4)}
-                        </td>
-                        <td  className="text-right px-2.5 py-2 font-mono tabular-nums">
+                        </Td>
+                        <Td align="right" mono>
                           {item.std_dev.toFixed(4)}
-                        </td>
-                        <td  className="text-right px-2.5 py-2 font-mono tabular-nums text-muted">
+                        </Td>
+                        <Td align="right" mono className="text-muted">
                           {item.sample_count}
-                        </td>
+                        </Td>
                       </tr>
                     );
                   })}

@@ -26,6 +26,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
 import { formatDate, formatRelative } from '@/lib/formatDate';
 import type { DisbursementProof, Payroll, PayrollPeriod } from '@/types/payroll';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 const periodStatusVariant = (status: string | null | undefined): ChipVariant => {
   switch (status) {
@@ -571,14 +572,14 @@ function VariancePanel({
 
         {varianceData && !isLoading && (
           <div className="space-y-3">
-            <table className="w-full text-sm">
+            <table className={tableCls}>
               <thead>
-                <tr className="border-b border-default text-left text-2xs uppercase tracking-wide text-muted">
-                  <th  className="h-8 py-2 pr-4 text-2xs uppercase tracking-wider text-muted font-medium">Metric</th>
-                  <th  className="h-8 py-2 pr-4 text-right text-2xs uppercase tracking-wider text-muted font-medium">Previous<br /><span className="font-mono text-[10px] normal-case">{varianceData.previous.period_label}</span></th>
-                  <th  className="h-8 py-2 pr-4 text-right text-2xs uppercase tracking-wider text-muted font-medium">Current<br /><span className="font-mono text-[10px] normal-case">{varianceData.current.period_label}</span></th>
-                  <th  className="h-8 py-2 pr-4 text-right text-2xs uppercase tracking-wider text-muted font-medium">Delta</th>
-                  <th  className="h-8 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium">Change %</th>
+                <tr className={theadTrCls}>
+                  <Th>Metric</Th>
+                  <Th align="right">Previous<br /><span className="font-mono text-[10px] normal-case">{varianceData.previous.period_label}</span></Th>
+                  <Th align="right">Current<br /><span className="font-mono text-[10px] normal-case">{varianceData.current.period_label}</span></Th>
+                  <Th align="right">Delta</Th>
+                  <Th align="right">Change %</Th>
                 </tr>
               </thead>
               <tbody>
@@ -616,16 +617,16 @@ function VariancePanel({
                     isMoney: false,
                   },
                 ].map((row) => (
-                  <tr key={row.label} className="border-b border-default/50 h-9">
-                    <td className="pr-4 font-medium">{row.label}</td>
-                    <td  className="pr-4 text-right font-mono tabular-nums text-muted">{row.prev}</td>
-                    <td  className="pr-4 text-right font-mono tabular-nums">{row.curr}</td>
-                    <td className={`pr-4 text-right font-mono tabular-nums ${deltaColor(row.delta)}`}>
+                  <tr key={row.label} className={trCls}>
+                    <Td className="font-medium">{row.label}</Td>
+                    <Td align="right" mono className="text-muted">{row.prev}</Td>
+                    <Td align="right" mono>{row.curr}</Td>
+                    <Td align="right" mono className={deltaColor(row.delta)}>
                       {row.delta > 0 ? '+' : ''}{row.isMoney ? fmt(row.delta) : row.delta}
-                    </td>
-                    <td className={`text-right font-mono tabular-nums text-xs ${deltaColor(row.pct ?? 0)}`}>
+                    </Td>
+                    <Td align="right" mono className={` text-xs ${deltaColor(row.pct ?? 0)}`}>
                       {pctFmt(row.pct)}
-                    </td>
+                    </Td>
                   </tr>
                 ))}
               </tbody>

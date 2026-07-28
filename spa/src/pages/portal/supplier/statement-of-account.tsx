@@ -5,6 +5,7 @@ import { Panel } from '@/components/ui/Panel';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 const bucketLabels: Record<string, string> = {
   current: 'Current (Not Due)',
@@ -101,38 +102,38 @@ export default function SupplierStatementOfAccountPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+            <table className={tableCls}>
               <thead>
-                <tr className="border-b border-border text-muted">
-                  <th  className="h-8 text-left px-4 py-2 font-medium text-2xs uppercase tracking-wider text-muted">Bill #</th>
-                  <th  className="h-8 text-left px-4 py-2 font-medium text-2xs uppercase tracking-wider text-muted">PO</th>
-                  <th  className="h-8 text-left px-4 py-2 font-medium text-2xs uppercase tracking-wider text-muted">Date</th>
-                  <th  className="h-8 text-left px-4 py-2 font-medium text-2xs uppercase tracking-wider text-muted">Due Date</th>
-                  <th  className="h-8 text-right px-4 py-2 font-medium text-2xs uppercase tracking-wider text-muted">Total</th>
-                  <th  className="h-8 text-right px-4 py-2 font-medium text-2xs uppercase tracking-wider text-muted">Balance</th>
-                  <th  className="h-8 text-center px-4 py-2 font-medium text-2xs uppercase tracking-wider text-muted">Status</th>
-                  <th  className="h-8 text-center px-4 py-2 font-medium text-2xs uppercase tracking-wider text-muted">Bucket</th>
+                <tr className={theadTrCls}>
+                  <Th>Bill #</Th>
+                  <Th>PO</Th>
+                  <Th>Date</Th>
+                  <Th>Due Date</Th>
+                  <Th align="right">Total</Th>
+                  <Th align="right">Balance</Th>
+                  <Th align="center">Status</Th>
+                  <Th align="center">Bucket</Th>
                 </tr>
               </thead>
               <tbody>
                 {soa.open_bills.map((bill) => (
-                  <tr key={bill.id} className="border-b border-border/50 hover:bg-subtle/50 transition-colors">
-                    <td className="px-4 py-2.5 font-medium">{bill.bill_number}</td>
-                    <td className="px-4 py-2.5 text-muted">{bill.purchase_order?.po_number ?? '—'}</td>
-                    <td className="px-4 py-2.5 text-muted">{bill.date ?? '—'}</td>
-                    <td className="px-4 py-2.5 text-muted">{bill.due_date ?? '—'}</td>
-                    <td  className="px-4 py-2.5 text-right font-mono tabular-nums">{bill.total_amount}</td>
-                    <td  className="px-4 py-2.5 text-right font-medium font-mono tabular-nums">{bill.balance}</td>
-                    <td className="px-4 py-2.5 text-center">
+                  <tr key={bill.id} className={trCls}>
+                    <Td className="font-medium">{bill.bill_number}</Td>
+                    <Td className="text-muted">{bill.purchase_order?.po_number ?? '—'}</Td>
+                    <Td className="text-muted">{bill.date ?? '—'}</Td>
+                    <Td className="text-muted">{bill.due_date ?? '—'}</Td>
+                    <Td align="right" mono>{bill.total_amount}</Td>
+                    <Td align="right" mono className="font-medium">{bill.balance}</Td>
+                    <Td align="center">
                       <Chip variant={chipVariantForStatus(bill.status)}>{bill.status}</Chip>
-                    </td>
-                    <td className="px-4 py-2.5 text-center">
+                    </Td>
+                    <Td align="center">
                       <span className={`text-2xs font-medium ${
                         bucketColors[bill.aging_bucket] ?? 'text-muted'
                       }`}>
                         {bucketLabels[bill.aging_bucket] ?? bill.aging_bucket}
                       </span>
-                    </td>
+                    </Td>
                   </tr>
                 ))}
               </tbody>

@@ -16,6 +16,7 @@ import toast from 'react-hot-toast';
 import { cn } from '@/lib/cn';
 import { ArrowLeft, Send, XCircle, CheckCircle } from 'lucide-react';
 import type { Budget } from '@/types/budgeting';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'] as const;
 
@@ -156,38 +157,38 @@ export default function BudgetDetailPage() {
       <Panel title="Line Items" meta={<span className="text-xs text-muted">Monthly allocations per account</span>}>
         {budget.line_items && budget.line_items.length > 0 ? (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className={tableCls}>
               <thead>
-                <tr className="border-b border-default text-left text-xs uppercase tracking-wider text-muted">
-                  <th  className="h-8 py-2 pr-3 text-2xs uppercase tracking-wider text-muted font-medium">Account</th>
+                <tr className={theadTrCls}>
+                  <Th>Account</Th>
                   {MONTHS.map((m) => (
-                    <th  key={m} className="h-8 py-2 pr-3 text-right font-mono text-2xs uppercase tracking-wider text-muted font-medium">{m}</th>
+                    <Th align="right" className="font-mono" key={m}>{m}</Th>
                   ))}
-                  <th  className="h-8 py-2 pr-3 text-right text-2xs uppercase tracking-wider text-muted font-medium">Annual</th>
-                  <th  className="h-8 py-2 pr-3 text-right text-2xs uppercase tracking-wider text-muted font-medium">Actual</th>
-                  <th  className="h-8 py-2 text-right text-2xs uppercase tracking-wider text-muted font-medium">Variance</th>
+                  <Th align="right">Annual</Th>
+                  <Th align="right">Actual</Th>
+                  <Th align="right">Variance</Th>
                 </tr>
               </thead>
               <tbody>
                 {budget.line_items.map((li) => (
-                  <tr key={li.id} className="border-b border-default/50 hover:bg-elevated/50 transition-colors">
-                    <td className="py-2 pr-3">
+                  <tr key={li.id} className={trCls}>
+                    <Td>
                       <span className="font-medium">{li.account?.code}</span>
                       <span className="ml-1.5 text-muted text-xs">{li.account?.name}</span>
-                    </td>
+                    </Td>
                     {MONTHS.map((m) => {
                       const val = li[m.toLowerCase() as keyof typeof li] as number;
                       return (
-                        <td  key={m} className="py-2 pr-3 text-right font-mono text-xs tabular-nums">
+                        <Td align="right" mono className="text-xs" key={m}>
                           {val > 0 ? `₱${(val / 1000).toFixed(0)}K` : '-'}
-                        </td>
+                        </Td>
                       );
                     })}
-                    <td  className="py-2 pr-3 text-right font-mono font-medium tabular-nums">₱{(li.annual_total / 1000).toFixed(0)}K</td>
-                    <td  className="py-2 pr-3 text-right font-mono tabular-nums">₱{(li.actual_total / 1000).toFixed(0)}K</td>
-                    <td className={cn('py-2 text-right font-mono', li.variance < 0 ? 'text-danger' : 'text-success')}>
+                    <Td align="right" mono className="font-medium">₱{(li.annual_total / 1000).toFixed(0)}K</Td>
+                    <Td align="right" mono>₱{(li.actual_total / 1000).toFixed(0)}K</Td>
+                    <Td align="right" mono className={cn(li.variance < 0 ? 'text-danger' : 'text-success')}>
                       {li.variance >= 0 ? '+' : ''}{li.variance >= 0 ? '₱' : '-₱'}{(Math.abs(li.variance) / 1000).toFixed(0)}K
-                    </td>
+                    </Td>
                   </tr>
                 ))}
               </tbody>

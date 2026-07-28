@@ -27,6 +27,8 @@ import { productsApi } from '@/api/crm/products';
 import { machinesApi } from '@/api/mrp/machines';
 import { moldsApi } from '@/api/mrp/molds';
 import { routingsApi } from '@/api/production/routings';
+import { Td, Th, tableCls, trCls } from '@/components/ui/table-cells';
+import { cn } from '@/lib/cn';
 
 // ─── Schema ──────────────────────────────────────────────────────
 
@@ -249,24 +251,24 @@ export default function RoutingEditorPage() {
         <fieldset className="mb-8">
           <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">Operations</legend>
           <div className="border border-default rounded-md overflow-hidden">
-            <table className="w-full text-xs">
-              <thead className="bg-subtle">
+            <table className={tableCls}>
+              <thead>
                 <tr>
-                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2 w-10">#</th>
-                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Operation</th>
-                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Work center</th>
-                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Machine</th>
-                  <th  className="h-8 text-left text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Mold</th>
-                  <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Setup (min)</th>
-                  <th  className="h-8 text-right text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">Cycle (min)</th>
-                  <th  className="h-8 text-center text-2xs uppercase tracking-wider text-muted font-medium px-2.5 py-2">QC</th>
-                  <th  className="h-8 px-2 py-2 w-8 text-2xs uppercase tracking-wider text-muted font-medium" />
+                  <Th className="w-10">#</Th>
+                  <Th>Operation</Th>
+                  <Th>Work center</Th>
+                  <Th>Machine</Th>
+                  <Th>Mold</Th>
+                  <Th align="right">Setup (min)</Th>
+                  <Th align="right">Cycle (min)</Th>
+                  <Th align="center">QC</Th>
+                  <Th className="w-8" />
                 </tr>
               </thead>
               <tbody>
                 {fields.map((field, i) => (
-                  <tr key={field.id} className="border-t border-subtle align-top">
-                    <td className="px-2.5 py-1.5">
+                  <tr key={field.id} className={cn(trCls, 'align-top')}>
+                    <Td>
                       <div className="flex items-center gap-1 text-muted">
                         <GripVertical size={12} className="shrink-0" aria-hidden />
                         <Input
@@ -276,22 +278,22 @@ export default function RoutingEditorPage() {
                           placeholder="10"
                         />
                       </div>
-                    </td>
-                    <td className="px-2.5 py-1.5">
+                    </Td>
+                    <Td>
                       <Input
                         {...register(`operations.${i}.operation_name` as const)}
                         error={errors.operations?.[i]?.operation_name?.message}
                         placeholder="e.g. Injection molding"
                       />
-                    </td>
-                    <td className="px-2.5 py-1.5">
+                    </Td>
+                    <Td>
                       <Input
                         {...register(`operations.${i}.work_center` as const)}
                         error={errors.operations?.[i]?.work_center?.message}
                         placeholder="e.g. Line A"
                       />
-                    </td>
-                    <td className="px-2.5 py-1.5">
+                    </Td>
+                    <Td>
                       <Select
                         {...register(`operations.${i}.machine_id` as const)}
                         error={errors.operations?.[i]?.machine_id?.message}
@@ -301,8 +303,8 @@ export default function RoutingEditorPage() {
                           <option key={m.id} value={m.id}>{m.machine_code} — {m.name}</option>
                         ))}
                       </Select>
-                    </td>
-                    <td className="px-2.5 py-1.5">
+                    </Td>
+                    <Td>
                       <Select
                         {...register(`operations.${i}.mold_id` as const)}
                         error={errors.operations?.[i]?.mold_id?.message}
@@ -312,29 +314,29 @@ export default function RoutingEditorPage() {
                           <option key={m.id} value={m.id}>{m.mold_code} — {m.name}</option>
                         ))}
                       </Select>
-                    </td>
-                    <td className="px-2.5 py-1.5">
+                    </Td>
+                    <Td>
                       <Input
                         {...register(`operations.${i}.setup_time_minutes` as const)}
                         error={errors.operations?.[i]?.setup_time_minutes?.message}
                         placeholder="0"
                         className="font-mono text-right"
                       />
-                    </td>
-                    <td className="px-2.5 py-1.5">
+                    </Td>
+                    <Td>
                       <Input
                         {...register(`operations.${i}.cycle_time_minutes` as const)}
                         error={errors.operations?.[i]?.cycle_time_minutes?.message}
                         placeholder="0"
                         className="font-mono text-right"
                       />
-                    </td>
-                    <td className="px-2.5 py-1.5 text-center">
+                    </Td>
+                    <Td align="center">
                       <div className="flex items-center justify-center h-8">
                         <Checkbox {...register(`operations.${i}.qc_required` as const)} />
                       </div>
-                    </td>
-                    <td  className="px-2 py-1.5 text-right font-mono tabular-nums">
+                    </Td>
+                    <Td align="right" mono>
                       <button
                         type="button"
                         onClick={() => remove(i)}
@@ -344,7 +346,7 @@ export default function RoutingEditorPage() {
                       >
                         <Trash2 size={14} />
                       </button>
-                    </td>
+                    </Td>
                   </tr>
                 ))}
               </tbody>
