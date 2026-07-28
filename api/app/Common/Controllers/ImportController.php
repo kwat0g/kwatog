@@ -6,6 +6,7 @@ namespace App\Common\Controllers;
 
 use App\Common\Models\ImportBatch;
 use App\Common\Services\Import\MasterDataImportService;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use RuntimeException;
@@ -32,6 +33,7 @@ class ImportController
         } catch (RuntimeException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
+
         return response()->json(['data' => $result]);
     }
 
@@ -48,15 +50,15 @@ class ImportController
         if ($result['batch'] === null) {
             return response()->json([
                 'message' => 'Import rejected — fix the '.count($result['errors']).' error row(s) and re-upload. Nothing was imported.',
-                'errors'  => $result['errors'],
-                'total'   => $result['total'],
+                'errors' => $result['errors'],
+                'total' => $result['total'],
             ], 422);
         }
 
         return response()->json([
-            'data'    => [
+            'data' => [
                 'batch_id' => $result['batch']->hash_id,
-                'total'    => $result['total'],
+                'total' => $result['total'],
                 'imported' => $result['imported'],
             ],
             'message' => "Imported {$result['imported']} row(s).",
@@ -71,16 +73,17 @@ class ImportController
             ->limit(100)
             ->get()
             ->map(fn (ImportBatch $b) => [
-                'id'            => $b->hash_id,
-                'entity_type'   => $b->entity_type,
-                'filename'      => $b->filename,
-                'status'        => $b->status,
-                'total_rows'    => $b->total_rows,
+                'id' => $b->hash_id,
+                'entity_type' => $b->entity_type,
+                'filename' => $b->filename,
+                'status' => $b->status,
+                'total_rows' => $b->total_rows,
                 'imported_rows' => $b->imported_rows,
-                'created_by'    => $b->creator?->name,
-                'created_at'    => optional($b->created_at)->toIso8601String(),
+                'created_by' => $b->creator?->name,
+                'created_at' => optional($b->created_at)->toIso8601String(),
                 'rolled_back_at' => optional($b->rolled_back_at)->toIso8601String(),
             ]);
+
         return response()->json(['data' => $batches]);
     }
 
@@ -88,13 +91,14 @@ class ImportController
     {
         try {
             $this->service->rollback($batch, $request->user());
-        } catch (RuntimeException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
-        } catch (\Illuminate\Database\QueryException $e) {
+        } catch (QueryException) {
             return response()->json([
                 'message' => 'Cannot roll back — some imported records are already referenced by other data.',
             ], 422);
+        } catch (RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
         }
+
         return response()->json(['message' => 'Batch rolled back.']);
     }
 }

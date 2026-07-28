@@ -20,7 +20,7 @@ export interface ApprovalRecord {
 }
 
 export interface PurchaseRequestItem {
-  id: number;
+  id: string;
   item: { id: string; code: string; name: string; unit_of_measure: string } | null;
   description: string;
   quantity: string;
@@ -47,6 +47,9 @@ export interface PurchaseRequest {
   current_approval_step: number;
   submitted_at: string | null;
   approved_at: string | null;
+  budget_warning_level?: string | null;
+  budget_warning_message?: string | null;
+  budget_acknowledged_at?: string | null;
   total_estimated_amount: string;
   requester: { id: string; name: string } | null;
   department: { id: string; name: string; code: string } | null;
@@ -124,6 +127,9 @@ export interface PurchaseOrder {
   current_approval_step: number;
   approved_at: string | null;
   sent_to_supplier_at: string | null;
+  budget_warning_level?: string | null;
+  budget_warning_message?: string | null;
+  budget_acknowledged_at?: string | null;
   remarks: string | null;
   quantity_received_pct: number;
   vendor: { id: string; name: string; contact_person: string | null; email: string | null } | null;
@@ -138,6 +144,7 @@ export interface PurchaseOrder {
 
 export interface CreatePurchaseOrderData {
   vendor_id: string;
+  purchase_request_id?: string;
   date?: string;
   expected_delivery_date?: string;
   is_vatable?: boolean;

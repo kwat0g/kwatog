@@ -11,6 +11,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use RuntimeException;
@@ -24,6 +25,7 @@ class DisbursementProofController extends Controller
     public function index(PayrollPeriod $period): AnonymousResourceCollection
     {
         $proofs = $period->disbursementProofs()->with('uploader')->orderByDesc('created_at')->get();
+
         return DisbursementProofResource::collection($proofs);
     }
 
@@ -35,13 +37,13 @@ class DisbursementProofController extends Controller
         $this->authorizeFinance($request);
 
         $validated = $request->validate([
-            'proof_type'            => ['required', 'string', Rule::in(['deposit_slip', 'bank_confirmation', 'transfer_receipt', 'other'])],
-            'file'                  => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
-            'bank_name'             => ['nullable', 'string', 'max:100'],
+            'proof_type' => ['required', 'string', Rule::in(['deposit_slip', 'bank_confirmation', 'transfer_receipt', 'other'])],
+            'file' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
+            'bank_name' => ['nullable', 'string', 'max:100'],
             'transaction_reference' => ['nullable', 'string', 'max:100'],
-            'disbursed_amount'      => ['nullable', 'numeric', 'min:0'],
-            'disbursement_date'     => ['required', 'date'],
-            'notes'                 => ['nullable', 'string', 'max:500'],
+            'disbursed_amount' => ['nullable', 'numeric', 'min:0'],
+            'disbursement_date' => ['required', 'date'],
+            'notes' => ['nullable', 'string', 'max:500'],
         ]);
 
         $file = $request->file('file');
@@ -58,21 +60,28 @@ class DisbursementProofController extends Controller
             bin2hex(random_bytes(4)),
             $file->extension(),
         );
-        $relative = $dir . DIRECTORY_SEPARATOR . $filename;
-        $disk->putFileAs($dir, $file, $filename);
+        $relative = $dir.DIRECTORY_SEPARATOR.$filename;
+        if ($disk->putFileAs($dir, $file, $filename) === false) {
+            throw new RuntimeException('Unable to store disbursement proof.');
+        }
 
-        $proof = DisbursementProof::create([
-            'payroll_period_id'     => $period->id,
-            'proof_type'            => $validated['proof_type'],
-            'file_name'             => $file->getClientOriginalName(),
-            'file_path'             => $relative,
-            'bank_name'             => $validated['bank_name'] ?? null,
-            'transaction_reference' => $validated['transaction_reference'] ?? null,
-            'disbursed_amount'      => $validated['disbursed_amount'] ?? null,
-            'disbursement_date'     => $validated['disbursement_date'],
-            'uploaded_by'           => $request->user()->id,
-            'notes'                 => $validated['notes'] ?? null,
-        ]);
+        try {
+            $proof = DisbursementProof::create([
+                'payroll_period_id' => $period->id,
+                'proof_type' => $validated['proof_type'],
+                'file_name' => $file->getClientOriginalName(),
+                'file_path' => $relative,
+                'bank_name' => $validated['bank_name'] ?? null,
+                'transaction_reference' => $validated['transaction_reference'] ?? null,
+                'disbursed_amount' => $validated['disbursed_amount'] ?? null,
+                'disbursement_date' => $validated['disbursement_date'],
+                'uploaded_by' => $request->user()->id,
+                'notes' => $validated['notes'] ?? null,
+            ]);
+        } catch (\Throwable $e) {
+            $disk->delete($relative);
+            throw $e;
+        }
 
         $proof->load('uploader');
 
@@ -102,14 +111,18 @@ class DisbursementProofController extends Controller
         return response()->stream(
             function () use ($disk, $proof) {
                 $stream = $disk->readStream($proof->file_path);
-                if (! $stream) abort(404);
+                if (! $stream) {
+                    abort(404);
+                }
                 fpassthru($stream);
-                if (is_resource($stream)) fclose($stream);
+                if (is_resource($stream)) {
+                    fclose($stream);
+                }
             },
             200,
             [
-                'Content-Type'        => $mime,
-                'Cache-Control'       => 'private, no-store, max-age=0',
+                'Content-Type' => $mime,
+                'Cache-Control' => 'private, no-store, max-age=0',
                 'Content-Disposition' => $isImage
                     ? sprintf('inline; filename="%s"', $proof->file_name)
                     : sprintf('attachment; filename="%s"', $proof->file_name),
@@ -133,8 +146,11 @@ class DisbursementProofController extends Controller
             return response()->json(['message' => 'Cannot delete proof after the period has been marked as disbursed.'], 422);
         }
 
-        Storage::disk('local')->delete($proof->file_path);
-        $proof->delete();
+        $path = $proof->file_path;
+        DB::transaction(function () use ($proof, $path): void {
+            $proof->delete();
+            DB::afterCommit(fn () => Storage::disk('local')->delete($path));
+        });
 
         return response()->json(['message' => 'Proof deleted.']);
     }

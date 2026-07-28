@@ -24,12 +24,12 @@ export default function FactoryFloorLayout() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100">
+    <div className="min-h-screen flex flex-col bg-surface text-primary">
       {/* Sticky header */}
-      <header className="sticky top-0 z-10 border-b border-zinc-200 dark:border-zinc-800 bg-canvas dark:bg-zinc-900">
+      <header className="sticky top-0 z-10 border-b border-default bg-canvas">
         <div className="flex items-center justify-between px-4 py-3">
           <div>
-            <div className="text-xs uppercase tracking-wider text-zinc-500">Factory Floor</div>
+            <div className="text-xs uppercase tracking-wider text-muted">Factory Floor</div>
             <div className="font-medium leading-tight">{user?.name ?? 'Operator'}</div>
           </div>
           <button
@@ -38,7 +38,7 @@ export default function FactoryFloorLayout() {
               await logout();
               navigate('/login');
             }}
-            className="text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 px-3 py-2 min-h-[44px] rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+            className="text-sm text-secondary hover:text-primary px-3 py-2 min-h-[44px] rounded focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
           >
             Logout
           </button>
@@ -51,7 +51,7 @@ export default function FactoryFloorLayout() {
       </main>
 
       {/* Bottom navigation */}
-      <nav className="fixed bottom-0 inset-x-0 z-10 border-t border-zinc-200 dark:border-zinc-800 bg-canvas dark:bg-zinc-900 safe-area-pb">
+      <nav className="fixed bottom-0 inset-x-0 z-10 border-t border-default bg-canvas safe-area-pb">
         <div className="flex items-stretch max-w-2xl mx-auto">
           {tabs.map(tab => {
             const active = isActive(tab.to, tab.exact);
@@ -60,10 +60,10 @@ export default function FactoryFloorLayout() {
               <Link
                 key={tab.to}
                 to={tab.to}
-                className={`flex-1 flex flex-col items-center justify-center py-2 min-h-[56px] transition-colors focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500 ${
+                className={`flex-1 flex flex-col items-center justify-center py-2 min-h-[56px] transition-colors focus:outline-none focus:ring-2 focus:ring-inset focus:ring-accent ${
                   active
-                    ? 'text-indigo-600 dark:text-indigo-400'
-                    : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300'
+                    ? 'text-accent'
+                    : 'text-muted hover:text-secondary'
                 }`}
               >
                 <Icon className="w-5 h-5" />

@@ -250,7 +250,7 @@ export default function PurchasingDashboard() {
   const poStatusChartData = (q.data as unknown as PurchasingDashboardData)?.panels?.po_pipeline?.map(i => ({
     name: i.status.replace(/_/g, ' '),
     value: i.count,
-    color: i.status === 'received' || i.status === 'closed' ? 'var(--color-success)' : i.status === 'sent' ? 'var(--color-info)' : 'var(--color-warning)',
+    color: i.status === 'received' || i.status === 'closed' ? 'var(--success)' : i.status === 'sent' ? 'var(--info)' : 'var(--warning)',
   })) ?? [];
 
   const prStatusChartData = (q.data as unknown as PurchasingDashboardData)?.panels?.pr_action_queue ? (() => {
@@ -349,7 +349,7 @@ export default function PurchasingDashboard() {
             ) : (
               <BarComparison
                 data={prStatusChartData}
-                bars={[{ dataKey: 'count', color: 'var(--color-warning)', label: 'PRs' }]}
+                bars={[{ dataKey: 'count', color: 'var(--warning)', label: 'PRs' }]}
                 xKey="label"
                 height={180}
               />

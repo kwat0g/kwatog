@@ -6,6 +6,7 @@ namespace App\Modules\Inventory\Models;
 
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
+use App\Modules\Auth\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -13,7 +14,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class StockCountSession extends Model
 {
-    use HasFactory, HasHashId, HasAuditLog;
+    use HasAuditLog, HasFactory, HasHashId;
 
     protected $fillable = [
         'session_number', 'title', 'scope', 'warehouse_id', 'zone_id',
@@ -22,12 +23,12 @@ class StockCountSession extends Model
     ];
 
     protected $casts = [
-        'frozen_at'      => 'datetime',
-        'completed_at'   => 'datetime',
+        'frozen_at' => 'datetime',
+        'completed_at' => 'datetime',
         'total_locations' => 'integer',
         'counted_locations' => 'integer',
-        'variance_count'  => 'integer',
-        'variance_value'  => 'decimal:2',
+        'variance_count' => 'integer',
+        'variance_value' => 'decimal:2',
     ];
 
     public function warehouse(): BelongsTo

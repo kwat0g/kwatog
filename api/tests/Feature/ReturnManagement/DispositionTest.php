@@ -5,9 +5,21 @@ declare(strict_types=1);
 namespace Tests\Feature\ReturnManagement;
 
 use App\Modules\Accounting\Models\Customer;
+use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\Bill;
+use App\Modules\Accounting\Models\BillItem;
+use App\Modules\Accounting\Models\CreditNote;
 use App\Modules\Accounting\Models\Invoice;
+use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
+use App\Modules\Inventory\Models\GoodsReceiptNote;
+use App\Modules\Inventory\Models\GrnItem;
+use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\WarehouseLocation;
+use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
+use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use App\Modules\Quality\Models\NonConformanceReport;
 use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
 use App\Modules\ReturnManagement\Enums\ReturnRequestType;
@@ -227,6 +239,179 @@ class DispositionTest extends TestCase
         $item = $result->items->first();
         $this->assertSame('rework', $item->disposition);
         $this->assertNotNull($item->ncr_id);
+    }
+
+    public function test_supplier_disposition_reverses_receipt_applies_credit_and_creates_replacement_po(): void
+    {
+        config()->set('budgeting.enforcement_mode', 'off');
+
+        $by = $this->makeUser();
+        $vendor = Vendor::factory()->create(['created_by' => null]);
+        $item = Item::factory()->create();
+        $location = WarehouseLocation::factory()->create();
+        $expense = Account::query()->where('type', 'expense')->firstOrFail();
+
+        $po = PurchaseOrder::factory()->create([
+            'vendor_id'   => $vendor->id,
+            'created_by'  => $by->id,
+            'subtotal'    => '1000.00',
+            'vat_amount'  => '120.00',
+            'total_amount'=> '1120.00',
+            'is_vatable'  => true,
+        ]);
+        $po->forceFill(['status' => PurchaseOrderStatus::Received])->save();
+        $poItem = PurchaseOrderItem::create([
+            'purchase_order_id' => $po->id,
+            'item_id'           => $item->id,
+            'description'       => 'Resin received for supplier-return test',
+            'quantity'          => '100.00',
+            'unit'              => 'kg',
+            'unit_price'        => '10.00',
+            'total'             => '1000.00',
+            'quantity_received' => '100.00',
+        ]);
+
+        $grn = GoodsReceiptNote::factory()->create([
+            'purchase_order_id' => $po->id,
+            'vendor_id'         => $vendor->id,
+            'received_by'       => $by->id,
+            'status'            => 'accepted',
+        ]);
+        $grnItem = GrnItem::create([
+            'goods_receipt_note_id'  => $grn->id,
+            'purchase_order_item_id' => $poItem->id,
+            'item_id'                => $item->id,
+            'location_id'            => $location->id,
+            'quantity_received'      => '100.000',
+            'quantity_accepted'      => '100.000',
+            'unit_cost'              => '10.0000',
+        ]);
+
+        $bill = Bill::create([
+            'bill_number'      => 'BILL-RMA-'.substr(uniqid(), -5),
+            'vendor_id'        => $vendor->id,
+            'purchase_order_id'=> $po->id,
+            'status'           => 'unpaid',
+            'subtotal'         => '1000.00',
+            'vat_amount'       => '120.00',
+            'total_amount'     => '1120.00',
+            'amount_paid'      => '0.00',
+            'balance'          => '1120.00',
+            'date'             => now()->toDateString(),
+            'due_date'         => now()->addDays(30)->toDateString(),
+            'is_vatable'       => true,
+            'created_by'       => $by->id,
+        ]);
+        $billItem = BillItem::create([
+            'bill_id'            => $bill->id,
+            'expense_account_id' => $expense->id,
+            'item_id'            => $item->id,
+            'description'        => 'Received resin',
+            'quantity'           => '100.00',
+            'unit'               => 'kg',
+            'unit_price'         => '10.00',
+            'total'              => '1000.00',
+        ]);
+
+        $rma = ReturnRequest::create([
+            'rma_number'        => 'RMA-SUP-'.substr(uniqid(), -5),
+            'type'              => ReturnRequestType::SupplierReturn->value,
+            'status'            => ReturnRequestStatus::Inspected->value,
+            'purchase_order_id' => $po->id,
+            'bill_id'           => $bill->id,
+            'vendor_id'         => $vendor->id,
+            'reason_code'       => 'quality_issue',
+            'return_date'       => now()->toDateString(),
+            'created_by'        => $by->id,
+        ]);
+        $rmaItem = ReturnRequestItem::create([
+            'return_request_id'  => $rma->id,
+            'item_id'            => $item->id,
+            'quantity'           => '20.000',
+            'returned_quantity'  => '20.000',
+            'unit_price'         => '10.00',
+            'total'              => '200.00',
+            'source_po_item_id'  => $poItem->id,
+            'source_grn_item_id' => $grnItem->id,
+            'source_bill_item_id'=> $billItem->id,
+        ]);
+
+        $result = app(ReturnRequestService::class)->dispose($rma->load('items'), [[
+            'item_id'     => $rmaItem->hash_id,
+            'disposition' => 'return_to_supplier',
+            'notes'       => 'Failed incoming QC',
+        ]], $by, true);
+
+        $this->assertSame('80.000', (string) $grnItem->fresh()->quantity_received);
+        $this->assertSame('80.000', (string) $grnItem->fresh()->quantity_accepted);
+        $this->assertSame('80.00', (string) $poItem->fresh()->quantity_received);
+        $this->assertSame(PurchaseOrderStatus::PartiallyReceived, $po->fresh()->status);
+
+        $credit = CreditNote::findOrFail($result->credit_note_id);
+        $this->assertSame('supplier', $credit->type->value);
+        $this->assertSame('224.00', (string) $credit->total_amount);
+        $this->assertSame('applied', $credit->status->value);
+        $this->assertSame('896.00', (string) $bill->fresh()->balance);
+
+        $replacement = $result->replacementPurchaseOrder;
+        $this->assertNotNull($replacement);
+        $this->assertSame($vendor->id, $replacement->vendor_id);
+        $this->assertSame(PurchaseOrderStatus::Draft, $replacement->status);
+        $this->assertSame('20.00', (string) $replacement->items()->firstOrFail()->quantity);
+        $this->assertSame('disposed', $result->disposition_status);
+
+        try {
+            app(ReturnRequestService::class)->dispose($result->fresh('items'), [[
+                'item_id' => $rmaItem->hash_id,
+                'disposition' => 'return_to_supplier',
+            ]], $by, true);
+            $this->fail('A disposed supplier return must not run twice.');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('already been disposed', $e->getMessage());
+        }
+        $this->assertSame(1, CreditNote::query()->where('return_request_id', $rma->id)->count());
+        $this->assertSame('80.000', (string) $grnItem->fresh()->quantity_received);
+    }
+
+    public function test_supplier_disposition_rolls_back_when_source_lineage_is_invalid(): void
+    {
+        $by = $this->makeUser();
+        $vendor = Vendor::factory()->create();
+        $item = Item::factory()->create();
+        $po = PurchaseOrder::factory()->create(['vendor_id' => $vendor->id, 'created_by' => $by->id]);
+        $poItem = PurchaseOrderItem::create([
+            'purchase_order_id' => $po->id, 'item_id' => $item->id,
+            'description' => 'Original line', 'quantity' => 10, 'unit' => 'pcs',
+            'unit_price' => 5, 'total' => 50, 'quantity_received' => 10,
+        ]);
+        $rma = ReturnRequest::create([
+            'rma_number' => 'RMA-SUP-'.substr(uniqid(), -5),
+            'type' => ReturnRequestType::SupplierReturn->value,
+            'status' => ReturnRequestStatus::Inspected->value,
+            'purchase_order_id' => $po->id, 'vendor_id' => $vendor->id,
+            'reason_code' => 'quality_issue', 'return_date' => now()->toDateString(),
+            'created_by' => $by->id,
+        ]);
+        $rmaItem = ReturnRequestItem::create([
+            'return_request_id' => $rma->id, 'item_id' => $item->id,
+            'quantity' => 2, 'returned_quantity' => 2, 'unit_price' => 5, 'total' => 10,
+            'source_po_item_id' => $poItem->id,
+            // Deliberately no GRN lineage.
+        ]);
+
+        try {
+            app(ReturnRequestService::class)->dispose($rma->load('items'), [[
+                'item_id' => $rmaItem->hash_id,
+                'disposition' => 'return_to_supplier',
+            ]], $by);
+            $this->fail('Expected invalid supplier-return lineage to be rejected.');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('source GRN and PO lines', $e->getMessage());
+        }
+
+        $this->assertNull($rmaItem->fresh()->disposition, 'Item update must roll back with the transaction.');
+        $this->assertNull($rma->fresh()->disposition_status);
+        $this->assertSame('10.00', (string) $poItem->fresh()->quantity_received);
     }
 
     /**

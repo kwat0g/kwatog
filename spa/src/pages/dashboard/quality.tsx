@@ -312,14 +312,14 @@ export default function QcDashboard() {
       stageCounts[ins.stage] = (stageCounts[ins.stage] || 0) + 1;
     });
     const colorMap: Record<string, string> = {
-      incoming: 'var(--color-info)',
-      in_process: 'var(--color-warning)',
-      outgoing: 'var(--color-danger)',
+      incoming: 'var(--info)',
+      in_process: 'var(--warning)',
+      outgoing: 'var(--danger)',
     };
     return Object.entries(stageCounts).map(([name, value]) => ({
       name,
       value,
-      color: colorMap[name] ?? 'var(--color-muted)',
+      color: colorMap[name] ?? 'var(--text-muted)',
     }));
   })() : [];
 
@@ -408,7 +408,7 @@ export default function QcDashboard() {
             ) : (
               <BarComparison
                 data={(panels?.defect_pareto ?? []).slice(0, 6).map(d => ({ label: d.code, count: d.count }))}
-                bars={[{ dataKey: 'count', color: 'var(--color-danger)', label: 'Occurrences' }]}
+                bars={[{ dataKey: 'count', color: 'var(--danger)', label: 'Occurrences' }]}
                 xKey="label"
                 height={180}
               />

@@ -18,17 +18,20 @@ class ItemService
     public function list(array $filters): LengthAwarePaginator
     {
         $q = Item::query()->with('category:id,name,parent_id');
+        $q->withExists(['qualityPlans as has_active_quality_plan' => fn ($plan) => $plan->effective()]);
 
         // Subqueries for available/on-hand to prevent N+1.
         $q->withSum(['stockLevels as on_hand_quantity' => fn ($s) => $s], 'quantity')
-          ->withSum(['stockLevels as reserved_quantity' => fn ($s) => $s], 'reserved_quantity');
+            ->withSum(['stockLevels as reserved_quantity' => fn ($s) => $s], 'reserved_quantity');
 
         if (! empty($filters['item_type'])) {
             $q->where('item_type', $filters['item_type']);
         }
         if (! empty($filters['category_id'])) {
             $catId = HashIdFilter::decode($filters['category_id'], ItemCategory::class);
-            if ($catId) $q->where('category_id', $catId);
+            if ($catId) {
+                $q->where('category_id', $catId);
+            }
         }
         if (isset($filters['is_active']) && $filters['is_active'] !== '') {
             $q->where('is_active', filter_var($filters['is_active'], FILTER_VALIDATE_BOOLEAN));
@@ -40,7 +43,7 @@ class ItemService
             $term = $filters['search'];
             $q->where(function ($qq) use ($term) {
                 $qq->where('code', SearchOperator::like(), "%{$term}%")
-                   ->orWhere('name', SearchOperator::like(), "%{$term}%");
+                    ->orWhere('name', SearchOperator::like(), "%{$term}%");
             });
         }
 
@@ -68,7 +71,8 @@ class ItemService
 
     public function show(Item $item): Item
     {
-        return $item->load(['category', 'approvedSuppliers.vendor:id,name']);
+        return $item->load(['category', 'approvedSuppliers.vendor:id,name'])
+            ->loadExists(['qualityPlans as has_active_quality_plan' => fn ($plan) => $plan->effective()]);
     }
 
     public function create(array $data): Item
@@ -91,6 +95,7 @@ class ItemService
                 }
             }
             $item->update($data);
+
             return $item->fresh();
         });
     }

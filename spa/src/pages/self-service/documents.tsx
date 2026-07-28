@@ -5,12 +5,13 @@
  *   • Auto-generated certificates (employment, gov contributions, BIR 2316)
  *   • Payslips (links to the payslip history page)
  *
- * PDFs download via <a href> so the browser carries the session cookie — no
- * blob fetch in JS (matches the payslip download pattern).
+ * Protected PDFs use the shared authenticated downloader so expired sessions
+ * return users to login instead of opening a raw API error in a new tab.
  */
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { Download, FileText, Receipt, ChevronRight } from 'lucide-react';
+import { downloadAuthenticatedFile } from '@/api/download';
 import { selfServiceApi } from '@/api/self-service';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/Button';
@@ -80,17 +81,19 @@ export default function SelfServiceDocumentsPage() {
                       <div className="text-xs text-muted truncate">{cert.note}</div>
                     </div>
                     {cert.available && url ? (
-                      <a
-                        href={url}
-                        target="_blank"
-                        rel="noopener"
+                      <button
+                        type="button"
+                        onClick={() => void downloadAuthenticatedFile(url, {
+                          openInNewTab: true,
+                          errorMessage: `Failed to generate ${cert.label}.`,
+                        })}
                         className="shrink-0 inline-flex items-center gap-1 px-3 h-11 text-sm rounded-md border border-default bg-canvas text-primary hover:bg-elevated"
                         aria-label={`Download ${cert.label}`}
                       >
                         <Download size={14} /> PDF
-                      </a>
+                      </button>
                     ) : (
-                      <span className="shrink-0 text-2xs text-subtle px-2">Unavailable</span>
+                      <span className="shrink-0 text-2xs text-text-subtle px-2">Unavailable</span>
                     )}
                   </li>
                 );
@@ -112,7 +115,7 @@ export default function SelfServiceDocumentsPage() {
                 <span className="block text-sm font-medium">View all payslips</span>
                 <span className="block text-xs text-muted">Download any period's payslip PDF</span>
               </span>
-              <ChevronRight size={16} className="text-subtle shrink-0" />
+              <ChevronRight size={16} className="text-text-subtle shrink-0" />
             </Link>
           </section>
 

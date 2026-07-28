@@ -34,15 +34,15 @@ class SupplierPortalServiceTest extends TestCase
 
     /* ─── Helpers ────────────────────────────────────────────────── */
 
-    private function makePortalUser(Vendor $vendor = null): SupplierPortalUser
+    private function makePortalUser(?Vendor $vendor = null): SupplierPortalUser
     {
         $vendor ??= Vendor::factory()->create();
 
         return SupplierPortalUser::create([
             'vendor_id' => $vendor->id,
-            'name'      => 'SupUser-' . substr(uniqid(), -5),
-            'email'     => 'su-' . uniqid() . '@t.test',
-            'password'  => bcrypt('Password1!'),
+            'name' => 'SupUser-'.substr(uniqid(), -5),
+            'email' => 'su-'.uniqid().'@t.test',
+            'password' => bcrypt('Password1!'),
             'is_active' => true,
         ]);
     }
@@ -50,25 +50,27 @@ class SupplierPortalServiceTest extends TestCase
     private function actAs(SupplierPortalUser $user): self
     {
         Sanctum::actingAs($user, ['*'], 'supplier_portal');
+
         return $this;
     }
 
     private function createBill(int $vendorId): Bill
     {
         $internalUser = User::factory()->create();
+
         return Bill::create([
-            'bill_number'  => 'BILL-T-' . substr(uniqid(), -5),
-            'vendor_id'    => $vendorId,
-            'date'         => now()->toDateString(),
-            'due_date'     => now()->addDays(30)->toDateString(),
-            'is_vatable'   => true,
-            'subtotal'     => '1000.00',
-            'vat_amount'   => '120.00',
+            'bill_number' => 'BILL-T-'.substr(uniqid(), -5),
+            'vendor_id' => $vendorId,
+            'date' => now()->toDateString(),
+            'due_date' => now()->addDays(30)->toDateString(),
+            'is_vatable' => true,
+            'subtotal' => '1000.00',
+            'vat_amount' => '120.00',
             'total_amount' => '1120.00',
-            'amount_paid'  => '0.00',
-            'balance'      => '1120.00',
-            'status'       => 'unpaid',
-            'created_by'   => $internalUser->id,
+            'amount_paid' => '0.00',
+            'balance' => '1120.00',
+            'status' => 'unpaid',
+            'created_by' => $internalUser->id,
         ]);
     }
 
@@ -198,8 +200,8 @@ class SupplierPortalServiceTest extends TestCase
         $this->actAs($user);
 
         $response = $this->postJson("/api/v1/b2b/supplier/purchase-orders/{$po->hash_id}/shipment-update", [
-            'carrier'           => 'Maersk',
-            'tracking_number'   => 'MAEU1234567',
+            'carrier' => 'Maersk',
+            'tracking_number' => 'MAEU1234567',
             'estimated_arrival' => '2026-07-15',
         ]);
 
@@ -273,24 +275,24 @@ class SupplierPortalServiceTest extends TestCase
         $po = PurchaseOrder::factory()->create(['vendor_id' => $vendor->id]);
 
         DeliverySchedule::create([
-            'customer_id'       => $customer->id,
-            'vendor_id'         => $vendor->id,
+            'customer_id' => $customer->id,
+            'vendor_id' => $vendor->id,
             'purchase_order_id' => $po->id,
-            'month'             => '2026-07',
-            'status'            => 'submitted',
-            'lines'             => [['item' => 'X', 'qty' => 100]],
+            'month' => '2026-07',
+            'status' => 'submitted',
+            'lines' => [['item' => 'X', 'qty' => 100]],
         ]);
 
         // Other vendor's schedule — must NOT appear.
         $other = Vendor::factory()->create();
         $otherPo = PurchaseOrder::factory()->create(['vendor_id' => $other->id]);
         DeliverySchedule::create([
-            'customer_id'       => $customer->id,
-            'vendor_id'         => $other->id,
+            'customer_id' => $customer->id,
+            'vendor_id' => $other->id,
             'purchase_order_id' => $otherPo->id,
-            'month'             => '2026-07',
-            'status'            => 'submitted',
-            'lines'             => [['item' => 'Y', 'qty' => 200]],
+            'month' => '2026-07',
+            'status' => 'submitted',
+            'lines' => [['item' => 'Y', 'qty' => 200]],
         ]);
 
         $this->actAs($user);
@@ -299,6 +301,27 @@ class SupplierPortalServiceTest extends TestCase
 
         $response->assertOk();
         $this->assertCount(1, $response->json('data'));
+    }
+
+    public function test_store_delivery_schedule_rejects_other_vendors_purchase_order(): void
+    {
+        $vendor = Vendor::factory()->create();
+        $otherVendor = Vendor::factory()->create();
+        $user = $this->makePortalUser($vendor);
+        $otherPo = PurchaseOrder::factory()->create(['vendor_id' => $otherVendor->id]);
+
+        $this->actAs($user);
+
+        $this->postJson('/api/v1/b2b/supplier/delivery-schedules', [
+            'purchase_order_id' => $otherPo->hash_id,
+            'month' => '2026-08',
+            'lines' => [['product_name' => 'Relay Cover', 'quantity' => 500]],
+        ])->assertStatus(422);
+
+        $this->assertDatabaseMissing('delivery_schedules', [
+            'vendor_id' => $vendor->id,
+            'purchase_order_id' => $otherPo->id,
+        ]);
     }
 
     /* ─── Auth guard ─────────────────────────────────────────────── */

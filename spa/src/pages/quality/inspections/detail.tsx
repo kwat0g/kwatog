@@ -175,6 +175,8 @@ export default function InspectionDetailPage() {
         subtitle={
           data.product
             ? `${data.product.part_number} — ${data.product.name} (${data.stage.replace('_', '-')})`
+            : data.item
+              ? `${data.item.code} — ${data.item.name} (${data.stage.replace('_', '-')})`
             : data.stage
         }
         breadcrumbs={[{ label: 'Quality', href: '/quality' }, { label: 'Inspections', href: '/quality/inspections' }, { label: data.inspection_number }]}

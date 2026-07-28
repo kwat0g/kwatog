@@ -9,6 +9,7 @@ use App\Modules\Accounting\Models\Bill;
 use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Support\ThreeWayMatchResult;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -34,15 +35,15 @@ class ThreeWayMatchService
     {
         $po->loadMissing('items');
 
-        $qtyTol   = (float) $this->settings->get('purchasing.three_way_tolerance_qty_pct', 5.0);
+        $qtyTol = (float) $this->settings->get('purchasing.three_way_tolerance_qty_pct', 5.0);
         $priceTol = (float) $this->settings->get('purchasing.three_way_tolerance_price_pct', 5.0);
 
         // Aggregate accepted GRN qty per po_item.
         $grnAccepted = GrnItem::query()
             ->whereIn('purchase_order_item_id', $po->items->pluck('id'))
             ->select('purchase_order_item_id',
-                \DB::raw('SUM(quantity_accepted) as qty_accepted'),
-                \DB::raw('AVG(unit_cost) as avg_cost')
+                DB::raw('SUM(quantity_accepted) as qty_accepted'),
+                DB::raw('AVG(unit_cost) as avg_cost')
             )
             ->groupBy('purchase_order_item_id')
             ->get()
@@ -62,17 +63,17 @@ class ThreeWayMatchService
             $billKey = (string) $poi->item_id;
             $bl = $billByItem[$billKey] ?? null;
 
-            $billQty   = $bl ? (float) $bl['quantity']   : 0.0;
+            $billQty = $bl ? (float) $bl['quantity'] : 0.0;
             $billPrice = $bl ? (float) $bl['unit_price'] : 0.0;
-            $grnQty    = $grn ? (float) $grn->qty_accepted : 0.0;
-            $grnCost   = $grn ? (float) $grn->avg_cost     : (float) $poi->unit_price;
-            $poQty     = (float) $poi->quantity;
-            $poPrice   = (float) $poi->unit_price;
+            $grnQty = $grn ? (float) $grn->qty_accepted : 0.0;
+            $grnCost = $grn ? (float) $grn->avg_cost : (float) $poi->unit_price;
+            $poQty = (float) $poi->quantity;
+            $poPrice = (float) $poi->unit_price;
 
-            $qtyVar   = $poQty   > 0 ? abs($billQty - $poQty)   / $poQty   * 100 : 0.0;
+            $qtyVar = $poQty > 0 ? abs($billQty - $poQty) / $poQty * 100 : 0.0;
             $priceVar = $poPrice > 0 ? abs($billPrice - $poPrice) / $poPrice * 100 : 0.0;
 
-            $qtyOk   = $qtyVar   <= $qtyTol;
+            $qtyOk = $qtyVar <= $qtyTol;
             $priceOk = $priceVar <= $priceTol;
 
             // H-6 — Bill qty must not exceed accepted GRN qty beyond the qty
@@ -88,31 +89,34 @@ class ThreeWayMatchService
             $severity = ($qtyOk && $priceOk && $grnOk) ? 'ok' : 'block';
             $lineStatus = match (true) {
                 ! $qtyOk && ! $priceOk => 'both',
-                ! $qtyOk               => 'qty_variance',
-                ! $priceOk             => 'price_variance',
-                ! $grnOk               => 'grn_short',
-                default                => 'matched',
+                ! $qtyOk => 'qty_variance',
+                ! $priceOk => 'price_variance',
+                ! $grnOk => 'grn_short',
+                default => 'matched',
             };
 
-            if ($severity === 'block') $overall = 'blocked';
-            elseif (($qtyVar > 0 || $priceVar > 0) && $overall !== 'blocked') $overall = 'has_variances';
+            if ($severity === 'block') {
+                $overall = 'blocked';
+            } elseif (($qtyVar > 0 || $priceVar > 0) && $overall !== 'blocked') {
+                $overall = 'has_variances';
+            }
 
             $lines[] = [
-                'item_id'           => $poi->item_id,
-                'item_code'         => $poi->item?->code,
-                'description'       => $poi->description,
-                'po_quantity'       => number_format($poQty, 2, '.', ''),
-                'po_unit_price'     => number_format($poPrice, 2, '.', ''),
-                'po_total'          => number_format($poQty * $poPrice, 2, '.', ''),
+                'item_id' => $poi->item_id,
+                'item_code' => $poi->item?->code,
+                'description' => $poi->description,
+                'po_quantity' => number_format($poQty, 2, '.', ''),
+                'po_unit_price' => number_format($poPrice, 2, '.', ''),
+                'po_total' => number_format($poQty * $poPrice, 2, '.', ''),
                 'grn_quantity_accepted' => number_format($grnQty, 3, '.', ''),
-                'grn_unit_cost'     => number_format($grnCost, 4, '.', ''),
-                'grn_status'        => $grnOk ? 'ok' : 'short',
-                'bill_quantity'     => number_format($billQty, 2, '.', ''),
-                'bill_unit_price'   => number_format($billPrice, 2, '.', ''),
-                'bill_total'        => number_format($billQty * $billPrice, 2, '.', ''),
+                'grn_unit_cost' => number_format($grnCost, 4, '.', ''),
+                'grn_status' => $grnOk ? 'ok' : 'short',
+                'bill_quantity' => number_format($billQty, 2, '.', ''),
+                'bill_unit_price' => number_format($billPrice, 2, '.', ''),
+                'bill_total' => number_format($billQty * $billPrice, 2, '.', ''),
                 'quantity_variance_pct' => round($qtyVar, 2),
-                'price_variance_pct'    => round($priceVar, 2),
-                'status'   => $lineStatus,
+                'price_variance_pct' => round($priceVar, 2),
+                'status' => $lineStatus,
                 'severity' => $severity,
             ];
         }
@@ -128,7 +132,9 @@ class ThreeWayMatchService
 
     public function matchForBill(Bill $bill): ?ThreeWayMatchResult
     {
-        if (! $bill->purchase_order_id) return null;
+        if (! $bill->purchase_order_id) {
+            return null;
+        }
         /** @var PurchaseOrder $po */
         $po = PurchaseOrder::query()->with('items.item')->findOrFail($bill->purchase_order_id);
 
@@ -142,10 +148,10 @@ class ThreeWayMatchService
             if ($bi->item_id) {
                 $anyHasItemId = true;
                 $billLinesByItem[(string) $bi->item_id] = [
-                    'item_id'     => $bi->item_id,
+                    'item_id' => $bi->item_id,
                     'description' => $bi->description,
-                    'quantity'    => $bi->quantity,
-                    'unit_price'  => $bi->unit_price,
+                    'quantity' => $bi->quantity,
+                    'unit_price' => $bi->unit_price,
                 ];
             }
         }
@@ -159,14 +165,14 @@ class ThreeWayMatchService
         // any rows the migration could not backfill.
         Log::warning('ThreeWayMatchService::matchForBill falling back to index alignment', [
             'bill_id' => $bill->id,
-            'po_id'   => $po->id,
+            'po_id' => $po->id,
         ]);
 
         $billLines = $bill->items->map(fn ($i) => [
-            'item_id'     => null,
+            'item_id' => null,
             'description' => $i->description,
-            'quantity'    => $i->quantity,
-            'unit_price'  => $i->unit_price,
+            'quantity' => $i->quantity,
+            'unit_price' => $i->unit_price,
         ])->all();
 
         $aligned = [];
@@ -175,6 +181,7 @@ class ThreeWayMatchService
                 $aligned[(string) $poi->item_id] = $billLines[$idx];
             }
         }
+
         return $this->matchForPo($po, array_values($aligned));
     }
 }

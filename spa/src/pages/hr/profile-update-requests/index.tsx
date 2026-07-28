@@ -170,7 +170,7 @@ export default function ProfileUpdateRequestsPage() {
                     <span className="text-muted w-40 shrink-0">
                       {FIELD_LABELS[key] ?? key}:
                     </span>
-                    <span className="font-mono tabular-nums">{value ?? <em className="text-subtle">empty</em>}</span>
+                    <span className="font-mono tabular-nums">{value ?? <em className="text-text-subtle">empty</em>}</span>
                   </div>
                 ))}
                 {row.note && (

@@ -1,14 +1,18 @@
-/** Global ⌘K command palette with grouped results, type icons, status chips, keyboard nav. */
-import { useEffect, useMemo, useRef, useState } from 'react';
+/** Global ⌘K command palette: recent items, page navigation, record search. */
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Search, Loader2,
+  Search, Loader2, Clock, X,
   User, ShoppingCart, Package, FileText, Receipt, Wrench,
-  Box, Building2, Truck, AlertTriangle,
+  Box, Building2, Truck, AlertTriangle, ArrowRight,
+  type LucideIcon,
 } from 'lucide-react';
 import { client } from '@/api/client';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { formatPeso } from '@/lib/formatNumber';
+import { SECTIONS, isNavItemVisible } from '@/components/layout/Sidebar';
+import { useAuthStore } from '@/stores/authStore';
+import { useRecentItemsStore } from '@/stores/recentItemsStore';
 
 type GroupType =
   | 'employee'
@@ -42,7 +46,7 @@ interface SearchResponse {
   query: string;
 }
 
-const ICONS: Record<GroupType, typeof User> = {
+const ICONS: Record<GroupType, LucideIcon> = {
   employee:       User,
   sales_order:    ShoppingCart,
   purchase_order: Package,
@@ -55,6 +59,33 @@ const ICONS: Record<GroupType, typeof User> = {
   vendor:         Truck,
   ncr:            AlertTriangle,
 };
+
+function iconForType(type?: string | null): LucideIcon {
+  return (type && type in ICONS ? ICONS[type as GroupType] : FileText) as LucideIcon;
+}
+
+/** Normalized row — every section renders through this shape. */
+interface Row {
+  url: string;
+  label: string;
+  sublabel?: string | null;
+  status?: string | null;
+  amount?: string | null;
+  icon: LucideIcon;
+  /** Palette group type ('sales_order', 'page', …) — preserved into recents. */
+  type?: string | null;
+  /** Record IDs render in mono; page names in sans. */
+  mono?: boolean;
+}
+
+interface Section {
+  key: string;
+  label: string;
+  icon?: LucideIcon;
+  rows: Row[];
+  /** Optional affordance on the right of the section header. */
+  headerAction?: { label: string; onClick: () => void };
+}
 
 interface Props {
   open: boolean;
@@ -70,6 +101,13 @@ export function CommandPalette({ open, onClose }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
+  const permissions = useAuthStore((s) => s.permissions);
+  const features = useAuthStore((s) => s.features);
+  const roleSlug = useAuthStore((s) => s.user?.role?.slug);
+  const recents = useRecentItemsStore((s) => s.items);
+  const addRecent = useRecentItemsStore((s) => s.add);
+  const clearRecents = useRecentItemsStore((s) => s.clear);
+
   // Reset on close.
   useEffect(() => {
     if (!open) {
@@ -81,16 +119,19 @@ export function CommandPalette({ open, onClose }: Props) {
     }
   }, [open]);
 
-  // Debounced search.
+  const trimmed = q.trim();
+  const searching = trimmed.length >= 2;
+
+  // Debounced record search.
   useEffect(() => {
-    if (!open || q.trim().length < 2) {
+    if (!open || !searching) {
       setGroups([]);
       return;
     }
     const handle = setTimeout(async () => {
       setLoading(true);
       try {
-        const res = await client.get<SearchResponse>('/search', { params: { q } });
+        const res = await client.get<SearchResponse>('/search', { params: { q: trimmed } });
         setGroups(res.data.data);
         setActiveIndex(0);
       } catch {
@@ -100,12 +141,124 @@ export function CommandPalette({ open, onClose }: Props) {
       }
     }, 200);
     return () => clearTimeout(handle);
-  }, [q, open]);
+  }, [trimmed, open, searching]);
 
-  // Flat list for keyboard nav.
-  const flatItems = useMemo(
-    () => groups.flatMap((g) => g.items.map((it) => ({ ...it, _group: g.label, _type: g.type }))),
-    [groups],
+  // "Go to" pages — the same gated sitemap as the sidebar.
+  const visibleNav = useMemo(
+    () =>
+      SECTIONS.map((section) => ({
+        ...section,
+        items: section.items.filter((item) =>
+          isNavItemVisible(item, { permissions, features, roleSlug }),
+        ),
+      })).filter((s) => s.items.length > 0),
+    [permissions, features, roleSlug],
+  );
+
+  const sections = useMemo<Section[]>(() => {
+    const out: Section[] = [];
+
+    if (!searching) {
+      if (recents.length > 0) {
+        out.push({
+          key: 'recent',
+          label: 'Recent',
+          icon: Clock,
+          headerAction: { label: 'Clear', onClick: clearRecents },
+          rows: recents.map((r) => ({
+            url: r.url,
+            label: r.label,
+            sublabel: r.sublabel,
+            status: r.status,
+            type: r.type,
+            icon: r.type === 'page' ? ArrowRight : iconForType(r.type),
+            mono: r.type !== 'page',
+          })),
+        });
+      }
+      // Full app map, grouped like the sidebar.
+      for (const section of visibleNav) {
+        out.push({
+          key: `nav-${section.label}`,
+          label: section.label,
+          rows: section.items.map((item) => ({
+            url: item.to,
+            label: item.label,
+            type: 'page',
+            icon: item.icon,
+          })),
+        });
+      }
+      return out;
+    }
+
+    // Query mode — matching pages first, then record results.
+    const needle = trimmed.toLowerCase();
+    const pageRows = visibleNav
+      .flatMap((s) => s.items.map((item) => ({ item, section: s.label })))
+      .filter(({ item, section }) =>
+        item.label.toLowerCase().includes(needle) || section.toLowerCase().includes(needle),
+      )
+      .map<Row>(({ item, section }) => ({
+        url: item.to,
+        label: item.label,
+        sublabel: section,
+        type: 'page',
+        icon: item.icon,
+      }));
+    if (pageRows.length > 0) {
+      out.push({ key: 'pages', label: 'Pages', rows: pageRows });
+    }
+
+    for (const group of groups) {
+      out.push({
+        key: `api-${group.group}`,
+        label: group.label,
+        icon: iconForType(group.type),
+        rows: group.items.map((item) => ({
+          url: item.url,
+          label: item.label,
+          sublabel: item.sublabel,
+          status: item.status,
+          amount: item.amount,
+          type: group.type,
+          icon: iconForType(group.type),
+          mono: true,
+        })),
+      });
+    }
+    return out;
+  }, [searching, trimmed, visibleNav, recents, groups, clearRecents]);
+
+  // Flat list for keyboard nav, plus each section's start offset for indexing.
+  const { flatRows, sectionOffsets } = useMemo(() => {
+    const rows: Row[] = [];
+    const offsets: number[] = [];
+    for (const s of sections) {
+      offsets.push(rows.length);
+      rows.push(...s.rows);
+    }
+    return { flatRows: rows, sectionOffsets: offsets };
+  }, [sections]);
+
+  // Clamp the active row when the list shrinks.
+  useEffect(() => {
+    setActiveIndex((i) => Math.min(i, Math.max(0, flatRows.length - 1)));
+  }, [flatRows.length]);
+
+  const pick = useCallback(
+    (row: Row) => {
+      addRecent({
+        url: row.url,
+        label: row.label,
+        sublabel: row.sublabel,
+        status: row.status,
+        type: row.type,
+      });
+      navigate(row.url);
+      onClose();
+    },
+    [addRecent, navigate, onClose],
   );
 
   // Keyboard navigation.
@@ -117,22 +270,19 @@ export function CommandPalette({ open, onClose }: Props) {
         onClose();
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
-        setActiveIndex((i) => Math.min(i + 1, Math.max(0, flatItems.length - 1)));
+        setActiveIndex((i) => Math.min(i + 1, Math.max(0, flatRows.length - 1)));
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
         setActiveIndex((i) => Math.max(0, i - 1));
       } else if (e.key === 'Enter') {
         e.preventDefault();
-        const target = flatItems[activeIndex];
-        if (target) {
-          navigate(target.url);
-          onClose();
-        }
+        const target = flatRows[activeIndex];
+        if (target) pick(target);
       }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [open, flatItems, activeIndex, navigate, onClose]);
+  }, [open, flatRows, activeIndex, pick, onClose]);
 
   // Scroll active row into view.
   useEffect(() => {
@@ -143,9 +293,8 @@ export function CommandPalette({ open, onClose }: Props) {
 
   if (!open) return null;
 
-  const trimmed = q.trim();
-  const showEmptyState = trimmed.length >= 2 && !loading && groups.length === 0;
-  const totalResults = flatItems.length;
+  const showEmptyState = searching && !loading && sections.length === 0;
+  const totalResults = flatRows.length;
 
   return (
     <div
@@ -157,7 +306,7 @@ export function CommandPalette({ open, onClose }: Props) {
     >
       <div className="absolute inset-0 bg-black/30" />
       <div
-        className="relative w-full max-w-2xl rounded-md border border-default bg-canvas-menu overflow-hidden"
+        className="relative w-full max-w-2xl rounded-md border border-default bg-canvas shadow-menu overflow-hidden animate-slide-up"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2 px-3 py-2.5 border-b border-default">
@@ -166,33 +315,29 @@ export function CommandPalette({ open, onClose }: Props) {
             ref={inputRef}
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search employees, orders, vendors, items, NCRs…"
-            className="flex-1 bg-transparent text-sm outline-none placeholder:text-subtle"
+            placeholder="Search pages, employees, orders, vendors, items, NCRs…"
+            className="flex-1 bg-transparent text-sm outline-none placeholder:text-text-subtle"
             aria-label="Search query"
           />
           {loading && <Loader2 size={14} className="text-muted animate-spin" />}
-          <kbd className="font-mono text-[10px] text-subtle border border-subtle rounded px-1 py-0.5">ESC</kbd>
+          <kbd className="font-mono text-[10px] text-text-subtle border border-subtle rounded px-1 py-0.5">ESC</kbd>
         </div>
 
         <div ref={listRef} className="max-h-[420px] overflow-y-auto">
-          {trimmed.length < 2 && (
-            <div className="px-3 py-4 text-xs text-muted">
-              <p>Type at least 2 characters to search across the ERP.</p>
-              <p className="mt-2 text-2xs uppercase tracking-wider text-subtle">Try</p>
-              <ul className="mt-1 space-y-0.5 text-xs">
-                <li><span className="font-mono text-default">SO-</span> sales orders</li>
-                <li><span className="font-mono text-default">PO-</span> purchase orders</li>
-                <li><span className="font-mono text-default">WO-</span> work orders</li>
-                <li><span className="font-mono text-default">INV-</span> invoices</li>
-                <li><span className="font-mono text-default">NCR-</span> non-conformance reports</li>
-                <li>Or any name — employee, vendor, customer, product</li>
-              </ul>
+          {!searching && recents.length === 0 && (
+            <div className="px-3 pt-3 pb-1 text-xs text-muted">
+              Pick a page below, or type at least 2 characters to search records
+              (<span className="font-mono text-primary">SO-</span>,{' '}
+              <span className="font-mono text-primary">PO-</span>,{' '}
+              <span className="font-mono text-primary">WO-</span>,{' '}
+              <span className="font-mono text-primary">INV-</span>,{' '}
+              <span className="font-mono text-primary">NCR-</span>, any name).
             </div>
           )}
 
           {showEmptyState && (
             <div className="px-3 py-5 text-center">
-              <p className="text-sm text-default">
+              <p className="text-sm text-primary">
                 No results for <span className="font-mono">"{trimmed}"</span>
               </p>
               <p className="mt-1 text-xs text-muted">
@@ -201,59 +346,63 @@ export function CommandPalette({ open, onClose }: Props) {
             </div>
           )}
 
-          {groups.map((group) => {
-            const Icon = ICONS[group.type] ?? FileText;
-            return (
-              <div key={group.group} className="border-t border-subtle first:border-t-0">
-                <div className="px-3 pt-2 pb-1 text-2xs uppercase tracking-wider text-muted font-medium flex items-center gap-2">
-                  <Icon size={11} className="text-muted" />
-                  <span>{group.label}</span>
-                  <span className="font-mono text-subtle">·</span>
-                  <span className="font-mono text-subtle tabular-nums">{group.items.length}</span>
-                </div>
-                <ul>
-                  {group.items.map((item) => {
-                    const flatIdx = flatItems.findIndex(
-                      (f) => f._type === group.type && f.id === item.id && f.url === item.url,
-                    );
-                    const isActive = flatIdx === activeIndex;
-                    return (
-                      <li key={`${group.group}-${item.id}`}>
-                        <button
-                          data-flat-index={flatIdx}
-                          onClick={() => { navigate(item.url); onClose(); }}
-                          onMouseEnter={() => setActiveIndex(flatIdx)}
-                          className={`w-full text-left px-3 py-2 text-sm flex items-center gap-3 ${
-                            isActive ? 'bg-elevated' : 'hover:bg-subtle'
-                          }`}
-                        >
-                          <Icon size={14} className="text-muted shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono text-default truncate">{item.label}</span>
-                              {item.status && (
-                                <Chip variant={chipVariantForStatus(item.status)}>
-                                  {item.status.replace(/_/g, ' ')}
-                                </Chip>
-                              )}
-                            </div>
-                            {item.sublabel && (
-                              <div className="text-xs text-muted truncate mt-0.5">{item.sublabel}</div>
+          {sections.map((section, sectionIdx) => (
+            <div key={section.key} className="border-t border-subtle first:border-t-0">
+              <div className="px-3 pt-2 pb-1 text-2xs uppercase tracking-wider text-muted font-medium flex items-center gap-2">
+                {section.icon && <section.icon size={11} className="text-muted" />}
+                <span className="flex-1">{section.label}</span>
+                <span className="font-mono text-text-subtle tabular-nums">{section.rows.length}</span>
+                {section.headerAction && (
+                  <button
+                    type="button"
+                    onClick={section.headerAction.onClick}
+                    className="inline-flex items-center gap-0.5 normal-case tracking-normal font-normal text-text-subtle hover:text-primary"
+                  >
+                    <X size={10} />
+                    {section.headerAction.label}
+                  </button>
+                )}
+              </div>
+              <ul>
+                {section.rows.map((row, rowIdx) => {
+                  const flatIdx = sectionOffsets[sectionIdx] + rowIdx;
+                  const isActive = flatIdx === activeIndex;
+                  return (
+                    <li key={`${section.key}-${row.url}`}>
+                      <button
+                        data-flat-index={flatIdx}
+                        onClick={() => pick(row)}
+                        onMouseEnter={() => setActiveIndex(flatIdx)}
+                        className={`w-full text-left px-3 py-2 text-sm flex items-center gap-3 ${
+                          isActive ? 'bg-elevated' : 'hover:bg-subtle'
+                        }`}
+                      >
+                        <row.icon size={14} className="text-muted shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className={`truncate ${row.mono ? 'font-mono' : ''}`}>{row.label}</span>
+                            {row.status && (
+                              <Chip variant={chipVariantForStatus(row.status)}>
+                                {row.status.replace(/_/g, ' ')}
+                              </Chip>
                             )}
                           </div>
-                          {item.amount != null && (
-                            <span className="font-mono tabular-nums text-xs text-muted ml-3 shrink-0">
-                              {formatPeso(Number(item.amount))}
-                            </span>
+                          {row.sublabel && (
+                            <div className="text-xs text-muted truncate mt-0.5">{row.sublabel}</div>
                           )}
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            );
-          })}
+                        </div>
+                        {row.amount != null && (
+                          <span className="font-mono tabular-nums text-xs text-muted ml-3 shrink-0">
+                            {formatPeso(Number(row.amount))}
+                          </span>
+                        )}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
         </div>
 
         <div className="px-3 py-1.5 border-t border-default text-2xs text-muted flex items-center justify-between font-mono">

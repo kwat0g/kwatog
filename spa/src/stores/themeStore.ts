@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { authApi } from '@/api/auth';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 
@@ -73,11 +74,9 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     // Server-side persistence is wired in Task 9 once auth lands —
     // we fire-and-forget to avoid coupling the theme to the auth boot.
     if (typeof window !== 'undefined') {
-      void import('@/api/auth')
-        .then((mod) => mod.authApi?.updatePreferences?.({ theme_mode: mode }))
-        .catch(() => {
-          /* Silent — preferences will sync next auth bootstrap. */
-        });
+      void authApi.updatePreferences({ theme_mode: mode }).catch(() => {
+        /* Silent — preferences will sync next auth bootstrap. */
+      });
     }
   },
 

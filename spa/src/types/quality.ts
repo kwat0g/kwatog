@@ -66,6 +66,7 @@ export interface Inspection {
   completed_at: string | null;
   notes: string | null;
   product?: { id: string; part_number: string; name: string } | null;
+  item?: { id: string; code: string; name: string } | null;
   inspector?: { id: string; name: string } | null;
   spec?: { id: string; version: number; is_active: boolean } | null;
   measurements?: InspectionMeasurement[];

@@ -62,18 +62,22 @@ class ReturnRequestResource extends JsonResource
             ] : null),
 
             'credit_note'          => $this->whenLoaded('creditNote', fn () => $this->creditNote ? [
-                'id'             => $this->creditNote->hash_id,
-                'invoice_number' => $this->creditNote->invoice_number,
+                'id'                 => $this->creditNote->hash_id,
+                'credit_note_number' => $this->creditNote->credit_note_number,
+                'type'               => $this->creditNote->type?->value,
+                'status'             => $this->creditNote->status?->value,
+                'total_amount'       => (string) $this->creditNote->total_amount,
+            ] : null),
+
+            'replacement_purchase_order' => $this->whenLoaded('replacementPurchaseOrder', fn () => $this->replacementPurchaseOrder ? [
+                'id'        => $this->replacementPurchaseOrder->hash_id,
+                'po_number' => $this->replacementPurchaseOrder->po_number,
+                'status'    => $this->replacementPurchaseOrder->status?->value,
             ] : null),
 
             'credit_memo'          => $this->whenLoaded('creditMemo', fn () => $this->creditMemo ? [
                 'id'             => $this->creditMemo->hash_id,
                 'invoice_number' => $this->creditMemo->invoice_number,
-            ] : null),
-
-            'debit_note'           => $this->whenLoaded('debitNote', fn () => $this->debitNote ? [
-                'id'          => $this->debitNote->hash_id,
-                'bill_number' => $this->debitNote->bill_number,
             ] : null),
 
             'inspection'           => $this->whenLoaded('inspection', fn () => $this->inspection ? [

@@ -134,7 +134,7 @@ export default function MrpPlansListPage() {
               <span><span className="text-default">{lastRun.data.prs_created}</span> PRs created</span>
               <span><span className="text-default">{lastRun.data.prs_updated}</span> PRs updated</span>
               {lastRun.data.duration_ms != null && (
-                <span className="text-subtle">{(lastRun.data.duration_ms / 1000).toFixed(1)}s</span>
+                <span className="text-text-subtle">{(lastRun.data.duration_ms / 1000).toFixed(1)}s</span>
               )}
             </div>
           </div>

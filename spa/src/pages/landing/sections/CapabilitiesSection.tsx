@@ -5,8 +5,6 @@
  * (staggered). No tilt, no glow — just a clean border lift on hover.
  */
 
-declare const __: unique symbol;
-
 import { cn } from '@/lib/cn';
 import { SectionHeading } from '../components/SectionHeading';
 import { CAPABILITIES } from '../data';

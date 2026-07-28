@@ -10,7 +10,7 @@
  * usePermission hook, NOT backend enforcement (that's the curl harness's job).
  */
 import { test, expect } from '@playwright/test';
-import { loginAs, ROLES, mockList } from './helpers-extended';
+import { loginAs } from './helpers-extended';
 import { BasePage } from './pages/BasePage';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -32,10 +32,10 @@ const GATED_PAGES: Record<string, { url: string; permission: string; }> = {
   'hr loans':         { url: '/hr/loans',         permission: 'loans.view' },
   'hr separations':   { url: '/hr/separations',   permission: 'hr.separation.view' },
 
-  'payroll periods':          { url: '/payroll/periods',           permission: 'payroll.view' },
-  'payroll adjustments':      { url: '/payroll/adjustments',       permission: 'payroll.view' },
-  'payroll pipeline':         { url: '/payroll/pipeline',          permission: 'payroll.view' },
-  'payroll statutory':        { url: '/payroll/statutory',         permission: 'payroll.view' },
+  'payroll periods':          { url: '/payroll/periods',           permission: 'payroll.periods.view' },
+  'payroll adjustments':      { url: '/payroll/adjustments',       permission: 'payroll.adjustments.create' },
+  'payroll pipeline':         { url: '/payroll/pipeline',          permission: 'payroll.periods.view' },
+  'payroll statutory':        { url: '/payroll/statutory',         permission: 'payroll.statutory.export' },
 
   'accounting coa':           { url: '/accounting/coa',            permission: 'accounting.coa.view' },
   'accounting journal':       { url: '/accounting/journal-entries', permission: 'accounting.journal.view' },
@@ -78,6 +78,19 @@ const GATED_PAGES: Record<string, { url: string; permission: string; }> = {
   'supply chain shipments':  { url: '/supply-chain/shipments',     permission: 'supply_chain.view' },
   'supply chain deliveries': { url: '/supply-chain/deliveries',    permission: 'supply_chain.view' },
 };
+
+test.beforeEach(async ({ page }) => {
+  // Permission-guard tests only need pages to mount; their data contracts are
+  // covered elsewhere. Prevent unmocked API requests from reaching the local
+  // backend and turning a frontend RBAC assertion into an auth-redirect test.
+  await page.route('**/api/v1/**', async (route) => {
+    await route.fulfill({
+      status: 500,
+      contentType: 'application/json',
+      body: JSON.stringify({ message: 'Not part of this permission-guard test.' }),
+    });
+  });
+});
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Tests: admin-only surface
@@ -148,13 +161,13 @@ test.describe('Permission guards — HR boundaries', () => {
 });
 
 test.describe('Permission guards — Payroll boundaries', () => {
-  test('hr can view payroll periods (has payroll.view)', async ({ page }) => {
+  test('hr can view payroll periods (has payroll.periods.view)', async ({ page }) => {
     const bp = new BasePage(page);
     await loginAs(page, 'hr', '/payroll/periods');
     await expect(bp.forbiddenText).not.toBeVisible();
   });
 
-  test('warehouse cannot view payroll periods (no payroll.view)', async ({ page }) => {
+  test('warehouse cannot view payroll periods (no payroll.periods.view)', async ({ page }) => {
     const bp = new BasePage(page);
     await loginAs(page, 'warehouse', '/payroll/periods');
     await bp.expectForbidden();
@@ -258,7 +271,7 @@ test.describe('Permission guards — department_head boundaries', () => {
     await bp.expectForbidden();
   });
 
-  test('depthead cannot view payroll periods (no payroll.view)', async ({ page }) => {
+  test('depthead cannot view payroll periods (no payroll.periods.view)', async ({ page }) => {
     const bp = new BasePage(page);
     await loginAs(page, 'depthead', '/payroll/periods');
     await bp.expectForbidden();

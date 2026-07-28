@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Common\Support\ChainDefinitions;
 use App\Modules\Auth\Models\User;
 use Illuminate\Support\Facades\Broadcast;
 
@@ -16,41 +17,33 @@ use Illuminate\Support\Facades\Broadcast;
  * Sprint 6 channels (production), Sprint 8 channels (payroll, inventory,
  * maintenance, user notifications).
  */
-
-Broadcast::channel('production.dashboard', fn (User $user): bool =>
-    $user->hasPermission('production.dashboard.view')
+Broadcast::channel('production.dashboard', fn (User $user): bool => $user->hasPermission('production.dashboard.view')
 );
 
-Broadcast::channel('production.wo.{hashId}', fn (User $user, string $hashId): bool =>
-    $user->hasPermission('production.work_orders.view')
+Broadcast::channel('production.wo.{hashId}', fn (User $user, string $hashId): bool => $user->hasPermission('production.work_orders.view')
 );
 
-Broadcast::channel('production.machine.{hashId}', fn (User $user, string $hashId): bool =>
-    $user->hasPermission('mrp.machines.view')
+Broadcast::channel('production.machine.{hashId}', fn (User $user, string $hashId): bool => $user->hasPermission('mrp.machines.view')
 );
 
 /* Sprint 8 — Task 78. New channels. */
 
-// Payroll period progress — visible to anyone with payroll.view
-Broadcast::channel('payroll.period.{hashId}', fn (User $user, string $hashId): bool =>
-    $user->hasPermission('payroll.view')
+// Payroll period progress contains company-wide run metadata.
+Broadcast::channel('payroll.period.{hashId}', fn (User $user, string $hashId): bool => $user->hasPermission('payroll.periods.view')
 );
 
 // Inventory stock changes — useful for warehouse staff dashboards
-Broadcast::channel('inventory.stock', fn (User $user): bool =>
-    $user->hasPermission('inventory.stock_levels.view') || $user->hasPermission('inventory.view')
+Broadcast::channel('inventory.stock', fn (User $user): bool => $user->hasPermission('inventory.stock_levels.view') || $user->hasPermission('inventory.view')
 );
 
 // Maintenance dashboard — open WO updates push live
-Broadcast::channel('maintenance.dashboard', fn (User $user): bool =>
-    $user->hasPermission('maintenance.view')
+Broadcast::channel('maintenance.dashboard', fn (User $user): bool => $user->hasPermission('maintenance.view')
 );
 
 // Per-user notifications channel — backs the SPA bell + toast updates.
 // Laravel's default convention is `App.Models.User.{id}` for notifiable
 // listeners; we use the explicit `user.{id}` channel for clarity.
-Broadcast::channel('user.{userId}', fn (User $user, int $userId): bool =>
-    $user->id === $userId
+Broadcast::channel('user.{userId}', fn (User $user, string $userId): bool => $user->id === User::tryDecodeHash($userId)
 );
 
 // Sidebar badge counts — any authenticated user may listen; the payload is
@@ -65,9 +58,10 @@ Broadcast::channel('badges', fn (User $user): bool => true);
 Broadcast::channel(
     'chain.{entityType}.{hashId}',
     function (User $user, string $entityType, string $hashId): bool {
-        if (! in_array($entityType, \App\Common\Support\ChainDefinitions::allowedTypes(), true)) {
+        if (! in_array($entityType, ChainDefinitions::allowedTypes(), true)) {
             return false;
         }
-        return $user->hasPermission(\App\Common\Support\ChainDefinitions::viewPermission($entityType));
+
+        return $user->hasPermission(ChainDefinitions::viewPermission($entityType));
     }
 );

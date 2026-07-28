@@ -26,23 +26,23 @@ export function BarComparison({
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" />
         <XAxis
           dataKey={xKey}
-          tick={{ fontSize: 11, fill: 'var(--color-muted)' }}
+          tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
           axisLine={false}
           tickLine={false}
         />
         <YAxis
-          tick={{ fontSize: 11, fill: 'var(--color-muted)' }}
+          tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
           axisLine={false}
           tickLine={false}
           tickFormatter={formatValue}
         />
         <Tooltip
           contentStyle={{
-            background: 'var(--color-surface)',
-            border: '1px solid var(--color-border)',
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--border-default)',
             borderRadius: 6,
             fontSize: 12,
           }}

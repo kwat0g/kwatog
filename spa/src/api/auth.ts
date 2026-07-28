@@ -1,5 +1,4 @@
-import axios from 'axios';
-import { unwrappingClient as client } from './client';
+import { getCsrfCookie, unwrappingClient as client } from './client';
 
 export interface AuthRole {
   id: string;
@@ -46,13 +45,6 @@ export interface PreferencesPayload {
   theme_mode?: 'light' | 'dark' | 'system';
   sidebar_collapsed?: boolean;
 }
-
-/**
- * Pre-flight CSRF cookie request — Axios will send the resulting XSRF-TOKEN
- * as `X-XSRF-TOKEN` on the next mutating call.
- */
-export const getCsrfCookie = () =>
-  axios.get('/sanctum/csrf-cookie', { withCredentials: true });
 
 export const authApi = {
   csrf: getCsrfCookie,

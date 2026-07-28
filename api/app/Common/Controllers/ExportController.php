@@ -8,9 +8,9 @@ use App\Common\Enums\ExportFormat;
 use App\Common\Services\Export\ColumnSelectorService;
 use App\Common\Services\Export\ExportColumnRegistry;
 use App\Common\Services\Export\ExportRunner;
+use App\Common\Services\Export\SpreadsheetExportService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Maatwebsite\Excel\Facades\Excel;
 
 /**
  * Series E (Task E2) — single export HTTP surface used by every list page.
@@ -25,6 +25,7 @@ class ExportController
     public function __construct(
         private readonly ColumnSelectorService $selector,
         private readonly ExportRunner $runner,
+        private readonly SpreadsheetExportService $spreadsheets,
     ) {}
 
     public function columns(string $module, Request $request): JsonResponse
@@ -35,17 +36,17 @@ class ExportController
         $shape = [];
         foreach ($available as $key => $def) {
             $shape[] = [
-                'key'     => $key,
-                'label'   => $def['label'],
+                'key' => $key,
+                'label' => $def['label'],
                 'default' => (bool) ($def['default'] ?? false),
-                'format'  => $def['format'] ?? 'text',
+                'format' => $def['format'] ?? 'text',
             ];
         }
 
         return response()->json([
             'data' => [
-                'module'   => $module,
-                'columns'  => $shape,
+                'module' => $module,
+                'columns' => $shape,
                 'selected' => $this->selector->resolve($request->user(), $module),
             ],
         ]);
@@ -62,7 +63,7 @@ class ExportController
 
         return response()->json([
             'data' => [
-                'module'   => $module,
+                'module' => $module,
                 'selected' => $this->selector->resolve($request->user(), $module),
             ],
         ]);
@@ -79,7 +80,7 @@ class ExportController
         return response()->json([
             'data' => [
                 'columns' => $columns,
-                'rows'    => $rows,
+                'rows' => $rows,
             ],
         ]);
     }
@@ -90,7 +91,7 @@ class ExportController
 
         $columns = $this->resolveColumnsFromRequest($request, $module);
         $filters = (array) $request->query('filters', []);
-        $format  = ExportFormat::tryFrom((string) $request->query('format', 'xlsx')) ?? ExportFormat::Xlsx;
+        $format = ExportFormat::tryFrom((string) $request->query('format', 'xlsx')) ?? ExportFormat::Xlsx;
 
         $exporter = $this->runner->build($module, $columns, $filters);
         $filename = sprintf(
@@ -100,11 +101,7 @@ class ExportController
             $format->extension(),
         );
 
-        $writer = $format === ExportFormat::Csv ? \Maatwebsite\Excel\Excel::CSV : \Maatwebsite\Excel\Excel::XLSX;
-
-        return Excel::download($exporter, $filename, $writer, [
-            'Content-Type' => $format->mimeType(),
-        ]);
+        return $this->spreadsheets->download($exporter, $filename, $format);
     }
 
     /** @return array<int, string> */
@@ -117,6 +114,7 @@ class ExportController
         if (is_array($raw)) {
             return array_values(array_filter($raw, 'is_string'));
         }
+
         return $this->selector->resolve($request->user(), $module);
     }
 
@@ -134,17 +132,17 @@ class ExportController
     private function permissionFor(string $module): string
     {
         return match ($module) {
-            'hr.employees'           => 'hr.employees.export',
+            'hr.employees' => 'hr.employees.export',
             'payroll.register',
             'payroll.gov.sss_r3',
             'payroll.gov.philhealth_rf1',
             'payroll.gov.pagibig',
-            'payroll.gov.bir_1601c'  => 'payroll.view',
+            'payroll.gov.bir_1601c' => 'payroll.view',
             'inventory.valuation',
-            'inventory.stock_card'   => 'inventory.view',
+            'inventory.stock_card' => 'inventory.view',
             'accounting.ar_aging',
-            'accounting.ap_aging'    => 'accounting.view',
-            default                  => 'admin.audit_logs.view',
+            'accounting.ap_aging' => 'accounting.view',
+            default => 'admin.audit_logs.view',
         };
     }
 }

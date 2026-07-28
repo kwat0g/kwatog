@@ -71,14 +71,14 @@ export default function HrDashboard() {
   const departmentDonutData = q.data?.panels.by_department.map(d => ({
     name: d.label,
     value: d.count,
-    color: 'var(--color-accent)',
+    color: 'var(--accent)',
   })).slice(0, 6) ?? [];
 
   const attendanceDonutData = q.data ? [
-    { name: 'Present', value: q.data.panels.attendance_summary.present, color: 'var(--color-success)' },
-    { name: 'Late', value: q.data.panels.attendance_summary.late, color: 'var(--color-warning)' },
-    { name: 'Absent', value: q.data.panels.attendance_summary.absent, color: 'var(--color-danger)' },
-    { name: 'On Leave', value: q.data.panels.attendance_summary.on_leave, color: 'var(--color-info)' },
+    { name: 'Present', value: q.data.panels.attendance_summary.present, color: 'var(--success)' },
+    { name: 'Late', value: q.data.panels.attendance_summary.late, color: 'var(--warning)' },
+    { name: 'Absent', value: q.data.panels.attendance_summary.absent, color: 'var(--danger)' },
+    { name: 'On Leave', value: q.data.panels.attendance_summary.on_leave, color: 'var(--info)' },
   ].filter(i => i.value > 0) : [];
 
   return (

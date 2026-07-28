@@ -1,4 +1,4 @@
-import { portalClient, getPortalCsrf } from './client';
+import { createPortalClient, getPortalCsrf } from './client';
 import type {
   CustomerPortalUser,
   CustomerDashboardData,
@@ -16,16 +16,28 @@ import type {
 } from '@/types/b2b';
 import type { ChainStep } from '@/types/chain';
 
+const { client: portalClient, setToken } = createPortalClient();
+
+type CustomerLoginResponse = {
+  token: string;
+  user: CustomerPortalUser;
+};
+
 export const customerPortalApi = {
   // ── Auth ──────────────────────────────────────────
   login: async (email: string, password: string) => {
     await getPortalCsrf();
-    const { data } = await portalClient.post<{ data: CustomerPortalUser }>('/b2b/customer/login', { email, password });
-    return data.data;
+    const { data } = await portalClient.post<{ data: CustomerLoginResponse }>('/b2b/customer/login', { email, password });
+    setToken(data.data.token);
+    return data.data.user;
   },
 
   logout: async () => {
-    await portalClient.post('/b2b/customer/logout');
+    try {
+      await portalClient.post('/b2b/customer/logout');
+    } finally {
+      setToken(null);
+    }
   },
 
   me: async () => {

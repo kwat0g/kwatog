@@ -6,6 +6,17 @@
 > drive the happy-path interaction, then paste a screenshot link or check the
 > box. Flag broken layout / visual regressions in the **Notes** column.
 
+## Automated defense gate (2026-07-27)
+
+`cd spa && npm run test:defense` passed at 1440×900 in headless Chrome for 17
+internal showcase routes, the exact seeded batch trace, and both B2B portal
+logins. It also enforces zero browser console errors and zero failed API
+responses. Screenshots are in `docs/defense-screenshots/`.
+
+This does **not** replace the unchecked manual Firefox/Safari/Edge, mobile,
+dark-mode, reduced-motion, or accessibility rows below; complete those on the
+actual presentation hardware before the defense.
+
 ## Browsers
 
 | Slug         | Vendor             | Min version |

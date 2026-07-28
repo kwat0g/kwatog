@@ -67,6 +67,11 @@ class Item extends Model
         return $this->hasMany(\App\Modules\Purchasing\Models\ApprovedSupplier::class);
     }
 
+    public function qualityPlans(): HasMany
+    {
+        return $this->hasMany(\App\Modules\Quality\Models\ItemQualityPlan::class);
+    }
+
     /**
      * OGAMI-004 — alternate-UOM conversion rows (e.g. BAG → KG) whose base
      * end matches this item's {@see $unit_of_measure}.

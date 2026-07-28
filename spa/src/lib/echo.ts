@@ -10,6 +10,7 @@
  */
 import Echo from 'laravel-echo';
 import Pusher from 'pusher-js';
+import axios from 'axios';
 
 declare global {
   interface Window { Pusher: typeof Pusher }
@@ -38,5 +39,23 @@ export const echo = new Echo({
   forceTLS: env('VITE_REVERB_SCHEME', isHttps ? 'https' : 'http') === 'https',
   enabledTransports: ['ws', 'wss'],
   authEndpoint: '/api/v1/broadcasting/auth',
-  withCredentials: true, // MANDATORY for cookie-based Sanctum auth
+  // Pusher's default XHR authorizer does not copy Laravel's XSRF cookie into
+  // the X-XSRF-TOKEN header. Use Axios so private-channel authorization
+  // carries both the session cookie and the current CSRF token.
+  authorizer: (channel: { name: string }) => ({
+    authorize: (socketId: string, callback: (error: boolean, data: unknown) => void) => {
+      axios.post(
+        '/api/v1/broadcasting/auth',
+        { socket_id: socketId, channel_name: channel.name },
+        {
+          withCredentials: true,
+          headers: {
+            Accept: 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+        },
+      ).then((response) => callback(false, response.data))
+        .catch((error: unknown) => callback(true, error));
+    },
+  }),
 });

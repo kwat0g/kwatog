@@ -39,6 +39,13 @@ export interface MockUser {
   features?: string[];
 }
 
+const DEFAULT_FEATURES = [
+  'hr', 'attendance', 'leave', 'payroll', 'loans', 'accounting',
+  'inventory', 'purchasing', 'supply_chain', 'production', 'mrp', 'crm',
+  'quality', 'maintenance', 'recruitment', 'assets', 'return_management',
+  'search', 'notifications', 'b2b_portals', 'forecasting', 'budgeting',
+];
+
 export const USERS: Record<string, MockUser> = {
   hr: {
     id: 'u1', name: 'HR Officer', email: 'hr@ogami.test',
@@ -49,7 +56,7 @@ export const USERS: Record<string, MockUser> = {
   finance: {
     id: 'u2', name: 'Finance Officer', email: 'finance@ogami.test',
     roleSlug: 'finance_officer', roleName: 'Finance Officer',
-    permissions: ['accounting.dashboard.view'],
+    permissions: ['dashboard.accounting.view'],
     employee: null,
   },
   qc: {
@@ -83,12 +90,52 @@ export async function mockAuth(page: Page, user: MockUser): Promise<void> {
           email: user.email,
           role: { id: `${user.id}_role`, slug: user.roleSlug, name: user.roleName },
           permissions: user.permissions,
-          features: user.features ?? [],
+          features: user.features ?? DEFAULT_FEATURES,
           employee: user.employee ?? null,
           is_active: true,
           must_change_password: false,
           theme_mode: 'light',
           sidebar_collapsed: false,
+        },
+      }),
+    });
+  });
+  // Authenticated layouts always request these two background resources.
+  // Mocking them prevents a real 401 from the local API proxy from triggering
+  // the production interceptor's session-expired redirect during isolated E2E.
+  await page.route('**/api/v1/notifications?*', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: [],
+        meta: { current_page: 1, last_page: 1, per_page: 8, total: 0, unread_count: 0 },
+      }),
+    });
+  });
+  await page.route('**/api/v1/dashboards/badges', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: {} }) });
+  });
+  await page.route('**/api/v1/dashboard/kpi/scorecard?*', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [] }) });
+  });
+  await page.route('**/api/v1/dashboard/layout', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [] }) });
+  });
+  await page.route('**/api/v1/dashboards/copq-widget?*', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: {
+          current: {
+            internal_failure: { scrap_units: 0, rework_units: 0, scrap_cost: 0, rework_cost: 0 },
+            external_failure: { returns: 0, complaints: 0, return_cost: 0 },
+            total: 0,
+            period_label: 'Current month',
+          },
+          trend: [],
+          period: 'Current month',
         },
       }),
     });
@@ -153,10 +200,17 @@ export async function setupDashboard(
   mockData: Record<string, unknown> = {},
   opts: MockDashboardApiOptions = {},
 ): Promise<void> {
+  const unauthorizedUrls: string[] = [];
+  page.on('response', (response) => {
+    if (response.status() === 401) unauthorizedUrls.push(response.url());
+  });
   await mockAuth(page, user);
   await mockDashboardApi(page, apiUrl, mockData, opts);
   await page.goto(urlFromApi(apiUrl));
   await page.waitForLoadState('networkidle');
+  if (new URL(page.url()).pathname === '/login') {
+    throw new Error(`Mock authentication failed; unauthorized: ${unauthorizedUrls.join(', ') || 'none'}`);
+  }
 }
 
 // ── Internal helpers ──────────────────────────────────────────────────────

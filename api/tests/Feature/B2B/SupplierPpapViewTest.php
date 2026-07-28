@@ -33,6 +33,7 @@ class SupplierPpapViewTest extends TestCase
         $supplier = SupplierPortalUser::create([
             'vendor_id' => $vendor->id, 'name' => 'Test User',
             'email' => 'sup@test.com', 'password' => bcrypt('pw'),
+            'is_active' => true,
         ]);
 
         $item = Item::factory()->create();
@@ -66,6 +67,7 @@ class SupplierPpapViewTest extends TestCase
         $supplier = SupplierPortalUser::create([
             'vendor_id' => $vendor->id, 'name' => 'Filter User',
             'email' => 'filter@test.com', 'password' => bcrypt('pw'),
+            'is_active' => true,
         ]);
 
         $item = Item::factory()->create();

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Download } from 'lucide-react';
 import { auditLogsApi, type AuditLogEntry, type AuditLogParams } from '@/api/admin/audit-logs';
+import { downloadAuthenticatedFile } from '@/api/download';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { DataTable, NumCell, StackedCell, type Column } from '@/components/ui/DataTable';
@@ -78,11 +79,10 @@ export default function AuditLogsPage() {
         backTo="/admin/audit-logs"
         backLabel="Admin"
         actions={
-          <a href={auditLogsApi.exportUrl(filters)} download>
-            <Button variant="secondary" size="sm" icon={<Download size={14} />}>
-              Export CSV
-            </Button>
-          </a>
+          <Button variant="secondary" size="sm" icon={<Download size={14} />}
+            onClick={() => void downloadAuthenticatedFile(auditLogsApi.exportUrl(filters), { errorMessage: 'Failed to export audit logs.' })}>
+            Export CSV
+          </Button>
         }
       />
 

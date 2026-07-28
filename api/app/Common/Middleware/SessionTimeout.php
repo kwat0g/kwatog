@@ -9,12 +9,13 @@ use App\Modules\Auth\Models\User;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Idle-session timeout. Durations are configurable via admin settings;
  * defaults: 15 min for `employee` role, 30 min for everyone else.
- * Updates last_activity on every authenticated request.
+ * Refreshes last_activity at most once per minute for authenticated requests.
  */
 class SessionTimeout
 {
@@ -22,6 +23,18 @@ class SessionTimeout
 
     public function handle(Request $request, Closure $next): Response
     {
+        // This middleware is also appended to the API group so security policy
+        // cannot be accidentally omitted from a new module route. Public,
+        // portal, and edge-device routes use different principals/policies.
+        if (! $this->usesInternalSanctumGuard($request)) {
+            return $next($request);
+        }
+
+        if ($request->attributes->get('_ogami_session_timeout_checked')) {
+            return $next($request);
+        }
+        $request->attributes->set('_ogami_session_timeout_checked', true);
+
         $user = $request->user();
         if (! $user) {
             return $next($request);
@@ -36,7 +49,7 @@ class SessionTimeout
         if (! $user instanceof User) {
             return response()->json([
                 'message' => 'Unauthenticated.',
-                'code'    => 'guard_mismatch',
+                'code' => 'guard_mismatch',
             ], 401);
         }
 
@@ -45,12 +58,13 @@ class SessionTimeout
             $allowedPaths = [
                 'api/v1/auth/change-password',
                 'api/v1/auth/user',
+                'api/v1/auth/logout',
             ];
             $path = $request->path();
             if (! in_array($path, $allowedPaths, true)) {
                 return response()->json([
                     'message' => 'Your password has expired. Please change it before proceeding.',
-                    'code'    => 'password_expired',
+                    'code' => 'password_expired',
                 ], 403);
             }
         }
@@ -62,18 +76,46 @@ class SessionTimeout
         $lastActivity = $user->last_activity ? Carbon::parse($user->last_activity) : null;
 
         if ($lastActivity && $lastActivity->diffInMinutes(now()) >= $minutes) {
-            auth()->logout();
-            $request->session()->invalidate();
-            $request->session()->regenerateToken();
+            // `auth()` resolves Sanctum's RequestGuard on these routes, which
+            // has no logout() method. The SPA identity lives on the web guard.
+            Auth::guard('web')->logout();
+            if ($request->hasSession()) {
+                $request->session()->invalidate();
+                $request->session()->regenerateToken();
+            }
 
             return response()->json([
                 'message' => 'Your session has expired due to inactivity.',
-                'code'    => 'session_timeout',
+                'code' => 'session_timeout',
             ], 401);
         }
 
-        $user->forceFill(['last_activity' => now()])->saveQuietly();
+        // Avoid a database write on every polling/dashboard request while still
+        // retaining minute-level idle-time accuracy.
+        if (! $lastActivity || $lastActivity->lt(now()->subMinute())) {
+            $user->forceFill(['last_activity' => now()])->saveQuietly();
+        }
 
         return $next($request);
+    }
+
+    private function usesInternalSanctumGuard(Request $request): bool
+    {
+        if ($request->is('api/v1/edge/*')) {
+            return false;
+        }
+
+        $route = $request->route();
+        if (! is_object($route) || ! method_exists($route, 'gatherMiddleware')) {
+            return false;
+        }
+
+        foreach ($route->gatherMiddleware() as $middleware) {
+            if ($middleware === 'auth:sanctum' || str_contains((string) $middleware, 'Authenticate:sanctum')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

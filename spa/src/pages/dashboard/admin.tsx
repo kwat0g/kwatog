@@ -262,7 +262,7 @@ function AuthEventsPanel({
               <div className="text-2xs uppercase tracking-wider text-muted mb-1">Successful / hour</div>
               <SparkLine
                 data={data.success_trend_24h}
-                color="var(--color-success)"
+                color="var(--success)"
                 height={32}
                 width={160}
               />

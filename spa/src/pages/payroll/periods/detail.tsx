@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Play, CheckCircle2, Lock, LockOpen, Download, AlertCircle, Upload, Eye, Trash2, Banknote, Ban } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { periodsApi } from '@/api/payroll/periods';
+import { downloadAuthenticatedFile } from '@/api/download';
 import { payrollsApi, type PayrollListParams } from '@/api/payroll/payrolls';
 import type { PayrollVarianceReport } from '@/types/payroll';
 import { Button } from '@/components/ui/Button';
@@ -283,12 +284,17 @@ export default function PayrollPeriodDetailPage() {
               </Button>
             )}
             {canBankFile && (
-              <a
-                href={periodsApi.bankFileUrl(period.id)}
-                className="inline-flex items-center gap-1 px-3 h-7 text-xs rounded-md border border-default bg-canvas text-primary hover:bg-elevated"
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<Download size={14} />}
+                onClick={() => void downloadAuthenticatedFile(periodsApi.bankFileUrl(period.id), {
+                  filename: `payroll-bank-file-${period.id}.csv`,
+                  errorMessage: 'Failed to download the bank file.',
+                })}
               >
-                <Download size={14} /> Bank file
-              </a>
+                Bank file
+              </Button>
             )}
             {canUploadProof && (
               <Button variant="secondary" size="sm" icon={<Upload size={14} />}
@@ -673,15 +679,13 @@ function DisbursementProofCard({ proof, periodId }: { proof: DisbursementProof; 
         </div>
       </div>
       <div className="shrink-0 flex items-center gap-1">
-        <a
-          href={periodsApi.downloadProof(periodId, proof.id)}
-          target="_blank"
-          rel="noopener"
+        <button
+          onClick={() => void downloadAuthenticatedFile(periodsApi.downloadProof(periodId, proof.id), { openInNewTab: true, errorMessage: 'Failed to open disbursement proof.' })}
           className="inline-flex items-center justify-center h-8 w-8 rounded hover:bg-elevated text-muted hover:text-primary transition-colors"
           title="View proof"
         >
           <Eye size={14} />
-        </a>
+        </button>
         <button
           onClick={() => setShowDeleteConfirm(true)}
           disabled={deleteMutation.isPending}
@@ -846,5 +850,3 @@ function VoidPeriodModal({
     </Modal>
   );
 }
-
-

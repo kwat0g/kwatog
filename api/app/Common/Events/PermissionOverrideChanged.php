@@ -25,7 +25,8 @@ class PermissionOverrideChanged implements ShouldBroadcast
 
     public function broadcastOn(): array
     {
-        return [new PrivateChannel("user.{$this->userId}")];
+        $hashId = app('hashids')->encode($this->userId);
+        return [new PrivateChannel("user.{$hashId}")];
     }
 
     public function broadcastAs(): string

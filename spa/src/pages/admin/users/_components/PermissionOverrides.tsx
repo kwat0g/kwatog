@@ -89,7 +89,7 @@ export function PermissionOverrides({
       </div>
 
       {!canManage && (
-        <p className="text-sm text-subtle">
+        <p className="text-sm text-text-subtle">
           You don't have permission to view or manage user overrides.
         </p>
       )}
@@ -120,7 +120,7 @@ export function PermissionOverrides({
       )}
 
       {canManage && list.data && list.data.length === 0 && (
-        <p className="text-sm text-subtle">
+        <p className="text-sm text-text-subtle">
           No active overrides. The user inherits exactly their role's permissions.
         </p>
       )}

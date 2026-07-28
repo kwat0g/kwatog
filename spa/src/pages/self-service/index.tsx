@@ -243,7 +243,7 @@ function QuickAction({
         <span className="block text-sm font-medium text-primary truncate">{title}</span>
         <span className="block text-xs text-muted truncate">{subtitle}</span>
       </span>
-      <ChevronRight size={16} className="text-subtle shrink-0" aria-hidden="true" />
+      <ChevronRight size={16} className="text-text-subtle shrink-0" aria-hidden="true" />
     </Link>
   );
 }

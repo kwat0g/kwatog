@@ -6,6 +6,7 @@ import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { Send, ThumbsUp, ThumbsDown, Truck, X, FileText, CheckSquare, Scale, Receipt, Package as PackageIcon, AlertTriangle } from 'lucide-react';
 import { purchaseOrdersApi } from '@/api/purchasing/purchase-orders';
+import { downloadAuthenticatedFile } from '@/api/download';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -69,6 +70,9 @@ export default function PurchaseOrderDetailPage() {
   const close = useMutation({ mutationFn: () => purchaseOrdersApi.close(id),
     onSuccess: () => { invalidate(); toast.success('PO closed.'); setConfirm(null); },
     onError: (e) => toast.error(errMsg(e, 'Failed to close PO.')) });
+  const acknowledgeBudget = useMutation({ mutationFn: () => purchaseOrdersApi.acknowledgeBudget(id),
+    onSuccess: () => { invalidate(); toast.success('Budget warning acknowledged.'); },
+    onError: (e) => toast.error(errMsg(e, 'Failed to acknowledge budget warning.')) });
 
   if (isLoading) return <SkeletonTable rows={6} columns={5} />;
   if (isError || !data) return (
@@ -112,9 +116,8 @@ export default function PurchaseOrderDetailPage() {
             {data.status === 'received' && can('purchasing.po.create') && (
               <Button size="sm" variant="secondary" icon={<CheckSquare size={14} />} onClick={() => setConfirm('close')} loading={close.isPending}>Close</Button>
             )}
-            <a href={purchaseOrdersApi.pdfUrl(id)} target="_blank" rel="noopener">
-              <Button size="sm" variant="secondary" icon={<FileText size={14} />}>PDF</Button>
-            </a>
+            <Button size="sm" variant="secondary" icon={<FileText size={14} />}
+              onClick={() => void downloadAuthenticatedFile(purchaseOrdersApi.pdfUrl(id), { openInNewTab: true, errorMessage: 'Failed to generate purchase order PDF.' })}>PDF</Button>
             {!['received', 'closed', 'cancelled'].includes(data.status) && (
               <Button size="sm" variant="secondary" icon={<X size={14} />} onClick={() => setCancelOpen(true)} loading={cancel.isPending}>Cancel</Button>
             )}
@@ -122,6 +125,18 @@ export default function PurchaseOrderDetailPage() {
         }
       />
       <div className="px-5 py-4 space-y-4">
+        {data.budget_warning_level && (
+          <div className="flex items-center justify-between gap-4 rounded-md border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
+            <div>
+              <div className="font-medium">Budget {data.budget_warning_level}</div>
+              <div className="text-muted">{data.budget_warning_message}</div>
+            </div>
+            {['exhausted', 'overdrawn'].includes(data.budget_warning_level) && !data.budget_acknowledged_at && can('budgeting.approve') && (
+              <Button size="sm" variant="secondary" onClick={() => acknowledgeBudget.mutate()} loading={acknowledgeBudget.isPending}>Finance acknowledge</Button>
+            )}
+            {data.budget_acknowledged_at && <Chip variant="success">Finance acknowledged</Chip>}
+          </div>
+        )}
         <Panel title="Procure-to-pay chain">
           <ChainHeader steps={buildPurchaseOrderChain(data)} />
         </Panel>
@@ -392,5 +407,4 @@ export default function PurchaseOrderDetailPage() {
     </div>
   );
 }
-
 

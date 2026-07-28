@@ -23,6 +23,7 @@ import { StatCard } from '@/components/ui/StatCard';
 import { productsApi } from '@/api/crm/products';
 import { customersApi } from '@/api/accounting/customers';
 import { forecastingApi } from '@/api/forecasting';
+import { usePermission } from '@/hooks/usePermission';
 import type { ForecastMethod, DemandForecast } from '@/types/forecasting';
 
 const METHOD_LABELS: Record<ForecastMethod, string> = {
@@ -35,6 +36,8 @@ const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Se
 
 export default function DemandForecastingPage() {
   const qc = useQueryClient();
+  const { can } = usePermission();
+  const canManage = can('forecasting.manage');
   const [productId, setProductId] = useState<string>('');
   const [customerId, setCustomerId] = useState<string>('');
   const [method, setMethod] = useState<ForecastMethod>('weighted_avg');
@@ -84,6 +87,18 @@ export default function DemandForecastingPage() {
       customer_id: customerId || undefined,
     }),
     enabled: !!productId,
+  });
+
+  const selectedProduct = productsQ.data?.data.find((product) => product.id === productId);
+
+  const mrpInclusionM = useMutation({
+    mutationFn: (include: boolean) => forecastingApi.updateMrpInclusion(productId, include),
+    onSuccess: (product) => {
+      toast.success(product.include_forecast_in_mrp
+        ? 'Forecast included in MRP projections.'
+        : 'Forecast excluded from MRP projections.');
+      qc.invalidateQueries({ queryKey: ['products'] });
+    },
   });
 
   const recomputeM = useMutation({
@@ -239,10 +254,23 @@ export default function DemandForecastingPage() {
                 />
               </div>
             </div>
-            <div className="md:col-span-6 flex justify-end">
+            <div className="md:col-span-6 flex flex-wrap items-center gap-3 justify-end">
+              <label className="mr-auto flex items-center gap-2 rounded-md border border-default px-3 py-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={selectedProduct?.include_forecast_in_mrp ?? false}
+                  disabled={!productId || !canManage || mrpInclusionM.isPending}
+                  onChange={(event) => mrpInclusionM.mutate(event.target.checked)}
+                  className="h-4 w-4 accent-[var(--color-accent)]"
+                />
+                <span>
+                  <span className="font-medium text-primary">Include forecast in MRP</span>
+                  <span className="ml-2 text-xs text-muted">Advisory only; no PR is created.</span>
+                </span>
+              </label>
               <Button
                 onClick={() => recomputeM.mutate()}
-                disabled={!productId || recomputeM.isPending}
+                disabled={!productId || !canManage || recomputeM.isPending}
               >
                 {recomputeM.isPending ? 'Recomputing…' : 'Recompute forecast'}
               </Button>
@@ -344,7 +372,9 @@ export default function DemandForecastingPage() {
                       ) : '—'}
                     </td>
                     <td  className="px-4 py-2 text-right font-mono tabular-nums">
-                      <Button size="sm" variant="ghost" onClick={() => openManual(f)}>Override</Button>
+                      {canManage && (
+                        <Button size="sm" variant="ghost" onClick={() => openManual(f)}>Override</Button>
+                      )}
                     </td>
                   </tr>
                 ))}

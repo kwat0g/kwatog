@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\SupplyChain\Services;
 
-use App\Common\Support\SearchOperator;
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Support\SearchOperator;
 use App\Modules\Auth\Models\User;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\SupplyChain\Enums\ShipmentDocumentType;
@@ -41,8 +41,14 @@ class ShipmentService
             'creator:id,name,role_id',
         ]);
 
-        foreach (['status'] as $f) if (! empty($filters[$f])) $q->where($f, $filters[$f]);
-        if (! empty($filters['purchase_order_id'])) $q->where('purchase_order_id', (int) $filters['purchase_order_id']);
+        foreach (['status'] as $f) {
+            if (! empty($filters[$f])) {
+                $q->where($f, $filters[$f]);
+            }
+        }
+        if (! empty($filters['purchase_order_id'])) {
+            $q->where('purchase_order_id', (int) $filters['purchase_order_id']);
+        }
         if (! empty($filters['search'])) {
             $term = '%'.trim((string) $filters['search']).'%';
             $q->where(fn (Builder $b) => $b
@@ -50,6 +56,7 @@ class ShipmentService
                 ->orWhere('container_number', SearchOperator::like(), $term)
                 ->orWhere('bl_number', SearchOperator::like(), $term));
         }
+
         return $q->orderByDesc('id')->paginate(min((int) ($filters['per_page'] ?? 20), 100));
     }
 
@@ -62,22 +69,34 @@ class ShipmentService
         ]);
     }
 
-    /** @param array{purchase_order_id: int, carrier?: string|null, eta?: string|null, notes?: string|null} $data */
+    /**
+     * @param array{
+     *   purchase_order_id: int,
+     *   carrier?: string|null,
+     *   vessel?: string|null,
+     *   container_number?: string|null,
+     *   bl_number?: string|null,
+     *   etd?: string|null,
+     *   eta?: string|null,
+     *   notes?: string|null
+     * } $data
+     */
     public function create(array $data, User $by): Shipment
     {
         $po = PurchaseOrder::query()->findOrFail((int) $data['purchase_order_id']);
+
         return DB::transaction(fn () => $this->show(Shipment::create([
-            'shipment_number'   => $this->sequences->generate('shipment'),
+            'shipment_number' => $this->sequences->generate('shipment'),
             'purchase_order_id' => $po->id,
-            'status'            => ShipmentStatus::Ordered->value,
-            'carrier'           => $data['carrier'] ?? null,
-            'vessel'            => $data['vessel'] ?? null,
-            'container_number'  => $data['container_number'] ?? null,
-            'bl_number'         => $data['bl_number'] ?? null,
-            'etd'               => $data['etd'] ?? null,
-            'eta'               => $data['eta'] ?? null,
-            'notes'             => $data['notes'] ?? null,
-            'created_by'        => $by->id,
+            'status' => ShipmentStatus::Ordered->value,
+            'carrier' => $data['carrier'] ?? null,
+            'vessel' => $data['vessel'] ?? null,
+            'container_number' => $data['container_number'] ?? null,
+            'bl_number' => $data['bl_number'] ?? null,
+            'etd' => $data['etd'] ?? null,
+            'eta' => $data['eta'] ?? null,
+            'notes' => $data['notes'] ?? null,
+            'created_by' => $by->id,
         ])));
     }
 
@@ -90,11 +109,20 @@ class ShipmentService
         $patch = ['status' => $next->value];
         // Auto-stamp date columns at known transitions.
         $today = now()->toDateString();
-        if ($next === ShipmentStatus::Shipped && ! $s->atd)              $patch['atd'] = $today;
-        if ($next === ShipmentStatus::Cleared && ! $s->customs_clearance_date) $patch['customs_clearance_date'] = $today;
-        if ($next === ShipmentStatus::Received && ! $s->ata)             $patch['ata'] = $today;
-        if ($note) $patch['notes'] = trim(($s->notes ? $s->notes."\n" : '').'['.$next->value.'] '.$note);
+        if ($next === ShipmentStatus::Shipped && ! $s->atd) {
+            $patch['atd'] = $today;
+        }
+        if ($next === ShipmentStatus::Cleared && ! $s->customs_clearance_date) {
+            $patch['customs_clearance_date'] = $today;
+        }
+        if ($next === ShipmentStatus::Received && ! $s->ata) {
+            $patch['ata'] = $today;
+        }
+        if ($note) {
+            $patch['notes'] = trim(($s->notes ? $s->notes."\n" : '').'['.$next->value.'] '.$note);
+        }
         $s->forceFill($patch)->save();
+
         return $this->show($s);
     }
 
@@ -106,8 +134,11 @@ class ShipmentService
     {
         $allowed = ['carrier', 'vessel', 'container_number', 'bl_number', 'etd', 'eta', 'notes'];
         $patch = array_intersect_key($data, array_flip($allowed));
-        if (empty($patch)) return $this->show($s);
+        if (empty($patch)) {
+            return $this->show($s);
+        }
         $s->forceFill($patch)->save();
+
         return $this->show($s);
     }
 
@@ -123,30 +154,40 @@ class ShipmentService
         User $by,
         ?string $notes = null,
     ): ShipmentDocument {
-        return DB::transaction(function () use ($s, $file, $type, $by, $notes) {
-            $folder = "shipments/{$s->id}";
-            $path = $file->store($folder, 'local');
-            return ShipmentDocument::create([
-                'shipment_id'       => $s->id,
-                'document_type'     => $type->value,
-                'file_path'         => $path,
+        $folder = "shipments/{$s->id}";
+        $path = $file->store($folder, 'local');
+        if ($path === false) {
+            throw new RuntimeException('Unable to store shipment document.');
+        }
+
+        try {
+            return DB::transaction(fn () => ShipmentDocument::create([
+                'shipment_id' => $s->id,
+                'document_type' => $type->value,
+                'file_path' => $path,
                 'original_filename' => $file->getClientOriginalName(),
-                'file_size_bytes'   => $file->getSize(),
-                'mime_type'         => $file->getMimeType(),
-                'notes'             => $notes,
-                'uploaded_by'       => $by->id,
-                'uploaded_at'       => now(),
-            ])->load('uploader:id,name,role_id');
-        });
+                'file_size_bytes' => $file->getSize(),
+                'mime_type' => $file->getMimeType(),
+                'notes' => $notes,
+                'uploaded_by' => $by->id,
+                'uploaded_at' => now(),
+            ])->load('uploader:id,name,role_id'));
+        } catch (\Throwable $e) {
+            Storage::disk('local')->delete($path);
+            throw $e;
+        }
     }
 
     public function deleteDocument(ShipmentDocument $doc): void
     {
-        DB::transaction(function () use ($doc) {
-            if ($doc->file_path) {
-                Storage::disk('local')->delete($doc->file_path);
-            }
+        $path = $doc->file_path;
+        DB::transaction(function () use ($doc, $path) {
             $doc->delete();
+            DB::afterCommit(function () use ($path): void {
+                if ($path) {
+                    Storage::disk('local')->delete($path);
+                }
+            });
         });
     }
 
@@ -156,10 +197,9 @@ class ShipmentService
             throw new RuntimeException('Cannot delete a received shipment.');
         }
         DB::transaction(function () use ($s) {
-            foreach ($s->documents as $doc) {
-                if ($doc->file_path) Storage::disk('local')->delete($doc->file_path);
-            }
+            $paths = $s->documents->pluck('file_path')->filter()->values()->all();
             $s->delete();
+            DB::afterCommit(fn () => Storage::disk('local')->delete($paths));
         });
     }
 }

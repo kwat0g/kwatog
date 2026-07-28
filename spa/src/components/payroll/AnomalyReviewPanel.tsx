@@ -83,7 +83,7 @@ export function AnomalyReviewPanel({ periodId }: Props) {
         </span>
         <button
           onClick={() => setShowResolved((v) => !v)}
-          className="text-muted hover:text-default underline-offset-2 hover:underline"
+          className="text-muted hover:text-primary underline-offset-2 hover:underline"
         >
           {showResolved ? 'Show unresolved' : 'Show resolved'}
         </button>
@@ -129,7 +129,7 @@ export function AnomalyReviewPanel({ periodId }: Props) {
                   <div className="flex items-center gap-2 flex-wrap">
                     <Chip variant={TYPE_VARIANT[f.flag_type]}>{TYPE_LABEL[f.flag_type]}</Chip>
                     {f.employee && (
-                      <span className="text-sm text-default">
+                      <span className="text-sm text-primary">
                         <span className="font-mono text-muted">{f.employee.employee_no}</span>{' '}
                         {f.employee.name}
                       </span>
@@ -138,17 +138,17 @@ export function AnomalyReviewPanel({ periodId }: Props) {
                   </div>
                   {(previous != null || current != null) && (
                     <p className="text-2xs text-muted font-mono tabular-nums mt-0.5">
-                      {previous != null && <>previous: <span className="text-default">{String(previous)}</span> </>}
-                      {current != null && <>· current: <span className="text-default">{String(current)}</span></>}
+                      {previous != null && <>previous: <span className="text-primary">{String(previous)}</span> </>}
+                      {current != null && <>· current: <span className="text-primary">{String(current)}</span></>}
                     </p>
                   )}
                   {f.is_resolved && f.resolution_remarks && (
                     <p className="text-xs text-muted mt-0.5">
-                      <span className="text-subtle">Remarks:</span> {f.resolution_remarks}
+                      <span className="text-text-subtle">Remarks:</span> {f.resolution_remarks}
                     </p>
                   )}
                   {f.is_resolved && f.resolved_at && (
-                    <p className="text-2xs text-subtle font-mono tabular-nums mt-0.5">
+                    <p className="text-2xs text-text-subtle font-mono tabular-nums mt-0.5">
                       Resolved {formatDateTime(f.resolved_at)}
                       {f.resolved_by ? ` · ${f.resolved_by.name}` : ''}
                     </p>

@@ -26,11 +26,13 @@ class Product extends Model
     protected $fillable = [
         'part_number', 'name', 'description', 'unit_of_measure',
         'standard_cost', 'revenue_account_id', 'is_active',
+        'include_forecast_in_mrp',
     ];
 
     protected $casts = [
         'standard_cost' => 'decimal:2',
         'is_active'     => 'boolean',
+        'include_forecast_in_mrp' => 'boolean',
     ];
 
     public function priceAgreements(): HasMany

@@ -30,6 +30,12 @@ class DocumentSequenceServiceTest extends TestCase
         $this->assertMatchesRegularExpression('/^OGM-\d{4}-\d{4}$/', $code);
     }
 
+    public function test_stock_count_has_registered_monthly_sequence(): void
+    {
+        $code = app(DocumentSequenceService::class)->generate('stock_count');
+        $this->assertMatchesRegularExpression('/^SC-\d{6}-\d{4}$/', $code);
+    }
+
     public function test_unknown_type_throws(): void
     {
         $this->expectException(\InvalidArgumentException::class);

@@ -138,7 +138,7 @@ export default function EmployeeDirectoryPage() {
           {grouped.map(([deptName, employees]) => (
             <section key={deptName}>
               <h2 className="text-2xs uppercase tracking-wider text-muted font-medium mb-2">
-                {deptName} <span className="text-subtle font-mono tabular-nums">({employees.length})</span>
+                {deptName} <span className="text-text-subtle font-mono tabular-nums">({employees.length})</span>
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                 {employees.map((e) => (

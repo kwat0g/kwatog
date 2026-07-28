@@ -8,6 +8,7 @@ use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
+use App\Modules\Inventory\Models\Item;
 use App\Modules\Quality\Enums\InspectionEntityType;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
@@ -26,28 +27,28 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class Inspection extends Model
 {
-    use HasFactory, HasHashId, HasAuditLog;
+    use HasAuditLog, HasFactory, HasHashId;
 
     protected $fillable = [
         'inspection_number', 'stage', 'status',
-        'product_id', 'inspection_spec_id',
-        'entity_type', 'entity_id',
+        'product_id', 'item_id', 'inspection_spec_id',
+        'item_quality_plan_id', 'entity_type', 'entity_id', 'grn_item_id',
         'batch_quantity', 'sample_size',
         'aql_code', 'accept_count', 'reject_count', 'defect_count',
         'inspector_id', 'started_at', 'completed_at', 'notes',
     ];
 
     protected $casts = [
-        'stage'          => InspectionStage::class,
-        'status'         => InspectionStatus::class,
-        'entity_type'    => InspectionEntityType::class,
+        'stage' => InspectionStage::class,
+        'status' => InspectionStatus::class,
+        'entity_type' => InspectionEntityType::class,
         'batch_quantity' => 'integer',
-        'sample_size'    => 'integer',
-        'accept_count'   => 'integer',
-        'reject_count'   => 'integer',
-        'defect_count'   => 'integer',
-        'started_at'     => 'datetime',
-        'completed_at'   => 'datetime',
+        'sample_size' => 'integer',
+        'accept_count' => 'integer',
+        'reject_count' => 'integer',
+        'defect_count' => 'integer',
+        'started_at' => 'datetime',
+        'completed_at' => 'datetime',
     ];
 
     public function product(): BelongsTo
@@ -55,9 +56,24 @@ class Inspection extends Model
         return $this->belongsTo(Product::class);
     }
 
+    public function item(): BelongsTo
+    {
+        return $this->belongsTo(Item::class);
+    }
+
     public function spec(): BelongsTo
     {
         return $this->belongsTo(InspectionSpec::class, 'inspection_spec_id');
+    }
+
+    public function qualityPlan(): BelongsTo
+    {
+        return $this->belongsTo(ItemQualityPlan::class, 'item_quality_plan_id');
+    }
+
+    public function grnItem(): BelongsTo
+    {
+        return $this->belongsTo(\App\Modules\Inventory\Models\GrnItem::class, 'grn_item_id');
     }
 
     public function inspector(): BelongsTo

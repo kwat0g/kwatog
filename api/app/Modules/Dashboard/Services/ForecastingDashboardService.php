@@ -20,7 +20,8 @@ use Illuminate\Support\Facades\Schema;
 class ForecastingDashboardService
 {
     private const HISTORICAL_MONTHS = 6;
-    private const FORECAST_MONTHS   = 6;
+
+    private const FORECAST_MONTHS = 6;
 
     /* ───────────────────────────────────────────────────────────────
      * 1. HR — Headcount forecast
@@ -40,16 +41,16 @@ class ForecastingDashboardService
             return $this->emptyResponse();
         }
 
-        $now    = Carbon::now();
+        $now = Carbon::now();
         $months = [];
 
         // Build historical series: headcount at end of each of the last N months.
         for ($i = self::HISTORICAL_MONTHS - 1; $i >= 0; $i--) {
             $endOfMonth = $now->copy()->subMonthsNoOverflow($i)->endOfMonth();
             $months[] = [
-                'year'  => (int) $endOfMonth->year,
+                'year' => (int) $endOfMonth->year,
                 'month' => (int) $endOfMonth->month,
-                'date'  => $endOfMonth->toDateString(),
+                'date' => $endOfMonth->toDateString(),
             ];
         }
 
@@ -60,35 +61,35 @@ class ForecastingDashboardService
                 ->where('date_hired', '<=', $m['date'])
                 ->where(function ($q) use ($m) {
                     $q->whereNull('deleted_at')
-                      ->orWhere('deleted_at', '>', $m['date']);
+                        ->orWhere('deleted_at', '>', $m['date']);
                 })
                 ->count();
 
             $historical[] = [
-                'year'  => $m['year'],
+                'year' => $m['year'],
                 'month' => $m['month'],
                 'value' => $count,
             ];
         }
 
         // Apply moving average for forecast.
-        $values      = array_map(fn ($r) => $r['value'], $historical);
-        $avg         = count($values) > 0 ? array_sum($values) / count($values) : 0;
-        $trend       = $this->computeTrend($values);
+        $values = array_map(fn ($r) => $r['value'], $historical);
+        $avg = count($values) > 0 ? array_sum($values) / count($values) : 0;
+        $trend = $this->computeTrend($values);
         $seasonality = $this->computeSeasonality($values, $historical);
 
         $forecast = [];
         for ($i = 1; $i <= self::FORECAST_MONTHS; $i++) {
             $future = $now->copy()->addMonthsNoOverflow($i);
-            $base   = round($avg);
+            $base = round($avg);
             // Apply seasonal adjustment if available.
-            $adj    = $seasonality[$future->month] ?? 0;
-            $val    = max(0, (int) round($base + $adj));
+            $adj = $seasonality[$future->month] ?? 0;
+            $val = max(0, (int) round($base + $adj));
 
             $forecast[] = [
-                'year'       => (int) $future->year,
-                'month'      => (int) $future->month,
-                'value'      => $val,
+                'year' => (int) $future->year,
+                'month' => (int) $future->month,
+                'value' => $val,
                 'confidence' => $this->confidenceFromForecast($values, $base),
             ];
         }
@@ -100,12 +101,12 @@ class ForecastingDashboardService
 
         return [
             'historical' => $historical,
-            'forecast'   => $forecast,
-            'trend'      => $trend,
-            'kpi'        => [
+            'forecast' => $forecast,
+            'trend' => $trend,
+            'kpi' => [
                 'label' => 'Projected Headcount',
                 'value' => (string) $avgForecast,
-                'unit'  => 'count',
+                'unit' => 'count',
                 'trend' => $trend,
             ],
         ];
@@ -127,18 +128,18 @@ class ForecastingDashboardService
             return $this->emptyResponse();
         }
 
-        $now    = Carbon::now();
+        $now = Carbon::now();
         $lookback = 12; // Revenue benefits from more data (seasonality).
         $months = [];
 
         for ($i = $lookback - 1; $i >= 0; $i--) {
             $monthStart = $now->copy()->subMonthsNoOverflow($i)->startOfMonth();
-            $monthEnd   = $now->copy()->subMonthsNoOverflow($i)->endOfMonth();
+            $monthEnd = $now->copy()->subMonthsNoOverflow($i)->endOfMonth();
             $months[] = [
-                'year'  => (int) $monthStart->year,
+                'year' => (int) $monthStart->year,
                 'month' => (int) $monthStart->month,
                 'start' => $monthStart->toDateString(),
-                'end'   => $monthEnd->toDateString(),
+                'end' => $monthEnd->toDateString(),
             ];
         }
 
@@ -154,27 +155,27 @@ class ForecastingDashboardService
                 ->value('rev');
 
             $historical[] = [
-                'year'  => $m['year'],
+                'year' => $m['year'],
                 'month' => $m['month'],
                 'value' => round($revenue, 2),
             ];
         }
 
         $values = array_map(fn ($r) => $r['value'], $historical);
-        $avg    = count($values) > 0 ? array_sum($values) / count($values) : 0;
-        $trend  = $this->computeTrend($values);
+        $avg = count($values) > 0 ? array_sum($values) / count($values) : 0;
+        $trend = $this->computeTrend($values);
         $seasonality = $this->computeSeasonality($values, $historical);
 
         $forecast = [];
         for ($i = 1; $i <= self::FORECAST_MONTHS; $i++) {
             $future = $now->copy()->addMonthsNoOverflow($i);
-            $adj    = $seasonality[$future->month] ?? 0;
-            $val    = round(max(0, $avg + $adj), 2);
+            $adj = $seasonality[$future->month] ?? 0;
+            $val = round(max(0, $avg + $adj), 2);
 
             $forecast[] = [
-                'year'       => (int) $future->year,
-                'month'      => (int) $future->month,
-                'value'      => $val,
+                'year' => (int) $future->year,
+                'month' => (int) $future->month,
+                'value' => $val,
                 'confidence' => $this->confidenceFromForecast($values, $avg),
             ];
         }
@@ -184,12 +185,12 @@ class ForecastingDashboardService
 
         return [
             'historical' => $historical,
-            'forecast'   => $forecast,
-            'trend'      => $trend,
-            'kpi'        => [
+            'forecast' => $forecast,
+            'trend' => $trend,
+            'kpi' => [
                 'label' => 'Projected Revenue (6mo)',
                 'value' => number_format($avgForecast, 2, '.', ''),
-                'unit'  => 'PHP',
+                'unit' => 'PHP',
                 'trend' => $trend,
             ],
         ];
@@ -214,17 +215,17 @@ class ForecastingDashboardService
             return $this->emptyResponse();
         }
 
-        $now    = Carbon::now();
+        $now = Carbon::now();
         $months = [];
 
         for ($i = self::HISTORICAL_MONTHS - 1; $i >= 0; $i--) {
             $monthStart = $now->copy()->subMonthsNoOverflow($i)->startOfMonth();
-            $monthEnd   = $now->copy()->subMonthsNoOverflow($i)->endOfMonth();
+            $monthEnd = $now->copy()->subMonthsNoOverflow($i)->endOfMonth();
             $months[] = [
-                'year'  => (int) $monthStart->year,
+                'year' => (int) $monthStart->year,
                 'month' => (int) $monthStart->month,
                 'start' => $monthStart->toDateTimeString(),
-                'end'   => $monthEnd->toDateTimeString(),
+                'end' => $monthEnd->toDateTimeString(),
             ];
         }
 
@@ -238,31 +239,31 @@ class ForecastingDashboardService
                 ->first();
 
             $totalSampled = (int) ($rows->total_sampled ?? 0);
-            $defects      = (int) ($rows->defects ?? 0);
-            $rate         = $totalSampled > 0 ? round(($defects * 100.0) / $totalSampled, 2) : 0.0;
+            $defects = (int) ($rows->defects ?? 0);
+            $rate = $totalSampled > 0 ? round(($defects * 100.0) / $totalSampled, 2) : 0.0;
 
             $historical[] = [
-                'year'     => $m['year'],
-                'month'    => $m['month'],
-                'value'    => $rate,
-                'total'    => $totalSampled,
-                'defects'  => $defects,
+                'year' => $m['year'],
+                'month' => $m['month'],
+                'value' => $rate,
+                'total' => $totalSampled,
+                'defects' => $defects,
             ];
         }
 
         $values = array_map(fn ($r) => $r['value'], $historical);
-        $avg    = count($values) > 0 ? array_sum($values) / count($values) : 0;
-        $trend  = $this->computeTrend($values);
+        $avg = count($values) > 0 ? array_sum($values) / count($values) : 0;
+        $trend = $this->computeTrend($values);
 
         $forecast = [];
         for ($i = 1; $i <= self::FORECAST_MONTHS; $i++) {
             $future = $now->copy()->addMonthsNoOverflow($i);
-            $val    = round(max(0, min(100, $avg)), 2);
+            $val = round(max(0, min(100, $avg)), 2);
 
             $forecast[] = [
-                'year'       => (int) $future->year,
-                'month'      => (int) $future->month,
-                'value'      => $val,
+                'year' => (int) $future->year,
+                'month' => (int) $future->month,
+                'value' => $val,
                 'confidence' => $this->confidenceFromForecast($values, $avg),
             ];
         }
@@ -272,12 +273,12 @@ class ForecastingDashboardService
 
         return [
             'historical' => $historical,
-            'forecast'   => $forecast,
-            'trend'      => $trend,
-            'kpi'        => [
+            'forecast' => $forecast,
+            'trend' => $trend,
+            'kpi' => [
                 'label' => 'Projected Defect Rate',
-                'value' => number_format($avgForecast, 1, '.', '') . '%',
-                'unit'  => 'pct',
+                'value' => number_format($avgForecast, 1, '.', ''),
+                'unit' => 'pct',
                 'trend' => $trend,
             ],
         ];
@@ -294,7 +295,9 @@ class ForecastingDashboardService
     private function computeTrend(array $values): string
     {
         $n = count($values);
-        if ($n < 3) return 'stable';
+        if ($n < 3) {
+            return 'stable';
+        }
 
         $xMean = ($n - 1) / 2;
         $yMean = array_sum($values) / $n;
@@ -307,12 +310,19 @@ class ForecastingDashboardService
             $den += $dx * $dx;
         }
 
-        if ($den === 0.0) return 'stable';
+        if ($den === 0.0) {
+            return 'stable';
+        }
         $slope = $num / $den;
         $threshold = $yMean > 0 ? abs(0.03 * $yMean) : 0.5;
 
-        if ($slope > $threshold) return 'up';
-        if ($slope < -$threshold) return 'down';
+        if ($slope > $threshold) {
+            return 'up';
+        }
+        if ($slope < -$threshold) {
+            return 'down';
+        }
+
         return 'stable';
     }
 
@@ -323,10 +333,14 @@ class ForecastingDashboardService
     private function computeSeasonality(array $values, array $historical): array
     {
         $n = count($values);
-        if ($n < 12) return [];
+        if ($n < 12) {
+            return [];
+        }
 
         $avg = array_sum($values) / $n;
-        if ($avg <= 0) return [];
+        if ($avg <= 0) {
+            return [];
+        }
 
         $byMonth = [];
         foreach ($historical as $i => $h) {
@@ -352,17 +366,22 @@ class ForecastingDashboardService
     private function confidenceFromForecast(array $values, float $forecastValue): ?float
     {
         $n = count($values);
-        if ($n < 2) return null;
+        if ($n < 2) {
+            return null;
+        }
 
         $mean = array_sum($values) / $n;
-        if ($mean <= 0) return 50.0;
+        if ($mean <= 0) {
+            return 50.0;
+        }
 
         $variance = 0.0;
         foreach ($values as $v) {
             $variance += ($v - $mean) ** 2;
         }
         $stddev = sqrt($variance / $n);
-        $cv     = $stddev / $mean;
+        $cv = $stddev / $mean;
+
         return max(0.0, min(100.0, 100.0 - (100.0 * $cv)));
     }
 
@@ -373,12 +392,12 @@ class ForecastingDashboardService
     {
         return [
             'historical' => [],
-            'forecast'   => [],
-            'trend'      => 'stable',
-            'kpi'        => [
+            'forecast' => [],
+            'trend' => 'stable',
+            'kpi' => [
                 'label' => 'Forecast',
                 'value' => '—',
-                'unit'  => '—',
+                'unit' => '—',
                 'trend' => 'stable',
             ],
         ];

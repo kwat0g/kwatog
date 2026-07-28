@@ -5,30 +5,14 @@ declare(strict_types=1);
 namespace App\Common\Exports;
 
 use App\Common\Services\Export\ExportColumnRegistry;
-use Maatwebsite\Excel\Concerns\FromCollection;
-use Maatwebsite\Excel\Concerns\ShouldAutoSize;
-use Maatwebsite\Excel\Concerns\WithEvents;
-use Maatwebsite\Excel\Concerns\WithHeadings;
-use Maatwebsite\Excel\Concerns\WithMapping;
-use Maatwebsite\Excel\Concerns\WithStyles;
-use Maatwebsite\Excel\Concerns\WithTitle;
-use Maatwebsite\Excel\Events\AfterSheet;
-use PhpOffice\PhpSpreadsheet\Style\Fill;
-use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
+use Illuminate\Support\Collection;
 
 /**
  * Series E (Task E2) — base class for every "configurable columns" module
  * export. Subclasses override `query()` and `module()`. Headers, mapping,
  * styles, freeze pane all come for free from the registry.
  */
-abstract class BaseModuleExport implements
-    FromCollection,
-    WithHeadings,
-    WithMapping,
-    WithStyles,
-    WithEvents,
-    WithTitle,
-    ShouldAutoSize
+abstract class BaseModuleExport implements SpreadsheetExport
 {
     /**
      * @param  array<int, string>  $columns  Column keys, in order.
@@ -43,7 +27,7 @@ abstract class BaseModuleExport implements
     abstract public function module(): string;
 
     /** Return the dataset to export — Eloquent collection or generic Collection. */
-    abstract public function collection();
+    abstract public function collection(): Collection;
 
     /** @return array<int, string> */
     public function headings(): array
@@ -53,6 +37,7 @@ abstract class BaseModuleExport implements
         foreach ($this->columns as $key) {
             $headers[] = $registry[$key]['label'] ?? $this->humanize($key);
         }
+
         return $headers;
     }
 
@@ -73,49 +58,13 @@ abstract class BaseModuleExport implements
                 $out[] = is_array($row) ? ($row[$key] ?? null) : ($row->{$key} ?? null);
             }
         }
+
         return $out;
     }
 
     public function title(): string
     {
-        return substr($this->module() . ' ' . now()->format('Y-m-d'), 0, 31);
-    }
-
-    /**
-     * @return array<int|string, array<string, mixed>>
-     */
-    public function styles(Worksheet $sheet): array
-    {
-        return [
-            // Bold + light-gray header row
-            1 => [
-                'font' => ['bold' => true, 'color' => ['rgb' => '111111']],
-                'fill' => [
-                    'fillType'   => Fill::FILL_SOLID,
-                    'startColor' => ['rgb' => 'F4F4F5'],
-                ],
-            ],
-        ];
-    }
-
-    public function registerEvents(): array
-    {
-        return [
-            AfterSheet::class => function (AfterSheet $event) {
-                $sheet = $event->sheet->getDelegate();
-                // Freeze the header row.
-                $sheet->freezePane('A2');
-                // Subtle alternating-row fill (every other data row).
-                $highest = $sheet->getHighestDataRow();
-                $highestCol = $sheet->getHighestDataColumn();
-                for ($row = 2; $row <= $highest; $row += 2) {
-                    $sheet->getStyle("A{$row}:{$highestCol}{$row}")->getFill()->applyFromArray([
-                        'fillType'   => Fill::FILL_SOLID,
-                        'startColor' => ['rgb' => 'FAFAFA'],
-                    ]);
-                }
-            },
-        ];
+        return substr($this->module().' '.now()->format('Y-m-d'), 0, 31);
     }
 
     private function humanize(string $key): string

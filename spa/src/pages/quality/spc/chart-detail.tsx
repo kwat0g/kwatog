@@ -48,16 +48,16 @@ const RULE_LABELS: Record<string, string> = {
   rule_4_eight_same_side: 'Rule 4: 8 consecutive on same side',
 };
 
-// ─── Chart colours (CSS variables would be ideal but Recharts needs hex) ──
+// ─── Chart colours — design tokens (Recharts accepts CSS vars in SVG attrs) ──
 const COLORS = {
-  cl: '#6366f1', // indigo — center line
-  ucl: '#ef4444', // red — upper control limit
-  lcl: '#ef4444', // red — lower control limit
+  cl: 'var(--accent)', // indigo — center line
+  ucl: 'var(--danger)', // red — upper control limit
+  lcl: 'var(--danger)', // red — lower control limit
   zone_a: 'rgba(239, 68, 68, 0.06)', // 2-sigma to 3-sigma
   zone_b: 'rgba(245, 158, 11, 0.06)', // 1-sigma to 2-sigma
   zone_c: 'rgba(34, 197, 94, 0.06)', // 0 to 1-sigma
-  point_normal: '#6366f1',
-  point_violation: '#ef4444',
+  point_normal: 'var(--accent)',
+  point_violation: 'var(--danger)',
   grid: 'var(--border-default)',
 };
 
@@ -147,6 +147,7 @@ function XBarChart({
 }) {
   // Calculate zone boundaries (1-sigma, 2-sigma from CL)
   const oneSigma = cl !== null && ucl !== null ? (ucl - cl) / 3 : null;
+  const TooltipContent = renderTooltip;
 
   return (
     <Panel title={title}>
@@ -163,7 +164,7 @@ function XBarChart({
             domain={['auto', 'auto']}
             tickFormatter={(v: number) => v.toFixed(2)}
           />
-          {renderTooltip && <RechartsTooltip content={renderTooltip as any} />}
+          {TooltipContent && <RechartsTooltip content={<TooltipContent />} />}
 
           {/* Zone shading (3 zones above and below CL) */}
           {cl !== null && oneSigma !== null && (

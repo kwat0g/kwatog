@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace App\Modules\Payroll\Controllers;
 
+use App\Common\Support\HashIdFilter;
+use App\Modules\Payroll\Jobs\PostPayrollToGlJob;
 use App\Modules\Payroll\Jobs\ProcessPayrollJob;
+use App\Modules\Payroll\Models\DisbursementProof;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Payroll\Requests\CreatePayrollPeriodRequest;
 use App\Modules\Payroll\Requests\RunThirteenthMonthRequest;
 use App\Modules\Payroll\Requests\VoidPayrollPeriodRequest;
 use App\Modules\Payroll\Resources\PayrollPeriodResource;
+use App\Modules\Payroll\Services\BankFileService;
 use App\Modules\Payroll\Services\PayrollPeriodService;
 use App\Modules\Payroll\Services\ThirteenthMonthService;
 use Illuminate\Http\JsonResponse;
@@ -36,12 +40,14 @@ class PayrollPeriodController
     public function pipeline(Request $request): JsonResponse
     {
         $year = (int) ($request->query('year') ?? now()->year);
+
         return response()->json(['data' => $this->service->pipeline($year)]);
     }
 
     public function store(CreatePayrollPeriodRequest $request): JsonResponse
     {
         $period = $this->service->create($request->validated(), $request->user());
+
         return (new PayrollPeriodResource($period))->response()->setStatusCode(201);
     }
 
@@ -54,6 +60,7 @@ class PayrollPeriodController
     public function compute(PayrollPeriod $period, Request $request): JsonResponse
     {
         ProcessPayrollJob::dispatch($period, $request->user()?->id);
+
         return (new PayrollPeriodResource($period->fresh()))
             ->response()
             ->setStatusCode(202);
@@ -88,8 +95,8 @@ class PayrollPeriodController
         // Dispatch GL posting job (Task 29). Wrapped in a class_exists check
         // so this controller still loads if PostPayrollToGlJob hasn't been
         // created yet.
-        if (class_exists(\App\Modules\Payroll\Jobs\PostPayrollToGlJob::class)) {
-            \App\Modules\Payroll\Jobs\PostPayrollToGlJob::dispatch($period);
+        if (class_exists(PostPayrollToGlJob::class)) {
+            PostPayrollToGlJob::dispatch($period);
         }
 
         return response()->json([
@@ -107,14 +114,14 @@ class PayrollPeriodController
      */
     public function variance(Request $request, PayrollPeriod $period): JsonResponse
     {
-        abort_unless($request->user()?->can('payroll.view'), 403);
+        abort_unless($request->user()?->can('payroll.periods.view'), 403);
 
         $compareToId = (string) $request->query('compare_to', '');
         if ($compareToId === '') {
             abort(422, 'compare_to parameter is required.');
         }
 
-        $decoded = \App\Common\Support\HashIdFilter::decode($compareToId, PayrollPeriod::class);
+        $decoded = HashIdFilter::decode($compareToId, PayrollPeriod::class);
         if (! $decoded) {
             abort(404, 'Period not found.');
         }
@@ -127,13 +134,14 @@ class PayrollPeriodController
 
     public function markDisbursed(PayrollPeriod $period, Request $request): PayrollPeriodResource
     {
-        if (! class_exists(\App\Modules\Payroll\Models\DisbursementProof::class)) {
+        if (! class_exists(DisbursementProof::class)) {
             throw new RuntimeException('DisbursementProof model not yet available.');
         }
         $user = $request->user();
         if (! $user) {
             throw new RuntimeException('Authenticated user required.');
         }
+
         return new PayrollPeriodResource($this->service->markDisbursed($period, $user));
     }
 
@@ -158,7 +166,7 @@ class PayrollPeriodController
         }
 
         return response()->json([
-            'data'    => (new PayrollPeriodResource($updated))->resolve(),
+            'data' => (new PayrollPeriodResource($updated))->resolve(),
             'message' => 'Period unlocked. You can re-run compute.',
         ]);
     }
@@ -181,14 +189,14 @@ class PayrollPeriodController
         }
 
         return response()->json([
-            'data'    => (new PayrollPeriodResource($voided))->resolve(),
+            'data' => (new PayrollPeriodResource($voided))->resolve(),
             'message' => 'Period voided. Any GL posting was reversed; you can recompute or create a replacement period.',
         ]);
     }
 
     public function bankFile(PayrollPeriod $period, Request $request)
     {
-        if (! class_exists(\App\Modules\Payroll\Services\BankFileService::class)) {
+        if (! class_exists(BankFileService::class)) {
             return response()->json(['message' => 'Bank file service not yet available.'], 503);
         }
 
@@ -196,8 +204,9 @@ class PayrollPeriodController
             'format' => ['sometimes', 'string', 'in:generic,bdo,bpi,metrobank'],
         ]);
 
-        /** @var \App\Modules\Payroll\Services\BankFileService $svc */
-        $svc = app(\App\Modules\Payroll\Services\BankFileService::class);
+        /** @var BankFileService $svc */
+        $svc = app(BankFileService::class);
+
         return $svc->stream($period, $request->user(), $validated['format'] ?? 'generic');
     }
 
@@ -207,7 +216,7 @@ class PayrollPeriodController
      */
     public function bankFilePreview(PayrollPeriod $period, Request $request): JsonResponse
     {
-        if (! class_exists(\App\Modules\Payroll\Services\BankFileService::class)) {
+        if (! class_exists(BankFileService::class)) {
             return response()->json(['message' => 'Bank file service not yet available.'], 503);
         }
 
@@ -215,8 +224,8 @@ class PayrollPeriodController
             'format' => ['sometimes', 'string', 'in:generic,bdo,bpi,metrobank'],
         ]);
 
-        /** @var \App\Modules\Payroll\Services\BankFileService $svc */
-        $svc = app(\App\Modules\Payroll\Services\BankFileService::class);
+        /** @var BankFileService $svc */
+        $svc = app(BankFileService::class);
         $preview = $svc->preview($period, $validated['format'] ?? 'generic');
 
         return response()->json(['data' => $preview]);
@@ -232,6 +241,7 @@ class PayrollPeriodController
             $request->user(),
             $request->validated('payroll_date'),
         );
+
         return (new PayrollPeriodResource($period))->response()->setStatusCode(201);
     }
 }

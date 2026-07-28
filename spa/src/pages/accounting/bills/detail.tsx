@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import { onFormInvalid } from '@/lib/formErrors';
 import { Printer, Receipt, Ban } from 'lucide-react';
 import { billsApi } from '@/api/accounting/bills';
+import { downloadAuthenticatedFile } from '@/api/download';
 import { accountsApi } from '@/api/accounting/accounts';
 import { threeWayMatchApi } from '@/api/purchasing/purchase-orders';
 import { Button } from '@/components/ui/Button';
@@ -151,9 +152,7 @@ export default function BillDetailPage() {
         ]}
         actions={
           <div className="flex gap-1.5">
-            <a href={billsApi.pdfUrl(bill.id)} target="_blank" rel="noopener">
-              <Button variant="secondary" size="sm" icon={<Printer size={14} />}>Print</Button>
-            </a>
+            <Button variant="secondary" size="sm" icon={<Printer size={14} />} onClick={() => void downloadAuthenticatedFile(billsApi.pdfUrl(bill.id), { openInNewTab: true, errorMessage: 'Failed to generate bill PDF.' })}>Print</Button>
             {isOpen && can('accounting.bills.pay') && (
               <Button variant="primary" size="sm" icon={<Receipt size={14} />} onClick={() => setShowPay(true)}>Record payment</Button>
             )}

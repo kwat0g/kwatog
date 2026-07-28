@@ -69,17 +69,17 @@ export default function PlantManagerDashboard() {
       statusCounts[m.status] = (statusCounts[m.status] || 0) + 1;
     });
     const colorMap: Record<string, string> = {
-      running: 'var(--color-success)',
-      idle: 'var(--color-warning)',
-      setup: 'var(--color-info)',
-      breakdown: 'var(--color-danger)',
-      down: 'var(--color-danger)',
-      stopped: 'var(--color-muted)',
+      running: 'var(--success)',
+      idle: 'var(--warning)',
+      setup: 'var(--info)',
+      breakdown: 'var(--danger)',
+      down: 'var(--danger)',
+      stopped: 'var(--text-muted)',
     };
     return Object.entries(statusCounts).map(([name, value]) => ({
       name,
       value,
-      color: colorMap[name] ?? 'var(--color-muted)',
+      color: colorMap[name] ?? 'var(--text-muted)',
     }));
   })() : [];
 
@@ -175,7 +175,7 @@ export default function PlantManagerDashboard() {
                 ) : (
                   <BarComparison
                     data={q.data.panels.defect_pareto.slice(0, 8).map(d => ({ label: d.code, count: d.count }))}
-                    bars={[{ dataKey: 'count', color: 'var(--color-danger)', label: 'Defects' }]}
+                    bars={[{ dataKey: 'count', color: 'var(--danger)', label: 'Defects' }]}
                     xKey="label"
                     height={180}
                   />

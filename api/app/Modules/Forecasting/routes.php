@@ -51,4 +51,7 @@ Route::middleware(['auth:sanctum', 'feature:forecasting'])->prefix('forecasting'
     Route::get('/mrp-projection',
         [ForecastMrpController::class, 'project'])
         ->middleware('permission:forecasting.view');
+    Route::patch('/products/{product}/mrp-inclusion',
+        [ForecastMrpController::class, 'updateInclusion'])
+        ->middleware('permission:forecasting.manage');
 });

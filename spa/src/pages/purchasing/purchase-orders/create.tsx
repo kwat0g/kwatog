@@ -110,6 +110,7 @@ export default function CreatePurchaseOrderPage() {
   const create = useMutation({
     mutationFn: (values: V) => purchaseOrdersApi.create({
       vendor_id: values.vendor_id,
+      purchase_request_id: prId || undefined,
       date: values.date,
       expected_delivery_date: values.expected_delivery_date || undefined,
       is_vatable: values.is_vatable,

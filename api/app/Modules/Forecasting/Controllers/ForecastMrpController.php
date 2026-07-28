@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Forecasting\Controllers;
 
+use App\Modules\CRM\Models\Product;
+use App\Modules\CRM\Resources\ProductResource;
 use App\Modules\Forecasting\Services\ForecastMrpService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -26,5 +28,19 @@ class ForecastMrpController
         return response()->json([
             'data' => $this->service->project((int) $data['year'], (int) $data['month']),
         ]);
+    }
+
+    /** Opt a finished product's forecasts in or out of advisory MRP planning. */
+    public function updateInclusion(Request $request, Product $product): ProductResource
+    {
+        $data = $request->validate([
+            'include_forecast_in_mrp' => ['required', 'boolean'],
+        ]);
+
+        $product->update([
+            'include_forecast_in_mrp' => $data['include_forecast_in_mrp'],
+        ]);
+
+        return new ProductResource($product->refresh());
     }
 }

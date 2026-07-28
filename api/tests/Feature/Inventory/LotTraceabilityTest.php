@@ -8,6 +8,7 @@ use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Events\StockMovementCompleted;
+use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Services\GrnService;
@@ -16,6 +17,7 @@ use App\Modules\Inventory\Services\StockMovementService;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
+use App\Modules\Quality\Models\Inspection;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Tests\TestCase;
@@ -32,8 +34,11 @@ class LotTraceabilityTest extends TestCase
     use RefreshDatabase;
 
     private User $user;
+
     private GrnService $grnSvc;
+
     private MaterialIssueService $misSvc;
+
     private StockMovementService $movements;
 
     protected function setUp(): void
@@ -47,41 +52,47 @@ class LotTraceabilityTest extends TestCase
         $role = Role::firstOrCreate(['slug' => 'warehouse_staff'], ['name' => 'Warehouse Staff']);
         $this->user = User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
 
-        $this->grnSvc    = app(GrnService::class);
-        $this->misSvc    = app(MaterialIssueService::class);
+        $this->grnSvc = app(GrnService::class);
+        $this->misSvc = app(MaterialIssueService::class);
         $this->movements = app(StockMovementService::class);
+    }
+
+    private function passIncomingQc(GoodsReceiptNote $grn): void
+    {
+        Inspection::query()->findOrFail($grn->fresh()->qc_inspection_id)
+            ->update(['status' => 'passed']);
     }
 
     public function test_lot_flows_from_grn_receipt_through_to_material_issue(): void
     {
-        $item     = Item::factory()->create(['is_active' => true]);
+        $item = Item::factory()->create(['is_active' => true]);
         $location = WarehouseLocation::factory()->create();
-        $lot      = 'LOT-A-001';
+        $lot = 'LOT-A-001';
 
         $po = PurchaseOrder::factory()->create([
-            'status'     => PurchaseOrderStatus::Approved->value,
+            'status' => PurchaseOrderStatus::Approved->value,
             'created_by' => $this->user->id,
         ]);
         $poItem = PurchaseOrderItem::create([
             'purchase_order_id' => $po->id,
-            'item_id'           => $item->id,
-            'description'       => 'Resin lot',
-            'quantity'          => '100.000',
-            'unit'              => 'pcs',
-            'unit_price'        => '10.00',
-            'total'             => '1000.00',
+            'item_id' => $item->id,
+            'description' => 'Resin lot',
+            'quantity' => '100.000',
+            'unit' => 'pcs',
+            'unit_price' => '10.00',
+            'total' => '1000.00',
             'quantity_received' => '0.000',
         ]);
 
         // Receive WITH a lot + expiry.
         $grn = $this->grnSvc->create($po, [[
             'purchase_order_item_id' => $poItem->id,
-            'item_id'                => $item->id,
-            'location_id'            => $location->id,
-            'quantity_received'      => '100',
-            'unit_cost'              => '10.00',
-            'lot_number'             => $lot,
-            'expiry_date'            => '2027-01-31',
+            'item_id' => $item->id,
+            'location_id' => $location->id,
+            'quantity_received' => '100',
+            'unit_cost' => '10.00',
+            'lot_number' => $lot,
+            'expiry_date' => '2027-01-31',
         ]], [], $this->user);
 
         // The grn_item persisted the lot + expiry.
@@ -90,17 +101,18 @@ class LotTraceabilityTest extends TestCase
         $this->assertSame('2027-01-31', $grnItem->expiry_date->toDateString());
 
         // Accept → stock posts; movement carries the lot.
+        $this->passIncomingQc($grn);
         $grn = $this->grnSvc->accept($grn->fresh(), $this->user);
         $this->assertSame(GrnStatus::Accepted, $grn->status);
 
         // Issue the same lot to a (nullable) work order.
         $this->misSvc->create([
             'issued_date' => now()->toDateString(),
-            'items'       => [[
-                'item_id'         => $item->id,
-                'location_id'     => $location->id,
+            'items' => [[
+                'item_id' => $item->id,
+                'location_id' => $location->id,
                 'quantity_issued' => '40',
-                'lot_number'      => $lot,
+                'lot_number' => $lot,
             ]],
         ], $this->user);
 
@@ -115,33 +127,34 @@ class LotTraceabilityTest extends TestCase
 
     public function test_lot_capture_is_optional_and_null_safe(): void
     {
-        $item     = Item::factory()->create(['is_active' => true]);
+        $item = Item::factory()->create(['is_active' => true]);
         $location = WarehouseLocation::factory()->create();
 
         $po = PurchaseOrder::factory()->create([
-            'status'     => PurchaseOrderStatus::Approved->value,
+            'status' => PurchaseOrderStatus::Approved->value,
             'created_by' => $this->user->id,
         ]);
         $poItem = PurchaseOrderItem::create([
             'purchase_order_id' => $po->id,
-            'item_id'           => $item->id,
-            'description'       => 'No-lot line',
-            'quantity'          => '50.000',
-            'unit'              => 'pcs',
-            'unit_price'        => '5.00',
-            'total'             => '250.00',
+            'item_id' => $item->id,
+            'description' => 'No-lot line',
+            'quantity' => '50.000',
+            'unit' => 'pcs',
+            'unit_price' => '5.00',
+            'total' => '250.00',
             'quantity_received' => '0.000',
         ]);
 
         // No lot supplied — existing callers must keep working.
         $grn = $this->grnSvc->create($po, [[
             'purchase_order_item_id' => $poItem->id,
-            'item_id'                => $item->id,
-            'location_id'            => $location->id,
-            'quantity_received'      => '50',
-            'unit_cost'              => '5.00',
+            'item_id' => $item->id,
+            'location_id' => $location->id,
+            'quantity_received' => '50',
+            'unit_cost' => '5.00',
         ]], [], $this->user);
 
+        $this->passIncomingQc($grn);
         $grn = $this->grnSvc->accept($grn->fresh(), $this->user);
         $this->assertSame(GrnStatus::Accepted, $grn->status);
         $this->assertNull($grn->items->first()->material_lot_number);
@@ -149,35 +162,35 @@ class LotTraceabilityTest extends TestCase
 
     public function test_incoming_resin_qc_attributes_persist_on_grn_line(): void
     {
-        $item     = Item::factory()->create(['is_active' => true]);
+        $item = Item::factory()->create(['is_active' => true]);
         $location = WarehouseLocation::factory()->create();
 
         $po = PurchaseOrder::factory()->create([
-            'status'     => PurchaseOrderStatus::Approved->value,
+            'status' => PurchaseOrderStatus::Approved->value,
             'created_by' => $this->user->id,
         ]);
         $poItem = PurchaseOrderItem::create([
             'purchase_order_id' => $po->id,
-            'item_id'           => $item->id,
-            'description'       => 'Resin Type A',
-            'quantity'          => '500.000',
-            'unit'              => 'kg',
-            'unit_price'        => '80.00',
-            'total'             => '40000.00',
+            'item_id' => $item->id,
+            'description' => 'Resin Type A',
+            'quantity' => '500.000',
+            'unit' => 'kg',
+            'unit_price' => '80.00',
+            'total' => '40000.00',
             'quantity_received' => '0.000',
         ]);
 
         // OGAMI-005 — receive resin WITH COA + moisture reading.
         $grn = $this->grnSvc->create($po, [[
             'purchase_order_item_id' => $poItem->id,
-            'item_id'                => $item->id,
-            'location_id'            => $location->id,
-            'quantity_received'      => '500',
-            'unit_cost'              => '80.00',
-            'lot_number'             => 'RESIN-LOT-77',
-            'moisture_percentage'    => '0.025',
-            'coa_document_path'      => 'coa/resin-lot-77.pdf',
-            'coa_verified'           => true,
+            'item_id' => $item->id,
+            'location_id' => $location->id,
+            'quantity_received' => '500',
+            'unit_cost' => '80.00',
+            'lot_number' => 'RESIN-LOT-77',
+            'moisture_percentage' => '0.025',
+            'coa_document_path' => 'coa/resin-lot-77.pdf',
+            'coa_verified' => true,
         ]], [], $this->user);
 
         $line = $grn->items->first();
@@ -189,30 +202,30 @@ class LotTraceabilityTest extends TestCase
 
     public function test_over_receipt_blocked_by_default_but_allowed_within_tolerance(): void
     {
-        $item     = Item::factory()->create(['is_active' => true]);
+        $item = Item::factory()->create(['is_active' => true]);
         $location = WarehouseLocation::factory()->create();
 
         $po = PurchaseOrder::factory()->create([
-            'status'     => PurchaseOrderStatus::Approved->value,
+            'status' => PurchaseOrderStatus::Approved->value,
             'created_by' => $this->user->id,
         ]);
         $poItem = PurchaseOrderItem::create([
             'purchase_order_id' => $po->id,
-            'item_id'           => $item->id,
-            'description'       => 'Resin (ordered 1000kg)',
-            'quantity'          => '1000.000',
-            'unit'              => 'kg',
-            'unit_price'        => '80.00',
-            'total'             => '80000.00',
+            'item_id' => $item->id,
+            'description' => 'Resin (ordered 1000kg)',
+            'quantity' => '1000.000',
+            'unit' => 'kg',
+            'unit_price' => '80.00',
+            'total' => '80000.00',
             'quantity_received' => '0.000',
         ]);
 
         $line = [
             'purchase_order_item_id' => $poItem->id,
-            'item_id'                => $item->id,
-            'location_id'            => $location->id,
-            'quantity_received'      => '1002', // 0.2% over
-            'unit_cost'              => '80.00',
+            'item_id' => $item->id,
+            'location_id' => $location->id,
+            'quantity_received' => '1002', // 0.2% over
+            'unit_cost' => '80.00',
         ];
 
         // Default tolerance 0 → hard block.

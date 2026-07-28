@@ -60,7 +60,7 @@ export default function DriverDeliveryDetail() {
         role="status"
         aria-live="polite"
         aria-busy="true"
-        className="py-12 text-center text-zinc-500"
+        className="py-12 text-center text-muted"
       >
         <span className="sr-only">Loading delivery…</span>
         Loading…
@@ -76,12 +76,12 @@ export default function DriverDeliveryDetail() {
           type="button"
           onClick={() => refetch()}
           disabled={isFetching}
-          className="text-sm underline disabled:opacity-60 min-h-[44px] px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 rounded"
+          className="text-sm text-primary underline disabled:opacity-60 min-h-[44px] px-3 focus:outline-none focus:ring-2 focus:ring-accent rounded"
         >
           {isFetching ? 'Retrying…' : 'Try again'}
         </button>
         <div className="mt-4">
-          <Link to="/driver" className="text-sm text-zinc-500 underline">All deliveries</Link>
+          <Link to="/driver" className="text-sm text-muted underline">All deliveries</Link>
         </div>
       </div>
     );
@@ -94,28 +94,28 @@ export default function DriverDeliveryDetail() {
     <div className="space-y-4">
       <Link
         to="/driver"
-        className="inline-block text-sm text-zinc-500 underline min-h-[44px] py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 rounded"
+        className="inline-block text-sm text-muted underline min-h-[44px] py-2 focus:outline-none focus:ring-2 focus:ring-accent rounded"
       >
         ← All deliveries
       </Link>
 
-      <div className="rounded-md border border-zinc-200 dark:border-zinc-800 p-4 bg-canvas dark:bg-zinc-900">
-        <div className="font-mono">{data.delivery_number}</div>
-        <div className="mt-2 text-sm space-y-1">
+      <div className="rounded-md border border-default p-4 bg-canvas">
+        <div className="font-mono text-primary">{data.delivery_number}</div>
+        <div className="mt-2 text-sm text-primary space-y-1">
           <div>
-            <span className="text-zinc-500">Customer:</span>{' '}
+            <span className="text-muted">Customer:</span>{' '}
             {data.sales_order?.customer?.name ?? '—'}
           </div>
           <div>
-            <span className="text-zinc-500">SO:</span>{' '}
+            <span className="text-muted">SO:</span>{' '}
             {data.sales_order?.so_number ?? '—'}
           </div>
           <div>
-            <span className="text-zinc-500">Vehicle:</span>{' '}
+            <span className="text-muted">Vehicle:</span>{' '}
             {data.vehicle?.plate_number ?? '—'}
           </div>
           <div>
-            <span className="text-zinc-500">Status:</span>{' '}
+            <span className="text-muted">Status:</span>{' '}
             <strong>{data.status.replace(/_/g, ' ')}</strong>
           </div>
         </div>
@@ -126,7 +126,7 @@ export default function DriverDeliveryDetail() {
           type="button"
           disabled={transition.isPending}
           onClick={() => transition.mutate(next)}
-          className="w-full rounded-md bg-indigo-600 text-white py-3 font-medium disabled:opacity-60 min-h-[44px] focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+          className="w-full rounded-md bg-accent text-accent-fg py-3 font-medium hover:bg-accent-hover disabled:opacity-60 min-h-[44px] focus:outline-none focus:ring-2 focus:ring-accent"
         >
           {transition.isPending ? 'Updating…' : label}
         </button>
@@ -136,7 +136,7 @@ export default function DriverDeliveryDetail() {
         <button
           type="button"
           onClick={() => navigate(`/driver/${id}/photo`)}
-          className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 py-3 font-medium min-h-[44px] focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+          className="w-full rounded-md border border-default bg-canvas text-primary py-3 font-medium hover:bg-elevated min-h-[44px] focus:outline-none focus:ring-2 focus:ring-accent"
         >
           {(data.proofs?.length ?? 0) > 0 ? 'Replace Receipt Photo' : 'Capture Receipt Photo'}
         </button>

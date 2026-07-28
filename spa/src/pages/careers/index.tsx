@@ -41,15 +41,15 @@ export default function CareersPage() {
 
       <main className="mx-auto max-w-6xl px-5 pb-24 pt-32">
         <div className="mb-12 text-center">
-          <h1 className="text-2xl font-medium tracking-tight text-neutral-900 sm:text-2xl">
+          <h1 className="text-2xl font-medium tracking-tight text-primary sm:text-2xl">
             Join Our Team
           </h1>
-          <p className="mt-4 text-lg text-neutral-600">
+          <p className="mt-4 text-lg text-secondary">
             Be part of Philippine Ogami Corporation — a leader in precision plastic injection molding for the automotive industry.
           </p>
           <Link
             to="/careers/track"
-            className="mt-4 inline-block text-sm text-neutral-500 underline underline-offset-4 hover:text-neutral-900"
+            className="mt-4 inline-block text-sm text-muted underline underline-offset-4 hover:text-primary"
           >
             Already applied? Track your application
           </Link>
@@ -58,17 +58,17 @@ export default function CareersPage() {
         {isLoading && (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-48 animate-pulse rounded-md border border-neutral-200 bg-neutral-50" />
+              <div key={i} className="h-48 animate-pulse rounded-md border border-default bg-surface" />
             ))}
           </div>
         )}
 
         {isError && (
-          <p className="text-center text-neutral-500">Failed to load job postings. Please try again later.</p>
+          <p className="text-center text-muted">Failed to load job postings. Please try again later.</p>
         )}
 
         {!isLoading && !isError && postings.length === 0 && (
-          <p className="text-center text-neutral-500">No open positions at the moment. Check back soon.</p>
+          <p className="text-center text-muted">No open positions at the moment. Check back soon.</p>
         )}
 
         {!isLoading && postings.length > 0 && (
@@ -78,12 +78,12 @@ export default function CareersPage() {
                 <Link
                   key={posting.id}
                   to={`/careers/${posting.id}`}
-                  className="group rounded-md border border-neutral-200 p-5 transition-colors hover:border-neutral-400"
+                  className="group rounded-md border border-default p-5 transition-colors hover:border-strong"
                 >
-                  <h2 className="text-lg font-medium text-neutral-900 group-hover:underline">
+                  <h2 className="text-lg font-medium text-primary group-hover:underline">
                     {posting.title}
                   </h2>
-                  <div className="mt-3 flex flex-col gap-2 text-sm text-neutral-600">
+                  <div className="mt-3 flex flex-col gap-2 text-sm text-secondary">
                     <span className="flex items-center gap-1.5">
                       <MapPin size={14} />
                       {posting.department.name}
@@ -117,8 +117,8 @@ export default function CareersPage() {
                     onClick={() => setPage(p)}
                     className={`h-8 w-8 rounded text-sm ${
                       p === page
-                        ? 'bg-neutral-900 text-white'
-                        : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
+                        ? 'bg-primary text-canvas'
+                        : 'bg-elevated text-secondary hover:bg-strong'
                     }`}
                   >
                     {p}

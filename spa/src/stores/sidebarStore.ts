@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { authApi } from '@/api/auth';
 
 interface SidebarState {
   collapsed: boolean;
@@ -18,11 +19,9 @@ export const useSidebarStore = create<SidebarState>((set, get) => ({
     set({ collapsed: next });
 
     if (typeof window !== 'undefined') {
-      void import('@/api/auth')
-        .then((mod) => mod.authApi?.updatePreferences?.({ sidebar_collapsed: next }))
-        .catch(() => {
-          /* Preference will sync on next bootstrap. */
-        });
+      void authApi.updatePreferences({ sidebar_collapsed: next }).catch(() => {
+        /* Preference will sync on next bootstrap. */
+      });
     }
   },
 

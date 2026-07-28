@@ -31,12 +31,15 @@ class PurchaseRequest extends Model
         'template_id', 'date', 'reason', 'priority',
         'is_auto_generated', 'auto_generated_reason',
         'is_urgent', 'urgency_reason',
+        'budget_warning_level', 'budget_warning_message',
+        'budget_acknowledged_by', 'budget_acknowledged_at',
     ];
 
     protected $casts = [
         'date'                  => 'date',
         'submitted_at'          => 'datetime',
         'approved_at'           => 'datetime',
+        'budget_acknowledged_at' => 'datetime',
         'is_auto_generated'     => 'boolean',
         'is_urgent'             => 'boolean',
         'current_approval_step' => 'integer',
@@ -47,6 +50,11 @@ class PurchaseRequest extends Model
     public function requester(): BelongsTo
     {
         return $this->belongsTo(User::class, 'requested_by');
+    }
+
+    public function budgetAcknowledger(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'budget_acknowledged_by');
     }
 
     public function department(): BelongsTo

@@ -7,6 +7,7 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Eye, Download } from 'lucide-react';
 import { client } from '@/api/client';
+import { downloadAuthenticatedFile } from '@/api/download';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { DataTable, NumCell, StackedCell, type Column } from '@/components/ui/DataTable';
@@ -83,11 +84,10 @@ export function DocumentList({ endpoint = '/documents', filters }: DocumentListP
             >
               View
             </Button>
-            <a href={row.download_url} download rel="noopener">
-              <Button size="sm" variant="ghost" icon={<Download size={14} />}>
-                Download
-              </Button>
-            </a>
+            <Button size="sm" variant="ghost" icon={<Download size={14} />}
+              onClick={() => void downloadAuthenticatedFile(row.download_url, { filename: row.file_name, errorMessage: 'Failed to download document.' })}>
+              Download
+            </Button>
           </div>
         ),
         align: 'right',

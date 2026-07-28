@@ -1,4 +1,4 @@
-import { portalClient, getPortalCsrf } from './client';
+import { createPortalClient, getPortalCsrf } from './client';
 import type {
   SupplierPortalUser,
   SupplierDashboardData,
@@ -13,16 +13,28 @@ import type {
   DeliverySchedule,
 } from '@/types/b2b';
 
+const { client: portalClient, setToken } = createPortalClient();
+
+type SupplierLoginResponse = {
+  token: string;
+  user: SupplierPortalUser;
+};
+
 export const supplierPortalApi = {
   // ── Auth ──────────────────────────────────────────
   login: async (email: string, password: string) => {
     await getPortalCsrf();
-    const { data } = await portalClient.post<{ data: SupplierPortalUser }>('/b2b/supplier/login', { email, password });
-    return data.data;
+    const { data } = await portalClient.post<{ data: SupplierLoginResponse }>('/b2b/supplier/login', { email, password });
+    setToken(data.data.token);
+    return data.data.user;
   },
 
   logout: async () => {
-    await portalClient.post('/b2b/supplier/logout');
+    try {
+      await portalClient.post('/b2b/supplier/logout');
+    } finally {
+      setToken(null);
+    }
   },
 
   me: async () => {

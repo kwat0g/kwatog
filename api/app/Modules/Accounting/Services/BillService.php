@@ -4,11 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Services;
 
-use App\Common\Support\SearchOperator;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\Money;
-use App\Modules\Accounting\Services\BudgetEnforcementService;
-use App\Modules\HR\Models\Department;
+use App\Common\Support\SearchOperator;
 use App\Modules\Accounting\Enums\BillStatus;
 use App\Modules\Accounting\Enums\JournalEntryStatus;
 use App\Modules\Accounting\Models\Account;
@@ -17,10 +15,11 @@ use App\Modules\Accounting\Models\BillItem;
 use App\Modules\Accounting\Models\BillPayment;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\User;
+use App\Modules\HR\Models\Department;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Exceptions\ThreeWayMatchException;
 use App\Modules\Purchasing\Models\PurchaseOrder;
-use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Services\ThreeWayMatchService;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -34,14 +33,15 @@ class BillService
     private const VAT_RATE = '0.12';
 
     /** AP control account code. */
-    private const AP_CODE      = '2010';
-    private const VAT_INPUT    = '1310';
+    private const AP_CODE = '2010';
+
+    private const VAT_INPUT = '1310';
 
     public function __construct(
         private readonly JournalEntryService $journals,
         private readonly AccountingPeriodService $periods,
-        private readonly ?ThreeWayMatchService $threeWayMatch = null,
-        private readonly ?BudgetEnforcementService $budget = null,
+        private readonly ThreeWayMatchService $threeWayMatch,
+        private readonly BudgetEnforcementService $budget,
     ) {}
 
     public function list(array $filters): LengthAwarePaginator
@@ -53,19 +53,25 @@ class BillService
         }
         if (! empty($filters['vendor_id'])) {
             $vendorId = HashIdFilter::decode($filters['vendor_id'], Vendor::class);
-            if ($vendorId) $q->where('vendor_id', $vendorId);
+            if ($vendorId) {
+                $q->where('vendor_id', $vendorId);
+            }
         }
-        if (! empty($filters['from'])) $q->whereDate('date', '>=', $filters['from']);
-        if (! empty($filters['to']))   $q->whereDate('date', '<=', $filters['to']);
+        if (! empty($filters['from'])) {
+            $q->whereDate('date', '>=', $filters['from']);
+        }
+        if (! empty($filters['to'])) {
+            $q->whereDate('date', '<=', $filters['to']);
+        }
         if (! empty($filters['overdue'])) {
             $q->whereIn('status', [BillStatus::Unpaid, BillStatus::Partial])
-              ->whereDate('due_date', '<', now());
+                ->whereDate('due_date', '<', now());
         }
         if (! empty($filters['search'])) {
             $term = $filters['search'];
             $q->where(function ($qq) use ($term) {
                 $qq->where('bill_number', SearchOperator::like(), "%{$term}%")
-                   ->orWhereHas('vendor', fn ($vv) => $vv->where('name', SearchOperator::like(), "%{$term}%"));
+                    ->orWhereHas('vendor', fn ($vv) => $vv->where('name', SearchOperator::like(), "%{$term}%"));
             });
         }
 
@@ -117,7 +123,7 @@ class BillService
             }
 
             // Budget enforcement check.
-            if ($this->budget && ! empty($data['department_id'])) {
+            if (! empty($data['department_id'])) {
                 $deptId = is_int($data['department_id'])
                     ? $data['department_id']
                     : HashIdFilter::decode($data['department_id'], Department::class);
@@ -155,7 +161,7 @@ class BillService
                     }
                 }
 
-                if ($this->threeWayMatch && $poId) {
+                if ($poId) {
                     $po = PurchaseOrder::query()->with(['items.item'])->findOrFail($poId);
                     [$itemsForMatch] = $this->normalizeItems($data['items'] ?? []);
                     // H-7: Align bill lines to PO lines by item_id FK, not by index.
@@ -167,10 +173,10 @@ class BillService
                     foreach ($itemsForMatch as $li) {
                         if (! empty($li['item_id'])) {
                             $billLines[(string) $li['item_id']] = [
-                                'item_id'     => $li['item_id'],
+                                'item_id' => $li['item_id'],
                                 'description' => $li['description'],
-                                'quantity'    => $li['quantity'] ?? '0',
-                                'unit_price'  => $li['unit_price'] ?? '0',
+                                'quantity' => $li['quantity'] ?? '0',
+                                'unit_price' => $li['unit_price'] ?? '0',
                             ];
                         }
                     }
@@ -185,23 +191,23 @@ class BillService
             }
 
             $bill = Bill::create([
-                'bill_number'      => $data['bill_number'],
-                'vendor_id'        => $vendor->id,
-                'purchase_order_id'=> $poId,
-                'date'             => $data['date'],
-                'due_date'         => $data['due_date']
+                'bill_number' => $data['bill_number'],
+                'vendor_id' => $vendor->id,
+                'purchase_order_id' => $poId,
+                'date' => $data['date'],
+                'due_date' => $data['due_date']
                     ?? Carbon::parse($data['date'])->addDays($vendor->payment_terms_days)->toDateString(),
-                'is_vatable'       => $isVatable,
-                'subtotal'         => $subtotal,
-                'vat_amount'       => $vat,
-                'total_amount'     => $total,
-                'amount_paid'      => Money::zero(),
-                'balance'          => $total,
-                'has_variances'    => $hasVariances,
+                'is_vatable' => $isVatable,
+                'subtotal' => $subtotal,
+                'vat_amount' => $vat,
+                'total_amount' => $total,
+                'amount_paid' => Money::zero(),
+                'balance' => $total,
+                'has_variances' => $hasVariances,
                 'three_way_match_snapshot' => $matchSnapshot,
-                'status'        => BillStatus::Unpaid,
-                'created_by'    => $by->id,
-                'remarks'       => $data['remarks'] ?? null,
+                'status' => BillStatus::Unpaid,
+                'created_by' => $by->id,
+                'remarks' => $data['remarks'] ?? null,
             ]);
 
             foreach ($items as $row) {
@@ -209,39 +215,39 @@ class BillService
             }
 
             // Build JE: DR each expense_account_id; DR VAT Input if vatable; CR AP.
-            $apId      = $this->accountId(self::AP_CODE);
+            $apId = $this->accountId(self::AP_CODE);
             $vatInputId = $this->accountId(self::VAT_INPUT);
 
             $lines = [];
             foreach ($items as $row) {
                 $lines[] = [
                     'account_id' => $row['expense_account_id'],
-                    'debit'      => $row['total'],
-                    'credit'     => '0.00',
-                    'description'=> $row['description'],
+                    'debit' => $row['total'],
+                    'credit' => '0.00',
+                    'description' => $row['description'],
                 ];
             }
             if ($isVatable && Money::gt($vat, '0')) {
                 $lines[] = [
                     'account_id' => $vatInputId,
-                    'debit'      => $vat,
-                    'credit'     => '0.00',
-                    'description'=> 'VAT Input',
+                    'debit' => $vat,
+                    'credit' => '0.00',
+                    'description' => 'VAT Input',
                 ];
             }
             $lines[] = [
                 'account_id' => $apId,
-                'debit'      => '0.00',
-                'credit'     => $total,
-                'description'=> "AP — {$vendor->name} · {$data['bill_number']}",
+                'debit' => '0.00',
+                'credit' => $total,
+                'description' => "AP — {$vendor->name} · {$data['bill_number']}",
             ];
 
             $je = $this->journals->create([
-                'date'           => (string) $bill->date->toDateString(),
-                'description'    => "Bill {$bill->bill_number} from {$vendor->name}",
+                'date' => (string) $bill->date->toDateString(),
+                'description' => "Bill {$bill->bill_number} from {$vendor->name}",
                 'reference_type' => 'bill',
-                'reference_id'   => $bill->id,
-                'lines'          => $lines,
+                'reference_id' => $bill->id,
+                'lines' => $lines,
             ], $by);
             $je = $this->journals->post($je, $by);
 
@@ -269,9 +275,10 @@ class BillService
                 }
             }
             $bill->update([
-                'status'  => BillStatus::Cancelled,
+                'status' => BillStatus::Cancelled,
                 'balance' => Money::zero(),
             ]);
+
             return $bill->fresh();
         });
     }
@@ -293,7 +300,7 @@ class BillService
             throw new RuntimeException('Payment amount must be greater than zero.');
         }
         if (Money::gt($amount, (string) $bill->balance)) {
-            throw new RuntimeException("Payment {$amount} exceeds outstanding balance " . $bill->balance . '.');
+            throw new RuntimeException("Payment {$amount} exceeds outstanding balance ".$bill->balance.'.');
         }
 
         return DB::transaction(function () use ($bill, $data, $amount, $by) {
@@ -303,22 +310,22 @@ class BillService
             }
 
             $payment = BillPayment::create([
-                'bill_id'           => $bill->id,
-                'cash_account_id'   => $cashAccountId,
-                'payment_date'      => $data['payment_date'],
-                'amount'            => $amount,
-                'payment_method'    => $data['payment_method'],
-                'reference_number'  => $data['reference_number'] ?? null,
-                'created_by'        => $by->id,
+                'bill_id' => $bill->id,
+                'cash_account_id' => $cashAccountId,
+                'payment_date' => $data['payment_date'],
+                'amount' => $amount,
+                'payment_method' => $data['payment_method'],
+                'reference_number' => $data['reference_number'] ?? null,
+                'created_by' => $by->id,
             ]);
 
             $apId = $this->accountId(self::AP_CODE);
             $je = $this->journals->create([
-                'date'           => $payment->payment_date->toDateString(),
-                'description'    => "Payment for Bill {$bill->bill_number}",
+                'date' => $payment->payment_date->toDateString(),
+                'description' => "Payment for Bill {$bill->bill_number}",
                 'reference_type' => 'bill_payment',
-                'reference_id'   => $payment->id,
-                'lines'          => [
+                'reference_id' => $payment->id,
+                'lines' => [
                     ['account_id' => $apId,           'debit' => $amount, 'credit' => '0.00', 'description' => 'AP settled'],
                     ['account_id' => $cashAccountId,  'debit' => '0.00',  'credit' => $amount, 'description' => 'Cash disbursed'],
                 ],
@@ -328,14 +335,14 @@ class BillService
             $payment->update(['journal_entry_id' => $je->id]);
 
             // Update bill totals.
-            $newPaid    = Money::add((string) $bill->amount_paid, $amount);
+            $newPaid = Money::add((string) $bill->amount_paid, $amount);
             $newBalance = Money::sub((string) $bill->total_amount, $newPaid);
-            $newStatus  = Money::isZero($newBalance) ? BillStatus::Paid : BillStatus::Partial;
+            $newStatus = Money::isZero($newBalance) ? BillStatus::Paid : BillStatus::Partial;
 
             $bill->update([
                 'amount_paid' => $newPaid,
-                'balance'     => $newBalance,
-                'status'      => $newStatus,
+                'balance' => $newBalance,
+                'status' => $newStatus,
             ]);
 
             return $payment->fresh(['cashAccount']);
@@ -372,14 +379,14 @@ class BillService
             $vid = $bill->vendor_id;
             if (! isset($byVendor[$vid])) {
                 $byVendor[$vid] = [
-                    'vendor_id'   => $bill->vendor->hash_id,
+                    'vendor_id' => $bill->vendor->hash_id,
                     'vendor_name' => $bill->vendor->name,
-                    'current'     => '0.00',
-                    'd1_30'       => '0.00',
-                    'd31_60'      => '0.00',
-                    'd61_90'      => '0.00',
-                    'd91_plus'    => '0.00',
-                    'total'       => '0.00',
+                    'current' => '0.00',
+                    'd1_30' => '0.00',
+                    'd31_60' => '0.00',
+                    'd61_90' => '0.00',
+                    'd91_plus' => '0.00',
+                    'total' => '0.00',
                 ];
             }
             $byVendor[$vid][$bucket] = Money::add($byVendor[$vid][$bucket], $balance);
@@ -406,7 +413,8 @@ class BillService
             throw new RuntimeException('A bill must have at least one line item.');
         }
 
-        $rows = []; $subtotal = Money::zero();
+        $rows = [];
+        $subtotal = Money::zero();
         foreach ($rawItems as $raw) {
             $accountId = HashIdFilter::decode($raw['expense_account_id'] ?? null, Account::class);
             if (! $accountId) {
@@ -415,7 +423,7 @@ class BillService
 
             $itemId = HashIdFilter::decode($raw['item_id'] ?? null, Item::class);
 
-            $qty   = Money::round2((string) $raw['quantity']);
+            $qty = Money::round2((string) $raw['quantity']);
             $price = Money::round2((string) $raw['unit_price']);
             $total = Money::round2(bcmul($qty, $price, 4));
 
@@ -425,15 +433,16 @@ class BillService
 
             $rows[] = [
                 'expense_account_id' => $accountId,
-                'item_id'            => $itemId,
-                'description'        => (string) $raw['description'],
-                'quantity'           => $qty,
-                'unit'               => $raw['unit'] ?? null,
-                'unit_price'         => $price,
-                'total'              => $total,
+                'item_id' => $itemId,
+                'description' => (string) $raw['description'],
+                'quantity' => $qty,
+                'unit' => $raw['unit'] ?? null,
+                'unit_price' => $price,
+                'total' => $total,
             ];
             $subtotal = Money::add($subtotal, $total);
         }
+
         return [$rows, $subtotal];
     }
 
@@ -443,6 +452,7 @@ class BillService
         if (! $id) {
             throw new RuntimeException("Required account {$code} not found in COA. Run ChartOfAccountsSeeder.");
         }
+
         return (int) $id;
     }
 }

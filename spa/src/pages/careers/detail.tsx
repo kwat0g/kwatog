@@ -95,25 +95,25 @@ export default function JobPostingDetailPage() {
       <main className="mx-auto max-w-3xl px-5 pb-24 pt-32">
         <Link
           to="/careers"
-          className="mb-8 inline-flex items-center gap-1.5 text-sm text-neutral-500 hover:text-neutral-900"
+          className="mb-8 inline-flex items-center gap-1.5 text-sm text-muted hover:text-primary"
         >
           <ArrowLeft size={14} /> Back to all positions
         </Link>
 
         {isLoading && (
           <div className="space-y-4">
-            <div className="h-8 w-2/3 animate-pulse rounded bg-neutral-100" />
-            <div className="h-4 w-1/3 animate-pulse rounded bg-neutral-100" />
-            <div className="h-32 animate-pulse rounded bg-neutral-50" />
+            <div className="h-8 w-2/3 animate-pulse rounded bg-elevated" />
+            <div className="h-4 w-1/3 animate-pulse rounded bg-elevated" />
+            <div className="h-32 animate-pulse rounded bg-surface" />
           </div>
         )}
 
-        {isError && <p className="text-neutral-500">Failed to load job posting.</p>}
+        {isError && <p className="text-muted">Failed to load job posting.</p>}
 
         {posting && (
           <>
-            <h1 className="text-2xl font-medium tracking-tight text-neutral-900">{posting.title}</h1>
-            <div className="mt-3 flex flex-wrap gap-4 text-sm text-neutral-600">
+            <h1 className="text-2xl font-medium tracking-tight text-primary">{posting.title}</h1>
+            <div className="mt-3 flex flex-wrap gap-4 text-sm text-secondary">
               <span className="flex items-center gap-1.5">
                 <MapPin size={14} /> {posting.department.name}
               </span>
@@ -128,12 +128,12 @@ export default function JobPostingDetailPage() {
             </div>
 
             <section className="mt-8">
-              <h2 className="text-lg font-medium text-neutral-900">Description</h2>
-              <p className="mt-2 whitespace-pre-line text-neutral-700">{posting.description}</p>
+              <h2 className="text-lg font-medium text-primary">Description</h2>
+              <p className="mt-2 whitespace-pre-line text-secondary">{posting.description}</p>
             </section>
 
             <section className="mt-6">
-              <h2 className="text-lg font-medium text-neutral-900">Requirements</h2>
+              <h2 className="text-lg font-medium text-primary">Requirements</h2>
               <div className="mt-3 flex flex-wrap gap-2">
                 {posting.requirements
                   .split('\n')
@@ -142,7 +142,7 @@ export default function JobPostingDetailPage() {
                   .map((req: string, i: number) => (
                     <span
                       key={i}
-                      className="inline-flex items-center rounded-md border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-sm text-neutral-700"
+                      className="inline-flex items-center rounded-md border border-default bg-surface px-3 py-1.5 text-sm text-secondary"
                     >
                       {req}
                     </span>
@@ -156,35 +156,35 @@ export default function JobPostingDetailPage() {
               </p>
             )}
 
-            <hr className="my-10 border-neutral-200" />
+            <hr className="my-10 border-default" />
 
             {trackingCode ? (
               <div className="rounded-md border border-default bg-success-bg p-5 text-center">
                 <CheckCircle className="mx-auto mb-3 text-success" size={40} />
-                <h2 className="text-xl font-medium text-neutral-900">Application Submitted!</h2>
-                <p className="mt-2 text-neutral-600">
+                <h2 className="text-xl font-medium text-primary">Application Submitted!</h2>
+                <p className="mt-2 text-secondary">
                   Your tracking code is:
                 </p>
-                <p className="mt-1 font-mono text-2xl font-medium tracking-widest text-neutral-900">
+                <p className="mt-1 font-mono text-2xl font-medium tracking-widest text-primary">
                   {trackingCode}
                 </p>
-                <p className="mt-3 text-sm text-neutral-500">
+                <p className="mt-3 text-sm text-muted">
                   Save this code. You can check your application status at{' '}
                   <Link to="/careers/track" className="underline">the tracking page</Link>.
                 </p>
               </div>
             ) : (
               <div>
-                <h2 className="text-xl font-medium text-neutral-900">Apply for this Position</h2>
+                <h2 className="text-xl font-medium text-primary">Apply for this Position</h2>
                 <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-4">
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div>
-                      <label className="mb-1 block text-sm font-medium text-neutral-700">First Name *</label>
+                      <label className="mb-1 block text-sm font-medium text-secondary">First Name *</label>
                       <Input {...register('first_name')} />
                       {errors.first_name && <p className="mt-1 text-xs text-danger">{errors.first_name.message}</p>}
                     </div>
                     <div>
-                      <label className="mb-1 block text-sm font-medium text-neutral-700">Last Name *</label>
+                      <label className="mb-1 block text-sm font-medium text-secondary">Last Name *</label>
                       <Input {...register('last_name')} />
                       {errors.last_name && <p className="mt-1 text-xs text-danger">{errors.last_name.message}</p>}
                     </div>
@@ -192,22 +192,22 @@ export default function JobPostingDetailPage() {
 
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div>
-                      <label className="mb-1 block text-sm font-medium text-neutral-700">Email *</label>
+                      <label className="mb-1 block text-sm font-medium text-secondary">Email *</label>
                       <Input type="email" {...register('email')} />
                       {errors.email && <p className="mt-1 text-xs text-danger">{errors.email.message}</p>}
                     </div>
                     <div>
-                      <label className="mb-1 block text-sm font-medium text-neutral-700">Phone *</label>
+                      <label className="mb-1 block text-sm font-medium text-secondary">Phone *</label>
                       <Input {...register('phone')} placeholder="09XX-XXX-XXXX" />
                       {errors.phone && <p className="mt-1 text-xs text-danger">{errors.phone.message}</p>}
                     </div>
                   </div>
 
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-neutral-700">Resume *</label>
+                    <label className="mb-1 block text-sm font-medium text-secondary">Resume *</label>
                     <div
                       onClick={() => fileRef.current?.click()}
-                      className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-neutral-300 px-4 py-3 text-sm text-neutral-600 hover:border-neutral-400"
+                      className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-default px-4 py-3 text-sm text-secondary hover:border-strong"
                     >
                       <Upload size={16} />
                       {resume ? resume.name : 'Click to upload (PDF, DOC, DOCX — max 5MB)'}
@@ -226,7 +226,7 @@ export default function JobPostingDetailPage() {
                   </div>
 
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-neutral-700">Cover Letter</label>
+                    <label className="mb-1 block text-sm font-medium text-secondary">Cover Letter</label>
                     <Textarea {...register('cover_letter')} rows={4} placeholder="Tell us why you're a great fit..." />
                   </div>
 

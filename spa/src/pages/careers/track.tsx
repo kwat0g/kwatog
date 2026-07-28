@@ -67,13 +67,13 @@ export default function ApplicationTrackPage() {
       <main className="mx-auto max-w-2xl px-5 pb-24 pt-32">
         <Link
           to="/careers"
-          className="mb-8 inline-flex items-center gap-1.5 text-sm text-neutral-500 hover:text-neutral-900"
+          className="mb-8 inline-flex items-center gap-1.5 text-sm text-muted hover:text-primary"
         >
           <ArrowLeft size={14} /> Back to careers
         </Link>
 
-        <h1 className="text-2xl font-medium tracking-tight text-neutral-900">Track Your Application</h1>
-        <p className="mt-2 text-neutral-600">
+        <h1 className="text-2xl font-medium tracking-tight text-primary">Track Your Application</h1>
+        <p className="mt-2 text-secondary">
           Enter the tracking code you received after submitting your application.
         </p>
 
@@ -97,18 +97,18 @@ export default function ApplicationTrackPage() {
         )}
 
         {info && (
-          <div className="mt-8 rounded-md border border-neutral-200 p-5">
+          <div className="mt-8 rounded-md border border-default p-5">
             <div className="mb-6">
-              <h2 className="text-lg font-medium text-neutral-900">{info.position}</h2>
-              <p className="mt-1 text-sm text-neutral-500">
+              <h2 className="text-lg font-medium text-primary">{info.position}</h2>
+              <p className="mt-1 text-sm text-muted">
                 Applied on {formatDate(info.applied_at)}
               </p>
-              <p className="mt-1 font-mono text-xs text-neutral-400">{info.tracking_code}</p>
+              <p className="mt-1 font-mono text-xs text-muted">{info.tracking_code}</p>
             </div>
 
             {isRejected ? (
-              <div className="rounded-md bg-neutral-50 p-4 text-center">
-                <p className="font-medium text-neutral-700">
+              <div className="rounded-md bg-surface p-4 text-center">
+                <p className="font-medium text-secondary">
                   Thank you for your interest. Unfortunately, we have decided to move forward with other candidates.
                 </p>
               </div>
@@ -125,24 +125,24 @@ export default function ApplicationTrackPage() {
                             isDone
                               ? 'bg-success text-white'
                               : isActive
-                              ? 'bg-neutral-900 text-white'
-                              : 'bg-neutral-200 text-neutral-400'
+                              ? 'bg-primary text-canvas'
+                              : 'bg-elevated text-muted'
                           }`}
                         >
                           {isDone ? <CheckCircle size={14} /> : idx + 1}
                         </div>
                         {idx < STAGE_STEPS.length - 1 && (
-                          <div className={`h-6 w-0.5 ${isDone ? 'bg-success' : 'bg-neutral-200'}`} />
+                          <div className={`h-6 w-0.5 ${isDone ? 'bg-success' : 'bg-elevated'}`} />
                         )}
                       </div>
                       <span
                         className={`text-sm ${
-                          isActive ? 'font-medium text-neutral-900' : isDone ? 'text-neutral-600' : 'text-neutral-400'
+                          isActive ? 'font-medium text-primary' : isDone ? 'text-secondary' : 'text-muted'
                         }`}
                       >
                         {step}
                         {isActive && (
-                          <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600">
+                          <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-elevated px-2 py-0.5 text-xs text-secondary">
                             <Clock size={10} /> Current
                           </span>
                         )}
@@ -154,9 +154,9 @@ export default function ApplicationTrackPage() {
             )}
 
             {info.interview && (
-              <div className="mt-6 rounded-md bg-blue-50 p-4">
-                <h3 className="text-sm font-medium text-blue-900">Upcoming Interview</h3>
-                <div className="mt-2 space-y-1 text-sm text-blue-800">
+              <div className="mt-6 rounded-md bg-info-bg p-4">
+                <h3 className="text-sm font-medium text-info-fg">Upcoming Interview</h3>
+                <div className="mt-2 space-y-1 text-sm text-info-fg">
                   <p className="flex items-center gap-1.5">
                     <Calendar size={14} />
                     {formatDateTime(info.interview.scheduled_at)}

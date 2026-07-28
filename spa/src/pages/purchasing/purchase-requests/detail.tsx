@@ -5,6 +5,7 @@ import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { Send, ThumbsUp, ThumbsDown, X, ShoppingCart, FileText, AlertTriangle, Zap } from 'lucide-react';
 import { purchaseRequestsApi } from '@/api/purchasing/purchase-requests';
+import { downloadAuthenticatedFile } from '@/api/download';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -72,6 +73,11 @@ export default function PurchaseRequestDetailPage() {
   const approve = useOptimisticAction(() => purchaseRequestsApi.approve(id), 'approved', { successMsg: 'Purchase request approved.', errorMsg: 'Failed to approve.', afterSuccess: () => setConfirm(null) });
   const reject = useOptimisticAction<string>((reason) => purchaseRequestsApi.reject(id, reason), 'rejected', { successMsg: 'Purchase request rejected.', errorMsg: 'Failed to reject.', afterSuccess: () => setRejectOpen(false) });
   const cancel = useOptimisticAction(() => purchaseRequestsApi.cancel(id), 'cancelled', { successMsg: 'Purchase request cancelled.', errorMsg: 'Failed to cancel.', afterSuccess: () => setConfirm(null) });
+  const acknowledgeBudget = useMutation({
+    mutationFn: () => purchaseRequestsApi.acknowledgeBudget(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: detailKey }); toast.success('Budget warning acknowledged.'); },
+    onError: (e) => toast.error(errMsg(e, 'Failed to acknowledge budget warning.')),
+  });
 
   if (isLoading) return <SkeletonTable rows={6} columns={5} />;
   if (isError || !data) return (
@@ -101,9 +107,8 @@ export default function PurchaseRequestDetailPage() {
             {data.status === 'approved' && can('purchasing.po.create') && (
               <Button size="sm" variant="primary" icon={<ShoppingCart size={14} />} onClick={() => nav(`/purchasing/purchase-orders/create?pr_id=${data.id}`)}>Convert to PO</Button>
             )}
-            <a href={purchaseRequestsApi.pdfUrl(data.id)} target="_blank" rel="noopener">
-              <Button size="sm" variant="secondary" icon={<FileText size={14} />}>PDF</Button>
-            </a>
+            <Button size="sm" variant="secondary" icon={<FileText size={14} />}
+              onClick={() => void downloadAuthenticatedFile(purchaseRequestsApi.pdfUrl(data.id), { openInNewTab: true, errorMessage: 'Failed to generate purchase request PDF.' })}>PDF</Button>
             {(data.status === 'draft' || data.status === 'pending') && (
               <Button size="sm" variant="secondary" icon={<X size={14} />} onClick={() => setConfirm('cancel')} loading={cancel.isPending}>Cancel</Button>
             )}
@@ -111,6 +116,18 @@ export default function PurchaseRequestDetailPage() {
         }
       />
       <div className="px-5 py-4 space-y-4">
+        {data.budget_warning_level && (
+          <div className="flex items-center justify-between gap-4 rounded-md border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
+            <div>
+              <div className="font-medium">Budget {data.budget_warning_level}</div>
+              <div className="text-muted">{data.budget_warning_message}</div>
+            </div>
+            {['exhausted', 'overdrawn'].includes(data.budget_warning_level) && !data.budget_acknowledged_at && can('budgeting.approve') && (
+              <Button size="sm" variant="secondary" onClick={() => acknowledgeBudget.mutate()} loading={acknowledgeBudget.isPending}>Finance acknowledge</Button>
+            )}
+            {data.budget_acknowledged_at && <Chip variant="success">Finance acknowledged</Chip>}
+          </div>
+        )}
         <Panel title="Approval chain">
           <ChainHeader steps={buildPrChainSteps(data)} />
         </Panel>
@@ -262,5 +279,4 @@ function buildPrChainSteps(pr: PurchaseRequest): ChainStep[] {
   });
   return steps;
 }
-
 

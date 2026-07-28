@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- navigation metadata is intentionally shared with command/search surfaces. */
 import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -51,6 +52,8 @@ import {
   ShieldAlert,
   Monitor,
   Upload,
+  ListChecks,
+  ScanBarcode,
   type LucideIcon,
 } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo } from 'react';
@@ -61,7 +64,7 @@ import { Badge } from '@/components/ui/Badge';
 import { useBadges } from '@/hooks/useBadges';
 import type { BadgeSeverity } from '@/api/badges';
 
-interface NavItem {
+export interface NavItem {
   to: string;
   label: string;
   icon: LucideIcon;
@@ -86,7 +89,7 @@ interface NavItem {
   roles?: string[];
 }
 
-interface NavSection {
+export interface NavSection {
   label: string;
   items: NavItem[];
 }
@@ -99,11 +102,13 @@ interface NavSection {
  * "dashboard" sub-pages (Production Dashboard, Quality Dashboard) are removed
  * — users reach their role dashboard via the top-level /dashboard redirect.
  */
-const SECTIONS: NavSection[] = [
+export const SECTIONS: NavSection[] = [
   {
     label: 'Overview',
     items: [
       { to: '/dashboard',     label: 'Dashboard',      icon: LayoutDashboard },
+      { to: '/action-center', label: 'Action Center',  icon: ListChecks, badgeKey: 'action_center' },
+      { to: '/exceptions',    label: 'Exceptions',     icon: ShieldAlert },
       { to: '/dashboard/scorecard', label: 'KPI Scorecard', icon: BarChart3 },
       { to: '/chains',        label: 'Chain Tracker',  icon: Workflow, permission: 'crm.sales_orders.view' },
       { to: '/approvals',     label: 'Approvals',     icon: Inbox,  permission: 'approvals.board.view', badgeKey: 'approvals' },
@@ -142,8 +147,17 @@ const SECTIONS: NavSection[] = [
     ],
   },
   {
+    label: 'Forecasting',
+    items: [
+      { to: '/forecasting/demand',    label: 'Demand Forecast', icon: BarChart3, feature: 'forecasting', permission: 'forecasting.view' },
+      { to: '/forecasting/stock-out', label: 'Stock-out Plan',  icon: Target,    feature: 'forecasting', permission: 'forecasting.view' },
+      { to: '/forecasting/accuracy',  label: 'Accuracy',        icon: Activity,  feature: 'forecasting', permission: 'forecasting.view' },
+    ],
+  },
+  {
     label: 'Procurement',
     items: [
+      { to: '/purchasing/chain',              label: 'Procurement Chain',  icon: Workflow,     feature: 'purchasing', permission: 'purchasing.view' },
       { to: '/purchasing/purchase-orders',    label: 'Purchase Orders',    icon: ShoppingCart, feature: 'purchasing', permission: 'purchasing.view', badgeKey: 'purchase_requests' },
       { to: '/purchasing/purchase-requests',  label: 'Purchase Requests',  icon: FileText,     feature: 'purchasing', permission: 'purchasing.view' },
       { to: '/purchasing/approved-suppliers', label: 'Approved Suppliers', icon: BadgeCheck,   feature: 'purchasing', permission: 'purchasing.view' },
@@ -158,6 +172,11 @@ const SECTIONS: NavSection[] = [
       { to: '/inventory/mrb',             label: 'MRB / Quarantine',icon: AlertTriangle,  feature: 'inventory', permission: 'inventory.mrb.view' },
       { to: '/inventory/stock-levels',    label: 'Stock Levels',    icon: BarChart2,      feature: 'inventory', permission: 'inventory.view' },
       { to: '/inventory/movements',       label: 'Movements',       icon: ArrowLeftRight, feature: 'inventory', permission: 'inventory.view' },
+      { to: '/inventory/warehouse-map',   label: 'Warehouse Map',   icon: Boxes,          feature: 'inventory', permission: 'inventory.view' },
+      { to: '/inventory/stock-count',     label: 'Stock Count',     icon: ClipboardList,  feature: 'inventory', permission: 'inventory.view' },
+      { to: '/inventory/transfer-orders', label: 'Transfer Orders', icon: ArrowLeftRight, feature: 'inventory', permission: 'inventory.view' },
+      { to: '/inventory/picking',         label: 'Picking',         icon: Package,        feature: 'inventory', permission: 'inventory.view' },
+      { to: '/inventory/scanner',         label: 'Warehouse Scanner', icon: ScanBarcode,  feature: 'inventory', permission: 'inventory.view' },
     ],
   },
   {
@@ -194,9 +213,9 @@ const SECTIONS: NavSection[] = [
       { to: '/accounting/periods',         label: 'Periods',           icon: CalendarClock, feature: 'accounting', permission: 'accounting.periods.view' },
       { to: '/accounting/fx-rates',        label: 'FX Rates',          icon: Coins,         feature: 'accounting', permission: 'accounting.statements.view' },
       { to: '/accounting/parent-pack',     label: 'JP Parent Pack',    icon: Building2,     feature: 'accounting', permission: 'accounting.statements.view' },
-      { to: '/budgeting',                  label: 'Budgets',           icon: PieChart,      permission: 'budgeting.view' },
-      { to: '/budgeting/budget-vs-actual', label: 'Budget vs Actual',  icon: Target,        permission: 'budgeting.view' },
-      { to: '/budgeting/transfers',        label: 'Budget Transfers',  icon: ArrowLeftRight, permission: 'budgeting.view' },
+      { to: '/budgeting',                  label: 'Budgets',           icon: PieChart,       feature: 'budgeting', permission: 'budgeting.view' },
+      { to: '/budgeting/budget-vs-actual', label: 'Budget vs Actual',  icon: Target,         feature: 'budgeting', permission: 'budgeting.view' },
+      { to: '/budgeting/transfers',        label: 'Budget Transfers',  icon: ArrowLeftRight, feature: 'budgeting', permission: 'budgeting.view' },
     ],
   },
   {
@@ -241,9 +260,32 @@ const SECTIONS: NavSection[] = [
       { to: '/admin/imports',      label: 'Import Data',  icon: Upload,       permission: 'admin.import.manage' },
       { to: '/admin/sessions',     label: 'Sessions',     icon: Monitor,      permission: 'admin.settings.manage' },
       { to: '/admin/depreciation', label: 'Depreciation', icon: BarChart2,    permission: 'assets.depreciation.view' },
+      { to: '/admin/operations-health', label: 'Operations Health', icon: Activity, permission: 'dashboard.admin.view' },
     ],
   },
 ];
+
+export interface NavVisibilityContext {
+  permissions?: Set<string>;
+  features?: Set<string>;
+  roleSlug?: string;
+}
+
+/**
+ * Shared nav-item gate — used by the Sidebar and the ⌘K palette's "Go to"
+ * group so both surfaces always show exactly the same destinations.
+ *
+ * system_admin bypasses the permission gate, mirroring usePermission().can()'s
+ * isAdmin short-circuit — otherwise an admin with an empty permission set would
+ * see a thinner menu than the pages they can actually open.
+ */
+export function isNavItemVisible(item: NavItem, { permissions, features, roleSlug }: NavVisibilityContext): boolean {
+  const isAdmin = roleSlug === 'system_admin';
+  if (item.feature && features && !features.has(item.feature)) return false;
+  if (!isAdmin && item.permission && permissions && !permissions.has(item.permission)) return false;
+  if (!isAdmin && item.roles && roleSlug && !item.roles.includes(roleSlug)) return false;
+  return true;
+}
 
 interface SidebarProps {
   permissions?: Set<string>;
@@ -273,17 +315,16 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
   // Polish Task S2 — dynamic badge counts for every gated nav item.
   const { getBadge } = useBadges();
 
-  // system_admin bypasses the permission gate, mirroring usePermission().can()'s
-  // isAdmin short-circuit — otherwise an admin with an empty permission set would
-  // see a thinner menu than the pages they can actually open.
-  const isAdmin = roleSlug === 'system_admin';
+  // system_admin bypass is handled inside isNavItemVisible.
+  const visibility = useMemo(
+    () => ({ permissions, features, roleSlug }),
+    [permissions, features, roleSlug],
+  );
 
-  const isVisible = useCallback((item: NavItem) => {
-    if (item.feature && features && !features.has(item.feature)) return false;
-    if (!isAdmin && item.permission && permissions && !permissions.has(item.permission)) return false;
-    if (!isAdmin && item.roles && roleSlug && !item.roles.includes(roleSlug)) return false;
-    return true;
-  }, [features, permissions, roleSlug, isAdmin]);
+  const isVisible = useCallback(
+    (item: NavItem) => isNavItemVisible(item, visibility),
+    [visibility],
+  );
 
   // Filter sections to only those with visible items so the active-section
   // detection and collapsed-rail dividers don't reference hidden groups.

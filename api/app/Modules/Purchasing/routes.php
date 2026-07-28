@@ -30,6 +30,7 @@ Route::middleware(['auth:sanctum', 'feature:purchasing'])->prefix('purchasing')-
     Route::delete('/purchase-requests/{purchaseRequest}', [PurchaseRequestController::class, 'destroy'])->middleware('permission:purchasing.pr.create');
 
     Route::patch('/purchase-requests/{purchaseRequest}/submit',  [PurchaseRequestController::class, 'submit'])->middleware('permission:purchasing.pr.create');
+    Route::patch('/purchase-requests/{purchaseRequest}/acknowledge-budget', [PurchaseRequestController::class, 'acknowledgeBudget'])->middleware('permission:budgeting.approve');
     Route::patch('/purchase-requests/{purchaseRequest}/approve', [PurchaseRequestController::class, 'approve'])->middleware('permission:purchasing.pr.approve');
     Route::patch('/purchase-requests/{purchaseRequest}/reject',  [PurchaseRequestController::class, 'reject'])->middleware('permission:purchasing.pr.approve');
     Route::patch('/purchase-requests/{purchaseRequest}/cancel',  [PurchaseRequestController::class, 'cancel'])->middleware('permission:purchasing.pr.create');
@@ -50,6 +51,7 @@ Route::middleware(['auth:sanctum', 'feature:purchasing'])->prefix('purchasing')-
     Route::put('/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'update'])->middleware('permission:purchasing.po.create');
     Route::delete('/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'destroy'])->middleware('permission:purchasing.po.create');
     Route::patch('/purchase-orders/{purchaseOrder}/submit',  [PurchaseOrderController::class, 'submit'])->middleware('permission:purchasing.po.create');
+    Route::patch('/purchase-orders/{purchaseOrder}/acknowledge-budget', [PurchaseOrderController::class, 'acknowledgeBudget'])->middleware('permission:budgeting.approve');
     Route::patch('/purchase-orders/{purchaseOrder}/approve', [PurchaseOrderController::class, 'approve'])->middleware('permission:purchasing.po.approve');
     Route::patch('/purchase-orders/{purchaseOrder}/reject',  [PurchaseOrderController::class, 'reject'])->middleware('permission:purchasing.po.approve');
     Route::patch('/purchase-orders/{purchaseOrder}/send',    [PurchaseOrderController::class, 'send'])->middleware('permission:purchasing.po.send');

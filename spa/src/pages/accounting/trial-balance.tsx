@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Download, Printer } from 'lucide-react';
 import { statementsApi } from '@/api/accounting/statements';
+import { downloadAuthenticatedFile } from '@/api/download';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
@@ -30,12 +31,8 @@ export default function TrialBalancePage() {
         backLabel="Journal Entries"
         actions={
           <div className="flex gap-1.5">
-            <a href={statementsApi.csvUrl('trial-balance', { from, to })}>
-              <Button variant="secondary" size="sm" icon={<Download size={14} />}>CSV</Button>
-            </a>
-            <a href={statementsApi.pdfUrl('trial-balance', { from, to })} target="_blank" rel="noopener">
-              <Button variant="secondary" size="sm" icon={<Printer size={14} />}>PDF</Button>
-            </a>
+            <Button variant="secondary" size="sm" icon={<Download size={14} />} onClick={() => void downloadAuthenticatedFile(statementsApi.csvUrl('trial-balance', { from, to }), { errorMessage: 'Failed to export trial balance.' })}>CSV</Button>
+            <Button variant="secondary" size="sm" icon={<Printer size={14} />} onClick={() => void downloadAuthenticatedFile(statementsApi.pdfUrl('trial-balance', { from, to }), { openInNewTab: true, errorMessage: 'Failed to generate trial balance PDF.' })}>PDF</Button>
           </div>
         }
       />

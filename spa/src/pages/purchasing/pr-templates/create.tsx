@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
 import { prTemplatesApi } from '@/api/purchasing/purchase-requests';
 import { itemsApi } from '@/api/inventory/items';
+import { departmentsApi } from '@/api/hr/departments';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -72,7 +73,7 @@ export default function PrTemplateFormPage() {
 
   const { data: deptsData } = useQuery({
     queryKey: ['hr', 'departments', 'select'],
-    queryFn: () => fetch('/api/v1/hr/departments').then((r) => r.json()),
+    queryFn: () => departmentsApi.list({ per_page: 500 }),
   });
 
   const save = useMutation({

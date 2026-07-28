@@ -14,13 +14,15 @@ export const purchaseRequestsApi = {
   delete: (id: string) => client.delete(`/purchasing/purchase-requests/${id}`),
   submit: (id: string) =>
     client.patch<PurchaseRequest>(`/purchasing/purchase-requests/${id}/submit`).then((r) => r.data),
+  acknowledgeBudget: (id: string) =>
+    client.patch<PurchaseRequest>(`/purchasing/purchase-requests/${id}/acknowledge-budget`).then((r) => r.data),
   approve: (id: string, remarks?: string) =>
     client.patch<PurchaseRequest>(`/purchasing/purchase-requests/${id}/approve`, { remarks }).then((r) => r.data),
   reject: (id: string, reason: string) =>
     client.patch<PurchaseRequest>(`/purchasing/purchase-requests/${id}/reject`, { reason }).then((r) => r.data),
   cancel: (id: string) =>
     client.patch<PurchaseRequest>(`/purchasing/purchase-requests/${id}/cancel`).then((r) => r.data),
-  convert: (id: string, vendor_map: Record<number, number>) =>
+  convert: (id: string, vendor_map: Record<string, string>) =>
     client.post<PurchaseOrder[]>(`/purchasing/purchase-requests/${id}/convert`, { vendor_map }).then((r) => r.data),
 
   /** ADV6 — Bulk approve multiple PRs at once. Accepts hash ID strings. */

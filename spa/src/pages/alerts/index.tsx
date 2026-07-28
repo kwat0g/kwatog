@@ -126,7 +126,7 @@ export default function AlertsListPage() {
             </button>
           );
         })}
-        <span className="text-2xs text-subtle ml-2">
+        <span className="text-2xs text-text-subtle ml-2">
           Showing {filters.is_dismissed ? 'dismissed' : 'active'} alerts
         </span>
         <button
@@ -170,8 +170,8 @@ export default function AlertsListPage() {
                 <h2 className="text-2xs uppercase tracking-wider text-muted font-medium mb-2 flex items-center gap-2">
                   <SevIcon size={11} />
                   <span>{sev}</span>
-                  <span className="font-mono tabular-nums text-subtle">·</span>
-                  <span className="font-mono tabular-nums text-subtle">{items.length}</span>
+                  <span className="font-mono tabular-nums text-text-subtle">·</span>
+                  <span className="font-mono tabular-nums text-text-subtle">{items.length}</span>
                 </h2>
                 <div className="rounded-md border border-subtle divide-y divide-subtle bg-canvas">
                   {items.map((a) => {
@@ -199,18 +199,18 @@ export default function AlertsListPage() {
                               <Chip variant="info">new</Chip>
                             )}
                             {a.is_dismissed && a.dismissed_at && (
-                              <span className="text-2xs text-subtle">
+                              <span className="text-2xs text-text-subtle">
                                 dismissed {formatDateTime(a.dismissed_at)}
                               </span>
                             )}
                           </div>
                           <p className="text-xs text-muted mt-0.5">{a.message}</p>
                           {a.entity && (
-                            <p className="text-2xs text-subtle font-mono mt-0.5">
+                            <p className="text-2xs text-text-subtle font-mono mt-0.5">
                               {a.entity.type} · {a.entity.label}
                             </p>
                           )}
-                          <p className="text-2xs text-subtle font-mono tabular-nums mt-0.5">
+                          <p className="text-2xs text-text-subtle font-mono tabular-nums mt-0.5">
                             {formatDateTime(a.created_at)}
                           </p>
                         </div>

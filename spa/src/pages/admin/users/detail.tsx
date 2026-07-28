@@ -225,27 +225,27 @@ export default function AdminUserDetailPage() {
                 </Link>
               </div>
               <div className="text-muted">
-                <span className="text-subtle">Employee No: </span>
+                <span className="text-text-subtle">Employee No: </span>
                 <span className="font-mono tabular-nums">
                   {user.employee.employee_no}
                 </span>
               </div>
               {user.employee.department && (
                 <div className="text-muted">
-                  <span className="text-subtle">Department: </span>
+                  <span className="text-text-subtle">Department: </span>
                   {user.employee.department.name}
                 </div>
               )}
             </div>
           ) : (
-            <p className="text-sm text-subtle">No linked employee.</p>
+            <p className="text-sm text-text-subtle">No linked employee.</p>
           )}
         </Panel>
 
         {/* Login history */}
         <Panel title="Recent Logins" className="lg:col-span-3">
           {user.recent_logins.length === 0 ? (
-            <p className="text-sm text-subtle">No login attempts recorded.</p>
+            <p className="text-sm text-text-subtle">No login attempts recorded.</p>
           ) : (
             <table className="w-full text-xs">
               <thead>

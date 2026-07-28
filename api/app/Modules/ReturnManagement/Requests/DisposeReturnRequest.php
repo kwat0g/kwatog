@@ -20,6 +20,7 @@ class DisposeReturnRequest extends FormRequest
             'dispositions.*.item_id'     => ['required', 'string'],
             'dispositions.*.disposition' => ['required', 'string', 'in:scrap,rework,restock,return_to_supplier'],
             'dispositions.*.notes'       => ['nullable', 'string', 'max:500'],
+            'create_replacement_po'      => ['sometimes', 'boolean'],
         ];
     }
 }

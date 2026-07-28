@@ -4,15 +4,17 @@ declare(strict_types=1);
 
 namespace App\Modules\SupplyChain\Services;
 
-use App\Common\Support\SearchOperator;
+use App\Common\Services\ChainBroadcaster;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
+use App\Common\Support\SearchOperator;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Services\InvoiceService;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
-use App\Modules\Quality\Enums\InspectionEntityType;
+use App\Modules\CRM\Services\SalesOrderService;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
 use App\Modules\Quality\Models\Inspection;
@@ -56,12 +58,19 @@ class DeliveryService
             'driver:id,name,role_id',
         ]);
 
-        foreach (['status'] as $f) if (! empty($filters[$f])) $q->where($f, $filters[$f]);
-        if (! empty($filters['sales_order_id'])) $q->where('sales_order_id', (int) $filters['sales_order_id']);
+        foreach (['status'] as $f) {
+            if (! empty($filters[$f])) {
+                $q->where($f, $filters[$f]);
+            }
+        }
+        if (! empty($filters['sales_order_id'])) {
+            $q->where('sales_order_id', (int) $filters['sales_order_id']);
+        }
         if (! empty($filters['search'])) {
             $term = '%'.trim((string) $filters['search']).'%';
             $q->where(fn (Builder $b) => $b->where('delivery_number', SearchOperator::like(), $term));
         }
+
         return $q->orderByDesc('id')->paginate(min((int) ($filters['per_page'] ?? 20), 100));
     }
 
@@ -84,6 +93,7 @@ class DeliveryService
             'proofs' => fn ($q) => $q->orderByDesc('created_at'),
             'proofs.uploader:id,name',
         ]);
+
         return $d;
     }
 
@@ -114,13 +124,13 @@ class DeliveryService
         return DB::transaction(function () use ($so, $data, $by) {
             $delivery = Delivery::create([
                 'delivery_number' => $this->sequences->generate('delivery'),
-                'sales_order_id'  => $so->id,
-                'vehicle_id'      => $data['vehicle_id'] ?? null,
-                'driver_id'       => $data['driver_id'] ?? null,
-                'status'          => DeliveryStatus::Scheduled->value,
-                'scheduled_date'  => $data['scheduled_date'],
-                'notes'           => $data['notes'] ?? null,
-                'created_by'      => $by->id,
+                'sales_order_id' => $so->id,
+                'vehicle_id' => $data['vehicle_id'] ?? null,
+                'driver_id' => $data['driver_id'] ?? null,
+                'status' => DeliveryStatus::Scheduled->value,
+                'scheduled_date' => $data['scheduled_date'],
+                'notes' => $data['notes'] ?? null,
+                'created_by' => $by->id,
             ]);
 
             foreach ($data['items'] as $row) {
@@ -135,11 +145,11 @@ class DeliveryService
                 );
 
                 DeliveryItem::create([
-                    'delivery_id'         => $delivery->id,
+                    'delivery_id' => $delivery->id,
                     'sales_order_item_id' => $soItem->id,
-                    'inspection_id'       => $inspectionId,
-                    'quantity'            => (string) $row['quantity'],
-                    'unit_price'          => (string) $soItem->unit_price,
+                    'inspection_id' => $inspectionId,
+                    'quantity' => (string) $row['quantity'],
+                    'unit_price' => (string) $soItem->unit_price,
                 ]);
             }
 
@@ -162,6 +172,7 @@ class DeliveryService
                 || ($insp->status instanceof InspectionStatus ? $insp->status : InspectionStatus::from((string) $insp->status)) !== InspectionStatus::Passed) {
                 throw new RuntimeException("Supplied inspection #{$suppliedInspectionId} is not a passed outgoing inspection for the product.");
             }
+
             return (int) $insp->id;
         }
 
@@ -175,6 +186,7 @@ class DeliveryService
         if (! $latest) {
             throw new RuntimeException("Cannot ship — no passed outgoing inspection found for product #{$productId}.");
         }
+
         return (int) $latest->id;
     }
 
@@ -186,9 +198,15 @@ class DeliveryService
         }
         $patch = ['status' => $next->value];
         $now = now();
-        if ($next === DeliveryStatus::InTransit && ! $d->departed_at)  $patch['departed_at']  = $now;
-        if ($next === DeliveryStatus::Delivered && ! $d->delivered_at) $patch['delivered_at'] = $now;
-        if ($note) $patch['notes'] = trim(($d->notes ? $d->notes."\n" : '').'['.$next->value.'] '.$note);
+        if ($next === DeliveryStatus::InTransit && ! $d->departed_at) {
+            $patch['departed_at'] = $now;
+        }
+        if ($next === DeliveryStatus::Delivered && ! $d->delivered_at) {
+            $patch['delivered_at'] = $now;
+        }
+        if ($note) {
+            $patch['notes'] = trim(($d->notes ? $d->notes."\n" : '').'['.$next->value.'] '.$note);
+        }
         $d->forceFill($patch)->save();
 
         // Mark the vehicle in-use / available based on transition.
@@ -205,7 +223,7 @@ class DeliveryService
 
         // Series C — Task C4. Real-time chain progress for the delivery
         // detail page on the SPA.
-        app(\App\Common\Services\ChainBroadcaster::class)
+        app(ChainBroadcaster::class)
             ->broadcastFor($d->fresh(), $next->value, auth()->user());
 
         return $this->show($d);
@@ -227,6 +245,9 @@ class DeliveryService
         // rollback cannot orphan a file that was written inside the transaction.
         // If the transaction fails we delete the file and re-throw.
         $path = $file->store("deliveries/{$d->id}", 'local');
+        if ($path === false) {
+            throw new RuntimeException('Unable to store receipt photo.');
+        }
 
         try {
             return DB::transaction(function () use ($d, $file, $path, $by) {
@@ -235,15 +256,15 @@ class DeliveryService
                 // ADV7 — also register the legacy upload as a DeliveryProof so the
                 // confirmation guard sees it. Falls back to the delivery creator
                 // if no user is supplied.
-                \App\Modules\SupplyChain\Models\DeliveryProof::create([
+                DeliveryProof::create([
                     'delivery_id' => $d->id,
-                    'proof_type'  => 'photo',
-                    'file_name'   => $file->getClientOriginalName() ?: basename($path),
-                    'file_path'   => $path,
-                    'file_size'   => $file->getSize() ?: null,
-                    'mime_type'   => $file->getMimeType(),
+                    'proof_type' => 'photo',
+                    'file_name' => $file->getClientOriginalName() ?: basename($path),
+                    'file_path' => $path,
+                    'file_size' => $file->getSize() ?: null,
+                    'mime_type' => $file->getMimeType(),
                     'uploaded_by' => $by?->id ?? $d->created_by,
-                    'notes'       => 'Quick receipt photo',
+                    'notes' => 'Quick receipt photo',
                 ]);
 
                 return $this->show($d);
@@ -307,14 +328,22 @@ class DeliveryService
             }
 
             $patch = [
-                'status'       => DeliveryStatus::Confirmed->value,
+                'status' => DeliveryStatus::Confirmed->value,
                 'confirmed_at' => now(),
                 'confirmed_by' => $by->id,
             ];
-            if (! empty($receiverData['receiver_name']))     $patch['receiver_name']     = $receiverData['receiver_name'];
-            if (! empty($receiverData['receiver_position'])) $patch['receiver_position'] = $receiverData['receiver_position'];
-            if (! empty($receiverData['delivery_remarks']))  $patch['delivery_remarks']  = $receiverData['delivery_remarks'];
-            if (! $locked->received_at) $patch['received_at'] = now();
+            if (! empty($receiverData['receiver_name'])) {
+                $patch['receiver_name'] = $receiverData['receiver_name'];
+            }
+            if (! empty($receiverData['receiver_position'])) {
+                $patch['receiver_position'] = $receiverData['receiver_position'];
+            }
+            if (! empty($receiverData['delivery_remarks'])) {
+                $patch['delivery_remarks'] = $receiverData['delivery_remarks'];
+            }
+            if (! $locked->received_at) {
+                $patch['received_at'] = now();
+            }
             $locked->forceFill($patch)->save();
             // Keep $d in sync with the locked copy so callers see the new state.
             $d->forceFill($patch);
@@ -326,7 +355,7 @@ class DeliveryService
             } catch (\Throwable $e) {
                 Log::warning('CoC auto-attach failed on delivery confirm', [
                     'delivery_id' => $locked->id,
-                    'error'       => $e->getMessage(),
+                    'error' => $e->getMessage(),
                 ]);
             }
 
@@ -335,7 +364,7 @@ class DeliveryService
             // so Postgres MVCC sees the in-txn write when we aggregate below.
             if ($locked->sales_order_id) {
                 $coverage = $this->computeSalesOrderDeliveryCoverage((int) $locked->sales_order_id);
-                $soService = app(\App\Modules\CRM\Services\SalesOrderService::class);
+                $soService = app(SalesOrderService::class);
                 if ($coverage === 'full') {
                     $soService->markDelivered((int) $locked->sales_order_id);
                 } elseif ($coverage === 'partial') {
@@ -356,7 +385,7 @@ class DeliveryService
                 // failure is visible and manual invoicing can be triaged.
                 Log::error('Draft invoice creation failed on delivery confirm', [
                     'delivery_id' => $locked->id,
-                    'error'       => $e->getMessage(),
+                    'error' => $e->getMessage(),
                 ]);
 
                 // C-1 — surface the failure to AR clerks so manual invoicing can
@@ -369,7 +398,7 @@ class DeliveryService
                     } catch (\Throwable $notifyError) {
                         Log::warning('Auto-invoice failure notification dispatch failed', [
                             'delivery_id' => $deliveryForNotify->id,
-                            'error'       => $notifyError->getMessage(),
+                            'error' => $notifyError->getMessage(),
                         ]);
                     }
                 });
@@ -382,7 +411,7 @@ class DeliveryService
             DB::afterCommit(function () use ($delivery, $invoiceId, $by) {
                 DeliveryConfirmed::dispatch($delivery, $invoiceId);
                 // Series C — Task C4. Real-time chain progress.
-                app(\App\Common\Services\ChainBroadcaster::class)
+                app(ChainBroadcaster::class)
                     ->broadcastFor($delivery, DeliveryStatus::Confirmed->value, $by);
             });
 
@@ -445,36 +474,45 @@ class DeliveryService
             }
 
             $path = "deliveries/{$delivery->id}/proofs/coc-{$cocNumber}.pdf";
-            Storage::disk('local')->put($path, $built['contents']);
+            if (! Storage::disk('local')->put($path, $built['contents'])) {
+                throw new RuntimeException('Unable to store the generated certificate of conformance.');
+            }
 
-            DeliveryProof::create([
-                'delivery_id' => $delivery->id,
-                'proof_type'  => 'coc',
-                'file_name'   => $built['file_name'],
-                'file_path'   => $path,
-                'file_size'   => strlen($built['contents']),
-                'mime_type'   => 'application/pdf',
-                'uploaded_by' => $by->id,
-                'notes'       => "Auto-generated from inspection #{$inspection->inspection_number}",
-            ]);
+            try {
+                DeliveryProof::create([
+                    'delivery_id' => $delivery->id,
+                    'proof_type' => 'coc',
+                    'file_name' => $built['file_name'],
+                    'file_path' => $path,
+                    'file_size' => strlen($built['contents']),
+                    'mime_type' => 'application/pdf',
+                    'uploaded_by' => $by->id,
+                    'notes' => "Auto-generated from inspection #{$inspection->inspection_number}",
+                ]);
+            } catch (\Throwable $e) {
+                Storage::disk('local')->delete($path);
+                throw $e;
+            }
         }
     }
 
     private function createDraftInvoice(Delivery $d, User $by): ?int
     {
-        $svc = app(\App\Modules\Accounting\Services\InvoiceService::class);
+        $svc = app(InvoiceService::class);
         $d->loadMissing(['salesOrder.customer', 'items.salesOrderItem.product']);
-        if (! $d->salesOrder?->customer) return null;
+        if (! $d->salesOrder?->customer) {
+            return null;
+        }
 
         // C-1 — Resolve the default revenue account once per call. Falls back
         // to '4010' (Sales Revenue) if the setting was never seeded.
-        $defaultCode      = (string) $this->settings->get('accounting.default_sales_revenue_account_code', '4010');
+        $defaultCode = (string) $this->settings->get('accounting.default_sales_revenue_account_code', '4010');
         $defaultAccountId = $defaultCode === ''
             ? null
             : Account::query()->where('code', $defaultCode)->value('id');
 
         $customerHashId = app('hashids')->encode($d->salesOrder->customer_id);
-        $hashids        = app('hashids');
+        $hashids = app('hashids');
 
         $items = $d->items->map(function (DeliveryItem $i) use ($defaultAccountId, $hashids) {
             $revenueId = $i->salesOrderItem?->product?->revenue_account_id
@@ -486,22 +524,22 @@ class DeliveryService
 
             return [
                 'revenue_account_id' => $hashids->encode((int) $revenueId),
-                'description'        => $i->salesOrderItem?->product?->name ?? 'Delivery line',
-                'quantity'           => (string) $i->quantity,
-                'unit_price'         => (string) $i->unit_price,
+                'description' => $i->salesOrderItem?->product?->name ?? 'Delivery line',
+                'quantity' => (string) $i->quantity,
+                'unit_price' => (string) $i->unit_price,
             ];
         })->all();
 
         $invoice = $svc->create([
-            'customer_id'    => $customerHashId,
-            'date'           => now()->toDateString(),
-            'is_vatable'     => true,
-            'items'          => $items,
-            'remarks'        => "Auto-generated from delivery {$d->delivery_number}",
+            'customer_id' => $customerHashId,
+            'date' => now()->toDateString(),
+            'is_vatable' => true,
+            'items' => $items,
+            'remarks' => "Auto-generated from delivery {$d->delivery_number}",
             // C-2 — link the invoice back to the parent SO + this delivery so
             // InvoiceService::finalize can promote the SO to 'invoiced'.
             'sales_order_id' => $d->sales_order_id ? app('hashids')->encode((int) $d->sales_order_id) : null,
-            'delivery_id'    => app('hashids')->encode((int) $d->id),
+            'delivery_id' => app('hashids')->encode((int) $d->id),
         ], $by);
 
         return (int) $invoice->id;
@@ -526,11 +564,11 @@ class DeliveryService
         }
 
         $this->notifications->send($recipients, 'invoice.auto_failed', [
-            'title'       => "Auto-invoice failed for delivery {$d->delivery_number}",
-            'message'     => 'Auto-invoice could not be created automatically. Please create the invoice manually.',
-            'link_to'     => "/supply-chain/deliveries/{$d->hash_id}",
+            'title' => "Auto-invoice failed for delivery {$d->delivery_number}",
+            'message' => 'Auto-invoice could not be created automatically. Please create the invoice manually.',
+            'link_to' => "/supply-chain/deliveries/{$d->hash_id}",
             'entity_type' => 'delivery',
-            'entity_id'   => $d->hash_id,
+            'entity_id' => $d->hash_id,
         ]);
     }
 
@@ -543,9 +581,17 @@ class DeliveryService
         if ($current === DeliveryStatus::Confirmed) {
             throw new RuntimeException('Cannot delete a confirmed delivery (an invoice may be attached).');
         }
-        DB::transaction(function () use ($d) {
-            if ($d->receipt_photo_path) Storage::disk('local')->delete($d->receipt_photo_path);
+        $paths = DeliveryProof::query()
+            ->where('delivery_id', $d->id)
+            ->pluck('file_path')
+            ->push($d->receipt_photo_path)
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+        DB::transaction(function () use ($d, $paths) {
             $d->delete();
+            DB::afterCommit(fn () => Storage::disk('local')->delete($paths));
         });
     }
 

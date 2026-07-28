@@ -234,7 +234,7 @@ export default function WarehouseDashboard() {
   const zoneUtilChartData = (q.data as unknown as WarehouseDashboardData)?.panels?.zone_utilization?.map(z => ({
     name: z.name,
     value: z.percent,
-    color: z.percent >= 90 ? 'var(--color-danger)' : z.percent >= 75 ? 'var(--color-warning)' : 'var(--color-success)',
+    color: z.percent >= 90 ? 'var(--danger)' : z.percent >= 75 ? 'var(--warning)' : 'var(--success)',
   })) ?? [];
 
   /* ─── LOADING ─── */

@@ -39,7 +39,7 @@ export default function MobileMaintenanceList() {
   return (
     <div className="space-y-3">
       {/* Tab bar */}
-      <div className="flex rounded-md bg-zinc-100 dark:bg-zinc-800 p-1">
+      <div className="flex rounded-md bg-elevated p-1">
         <TabButton active={tab === 'my_assigned'} onClick={() => setTab('my_assigned')}>
           My Assigned
         </TabButton>
@@ -55,7 +55,7 @@ export default function MobileMaintenanceList() {
           type="button"
           onClick={() => refetch()}
           disabled={isFetching}
-          className="inline-flex items-center gap-1.5 text-sm text-zinc-600 dark:text-zinc-400 min-h-[44px] px-3 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 text-sm text-secondary min-h-[44px] px-3 rounded focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 disabled:opacity-50"
         >
           <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
           Refresh
@@ -64,7 +64,7 @@ export default function MobileMaintenanceList() {
 
       {/* Empty state */}
       {orders.length === 0 && (
-        <div className="py-12 text-center text-zinc-500">
+        <div className="py-12 text-center text-muted">
           <p className="text-lg">
             {tab === 'my_assigned' ? 'No work orders assigned to you.' : 'No open work orders.'}
           </p>
@@ -72,7 +72,7 @@ export default function MobileMaintenanceList() {
           <button
             type="button"
             onClick={() => refetch()}
-            className="mt-4 inline-flex items-center gap-2 text-sm text-indigo-600 dark:text-indigo-400 min-h-[44px] px-4 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+            className="mt-4 inline-flex items-center gap-2 text-sm text-accent min-h-[44px] px-4 rounded focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
           >
             <RefreshCw className="w-4 h-4" />
             Refresh
@@ -85,7 +85,7 @@ export default function MobileMaintenanceList() {
         <Link
           key={wo.id}
           to={`/maintenance/mobile/${wo.id}`}
-          className="block rounded-md border border-zinc-200 dark:border-zinc-800 bg-canvas dark:bg-zinc-900 p-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 active:bg-zinc-50 dark:active:bg-zinc-800"
+          className="block rounded-md border border-default bg-canvas p-4 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 active:bg-surface"
         >
           {/* Header: MWO number + priority */}
           <div className="flex items-center justify-between">
@@ -97,14 +97,14 @@ export default function MobileMaintenanceList() {
           <div className="mt-1.5 text-sm font-medium">
             {wo.maintainable?.name ?? 'Unknown target'}
           </div>
-          <div className="mt-0.5 flex items-center gap-2 text-xs text-zinc-500">
+          <div className="mt-0.5 flex items-center gap-2 text-xs text-muted">
             <span className="capitalize">{wo.type}</span>
             <span>&middot;</span>
             <StatusChip status={wo.status} />
           </div>
 
           {/* Assignee + due info */}
-          <div className="mt-3 flex items-center justify-between text-xs text-zinc-500">
+          <div className="mt-3 flex items-center justify-between text-xs text-muted">
             <span>
               {wo.assignee
                 ? `Assigned: ${wo.assignee.name}`
@@ -138,10 +138,10 @@ function TabButton({
     <button
       type="button"
       onClick={onClick}
-      className={`flex-1 text-sm font-medium py-2 rounded-md min-h-[44px] transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
+      className={`flex-1 text-sm font-medium py-2 rounded-md min-h-[44px] transition-colors focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 ${
         active
-          ? 'bg-canvas dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100'
-          : 'text-zinc-500 dark:text-zinc-400'
+          ? 'bg-canvas text-primary'
+          : 'text-muted'
       }`}
     >
       {children}
@@ -187,9 +187,9 @@ function Skeleton() {
   return (
     <div role="status" aria-live="polite" aria-busy="true" className="space-y-3 animate-pulse">
       <span className="sr-only">Loading work orders...</span>
-      <div className="h-10 rounded-md bg-zinc-100 dark:bg-zinc-800" />
+      <div className="h-10 rounded-md bg-elevated" />
       {[0, 1, 2, 3].map(i => (
-        <div key={i} className="h-28 rounded-md bg-zinc-100 dark:bg-zinc-800" />
+        <div key={i} className="h-28 rounded-md bg-elevated" />
       ))}
     </div>
   );
@@ -202,7 +202,7 @@ function ErrorRetry({ onRetry }: { onRetry: () => void }) {
       <button
         type="button"
         onClick={onRetry}
-        className="text-sm underline min-h-[44px] px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 rounded"
+        className="text-sm underline min-h-[44px] px-3 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 rounded"
       >
         Try again
       </button>

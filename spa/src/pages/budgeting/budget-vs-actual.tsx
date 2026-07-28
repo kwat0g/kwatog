@@ -102,10 +102,10 @@ export default function BudgetVsActualPage() {
                       formatter={(v: number) => formatPeso(v)}
                     />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Bar dataKey="budgeted" name="Budgeted" fill="var(--color-info, #3b82f6)" radius={[3, 3, 0, 0]} maxBarSize={32} />
+                    <Bar dataKey="budgeted" name="Budgeted" fill="var(--info, #3b82f6)" radius={[3, 3, 0, 0]} maxBarSize={32} />
                     <Bar dataKey="actual" name="Actual" radius={[3, 3, 0, 0]} maxBarSize={32}>
                       {chartData.map((entry, i) => (
-                        <Cell key={i} fill={entry.actual > entry.budgeted ? 'var(--color-danger, #ef4444)' : 'var(--color-success, #22c55e)'} />
+                        <Cell key={i} fill={entry.actual > entry.budgeted ? 'var(--danger, #ef4444)' : 'var(--success, #22c55e)'} />
                       ))}
                     </Bar>
                   </BarChart>

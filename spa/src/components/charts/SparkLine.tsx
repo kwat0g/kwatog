@@ -9,7 +9,7 @@ interface SparkLineProps {
 
 export function SparkLine({
   data,
-  color = 'var(--color-accent)',
+  color = 'var(--accent)',
   height = 24,
   width = 80,
 }: SparkLineProps) {

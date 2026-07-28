@@ -32,8 +32,7 @@ class DemoAccountSeeder extends Seeder
         ['email' => 'maintenance@ogami.test', 'name' => 'Juan Bautista',        'role' => 'maintenance_tech',   'dept' => 'MAINT'],
         ['email' => 'impex@ogami.test',       'name' => 'Lisa Yamamoto',        'role' => 'impex_officer',      'dept' => 'IMPEX'],
         ['email' => 'depthead@ogami.test',    'name' => 'Roberto Santos',       'role' => 'department_head',    'dept' => 'PROD'],
-        ['email' => 'purchasing@ogami.test',  'name' => 'Elena Cruz',           'role' => 'purchasing_officer', 'dept' => 'PUR'],
-        ['email' => 'employee@ogami.test',    'name' => 'Manuel Cruz',          'role' => 'employee',           'dept' => 'PROD'],
+        ['email' => 'driver@ogami.test',      'name' => 'Nestor Flores',        'role' => 'driver',             'dept' => 'WH'],
     ];
 
     public function run(): void

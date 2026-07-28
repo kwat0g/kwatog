@@ -13,7 +13,7 @@ const API_URL = '/api/v1/dashboards/quality';
 const PAGE_URL = '/dashboard/quality';
 
 function makeQualityData(overrides: Record<string, unknown> = {}): Record<string, unknown> {
-  return {
+  const base = {
     kpis: [
       { label: 'Pending Inspections', value: '8', unit: 'count' },
       { label: 'Pass Rate Today', value: '94.5', unit: 'pct' },
@@ -47,10 +47,15 @@ function makeQualityData(overrides: Record<string, unknown> = {}): Record<string
           { year: 2026, month: 12, value: 2.1, confidence: 68 },
         ],
         trend: 'down',
-        kpi: { label: 'Projected Defect Rate', value: '2.3%', unit: 'pct', trend: 'down' },
+        kpi: { label: 'Projected Defect Rate', value: '2.3', unit: 'pct', trend: 'down' },
       },
     },
+  };
+
+  return {
+    ...base,
     ...overrides,
+    panels: { ...base.panels, ...((overrides.panels as Record<string, unknown>) ?? {}) },
   };
 }
 
@@ -64,10 +69,10 @@ test.describe('Quality Dashboard — Defect Rate Forecast Panel', () => {
     await expect(page.getByText('QC Dashboard')).toBeVisible();
     await expect(page.getByText('Defect Rate Forecast (6 months)')).toBeVisible();
     await expect(page.getByText('Projected Defect Rate')).toBeVisible();
-    await expect(page.getByText('2.3%')).toBeVisible();
+    await expect(page.getByText('Projected Defect Rate').locator('..')).toContainText('2.3%');
     await expect(page.locator('text=down').first()).toBeVisible();
-    await expect(page.getByText('Historical')).toBeVisible();
-    await expect(page.getByText('Forecast')).toBeVisible();
+    await expect(page.getByText('Historical', { exact: true })).toBeVisible();
+    await expect(page.getByText('Forecast', { exact: true })).toBeVisible();
   });
 
   test('shows stable trend when defect rate is consistent', async ({ page }) => {
@@ -81,7 +86,7 @@ test.describe('Quality Dashboard — Defect Rate Forecast Panel', () => {
           ],
           forecast: [{ year: 2026, month: 4, value: 2.8, confidence: 80 }],
           trend: 'stable',
-          kpi: { label: 'Projected Defect Rate', value: '2.8%', unit: 'pct', trend: 'stable' },
+          kpi: { label: 'Projected Defect Rate', value: '2.8', unit: 'pct', trend: 'stable' },
         },
       },
     });
@@ -107,7 +112,7 @@ test.describe('Quality Dashboard — Defect Rate Forecast Panel', () => {
             { year: 2026, month: 8, value: 5.0, confidence: 82 },
           ],
           trend: 'up',
-          kpi: { label: 'Projected Defect Rate', value: '4.9%', unit: 'pct', trend: 'up' },
+          kpi: { label: 'Projected Defect Rate', value: '4.9', unit: 'pct', trend: 'up' },
         },
       },
     });

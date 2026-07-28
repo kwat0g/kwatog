@@ -80,6 +80,7 @@ class ReturnRequestController extends Controller
             'purchaseOrder',
             'bill',
             'creditNote',
+            'replacementPurchaseOrder',
             'creditMemo',
             'creator:id,name',
             'approver:id,name',
@@ -115,6 +116,9 @@ class ReturnRequestController extends Controller
             'items.*.unit_price'  => ['nullable', 'numeric', 'min:0'],
             'items.*.reason'      => ['nullable', 'string', 'max:500'],
             'items.*.condition'   => ['nullable', 'string', 'max:30'],
+            'items.*.source_po_item_id' => ['nullable', 'exists:purchase_order_items,id'],
+            'items.*.source_grn_item_id' => ['nullable', 'exists:grn_items,id'],
+            'items.*.source_bill_item_id' => ['nullable', 'exists:bill_items,id'],
         ]);
 
         $rma = $this->service->create($validated, $request->user());
@@ -176,7 +180,12 @@ class ReturnRequestController extends Controller
     public function dispose(DisposeReturnRequest $request, ReturnRequest $returnRequest): ReturnRequestResource
     {
         return new ReturnRequestResource(
-            $this->service->dispose($returnRequest, $request->validated()['dispositions'], $request->user())
+            $this->service->dispose(
+                $returnRequest,
+                $request->validated()['dispositions'],
+                $request->user(),
+                (bool) ($request->validated()['create_replacement_po'] ?? false),
+            )
         );
     }
 

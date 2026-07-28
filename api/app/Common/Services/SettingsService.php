@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Common\Services;
 
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -39,7 +40,8 @@ class SettingsService
 
     private function fetch(string $key, mixed $default): mixed
     {
-        $row = \DB::table('settings')->where('key', $key)->first();
+        $row = DB::table('settings')->where('key', $key)->first();
+
         return $row ? json_decode($row->value, true) : $default;
     }
 
@@ -49,9 +51,9 @@ class SettingsService
             return;
         }
 
-        $existing = \DB::table('settings')->where('key', $key)->first();
+        $existing = DB::table('settings')->where('key', $key)->first();
         $payload = [
-            'value'      => json_encode($value),
+            'value' => json_encode($value),
             'updated_at' => now(),
         ];
         if ($group !== null) {
@@ -65,12 +67,12 @@ class SettingsService
         }
 
         if ($existing) {
-            \DB::table('settings')->where('key', $key)->update($payload);
+            DB::table('settings')->where('key', $key)->update($payload);
         } else {
-            \DB::table('settings')->insert([
+            DB::table('settings')->insert([
                 ...$payload,
-                'key'        => $key,
-                'group'      => $group ?? 'general',
+                'key' => $key,
+                'group' => $group ?? 'general',
                 'created_at' => now(),
             ]);
         }
@@ -92,7 +94,7 @@ class SettingsService
             return [];
         }
 
-        return \DB::table('settings')->where('group', $group)->get()
+        return DB::table('settings')->where('group', $group)->get()
             ->mapWithKeys(fn ($row) => [$row->key => json_decode($row->value, true)])
             ->all();
     }

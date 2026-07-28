@@ -53,14 +53,15 @@ export default function TrainingMatrixPage() {
       departmentId ? { department_id: departmentId } : undefined,
     ),
   });
+  const skills = data?.skills;
 
   // Group skills by category for header display
   const skillCategories = useMemo(() => {
-    if (!data?.skills) return [];
-    const groups: { category: string; skills: typeof data.skills }[] = [];
+    if (!skills) return [];
+    const groups: { category: string; skills: typeof skills }[] = [];
     let currentCategory = '';
-    let currentGroup: typeof data.skills = [];
-    for (const skill of data.skills) {
+    let currentGroup: typeof skills = [];
+    for (const skill of skills) {
       const cat = skill.category || 'Uncategorized';
       if (cat !== currentCategory) {
         if (currentGroup.length > 0) {
@@ -76,7 +77,7 @@ export default function TrainingMatrixPage() {
       groups.push({ category: currentCategory, skills: currentGroup });
     }
     return groups;
-  }, [data?.skills]);
+  }, [skills]);
 
   const coveragePct = data?.summary
     ? data.summary.total_employees * data.summary.total_skills > 0

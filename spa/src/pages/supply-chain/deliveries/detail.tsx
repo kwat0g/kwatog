@@ -5,6 +5,7 @@ import { Link, useParams } from 'react-router-dom';
 import { Truck, Camera, Check, ArrowRight, Tag, Trash2, FileText, Image as ImageIcon, ShieldCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { AxiosError } from 'axios';
+import { downloadAuthenticatedFile } from '@/api/download';
 import { deliveriesApi, deliveryProofsApi } from '@/api/supply-chain';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -287,14 +288,21 @@ export default function DeliveryDetailPage() {
                 {proofs.map((p) => (
                   <li key={p.id} className="border border-subtle rounded-md overflow-hidden bg-canvas">
                     {p.is_image && p.view_url ? (
-                      <a href={p.view_url} target="_blank" rel="noopener noreferrer" className="block aspect-video bg-subtle">
+                      <button type="button" onClick={() => void downloadAuthenticatedFile(p.view_url!, {
+                        openInNewTab: true,
+                        errorMessage: 'Failed to open the delivery proof.',
+                      })} className="block w-full aspect-video bg-subtle">
                         <img src={p.view_url} alt={p.file_name} className="w-full h-full object-cover" />
-                      </a>
+                      </button>
                     ) : (
-                      <a href={p.view_url ?? '#'} target="_blank" rel="noopener noreferrer"
-                         className="flex items-center justify-center aspect-video bg-subtle text-muted hover:text-accent">
+                      <button type="button" disabled={!p.view_url}
+                        onClick={() => p.view_url && void downloadAuthenticatedFile(p.view_url, {
+                          openInNewTab: true,
+                          errorMessage: 'Failed to open the delivery proof.',
+                        })}
+                        className="flex w-full items-center justify-center aspect-video bg-subtle text-muted hover:text-accent">
                         <FileText size={32} />
-                      </a>
+                      </button>
                     )}
                     <div className="px-2.5 py-2 text-xs">
                       <div className="flex items-center justify-between gap-2">
@@ -398,9 +406,12 @@ export default function DeliveryDetailPage() {
         <div className="space-y-4">
           {data.receipt_photo_url && (
             <Panel title="Quick receipt photo">
-              <a href={data.receipt_photo_url} target="_blank" rel="noopener noreferrer">
+              <button type="button" onClick={() => void downloadAuthenticatedFile(data.receipt_photo_url!, {
+                openInNewTab: true,
+                errorMessage: 'Failed to open the receipt photo.',
+              })} className="block w-full">
                 <img src={data.receipt_photo_url} alt="Receipt" className="w-full rounded-md border border-default" />
-              </a>
+              </button>
             </Panel>
           )}
           {data.invoice && (

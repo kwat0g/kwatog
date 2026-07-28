@@ -57,7 +57,16 @@ const draftSO = {
   date: '2026-06-04',
   delivery_date: '2026-06-20',
   total_amount: '150000.00',
-  lines: [],
+  subtotal: '133928.57',
+  vat_amount: '16071.43',
+  payment_terms_days: 30,
+  delivery_terms: null,
+  notes: null,
+  item_count: 0,
+  items: [],
+  work_orders: [],
+  created_at: '2026-06-04T08:00:00Z',
+  updated_at: '2026-06-04T08:00:00Z',
   mrp_plan: null,
 };
 
@@ -70,11 +79,20 @@ const draftInvoice = {
   display_status: 'Draft',
   amount_paid: '0.00',
   balance: '150000.00',
+  subtotal: '133928.57',
+  vat_amount: '16071.43',
+  total_amount: '150000.00',
+  is_vatable: true,
+  is_overdue: false,
+  aging_bucket: 'current',
+  remarks: null,
   date: '2026-06-04',
   due_date: '2026-07-04',
   customer: { id: 'cAb3Zq', name: 'Toyota Motor Philippines' },
   journal_entry: null,
   payments: [],
+  items: [],
+  collections: [],
 };
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -98,12 +116,13 @@ test.describe('Order-to-Cash golden path', () => {
     await page.goto('/crm/sales-orders');
     await page.waitForLoadState('networkidle');
 
-    await expect(page.getByText('SO-202606-0001')).toBeVisible();
-    await expect(page.getByText('Draft').first()).toBeVisible();
+    await expect(page.getByRole('link', { name: 'SO-202606-0001' })).toBeVisible();
+    await expect(page.getByRole('row', { name: /SO-202606-0001/ })).toContainText('Draft');
   });
 
   test('confirms a sales order', async ({ page }) => {
     await mockAuth(page, salesUser);
+    let confirmed = false;
 
     await page.route(`**/api/v1/crm/sales-orders/${SO_ID}`, async (route) => {
       await route.fulfill({
@@ -114,6 +133,7 @@ test.describe('Order-to-Cash golden path', () => {
     });
 
     await page.route(`**/api/v1/crm/sales-orders/${SO_ID}/confirm`, async (route) => {
+      confirmed = true;
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -124,24 +144,29 @@ test.describe('Order-to-Cash golden path', () => {
       });
     });
 
-    // Re-mock the detail GET to return confirmed state after mutation invalidates
-    let confirmed = false;
-    await page.route(`**/api/v1/crm/sales-orders/${SO_ID}**`, async (route) => {
+    // Re-mock the exact detail GET to return confirmed state after invalidation.
+    await page.route(`**/api/v1/crm/sales-orders/${SO_ID}`, async (route) => {
       const so = confirmed
         ? { ...draftSO, status: 'confirmed', status_label: 'Confirmed', is_editable: false }
         : draftSO;
-      confirmed = true;
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({ data: so }),
       });
     });
+    await page.route(`**/api/v1/crm/sales-orders/${SO_ID}/chain`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ data: [] }),
+      });
+    });
 
     await page.goto(`/crm/sales-orders/${SO_ID}`);
     await page.waitForLoadState('networkidle');
 
-    await expect(page.getByText('SO-202606-0001')).toBeVisible();
+    await expect(page.getByRole('heading', { name: /SO-202606-0001/ })).toBeVisible();
     await page.getByRole('button', { name: /confirm order/i }).click();
 
     // Confirm dialog — click the confirm action
@@ -177,21 +202,27 @@ test.describe('Order-to-Cash golden path', () => {
     await page.goto('/accounting/invoices');
     await page.waitForLoadState('networkidle');
 
-    await expect(page.getByRole('button', { name: /new invoice/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /new invoice/i }).first()).toBeVisible();
   });
 
   test('finalizes an invoice', async ({ page }) => {
     await mockAuth(page, financeUser);
+    let finalized = false;
 
     await page.route(`**/api/v1/invoices/${INV_ID}`, async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ data: draftInvoice }),
+        body: JSON.stringify({
+          data: finalized
+            ? { ...draftInvoice, status: 'finalized', display_status: 'Finalized' }
+            : draftInvoice,
+        }),
       });
     });
 
     await page.route(`**/api/v1/invoices/${INV_ID}/finalize`, async (route) => {
+      finalized = true;
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -204,7 +235,7 @@ test.describe('Order-to-Cash golden path', () => {
     await page.goto(`/accounting/invoices/${INV_ID}`);
     await page.waitForLoadState('networkidle');
 
-    await expect(page.getByText('INV-202606-0001')).toBeVisible();
+    await expect(page.getByRole('heading', { name: /INV-202606-0001/ })).toBeVisible();
     await page.getByRole('button', { name: /finalize/i }).click();
     await page.waitForLoadState('networkidle');
 

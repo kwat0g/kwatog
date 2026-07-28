@@ -6,7 +6,7 @@
  * handling in data pages.
  */
 import { test, expect } from '@playwright/test';
-import { loginAs, ROLES, mockAuth, mock500 } from './helpers-extended';
+import { loginAs, mock500 } from './helpers-extended';
 import { BasePage } from './pages/BasePage';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -36,7 +36,10 @@ test.describe('Error pages', () => {
 
   test('500 server error is surfaced from API response', async ({ page }) => {
     // Mock all employee list calls → 500
-    await mock500(page, '**/api/v1/employees*');
+    await mock500(page, '**/api/v1/hr/employees*');
+    await page.route('**/api/v1/hr/departments/tree', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [] }) });
+    });
     await loginAs(page, 'hr', '/hr/employees');
     await page.waitForTimeout(2000);
     // The SPA may surface the error as a toast, an error-text, a retry button, or
@@ -101,7 +104,10 @@ test.describe('Auth flow', () => {
 test.describe('HashID obfuscation', () => {
 
   test('URLs use hash IDs, not raw integer IDs', async ({ page }) => {
-    await page.route('**/api/v1/employees*', async (route) => {
+    await page.route('**/api/v1/hr/departments/tree', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [] }) });
+    });
+    await page.route('**/api/v1/hr/employees*', async (route) => {
       await route.fulfill({
         status: 200, contentType: 'application/json',
         body: JSON.stringify({
@@ -112,7 +118,7 @@ test.describe('HashID obfuscation', () => {
       });
     });
     // Also mock employee detail
-    await page.route('**/api/v1/employees/aB1cD2eF', async (route) => {
+    await page.route('**/api/v1/hr/employees/aB1cD2eF', async (route) => {
       await route.fulfill({
         status: 200, contentType: 'application/json',
         body: JSON.stringify({
@@ -123,22 +129,18 @@ test.describe('HashID obfuscation', () => {
 
     await loginAs(page, 'hr', '/hr/employees');
 
-    // Check the URL contains the hash ID somewhere in a link
-    const link = page.locator('a[href*="/hr/employees/"]').first();
-    const href = await link.getAttribute('href');
-    expect(href).toBeTruthy();
-    // The href should contain the hash, not a raw integer
-    expect(href!).toMatch(/\/hr\/employees\/[a-zA-Z0-9]+/);
-    // Specifically not a pure integer id at the end
-    expect(href!).not.toMatch(/\/hr\/employees\/\d+$/);
+    // DataTable rows navigate programmatically rather than rendering links.
+    await page.getByRole('row', { name: /OGM-2024-0001 Test Employee/ }).click();
+    await expect(page).toHaveURL(/\/hr\/employees\/aB1cD2eF$/);
+    expect(new URL(page.url()).pathname).not.toMatch(/\/hr\/employees\/\d+$/);
   });
 
   test('navigating to an integer ID returns a non-200 page (404, 403, or empty)', async ({ page }) => {
     // Mock the employee endpoint for integer 1 → 404
-    await page.route('**/api/v1/employees/1', async (route) => {
+    await page.route('**/api/v1/hr/employees/1', async (route) => {
       await route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ message: 'Not found.' }) });
     });
-    await page.route('**/api/v1/employees*', async (route) => {
+    await page.route('**/api/v1/hr/employees*', async (route) => {
       await route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ message: 'Not found.' }) });
     });
 
@@ -159,6 +161,9 @@ test.describe('HashID obfuscation', () => {
 test.describe('UI chrome', () => {
 
   test('sidebar is visible on authenticated pages', async ({ page }) => {
+    await page.route('**/api/v1/dashboards/hr', async (route) => {
+      await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ message: 'Not relevant to chrome test.' }) });
+    });
     await loginAs(page, 'hr', '/dashboard/hr');
     // AppLayout renders a sidebar — it could be <aside>, <nav>, or a component
     const sidebar = page.locator('aside, nav[role="navigation"], [role="complementary"]').first();
@@ -166,6 +171,9 @@ test.describe('UI chrome', () => {
   });
 
   test('topbar or main content area renders on authenticated pages', async ({ page }) => {
+    await page.route('**/api/v1/dashboards/default', async (route) => {
+      await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ message: 'Not relevant to chrome test.' }) });
+    });
     await loginAs(page, 'employee', '/dashboard/default');
     // The top area may be a <header>, a <nav>, or a top bar div.
     // Instead of asserting on a specific element, assert the sidebar is visible
@@ -178,6 +186,9 @@ test.describe('UI chrome', () => {
   });
 
   test('dark mode toggle exists and persists', async ({ page }) => {
+    await page.route('**/api/v1/dashboards/admin', async (route) => {
+      await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ message: 'Not relevant to chrome test.' }) });
+    });
     await loginAs(page, 'admin', '/dashboard/admin');
 
     const themeToggle = page.locator('button[aria-label*="theme"], button[aria-label*="dark"], button[aria-label*="light"], [data-testid="theme-toggle"]').first();

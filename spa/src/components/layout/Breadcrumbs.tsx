@@ -25,6 +25,8 @@ import { ChevronRight } from 'lucide-react';
  */
 const MODULE_LABELS: Record<string, string> = {
   dashboard: 'Dashboard',
+  'action-center': 'Action Center',
+  exceptions: 'Exception Workbench',
   alerts: 'Alerts',
   calendar: 'Calendar',
   approvals: 'Approvals',

@@ -33,9 +33,10 @@ class StockAdjustmentService
         string $reason,
         User $by,
         StockAdjustmentReason|string|null $reasonCode = null,
+        bool $bypassCountFreeze = false,
     ): StockMovement {
-        return DB::transaction(function () use ($itemId, $locationId, $qty, $unitCost, $reason, $by, $reasonCode) {
-            $mvmt = $this->applyMovement('in', $itemId, $locationId, $qty, $unitCost, $reason, $by);
+        return DB::transaction(function () use ($itemId, $locationId, $qty, $unitCost, $reason, $by, $reasonCode, $bypassCountFreeze) {
+            $mvmt = $this->applyMovement('in', $itemId, $locationId, $qty, $unitCost, $reason, $by, $bypassCountFreeze);
             $this->recordAdjustment('in', $itemId, $locationId, $qty, $unitCost, $reason, $reasonCode, $by, $mvmt, 'approved');
             return $mvmt;
         });
@@ -52,10 +53,11 @@ class StockAdjustmentService
         string $reason,
         User $by,
         StockAdjustmentReason|string|null $reasonCode = null,
+        bool $bypassCountFreeze = false,
     ): StockMovement {
-        return DB::transaction(function () use ($itemId, $locationId, $qty, $reason, $by, $reasonCode) {
+        return DB::transaction(function () use ($itemId, $locationId, $qty, $reason, $by, $reasonCode, $bypassCountFreeze) {
             $cost = $this->currentWac($itemId, $locationId);
-            $mvmt = $this->applyMovement('out', $itemId, $locationId, $qty, $cost, $reason, $by);
+            $mvmt = $this->applyMovement('out', $itemId, $locationId, $qty, $cost, $reason, $by, $bypassCountFreeze);
             $this->recordAdjustment('out', $itemId, $locationId, $qty, $cost, $reason, $reasonCode, $by, $mvmt, 'approved');
             return $mvmt;
         });
@@ -169,6 +171,7 @@ class StockAdjustmentService
         string $unitCost,
         string $reason,
         User $by,
+        bool $bypassCountFreeze = false,
     ): StockMovement {
         return $this->movements->move(new StockMovementInput(
             type: $direction === 'in' ? StockMovementType::AdjustmentIn : StockMovementType::AdjustmentOut,
@@ -181,6 +184,7 @@ class StockAdjustmentService
             referenceId: null,
             remarks: $reason,
             createdBy: $by->id,
+            bypassCountFreeze: $bypassCountFreeze,
         ));
     }
 

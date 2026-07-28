@@ -7,9 +7,11 @@
 > **Before the demo:** run the demo seeder so every screen has data:
 > ```
 > docker compose up -d
+> docker compose exec api php artisan migrate --force
 > docker compose exec api php artisan db:seed --class=GoldenPathDemoSeeder
+> cd spa && npm run test:defense
 > ```
-> Log in as `admin@ogami.test`. Companion: `docs/DEFENSE-TRACEABILITY.md` maps
+> Log in as `admin@ogami.test` / `password`. Companion: `docs/DEFENSE-TRACEABILITY.md` maps
 > each adviser item to its screen/route/test.
 
 ---
@@ -21,7 +23,8 @@
 - Point at the **Dashboard** — live KPIs, chain-stage breakdown, alerts.
 
 ## 1. Security posture (1 min) — say while on any page
-- No bearer tokens; Sanctum SPA cookie session (open dev-tools → session cookie is `HttpOnly`, JS can't read it).
+- Internal ERP users use a Sanctum cookie session (the session cookie is `HttpOnly`, so JavaScript cannot read it).
+- Supplier/customer portals use separate, narrowly scoped Sanctum bearer tokens and guards; cross-guard access is regression-tested.
 - URLs show `yR3kLm`, never integer IDs.
 - Government IDs encrypted at rest; non-HR users see masked `***-**-4567`.
 - Every action permission-checked **server-side** — frontend guards are UX only.
@@ -36,7 +39,7 @@
 
 ## 3. Procure-to-Pay chain (2 min)
 1. **Purchasing › Chain** (`/purchasing/chain`) — the overview: PRs → POs → GRN → Bills, with counts. *ADV5.*
-2. **Purchasing › Purchase Requests** — show a **template** (`/purchasing/pr-templates`) and note MRP auto-creates draft PRs with preferred supplier. *ADV6.*
+2. **Purchasing › Purchase Requests** — use `PR-DEMO-CONVERT` to show the approved-PR supplier-selection conversion. Use `PR-DEMO-BUDGET` to show the critical budget warning and Finance acknowledgment. *ADV6/ADV9.*
 3. **PO detail › Billing** — GRN received → **3-way match ✅** → Create Bill → Record Payment. *ADV5.*
 
 ## 4. Hire-to-Retire chain (2 min)
@@ -65,23 +68,23 @@ Customer complaint → RMA → Shipment Lot LOT-… → Batch BATCH-… → QC i
 - Material lot: `MLOT-20260703-01` → GRN-20260704-0001, supplier lot SL-TW-0234
 
 
-Then **Return Management** (`/return-management`) — open the RMA → disposition → **Credit Note** (`/accounting/credit-notes`) reduces AR. *ADV12.*
+Then **Return Management** (`/return-management`) — `RMA-DEMO-SUP-READY` is the non-destructive rehearsal record. Its Return-to-Supplier disposition is wired to reduce the exact GRN/PO receipt, apply a supplier credit to the bill, and optionally create a replacement PO. Use a reseeded database if you plan to execute this mutation live. *ADV12.*
 
 ---
 
 ## 6. Supporting modules — quick hits (2 min)
 Click through, one line each:
 - **Budgeting** (`/budgeting`) — FY2026 per-department allocated/spent/%. Maintenance sits at 🔴 **98% critical**. *ADV9.*
-- **Forecasting › Demand** (`/forecasting/demand`) — moving-average projection; **Stock-out** page → projected stock-out date → Create PR. *ADV11.*
-- **Warehouse Map** (`/inventory/warehouse-map`) — bin-level, color-coded; **Stock Count** (`/inventory/stock-count`) freezes a zone, variance → sign-off. *ADV8.*
-- **B2B Portals** — open `/portal/supplier` in a second tab: supplier sees only their own POs (separate auth guard, cross-guard isolation is tested). *ADV10.*
+- **Forecasting › Demand** (`/forecasting/demand`) — choose a product and show the literal **Include forecast in MRP** control. Only opted-in active products feed the advisory projection; it does not auto-create a PR. Then show **Stock-out** → projected date → Create PR. *ADV11.*
+- **Warehouse Map** (`/inventory/warehouse-map`) — bin-level, color-coded; **Stock Count** (`/inventory/stock-count`) has `Defense Demo — Zone Freeze`, which can be started to demonstrate movement/reservation blocking. *ADV8.*
+- **B2B Portals** — use `/portal/supplier/login` (`portal@supp.test`) and `/portal/customer/login` (`portal@cust.test`), password `password`. Each sees only its own organization through a separate bearer-token guard. *ADV10.*
 - **Admin › Roles** — create a "Line Supervisor" role live, grant 4 permissions, note dynamic RBAC. *ADV4.*
 
 ---
 
 ## 7. Close (1 min)
 - All 12 adviser items implemented end-to-end (backend + SPA + automated tests) — hand panel `docs/DEFENSE-TRACEABILITY.md`.
-- Full automated test suite green (state the pass count from `docs/TEST-COVERAGE-REPORT.md`).
+- Full automated test suite green (state the latest count from `docs/SYSTEM-AUDIT-2026-07-27.md`).
 - Scope discipline: cut cost-accounting, bank-rec, tax calendars deliberately — thesis ships a coherent, production-grade core.
 
 ---
@@ -101,8 +104,9 @@ Re-run the seeder (idempotent, safe):
 `docker compose exec api php artisan db:seed --class=GoldenPathDemoSeeder`
 
 ## Fallback if the app won't run on demo day
-`docs/defense-screenshots/` holds captured stills of all 16 showcase screens
-(regenerate with `node scripts/defense-smoke-walk.js` from the `spa/` dir). All
-16 were browser-verified to render — no blank, 404, or error-boundary pages.
+`docs/defense-screenshots/` holds captured stills of all showcase screens
+(regenerate with `npm run test:defense` from `spa/`). The strict runner exits
+non-zero for missing fixture content, console errors, failed API responses,
+blank/404/error pages, failed realtime authorization, or portal-login failure.
 Every showcase URL in this script is the real registered route (warehouse
 screens live under `/inventory/*`, not `/warehouse/*`).

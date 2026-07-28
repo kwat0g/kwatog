@@ -8,6 +8,7 @@ export interface Product {
   unit_of_measure: string;
   standard_cost: string;
   is_active: boolean;
+  include_forecast_in_mrp: boolean;
   has_bom: boolean;
   created_at: string;
   updated_at: string;

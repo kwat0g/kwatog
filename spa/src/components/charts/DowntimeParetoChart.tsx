@@ -75,7 +75,7 @@ export function DowntimeParetoChart({ data, height = 260, valueLabel }: Props) {
           yAxisId="left"
           dataKey="minutes"
           name="Downtime"
-          fill="var(--color-danger, #ef4444)"
+          fill="var(--danger, #ef4444)"
           radius={[3, 3, 0, 0]}
           maxBarSize={48}
         />
@@ -84,7 +84,7 @@ export function DowntimeParetoChart({ data, height = 260, valueLabel }: Props) {
           type="monotone"
           dataKey="cumulative_pct"
           name="Cumulative %"
-          stroke="var(--color-warning, #f59e0b)"
+          stroke="var(--warning, #f59e0b)"
           dot={{ r: 3 }}
           strokeWidth={2}
           activeDot={{ r: 4 }}

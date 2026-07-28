@@ -131,7 +131,7 @@ export default function FinanceDashboardPage() {
                 ) : (
                   <BarComparison
                     data={arAgingChartData}
-                    bars={[{ dataKey: 'amount', color: 'var(--color-info)', label: 'Amount' }]}
+                    bars={[{ dataKey: 'amount', color: 'var(--info)', label: 'Amount' }]}
                     xKey="label"
                     height={180}
                     formatValue={(v) => formatPeso(String(v))}
@@ -144,7 +144,7 @@ export default function FinanceDashboardPage() {
                 ) : (
                   <BarComparison
                     data={apAgingChartData}
-                    bars={[{ dataKey: 'amount', color: 'var(--color-warning)', label: 'Amount' }]}
+                    bars={[{ dataKey: 'amount', color: 'var(--warning)', label: 'Amount' }]}
                     xKey="label"
                     height={180}
                     formatValue={(v) => formatPeso(String(v))}

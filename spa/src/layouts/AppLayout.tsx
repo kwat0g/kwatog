@@ -11,6 +11,7 @@ import { PageActionsProvider } from '@/contexts/PageActionsContext';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { usePermissionSync } from '@/hooks/usePermissionSync';
 import { usePageFocus } from '@/hooks/usePageFocus';
+import { useRecentPageTracker } from '@/hooks/useRecentPageTracker';
 
 const KeyboardShortcutHelp = lazy(() =>
   import('@/components/ui/KeyboardShortcutHelp').then((m) => ({ default: m.KeyboardShortcutHelp })),
@@ -33,6 +34,9 @@ function AppLayoutInner() {
 
   // Move focus to new page content after route transitions (a11y)
   usePageFocus();
+
+  // Feed page visits into the ⌘K palette's Recent group
+  useRecentPageTracker();
 
   const onLogout = async () => {
     await logout();

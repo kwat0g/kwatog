@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Download, Printer } from 'lucide-react';
 import { statementsApi } from '@/api/accounting/statements';
+import { downloadAuthenticatedFile } from '@/api/download';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -26,12 +27,8 @@ export default function BalanceSheetPage() {
         backLabel="Journal Entries"
         actions={
           <div className="flex gap-1.5">
-            <a href={statementsApi.csvUrl('balance-sheet', { as_of: asOf })}>
-              <Button variant="secondary" size="sm" icon={<Download size={14} />}>CSV</Button>
-            </a>
-            <a href={statementsApi.pdfUrl('balance-sheet', { as_of: asOf })} target="_blank" rel="noopener">
-              <Button variant="secondary" size="sm" icon={<Printer size={14} />}>PDF</Button>
-            </a>
+            <Button variant="secondary" size="sm" icon={<Download size={14} />} onClick={() => void downloadAuthenticatedFile(statementsApi.csvUrl('balance-sheet', { as_of: asOf }), { errorMessage: 'Failed to export balance sheet.' })}>CSV</Button>
+            <Button variant="secondary" size="sm" icon={<Printer size={14} />} onClick={() => void downloadAuthenticatedFile(statementsApi.pdfUrl('balance-sheet', { as_of: asOf }), { openInNewTab: true, errorMessage: 'Failed to generate balance sheet PDF.' })}>PDF</Button>
           </div>
         }
       />

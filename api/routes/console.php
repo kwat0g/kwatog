@@ -8,8 +8,8 @@ use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
 
-Artisan::command('inspire', function () {
-    $this->comment(Inspiring::quote());
+Artisan::command('inspire', function (): void {
+    echo Inspiring::quote().PHP_EOL;
 })->purpose('Display an inspiring quote');
 
 /*
@@ -178,6 +178,13 @@ Schedule::command('ar:run-dunning')
     ->withoutOverlapping()
     ->onOneServer();
 
+// Rollout observability — emits plan coverage, missed QC triggers, scanner
+// recognition, and overdue Action Center work to the scheduler log hourly.
+Schedule::command('operations:rollout-health')
+    ->hourlyAt(10)
+    ->withoutOverlapping()
+    ->onOneServer();
+
 // T3.4.C — Daily training expiry alerts at 06:30 (30/14/7/expired tiers).
 // Idempotent within the same day — `alreadyFired()` short-circuits via
 // `last_alert_level` so re-runs are safe.
@@ -214,20 +221,20 @@ Schedule::command('notifications:send-digest')
     ->withoutOverlapping()
     ->onOneServer();
 
-	// OGAMI-104 — Year-end leave forfeiture/conversion. Scheduled Dec 31 at 23:00
-	// so it runs just before the year rolls over. Idempotent via
-	// processed_year_end_leave_types table, so re-runs are safe no-ops.
-	Schedule::command('leave:process-year-end')
-	    ->yearlyOn(12, 31, '23:00')
-	    ->withoutOverlapping()
-	    ->onOneServer();
+// OGAMI-104 — Year-end leave forfeiture/conversion. Scheduled Dec 31 at 23:00
+// so it runs just before the year rolls over. Idempotent via
+// processed_year_end_leave_types table, so re-runs are safe no-ops.
+Schedule::command('leave:process-year-end')
+    ->yearlyOn(12, 31, '23:00')
+    ->withoutOverlapping()
+    ->onOneServer();
 
-	// Budget-vs-actual GL sync on the 1st at 03:00 (after monthly depreciation).
-	// Idempotent: re-runs overwrite actual_total with current GL balance each time.
-	Schedule::command('budget:sync-actuals')
-	    ->monthlyOn(1, '03:00')
-	    ->withoutOverlapping()
-	    ->onOneServer();
+// Budget-vs-actual GL sync on the 1st at 03:00 (after monthly depreciation).
+// Idempotent: re-runs overwrite actual_total with current GL balance each time.
+Schedule::command('budget:sync-actuals')
+    ->monthlyOn(1, '03:00')
+    ->withoutOverlapping()
+    ->onOneServer();
 
 // CAPA effectiveness loop (IATF 16949 §10.2.1) — notify owners of due/overdue
 // verification checks daily at 02:05. Idempotent.

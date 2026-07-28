@@ -29,8 +29,7 @@ export class LeaveCreatePage extends BasePage {
   get halfDaySelect(): Locator { return this.page.getByLabel(/half.day/i); }
 
   async fillForm(type: string, start: string, end: string, reason: string): Promise<void> {
-    await this.typeSelect.click();
-    await this.page.getByRole('option', { name: type }).click();
+    await this.typeSelect.selectOption({ label: type });
     await this.startDateInput.fill(start);
     await this.endDateInput.fill(end);
     await this.reasonInput.fill(reason);
@@ -45,13 +44,19 @@ export class LeaveDetailPage extends BasePage {
   constructor(page: Page) { super(page); }
 
   get statusChip(): Locator { return this.page.locator('[data-status], .status-chip, span:has-text("pending_dept"), span:has-text("pending_hr"), span:has-text("approved"), span:has-text("rejected")').first(); }
-  get approveDeptButton(): Locator { return this.page.getByRole('button', { name: /approve.*department|dept.*approve/i }); }
-  get approveHrButton(): Locator { return this.page.getByRole('button', { name: /approve.*hr|hr.*approve/i }); }
+  get approveDeptButton(): Locator { return this.page.getByRole('button', { name: 'Approve', exact: true }).first(); }
+  get approveHrButton(): Locator { return this.page.getByRole('button', { name: 'Approve', exact: true }).first(); }
   get rejectButton(): Locator { return this.page.getByRole('button', { name: /reject/i }); }
   get cancelButton(): Locator { return this.page.getByRole('button', { name: /cancel/i }); }
 
-  async approveDept(): Promise<void> { await this.approveDeptButton.click(); }
-  async approveHR(): Promise<void> { await this.approveHrButton.click(); }
+  async approveDept(): Promise<void> {
+    await this.approveDeptButton.click();
+    await this.page.getByRole('button', { name: 'Approve', exact: true }).last().click();
+  }
+  async approveHR(): Promise<void> {
+    await this.approveHrButton.click();
+    await this.page.getByRole('button', { name: 'Approve', exact: true }).last().click();
+  }
 
   async expectStatus(text: string): Promise<void> {
     await this.page.getByText(text).first().waitFor({ state: 'visible', timeout: 5000 });
@@ -62,7 +67,7 @@ export class LeaveDetailPage extends BasePage {
 export class SelfServiceLeavePage extends BasePage {
   constructor(page: Page) { super(page); }
 
-  get fileLeaveButton(): Locator { return this.page.getByRole('button', { name: /file leave/i }); }
+  get fileLeaveButton(): Locator { return this.page.getByRole('button', { name: /new request/i }); }
   get leaveBalanceText(): Locator { return this.page.locator('text=/\\d+(\\.\\d+)?\\s*(days|day)/i').first(); }
 
   async captureBalance(): Promise<string> {

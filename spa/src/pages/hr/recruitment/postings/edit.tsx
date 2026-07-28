@@ -134,7 +134,7 @@ export default function PostingEditPage() {
   };
 
   const mutation = useMutation({
-    mutationFn: (data: FormData) => recruitmentApi.updatePosting(id!, data as any),
+    mutationFn: (data: FormData) => recruitmentApi.updatePosting(id!, data),
     onSuccess: () => {
       toast.success('Posting updated.');
       queryClient.invalidateQueries({ queryKey: ['recruitment-posting', id] });
@@ -177,14 +177,14 @@ export default function PostingEditPage() {
             <div className="grid gap-4 grid-cols-2 lg:grid-cols-3">
               <Select label="Department" required {...register('department_id')} error={errors.department_id?.message}>
                 <option value="">Select department</option>
-                {departments?.map((d: any) => (
+                {departments?.map((d) => (
                   <option key={d.id} value={d.id}>{d.name}</option>
                 ))}
               </Select>
 
               <Select label="Position" {...register('position_id')} disabled={!departmentId}>
                 <option value="">{departmentId ? 'Select position' : 'Select department first'}</option>
-                {positions.map((p: any) => (
+                {positions.map((p) => (
                   <option key={p.id} value={p.id}>{p.title}</option>
                 ))}
               </Select>

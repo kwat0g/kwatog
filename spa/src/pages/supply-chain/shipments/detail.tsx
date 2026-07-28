@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, Download, FileText, Trash2, Upload } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { AxiosError } from 'axios';
+import { downloadAuthenticatedFile } from '@/api/download';
 import { shipmentsApi } from '@/api/supply-chain';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -286,14 +287,16 @@ export default function ShipmentDetailPage() {
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       {doc.url && (
-                        <a
-                          href={doc.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                        <button
+                          type="button"
+                          onClick={() => void downloadAuthenticatedFile(doc.url!, {
+                            filename: doc.original_filename ?? undefined,
+                            errorMessage: 'Failed to download the shipment document.',
+                          })}
                           className="text-xs text-accent hover:underline"
                         >
                           Download
-                        </a>
+                        </button>
                       )}
                       {canManage && (
                         <button
@@ -372,12 +375,10 @@ export default function ShipmentDetailPage() {
                 size="sm"
                 icon={<Download size={14} />}
                 className="w-full justify-start"
-                onClick={() =>
-                  window.open(
-                    `/api/v1/supply-chain/shipments/${id}/packing-list`,
-                    '_blank',
-                  )
-                }
+                onClick={() => void downloadAuthenticatedFile(
+                  `/api/v1/supply-chain/shipments/${id}/packing-list`,
+                  { openInNewTab: true, errorMessage: 'Failed to generate the packing list.' },
+                )}
               >
                 Packing list
               </Button>
@@ -386,12 +387,10 @@ export default function ShipmentDetailPage() {
                 size="sm"
                 icon={<Download size={14} />}
                 className="w-full justify-start"
-                onClick={() =>
-                  window.open(
-                    `/api/v1/supply-chain/shipments/${id}/commercial-invoice`,
-                    '_blank',
-                  )
-                }
+                onClick={() => void downloadAuthenticatedFile(
+                  `/api/v1/supply-chain/shipments/${id}/commercial-invoice`,
+                  { openInNewTab: true, errorMessage: 'Failed to generate the commercial invoice.' },
+                )}
               >
                 Commercial invoice
               </Button>

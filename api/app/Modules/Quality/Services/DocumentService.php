@@ -52,13 +52,13 @@ class DocumentService
     public function create(array $data): ControlledDocument
     {
         return DB::transaction(fn () => ControlledDocument::create([
-            'code'                   => $data['code'],
-            'title'                  => $data['title'],
-            'category'               => $data['category'],
-            'description'            => $data['description'] ?? null,
-            'assignee_role'          => $data['assignee_role'],
+            'code' => $data['code'],
+            'title' => $data['title'],
+            'category' => $data['category'],
+            'description' => $data['description'] ?? null,
+            'assignee_role' => $data['assignee_role'],
             'review_interval_months' => $data['review_interval_months'] ?? null,
-            'is_active'              => $data['is_active'] ?? true,
+            'is_active' => $data['is_active'] ?? true,
         ]));
     }
 
@@ -70,6 +70,7 @@ class DocumentService
                 'assignee_role', 'review_interval_months', 'is_active',
             ])));
             $doc->save();
+
             return $doc->fresh(['currentRevision']);
         });
     }
@@ -82,9 +83,10 @@ class DocumentService
     {
         return DB::transaction(function () use ($doc) {
             $doc->forceFill([
-                'last_reviewed_at'     => now(),
+                'last_reviewed_at' => now(),
                 'last_review_alert_at' => null,
             ])->save();
+
             return $doc->fresh();
         });
     }
@@ -111,6 +113,9 @@ class DocumentService
         ?User $publisher = null,
     ): DocumentRevision {
         $path = $file->store("controlled-documents/{$doc->id}", 'local');
+        if ($path === false) {
+            throw new \RuntimeException('Unable to store controlled document revision.');
+        }
 
         try {
             return DB::transaction(function () use ($doc, $data, $file, $path, $publisher) {
@@ -121,22 +126,22 @@ class DocumentService
                 $next = (int) ($doc->revisions()->max('revision_number') ?? 0) + 1;
 
                 $rev = DocumentRevision::create([
-                    'document_id'     => $doc->id,
+                    'document_id' => $doc->id,
                     'revision_number' => $next,
-                    'effective_date'  => $data['effective_date'],
-                    'change_reason'   => $data['change_reason'],
-                    'file_path'       => $path,
-                    'file_name'       => $file->getClientOriginalName(),
-                    'file_size'       => $file->getSize(),
-                    'mime_type'       => $file->getClientMimeType(),
-                    'published_at'    => now(),
-                    'published_by'    => $publisher?->id,
-                    'is_current'      => true,
+                    'effective_date' => $data['effective_date'],
+                    'change_reason' => $data['change_reason'],
+                    'file_path' => $path,
+                    'file_name' => $file->getClientOriginalName(),
+                    'file_size' => $file->getSize(),
+                    'mime_type' => $file->getClientMimeType(),
+                    'published_at' => now(),
+                    'published_by' => $publisher?->id,
+                    'is_current' => true,
                 ]);
 
                 // Publishing is a review event — re-stamp the parent doc.
                 $doc->forceFill([
-                    'last_reviewed_at'     => now(),
+                    'last_reviewed_at' => now(),
                     'last_review_alert_at' => null,
                 ])->save();
 
@@ -170,10 +175,10 @@ class DocumentService
         $userIds->chunk(100)->each(function ($chunk) use ($rev, $now) {
             $rows = $chunk->map(fn ($uid) => [
                 'document_revision_id' => $rev->id,
-                'user_id'              => $uid,
-                'acknowledged_at'      => null,
-                'created_at'           => $now,
-                'updated_at'           => $now,
+                'user_id' => $uid,
+                'acknowledged_at' => null,
+                'created_at' => $now,
+                'updated_at' => $now,
             ])->all();
             DocumentAcknowledgment::insert($rows);
         });

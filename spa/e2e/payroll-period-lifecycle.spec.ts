@@ -31,6 +31,7 @@ const PAYROLL_USER: MockUser = {
   roleSlug: 'payroll_officer',
   roleName: 'Payroll Officer',
   permissions: [
+    'payroll.view',
     'payroll.periods.view',
     'payroll.periods.create',
     'payroll.periods.process',
@@ -109,8 +110,7 @@ test.describe('Payroll Period Lifecycle', () => {
     await mockAuth(page, PAYROLL_USER);
 
     // Return four periods covering every lifecycle status.
-    await page.route(API_LIST, async (route) => {
-      if (route.request().method() !== 'GET') { await route.continue(); return; }
+    await page.route(`${API_LIST}?*`, async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -133,14 +133,15 @@ test.describe('Payroll Period Lifecycle', () => {
     await expect(page.getByRole('button', { name: /New Period/i })).toBeVisible();
 
     // All four status chips are present
-    await expect(page.getByText('Draft')).toBeVisible();
-    await expect(page.getByText('Processing')).toBeVisible();
-    await expect(page.getByText('Approved')).toBeVisible();
-    await expect(page.getByText('Finalized')).toBeVisible();
+    const periodsTable = page.getByRole('table');
+    await expect(periodsTable.getByText('Draft', { exact: true })).toBeVisible();
+    await expect(periodsTable.getByText('Processing', { exact: true })).toBeVisible();
+    await expect(periodsTable.getByText('Approved', { exact: true })).toBeVisible();
+    await expect(periodsTable.getByText('Finalized', { exact: true })).toBeVisible();
 
     // Period date ranges are rendered
     await expect(page.getByText(/May 2026/)).toBeVisible();
-    await expect(page.getByText(/Apr 2026/)).toBeVisible();
+    await expect(page.getByText('Apr 2026 — 2nd Half', { exact: true })).toBeVisible();
 
     // Total period count in subtitle
     await expect(page.getByText(/4 periods/)).toBeVisible();
@@ -152,8 +153,7 @@ test.describe('Payroll Period Lifecycle', () => {
     await mockAuth(page, PAYROLL_USER);
 
     // List starts empty so the "Create period" empty-state button is shown.
-    await page.route(API_LIST, async (route) => {
-      if (route.request().method() !== 'GET') { await route.continue(); return; }
+    await page.route(`${API_LIST}?*`, async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -163,7 +163,6 @@ test.describe('Payroll Period Lifecycle', () => {
 
     // POST create → returns a draft period, then navigates to detail.
     await page.route(API_LIST, async (route) => {
-      if (route.request().method() !== 'POST') { await route.continue(); return; }
       await route.fulfill({
         status: 201,
         contentType: 'application/json',
@@ -206,8 +205,8 @@ test.describe('Payroll Period Lifecycle', () => {
 
     // After success → redirected to detail page
     await page.waitForURL(`**/payroll/periods/${PERIOD_ID}`);
-    await expect(page.getByText('May 2026 — 1st Half')).toBeVisible();
-    await expect(page.getByText('Draft')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'May 2026 — 1st Half' })).toBeVisible();
+    await expect(page.getByText('Draft', { exact: true }).first()).toBeVisible();
   });
 
   // ── Test 3: Process (compute) a payroll period ───────────────────────────
@@ -217,18 +216,20 @@ test.describe('Payroll Period Lifecycle', () => {
 
     // Starts as draft so the Compute button is rendered.
     const draftPeriod = makePeriod('draft');
+    let processing = false;
 
     await page.route(`**/api/v1/payroll-periods/${PERIOD_ID}`, async (route) => {
       if (route.request().method() !== 'GET') { await route.continue(); return; }
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(makeDetailResponse(draftPeriod)),
+        body: JSON.stringify(makeDetailResponse(processing ? makePeriod('processing') : draftPeriod)),
       });
     });
 
     // POST /compute → responds with processing status.
     await page.route(`**/api/v1/payroll-periods/${PERIOD_ID}/compute`, async (route) => {
+      processing = true;
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -252,27 +253,12 @@ test.describe('Payroll Period Lifecycle', () => {
     await page.waitForLoadState('networkidle');
 
     // Verify we're on the draft detail page
-    await expect(page.getByText('May 2026 — 1st Half')).toBeVisible();
-    await expect(page.getByText('Draft')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'May 2026 — 1st Half' })).toBeVisible();
+    await expect(page.getByText('Draft', { exact: true }).first()).toBeVisible();
 
     // Compute button is visible because status is draft and user has compute permission
     const computeBtn = page.getByRole('button', { name: /Compute/i });
     await expect(computeBtn).toBeVisible();
-
-    // After clicking Compute, the API returns the processing status.
-    // Intercept the subsequent GET for the period to return processing state.
-    let fetchCount = 0;
-    await page.route(`**/api/v1/payroll-periods/${PERIOD_ID}`, async (route) => {
-      if (route.request().method() !== 'GET') { await route.continue(); return; }
-      fetchCount++;
-      // Second+ fetch returns processing with 45 employees
-      const status = fetchCount > 1 ? 'processing' : 'draft';
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify(makeDetailResponse(makePeriod(status as 'draft' | 'processing'))),
-      });
-    });
 
     await computeBtn.click();
 
@@ -356,34 +342,36 @@ test.describe('Payroll Period Lifecycle', () => {
 
     // ── Step A: Approve ────────────────────────────────────────────────────
 
-    await expect(page.getByText('May 2026 — 1st Half')).toBeVisible();
-    await expect(page.getByText('Draft')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'May 2026 — 1st Half' })).toBeVisible();
+    await expect(page.getByText('Draft', { exact: true }).first()).toBeVisible();
 
     const approveBtn = page.getByRole('button', { name: /Approve/i });
     await expect(approveBtn).toBeVisible();
     await approveBtn.click();
+    await page.getByRole('button', { name: 'Approve', exact: true }).last().click();
 
     await expect(page.getByText('Period approved.')).toBeVisible({ timeout: 5000 });
 
     // After invalidation the page re-fetches and shows approved status.
-    await expect(page.getByText('Approved')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText('Approved', { exact: true }).first()).toBeVisible({ timeout: 5000 });
 
     // ── Step B: Finalize ───────────────────────────────────────────────────
 
     const finalizeBtn = page.getByRole('button', { name: /Finalize/i });
     await expect(finalizeBtn).toBeVisible();
     await finalizeBtn.click();
+    await page.getByRole('button', { name: 'Finalize', exact: true }).last().click();
 
     await expect(page.getByText(/Period finalized/i)).toBeVisible({ timeout: 5000 });
 
     // Finalized status chip is shown.
-    await expect(page.getByText('Finalized')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText('Finalized', { exact: true }).first()).toBeVisible({ timeout: 5000 });
 
-    // Bank file download link is present (canBankFile = true when finalized).
-    await expect(page.getByRole('link', { name: /Bank file/i })).toBeVisible();
+    // Bank file download action is present (canBankFile = true when finalized).
+    await expect(page.getByRole('button', { name: /Bank file/i })).toBeVisible();
 
     // Employee count stat card confirms 45 employees processed.
-    await expect(page.getByText('45')).toBeVisible();
+    await expect(page.getByText('45', { exact: true })).toBeVisible();
   });
 
 });

@@ -6,8 +6,15 @@ namespace Tests\Feature\Common;
 
 use App\Common\Models\ImportBatch;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\Customer;
+use App\Modules\Accounting\Models\JournalEntry;
+use App\Modules\Accounting\Models\JournalEntryLine;
+use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\HR\Models\Department;
+use App\Modules\HR\Models\Employee;
+use App\Modules\HR\Models\Position;
 use App\Modules\Inventory\Models\Item;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -38,6 +45,7 @@ class MasterDataImportTest extends TestCase
     {
         $path = tempnam(sys_get_temp_dir(), 'imp').'.csv';
         file_put_contents($path, $body);
+
         return new UploadedFile($path, 'import.csv', 'text/csv', null, true);
     }
 
@@ -102,8 +110,8 @@ class MasterDataImportTest extends TestCase
             ->post('/api/v1/imports/customers/commit', ['file' => $this->csv($custCsv)])
             ->assertStatus(201)
             ->assertJsonPath('data.imported', 2);
-        $this->assertSame(2, \App\Modules\Accounting\Models\Customer::query()->count());
-        $toyota = \App\Modules\Accounting\Models\Customer::query()->where('code', 'TMP')->firstOrFail();
+        $this->assertSame(2, Customer::query()->count());
+        $toyota = Customer::query()->where('code', 'TMP')->firstOrFail();
         $this->assertSame(45, (int) $toyota->payment_terms_days);
 
         $venCsv = "name,contact_person,payment_terms_days\n"
@@ -113,24 +121,24 @@ class MasterDataImportTest extends TestCase
             ->post('/api/v1/imports/vendors/commit', ['file' => $this->csv($venCsv)])
             ->assertStatus(201)
             ->assertJsonPath('data.imported', 2);
-        $this->assertSame(2, \App\Modules\Accounting\Models\Vendor::query()->count());
+        $this->assertSame(2, Vendor::query()->count());
     }
 
     public function test_duplicate_customer_name_rejects_whole_batch(): void
     {
-        \App\Modules\Accounting\Models\Customer::create(['name' => 'Toyota Motor Phils', 'is_active' => true]);
+        Customer::create(['name' => 'Toyota Motor Phils', 'is_active' => true]);
         $csv = "name\nNissan Phils\nToyota Motor Phils\n"; // 2nd row dup
 
         $this->actingAs($this->admin())
             ->post('/api/v1/imports/customers/commit', ['file' => $this->csv($csv)])
             ->assertStatus(422);
         // All-or-nothing: Nissan must NOT have been created either.
-        $this->assertSame(1, \App\Modules\Accounting\Models\Customer::query()->count());
+        $this->assertSame(1, Customer::query()->count());
     }
 
     public function test_employees_import_resolves_department_and_position(): void
     {
-        $dept = \App\Modules\HR\Models\Department::create(['name' => 'Production', 'code' => 'PRD']);
+        $dept = Department::create(['name' => 'Production', 'code' => 'PRD']);
 
         $csv = "first_name,last_name,birth_date,gender,civil_status,department,position,employment_type,pay_type,date_hired,basic_monthly_salary,sss_no\n"
              ."Juan,Dela Cruz,1990-01-15,male,single,PRD,Operator,regular,monthly,2025-01-06,20000.00,34-1234567-8\n"
@@ -141,18 +149,18 @@ class MasterDataImportTest extends TestCase
             ->assertStatus(201)
             ->assertJsonPath('data.imported', 2);
 
-        $this->assertSame(2, \App\Modules\HR\Models\Employee::query()->count());
-        $juan = \App\Modules\HR\Models\Employee::query()->where('last_name', 'Dela Cruz')->firstOrFail();
+        $this->assertSame(2, Employee::query()->count());
+        $juan = Employee::query()->where('last_name', 'Dela Cruz')->firstOrFail();
         $this->assertSame($dept->id, $juan->department_id);
         $this->assertNotNull($juan->employee_no); // generated
         $this->assertSame('34-1234567-8', $juan->sss_no); // encrypted round-trips
         // Position auto-created within the department.
-        $this->assertSame(2, \App\Modules\HR\Models\Position::query()->where('department_id', $dept->id)->count());
+        $this->assertSame(2, Position::query()->where('department_id', $dept->id)->count());
     }
 
     public function test_employee_import_rejects_bad_enum_and_imports_nothing(): void
     {
-        \App\Modules\HR\Models\Department::create(['name' => 'Production', 'code' => 'PRD']);
+        Department::create(['name' => 'Production', 'code' => 'PRD']);
         // Second row has an invalid pay_type → whole batch rejected.
         $csv = "first_name,last_name,birth_date,gender,civil_status,department,position,employment_type,pay_type,date_hired,basic_monthly_salary\n"
              ."Juan,Dela Cruz,1990-01-15,male,single,PRD,Operator,regular,monthly,2025-01-06,20000.00\n"
@@ -161,7 +169,7 @@ class MasterDataImportTest extends TestCase
         $this->actingAs($this->admin())
             ->post('/api/v1/imports/employees/commit', ['file' => $this->csv($csv)])
             ->assertStatus(422);
-        $this->assertSame(0, \App\Modules\HR\Models\Employee::query()->count());
+        $this->assertSame(0, Employee::query()->count());
     }
 
     public function test_batch_rollback_deletes_imported_records(): void
@@ -179,6 +187,39 @@ class MasterDataImportTest extends TestCase
 
         $this->assertSame(0, Account::query()->count());
         $this->assertSame(1, ImportBatch::query()->where('status', 'rolled_back')->count());
+    }
+
+    public function test_batch_rollback_hides_database_details_when_an_imported_record_is_in_use(): void
+    {
+        $commit = $this->actingAs($this->admin())
+            ->post('/api/v1/imports/coa/commit', [
+                'file' => $this->csv("code,name,type,normal_balance\n1000,Cash,asset,debit\n"),
+            ])
+            ->assertCreated();
+
+        $account = Account::query()->where('code', '1000')->firstOrFail();
+        $entry = JournalEntry::create([
+            'entry_number' => 'JE-IMPORT-ROLLBACK',
+            'date' => '2026-01-01',
+            'description' => 'References imported master data',
+        ]);
+        JournalEntryLine::create([
+            'journal_entry_id' => $entry->id,
+            'account_id' => $account->id,
+            'line_no' => 1,
+            'debit' => 1,
+            'credit' => 0,
+        ]);
+
+        $this->actingAs($this->admin())
+            ->postJson("/api/v1/imports/batches/{$commit->json('data.batch_id')}/rollback")
+            ->assertUnprocessable()
+            ->assertExactJson([
+                'message' => 'Cannot roll back — some imported records are already referenced by other data.',
+            ]);
+
+        $this->assertDatabaseHas('accounts', ['id' => $account->id]);
+        $this->assertDatabaseHas('import_batches', ['id' => ImportBatch::query()->value('id'), 'status' => 'committed']);
     }
 
     public function test_import_routes_are_permission_gated(): void

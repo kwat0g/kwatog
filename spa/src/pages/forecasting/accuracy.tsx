@@ -181,8 +181,8 @@ export default function ForecastAccuracyPage() {
                   />
                   <RTooltip
                     contentStyle={{
-                      backgroundColor: 'var(--color-surface)',
-                      border: '1px solid var(--color-border-default)',
+                      backgroundColor: 'var(--bg-surface)',
+                      border: '1px solid var(--border-default)',
                       borderRadius: 6,
                       fontSize: 12,
                     }}
@@ -191,7 +191,7 @@ export default function ForecastAccuracyPage() {
                   <Bar
                     dataKey="variance"
                     name="Variance"
-                    fill="var(--color-accent-amber)"
+                    fill="var(--warning)"
                     opacity={0.35}
                     barSize={20}
                   />
@@ -199,7 +199,7 @@ export default function ForecastAccuracyPage() {
                     type="monotone"
                     dataKey="forecast"
                     name="Forecast"
-                    stroke="var(--color-accent-indigo)"
+                    stroke="var(--accent)"
                     strokeWidth={2}
                     dot={{ r: 3 }}
                   />
@@ -207,7 +207,7 @@ export default function ForecastAccuracyPage() {
                     type="monotone"
                     dataKey="actual"
                     name="Actual"
-                    stroke="var(--color-accent-emerald)"
+                    stroke="var(--success)"
                     strokeWidth={2}
                     dot={{ r: 3 }}
                   />

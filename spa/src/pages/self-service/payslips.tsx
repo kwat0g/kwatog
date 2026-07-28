@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Download, CheckCircle2, Clock } from 'lucide-react';
+import { downloadAuthenticatedFile } from '@/api/download';
 import { payrollsApi, type PayrollListParams } from '@/api/payroll/payrolls';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/Button';
@@ -106,15 +107,17 @@ export default function SelfServicePayslipsPage() {
               </div>
 
               {!p.error_message && (
-                <a
-                  href={payrollsApi.payslipUrl(p.id)}
-                  target="_blank"
-                  rel="noopener"
+                <button
+                  type="button"
+                  onClick={() => void downloadAuthenticatedFile(payrollsApi.payslipUrl(p.id), {
+                    openInNewTab: true,
+                    errorMessage: 'Failed to generate the payslip.',
+                  })}
                   className="shrink-0 inline-flex items-center gap-1 px-3 h-11 text-sm rounded-md border border-default bg-canvas text-primary hover:bg-elevated"
                   aria-label={`Download payslip PDF for ${p.computed_at ? formatDate(p.computed_at) : 'this period'}`}
                 >
                   <Download size={14} /> PDF
-                </a>
+                </button>
               )}
             </li>
           ))}

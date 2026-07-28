@@ -18,7 +18,9 @@ use App\Modules\HR\Models\JobApplication;
 use App\Modules\HR\Models\JobPosting;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 
 class RecruitmentService
 {
@@ -31,10 +33,11 @@ class RecruitmentService
     {
         return DB::transaction(function () use ($data) {
             $data['posting_number'] = $this->sequences->generate('job_posting');
-            $posting = new JobPosting();
+            $posting = new JobPosting;
             $posting->fill($data);
             $posting->status = JobPostingStatus::Draft;
             $posting->save();
+
             return $posting;
         });
     }
@@ -42,16 +45,17 @@ class RecruitmentService
     public function updatePosting(JobPosting $posting, array $data): JobPosting
     {
         $posting->update($data);
+
         return $posting->fresh();
     }
 
     public function changePostingStatus(JobPosting $posting, JobPostingStatus $newStatus): void
     {
-        if (!$posting->status->canTransitionTo($newStatus)) {
+        if (! $posting->status->canTransitionTo($newStatus)) {
             throw new \LogicException("Cannot transition posting from {$posting->status->value} to {$newStatus->value}.");
         }
 
-        if ($newStatus === JobPostingStatus::Open && !$posting->posted_at) {
+        if ($newStatus === JobPostingStatus::Open && ! $posting->posted_at) {
             $posting->posted_at = now();
         }
         $posting->status = $newStatus;
@@ -60,47 +64,60 @@ class RecruitmentService
 
     public function submitApplication(JobPosting $posting, array $data, UploadedFile $resume): JobApplication
     {
-        return DB::transaction(function () use ($posting, $data, $resume) {
-            $path = $resume->store(
-                'recruitment/resumes/' . now()->format('Y/m'),
-                'local'
-            );
+        $path = $resume->store('recruitment/resumes/'.now()->format('Y/m'), 'local');
+        if ($path === false) {
+            throw new \RuntimeException('Unable to store the uploaded resume.');
+        }
 
-            $application = new JobApplication();
-            $application->fill([
-                'application_number'   => $this->sequences->generate('job_application'),
-                'job_posting_id'       => $posting->id,
-                'tracking_code'        => $this->generateTrackingCode(),
-                'first_name'           => $data['first_name'],
-                'last_name'            => $data['last_name'],
-                'email'                => $data['email'],
-                'phone'                => $data['phone'],
-                'resume_path'          => $path,
-                'resume_original_name' => $resume->getClientOriginalName(),
-                'cover_letter'         => $data['cover_letter'] ?? null,
-                'applied_at'           => now(),
-            ]);
-            $application->stage = ApplicationStage::New;
-            $application->save();
+        try {
+            $application = DB::transaction(function () use ($posting, $data, $resume, $path) {
+                $application = new JobApplication;
+                $application->fill([
+                    'application_number' => $this->sequences->generate('job_application'),
+                    'job_posting_id' => $posting->id,
+                    'tracking_code' => $this->generateTrackingCode(),
+                    'first_name' => $data['first_name'],
+                    'last_name' => $data['last_name'],
+                    'email' => $data['email'],
+                    'phone' => $data['phone'],
+                    'resume_path' => $path,
+                    'resume_original_name' => $resume->getClientOriginalName(),
+                    'cover_letter' => $data['cover_letter'] ?? null,
+                    'applied_at' => now(),
+                ]);
+                $application->stage = ApplicationStage::New;
+                $application->save();
 
+                return $application;
+            });
+        } catch (\Throwable $e) {
+            Storage::disk('local')->delete($path);
+            throw $e;
+        }
+
+        try {
             Mail::to($application->email)->send(
                 new ApplicationReceivedMail($application, $posting)
             );
-
             $this->notifyHrNewApplication($application, $posting);
+        } catch (\Throwable $e) {
+            Log::warning('Application saved but its confirmation notification failed.', [
+                'application_id' => $application->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
-            return $application;
-        });
+        return $application;
     }
 
     public function advanceStage(JobApplication $application, ?array $interviewData = null): void
     {
         $next = $application->stage->next();
-        if (!$next) {
+        if (! $next) {
             throw new \LogicException("Cannot advance from terminal stage: {$application->stage->value}");
         }
 
-        if ($application->stage === ApplicationStage::Screening && !$interviewData) {
+        if ($application->stage === ApplicationStage::Screening && ! $interviewData) {
             throw new \LogicException('Interview data required when advancing to interview stage.');
         }
 
@@ -157,8 +174,8 @@ class RecruitmentService
     {
         return ApplicationNote::create([
             'job_application_id' => $application->id,
-            'user_id'            => $user->id,
-            'body'               => $body,
+            'user_id' => $user->id,
+            'body' => $body,
         ]);
     }
 
@@ -168,7 +185,7 @@ class RecruitmentService
             $q->where('scheduled_at', '>=', now())->orderBy('scheduled_at')->limit(1);
         }])->where('tracking_code', $trackingCode)->first();
 
-        if (!$app) {
+        if (! $app) {
             return null;
         }
 
@@ -180,12 +197,12 @@ class RecruitmentService
 
         return [
             'tracking_code' => $app->tracking_code,
-            'position'      => $app->jobPosting->title,
-            'applied_at'    => $app->applied_at->toIso8601String(),
-            'status'        => $statusLabel,
-            'interview'     => $interview ? [
+            'position' => $app->jobPosting->title,
+            'applied_at' => $app->applied_at->toIso8601String(),
+            'status' => $statusLabel,
+            'interview' => $interview ? [
                 'scheduled_at' => $interview->scheduled_at->toIso8601String(),
-                'location'     => $interview->location,
+                'location' => $interview->location,
             ] : null,
         ];
     }
@@ -196,12 +213,12 @@ class RecruitmentService
         $posting = $application->jobPosting;
 
         return [
-            'first_name'    => $application->first_name,
-            'last_name'     => $application->last_name,
-            'email'         => $application->email,
-            'phone'         => $application->phone,
+            'first_name' => $application->first_name,
+            'last_name' => $application->last_name,
+            'email' => $application->email,
+            'phone' => $application->phone,
             'department_id' => $posting->department?->hash_id,
-            'position_id'   => $posting->position?->hash_id,
+            'position_id' => $posting->position?->hash_id,
         ];
     }
 
@@ -229,7 +246,7 @@ class RecruitmentService
             for ($i = 0; $i < 6; $i++) {
                 $code .= $chars[random_int(0, strlen($chars) - 1)];
             }
-            if (!JobApplication::where('tracking_code', $code)->exists()) {
+            if (! JobApplication::where('tracking_code', $code)->exists()) {
                 return $code;
             }
         }
@@ -247,11 +264,11 @@ class RecruitmentService
         }
 
         $this->notifications->send($hrUsers, 'recruitment.new_application', [
-            'title'       => 'New Job Application',
-            'message'     => "{$application->full_name} applied for {$posting->title}",
-            'link_to'     => "/hr/recruitment/applications/{$application->hash_id}",
+            'title' => 'New Job Application',
+            'message' => "{$application->full_name} applied for {$posting->title}",
+            'link_to' => "/hr/recruitment/applications/{$application->hash_id}",
             'entity_type' => 'job_application',
-            'entity_id'   => $application->hash_id,
+            'entity_id' => $application->hash_id,
         ]);
     }
 }

@@ -66,6 +66,9 @@ export default function ItemsListPage() {
     ) },
     { key: 'reorder', header: 'Reorder pt', align: 'right', cell: (r) => <NumCell>{Number(r.reorder_point).toFixed(3)}</NumCell> },
     { key: 'status', header: 'Stock', cell: (r) => <Chip variant={stockChip(r.stock_status)}>{r.stock_status}</Chip> },
+    { key: 'quality', header: 'QC plan', cell: (r) => (
+      <Chip variant={r.quality_plan_ready ? 'success' : 'warning'}>{r.quality_plan_ready ? 'ready' : 'missing'}</Chip>
+    ) },
     { key: 'active', header: '', cell: (r) => r.is_active ? null : <Chip variant="neutral">inactive</Chip> },
     ...(canManage ? [{
       key: 'actions',

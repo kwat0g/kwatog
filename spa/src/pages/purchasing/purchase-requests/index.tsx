@@ -1,15 +1,18 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, Zap } from 'lucide-react';
+import { Plus, ShoppingCart, Zap } from 'lucide-react';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
+import { vendorsApi } from '@/api/accounting/vendors';
 import { purchaseRequestsApi } from '@/api/purchasing/purchase-requests';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { DataTable, NumCell, type Column, type BulkAction } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
+import { Modal } from '@/components/ui/Modal';
+import { Select } from '@/components/ui/Select';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
@@ -34,6 +37,8 @@ export default function PurchaseRequestsListPage() {
   const qc = useQueryClient();
   const { can } = usePermission();
   const [filters, setFilters] = useState<Record<string, unknown>>({ page: 1, per_page: 25 });
+  const [convertTarget, setConvertTarget] = useState<PurchaseRequest | null>(null);
+  const [vendorMap, setVendorMap] = useState<Record<string, string>>({});
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['purchasing', 'purchase-requests', filters],
@@ -51,6 +56,41 @@ export default function PurchaseRequestsListPage() {
     },
     onError: (e) => toast.error(errMsg(e, 'Failed to bulk approve.')),
   });
+
+  const convertDetail = useQuery({
+    queryKey: ['purchasing', 'purchase-requests', convertTarget?.id, 'conversion'],
+    queryFn: () => purchaseRequestsApi.show(convertTarget!.id),
+    enabled: !!convertTarget,
+  });
+  const vendors = useQuery({
+    queryKey: ['accounting', 'vendors', 'pr-conversion'],
+    queryFn: () => vendorsApi.list({ per_page: 200, is_active: 'true' }),
+    enabled: !!convertTarget,
+  });
+  const convertMut = useMutation({
+    mutationFn: (assignments: Record<string, string>) => purchaseRequestsApi.convert(convertTarget!.id, assignments),
+    onSuccess: (orders) => {
+      qc.invalidateQueries({ queryKey: ['purchasing', 'purchase-requests'] });
+      setConvertTarget(null);
+      setVendorMap({});
+      toast.success(`${orders.length} purchase order${orders.length === 1 ? '' : 's'} created.`);
+      navigate(orders.length === 1 ? `/purchasing/purchase-orders/${orders[0].id}` : '/purchasing/purchase-orders');
+    },
+    onError: (e) => toast.error(errMsg(e, 'Failed to convert PR.')),
+  });
+
+  const openConversion = (request: PurchaseRequest) => {
+    setVendorMap({});
+    setConvertTarget(request);
+  };
+
+  const conversionItems = convertDetail.data?.items ?? [];
+  const effectiveVendorMap = Object.fromEntries(conversionItems.map((item) => [
+    item.id,
+    vendorMap[item.id] ?? item.suggested_vendor?.id ?? '',
+  ]));
+  const allVendorsAssigned = conversionItems.length > 0
+    && conversionItems.every((item) => effectiveVendorMap[item.id]);
 
   const bulkActions: BulkAction<PurchaseRequest>[] = [
     {
@@ -89,6 +129,21 @@ export default function PurchaseRequestsListPage() {
       </span>
     ) },
     { key: 'total', header: 'Estimated', align: 'right', cell: (r) => <NumCell>{formatPeso(r.total_estimated_amount)}</NumCell> },
+    ...(can('purchasing.po.create') ? [{
+      key: 'actions',
+      header: '',
+      align: 'right' as const,
+      cell: (r: PurchaseRequest) => r.status === 'approved' ? (
+        <Button
+          size="sm"
+          variant="secondary"
+          icon={<ShoppingCart size={13} />}
+          onClick={() => openConversion(r)}
+        >
+          Convert to PO
+        </Button>
+      ) : null,
+    }] : []),
   ];
 
   const filterConfig: FilterConfig[] = [
@@ -128,12 +183,49 @@ export default function PurchaseRequestsListPage() {
             data={data.data}
             meta={data.meta}
             onPageChange={(page) => setFilters(f => ({ ...f, page }))}
-            // ADV6 — Bulk approve via built-in select + bulkActions
             selectable={can('purchasing.pr.approve')}
             bulkActions={can('purchasing.pr.approve') ? bulkActions : undefined}
           />
         </div>
       )}
+
+      <Modal
+        isOpen={!!convertTarget}
+        onClose={() => { setConvertTarget(null); setVendorMap({}); }}
+        title={`Convert ${convertTarget?.pr_number ?? 'PR'} to PO`}
+        size="lg"
+      >
+        <div className="py-4 space-y-3">
+          {convertDetail.isLoading ? <SkeletonTable rows={3} columns={4} /> : conversionItems.map((item) => (
+            <div key={item.id} className="grid grid-cols-[1fr_120px_220px] gap-3 items-end border-b border-subtle pb-3">
+              <div>
+                <div className="font-medium text-sm">{item.item?.code ?? 'Uncoded item'} · {item.description}</div>
+                <div className="text-xs text-muted">{item.quantity} {item.unit ?? item.item?.unit_of_measure ?? ''} · {formatPeso(item.estimated_unit_price ?? '0')}</div>
+              </div>
+              <div className="text-xs text-muted">{formatPeso(item.estimated_total)}</div>
+              <Select
+                label="Supplier"
+              value={vendorMap[item.id] ?? item.suggested_vendor?.id ?? ''}
+              onChange={(event) => setVendorMap((current) => ({ ...current, [item.id]: event.target.value }))}
+              >
+                <option value="">Select supplier…</option>
+                {vendors.data?.data.map((vendor) => <option key={vendor.id} value={vendor.id}>{vendor.name}</option>)}
+              </Select>
+            </div>
+          ))}
+          <div className="flex justify-end gap-2 pt-3 border-t border-default">
+            <Button variant="secondary" onClick={() => { setConvertTarget(null); setVendorMap({}); }}>Cancel</Button>
+            <Button
+              variant="primary"
+              loading={convertMut.isPending}
+              disabled={!allVendorsAssigned || convertMut.isPending}
+              onClick={() => convertMut.mutate(effectiveVendorMap)}
+            >
+              Create PO
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

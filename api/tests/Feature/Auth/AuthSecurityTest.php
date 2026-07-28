@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Auth;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\PasswordHistory;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -38,14 +39,14 @@ class AuthSecurityTest extends TestCase
     private function makeUser(string $password = 'CorrectHorse-1!', array $overrides = []): User
     {
         return User::factory()->create(array_merge([
-            'role_id'               => Role::where('slug', 'system_admin')->value('id'),
-            'email'                 => 'auth+'.uniqid().'@t.test',
-            'password'              => Hash::make($password),
-            'password_changed_at'   => now(),
-            'is_active'             => true,
+            'role_id' => Role::where('slug', 'system_admin')->value('id'),
+            'email' => 'auth+'.uniqid().'@t.test',
+            'password' => Hash::make($password),
+            'password_changed_at' => now(),
+            'is_active' => true,
             'failed_login_attempts' => 0,
-            'locked_until'          => null,
-            'must_change_password'  => false,
+            'locked_until' => null,
+            'must_change_password' => false,
         ], $overrides));
     }
 
@@ -73,11 +74,11 @@ class AuthSecurityTest extends TestCase
 
         return $this->withSession(['_token' => $token])
             ->withHeaders([
-                'Origin'       => 'http://localhost',
+                'Origin' => 'http://localhost',
                 'X-CSRF-TOKEN' => $token,
             ])
             ->postJson('/api/v1/auth/login', [
-                'email'    => $email,
+                'email' => $email,
                 'password' => $password,
             ]);
     }
@@ -105,7 +106,7 @@ class AuthSecurityTest extends TestCase
 
         for ($i = 0; $i < 3; $i++) {
             $this->postJson('/api/v1/auth/login', [
-                'email'    => $user->email,
+                'email' => $user->email,
                 'password' => 'wrong-password-'.$i,
             ])->assertStatus(422);
         }
@@ -126,7 +127,7 @@ class AuthSecurityTest extends TestCase
         // IP+email pair, so this fits inside the budget exactly.
         for ($i = 0; $i < 5; $i++) {
             $this->postJson('/api/v1/auth/login', [
-                'email'    => $user->email,
+                'email' => $user->email,
                 'password' => 'wrong-password-'.$i,
             ])->assertStatus(422);
         }
@@ -144,7 +145,7 @@ class AuthSecurityTest extends TestCase
 
         // Even with the CORRECT password, the lockout gate must fire.
         $this->postJson('/api/v1/auth/login', [
-            'email'    => $user->email,
+            'email' => $user->email,
             'password' => $password,
         ])->assertStatus(423);
     }
@@ -157,7 +158,7 @@ class AuthSecurityTest extends TestCase
 
         for ($i = 0; $i < 3; $i++) {
             $this->postJson('/api/v1/auth/login', [
-                'email'    => $user->email,
+                'email' => $user->email,
                 'password' => 'wrong-pwd-'.$i,
             ])->assertStatus(422);
         }
@@ -178,25 +179,25 @@ class AuthSecurityTest extends TestCase
         // P1 -> P2 (history now: [P1])
         $this->actingAs($user)
             ->postJson('/api/v1/auth/change-password', [
-                'current_password'           => $original,
-                'new_password'               => 'Second-2!',
-                'new_password_confirmation'  => 'Second-2!',
+                'current_password' => $original,
+                'new_password' => 'Second-2!',
+                'new_password_confirmation' => 'Second-2!',
             ])->assertOk();
 
         // P2 -> P3 (history now: [P2, P1])
         $this->actingAs($user->fresh())
             ->postJson('/api/v1/auth/change-password', [
-                'current_password'           => 'Second-2!',
-                'new_password'               => 'Third-3!',
-                'new_password_confirmation'  => 'Third-3!',
+                'current_password' => 'Second-2!',
+                'new_password' => 'Third-3!',
+                'new_password_confirmation' => 'Third-3!',
             ])->assertOk();
 
         // Try to flip back to the original — still inside depth 3 (P1 is row 2 of 2).
         $this->actingAs($user->fresh())
             ->postJson('/api/v1/auth/change-password', [
-                'current_password'           => 'Third-3!',
-                'new_password'               => $original,
-                'new_password_confirmation'  => $original,
+                'current_password' => 'Third-3!',
+                'new_password' => $original,
+                'new_password_confirmation' => $original,
             ])
             ->assertStatus(422)
             ->assertJsonValidationErrorFor('new_password');
@@ -218,9 +219,9 @@ class AuthSecurityTest extends TestCase
         foreach ($cycle as [$current, $next]) {
             $this->actingAs($user->fresh())
                 ->postJson('/api/v1/auth/change-password', [
-                    'current_password'           => $current,
-                    'new_password'               => $next,
-                    'new_password_confirmation'  => $next,
+                    'current_password' => $current,
+                    'new_password' => $next,
+                    'new_password_confirmation' => $next,
                 ])->assertOk();
         }
 
@@ -230,9 +231,9 @@ class AuthSecurityTest extends TestCase
         // Now reuse the original — it's no longer in the trimmed history.
         $this->actingAs($user->fresh())
             ->postJson('/api/v1/auth/change-password', [
-                'current_password'           => 'P5ssword-5!',
-                'new_password'               => 'P1ssword-1!',
-                'new_password_confirmation'  => 'P1ssword-1!',
+                'current_password' => 'P5ssword-5!',
+                'new_password' => 'P1ssword-1!',
+                'new_password_confirmation' => 'P1ssword-1!',
             ])->assertOk();
     }
 
@@ -254,6 +255,38 @@ class AuthSecurityTest extends TestCase
             ->getJson('/api/v1/notifications')
             ->assertStatus(403)
             ->assertJsonPath('code', 'password_expired');
+    }
+
+    public function test_password_expiry_is_enforced_on_all_internal_module_routes(): void
+    {
+        $user = $this->makeUser('CorrectHorse-1!', [
+            'password_changed_at' => now()->subDays(91),
+        ]);
+
+        // Alerts previously had auth+permission but omitted password.expired.
+        $this->actingAs($user)
+            ->getJson('/api/v1/alerts')
+            ->assertStatus(403)
+            ->assertJsonPath('code', 'password_expired');
+    }
+
+    public function test_configured_password_expiry_days_is_honored_and_zero_disables_age_expiry(): void
+    {
+        $settings = app(SettingsService::class);
+        $user = $this->makeUser('CorrectHorse-1!', [
+            'password_changed_at' => now()->subDays(31),
+        ]);
+
+        $settings->set('security.password_expiry_days', 30, 'security');
+        $this->actingAs($user->fresh())
+            ->getJson('/api/v1/alerts')
+            ->assertStatus(403)
+            ->assertJsonPath('code', 'password_expired');
+
+        $settings->set('security.password_expiry_days', 0, 'security');
+        $this->actingAs($user->fresh())
+            ->getJson('/api/v1/alerts')
+            ->assertOk();
     }
 
     public function test_password_expiry_does_not_block_within_ninety_days(): void
@@ -278,7 +311,7 @@ class AuthSecurityTest extends TestCase
         $statuses = [];
         for ($i = 0; $i < 6; $i++) {
             $statuses[] = $this->postJson('/api/v1/auth/login', [
-                'email'    => $user->email,
+                'email' => $user->email,
                 'password' => 'wrong-pwd-'.$i,
             ])->getStatusCode();
         }

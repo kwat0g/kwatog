@@ -75,7 +75,7 @@ test.describe('Finance Dashboard — Revenue Forecast Panel', () => {
 
     // Legend.
     await expect(page.getByText('Historical')).toBeVisible();
-    await expect(page.getByText('Forecast')).toBeVisible();
+    await expect(page.getByText('Forecast', { exact: true })).toBeVisible();
   });
 
   test('shows stable trend when revenue is flat', async ({ page }) => {

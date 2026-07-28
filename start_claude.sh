@@ -1,15 +1,11 @@
-   #!/bin/bash
+#!/bin/bash
 
-   # 1. Provide your live API parameters
-   export ANTHROPIC_API_KEY="sk-sIiTrFgEvMuyicJqL8Qf6lQLpwobpUQLL4TNGcYTKd7KVpIG"
-   export ANTHROPIC_BASE_URL="https://agentrouter.org/"
+set -eu
 
-   # 2. Set the exact identifier for the High-Effort Reasoning tier
-   # Choose ONE of these valid options:
-   export ANTHROPIC_MODEL="claude-opus-4-6"
-   
-   # Or if you prefer DeepSeek's high effort reasoning model:
-   # export ANTHROPIC_MODEL="agentrouter/deepseek-r1"
+# Credentials must be supplied by the caller's environment or secret manager.
+: "${ANTHROPIC_API_KEY:?Set ANTHROPIC_API_KEY before running this script}"
 
-   # 3. Launch Claude Code natively
-   claude
+export ANTHROPIC_BASE_URL="${ANTHROPIC_BASE_URL:-https://agentrouter.org/}"
+export ANTHROPIC_MODEL="${ANTHROPIC_MODEL:-claude-opus-4-6}"
+
+exec claude

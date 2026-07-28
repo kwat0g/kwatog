@@ -18,6 +18,8 @@ use App\Modules\Inventory\Controllers\TransferOrderController;
 use App\Modules\Inventory\Controllers\UomController;
 use App\Modules\Inventory\Controllers\WarehouseController;
 use App\Modules\Inventory\Controllers\WarehouseMapController;
+use App\Modules\Inventory\Controllers\WarehouseScanController;
+use App\Modules\Quality\Controllers\ItemQualityPlanController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth:sanctum', 'feature:inventory'])->prefix('inventory')->group(function () {
@@ -36,6 +38,12 @@ Route::middleware(['auth:sanctum', 'feature:inventory'])->prefix('inventory')->g
     Route::post('/items',          [ItemController::class, 'store'])->middleware('permission:inventory.items.manage');
     Route::put('/items/{item}',    [ItemController::class, 'update'])->middleware('permission:inventory.items.manage');
     Route::delete('/items/{item}', [ItemController::class, 'destroy'])->middleware('permission:inventory.items.manage');
+    Route::get('/items/{item}/quality-plans', [ItemQualityPlanController::class, 'index'])
+        ->middleware('permission:inventory.view');
+    Route::post('/items/{item}/quality-plans', [ItemQualityPlanController::class, 'store'])
+        ->middleware('permission:quality.specs.manage');
+    Route::patch('/quality-plans/{itemQualityPlan}/deactivate', [ItemQualityPlanController::class, 'deactivate'])
+        ->middleware('permission:quality.specs.manage');
 
     /* ─── Series F / Task F3 — Stock Card ─── */
     Route::get('/items/{item}/stock-card', [StockCardController::class, 'show'])
@@ -72,6 +80,7 @@ Route::middleware(['auth:sanctum', 'feature:inventory'])->prefix('inventory')->g
     /* ─── Stock ─── */
     Route::get('/stock-levels',     [StockLevelController::class, 'index'])->middleware('permission:inventory.view');
     Route::get('/stock-movements',  [StockMovementController::class, 'index'])->middleware('permission:inventory.view');
+    Route::post('/scan/resolve', [WarehouseScanController::class, 'resolve'])->middleware('permission:inventory.view');
     Route::post('/stock-adjustments', [StockAdjustmentController::class, 'store'])->middleware('permission:inventory.adjust');
     Route::patch('/stock-adjustments/{stockAdjustment}/approve', [StockAdjustmentController::class, 'approve'])->middleware('permission:inventory.adjust.approve');
     Route::post('/stock-transfers',   [StockTransferController::class, 'store'])->middleware('permission:inventory.adjust');

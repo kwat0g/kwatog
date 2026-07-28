@@ -10,6 +10,7 @@ use App\Modules\Purchasing\Services\SupplierPerformanceService;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -30,9 +31,7 @@ class SupplierTierTest extends TestCase
         $this->seed(SettingsSeeder::class);
     }
 
-    /**
-     * @dataProvider tierBoundariesProvider
-     */
+    #[DataProvider('tierBoundariesProvider')]
     public function test_tier_is_stamped_from_overall_score(float $score, string $expected): void
     {
         $vendor = Vendor::factory()->create();

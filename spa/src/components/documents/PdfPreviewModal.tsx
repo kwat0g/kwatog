@@ -10,6 +10,7 @@
 import { Download } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
+import { downloadAuthenticatedFile } from '@/api/download';
 import type { DocumentRecord } from '@/types/documents';
 
 interface PdfPreviewModalProps {
@@ -41,11 +42,10 @@ export function PdfPreviewModal({ isOpen, onClose, document }: PdfPreviewModalPr
               </span>
             )}
           </div>
-          <a href={document.download_url} download rel="noopener">
-            <Button variant="primary" size="sm" icon={<Download size={14} />}>
-              Download
-            </Button>
-          </a>
+          <Button variant="primary" size="sm" icon={<Download size={14} />}
+            onClick={() => void downloadAuthenticatedFile(document.download_url, { filename: document.file_name, errorMessage: 'Failed to download document.' })}>
+            Download
+          </Button>
         </div>
       </div>
     </Modal>

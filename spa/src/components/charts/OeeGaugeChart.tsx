@@ -8,7 +8,7 @@ interface Props {
 }
 
 const colorFor = (v: number) =>
-  v >= 0.85 ? 'var(--color-success, #22c55e)' : v >= 0.70 ? 'var(--color-warning, #f59e0b)' : 'var(--color-danger, #ef4444)';
+  v >= 0.85 ? 'var(--success, #22c55e)' : v >= 0.70 ? 'var(--warning, #f59e0b)' : 'var(--danger, #ef4444)';
 
 export function OeeGaugeChart({ oee, availability, performance, quality }: Props) {
   const oeePct = oee * 100;

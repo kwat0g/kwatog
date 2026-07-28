@@ -7,6 +7,7 @@ namespace App\Modules\Purchasing\Services;
 use App\Common\Services\ApprovalService;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Support\HashIdFilter;
+use App\Modules\Accounting\Services\BudgetEnforcementService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Enums\PurchaseRequestPriority;
@@ -23,6 +24,7 @@ class PurchaseRequestService
     public function __construct(
         private readonly DocumentSequenceService $sequences,
         private readonly ApprovalService $approvals,
+        private readonly BudgetEnforcementService $budget,
     ) {}
 
     public function list(array $filters, ?User $user = null): LengthAwarePaginator
@@ -178,6 +180,10 @@ class PurchaseRequestService
         return DB::transaction(function () use ($pr) {
             $total = (float) $pr->totalEstimatedAmount();
 
+            if ($pr->department_id) {
+                $this->budget->assess($pr, (int) $pr->department_id, $total);
+            }
+
             // ADV6 — Pre-fill preferred suppliers on items before submission.
             $this->prefillSupplierOnItems($pr);
 
@@ -289,11 +295,17 @@ class PurchaseRequestService
         }
     }
 
+    public function acknowledgeBudget(PurchaseRequest $pr, User $by): PurchaseRequest
+    {
+        return $this->budget->acknowledge($pr, $by);
+    }
+
     public function approve(PurchaseRequest $pr, User $by, ?string $remarks = null): PurchaseRequest
     {
         if ($pr->status !== PurchaseRequestStatus::Pending) {
             throw new RuntimeException('Only pending PRs can be approved.');
         }
+        $this->budget->assertAcknowledged($pr);
         return DB::transaction(function () use ($pr, $by, $remarks) {
             $this->approvals->approve($pr, $by, $remarks);
             $becameApproved = false;

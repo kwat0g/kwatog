@@ -491,7 +491,7 @@ export default function PpcDashboard() {
   const woStatusChartData = (q.data as unknown as PpcDashboardData)?.panels?.wo_status_breakdown?.map(i => ({
     name: i.status.replace(/_/g, ' '),
     value: i.count,
-    color: i.status === 'completed' ? 'var(--color-success)' : i.status === 'in_progress' ? 'var(--color-info)' : 'var(--color-warning)',
+    color: i.status === 'completed' ? 'var(--success)' : i.status === 'in_progress' ? 'var(--info)' : 'var(--warning)',
   })) ?? [];
 
   const machineUtilChartData = (q.data as unknown as PpcDashboardData)?.panels?.machine_util ? (() => {
@@ -616,7 +616,7 @@ export default function PpcDashboard() {
             ) : (
               <BarComparison
                 data={machineUtilChartData}
-                bars={[{ dataKey: 'count', color: 'var(--color-accent)', label: 'Machines' }]}
+                bars={[{ dataKey: 'count', color: 'var(--accent)', label: 'Machines' }]}
                 xKey="label"
                 height={180}
               />

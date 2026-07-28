@@ -5,9 +5,15 @@ declare(strict_types=1);
 namespace App\Modules\ReturnManagement\Services;
 
 use App\Modules\Auth\Models\User;
+use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\BillItem;
 use App\Modules\Inventory\Enums\StockMovementType;
+use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Support\StockMovementInput;
+use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
+use App\Modules\Purchasing\Models\PurchaseOrderItem;
+use App\Modules\Purchasing\Services\PurchaseOrderService;
 use App\Modules\Quality\Enums\InspectionEntityType;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Models\Inspection;
@@ -30,6 +36,7 @@ class ReturnRequestService
         private readonly ApprovalService $approvals,
         private readonly InspectionService $inspections,
         private readonly \App\Modules\Accounting\Services\CreditNoteService $creditNotes,
+        private readonly PurchaseOrderService $purchaseOrders,
     ) {}
 
     /**
@@ -79,6 +86,7 @@ class ReturnRequestService
                         'source_sales_order_item_id' => $item['source_sales_order_item_id'] ?? null,
                         'source_invoice_item_id'    => $item['source_invoice_item_id'] ?? null,
                         'source_po_item_id'         => $item['source_po_item_id'] ?? null,
+                        'source_grn_item_id'        => $item['source_grn_item_id'] ?? null,
                         'source_bill_item_id'       => $item['source_bill_item_id'] ?? null,
                     ]);
                 }
@@ -250,16 +258,20 @@ class ReturnRequestService
      * Auto-creates NCRs for scrap/rework items with a product. Auto-creates
      * a credit memo for customer returns with positive item totals.
      */
-    public function dispose(ReturnRequest $rma, array $dispositions, User $by): ReturnRequest
-    {
-        $this->ensureStatus($rma, ReturnRequestStatus::Inspected);
+    public function dispose(
+        ReturnRequest $rma,
+        array $dispositions,
+        User $by,
+        bool $createReplacementPo = false,
+    ): ReturnRequest {
+        return DB::transaction(function () use ($rma, $dispositions, $by, $createReplacementPo) {
+            $rma = ReturnRequest::query()->lockForUpdate()->findOrFail($rma->id);
+            $this->ensureStatus($rma, ReturnRequestStatus::Inspected);
+            if ($rma->disposition_status === 'disposed') {
+                throw new \RuntimeException('RMA has already been disposed.');
+            }
 
-        if ($rma->disposition_status === 'disposed') {
-            throw new \RuntimeException('RMA has already been disposed.');
-        }
-
-        return DB::transaction(function () use ($rma, $dispositions, $by) {
-            $rma->load('items');
+            $rma->load(['items', 'bill.items', 'purchaseOrder.items']);
 
             foreach ($rma->items as $item) {
                 $disp = collect($dispositions)->firstWhere('item_id', $item->hash_id);
@@ -272,10 +284,8 @@ class ReturnRequestService
                     'disposition_notes' => $disp['notes'] ?? null,
                 ]);
 
-                // Auto-NCR for quality issues (scrap or rework with a product, skip if already linked)
-                if (in_array($disp['disposition'], ['scrap', 'rework'], true) && $item->product_id && !$item->ncr_id) {
-                    $ncrService = app(NcrService::class);
-                    $ncr = $ncrService->create([
+                if (in_array($disp['disposition'], ['scrap', 'rework'], true) && $item->product_id && ! $item->ncr_id) {
+                    $ncr = app(NcrService::class)->create([
                         'source'             => 'customer_complaint',
                         'severity'           => 'medium',
                         'product_id'         => $item->product_id,
@@ -291,20 +301,140 @@ class ReturnRequestService
                 }
             }
 
-            $rma->update(['disposition_status' => 'disposed']);
-
-            // Auto credit note for customer returns (REC-13 — a real, GL-posting
-            // credit note replaces the old negative-invoice hack).
+            $rma->load('items');
             if ($rma->type === ReturnRequestType::CustomerReturn && $rma->invoice_id) {
-                $creditTotal = $rma->items->sum(fn ($i) => (float) $i->total);
+                $creditTotal = $rma->items->sum(fn ($item) => (float) $item->total);
                 if ($creditTotal > 0) {
                     $creditNote = $this->createCreditNote($rma, (float) $creditTotal, $by);
                     $rma->update(['credit_note_id' => $creditNote->id]);
                 }
             }
 
-            return $rma->fresh()->load('items');
+            if ($rma->type === ReturnRequestType::SupplierReturn) {
+                $this->processSupplierDisposition($rma, $by, $createReplacementPo);
+            }
+
+            $rma->update(['disposition_status' => 'disposed']);
+
+            return $rma->fresh()->load(['items', 'creditNote', 'replacementPurchaseOrder']);
         });
+    }
+
+    private function processSupplierDisposition(ReturnRequest $rma, User $by, bool $createReplacementPo): void
+    {
+        $returnedItems = $rma->items->where('disposition', 'return_to_supplier');
+        if ($returnedItems->isEmpty()) {
+            return;
+        }
+        if (! $rma->vendor_id || ! $rma->purchase_order_id) {
+            throw new \RuntimeException('Supplier returns require a vendor and source purchase order.');
+        }
+
+        $creditLines = [];
+        $replacementLines = [];
+        foreach ($returnedItems->sortBy('source_grn_item_id') as $item) {
+            if (! $item->source_grn_item_id || ! $item->source_po_item_id) {
+                throw new \RuntimeException('Each supplier-return line requires source GRN and PO lines.');
+            }
+
+            $quantity = (string) ((float) $item->returned_quantity > 0 ? $item->returned_quantity : $item->quantity);
+            $grnItem = GrnItem::query()->with('grn')->lockForUpdate()->findOrFail($item->source_grn_item_id);
+            $poItem = PurchaseOrderItem::query()->lockForUpdate()->findOrFail($item->source_po_item_id);
+
+            if ((int) $grnItem->purchase_order_item_id !== (int) $poItem->id
+                || (int) $poItem->purchase_order_id !== (int) $rma->purchase_order_id
+                || (int) $grnItem->item_id !== (int) $item->item_id
+                || (int) $grnItem->grn->vendor_id !== (int) $rma->vendor_id) {
+                throw new \RuntimeException('Supplier-return source documents do not match the RMA.');
+            }
+            if (bccomp($quantity, '0', 3) <= 0
+                || bccomp($quantity, (string) $grnItem->quantity_received, 3) > 0
+                || bccomp($quantity, (string) $grnItem->quantity_accepted, 3) > 0
+                || bccomp($quantity, (string) $poItem->quantity_received, 3) > 0) {
+                throw new \RuntimeException('Supplier-return quantity exceeds the accepted receipt quantity.');
+            }
+
+            $grnItem->update([
+                'quantity_received' => bcsub((string) $grnItem->quantity_received, $quantity, 3),
+                'quantity_accepted' => bcsub((string) $grnItem->quantity_accepted, $quantity, 3),
+            ]);
+            $poItem->update([
+                'quantity_received' => bcsub((string) $poItem->quantity_received, $quantity, 3),
+            ]);
+
+            $billItem = $item->source_bill_item_id
+                ? BillItem::query()->where('bill_id', $rma->bill_id)->find($item->source_bill_item_id)
+                : null;
+            $accountId = $billItem?->expense_account_id
+                ?? Account::query()->where('code', '1200')->value('id');
+            if (! $accountId) {
+                throw new \RuntimeException('No accounting account is available for the supplier credit.');
+            }
+            $amount = bcmul($quantity, (string) $item->unit_price, 2);
+            if (bccomp($amount, '0', 2) > 0) {
+                $creditLines[$accountId] = bcadd($creditLines[$accountId] ?? '0', $amount, 2);
+            }
+            $replacementLines[] = [
+                'item_id'    => $item->item_id,
+                'description' => $poItem->description,
+                'quantity'   => $quantity,
+                'unit'       => $poItem->unit,
+                'unit_price' => (string) $poItem->unit_price,
+            ];
+        }
+
+        $this->recalculatePurchaseOrderReceiptStatus($rma);
+
+        if ($creditLines !== []) {
+            $creditNote = $this->creditNotes->create([
+                'type'              => 'supplier',
+                'vendor_id'         => $rma->vendor_id,
+                'bill_id'           => $rma->bill_id,
+                'return_request_id' => $rma->id,
+                'date'              => now()->toDateString(),
+                'is_vatable'        => (bool) ($rma->bill?->is_vatable ?? true),
+                'reason'            => "Supplier return — RMA {$rma->rma_number}",
+                'lines'             => collect($creditLines)->map(
+                    fn ($amount, $accountId) => [
+                        'account_id'  => (int) $accountId,
+                        'description' => "Returned goods — RMA {$rma->rma_number}",
+                        'amount'      => $amount,
+                    ]
+                )->values()->all(),
+            ], $by);
+            $creditNote = $this->creditNotes->finalize($creditNote, $by);
+
+            if ($rma->bill_id && bccomp((string) $rma->bill->balance, '0', 2) > 0) {
+                $applyAmount = min((float) $creditNote->total_amount, (float) $rma->bill->balance);
+                $this->creditNotes->apply($creditNote, [
+                    'bill_id' => $rma->bill_id,
+                    'amount'  => number_format($applyAmount, 2, '.', ''),
+                ], $by);
+            }
+            $rma->update(['credit_note_id' => $creditNote->id]);
+        }
+
+        if ($createReplacementPo) {
+            $replacement = $this->purchaseOrders->create([
+                'vendor_id'           => $rma->vendor_id,
+                'date'                => now()->toDateString(),
+                'is_vatable'          => true,
+                'remarks'             => "Replacement for supplier RMA {$rma->rma_number}",
+                'items'               => $replacementLines,
+            ], $by);
+            $rma->update(['replacement_purchase_order_id' => $replacement->id]);
+        }
+    }
+
+    private function recalculatePurchaseOrderReceiptStatus(ReturnRequest $rma): void
+    {
+        $po = $rma->purchaseOrder()->lockForUpdate()->firstOrFail();
+        $ordered = (float) $po->items()->sum('quantity');
+        $received = (float) $po->items()->sum('quantity_received');
+        $status = $received <= 0
+            ? PurchaseOrderStatus::Approved
+            : ($received < $ordered ? PurchaseOrderStatus::PartiallyReceived : PurchaseOrderStatus::Received);
+        $po->forceFill(['status' => $status])->save();
     }
 
     /**

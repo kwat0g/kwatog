@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Accounting\Services;
 
 use App\Modules\Accounting\Models\Budget;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
@@ -64,6 +65,60 @@ class BudgetEnforcementService
         }
 
         return [true, 'ok', "Budget within limits ({$pct}% consumed). ₱" . number_format($available, 2) . " available."];
+    }
+
+    public function assess(Model $document, int $departmentId, float $amount, ?int $fiscalYearId = null): array
+    {
+        [$canProceed, $level, $message] = $this->checkAvailability($departmentId, $amount, $fiscalYearId);
+        $requiresAcknowledgment = in_array($level, ['exhausted', 'overdrawn'], true);
+
+        $document->forceFill([
+            'budget_warning_level'    => $level === 'ok' ? null : $level,
+            'budget_warning_message'  => $level === 'ok' ? null : $message,
+            'budget_acknowledged_by'  => null,
+            'budget_acknowledged_at'  => null,
+        ])->save();
+
+        if ((string) config('budgeting.enforcement_mode', 'warn') === 'block' && ! $canProceed) {
+            throw new RuntimeException($message);
+        }
+
+        if ($requiresAcknowledgment) {
+            Log::warning('Budget acknowledgment required', [
+                'document_type' => $document->getMorphClass(),
+                'document_id'   => $document->getKey(),
+                'department_id' => $departmentId,
+                'amount'        => $amount,
+                'level'         => $level,
+            ]);
+        }
+
+        return [$canProceed, $level, $message];
+    }
+
+    public function acknowledge(Model $document, \App\Modules\Auth\Models\User $user): Model
+    {
+        if (! in_array($document->budget_warning_level, ['exhausted', 'overdrawn'], true)) {
+            throw new RuntimeException('This transaction does not require Finance acknowledgment.');
+        }
+        if (! $user->hasPermission('budgeting.approve')) {
+            throw new RuntimeException('Finance authorization is required to acknowledge a budget overrun.');
+        }
+
+        $document->forceFill([
+            'budget_acknowledged_by' => $user->id,
+            'budget_acknowledged_at' => now(),
+        ])->save();
+
+        return $document->fresh();
+    }
+
+    public function assertAcknowledged(Model $document): void
+    {
+        if (in_array($document->budget_warning_level, ['exhausted', 'overdrawn'], true)
+            && ! $document->budget_acknowledged_at) {
+            throw new RuntimeException($document->budget_warning_message ?? 'Finance acknowledgment is required.');
+        }
     }
 
     /**

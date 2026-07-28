@@ -67,6 +67,10 @@
   --accent-hover: #4338ca;
   --accent-fg: #ffffff;
 
+  /* Links — one of the few colored elements on the grayscale canvas. */
+  --text-link: #4f46e5;
+  --text-link-hover: #4338ca;
+
   /* ─── Semantic — success / warning / danger / info ─── */
   --success: #059669;
   --success-bg: #d1fae5;
@@ -164,6 +168,9 @@
   --accent: #6366f1;
   --accent-hover: #818cf8;
   --accent-fg: #ffffff;
+
+  --text-link: #818cf8;
+  --text-link-hover: #a5b4fc;
 
   --success: #10b981;
   --success-bg: #064e3b;

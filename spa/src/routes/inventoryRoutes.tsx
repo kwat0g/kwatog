@@ -9,6 +9,7 @@ const ItemsListPage             = lazy(() => import('@/pages/inventory/items'));
 const CreateItemPage            = lazy(() => import('@/pages/inventory/items/create'));
 const EditItemPage              = lazy(() => import('@/pages/inventory/items/edit'));
 const ItemDetailPage            = lazy(() => import('@/pages/inventory/items/detail'));
+const ItemQualityPlansPage      = lazy(() => import('@/pages/inventory/items/quality-plans'));
 const ItemCategoriesPage        = lazy(() => import('@/pages/inventory/categories'));
 const WarehousePage             = lazy(() => import('@/pages/inventory/warehouse'));
 const StockLevelsPage           = lazy(() => import('@/pages/inventory/stock-levels'));
@@ -32,6 +33,7 @@ const WarehouseMapPage   = lazy(() => import('@/pages/warehouse/map'));
 const StockCountPage     = lazy(() => import('@/pages/warehouse/stock-count'));
 const PickingListPage    = lazy(() => import('@/pages/warehouse/picking'));
 const TransferOrdersPage = lazy(() => import('@/pages/warehouse/transfers'));
+const WarehouseScannerPage = lazy(() => import('@/pages/warehouse/scanner'));
 
 export const inventoryRoutes = (
   <>
@@ -52,6 +54,8 @@ export const inventoryRoutes = (
       {/* Series F / Task F3 — per-item stock card */}
       <Route path="/inventory/items/:id/stock-card"
         element={<PermissionGuard permission="inventory.view"><StockCardPage /></PermissionGuard>} />
+      <Route path="/inventory/items/:id/quality-plans"
+        element={<PermissionGuard permission="inventory.view"><ItemQualityPlansPage /></PermissionGuard>} />
 
       <Route path="/inventory/categories"
         element={<PermissionGuard permission="inventory.view"><ItemCategoriesPage /></PermissionGuard>} />
@@ -76,6 +80,8 @@ export const inventoryRoutes = (
         element={<PermissionGuard permission="inventory.view"><PickingListPage /></PermissionGuard>} />
       <Route path="/inventory/transfer-orders"
         element={<PermissionGuard permission="inventory.view"><TransferOrdersPage /></PermissionGuard>} />
+      <Route path="/inventory/scanner"
+        element={<PermissionGuard permission="inventory.view"><WarehouseScannerPage /></PermissionGuard>} />
 
       <Route path="/inventory/grn"
         element={<PermissionGuard permission="inventory.view"><GrnListPage /></PermissionGuard>} />

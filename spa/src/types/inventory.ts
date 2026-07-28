@@ -37,12 +37,41 @@ export interface Item {
   lead_time_days: number;
   is_critical: boolean;
   is_active: boolean;
+  quality_plan_ready: boolean;
   on_hand_quantity: string;
   reserved_quantity: string;
   available_quantity: string;
   stock_status: StockStatus;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface QualityPlanParameter {
+  parameter_name: string;
+  parameter_type: 'dimensional' | 'visual' | 'functional';
+  unit_of_measure?: string | null;
+  nominal_value?: number | null;
+  tolerance_min?: number | null;
+  tolerance_max?: number | null;
+  is_critical?: boolean;
+  notes?: string | null;
+}
+
+export interface ItemQualityPlan {
+  id: string;
+  version: number;
+  stage: 'incoming';
+  sampling_method: 'aql' | 'fixed' | 'full';
+  fixed_sample_size: number | null;
+  aql_level: string | null;
+  parameters: QualityPlanParameter[];
+  effective_from: string;
+  effective_to: string | null;
+  is_active: boolean;
+  notes: string | null;
+  vendor: { id: string; name: string } | null;
+  creator: { id: string; name: string } | null;
+  created_at: string;
 }
 
 export interface CreateItemData {
@@ -126,7 +155,7 @@ export interface StockMovement {
 export interface GrnItem {
   id: number;
   purchase_order_item_id: number;
-  item?: { id: string; code: string; name: string; unit_of_measure: string };
+  item?: { id: string; code: string; name: string; unit_of_measure: string; quality_plan_ready: boolean };
   location?: { id: string; code: string; full_code: string };
   quantity_received: string;
   quantity_accepted: string;

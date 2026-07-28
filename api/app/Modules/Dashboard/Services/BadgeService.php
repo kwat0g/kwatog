@@ -113,6 +113,11 @@ class BadgeService
                         ->count(),
             ],
 
+            'action_center' => [
+                'permissions' => [],
+                'counter' => fn (): int => (int) app(ActionCenterService::class)->for($user)['summary']['total'],
+            ],
+
             // Procurement > Purchase requests — pending PRs routed to this role.
             'purchase_requests' => [
                 'permissions' => ['purchasing.pr.approve'],

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Leave\Models;
 
-use App\Models\User;
+use App\Modules\Auth\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -21,11 +21,11 @@ class ProcessedYearEndLeaveType extends Model
     ];
 
     protected $casts = [
-        'year'            => 'integer',
-        'processed_at'    => 'datetime',
+        'year' => 'integer',
+        'processed_at' => 'datetime',
         'employees_count' => 'integer',
-        'days_converted'  => 'decimal:1',
-        'days_forfeited'  => 'decimal:1',
+        'days_converted' => 'decimal:1',
+        'days_forfeited' => 'decimal:1',
     ];
 
     public function leaveType(): BelongsTo

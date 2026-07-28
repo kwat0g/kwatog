@@ -60,10 +60,10 @@ function fetchCopqWidget(months = 6) {
 /* ─── Component ─── */
 
 const TREND_BARS = [
-  { dataKey: 'scrap_cost', color: 'var(--color-danger)', label: 'Scrap' },
-  { dataKey: 'rework_cost', color: 'var(--color-warning)', label: 'Rework' },
-  { dataKey: 'warranty_cost', color: 'var(--color-info)', label: 'Returns' },
-  { dataKey: 'inspection_cost', color: 'var(--color-purple, #8b5cf6)', label: 'Complaints' },
+  { dataKey: 'scrap_cost', color: 'var(--danger)', label: 'Scrap' },
+  { dataKey: 'rework_cost', color: 'var(--warning)', label: 'Rework' },
+  { dataKey: 'warranty_cost', color: 'var(--info)', label: 'Returns' },
+  { dataKey: 'inspection_cost', color: 'var(--purple, #8b5cf6)', label: 'Complaints' },
 ];
 
 export function CopqWidget() {

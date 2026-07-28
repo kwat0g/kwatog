@@ -35,11 +35,14 @@ class PurchaseOrder extends Model
         'requires_vp_approval',
         'created_by', 'remarks', 'incoterm',
         'is_auto_generated',
+        'budget_warning_level', 'budget_warning_message',
+        'budget_acknowledged_by', 'budget_acknowledged_at',
     ];
 
     protected $casts = [
         'date'                   => 'date',
         'expected_delivery_date' => 'date',
+        'budget_acknowledged_at' => 'datetime',
         'subtotal'               => 'decimal:2',
         'vat_amount'             => 'decimal:2',
         'total_amount'           => 'decimal:2',
@@ -86,6 +89,11 @@ class PurchaseOrder extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function budgetAcknowledger(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'budget_acknowledged_by');
     }
 
     public function scopeOpen(Builder $q): Builder

@@ -28,6 +28,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+    volumes:
+      - appstorage:/var/www/storage/app
     networks: [ogami-net]
 
   nginx:
@@ -103,6 +105,8 @@ services:
     command: php artisan reverb:start --host=0.0.0.0 --port=8080
     depends_on:
       - api
+    volumes:
+      - appstorage:/var/www/storage/app
     networks: [ogami-net]
 
   queue:
@@ -117,6 +121,8 @@ services:
     depends_on:
       - api
       - redis
+    volumes:
+      - appstorage:/var/www/storage/app
     networks: [ogami-net]
 
   # Phase 4 — Scheduler. routes/console.php registers daily/hourly jobs
@@ -138,6 +144,8 @@ services:
     depends_on:
       - api
       - redis
+    volumes:
+      - appstorage:/var/www/storage/app
     networks: [ogami-net]
 
 networks:
@@ -148,3 +156,4 @@ volumes:
   pgdata:
   redisdata:
   meilidata:
+  appstorage:

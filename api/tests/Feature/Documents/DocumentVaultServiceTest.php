@@ -80,7 +80,7 @@ class DocumentVaultServiceTest extends TestCase
         $a = $this->fakeEntity(11);
         $b = $this->fakeEntity(22);
         $vault->store('A1', DocumentType::Invoice, $a, $this->makeUser());
-        $vault->store('A2', DocumentType::Coc,     $a, $this->makeUser());
+        $vault->store('A2', DocumentType::Coc, $a, $this->makeUser());
         $vault->store('B1', DocumentType::Invoice, $b, $this->makeUser());
 
         $this->assertCount(2, $vault->listForEntity($a));
@@ -90,7 +90,7 @@ class DocumentVaultServiceTest extends TestCase
     private function makeUser(): User
     {
         return User::factory()->create([
-            'name'  => 'Test User',
+            'name' => 'Test User',
             'email' => 'test+'.uniqid().'@example.com',
         ]);
     }
@@ -99,15 +99,25 @@ class DocumentVaultServiceTest extends TestCase
     {
         // Use a real model class so morphTo round-trips work; pick Alert
         // (smallest schema) and stub it as if it exists.
-        $entity = new class extends Model {
+        $entity = new class extends Model
+        {
             protected $table = 'fake_entities';
+
             public $exists = true;
 
-            public function getKey() { return $this->id; }
-            public function getMorphClass(): string { return 'fake_entity'; }
+            public function getKey()
+            {
+                return $this->id;
+            }
+
+            public function getMorphClass(): string
+            {
+                return 'fake_entity';
+            }
         };
         $entity->id = $id;
         $entity->employee_no = 'EMP-'.$id;
+
         return $entity;
     }
 }

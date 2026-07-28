@@ -1,4 +1,4 @@
-import axios, { AxiosError } from 'axios';
+import axios, { AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios';
 import toast from 'react-hot-toast';
 import { queryClient } from '@/lib/queryClient';
 import { useErrorLogStore } from '@/stores/errorLogStore';
@@ -35,7 +35,16 @@ export const client = axios.create({
 // ─── Shared error handler ─────────────────────────────────────
 // Extracted as a named function so it can be attached to both `client`
 // and `unwrappingClient` without duplicating logic.
-const handleResponseError = (error: AxiosError<LaravelDebugError>) => {
+interface OgamiRequestConfig extends InternalAxiosRequestConfig {
+  /** Internal loop guard for the one-time CSRF recovery retry. */
+  _csrfRetried?: boolean;
+  /** Explicit opt-in for a global toast. Screens normally own their error UI. */
+  showErrorToast?: boolean;
+  /** Legacy per-request opt-out retained for existing callers. */
+  skipErrorToast?: boolean;
+}
+
+const createResponseErrorHandler = (retryClient: AxiosInstance) => async (error: AxiosError<LaravelDebugError>) => {
   const status = error.response?.status;
   const data = error.response?.data;
 
@@ -59,10 +68,11 @@ const handleResponseError = (error: AxiosError<LaravelDebugError>) => {
   const isBootstrap = requestUrl.endsWith('/auth/user');
   const isLoginAttempt = requestUrl.endsWith('/auth/login');
 
-  // Per-request opt-out — queries can pass `{ skipErrorToast: true }` in their
-  // axios config to suppress the global 5xx / 403 toast (errors still flow
-  // through react-query / axios for inline handling).
-  const skipToast = (error.config as { skipErrorToast?: boolean } | undefined)?.skipErrorToast === true;
+  // Pages and mutations own their error UI. A request may explicitly opt into
+  // a global toast for a truly background operation; this avoids interceptor +
+  // page handlers producing two notifications for one failure.
+  const requestConfig = error.config as OgamiRequestConfig | undefined;
+  const showToast = requestConfig?.showErrorToast === true && requestConfig.skipErrorToast !== true;
 
   // Timeout — axios sets error.code = 'ECONNABORTED' when the request
   // exceeds the configured `timeout`. Check before the HTTP status switch
@@ -75,7 +85,7 @@ const handleResponseError = (error: AxiosError<LaravelDebugError>) => {
       status: 0,
       message: `Timeout after ${error.config?.timeout ?? 30_000}ms`,
     });
-    if (!skipToast) {
+    if (showToast) {
       toast.error('Request timed out. Please try again.', { duration: 5000 });
     }
     return Promise.reject(error);
@@ -104,7 +114,7 @@ const handleResponseError = (error: AxiosError<LaravelDebugError>) => {
         }
       } else if (data?.code === 'feature_disabled') {
         // ModuleGuard handles UI; suppress toast here.
-      } else if (!skipToast) {
+      } else if (showToast) {
         toast.error(data?.message ?? 'You do not have permission to perform this action.');
       }
       break;
@@ -114,8 +124,20 @@ const handleResponseError = (error: AxiosError<LaravelDebugError>) => {
       break;
 
     case 419:
-      // CSRF token mismatch — refresh the page to fetch a new token.
-      toast.error('Your session was refreshed. Please try again.');
+      // A tab left open longer than the Laravel session can retain an obsolete
+      // XSRF cookie. Refresh it and replay the failed mutation exactly once so
+      // login and normal forms recover without a hard browser refresh.
+      if (requestConfig && !requestConfig._csrfRetried) {
+        requestConfig._csrfRetried = true;
+        try {
+          await getCsrfCookie();
+        } catch {
+          return Promise.reject(error);
+        }
+        // Keep this outside the try/catch: if the replay receives a validation
+        // error, the caller must see that response rather than the original 419.
+        return retryClient.request(requestConfig);
+      }
       break;
 
     case 422:
@@ -123,18 +145,18 @@ const handleResponseError = (error: AxiosError<LaravelDebugError>) => {
       break;
 
     case 423:
-      toast.error(data?.message ?? 'Account locked. Try again later.');
+      if (showToast) toast.error(data?.message ?? 'Account locked. Try again later.');
       break;
 
     case 429:
-      toast.error('Too many requests. Please wait a moment.');
+      if (showToast) toast.error('Too many requests. Please wait a moment.');
       break;
 
     case 500:
     case 502:
     case 503:
     case 504:
-      if (!skipToast) {
+      if (showToast) {
         const serverMsg = import.meta.env.DEV ? data?.message : null;
         toast.error(serverMsg ?? 'Something went wrong. Please try again.', {
           duration: 5000,
@@ -143,7 +165,7 @@ const handleResponseError = (error: AxiosError<LaravelDebugError>) => {
       break;
 
     default:
-      if (!error.response && !skipToast) {
+      if (!error.response && showToast) {
         toast.error('Network error. Please check your connection.');
       }
   }
@@ -152,7 +174,7 @@ const handleResponseError = (error: AxiosError<LaravelDebugError>) => {
 };
 
 // ─── Attach interceptors to plain client ──────────────────────
-client.interceptors.response.use((response) => response, handleResponseError);
+client.interceptors.response.use((response) => response, createResponseErrorHandler(client));
 
 // ─── Unwrapping client ────────────────────────────────────────
 // Use this instance ONLY for files that have been migrated away from the
@@ -187,7 +209,7 @@ unwrappingClient.interceptors.response.use(
     }
     return response;
   },
-  handleResponseError,
+  createResponseErrorHandler(unwrappingClient),
 );
 
 /**

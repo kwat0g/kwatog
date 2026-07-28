@@ -26,7 +26,10 @@ class QuoteRequestService
         // never leaves the row gone but the file orphaned on disk. If the
         // insert fails, we delete the just-stored file in the catch below.
         if ($drawing !== null) {
-            $data['drawing_path']          = $drawing->store('quote-drawings', 'local');
+            $data['drawing_path'] = $drawing->store('quote-drawings', 'local');
+            if ($data['drawing_path'] === false) {
+                throw new \RuntimeException('Unable to store the uploaded drawing.');
+            }
             $data['drawing_original_name'] = $this->sanitizeFilename($drawing->getClientOriginalName());
         }
 
@@ -52,7 +55,7 @@ class QuoteRequestService
         } catch (\Throwable $e) {
             Log::warning('QuoteRequestReceivedNotification failed to send', [
                 'request_no' => $quote->request_no,
-                'error'      => $e->getMessage(),
+                'error' => $e->getMessage(),
             ]);
         }
 

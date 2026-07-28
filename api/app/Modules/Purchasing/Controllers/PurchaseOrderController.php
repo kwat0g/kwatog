@@ -36,7 +36,11 @@ class PurchaseOrderController
 
     public function store(StorePurchaseOrderRequest $request): JsonResponse
     {
-        $po = $this->service->create($request->validated(), $request->user());
+        try {
+            $po = $this->service->create($request->validated(), $request->user());
+        } catch (RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
         return (new PurchaseOrderResource($po))->response()->setStatusCode(201);
     }
 
@@ -57,6 +61,13 @@ class PurchaseOrderController
     public function submit(PurchaseOrder $purchaseOrder): PurchaseOrderResource
     {
         try { $po = $this->service->submit($purchaseOrder); }
+        catch (RuntimeException $e) { abort(422, $e->getMessage()); }
+        return new PurchaseOrderResource($this->service->show($po));
+    }
+
+    public function acknowledgeBudget(Request $request, PurchaseOrder $purchaseOrder): PurchaseOrderResource
+    {
+        try { $po = $this->service->acknowledgeBudget($purchaseOrder, $request->user()); }
         catch (RuntimeException $e) { abort(422, $e->getMessage()); }
         return new PurchaseOrderResource($this->service->show($po));
     }

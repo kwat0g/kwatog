@@ -14,14 +14,14 @@ const UNIT_SUFFIX: Record<string, string> = {
 };
 
 const STATUS_DOT: Record<string, string> = {
-  on_target: 'bg-emerald-500',
-  warning: 'bg-amber-500',
+  on_target: 'bg-success',
+  warning: 'bg-warning',
   off_target: 'bg-danger',
 };
 
 const TREND_COLORS: Record<string, Record<string, string>> = {
-  on_target: { up: 'text-emerald-500', down: 'text-emerald-500', flat: 'text-muted' },
-  warning: { up: 'text-amber-500', down: 'text-amber-500', flat: 'text-muted' },
+  on_target: { up: 'text-success', down: 'text-success', flat: 'text-muted' },
+  warning: { up: 'text-warning', down: 'text-warning', flat: 'text-muted' },
   off_target: { up: 'text-danger', down: 'text-danger', flat: 'text-muted' },
 };
 
@@ -92,7 +92,7 @@ export function KpiStrip({ codes, className }: KpiStripProps) {
             </div>
             {snap && (
               <div className="flex items-center gap-1 mt-0.5 shrink-0">
-                <span className={cn('w-1.5 h-1.5 rounded-full', STATUS_DOT[snap.status] ?? 'bg-gray-400')} />
+                <span className={cn('w-1.5 h-1.5 rounded-full', STATUS_DOT[snap.status] ?? 'bg-text-subtle')} />
                 <TrendIcon trend={snap.trend} status={snap.status} />
               </div>
             )}

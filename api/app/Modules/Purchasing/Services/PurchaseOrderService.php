@@ -22,7 +22,6 @@ use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Models\PurchaseRequestItem;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
 class PurchaseOrderService
@@ -126,14 +125,6 @@ class PurchaseOrderService
             $threshold = (float) $this->settings->get('approval.po.vp_threshold', 50000.0);
 
             $deptId = $this->resolveDepartmentId($data);
-            if ($deptId) {
-                [$canProceed, $level, $message] = $this->budget->checkAvailability($deptId, (float) $total);
-                if (! $canProceed) {
-                    throw ValidationException::withMessages([
-                        'budget' => [$message],
-                    ]);
-                }
-            }
 
             $po = PurchaseOrder::create([
                 'po_number'            => $this->sequences->generate('purchase_order'),
@@ -153,6 +144,9 @@ class PurchaseOrderService
             ]);
             // status is non-fillable; service-only.
             $po->forceFill(['status' => PurchaseOrderStatus::Draft])->save();
+            if ($deptId) {
+                $this->budget->assess($po, $deptId, (float) $total);
+            }
             foreach ($lines as $row) {
                 PurchaseOrderItem::create(array_merge($row, ['purchase_order_id' => $po->id]));
             }
@@ -200,7 +194,7 @@ class PurchaseOrderService
                 ], $by);
                 $created[] = $po;
             }
-            $pr->update(['status' => PurchaseRequestStatus::Converted]);
+            $pr->forceFill(['status' => PurchaseRequestStatus::Converted])->save();
             return $created;
         });
     }
@@ -248,11 +242,17 @@ class PurchaseOrderService
         });
     }
 
+    public function acknowledgeBudget(PurchaseOrder $po, User $by): PurchaseOrder
+    {
+        return $this->budget->acknowledge($po, $by);
+    }
+
     public function approve(PurchaseOrder $po, User $by, ?string $remarks = null): PurchaseOrder
     {
         if (! in_array($po->status, [PurchaseOrderStatus::PendingApproval, PurchaseOrderStatus::Draft], true)) {
             throw new RuntimeException('PO is not in an approvable state.');
         }
+        $this->budget->assertAcknowledged($po);
         // OGAMI-002 — segregation of duties: the approver must not be the user
         // who created the vendor on this PO (vendor-create vs PO-approve).
         $this->assertVendorSod($po, $by);

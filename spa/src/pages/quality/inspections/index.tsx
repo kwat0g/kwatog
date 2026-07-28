@@ -57,6 +57,11 @@ export default function InspectionsListPage() {
             <span className="font-mono">{r.product.part_number}</span>
             <span className="ml-2 text-muted">{r.product.name}</span>
           </span>
+        ) : r.item ? (
+          <span>
+            <span className="font-mono">{r.item.code}</span>
+            <span className="ml-2 text-muted">{r.item.name}</span>
+          </span>
         ) : (
           <span className="text-muted">—</span>
         ),

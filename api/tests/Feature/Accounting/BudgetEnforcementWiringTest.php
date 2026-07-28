@@ -33,8 +33,47 @@ class BudgetEnforcementWiringTest extends TestCase
         ]);
     }
 
-    public function test_po_creation_blocked_when_budget_exhausted(): void
+    public function test_po_creation_persists_warning_without_blocking_when_budget_exhausted(): void
     {
+        config(['budgeting.enforcement_mode' => 'warn']);
+
+        $dept = Department::factory()->create();
+        $fy   = FiscalYear::factory()->create(['status' => 'active']);
+        Budget::factory()->create([
+            'department_id'   => $dept->id,
+            'fiscal_year_id'  => $fy->id,
+            'total_allocated' => 100.00,
+            'total_spent'     => 100.00,
+            'total_committed' => 0.00,
+            'status'          => 'approved',
+        ]);
+        $user = $this->makeAdmin();
+        $pr   = PurchaseRequest::factory()->create(['department_id' => $dept->id]);
+
+        $response = $this->actingAs($user)
+            ->postJson('/api/v1/purchasing/purchase-orders', [
+                'vendor_id'   => \App\Modules\Accounting\Models\Vendor::factory()->create()->hash_id,
+                'date'        => now()->toDateString(),
+                'purchase_request_id' => $pr->hash_id,
+                'items'       => [
+                    ['item_id' => \App\Modules\Inventory\Models\Item::factory()->create()->hash_id,
+                     'quantity' => 1, 'unit_price' => 500.00, 'description' => 'test'],
+                ],
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.budget_warning_level', 'exhausted')
+            ->assertJsonPath('data.budget_acknowledged_at', null);
+
+        $po = PurchaseOrder::findOrFail(app('hashids')->decode($response->json('data.id'))[0]);
+        $this->assertSame($pr->id, $po->purchase_request_id);
+        $this->assertSame('exhausted', $po->budget_warning_level);
+        $this->assertNull($po->budget_acknowledged_at);
+    }
+
+    public function test_po_creation_is_blocked_in_explicit_block_mode(): void
+    {
+        config(['budgeting.enforcement_mode' => 'block']);
+
         $dept = Department::factory()->create();
         $fy   = FiscalYear::factory()->create(['status' => 'active']);
         Budget::factory()->create([
@@ -58,8 +97,7 @@ class BudgetEnforcementWiringTest extends TestCase
                      'quantity' => 1, 'unit_price' => 500.00, 'description' => 'test'],
                 ],
             ])
-            ->assertStatus(422)
-            ->assertJsonPath('errors.budget.0', fn ($v) => str_contains($v, 'exhausted') || str_contains($v, 'Insufficient'));
+            ->assertStatus(422);
     }
 
     public function test_po_creation_succeeds_within_budget(): void

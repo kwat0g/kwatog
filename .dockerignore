@@ -1,0 +1,36 @@
+.git/
+.github/
+.agents/
+.antigravitycli/
+.claude/
+.playwright-mcp/
+.roo/
+.superpowers/
+.idea/
+.vscode/
+evals/
+graphify-out/
+plans/
+
+# Never send secrets or runtime data to the Docker daemon/build cache.
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.production.example
+api/storage/
+api/bootstrap/cache/
+backups/
+*.log
+
+# Reproducible dependency/build outputs are produced inside their images.
+api/vendor/
+spa/node_modules/
+spa/dist/
+spa/playwright-report/
+spa/test-results/
+node_modules/
+coverage/
+
+# Development-only material is not needed by production PHP images.
+api/tests/
+docs/

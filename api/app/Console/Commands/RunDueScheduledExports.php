@@ -8,10 +8,10 @@ use App\Common\Enums\ExportFormat;
 use App\Common\Enums\ExportFrequency;
 use App\Common\Models\ScheduledExport;
 use App\Common\Services\Export\ExportRunner;
+use App\Common\Services\Export\SpreadsheetExportService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
-use Maatwebsite\Excel\Facades\Excel;
 
 /**
  * Series E (Task E2) — every-5-min scheduler tick. For each due export:
@@ -29,8 +29,10 @@ class RunDueScheduledExports extends Command
 
     protected $description = 'Run all scheduled exports whose next_run_at has elapsed.';
 
-    public function __construct(private readonly ExportRunner $runner)
-    {
+    public function __construct(
+        private readonly ExportRunner $runner,
+        private readonly SpreadsheetExportService $spreadsheets,
+    ) {
         parent::__construct();
     }
 
@@ -39,20 +41,23 @@ class RunDueScheduledExports extends Command
         $due = ScheduledExport::query()->due(now())->with('owner:id,name,email')->get();
 
         $this->info("Found {$due->count()} due export(s).");
-        if ($due->isEmpty()) return self::SUCCESS;
+        if ($due->isEmpty()) {
+            return self::SUCCESS;
+        }
 
         foreach ($due as $row) {
             try {
                 if ($this->option('dry-run')) {
                     $this->line("DRY: would run {$row->module} for {$row->owner?->email}");
+
                     continue;
                 }
                 $this->runOne($row);
                 $this->info("OK   {$row->name} ({$row->module})");
             } catch (\Throwable $e) {
                 Log::error('scheduled-export-failed', [
-                    'id'      => $row->id,
-                    'module'  => $row->module,
+                    'id' => $row->id,
+                    'module' => $row->module,
                     'message' => $e->getMessage(),
                 ]);
                 $this->error("FAIL {$row->name} — {$e->getMessage()}");
@@ -74,22 +79,17 @@ class RunDueScheduledExports extends Command
             now()->format('Ymd-His'),
             $format->extension(),
         );
-        $writer = $format === ExportFormat::Csv ? \Maatwebsite\Excel\Excel::CSV : \Maatwebsite\Excel\Excel::XLSX;
-
-        $tmp = tempnam(sys_get_temp_dir(), 'export-');
-        Excel::store($exporter, basename($tmp), null, $writer);
-        $bytes = (string) file_get_contents($tmp);
-        @unlink($tmp);
+        $bytes = $this->spreadsheets->render($exporter, $format);
 
         $recipients = (array) ($row->recipients ?? []);
         $name = $row->name;
         $module = $row->module;
 
-        Mail::raw("Attached is your scheduled export: {$name} ({$module}).", function ($message) use ($recipients, $filename, $bytes, $name) {
+        Mail::raw("Attached is your scheduled export: {$name} ({$module}).", function ($message) use ($recipients, $filename, $bytes, $name, $format) {
             $message->to($recipients)
                 ->subject("[Ogami ERP] Scheduled export: {$name}")
                 ->attachData($bytes, $filename, [
-                    'mime' => 'application/octet-stream',
+                    'mime' => $format->mimeType(),
                 ]);
         });
 

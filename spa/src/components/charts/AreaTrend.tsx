@@ -16,7 +16,7 @@ export function AreaTrend({
   dataKey = 'value',
   forecastKey,
   xKey = 'period',
-  color = 'var(--color-accent)',
+  color = 'var(--accent)',
   height = 200,
   unit = '',
   formatValue,
@@ -26,23 +26,23 @@ export function AreaTrend({
   return (
     <ResponsiveContainer width="100%" height={height}>
       <AreaChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" />
         <XAxis
           dataKey={xKey}
-          tick={{ fontSize: 11, fill: 'var(--color-muted)' }}
+          tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
           axisLine={false}
           tickLine={false}
         />
         <YAxis
-          tick={{ fontSize: 11, fill: 'var(--color-muted)' }}
+          tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
           axisLine={false}
           tickLine={false}
           tickFormatter={(v) => fmt(v)}
         />
         <Tooltip
           contentStyle={{
-            background: 'var(--color-surface)',
-            border: '1px solid var(--color-border)',
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--border-default)',
             borderRadius: 6,
             fontSize: 12,
           }}

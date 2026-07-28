@@ -53,7 +53,7 @@ export default function DriverPhotoCapture() {
   });
 
   if (!id) {
-    return <div className="py-12 text-center text-zinc-500">Missing delivery id.</div>;
+    return <div className="py-12 text-center text-muted">Missing delivery id.</div>;
   }
 
   const onPickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -81,11 +81,11 @@ export default function DriverPhotoCapture() {
     <div className="space-y-4">
       <Link
         to={`/driver/${id}`}
-        className="inline-block text-sm text-zinc-500 underline min-h-[44px] py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 rounded"
+        className="inline-block text-sm text-muted underline min-h-[44px] py-2 focus:outline-none focus:ring-2 focus:ring-accent rounded"
       >
         ← Back to delivery
       </Link>
-      <h1 className="text-lg font-medium">Receipt Photo</h1>
+      <h1 className="text-lg font-medium text-primary">Receipt Photo</h1>
 
       <input
         ref={fileRef}
@@ -106,7 +106,7 @@ export default function DriverPhotoCapture() {
       {preview ? (
         <img src={preview} alt="receipt preview" className="w-full rounded-md" />
       ) : (
-        <div className="aspect-[4/3] rounded-md border-2 border-dashed border-zinc-300 dark:border-zinc-700 flex items-center justify-center text-zinc-500">
+        <div className="aspect-[4/3] rounded-md border-2 border-dashed border-strong flex items-center justify-center text-muted">
           No photo yet
         </div>
       )}
@@ -121,14 +121,14 @@ export default function DriverPhotoCapture() {
         <button
           type="button"
           onClick={() => fileRef.current?.click()}
-          className="rounded-md border border-zinc-300 dark:border-zinc-700 py-3 min-h-[44px] focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+          className="rounded-md border border-default bg-canvas text-primary py-3 hover:bg-elevated min-h-[44px] focus:outline-none focus:ring-2 focus:ring-accent"
         >
           {preview ? 'Retake' : 'Take Photo'}
         </button>
         <button
           type="button"
           onClick={() => galleryRef.current?.click()}
-          className="rounded-md border border-zinc-300 dark:border-zinc-700 py-3 min-h-[44px] focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+          className="rounded-md border border-default bg-canvas text-primary py-3 hover:bg-elevated min-h-[44px] focus:outline-none focus:ring-2 focus:ring-accent"
         >
           Choose from Gallery
         </button>
@@ -138,7 +138,7 @@ export default function DriverPhotoCapture() {
         type="button"
         disabled={!file || upload.isPending}
         onClick={() => upload.mutate()}
-        className="w-full rounded-md bg-indigo-600 text-white py-3 font-medium disabled:opacity-60 min-h-[44px] focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+        className="w-full rounded-md bg-accent text-accent-fg py-3 font-medium hover:bg-accent-hover disabled:opacity-60 min-h-[44px] focus:outline-none focus:ring-2 focus:ring-accent"
       >
         {upload.isPending ? 'Uploading…' : 'Upload Photo'}
       </button>

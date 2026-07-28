@@ -6,6 +6,8 @@ namespace App\Modules\Edge\Services;
 
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\StockCountItem;
+use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 
@@ -28,11 +30,55 @@ class EdgeScanResolverService
         }
 
         return match (true) {
-            str_starts_with($code, 'WO-')  => $this->resolveWorkOrder($code, $context),
-            str_starts_with($code, 'PO-')  => $this->resolvePurchaseOrder($code, $context),
+            str_starts_with($code, 'WO-') => $this->resolveWorkOrder($code, $context),
+            str_starts_with($code, 'PO-') => $this->resolvePurchaseOrder($code, $context),
             str_starts_with($code, 'GRN-') => $this->resolveGrn($code, $context),
-            default                        => $this->resolveItem($code, $context),
+            default => $this->resolveInventoryCode($code, $context),
         };
+    }
+
+    private function resolveInventoryCode(string $code, array $context): array
+    {
+        $item = $this->resolveItem($code, $context);
+        if ($item['type'] !== 'unknown') {
+            return $item;
+        }
+
+        $location = WarehouseLocation::query()->with('zone.warehouse')
+            ->whereRaw('UPPER(code) = ?', [$code])->first();
+        if (! $location) {
+            return $this->unknown();
+        }
+
+        $actions = [[
+            'action' => 'view_bin',
+            'label' => 'View bin',
+            'params' => ['location_id' => $location->id],
+        ]];
+        $sessionId = $this->decodeNumericOrHash($context['stock_count_session_id'] ?? null);
+        if ($sessionId) {
+            $countItem = StockCountItem::query()->where('session_id', $sessionId)
+                ->where('location_id', $location->id)->first();
+            if ($countItem) {
+                $actions[] = [
+                    'action' => 'record_count',
+                    'label' => 'Record count for this bin',
+                    'params' => ['stock_count_item_id' => $countItem->id],
+                ];
+            }
+        }
+
+        return [
+            'type' => 'warehouse_location',
+            'entity' => [
+                'id' => $location->id,
+                'code' => $location->code,
+                'full_code' => $location->full_code,
+                'warehouse' => $location->zone?->warehouse?->name,
+                'zone' => $location->zone?->name,
+            ],
+            'suggested_actions' => $actions,
+        ];
     }
 
     private function resolveWorkOrder(string $code, array $context): array
@@ -45,35 +91,35 @@ class EdgeScanResolverService
             return $this->unknown();
         }
 
-        $status  = $this->statusValue($wo->status);
+        $status = $this->statusValue($wo->status);
         $actions = [];
 
         if (in_array($status, ['in_progress', 'released', 'confirmed'], true)) {
             $actions[] = [
                 'action' => 'report_output',
-                'label'  => 'Report output',
+                'label' => 'Report output',
                 'params' => ['wo_id' => $wo->hash_id],
             ];
             $actions[] = [
                 'action' => 'report_defect',
-                'label'  => 'Report defect',
+                'label' => 'Report defect',
                 'params' => ['wo_id' => $wo->hash_id],
             ];
         }
         $actions[] = [
             'action' => 'view_wo',
-            'label'  => 'View WO',
+            'label' => 'View WO',
             'params' => ['id' => $wo->hash_id],
         ];
 
         return [
-            'type'   => 'work_order',
+            'type' => 'work_order',
             'entity' => [
-                'id'                => $wo->hash_id,
-                'wo_number'         => $wo->wo_number,
-                'product'           => $wo->product?->name,
-                'status'            => $status,
-                'quantity_target'   => (int) $wo->quantity_target,
+                'id' => $wo->hash_id,
+                'wo_number' => $wo->wo_number,
+                'product' => $wo->product?->name,
+                'status' => $status,
+                'quantity_target' => (int) $wo->quantity_target,
                 'quantity_produced' => (int) ($wo->quantity_produced ?? 0),
             ],
             'suggested_actions' => $actions,
@@ -90,29 +136,29 @@ class EdgeScanResolverService
             return $this->unknown();
         }
 
-        $status  = $this->statusValue($po->status);
+        $status = $this->statusValue($po->status);
         $actions = [];
 
         if (in_array($status, ['approved', 'sent', 'partially_received'], true)) {
             $actions[] = [
                 'action' => 'open_grn',
-                'label'  => "Receive against {$po->po_number}",
+                'label' => "Receive against {$po->po_number}",
                 'params' => ['po_id' => $po->hash_id],
             ];
         }
         $actions[] = [
             'action' => 'view_po',
-            'label'  => 'View PO',
+            'label' => 'View PO',
             'params' => ['id' => $po->hash_id],
         ];
 
         return [
-            'type'   => 'purchase_order',
+            'type' => 'purchase_order',
             'entity' => [
-                'id'        => $po->hash_id,
+                'id' => $po->hash_id,
                 'po_number' => $po->po_number,
-                'vendor'    => $po->vendor?->name,
-                'status'    => $status,
+                'vendor' => $po->vendor?->name,
+                'status' => $status,
             ],
             'suggested_actions' => $actions,
         ];
@@ -128,15 +174,15 @@ class EdgeScanResolverService
         }
 
         return [
-            'type'   => 'goods_receipt_note',
+            'type' => 'goods_receipt_note',
             'entity' => [
-                'id'         => $grn->hash_id,
+                'id' => $grn->hash_id,
                 'grn_number' => $grn->grn_number,
-                'status'     => $this->statusValue($grn->status),
+                'status' => $this->statusValue($grn->status),
             ],
             'suggested_actions' => [[
                 'action' => 'view_grn',
-                'label'  => 'View GRN',
+                'label' => 'View GRN',
                 'params' => ['id' => $grn->hash_id],
             ]],
         ];
@@ -151,15 +197,39 @@ class EdgeScanResolverService
 
         $actions = [];
 
+        $sessionId = $this->decodeNumericOrHash($context['stock_count_session_id'] ?? null);
+        if ($sessionId) {
+            $countItem = StockCountItem::query()->where('session_id', $sessionId)
+                ->where('item_id', $item->id)
+                ->whereIn('status', ['pending', 'counted'])
+                ->first();
+            if ($countItem) {
+                $actions[] = [
+                    'action' => 'record_count',
+                    'label' => 'Record cycle count',
+                    'params' => ['stock_count_item_id' => $countItem->id],
+                ];
+            }
+        }
+
+        $misId = $this->decodeNumericOrHash($context['material_issue_id'] ?? null);
+        if ($misId) {
+            $actions[] = [
+                'action' => 'pick_for_issue',
+                'label' => 'Open material issue picking',
+                'params' => ['material_issue_id' => $misId, 'item_id' => $item->hash_id],
+            ];
+        }
+
         // Context-aware: scanner bound to an active WO → suggest issue.
         $woHash = $context['wo_id'] ?? null;
         if (is_string($woHash) && $woHash !== '') {
             $woId = $this->decodeHashId($woHash);
-            $wo   = $woId ? WorkOrder::query()->find($woId) : null;
+            $wo = $woId ? WorkOrder::query()->find($woId) : null;
             if ($wo && in_array($this->statusValue($wo->status), ['released', 'in_progress', 'confirmed'], true)) {
                 $actions[] = [
                     'action' => 'issue_to_wo',
-                    'label'  => "Issue to {$wo->wo_number}",
+                    'label' => "Issue to {$wo->wo_number}",
                     'params' => ['item_id' => $item->hash_id, 'wo_id' => $wo->hash_id],
                 ];
             }
@@ -169,11 +239,11 @@ class EdgeScanResolverService
         $grnHash = $context['grn_id'] ?? null;
         if (is_string($grnHash) && $grnHash !== '') {
             $grnId = $this->decodeHashId($grnHash);
-            $grn   = $grnId ? GoodsReceiptNote::query()->find($grnId) : null;
+            $grn = $grnId ? GoodsReceiptNote::query()->find($grnId) : null;
             if ($grn && $this->statusValue($grn->status) === 'pending_qc') {
                 $actions[] = [
                     'action' => 'add_to_grn',
-                    'label'  => "Add to {$grn->grn_number}",
+                    'label' => "Add to {$grn->grn_number}",
                     'params' => ['item_id' => $item->hash_id, 'grn_id' => $grn->hash_id],
                 ];
             }
@@ -181,17 +251,17 @@ class EdgeScanResolverService
 
         $actions[] = [
             'action' => 'view_item',
-            'label'  => 'View item',
+            'label' => 'View item',
             'params' => ['id' => $item->hash_id],
         ];
 
         return [
-            'type'   => 'item',
+            'type' => 'item',
             'entity' => [
-                'id'              => $item->hash_id,
-                'code'            => $item->code,
-                'name'            => $item->name,
-                'item_type'       => $item->item_type instanceof \BackedEnum
+                'id' => $item->hash_id,
+                'code' => $item->code,
+                'name' => $item->name,
+                'item_type' => $item->item_type instanceof \BackedEnum
                     ? $item->item_type->value
                     : $item->item_type,
                 'unit_of_measure' => $item->unit_of_measure,
@@ -210,12 +280,23 @@ class EdgeScanResolverService
         if ($status instanceof \BackedEnum) {
             return (string) $status->value;
         }
+
         return $status === null ? null : (string) $status;
     }
 
     private function decodeHashId(string $hash): ?int
     {
         $decoded = app('hashids')->decode($hash);
+
         return empty($decoded) ? null : (int) $decoded[0];
+    }
+
+    private function decodeNumericOrHash(mixed $value): ?int
+    {
+        if (is_int($value) || (is_string($value) && ctype_digit($value))) {
+            return (int) $value;
+        }
+
+        return is_string($value) && $value !== '' ? $this->decodeHashId($value) : null;
     }
 }

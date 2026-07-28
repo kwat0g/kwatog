@@ -70,7 +70,7 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
     /* ─── REC-12 — multi-currency (FX rates + JPY parent-pack translation) ─── */
     Route::prefix('accounting/currency')->group(function () {
         Route::get('/fx-rates',  [CurrencyController::class, 'listRates']) ->middleware('permission:accounting.statements.view');
-        Route::post('/fx-rates', [CurrencyController::class, 'storeRate']) ->middleware('permission:accounting.fx.manage');
+        Route::post('/fx-rates', [CurrencyController::class, 'storeRate']) ->middleware('permission:accounting.currency.manage');
         // Translated parent-pack statements — read-side, statements-view is enough.
         Route::get('/trial-balance',    [CurrencyController::class, 'trialBalance'])    ->middleware('permission:accounting.statements.view');
         Route::get('/income-statement', [CurrencyController::class, 'incomeStatement']) ->middleware('permission:accounting.statements.view');

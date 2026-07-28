@@ -100,12 +100,28 @@ class StockCountService
 
     public function startSession(int $id, User $user): StockCountSession
     {
-        $session = StockCountSession::findOrFail($id);
-        if ($session->status !== 'draft') {
-            throw new RuntimeException('Session must be in draft status to start.');
-        }
-        $session->update(['status' => 'in_progress']);
-        return $session->fresh()->load(['warehouse', 'zone', 'items.location', 'items.item']);
+        return DB::transaction(function () use ($id) {
+            $session = StockCountSession::query()->lockForUpdate()->findOrFail($id);
+            if ($session->status !== 'draft') {
+                throw new RuntimeException('Session must be in draft status to start.');
+            }
+
+            $locationIds = $session->items()->pluck('location_id');
+            $overlap = StockCountSession::query()
+                ->where('status', 'in_progress')
+                ->whereHas('items', fn ($items) => $items->whereIn('location_id', $locationIds))
+                ->lockForUpdate()
+                ->first();
+            if ($overlap) {
+                throw new RuntimeException("Locations are already frozen by stock count {$overlap->session_number}.");
+            }
+
+            $session->update([
+                'status'    => 'in_progress',
+                'frozen_at' => now(),
+            ]);
+            return $session->fresh()->load(['warehouse', 'zone', 'items.location', 'items.item']);
+        });
     }
 
     public function recordCount(int $itemId, array $data, User $user): StockCountItem
@@ -192,6 +208,7 @@ class StockCountService
                             '0', // cost accounted via existing WAC
                             'Cycle count adjustment — session ' . $session->session_number,
                             $user,
+                            bypassCountFreeze: true,
                         );
                     } elseif (bccomp($diff, '0', 3) < 0) {
                         // Stock decrease
@@ -201,6 +218,7 @@ class StockCountService
                             substr($diff, 1), // remove minus sign
                             'Cycle count adjustment — session ' . $session->session_number,
                             $user,
+                            bypassCountFreeze: true,
                         );
                     }
 

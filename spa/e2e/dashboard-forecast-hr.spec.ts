@@ -13,7 +13,7 @@ const API_URL = '/api/v1/dashboards/hr';
 const PAGE_URL = '/dashboard/hr';
 
 function makeHeadcountData(overrides: Record<string, unknown> = {}): Record<string, unknown> {
-  return {
+  const base = {
     kpis: [
       { label: 'Active Headcount', value: '150', unit: 'count' },
       { label: 'On Leave Today', value: '5', unit: 'count' },
@@ -48,7 +48,12 @@ function makeHeadcountData(overrides: Record<string, unknown> = {}): Record<stri
         kpi: { label: 'Projected Headcount', value: '153', unit: 'count', trend: 'up' },
       },
     },
+  };
+
+  return {
+    ...base,
     ...overrides,
+    panels: { ...base.panels, ...((overrides.panels as Record<string, unknown>) ?? {}) },
   };
 }
 
@@ -62,10 +67,10 @@ test.describe('HR Dashboard — Headcount Forecast Panel', () => {
     await expect(page.getByText('HR Officer Dashboard')).toBeVisible();
     await expect(page.getByText('Headcount Forecast')).toBeVisible();
     await expect(page.getByText('Projected Headcount')).toBeVisible();
-    await expect(page.getByText(/153/)).toBeVisible();
+    await expect(page.getByText('153employees', { exact: true })).toBeVisible();
     await expect(page.locator('text=up').first()).toBeVisible();
     await expect(page.getByText('Historical')).toBeVisible();
-    await expect(page.getByText('Forecast')).toBeVisible();
+    await expect(page.getByText('Forecast', { exact: true })).toBeVisible();
   });
 
   test('shows stable trend when headcount is flat', async ({ page }) => {

@@ -108,6 +108,7 @@ export default function GrnDetailPage() {
                   <td>
                     <span className="font-mono">{l.item?.code}</span>
                     <div className="text-2xs text-muted">{l.item?.name}</div>
+                    <Chip variant={l.item?.quality_plan_ready ? 'success' : 'warning'}>{l.item?.quality_plan_ready ? 'QC plan' : 'fallback QC'}</Chip>
                   </td>
                   <td className="font-mono">{l.location?.full_code}</td>
                   <td  className="text-right font-mono tabular-nums">{Number(l.quantity_received).toFixed(3)}</td>

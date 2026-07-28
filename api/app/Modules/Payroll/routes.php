@@ -12,23 +12,23 @@ use App\Modules\Payroll\Controllers\GovernmentTableController;
 use App\Modules\Payroll\Controllers\PayrollAdjustmentController;
 use App\Modules\Payroll\Controllers\PayrollAnomalyController;
 use App\Modules\Payroll\Controllers\PayrollController;
-use App\Modules\Payroll\Controllers\StatutoryExportController;
 use App\Modules\Payroll\Controllers\PayrollPeriodController;
+use App\Modules\Payroll\Controllers\StatutoryExportController;
 use Illuminate\Support\Facades\Route;
 
 // ─── Government tables (admin-managed) ─────────────────────────
 // Mounted under /api/v1/admin/* — Finance officers and System Admins use this
 // regardless of whether the payroll module feature toggle is enabled.
 Route::middleware('auth:sanctum')->prefix('admin/gov-tables')->group(function () {
-    Route::get('/',                        [GovernmentTableController::class, 'index'])
+    Route::get('/', [GovernmentTableController::class, 'index'])
         ->middleware('permission:admin.gov_tables.manage');
-    Route::put('/{govTable}',              [GovernmentTableController::class, 'update'])
+    Route::put('/{govTable}', [GovernmentTableController::class, 'update'])
         ->middleware('permission:admin.gov_tables.manage');
     Route::patch('/{govTable}/deactivate', [GovernmentTableController::class, 'deactivate'])
         ->middleware('permission:admin.gov_tables.manage');
-    Route::patch('/{govTable}/activate',   [GovernmentTableController::class, 'activate'])
+    Route::patch('/{govTable}/activate', [GovernmentTableController::class, 'activate'])
         ->middleware('permission:admin.gov_tables.manage');
-    Route::delete('/{govTable}',           [GovernmentTableController::class, 'destroy'])
+    Route::delete('/{govTable}', [GovernmentTableController::class, 'destroy'])
         ->middleware('permission:admin.gov_tables.manage');
 });
 
@@ -44,61 +44,61 @@ Route::middleware('auth:sanctum')->group(function () {
 if (class_exists(PayrollPeriodController::class)) {
     Route::middleware(['auth:sanctum', 'feature:payroll'])->group(function () {
         Route::prefix('payroll-periods')->group(function () {
-            Route::get('/',                       [PayrollPeriodController::class, 'index'])->middleware('permission:payroll.view');
-            Route::get('/pipeline',               [PayrollPeriodController::class, 'pipeline'])->middleware('permission:payroll.view');
-            Route::post('/',                      [PayrollPeriodController::class, 'store'])->middleware('permission:payroll.periods.create');
-            Route::post('/thirteenth-month',      [PayrollPeriodController::class, 'runThirteenthMonth'])->middleware('permission:payroll.thirteenth_month.run');
-            Route::get('/{period}',               [PayrollPeriodController::class, 'show'])->middleware('permission:payroll.view');
-            Route::post('/{period}/compute',      [PayrollPeriodController::class, 'compute'])->middleware('permission:payroll.periods.compute');
-            Route::patch('/{period}/approve',     [PayrollPeriodController::class, 'approve'])->middleware('permission:payroll.periods.approve');
-            Route::patch('/{period}/finalize',    [PayrollPeriodController::class, 'finalize'])->middleware('permission:payroll.periods.finalize');
+            Route::get('/', [PayrollPeriodController::class, 'index'])->middleware('permission:payroll.periods.view');
+            Route::get('/pipeline', [PayrollPeriodController::class, 'pipeline'])->middleware('permission:payroll.periods.view');
+            Route::post('/', [PayrollPeriodController::class, 'store'])->middleware('permission:payroll.periods.create');
+            Route::post('/thirteenth-month', [PayrollPeriodController::class, 'runThirteenthMonth'])->middleware('permission:payroll.thirteenth_month.run');
+            Route::get('/{period}', [PayrollPeriodController::class, 'show'])->middleware('permission:payroll.periods.view');
+            Route::post('/{period}/compute', [PayrollPeriodController::class, 'compute'])->middleware('permission:payroll.periods.compute');
+            Route::patch('/{period}/approve', [PayrollPeriodController::class, 'approve'])->middleware('permission:payroll.periods.approve');
+            Route::patch('/{period}/finalize', [PayrollPeriodController::class, 'finalize'])->middleware('permission:payroll.periods.finalize');
             Route::get('/{period}/bank-file/preview', [PayrollPeriodController::class, 'bankFilePreview'])->middleware('permission:payroll.periods.finalize');
-            Route::get('/{period}/bank-file',        [PayrollPeriodController::class, 'bankFile'])->middleware('permission:payroll.periods.finalize');
-            Route::get('/{period}/variance',      [PayrollPeriodController::class, 'variance'])->middleware('permission:payroll.view');
+            Route::get('/{period}/bank-file', [PayrollPeriodController::class, 'bankFile'])->middleware('permission:payroll.periods.finalize');
+            Route::get('/{period}/variance', [PayrollPeriodController::class, 'variance'])->middleware('permission:payroll.periods.view');
             // ADV1 — Disbursement proof (salary deposit slip / bank confirmation).
             Route::patch('/{period}/mark-disbursed', [PayrollPeriodController::class, 'markDisbursed'])->middleware('permission:payroll.periods.finalize');
             // H-8 — Admin escape hatch for periods stuck at Processing because
             // the payroll job worker crashed before its finally block could
             // reset status. POST (not PATCH) — recovery action with side
             // effects (audit log row).
-            Route::post('/{period}/force-unlock',    [PayrollPeriodController::class, 'forceUnlock'])->middleware('permission:payroll.periods.force_unlock');
+            Route::post('/{period}/force-unlock', [PayrollPeriodController::class, 'forceUnlock'])->middleware('permission:payroll.periods.force_unlock');
             // REC-01 — void a finalized period (reverses GL, transitions to
             // Voided). POST — irreversible-intent action with side effects
             // (JE reversal + audit row). Finance-gated, separate from finalize.
-            Route::post('/{period}/void',            [PayrollPeriodController::class, 'void'])->middleware('permission:payroll.periods.void');
+            Route::post('/{period}/void', [PayrollPeriodController::class, 'void'])->middleware('permission:payroll.periods.void');
         });
 
         // ADV1 — Disbursement proof CRUD (linked to a period).
-        if (class_exists(\App\Modules\Payroll\Controllers\DisbursementProofController::class)) {
+        if (class_exists(DisbursementProofController::class)) {
             Route::prefix('payroll-periods/{period}/disbursement-proofs')->group(function () {
-                Route::get('/',                         [DisbursementProofController::class, 'index'])->middleware('permission:payroll.view');
-                Route::post('/',                        [DisbursementProofController::class, 'store'])->middleware('permission:payroll.periods.finalize');
-                Route::get('/{proof}',                  [DisbursementProofController::class, 'show'])->middleware('permission:payroll.view');
-                Route::delete('/{proof}',               [DisbursementProofController::class, 'destroy'])->middleware('permission:payroll.periods.finalize');
+                Route::get('/', [DisbursementProofController::class, 'index'])->middleware('permission:payroll.periods.view');
+                Route::post('/', [DisbursementProofController::class, 'store'])->middleware('permission:payroll.periods.finalize');
+                Route::get('/{proof}', [DisbursementProofController::class, 'show'])->middleware('permission:payroll.periods.view');
+                Route::delete('/{proof}', [DisbursementProofController::class, 'destroy'])->middleware('permission:payroll.periods.finalize');
             });
         }
 
         Route::prefix('payrolls')->group(function () {
-            Route::get('/',                       [PayrollController::class, 'index'])->middleware('permission:payroll.view');
-            Route::get('/{payroll}',              [PayrollController::class, 'show'])->middleware('permission:payroll.view');
-            Route::post('/{payroll}/recompute',   [PayrollController::class, 'recompute'])->middleware('permission:payroll.periods.compute');
-            Route::get('/{payroll}/payslip',      [PayrollController::class, 'payslip'])->middleware('permission:payroll.view');
+            Route::get('/', [PayrollController::class, 'index'])->middleware('permission:payroll.view');
+            Route::get('/{payroll}', [PayrollController::class, 'show'])->middleware('permission:payroll.view');
+            Route::post('/{payroll}/recompute', [PayrollController::class, 'recompute'])->middleware('permission:payroll.periods.compute');
+            Route::get('/{payroll}/payslip', [PayrollController::class, 'payslip'])->middleware('permission:payroll.view');
         });
 
         Route::prefix('payroll-adjustments')->group(function () {
-            Route::get('/',                       [PayrollAdjustmentController::class, 'index'])->middleware('permission:payroll.adjustments.create');
-            Route::post('/',                      [PayrollAdjustmentController::class, 'store'])->middleware('permission:payroll.adjustments.create');
-            Route::get('/{adjustment}',           [PayrollAdjustmentController::class, 'show'])->middleware('permission:payroll.adjustments.create');
+            Route::get('/', [PayrollAdjustmentController::class, 'index'])->middleware('permission:payroll.adjustments.create');
+            Route::post('/', [PayrollAdjustmentController::class, 'store'])->middleware('permission:payroll.adjustments.create');
+            Route::get('/{adjustment}', [PayrollAdjustmentController::class, 'show'])->middleware('permission:payroll.adjustments.create');
             Route::patch('/{adjustment}/approve', [PayrollAdjustmentController::class, 'approve'])->middleware('permission:payroll.adjustments.create');
-            Route::patch('/{adjustment}/reject',  [PayrollAdjustmentController::class, 'reject'])->middleware('permission:payroll.adjustments.create');
+            Route::patch('/{adjustment}/reject', [PayrollAdjustmentController::class, 'reject'])->middleware('permission:payroll.adjustments.create');
         });
 
         // ─── De minimis benefits ──────────────────────────────────
         Route::prefix('de-minimis')->group(function () {
-            Route::get('/',                          [DeMinimisController::class, 'index'])->middleware('permission:payroll.view');
-            Route::post('/',                         [DeMinimisController::class, 'store'])->middleware('permission:payroll.adjustments.create');
-            Route::get('/{deMinimisBenefit}',        [DeMinimisController::class, 'show'])->middleware('permission:payroll.view');
-            Route::delete('/{deMinimisBenefit}',     [DeMinimisController::class, 'destroy'])->middleware('permission:payroll.adjustments.create');
+            Route::get('/', [DeMinimisController::class, 'index'])->middleware('permission:payroll.adjustments.create');
+            Route::post('/', [DeMinimisController::class, 'store'])->middleware('permission:payroll.adjustments.create');
+            Route::get('/{deMinimisBenefit}', [DeMinimisController::class, 'show'])->middleware('permission:payroll.adjustments.create');
+            Route::delete('/{deMinimisBenefit}', [DeMinimisController::class, 'destroy'])->middleware('permission:payroll.adjustments.create');
         });
 
         // ─── Payroll anomaly flags (Task A9) ─────────────────────

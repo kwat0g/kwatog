@@ -12,6 +12,7 @@ import { Check, Ban, FileDown, Lock, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { AxiosError } from 'axios';
 import { complaintsApi, type EightDPatch } from '@/api/crm/complaints';
+import { downloadAuthenticatedFile } from '@/api/download';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -190,7 +191,7 @@ export default function ComplaintDetailPage() {
             </Link>
             {report && isFinalized && (
               <Button variant="secondary" size="sm" icon={<FileDown size={14} />}
-                onClick={() => window.open(complaintsApi.pdfUrl(id), '_blank')}>
+                onClick={() => void downloadAuthenticatedFile(complaintsApi.pdfUrl(id), { openInNewTab: true, errorMessage: 'Failed to generate 8D report PDF.' })}>
                 Download 8D PDF
               </Button>
             )}

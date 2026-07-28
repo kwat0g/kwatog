@@ -37,7 +37,7 @@ export class AdminAuditLogPage extends BasePage {
 export class PurchaseRequestListPage extends BasePage {
   constructor(page: Page) { super(page); }
 
-  get heading(): Locator { return this.page.getByText(/purchase request/i); }
+  get heading(): Locator { return this.page.getByRole('heading', { name: /purchase requests/i }); }
   get createButton(): Locator { return this.page.getByRole('button', { name: /new.*request|create.*request/i }); }
   get table(): Locator { return this.page.locator('table').first(); }
 }
@@ -45,7 +45,7 @@ export class PurchaseRequestListPage extends BasePage {
 export class PurchaseOrderListPage extends BasePage {
   constructor(page: Page) { super(page); }
 
-  get heading(): Locator { return this.page.getByText(/purchase order/i); }
+  get heading(): Locator { return this.page.getByRole('heading', { name: /purchase orders/i }); }
   get createButton(): Locator { return this.page.getByRole('button', { name: /new.*order|create.*order/i }); }
   get table(): Locator { return this.page.locator('table').first(); }
 }

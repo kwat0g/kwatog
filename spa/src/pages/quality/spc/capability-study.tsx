@@ -267,33 +267,33 @@ export default function CapabilityStudyPage() {
                     {/* LSL reference line */}
                     <ReferenceLine
                       x={result.lsl.toFixed(3)}
-                      stroke="#ef4444"
+                      stroke="var(--danger)"
                       strokeDasharray="6 3"
                       strokeWidth={2}
-                      label={{ value: 'LSL', position: 'top', fontSize: 11, fill: '#ef4444' }}
+                      label={{ value: 'LSL', position: 'top', fontSize: 11, fill: 'var(--danger)' }}
                     />
                     {/* USL reference line */}
                     <ReferenceLine
                       x={result.usl.toFixed(3)}
-                      stroke="#ef4444"
+                      stroke="var(--danger)"
                       strokeDasharray="6 3"
                       strokeWidth={2}
-                      label={{ value: 'USL', position: 'top', fontSize: 11, fill: '#ef4444' }}
+                      label={{ value: 'USL', position: 'top', fontSize: 11, fill: 'var(--danger)' }}
                     />
                     {/* Mean reference line */}
                     <ReferenceLine
                       x={result.mean.toFixed(3)}
-                      stroke="#6366f1"
+                      stroke="var(--accent)"
                       strokeDasharray="4 2"
                       strokeWidth={1.5}
-                      label={{ value: 'Mean', position: 'top', fontSize: 10, fill: '#6366f1' }}
+                      label={{ value: 'Mean', position: 'top', fontSize: 10, fill: 'var(--accent)' }}
                     />
 
                     <Bar dataKey="count" radius={[2, 2, 0, 0]}>
                       {bars.map((bar, index) => (
                         <Cell
                           key={`cell-${index}`}
-                          fill={bar.outsideSpec ? '#fca5a5' : '#818cf8'}
+                          fill={bar.outsideSpec ? 'var(--danger)' : 'var(--accent)'}
                         />
                       ))}
                     </Bar>

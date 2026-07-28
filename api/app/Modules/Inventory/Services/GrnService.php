@@ -4,21 +4,28 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Services;
 
+use App\Common\Services\ChainBroadcaster;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Support\HashIdFilter;
+use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\User;
+use App\Modules\CRM\Models\Product;
 use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
+use App\Modules\Inventory\Events\GoodsReceiptNoteCreated;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\GrnItem;
+use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Support\StockMovementInput;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
+use App\Modules\Quality\Models\Inspection;
+use App\Modules\Quality\Models\InspectionMeasurement;
+use App\Modules\Quality\Services\InspectionService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 class GrnService
@@ -34,17 +41,27 @@ class GrnService
         $q = GoodsReceiptNote::query()
             ->with(['vendor:id,name', 'purchaseOrder:id,po_number', 'receiver:id,name,role_id']);
 
-        if (! empty($filters['status'])) $q->where('status', $filters['status']);
+        if (! empty($filters['status'])) {
+            $q->where('status', $filters['status']);
+        }
         if (! empty($filters['vendor_id'])) {
-            $vid = HashIdFilter::decode($filters['vendor_id'], \App\Modules\Accounting\Models\Vendor::class);
-            if ($vid) $q->where('vendor_id', $vid);
+            $vid = HashIdFilter::decode($filters['vendor_id'], Vendor::class);
+            if ($vid) {
+                $q->where('vendor_id', $vid);
+            }
         }
         if (! empty($filters['purchase_order_id'])) {
             $pid = HashIdFilter::decode($filters['purchase_order_id'], PurchaseOrder::class);
-            if ($pid) $q->where('purchase_order_id', $pid);
+            if ($pid) {
+                $q->where('purchase_order_id', $pid);
+            }
         }
-        if (! empty($filters['from'])) $q->whereDate('received_date', '>=', $filters['from']);
-        if (! empty($filters['to']))   $q->whereDate('received_date', '<=', $filters['to']);
+        if (! empty($filters['from'])) {
+            $q->whereDate('received_date', '>=', $filters['from']);
+        }
+        if (! empty($filters['to'])) {
+            $q->whereDate('received_date', '<=', $filters['to']);
+        }
         if (! empty($filters['search'])) {
             $q->where('grn_number', 'ilike', '%'.$filters['search'].'%');
         }
@@ -57,7 +74,8 @@ class GrnService
     {
         return $grn->load([
             'vendor', 'purchaseOrder',
-            'items.item:id,code,name,unit_of_measure',
+            'items.item' => fn ($item) => $item->select('id', 'code', 'name', 'unit_of_measure')
+                ->withExists(['qualityPlans as has_active_quality_plan' => fn ($plan) => $plan->effective()]),
             'items.location.zone.warehouse',
             'items.purchaseOrderItem',
             'receiver:id,name,role_id', 'acceptor:id,name,role_id',
@@ -68,7 +86,7 @@ class GrnService
      * Create a GRN for a PO, in `pending_qc` status. Stock is NOT yet incremented.
      * Stock is increased only when accept() is called (Sprint 7 will gate this on QC).
      *
-     * @param array<int, array{purchase_order_item_id:int|string, item_id:int|string, location_id:int|string, quantity_received:string, unit_cost?:string|null, remarks?:string|null}> $items
+     * @param  array<int, array{purchase_order_item_id:int|string, item_id:int|string, location_id:int|string, quantity_received:string, unit_cost?:string|null, remarks?:string|null}>  $items
      */
     public function create(PurchaseOrder $po, array $items, array $meta, User $by): GoodsReceiptNote
     {
@@ -82,13 +100,13 @@ class GrnService
 
         return DB::transaction(function () use ($po, $items, $meta, $by) {
             $grn = GoodsReceiptNote::create([
-                'grn_number'        => $this->sequences->generate('grn'),
+                'grn_number' => $this->sequences->generate('grn'),
                 'purchase_order_id' => $po->id,
-                'vendor_id'         => $po->vendor_id,
-                'received_date'     => $meta['received_date'] ?? now()->toDateString(),
-                'received_by'       => $by->id,
-                'status'            => GrnStatus::PendingQc,
-                'remarks'           => $meta['remarks'] ?? null,
+                'vendor_id' => $po->vendor_id,
+                'received_date' => $meta['received_date'] ?? now()->toDateString(),
+                'received_by' => $by->id,
+                'status' => GrnStatus::PendingQc,
+                'remarks' => $meta['remarks'] ?? null,
             ]);
 
             foreach ($items as $row) {
@@ -101,7 +119,7 @@ class GrnService
 
                 $locationId = HashIdFilter::decode($row['location_id'], WarehouseLocation::class)
                     ?? (int) $row['location_id'];
-                $itemId = HashIdFilter::decode($row['item_id'], \App\Modules\Inventory\Models\Item::class)
+                $itemId = HashIdFilter::decode($row['item_id'], Item::class)
                     ?? (int) $row['item_id'];
 
                 // OGAMI-004 — multi-UOM receiving. If the caller supplies a
@@ -119,7 +137,7 @@ class GrnService
                 // then the PO quantity is treated as already being in base uom.
                 $qtyReceived = (string) $row['quantity_received'];
                 if (! empty($row['received_uom_code'])) {
-                    $item = \App\Modules\Inventory\Models\Item::query()->findOrFail($itemId);
+                    $item = Item::query()->findOrFail($itemId);
                     $qtyReceived = $item->convertToBase($qtyReceived, (string) $row['received_uom_code']);
                 }
 
@@ -141,24 +159,24 @@ class GrnService
                 }
 
                 GrnItem::create([
-                    'goods_receipt_note_id'  => $grn->id,
+                    'goods_receipt_note_id' => $grn->id,
                     'purchase_order_item_id' => $poi->id,
-                    'item_id'                => $itemId,
-                    'location_id'            => $locationId,
-                    'quantity_received'      => $qtyReceived,
-                    'quantity_accepted'      => 0,
-                    'unit_cost'              => $row['unit_cost'] ?? $poi->unit_price,
-                    'remarks'                => $row['remarks'] ?? null,
+                    'item_id' => $itemId,
+                    'location_id' => $locationId,
+                    'quantity_received' => $qtyReceived,
+                    'quantity_accepted' => 0,
+                    'unit_cost' => $row['unit_cost'] ?? $poi->unit_price,
+                    'remarks' => $row['remarks'] ?? null,
                     // OGAMI-012 — optional lot capture per received line. The
                     // existing ADV3 `material_lot_number` column is the lot of
                     // record; we also persist an optional expiry. Both null-safe.
-                    'material_lot_number'    => $row['lot_number'] ?? ($row['material_lot_number'] ?? null),
+                    'material_lot_number' => $row['lot_number'] ?? ($row['material_lot_number'] ?? null),
                     'supplier_lot_reference' => $row['supplier_lot_reference'] ?? null,
-                    'expiry_date'            => $row['expiry_date'] ?? null,
+                    'expiry_date' => $row['expiry_date'] ?? null,
                     // OGAMI-005 — IATF incoming resin QC attributes (null-safe).
-                    'moisture_percentage'    => $row['moisture_percentage'] ?? null,
-                    'coa_document_path'      => $row['coa_document_path'] ?? null,
-                    'coa_verified'           => (bool) ($row['coa_verified'] ?? false),
+                    'moisture_percentage' => $row['moisture_percentage'] ?? null,
+                    'coa_document_path' => $row['coa_document_path'] ?? null,
+                    'coa_verified' => (bool) ($row['coa_verified'] ?? false),
                 ]);
 
                 // Update PO line running total of received quantity (base uom).
@@ -170,8 +188,7 @@ class GrnService
 
             // Series C — Task C2. Domain event for chain listeners
             // (TriggerIncomingQC). Fires after commit so the row is visible.
-            DB::afterCommit(fn () =>
-                event(new \App\Modules\Inventory\Events\GoodsReceiptNoteCreated($grn->fresh()))
+            DB::afterCommit(fn () => event(new GoodsReceiptNoteCreated($grn->fresh()))
             );
 
             return $this->show($grn->fresh());
@@ -185,6 +202,7 @@ class GrnService
             throw new RuntimeException('Only pending_qc GRNs can be accepted.');
         }
         $this->assertQcGate($grn);
+
         return DB::transaction(function () use ($grn, $by) {
             foreach ($grn->items as $row) {
                 $row->quantity_accepted = $row->quantity_received;
@@ -209,31 +227,24 @@ class GrnService
                 );
             }
             $grn->update([
-                'status'      => GrnStatus::Accepted,
+                'status' => GrnStatus::Accepted,
                 'accepted_by' => $by->id,
                 'accepted_at' => now(),
             ]);
             $fresh = $grn->fresh();
 
-            // Task 5 — post the inventory receipt to the GL (DR Inventory /
-            // CR GRNI). Flag-gated, idempotent, and non-blocking: a GL post
-            // failure must not abort the GRN acceptance itself.
-            try {
-                $this->gl->post($fresh);
-                $fresh = $fresh->fresh();
-            } catch (\Throwable $e) {
-                Log::error('GrnService::accept — GL post failed; GRN remains accepted', [
-                    'grn_id' => $fresh->id,
-                    'error'  => $e->getMessage(),
-                ]);
-            }
+            // Keep inventory and accounting atomic. When Accounting is disabled
+            // post() intentionally returns null; when it is enabled, a missing
+            // account or JE failure must roll back the stock receipt as well.
+            $this->gl->post($fresh);
+            $fresh = $fresh->fresh();
 
             // Series C — Task C4. Real-time chain progress for the GRN
             // detail page on the SPA.
-            DB::afterCommit(fn () =>
-                app(\App\Common\Services\ChainBroadcaster::class)
-                    ->broadcastFor($fresh, GrnStatus::Accepted->value, $by)
+            DB::afterCommit(fn () => app(ChainBroadcaster::class)
+                ->broadcastFor($fresh, GrnStatus::Accepted->value, $by)
             );
+
             return $fresh;
         });
     }
@@ -245,6 +256,7 @@ class GrnService
             throw new RuntimeException('Only pending_qc GRNs can be partially accepted.');
         }
         $this->assertQcGate($grn);
+
         return DB::transaction(function () use ($grn, $itemAcceptedMap, $by) {
             $allFull = true;
             foreach ($grn->items as $row) {
@@ -278,23 +290,14 @@ class GrnService
                 }
             }
             $grn->update([
-                'status'      => $allFull ? GrnStatus::Accepted : GrnStatus::PartialAccepted,
+                'status' => $allFull ? GrnStatus::Accepted : GrnStatus::PartialAccepted,
                 'accepted_by' => $by->id,
                 'accepted_at' => now(),
             ]);
             $fresh = $grn->fresh();
 
-            // Task 5 — post the accepted value to the GL. Same try/catch
-            // guard as accept(): GL failures must not abort the GRN.
-            try {
-                $this->gl->post($fresh);
-                $fresh = $fresh->fresh();
-            } catch (\Throwable $e) {
-                Log::error('GrnService::partialAccept — GL post failed; GRN remains accepted', [
-                    'grn_id' => $fresh->id,
-                    'error'  => $e->getMessage(),
-                ]);
-            }
+            $this->gl->post($fresh);
+            $fresh = $fresh->fresh();
 
             return $fresh;
         });
@@ -307,16 +310,17 @@ class GrnService
         }
         $result = DB::transaction(function () use ($grn, $reason, $by) {
             $grn->update([
-                'status'          => GrnStatus::Rejected,
+                'status' => GrnStatus::Rejected,
                 'rejected_reason' => $reason,
-                'accepted_by'     => $by->id,
-                'accepted_at'     => now(),
+                'accepted_by' => $by->id,
+                'accepted_at' => now(),
             ]);
+
             return $grn->fresh();
         });
 
         // Series C — Task C4. Real-time chain progress.
-        app(\App\Common\Services\ChainBroadcaster::class)->broadcastFor(
+        app(ChainBroadcaster::class)->broadcastFor(
             $result,
             GrnStatus::Rejected->value,
             $by,
@@ -335,13 +339,20 @@ class GrnService
      */
     private function assertQcGate(GoodsReceiptNote $grn): void
     {
-        if (! $grn->qc_inspection_id) return;
-        $status = DB::table('inspections')
-            ->where('id', $grn->qc_inspection_id)
-            ->value('status');
-        if ($status !== 'passed') {
+        $statuses = DB::table('inspections')
+            ->where('entity_type', 'grn')
+            ->where('entity_id', $grn->id)
+            ->pluck('status');
+        if ($statuses->isEmpty() && ! $grn->qc_inspection_id) {
+            return;
+        }
+        if ($statuses->isEmpty()) {
+            $statuses = collect([DB::table('inspections')->where('id', $grn->qc_inspection_id)->value('status')]);
+        }
+        $blocking = $statuses->first(fn ($status) => $status !== 'passed');
+        if ($blocking !== null) {
             throw new RuntimeException(
-                "GRN {$grn->grn_number} cannot be accepted until its incoming inspection passes (current: {$status})."
+                "GRN {$grn->grn_number} cannot be accepted until every incoming inspection passes (current: {$blocking})."
             );
         }
     }
@@ -350,8 +361,8 @@ class GrnService
      * CA2 — Single-screen receiving. Creates GRN + records QC inspection + accepts/rejects
      * in one atomic transaction, combining what were previously 3 separate API calls.
      *
-     * @param  array  $items   Same format as create()
-     * @param  array  $meta    ['received_date' => ..., 'remarks' => ...]
+     * @param  array  $items  Same format as create()
+     * @param  array  $meta  ['received_date' => ..., 'remarks' => ...]
      * @param  array  $qcData  ['result' => passed|failed|passed_with_remarks|pending, 'inspector_id' => ..., 'product_id' => ..., 'checks' => [...], 'remarks' => ..., 'failure_reason' => ..., 'disposition' => ...]
      * @return array{grn: GoodsReceiptNote, inspection: mixed, qc_result: string, disposition: string|null, stock_updated: bool}
      */
@@ -379,7 +390,7 @@ class GrnService
 
                 $productId = null;
                 if (! empty($qcData['product_id'])) {
-                    $productId = HashIdFilter::decode($qcData['product_id'], \App\Modules\CRM\Models\Product::class)
+                    $productId = HashIdFilter::decode($qcData['product_id'], Product::class)
                         ?? (ctype_digit((string) $qcData['product_id']) ? (int) $qcData['product_id'] : null);
                 }
 
@@ -395,12 +406,12 @@ class GrnService
 
                     try {
                         $inspection = $inspectionService->create([
-                            'stage'          => 'incoming',
-                            'product_id'     => $productId,
+                            'stage' => 'incoming',
+                            'product_id' => $productId,
                             'batch_quantity' => max(1, (int) $totalQty),
-                            'entity_type'    => 'grn',
-                            'entity_id'      => $grn->id,
-                            'notes'          => $qcData['remarks'] ?? null,
+                            'entity_type' => 'grn',
+                            'entity_id' => $grn->id,
+                            'notes' => $qcData['remarks'] ?? null,
                         ], $inspector);
 
                         // The InspectionService::create() already back-links
@@ -408,14 +419,44 @@ class GrnService
                         // so we reload to pick up the change.
                         $grn->refresh();
                     } catch (RuntimeException) {
-                        // No active inspection spec for this product — non-fatal
-                        // for the receiving flow. GRN proceeds without QC record.
+                        // A received raw item may have no CRM-product spec. Keep
+                        // the QC decision auditable with the item-level verdict.
+                        $line = $grn->items
+                            ->sortByDesc(fn ($row) => (float) $row->quantity_received)
+                            ->first();
+                        if ($line) {
+                            $inspection = $inspectionService->createIncomingForItem(
+                                Item::query()->findOrFail($line->item_id),
+                                max(1, (int) $totalQty),
+                                $grn->id,
+                                $inspector,
+                                $qcData['remarks'] ?? null,
+                            );
+                            $grn->refresh();
+                        }
+                    }
+                } else {
+                    $line = $grn->items
+                        ->sortByDesc(fn ($row) => (float) $row->quantity_received)
+                        ->first();
+                    if ($line) {
+                        $inspector = $inspectorId
+                            ? User::query()->findOrFail($inspectorId)
+                            : $by;
+                        $inspection = $inspectionService->createIncomingForItem(
+                            Item::query()->findOrFail($line->item_id),
+                            max(1, (int) collect($items)->sum(fn ($row) => (float) $row['quantity_received'])),
+                            $grn->id,
+                            $inspector,
+                            $qcData['remarks'] ?? null,
+                        );
+                        $grn->refresh();
                     }
                 }
             }
 
             // 3. Based on QC result, accept or leave pending
-            $qcResult    = $qcData['result'] ?? 'passed';
+            $qcResult = $qcData['result'] ?? 'passed';
             $disposition = null;
 
             if ($qcResult === 'passed' || $qcResult === 'passed_with_remarks') {
@@ -423,6 +464,7 @@ class GrnService
                 // so the QC gate in acceptInternal() does not block.
                 if ($inspection) {
                     $this->fastCompleteInspection($inspection, true, $by);
+                    $inspection = $inspection->fresh();
                 }
                 $grn = $this->acceptInternal($grn, $by);
             } elseif ($qcResult === 'failed') {
@@ -433,6 +475,7 @@ class GrnService
                 $isQualityFailure = ($qcData['is_quality_failure'] ?? true) !== false;
                 if ($inspection) {
                     $this->fastCompleteInspection($inspection, false, $by, $isQualityFailure);
+                    $inspection = $inspection->fresh();
                 }
                 $grn = $this->rejectInternal(
                     $grn,
@@ -443,10 +486,10 @@ class GrnService
             // If 'pending', leave GRN in pending_qc status for later decision
 
             return [
-                'grn'           => $this->show($grn->fresh()),
-                'inspection'    => $inspection,
-                'qc_result'     => $qcResult,
-                'disposition'   => $disposition,
+                'grn' => $this->show($grn->fresh()),
+                'inspection' => $inspection,
+                'qc_result' => $qcResult,
+                'disposition' => $disposition,
                 'stock_updated' => in_array($qcResult, ['passed', 'passed_with_remarks'], true),
             ];
         });
@@ -480,15 +523,18 @@ class GrnService
             );
         }
         $grn->update([
-            'status'      => GrnStatus::Accepted,
+            'status' => GrnStatus::Accepted,
             'accepted_by' => $by->id,
             'accepted_at' => now(),
         ]);
 
         $fresh = $grn->fresh();
-        DB::afterCommit(fn () =>
-            app(\App\Common\Services\ChainBroadcaster::class)
-                ->broadcastFor($fresh, GrnStatus::Accepted->value, $by)
+        // The consolidated receive+QC path must obey the same inventory/GL
+        // invariant as the standalone accept endpoint.
+        $this->gl->post($fresh);
+        $fresh = $fresh->fresh();
+        DB::afterCommit(fn () => app(ChainBroadcaster::class)
+            ->broadcastFor($fresh, GrnStatus::Accepted->value, $by)
         );
 
         return $fresh;
@@ -500,16 +546,15 @@ class GrnService
     private function rejectInternal(GoodsReceiptNote $grn, string $reason, User $by): GoodsReceiptNote
     {
         $grn->update([
-            'status'          => GrnStatus::Rejected,
+            'status' => GrnStatus::Rejected,
             'rejected_reason' => $reason,
-            'accepted_by'     => $by->id,
-            'accepted_at'     => now(),
+            'accepted_by' => $by->id,
+            'accepted_at' => now(),
         ]);
 
         $fresh = $grn->fresh();
-        DB::afterCommit(fn () =>
-            app(\App\Common\Services\ChainBroadcaster::class)
-                ->broadcastFor($fresh, GrnStatus::Rejected->value, $by)
+        DB::afterCommit(fn () => app(ChainBroadcaster::class)
+            ->broadcastFor($fresh, GrnStatus::Rejected->value, $by)
         );
 
         return $fresh;
@@ -531,24 +576,27 @@ class GrnService
      *                                  non-quality reason, no NCR created.
      */
     private function fastCompleteInspection(
-        \App\Modules\Quality\Models\Inspection $inspection,
+        Inspection $inspection,
         bool $passed,
         User $by,
         bool $isQualityFailure = true,
     ): void {
         $svc = $this->resolveInspectionService();
-        if (! $svc) return;
+        if (! $svc) {
+            return;
+        }
 
         // Logistics rejection: cancel the inspection so that complete() is
         // never called and no NCR is auto-opened (P3.6 audit fix).
         if (! $passed && ! $isQualityFailure) {
             $svc->cancel($inspection, 'Logistics rejection — no quality issue found', $by);
+
             return;
         }
 
         // Fill all measurement rows with the verdict so complete() won't
         // complain about unresolved measurements.
-        $rows = \App\Modules\Quality\Models\InspectionMeasurement::query()
+        $rows = InspectionMeasurement::query()
             ->where('inspection_id', $inspection->id)
             ->get();
 
@@ -566,9 +614,10 @@ class GrnService
     /**
      * Resolve the InspectionService if the Quality module is available.
      */
-    private function resolveInspectionService(): ?\App\Modules\Quality\Services\InspectionService
+    private function resolveInspectionService(): ?InspectionService
     {
         $cls = '\\App\\Modules\\Quality\\Services\\InspectionService';
+
         return class_exists($cls) ? app($cls) : null;
     }
 

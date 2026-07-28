@@ -53,7 +53,7 @@ export default function CustomerDashboardPage() {
         />
         <StatCard
           label="Outstanding"
-          value={dashboard?.total_outstanding ? `{formatPeso(dashboard.total_outstanding)}` : '₱0'}
+          value={dashboard?.total_outstanding ? formatPeso(dashboard.total_outstanding) : '₱0'}
           helper="Total balance"
         />
       </div>

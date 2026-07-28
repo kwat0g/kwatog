@@ -2,6 +2,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Download, RefreshCw, FilePenLine } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { downloadAuthenticatedFile } from '@/api/download';
 import { payrollsApi } from '@/api/payroll/payrolls';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -72,12 +73,17 @@ export default function PayrollEmployeeDetailPage() {
         actions={
           <>
             {data.error_message ? <Chip variant="danger">Failed</Chip> : <Chip variant="success">Computed</Chip>}
-            <a
-              href={payrollsApi.payslipUrl(data.id)}
-              className="inline-flex items-center gap-1 px-3 h-7 text-xs rounded-md border border-default bg-canvas text-primary hover:bg-elevated"
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<Download size={14} />}
+              onClick={() => void downloadAuthenticatedFile(payrollsApi.payslipUrl(data.id), {
+                openInNewTab: true,
+                errorMessage: 'Failed to generate the payslip.',
+              })}
             >
-              <Download size={14} /> Payslip
-            </a>
+              Payslip
+            </Button>
             {can('payroll.periods.compute') && (
               <Button variant="secondary" size="sm" icon={<RefreshCw size={14} />}
                 onClick={() => recomputeMutation.mutate()}

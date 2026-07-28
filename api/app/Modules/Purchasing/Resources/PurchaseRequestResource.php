@@ -28,6 +28,9 @@ class PurchaseRequestResource extends JsonResource
                 : false,
             'submitted_at'            => optional($this->submitted_at)->toIso8601String(),
             'approved_at'             => optional($this->approved_at)->toIso8601String(),
+            'budget_warning_level'    => $this->budget_warning_level,
+            'budget_warning_message'  => $this->budget_warning_message,
+            'budget_acknowledged_at'  => optional($this->budget_acknowledged_at)->toIso8601String(),
             'total_estimated_amount'  => $this->totalEstimatedAmount(),
             'requester'               => $this->whenLoaded('requester', fn () => $this->requester ? [
                 'id'   => $this->requester->hash_id,

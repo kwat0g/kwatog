@@ -19,11 +19,11 @@ export const payrollRoutes = (
     <Route element={<ModuleGuard module="payroll" />}>
       <Route
         path="/payroll/pipeline"
-        element={<PermissionGuard permission="payroll.view"><PayrollPipelinePage /></PermissionGuard>}
+        element={<PermissionGuard permission="payroll.periods.view"><PayrollPipelinePage /></PermissionGuard>}
       />
       <Route
         path="/payroll/periods"
-        element={<PermissionGuard permission="payroll.view"><PayrollPeriodsPage /></PermissionGuard>}
+        element={<PermissionGuard permission="payroll.periods.view"><PayrollPeriodsPage /></PermissionGuard>}
       />
       <Route
         path="/payroll/periods/create"
@@ -31,15 +31,15 @@ export const payrollRoutes = (
       />
       <Route
         path="/payroll/periods/:id"
-        element={<PermissionGuard permission="payroll.view"><PayrollPeriodDetailPage /></PermissionGuard>}
+        element={<PermissionGuard permission="payroll.periods.view"><PayrollPeriodDetailPage /></PermissionGuard>}
       />
       <Route
         path="/payroll/periods/:id/employee/:eid"
-        element={<PermissionGuard permission="payroll.view"><PayrollEmployeeDetailPage /></PermissionGuard>}
+        element={<PermissionGuard permission="payroll.periods.view"><PayrollEmployeeDetailPage /></PermissionGuard>}
       />
       <Route
         path="/payroll/adjustments"
-        element={<PermissionGuard permission="payroll.view"><PayrollAdjustmentsPage /></PermissionGuard>}
+        element={<PermissionGuard permission="payroll.adjustments.create"><PayrollAdjustmentsPage /></PermissionGuard>}
       />
       <Route
         path="/payroll/adjustments/create"
@@ -47,7 +47,7 @@ export const payrollRoutes = (
       />
       <Route
         path="/payroll/statutory"
-        element={<PermissionGuard permission="payroll.view"><StatutoryExportsPage /></PermissionGuard>}
+        element={<PermissionGuard permission="payroll.statutory.export"><StatutoryExportsPage /></PermissionGuard>}
       />
     </Route>
   </>

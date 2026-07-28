@@ -77,6 +77,13 @@ class PurchaseRequestController
         return new PurchaseRequestResource($this->service->show($pr));
     }
 
+    public function acknowledgeBudget(Request $request, PurchaseRequest $purchaseRequest): PurchaseRequestResource
+    {
+        try { $pr = $this->service->acknowledgeBudget($purchaseRequest, $request->user()); }
+        catch (RuntimeException $e) { abort(422, $e->getMessage()); }
+        return new PurchaseRequestResource($this->service->show($pr));
+    }
+
     public function approve(Request $request, PurchaseRequest $purchaseRequest): PurchaseRequestResource
     {
         try { $pr = $this->service->approve($purchaseRequest, $request->user(), $request->input('remarks')); }

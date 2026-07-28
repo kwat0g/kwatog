@@ -53,7 +53,7 @@ export default function SupplierDashboardPage() {
         />
         <StatCard
           label="Total Unpaid"
-          value={dashboard?.total_unpaid_amount ? `{formatPeso(dashboard.total_unpaid_amount)}` : '₱0'}
+          value={dashboard?.total_unpaid_amount ? formatPeso(dashboard.total_unpaid_amount) : '₱0'}
           helper="Outstanding balance"
         />
       </div>

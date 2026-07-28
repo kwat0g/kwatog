@@ -41,6 +41,7 @@ class SyncBudgetActuals implements ShouldQueue
         $fiscalYear = $this->resolveFiscalYear();
         if (! $fiscalYear) {
             Log::warning('[SyncBudgetActuals] No fiscal year found; aborting.');
+
             return;
         }
 
@@ -51,6 +52,7 @@ class SyncBudgetActuals implements ShouldQueue
 
         if ($lineItems->isEmpty()) {
             Log::info("[SyncBudgetActuals] No budget line items for fiscal year {$fiscalYear->id}.");
+
             return;
         }
 
@@ -73,7 +75,8 @@ class SyncBudgetActuals implements ShouldQueue
             }
         });
 
-        Log::info("[SyncBudgetActuals] Synced {$processed} budget line item(s) for fiscal year {$fiscalYear->id} ({$fiscalYear->name ?? $fiscalYear->id}).");
+        $fiscalYearLabel = $fiscalYear->name ?? (string) $fiscalYear->id;
+        Log::info("[SyncBudgetActuals] Synced {$processed} budget line item(s) for fiscal year {$fiscalYear->id} ({$fiscalYearLabel}).");
     }
 
     private function resolveFiscalYear(): ?FiscalYear

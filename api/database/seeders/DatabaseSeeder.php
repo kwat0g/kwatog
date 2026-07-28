@@ -86,6 +86,10 @@ class DatabaseSeeder extends Seeder
             // 12mo attendance, 6 finalized payroll cycles, 45 NCRs, forecasts).
             // Deterministic + idempotent.
             RealisticDataSeeder::class,
+
+            // Adviser-defense fixtures and external portal credentials. Runs
+            // after all base/volume rows because it links real chain records.
+            GoldenPathDemoSeeder::class,
         ]);
     }
 }

@@ -47,6 +47,7 @@ class ReturnRequest extends Model
         'credit_note_id',
         'credit_memo_id',
         'replacement_wo_id',
+        'replacement_purchase_order_id',
         'refund_amount',
         'stock_movement_id',
         'inspection_id',
@@ -94,6 +95,11 @@ class ReturnRequest extends Model
     public function purchaseOrder(): BelongsTo
     {
         return $this->belongsTo(PurchaseOrder::class);
+    }
+
+    public function replacementPurchaseOrder(): BelongsTo
+    {
+        return $this->belongsTo(PurchaseOrder::class, 'replacement_purchase_order_id');
     }
 
     public function bill(): BelongsTo

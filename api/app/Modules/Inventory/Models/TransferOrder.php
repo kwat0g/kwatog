@@ -6,13 +6,14 @@ namespace App\Modules\Inventory\Models;
 
 use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
+use App\Modules\Auth\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class TransferOrder extends Model
 {
-    use HasFactory, HasHashId, HasAuditLog;
+    use HasAuditLog, HasFactory, HasHashId;
 
     protected $fillable = [
         'transfer_number', 'from_location_id', 'to_location_id', 'item_id',
@@ -20,7 +21,7 @@ class TransferOrder extends Model
     ];
 
     protected $casts = [
-        'quantity'       => 'decimal:3',
+        'quantity' => 'decimal:3',
         'transferred_at' => 'datetime',
     ];
 

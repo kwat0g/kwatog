@@ -99,7 +99,8 @@ class RolePermissionSeeder extends Seeder
 
             // Payroll
             'payroll' => [
-                ['slug' => 'payroll.view',                'name' => 'View Payroll'],
+                ['slug' => 'payroll.view',                'name' => 'View Own Payroll'],
+                ['slug' => 'payroll.periods.view',        'name' => 'View Payroll Periods'],
                 ['slug' => 'payroll.periods.create',      'name' => 'Create Payroll Period'],
                 ['slug' => 'payroll.periods.compute',     'name' => 'Compute Payroll'],
                 ['slug' => 'payroll.periods.approve',     'name' => 'Approve Payroll'],
@@ -212,7 +213,7 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'purchasing.po.send',      'name' => 'Send PO to Supplier'],
                 // Series F — Task F4: supplier performance dashboard.
                 ['slug' => 'purchasing.suppliers.performance.view',     'name' => 'View Supplier Performance'],
-                ['slug' => 'purchasing.suppliers.performance.recompute','name' => 'Recompute Supplier Performance Snapshots'],
+                ['slug' => 'purchasing.suppliers.performance.recompute', 'name' => 'Recompute Supplier Performance Snapshots'],
             ],
 
             // Supply Chain
@@ -324,7 +325,7 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'maintenance.wo.create',      'name' => 'Create Maintenance Work Order'],
                 ['slug' => 'maintenance.wo.assign',      'name' => 'Assign Maintenance Work Order'],
                 ['slug' => 'maintenance.wo.complete',    'name' => 'Complete Maintenance Work Order'],
-                ['slug' => 'maintenance.schedules.manage','name' => 'Manage Maintenance Schedules'],
+                ['slug' => 'maintenance.schedules.manage', 'name' => 'Manage Maintenance Schedules'],
             ],
             // Sprint 8 — new permission groups
             'assets' => [
@@ -364,7 +365,7 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'assets.transfer.approve',    'name' => 'Approve Asset Transfer'],
             ],
             'dashboards' => [
-                ['slug' => 'dashboard.plant_manager.view','name' => 'View Plant Manager Dashboard'],
+                ['slug' => 'dashboard.plant_manager.view', 'name' => 'View Plant Manager Dashboard'],
                 ['slug' => 'dashboard.hr.view',           'name' => 'View HR Dashboard'],
                 ['slug' => 'dashboard.ppc.view',          'name' => 'View PPC Dashboard'],
                 ['slug' => 'dashboard.accounting.view',   'name' => 'View Accounting Dashboard'],
@@ -453,6 +454,7 @@ class RolePermissionSeeder extends Seeder
                     $this->selfService(),
                     [
                         'payroll.view',
+                        'payroll.periods.view',
                         'payroll.payslip.view_all',
                         // REC-06 follow-up — HR files SSS/PhilHealth/BIR remittances.
                         'payroll.statutory.export',
@@ -707,8 +709,8 @@ class RolePermissionSeeder extends Seeder
                 $allPermissions[] = Permission::updateOrCreate(
                     ['slug' => $p['slug']],
                     [
-                        'name'        => $p['name'],
-                        'module'      => $module,
+                        'name' => $p['name'],
+                        'module' => $module,
                         'description' => $p['description'] ?? null,
                     ],
                 );
@@ -723,9 +725,9 @@ class RolePermissionSeeder extends Seeder
             $role = Role::updateOrCreate(
                 ['slug' => $slug],
                 [
-                    'name'        => $def['name'],
+                    'name' => $def['name'],
                     'description' => $def['description'],
-                    'is_system'   => true,
+                    'is_system' => true,
                 ],
             );
 

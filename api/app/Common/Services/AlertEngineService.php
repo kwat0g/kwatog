@@ -8,9 +8,11 @@ use App\Common\Enums\AlertSeverity;
 use App\Common\Enums\AlertType;
 use App\Common\Models\Alert;
 use App\Common\Notifications\CriticalAlertEmail;
+use App\Modules\Accounting\Models\Bill;
+use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Auth\Models\User;
+use App\Modules\CRM\Models\Product;
 use App\Modules\Inventory\Models\Item;
-use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\MRP\Models\Mold;
 use App\Modules\Production\Models\WorkOrder;
@@ -36,8 +38,10 @@ use Illuminate\Support\Facades\Notification;
 class AlertEngineService
 {
     private const DEDUP_WINDOW_HOURS = 24;
-    private const OEE_THRESHOLD      = 0.75;
-    private const OEE_DAYS           = 3;
+
+    private const OEE_THRESHOLD = 0.75;
+
+    private const OEE_DAYS = 3;
 
     /**
      * Idempotent alert creation. Returns the existing record if a recent
@@ -58,7 +62,7 @@ class AlertEngineService
 
         if ($entity) {
             $query->where('entity_type', $entity::class)
-                  ->where('entity_id', $entity->getKey());
+                ->where('entity_id', $entity->getKey());
         } else {
             $query->whereNull('entity_id');
         }
@@ -69,13 +73,13 @@ class AlertEngineService
         }
 
         $alert = Alert::create([
-            'type'        => $type->value,
-            'severity'    => $severity->value,
-            'title'       => $title,
-            'message'     => $message,
+            'type' => $type->value,
+            'severity' => $severity->value,
+            'title' => $title,
+            'message' => $message,
             'entity_type' => $entity?->getMorphClass(),
-            'entity_id'   => $entity?->getKey(),
-            'metadata'    => $metadata,
+            'entity_id' => $entity?->getKey(),
+            'metadata' => $metadata,
         ]);
 
         if ($severity === AlertSeverity::Critical) {
@@ -92,6 +96,7 @@ class AlertEngineService
             'dismissed_by' => $user->id,
             'dismissed_at' => now(),
         ]);
+
         return $alert->fresh();
     }
 
@@ -100,6 +105,7 @@ class AlertEngineService
         if (! $alert->is_read) {
             $alert->update(['is_read' => true]);
         }
+
         return $alert->fresh();
     }
 
@@ -111,10 +117,10 @@ class AlertEngineService
         $stats = ['raised' => 0, 'by_severity' => [], 'by_type' => []];
         $before = Alert::count();
 
-        $this->safe(fn () => $this->checkInventory(),  'inventory');
+        $this->safe(fn () => $this->checkInventory(), 'inventory');
         $this->safe(fn () => $this->checkProduction(), 'production');
-        $this->safe(fn () => $this->checkFinance(),    'finance');
-        $this->safe(fn () => $this->checkQuality(),    'quality');
+        $this->safe(fn () => $this->checkFinance(), 'finance');
+        $this->safe(fn () => $this->checkQuality(), 'quality');
 
         $raised = max(0, Alert::count() - $before);
         $stats['raised'] = $raised;
@@ -155,9 +161,9 @@ class AlertEngineService
             ->get();
 
         foreach ($items as $item) {
-            $onHand   = (float) ($item->on_hand ?? 0);
-            $reorder  = (float) $item->reorder_point;
-            $safety   = (float) $item->safety_stock;
+            $onHand = (float) ($item->on_hand ?? 0);
+            $reorder = (float) $item->reorder_point;
+            $safety = (float) $item->safety_stock;
 
             if ($safety > 0 && $onHand < $safety) {
                 $this->raise(
@@ -168,6 +174,7 @@ class AlertEngineService
                     $item,
                     ['on_hand' => $onHand, 'safety_stock' => $safety, 'reorder_point' => $reorder],
                 );
+
                 continue; // critical preempts low-stock for the same item
             }
 
@@ -279,7 +286,9 @@ class AlertEngineService
 
         foreach ($rows as $row) {
             $total = (int) ($row->good + $row->reject);
-            if ($total < 100) continue; // not enough data
+            if ($total < 100) {
+                continue;
+            } // not enough data
             $quality = $row->good / max(1, $total);
             if ($quality < self::OEE_THRESHOLD) {
                 $machine = Machine::find($row->machine_id);
@@ -288,7 +297,7 @@ class AlertEngineService
                         AlertType::OeeBelowThreshold,
                         AlertSeverity::Warning,
                         "OEE below threshold: {$machine->machine_code}",
-                        "{$machine->name} quality rate is ".round($quality * 100, 1)."% over the last ".self::OEE_DAYS." days.",
+                        "{$machine->name} quality rate is ".round($quality * 100, 1).'% over the last '.self::OEE_DAYS.' days.',
                         $machine,
                         ['quality' => round($quality, 4), 'good' => (int) $row->good, 'reject' => (int) $row->reject],
                     );
@@ -311,8 +320,10 @@ class AlertEngineService
             ->select('id', 'invoice_number', 'due_date', 'balance', 'customer_id')
             ->get()
             ->each(function ($row) use ($today) {
-                $invoice = \App\Modules\Accounting\Models\Invoice::find($row->id);
-                if (! $invoice) return;
+                $invoice = Invoice::find($row->id);
+                if (! $invoice) {
+                    return;
+                }
 
                 $daysOver = $today->diffInDays(Carbon::parse($row->due_date));
                 if ($daysOver >= 60) {
@@ -320,7 +331,7 @@ class AlertEngineService
                         AlertType::ArOverdue60,
                         AlertSeverity::Critical,
                         "AR severely overdue: {$row->invoice_number}",
-                        "Invoice {$row->invoice_number} is {$daysOver} days past due. Balance ₱".number_format((float) $row->balance, 2).".",
+                        "Invoice {$row->invoice_number} is {$daysOver} days past due. Balance ₱".number_format((float) $row->balance, 2).'.',
                         $invoice,
                         ['days_overdue' => $daysOver, 'balance' => (float) $row->balance],
                     );
@@ -329,7 +340,7 @@ class AlertEngineService
                         AlertType::ArOverdue30,
                         AlertSeverity::Warning,
                         "AR overdue: {$row->invoice_number}",
-                        "Invoice {$row->invoice_number} is {$daysOver} days past due. Balance ₱".number_format((float) $row->balance, 2).".",
+                        "Invoice {$row->invoice_number} is {$daysOver} days past due. Balance ₱".number_format((float) $row->balance, 2).'.',
                         $invoice,
                         ['days_overdue' => $daysOver, 'balance' => (float) $row->balance],
                     );
@@ -343,13 +354,15 @@ class AlertEngineService
             ->select('id', 'bill_number', 'due_date', 'balance', 'vendor_id')
             ->get()
             ->each(function ($row) {
-                $bill = \App\Modules\Accounting\Models\Bill::find($row->id);
-                if (! $bill) return;
+                $bill = Bill::find($row->id);
+                if (! $bill) {
+                    return;
+                }
                 $this->raise(
                     AlertType::ApDueSoon,
                     AlertSeverity::Info,
                     "Bill due soon: {$row->bill_number}",
-                    "Bill {$row->bill_number} is due in 3 days ({$row->due_date}). Balance ₱".number_format((float) $row->balance, 2).".",
+                    "Bill {$row->bill_number} is due in 3 days ({$row->due_date}). Balance ₱".number_format((float) $row->balance, 2).'.',
                     $bill,
                     ['due_date' => $row->due_date, 'balance' => (float) $row->balance],
                 );
@@ -374,10 +387,12 @@ class AlertEngineService
 
         foreach ($rows as $row) {
             $total = (int) ($row->good + $row->reject);
-            if ($total < 100) continue;
+            if ($total < 100) {
+                continue;
+            }
             $scrap = $row->reject / max(1, $total);
             if ($scrap > 0.05) {
-                $product = \App\Modules\MRP\Models\Product::find($row->product_id);
+                $product = Product::find($row->product_id);
                 if ($product) {
                     $this->raise(
                         AlertType::QcFailRateHigh,
@@ -399,20 +414,15 @@ class AlertEngineService
         try {
             // Determine recipients by alert type → role.
             $roleSlugs = match ($alert->type) {
-                AlertType::StockCritical, AlertType::StockLow, AlertType::NoSupplier
-                    => ['warehouse_staff', 'purchasing_officer', 'ppc_head'],
+                AlertType::StockCritical, AlertType::StockLow, AlertType::NoSupplier => ['warehouse_staff', 'purchasing_officer', 'ppc_head'],
 
-                AlertType::MachineBreakdown, AlertType::MoldShotCritical, AlertType::MoldShotLimit
-                    => ['production_manager', 'maintenance_tech'],
+                AlertType::MachineBreakdown, AlertType::MoldShotCritical, AlertType::MoldShotLimit => ['production_manager', 'maintenance_tech'],
 
-                AlertType::WoOverdue, AlertType::OeeBelowThreshold
-                    => ['production_manager'],
+                AlertType::WoOverdue, AlertType::OeeBelowThreshold => ['production_manager'],
 
-                AlertType::ArOverdue30, AlertType::ArOverdue60, AlertType::ApDueSoon
-                    => ['finance_officer'],
+                AlertType::ArOverdue30, AlertType::ArOverdue60, AlertType::ApDueSoon => ['finance_officer'],
 
-                AlertType::QcFailRateHigh
-                    => ['qc_inspector', 'production_manager'],
+                AlertType::QcFailRateHigh => ['qc_inspector', 'production_manager'],
             };
 
             $users = User::query()
@@ -420,7 +430,9 @@ class AlertEngineService
                 ->where('is_active', true)
                 ->get();
 
-            if ($users->isEmpty()) return;
+            if ($users->isEmpty()) {
+                return;
+            }
 
             Notification::send($users, new CriticalAlertEmail($alert));
             $alert->update(['notified_email_at' => now()]);

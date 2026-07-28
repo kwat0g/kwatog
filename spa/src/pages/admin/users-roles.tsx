@@ -82,7 +82,7 @@ function UsersTab() {
                     </Link>
                   </td>
                   <td className="px-2.5 text-secondary">{u.email}</td>
-                  <td className="px-2.5">{u.role?.name ?? <span className="text-subtle">—</span>}</td>
+                  <td className="px-2.5">{u.role?.name ?? <span className="text-text-subtle">—</span>}</td>
                   <td className="px-2.5">
                     <Chip variant={u.is_active === false ? 'danger' : 'success'} >
                       {u.is_active === false ? 'Inactive' : 'Active'}

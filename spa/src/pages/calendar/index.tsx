@@ -217,7 +217,7 @@ export default function CalendarPage() {
                   <div
                     className={cn(
                       'text-xs font-mono tabular-nums',
-                      inMonth ? 'text-primary' : 'text-subtle',
+                      inMonth ? 'text-primary' : 'text-text-subtle',
                       isToday && 'inline-flex items-center justify-center bg-accent text-accent-fg w-5 h-5 rounded-full text-2xs',
                     )}
                   >

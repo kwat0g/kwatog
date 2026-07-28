@@ -129,7 +129,9 @@ export function ForecastPanel({
           <div className="flex items-center justify-between p-2 bg-elevated rounded-md">
             <span className="text-sm text-muted">{data.kpi.label}</span>
             <span className="text-lg font-medium font-mono tabular-nums">
-              {data.kpi.value}
+              {data.kpi.value !== '' && Number.isFinite(Number(data.kpi.value))
+                ? formatValue(Number(data.kpi.value))
+                : data.kpi.value}
               {unitLabel && <span className="text-xs text-muted ml-1">{unitLabel}</span>}
             </span>
           </div>

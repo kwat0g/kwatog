@@ -8,10 +8,13 @@ use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Events\StockMovementCompleted;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Exceptions\InvalidMovementException;
+use App\Modules\Inventory\Models\StockCountSession;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Support\StockMovementInput;
 use Illuminate\Support\Facades\DB;
+use RuntimeException;
 
 /**
  * Linchpin of the inventory ledger.
@@ -41,6 +44,13 @@ class StockMovementService
         $this->validateInput($in);
 
         return DB::transaction(function () use ($in) {
+            if (! $in->bypassCountFreeze) {
+                $this->assertLocationsNotFrozen([
+                    $in->fromLocationId,
+                    $in->toLocationId,
+                ]);
+            }
+
             // Lock affected rows in ID-ordered fashion for deadlock safety.
             $fromLevel = $in->fromLocationId
                 ? $this->lockOrCreate($in->itemId, $in->fromLocationId)
@@ -166,10 +176,55 @@ class StockMovementService
         }
     }
 
+    /** @param array<int, int|null> $locationIds */
+    private function assertLocationsNotFrozen(array $locationIds): void
+    {
+        $ids = array_values(array_unique(array_filter($locationIds)));
+        if ($ids === []) {
+            return;
+        }
+
+        $locations = WarehouseLocation::query()
+            ->whereIn('id', $ids)
+            ->lockForUpdate()
+            ->get(['id', 'zone_id']);
+
+        foreach ($locations as $location) {
+            $session = StockCountSession::query()
+                ->where('status', 'in_progress')
+                ->where(function ($query) use ($location) {
+                    $query->whereHas('items', fn ($items) => $items->where('location_id', $location->id))
+                        ->orWhere(function ($scope) use ($location) {
+                            $scope->where('scope', 'zone')->where('zone_id', $location->zone_id);
+                        })
+                        ->orWhere(function ($scope) use ($location) {
+                            $scope->whereIn('scope', ['warehouse', 'full'])
+                                ->where(function ($warehouse) use ($location) {
+                                    $warehouse->whereNull('warehouse_id')
+                                        ->orWhereIn('warehouse_id', function ($zones) use ($location) {
+                                            $zones->select('warehouse_id')
+                                                ->from('warehouse_zones')
+                                                ->where('id', $location->zone_id);
+                                        });
+                                });
+                        });
+                })
+                ->lockForUpdate()
+                ->first();
+
+            if ($session) {
+                throw new RuntimeException(
+                    "Warehouse location {$location->id} is frozen by stock count {$session->session_number}."
+                );
+            }
+        }
+    }
+
     /** Reserve stock for a work order (no quantity change, just reservation). */
     public function reserve(int $itemId, int $locationId, string $quantity): void
     {
         DB::transaction(function () use ($itemId, $locationId, $quantity) {
+            $this->assertLocationsNotFrozen([$locationId]);
             $level = $this->lockOrCreate($itemId, $locationId);
             $available = bcsub((string) $level->quantity, (string) $level->reserved_quantity, 3);
             if (bccomp($available, $quantity, 3) < 0) {
@@ -186,6 +241,7 @@ class StockMovementService
     public function release(int $itemId, int $locationId, string $quantity): void
     {
         DB::transaction(function () use ($itemId, $locationId, $quantity) {
+            $this->assertLocationsNotFrozen([$locationId]);
             $level = $this->lockOrCreate($itemId, $locationId);
             $rem = bcsub((string) $level->reserved_quantity, $quantity, 3);
             if (bccomp($rem, '0', 3) < 0) $rem = '0';

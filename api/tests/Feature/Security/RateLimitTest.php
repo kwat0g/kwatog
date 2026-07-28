@@ -12,9 +12,8 @@ use Illuminate\Support\Facades\RateLimiter;
 use Tests\TestCase;
 
 /**
- * Ensures the `api` named RateLimiter (60/min) is actually applied to the
- * API middleware group. Without the ThrottleRequests:api middleware appended
- * in bootstrap/app.php, every request under /api/v1 is unthrottled.
+ * Ensures the named API limiter is applied and that authenticated SPA traffic
+ * gets a larger, independently configurable bucket than anonymous traffic.
  */
 class RateLimitTest extends TestCase
 {
@@ -26,32 +25,38 @@ class RateLimitTest extends TestCase
         $this->seed(RolePermissionSeeder::class);
     }
 
-    public function test_api_group_throttles_after_sixty_requests_per_minute(): void
+    public function test_authenticated_api_limit_uses_configured_user_bucket(): void
     {
+        config()->set('rate_limits.api_authenticated_per_minute', 5);
+
         $user = User::factory()->create([
             'role_id' => Role::where('slug', 'system_admin')->value('id'),
             'email'   => 'rl+'.uniqid().'@t.test',
         ]);
 
         // Clear any prior counter for this key just in case.
-        RateLimiter::clear('api:'.$user->id);
-        RateLimiter::clear((string) $user->id);
+        RateLimiter::clear('user:'.$user->id);
 
-        $last = null;
         $statuses = [];
-        for ($i = 0; $i < 65; $i++) {
-            $last = $this->actingAs($user)->getJson('/api/v1/alerts/unread-count');
-            $statuses[] = $last->getStatusCode();
-            if ($last->getStatusCode() === 429) {
-                break;
-            }
+        for ($i = 0; $i < 6; $i++) {
+            $statuses[] = $this->actingAs($user)
+                ->getJson('/api/v1/alerts/unread-count')
+                ->getStatusCode();
         }
 
-        $this->assertSame(
-            429,
-            $last->getStatusCode(),
-            'Expected a 429 within 65 requests but never got one. Statuses observed: '
-                .implode(',', $statuses)
-        );
+        $this->assertSame([200, 200, 200, 200, 200, 429], $statuses);
+    }
+
+    public function test_guest_api_limit_remains_conservative(): void
+    {
+        config()->set('rate_limits.api_guest_per_minute', 3);
+        RateLimiter::clear('ip:127.0.0.1');
+
+        $statuses = [];
+        for ($i = 0; $i < 4; $i++) {
+            $statuses[] = $this->getJson('/api/v1/health')->getStatusCode();
+        }
+
+        $this->assertSame([200, 200, 200, 429], $statuses);
     }
 }

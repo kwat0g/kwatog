@@ -8,6 +8,7 @@ use App\Common\Services\SettingsService;
 use App\Modules\Admin\Requests\UpdateSettingRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class SettingsController
 {
@@ -25,13 +26,13 @@ class SettingsController
         $grouped = [];
         foreach ($rows as $row) {
             $grouped[$row->group][] = [
-                'key'             => $row->key,
-                'value'           => json_decode($row->value, true),
-                'group'           => $row->group,
-                'label'           => $row->label,
-                'description'     => $row->description,
+                'key' => $row->key,
+                'value' => json_decode($row->value, true),
+                'group' => $row->group,
+                'label' => $row->label,
+                'description' => $row->description,
                 'updated_by_name' => $row->updated_by_name,
-                'updated_at'      => $row->updated_at,
+                'updated_at' => $row->updated_at,
             ];
         }
 
@@ -50,7 +51,7 @@ class SettingsController
 
         return response()->json([
             'data' => [
-                'key'   => $key,
+                'key' => $key,
                 'value' => $this->settings->get($key),
             ],
         ]);
@@ -61,23 +62,26 @@ class SettingsController
         $dbVersion = 'unknown';
         try {
             $dbVersion = DB::selectOne('SELECT version() as v')->v ?? 'unknown';
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            Log::warning('Unable to read the database version for system info.', [
+                'error' => $e->getMessage(),
+            ]);
         }
 
         return response()->json(['data' => [
-            'php_version'     => PHP_VERSION,
+            'php_version' => PHP_VERSION,
             'laravel_version' => app()->version(),
-            'database'        => [
-                'driver'  => config('database.default'),
+            'database' => [
+                'driver' => config('database.default'),
                 'version' => $dbVersion,
             ],
-            'cache_driver'   => config('cache.default'),
-            'queue_driver'   => config('queue.default'),
+            'cache_driver' => config('cache.default'),
+            'queue_driver' => config('queue.default'),
             'session_driver' => config('session.driver'),
-            'app_env'        => config('app.env'),
-            'app_debug'      => (bool) config('app.debug'),
-            'timezone'       => config('app.timezone'),
-            'server_time'    => now()->toIso8601String(),
+            'app_env' => config('app.env'),
+            'app_debug' => (bool) config('app.debug'),
+            'timezone' => config('app.timezone'),
+            'server_time' => now()->toIso8601String(),
         ]]);
     }
 }

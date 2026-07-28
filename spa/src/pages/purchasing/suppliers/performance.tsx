@@ -140,7 +140,7 @@ export default function SupplierPerformancePage() {
           label="Overall score"
           value={
             score === null ? (
-              <span className="text-subtle">N/A</span>
+              <span className="text-text-subtle">N/A</span>
             ) : (
               <span className="flex items-baseline gap-1">
                 {score.toFixed(1)}

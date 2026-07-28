@@ -28,6 +28,9 @@ const CalendarPage       = lazy(() => import('@/pages/calendar'));
 const ApprovalsBoardPage = lazy(() => import('@/pages/approvals'));
 const ChainTrackerPage   = lazy(() => import('@/pages/chains'));
 const NotificationsListPage = lazy(() => import('@/pages/notifications'));
+const ActionCenterPage = lazy(() => import('@/pages/action-center'));
+const ExceptionWorkbenchPage = lazy(() => import('@/pages/exceptions'));
+const OperationsHealthPage = lazy(() => import('@/pages/admin/operations-health'));
 
 const AdminUsersRolesHubPage = lazy(() => import('@/pages/admin/users-roles'));
 
@@ -97,5 +100,9 @@ export const dashboardRoutes = (
 
     {/* Notifications page (Sprint 8 — Task 77) */}
     <Route path="/notifications" element={<NotificationsListPage />} />
+    <Route path="/action-center" element={<ActionCenterPage />} />
+    <Route path="/exceptions" element={<ExceptionWorkbenchPage />} />
+    <Route path="/admin/operations-health"
+      element={<PermissionGuard permission="dashboard.admin.view"><OperationsHealthPage /></PermissionGuard>} />
   </>
 );

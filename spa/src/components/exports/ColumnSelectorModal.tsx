@@ -75,9 +75,11 @@ export function ColumnSelectorModal({
         toast.error('Could not save column preference, downloading anyway.');
       }
     }
-    exportsApi.download(module, { format, columns: cols, filters });
-    toast.success(`Generating ${format.toUpperCase()} export…`);
-    onClose();
+    const downloaded = await exportsApi.download(module, { format, columns: cols, filters });
+    if (downloaded) {
+      toast.success(`${format.toUpperCase()} export downloaded.`);
+      onClose();
+    }
   };
 
   return (

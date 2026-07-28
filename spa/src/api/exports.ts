@@ -8,6 +8,7 @@
  */
 
 import { client } from './client';
+import { downloadAuthenticatedFile } from './download';
 import type {
   ColumnPayload,
   CreateScheduledExportInput,
@@ -41,8 +42,8 @@ export const exportsApi = {
       )
       .then((r) => r.data.data),
 
-  /** Trigger a browser download. Returns the URL it navigated to. */
-  download: (module: string, opts: DownloadOpts = {}): string => {
+  /** Download through Axios so expired sessions are handled inside the SPA. */
+  download: async (module: string, opts: DownloadOpts = {}): Promise<boolean> => {
     const params = new URLSearchParams();
     if (opts.format) params.set('format', opts.format);
     if (opts.columns?.length) params.set('columns', opts.columns.join(','));
@@ -53,8 +54,9 @@ export const exportsApi = {
       }
     }
     const url = `/api/v1/exports/${module}/download?${params.toString()}`;
-    triggerDownload(url);
-    return url;
+    return downloadAuthenticatedFile(url, {
+      errorMessage: `Failed to generate the ${opts.format?.toUpperCase() ?? 'file'} export.`,
+    });
   },
 };
 
@@ -68,15 +70,6 @@ function serializeOpts(opts: Omit<DownloadOpts, 'format'>): Record<string, strin
     }
   }
   return out;
-}
-
-function triggerDownload(url: string): void {
-  const a = document.createElement('a');
-  a.href = url;
-  a.rel = 'noopener';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
 }
 
 export const scheduledExportsApi = {

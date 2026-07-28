@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import { onFormInvalid } from '@/lib/formErrors';
 import { Printer, Coins, Ban, CheckCircle2 } from 'lucide-react';
 import { invoicesApi } from '@/api/accounting/invoices';
+import { downloadAuthenticatedFile } from '@/api/download';
 import { accountsApi } from '@/api/accounting/accounts';
 import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
@@ -135,9 +136,7 @@ export default function InvoiceDetailPage() {
         ]}
         actions={
           <div className="flex gap-1.5">
-            <a href={invoicesApi.pdfUrl(invoice.id)} target="_blank" rel="noopener">
-              <Button variant="secondary" size="sm" icon={<Printer size={14} />}>Print</Button>
-            </a>
+            <Button variant="secondary" size="sm" icon={<Printer size={14} />} onClick={() => void downloadAuthenticatedFile(invoicesApi.pdfUrl(invoice.id), { openInNewTab: true, errorMessage: 'Failed to generate invoice PDF.' })}>Print</Button>
             {isDraft && can('accounting.invoices.create') && (
               <Button variant="primary" size="sm" icon={<CheckCircle2 size={14} />} onClick={() => setShowFinalize(true)} disabled={finalizeMut.isPending}>
                 Finalize

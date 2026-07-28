@@ -15,7 +15,7 @@ export default function DriverDeliveryList() {
   const rows = (data?.data ?? []) as DriverDelivery[];
   if (rows.length === 0) {
     return (
-      <div className="py-12 text-center text-zinc-500">
+      <div className="py-12 text-center text-muted">
         No deliveries assigned today.
       </div>
     );
@@ -23,21 +23,21 @@ export default function DriverDeliveryList() {
 
   return (
     <div className="space-y-3">
-      <h1 className="text-lg font-medium">Today's Deliveries</h1>
+      <h1 className="text-lg font-medium text-primary">Today's Deliveries</h1>
       {rows.map(d => (
         <Link
           key={d.id}
           to={`/driver/${d.id}`}
-          className="block rounded-md border border-zinc-200 dark:border-zinc-800 bg-canvas dark:bg-zinc-900 p-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+          className="block rounded-md border border-default bg-canvas p-4 hover:bg-surface focus:outline-none focus:ring-2 focus:ring-accent"
         >
           <div className="flex items-baseline justify-between">
-            <div className="font-mono text-sm">{d.delivery_number}</div>
+            <div className="font-mono text-sm text-primary">{d.delivery_number}</div>
             <StatusChip status={d.status} />
           </div>
-          <div className="mt-1 text-sm">
+          <div className="mt-1 text-sm text-primary">
             {d.sales_order?.customer?.name ?? '—'}
           </div>
-          <div className="mt-1 text-xs text-zinc-500">
+          <div className="mt-1 text-xs text-muted">
             {d.sales_order?.so_number ?? '—'} · {d.vehicle?.plate_number ?? 'No vehicle'}
           </div>
         </Link>
@@ -56,7 +56,7 @@ const STATUS_CLASSES: Record<DriverDeliveryStatus, string> = {
 };
 
 function StatusChip({ status }: { status: DriverDeliveryStatus }) {
-  const cls = STATUS_CLASSES[status] ?? 'bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200';
+  const cls = STATUS_CLASSES[status] ?? 'bg-subtle text-muted';
   return (
     <span className={`text-xs px-2 py-0.5 rounded ${cls}`}>
       {status.replace(/_/g, ' ')}
@@ -74,7 +74,7 @@ function Skeleton() {
     >
       <span className="sr-only">Loading deliveries…</span>
       {[0, 1, 2].map(i => (
-        <div key={i} className="h-20 rounded-md bg-zinc-100 dark:bg-zinc-800" />
+        <div key={i} className="h-20 rounded-md bg-elevated" />
       ))}
     </div>
   );
@@ -87,7 +87,7 @@ function ErrorRetry({ onRetry }: { onRetry: () => void }) {
       <button
         type="button"
         onClick={onRetry}
-        className="text-sm underline min-h-[44px] px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 rounded"
+        className="text-sm text-primary underline min-h-[44px] px-3 focus:outline-none focus:ring-2 focus:ring-accent rounded"
       >
         Try again
       </button>

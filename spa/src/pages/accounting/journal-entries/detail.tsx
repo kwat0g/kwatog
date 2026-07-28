@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { Printer } from 'lucide-react';
 import { journalEntriesApi } from '@/api/accounting/journal-entries';
+import { downloadAuthenticatedFile } from '@/api/download';
 import { Button } from '@/components/ui/Button';
 import { Chip, type ChipVariant } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -86,9 +87,7 @@ export default function JournalEntryDetailPage() {
         ]}
         actions={
           <div className="flex gap-1.5">
-            <a href={journalEntriesApi.pdfUrl(je.id)} target="_blank" rel="noopener">
-              <Button variant="secondary" size="sm" icon={<Printer size={14} />}>Print</Button>
-            </a>
+            <Button variant="secondary" size="sm" icon={<Printer size={14} />} onClick={() => void downloadAuthenticatedFile(journalEntriesApi.pdfUrl(je.id), { openInNewTab: true, errorMessage: 'Failed to generate journal entry PDF.' })}>Print</Button>
             {isDraft && can('accounting.journal.post') && (
               <Button variant="primary" size="sm" onClick={() => setShowPost(true)} disabled={postMut.isPending}>
                 Post

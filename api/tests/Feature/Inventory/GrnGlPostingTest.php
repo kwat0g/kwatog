@@ -31,15 +31,18 @@ use Tests\TestCase;
  * GRNs that are accepted (in full or in part) must produce a balanced
  * journal entry: DR Inventory (routed by item category) / CR 2110 GRNI.
  * The post is flag-gated on `modules.accounting`, idempotent via
- * `goods_receipt_notes.journal_entry_id`, and must not block GRN
- * acceptance if the GL post itself fails.
+ * `goods_receipt_notes.journal_entry_id`. Accounting-disabled companies may
+ * receive without a JE; an enabled-but-misconfigured ledger must roll back the
+ * receipt so inventory and accounting cannot diverge.
  */
 class GrnGlPostingTest extends TestCase
 {
     use RefreshDatabase;
 
     private User $user;
+
     private GrnService $grnSvc;
+
     private GrnGlPostingService $glSvc;
 
     protected function setUp(): void
@@ -57,7 +60,7 @@ class GrnGlPostingTest extends TestCase
         $this->user = User::factory()->create(['role_id' => $role->id, 'is_active' => true]);
 
         $this->grnSvc = app(GrnService::class);
-        $this->glSvc  = app(GrnGlPostingService::class);
+        $this->glSvc = app(GrnGlPostingService::class);
     }
 
     private function enableAccounting(bool $enabled = true): void
@@ -73,17 +76,17 @@ class GrnGlPostingTest extends TestCase
     private function buildGrn(array $lines): GoodsReceiptNote
     {
         $po = PurchaseOrder::factory()->create([
-            'status'     => PurchaseOrderStatus::Approved->value,
+            'status' => PurchaseOrderStatus::Approved->value,
             'created_by' => $this->user->id,
         ]);
 
         $grn = GoodsReceiptNote::create([
-            'grn_number'        => 'GRN-' . substr(uniqid(), -10),
+            'grn_number' => 'GRN-'.substr(uniqid(), -10),
             'purchase_order_id' => $po->id,
-            'vendor_id'         => $po->vendor_id,
-            'received_date'     => now()->toDateString(),
-            'received_by'       => $this->user->id,
-            'status'            => GrnStatus::PendingQc,
+            'vendor_id' => $po->vendor_id,
+            'received_date' => now()->toDateString(),
+            'received_by' => $this->user->id,
+            'status' => GrnStatus::PendingQc,
         ]);
 
         foreach ($lines as $row) {
@@ -95,23 +98,23 @@ class GrnGlPostingTest extends TestCase
 
             $poi = PurchaseOrderItem::create([
                 'purchase_order_id' => $po->id,
-                'item_id'           => $item->id,
-                'description'       => 'Test line',
-                'quantity'          => $row['quantity'],
-                'unit'              => 'pcs',
-                'unit_price'        => $row['unit_cost'],
-                'total'             => bcmul($row['quantity'], $row['unit_cost'], 2),
+                'item_id' => $item->id,
+                'description' => 'Test line',
+                'quantity' => $row['quantity'],
+                'unit' => 'pcs',
+                'unit_price' => $row['unit_cost'],
+                'total' => bcmul($row['quantity'], $row['unit_cost'], 2),
                 'quantity_received' => '0.000',
             ]);
 
             GrnItem::create([
-                'goods_receipt_note_id'  => $grn->id,
+                'goods_receipt_note_id' => $grn->id,
                 'purchase_order_item_id' => $poi->id,
-                'item_id'                => $item->id,
-                'location_id'            => $location->id,
-                'quantity_received'      => $row['quantity'],
-                'quantity_accepted'      => 0,
-                'unit_cost'              => $row['unit_cost'],
+                'item_id' => $item->id,
+                'location_id' => $location->id,
+                'quantity_received' => $row['quantity'],
+                'quantity_accepted' => 0,
+                'unit_cost' => $row['unit_cost'],
             ]);
         }
 
@@ -160,6 +163,55 @@ class GrnGlPostingTest extends TestCase
         $this->assertSame('1200.00', (string) $grniCredit, 'GRNI CR must equal total accepted value');
     }
 
+    public function test_receive_with_qc_posts_the_same_required_gl_entry(): void
+    {
+        $this->enableAccounting(true);
+
+        $item = Item::factory()->create([
+            'item_type' => ItemType::RawMaterial->value,
+            'is_active' => true,
+        ]);
+        $location = WarehouseLocation::factory()->create();
+        $po = PurchaseOrder::factory()->create([
+            'status' => PurchaseOrderStatus::Approved->value,
+            'created_by' => $this->user->id,
+        ]);
+        $poItem = PurchaseOrderItem::create([
+            'purchase_order_id' => $po->id,
+            'item_id' => $item->id,
+            'description' => 'Consolidated receiving line',
+            'quantity' => '10.000',
+            'unit' => 'pcs',
+            'unit_price' => '5.00',
+            'total' => '50.00',
+            'quantity_received' => '0.000',
+        ]);
+
+        $result = $this->grnSvc->receiveWithQc(
+            $po,
+            [[
+                'purchase_order_item_id' => $poItem->id,
+                'item_id' => $item->id,
+                'location_id' => $location->id,
+                'quantity_received' => '10.000',
+                'unit_cost' => '5.00',
+            ]],
+            ['received_date' => now()->toDateString()],
+            ['result' => 'passed'],
+            $this->user,
+        );
+
+        $this->assertSame(GrnStatus::Accepted, $result['grn']->status);
+        $this->assertNotNull($result['grn']->journal_entry_id);
+        $this->assertSame('passed', $result['inspection']->status->value);
+        $this->assertSame($item->id, $result['inspection']->item_id);
+        $this->assertDatabaseHas('journal_entries', [
+            'id' => $result['grn']->journal_entry_id,
+            'reference_type' => 'goods_receipt_note',
+            'status' => 'posted',
+        ]);
+    }
+
     public function test_accept_skips_when_accounting_disabled(): void
     {
         $this->enableAccounting(false);
@@ -184,7 +236,7 @@ class GrnGlPostingTest extends TestCase
         ]);
 
         $accepted = $this->grnSvc->accept($grn, $this->user);
-        $firstId  = $accepted->journal_entry_id;
+        $firstId = $accepted->journal_entry_id;
         $this->assertNotNull($firstId);
 
         // Call the GL service directly a second time — should be a no-op.
@@ -252,7 +304,7 @@ class GrnGlPostingTest extends TestCase
         $this->assertSame('1100.00', (string) $grniCredit, 'GRNI CR equals only accepted value');
     }
 
-    public function test_gl_post_failure_does_not_block_grn_acceptance(): void
+    public function test_gl_post_failure_rolls_back_grn_acceptance_and_stock(): void
     {
         $this->enableAccounting(true);
 
@@ -263,16 +315,20 @@ class GrnGlPostingTest extends TestCase
             ['item_type' => ItemType::RawMaterial->value, 'quantity' => '10', 'unit_cost' => '5.00'],
         ]);
 
-        $accepted = $this->grnSvc->accept($grn, $this->user);
+        try {
+            $this->grnSvc->accept($grn, $this->user);
+            $this->fail('Acceptance should fail when the enabled ledger cannot post the receipt.');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('GRNI clearing account 2110 missing', $e->getMessage());
+        }
 
-        $this->assertSame(
-            GrnStatus::Accepted,
-            $accepted->status,
-            'GRN must still reach Accepted status even when GL posting fails',
-        );
-        $this->assertNull(
-            $accepted->journal_entry_id,
-            'No JE should be linked when the GL post fails',
-        );
+        $fresh = $grn->fresh();
+        $this->assertSame(GrnStatus::PendingQc, $fresh->status);
+        $this->assertNull($fresh->journal_entry_id);
+        $this->assertSame('0.000', (string) $fresh->items()->first()->quantity_accepted);
+        $this->assertDatabaseMissing('stock_movements', [
+            'reference_type' => 'goods_receipt_note',
+            'reference_id' => $grn->id,
+        ]);
     }
 }

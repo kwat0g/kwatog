@@ -17,13 +17,13 @@ export default function ActiveOrders() {
   const orders = (data?.data ?? []) as WorkOrder[];
   if (orders.length === 0) {
     return (
-      <div className="py-12 text-center text-zinc-500">
+      <div className="py-12 text-center text-muted">
         <p className="text-lg">No active work orders.</p>
         <p className="text-sm mt-1">Pull down or tap refresh to check again.</p>
         <button
           type="button"
           onClick={() => refetch()}
-          className="mt-4 inline-flex items-center gap-2 text-sm text-indigo-600 dark:text-indigo-400 min-h-[44px] px-4 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+          className="mt-4 inline-flex items-center gap-2 text-sm text-accent min-h-[44px] px-4 rounded focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
         >
           <RefreshCw className="w-4 h-4" />
           Refresh
@@ -40,7 +40,7 @@ export default function ActiveOrders() {
           type="button"
           onClick={() => refetch()}
           disabled={isFetching}
-          className="inline-flex items-center gap-1.5 text-sm text-zinc-600 dark:text-zinc-400 min-h-[44px] px-3 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 text-sm text-secondary min-h-[44px] px-3 rounded focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 disabled:opacity-50"
         >
           <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
           Refresh
@@ -51,7 +51,7 @@ export default function ActiveOrders() {
         <Link
           key={wo.id}
           to={`/factory/${wo.id}/output`}
-          className="block rounded-md border border-zinc-200 dark:border-zinc-800 bg-canvas dark:bg-zinc-900 p-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 active:bg-zinc-50 dark:active:bg-zinc-800"
+          className="block rounded-md border border-default bg-canvas p-4 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 active:bg-subtle"
         >
           {/* Header: WO number + status */}
           <div className="flex items-center justify-between">
@@ -63,25 +63,25 @@ export default function ActiveOrders() {
           <div className="mt-1.5 text-sm font-medium">
             {wo.product?.name ?? 'Unknown product'}
           </div>
-          <div className="mt-0.5 text-xs text-zinc-500">
+          <div className="mt-0.5 text-xs text-muted">
             {wo.machine?.name ?? 'No machine'} {wo.machine?.machine_code ? `(${wo.machine.machine_code})` : ''}
           </div>
 
           {/* Progress */}
           <div className="mt-3">
-            <div className="flex items-baseline justify-between text-xs text-zinc-500 mb-1">
+            <div className="flex items-baseline justify-between text-xs text-muted mb-1">
               <span>Progress</span>
-              <span className="font-mono tabular-nums text-sm text-zinc-900 dark:text-zinc-100">
+              <span className="font-mono tabular-nums text-sm text-primary">
                 {wo.quantity_good} / {wo.quantity_target}
               </span>
             </div>
-            <div className="h-2 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
+            <div className="h-2 rounded-full bg-elevated overflow-hidden">
               <div
-                className="h-full rounded-full bg-indigo-500 transition-all"
+                className="h-full rounded-full bg-accent transition-all"
                 style={{ width: `${Math.min(wo.progress_percentage, 100)}%` }}
               />
             </div>
-            <div className="text-right text-xs text-zinc-400 mt-0.5 font-mono tabular-nums">
+            <div className="text-right text-xs text-muted mt-0.5 font-mono tabular-nums">
               {wo.progress_percentage}%
             </div>
           </div>
@@ -119,7 +119,7 @@ function Skeleton() {
     <div role="status" aria-live="polite" aria-busy="true" className="space-y-3 animate-pulse">
       <span className="sr-only">Loading work orders...</span>
       {[0, 1, 2, 3].map(i => (
-        <div key={i} className="h-32 rounded-md bg-zinc-100 dark:bg-zinc-800" />
+        <div key={i} className="h-32 rounded-md bg-elevated" />
       ))}
     </div>
   );
@@ -134,7 +134,7 @@ function ErrorRetry({ onRetry }: { onRetry: () => void }) {
       <button
         type="button"
         onClick={onRetry}
-        className="text-sm underline min-h-[44px] px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 rounded"
+        className="text-sm underline min-h-[44px] px-3 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 rounded"
       >
         Try again
       </button>

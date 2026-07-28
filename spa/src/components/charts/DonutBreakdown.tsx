@@ -41,8 +41,8 @@ export function DonutBreakdown({
           </Pie>
           <Tooltip
             contentStyle={{
-              background: 'var(--color-surface)',
-              border: '1px solid var(--color-border)',
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-default)',
               borderRadius: 6,
               fontSize: 12,
             }}

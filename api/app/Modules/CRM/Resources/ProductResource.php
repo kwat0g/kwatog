@@ -19,6 +19,7 @@ class ProductResource extends JsonResource
             'unit_of_measure' => $this->unit_of_measure,
             'standard_cost'   => (string) $this->standard_cost,
             'is_active'       => (bool) $this->is_active,
+            'include_forecast_in_mrp' => (bool) $this->include_forecast_in_mrp,
             'has_bom'         => (bool) ($this->has_bom_flag ?? false),
             'created_at'      => optional($this->created_at)->toIso8601String(),
             'updated_at'      => optional($this->updated_at)->toIso8601String(),

@@ -163,7 +163,7 @@ export default function SelfServiceLeavePage() {
                       {r.start_date} → {r.end_date} · {r.days} day{Number(r.days) !== 1 ? 's' : ''}
                     </div>
                     {r.leave_type?.name && (
-                      <div className="text-xs text-subtle">{r.leave_type.name}</div>
+                      <div className="text-xs text-text-subtle">{r.leave_type.name}</div>
                     )}
                   </div>
                   <Chip variant={STATUS_CHIP[r.status] ?? 'neutral'}>

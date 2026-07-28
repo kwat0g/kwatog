@@ -68,14 +68,14 @@ function StepNode({ step }: { step: OnboardingStep; isLast: boolean }) {
           'inline-flex items-center justify-center w-4 h-4 rounded-full border text-[9px] font-medium',
           done
             ? 'bg-success-bg text-success-fg border-success-fg'
-            : 'bg-elevated text-subtle border-default',
+            : 'bg-elevated text-text-subtle border-default',
         )}
         aria-hidden
       >
         {done ? <Check size={10} strokeWidth={3} /> : null}
       </span>
       <div className="min-w-0">
-        <div className={cn('text-xs leading-tight', done ? 'text-primary' : 'text-subtle')}>
+        <div className={cn('text-xs leading-tight', done ? 'text-primary' : 'text-text-subtle')}>
           {step.label}
         </div>
         {done && step.completed_at && (

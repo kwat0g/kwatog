@@ -1,19 +1,24 @@
 import axios from 'axios';
 
-/**
- * Separate Axios instance for B2B portal API calls.
- * Uses cookie-based auth (Sanctum) just like the main app,
- * but hits a separate guard so B2B sessions don't collide
- * with internal ERP sessions on the same browser.
- */
-export const portalClient = axios.create({
-  baseURL: '/api/v1',
-  withCredentials: true,
-  headers: {
-    Accept: 'application/json',
-    'X-Requested-With': 'XMLHttpRequest',
-  },
-});
+export const createPortalClient = () => {
+  const client = axios.create({
+    baseURL: '/api/v1',
+    headers: {
+      Accept: 'application/json',
+      'X-Requested-With': 'XMLHttpRequest',
+    },
+  });
+
+  const setToken = (token: string | null) => {
+    if (token) {
+      client.defaults.headers.common.Authorization = `Bearer ${token}`;
+    } else {
+      delete client.defaults.headers.common.Authorization;
+    }
+  };
+
+  return { client, setToken };
+};
 
 export const getPortalCsrf = () =>
   axios.get('/sanctum/csrf-cookie', { withCredentials: true });

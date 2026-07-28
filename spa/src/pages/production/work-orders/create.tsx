@@ -153,7 +153,7 @@ export default function CreateWorkOrderPage() {
 
         <fieldset className="mb-8">
           <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">
-            Resources <span className="text-2xs lowercase tracking-normal text-subtle">— optional, can be assigned at confirm time</span>
+            Resources <span className="text-2xs lowercase tracking-normal text-text-subtle">— optional, can be assigned at confirm time</span>
           </legend>
           <div className="grid grid-cols-2 gap-3">
             <Select label="Machine" {...register('machine_id')} error={errors.machine_id?.message}>

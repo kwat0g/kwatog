@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Inventory\Models;
 
 use App\Common\Traits\HasHashId;
+use App\Modules\Auth\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -20,11 +21,11 @@ class StockCountItem extends Model
     ];
 
     protected $casts = [
-        'system_quantity'   => 'decimal:3',
-        'counted_quantity'  => 'decimal:3',
-        'variance'          => 'decimal:3',
-        'variance_percent'  => 'decimal:2',
-        'counted_at'        => 'datetime',
+        'system_quantity' => 'decimal:3',
+        'counted_quantity' => 'decimal:3',
+        'variance' => 'decimal:3',
+        'variance_percent' => 'decimal:2',
+        'counted_at' => 'datetime',
     ];
 
     public function session(): BelongsTo

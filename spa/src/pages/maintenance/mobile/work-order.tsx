@@ -103,9 +103,9 @@ export default function MobileWorkOrderDetail() {
     return (
       <div role="status" aria-live="polite" aria-busy="true" className="space-y-3 animate-pulse">
         <span className="sr-only">Loading work order...</span>
-        <div className="h-6 w-24 rounded bg-zinc-100 dark:bg-zinc-800" />
-        <div className="h-48 rounded-md bg-zinc-100 dark:bg-zinc-800" />
-        <div className="h-48 rounded-md bg-zinc-100 dark:bg-zinc-800" />
+        <div className="h-6 w-24 rounded bg-elevated" />
+        <div className="h-48 rounded-md bg-elevated" />
+        <div className="h-48 rounded-md bg-elevated" />
       </div>
     );
   }
@@ -117,7 +117,7 @@ export default function MobileWorkOrderDetail() {
         <button
           type="button"
           onClick={() => refetch()}
-          className="text-sm underline min-h-[44px] px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 rounded"
+          className="text-sm underline min-h-[44px] px-3 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 rounded"
         >
           Try again
         </button>
@@ -134,14 +134,14 @@ export default function MobileWorkOrderDetail() {
       {/* Back link */}
       <Link
         to="/maintenance/mobile"
-        className="inline-flex items-center gap-1.5 text-sm text-zinc-600 dark:text-zinc-400 min-h-[44px] rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+        className="inline-flex items-center gap-1.5 text-sm text-secondary min-h-[44px] rounded focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
       >
         <ArrowLeft className="w-4 h-4" />
         Back to list
       </Link>
 
       {/* MWO Summary card */}
-      <div className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-canvas dark:bg-zinc-900 p-4">
+      <div className="rounded-md border border-default bg-canvas p-4">
         <div className="flex items-center justify-between">
           <span className="font-mono text-sm font-medium">{wo.mwo_number}</span>
           <span
@@ -159,21 +159,21 @@ export default function MobileWorkOrderDetail() {
         </div>
 
         <div className="mt-2 text-sm font-medium">{wo.maintainable?.name ?? 'Unknown target'}</div>
-        <div className="text-xs text-zinc-500 mt-0.5">
+        <div className="text-xs text-muted mt-0.5">
           {wo.maintainable?.code ? `(${wo.maintainable.code})` : ''} &middot;{' '}
           <span className="capitalize">{wo.type}</span> &middot;{' '}
           <span className="capitalize">{wo.status.replace(/_/g, ' ')}</span>
         </div>
 
         {wo.description && (
-          <p className="mt-3 text-sm text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap">
+          <p className="mt-3 text-sm text-secondary whitespace-pre-wrap">
             {wo.description}
           </p>
         )}
 
         {wo.assignee && (
-          <div className="mt-3 text-xs text-zinc-500">
-            Assigned to: <span className="font-medium text-zinc-700 dark:text-zinc-300">{wo.assignee.name}</span>
+          <div className="mt-3 text-xs text-muted">
+            Assigned to: <span className="font-medium text-secondary">{wo.assignee.name}</span>
           </div>
         )}
       </div>
@@ -184,7 +184,7 @@ export default function MobileWorkOrderDetail() {
           type="button"
           onClick={() => startMutation.mutate()}
           disabled={startMutation.isPending}
-          className="w-full min-h-[52px] rounded-md bg-success hover:bg-success/90 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 text-white font-medium text-base transition-colors focus:outline-none focus:ring-2 focus:ring-success focus:ring-offset-2 inline-flex items-center justify-center gap-2"
+          className="w-full min-h-[52px] rounded-md bg-success hover:bg-success/90 disabled:bg-elevated text-white font-medium text-base transition-colors focus:outline-none focus:ring-2 focus:ring-success focus:ring-offset-2 inline-flex items-center justify-center gap-2"
         >
           <Play className="w-5 h-5" />
           {startMutation.isPending ? 'Starting...' : 'Start Work'}
@@ -193,13 +193,13 @@ export default function MobileWorkOrderDetail() {
 
       {/* Parts Used section */}
       {!isTerminal && (
-        <div className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-canvas dark:bg-zinc-900 p-4">
+        <div className="rounded-md border border-default bg-canvas p-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-base font-medium">Parts Used</h2>
             <button
               type="button"
               onClick={() => setShowPartSheet(true)}
-              className="inline-flex items-center gap-1 text-sm text-indigo-600 dark:text-indigo-400 min-h-[44px] px-3 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+              className="inline-flex items-center gap-1 text-sm text-accent min-h-[44px] px-3 rounded focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
             >
               <Plus className="w-4 h-4" />
               Add
@@ -211,49 +211,49 @@ export default function MobileWorkOrderDetail() {
               {wo.spare_parts.map((sp: SparePartUsage) => (
                 <div
                   key={sp.id}
-                  className="flex items-center justify-between p-2 rounded bg-zinc-50 dark:bg-zinc-800/50 text-sm"
+                  className="flex items-center justify-between p-2 rounded bg-surface text-sm"
                 >
                   <div>
                     <div className="font-medium">{sp.item?.name ?? 'Unknown'}</div>
-                    <div className="text-xs text-zinc-500">
+                    <div className="text-xs text-muted">
                       {sp.item?.code} &middot; Qty: <span className="font-mono tabular-nums">{sp.quantity}</span>
                     </div>
                   </div>
-                  <div className="font-mono tabular-nums text-xs text-zinc-500">
+                  <div className="font-mono tabular-nums text-xs text-muted">
                     {formatPeso(sp.total_cost)}
                   </div>
                 </div>
               ))}
-              <div className="text-right text-xs text-zinc-500 pt-1 border-t border-zinc-100 dark:border-zinc-800">
+              <div className="text-right text-xs text-muted pt-1 border-t border-subtle">
                 Total cost:{' '}
-                <span className="font-mono tabular-nums font-medium text-zinc-900 dark:text-zinc-100">
+                <span className="font-mono tabular-nums font-medium text-primary">
                   {formatPeso(wo.cost)}
                 </span>
               </div>
             </div>
           ) : (
-            <p className="text-sm text-zinc-500">No parts recorded yet.</p>
+            <p className="text-sm text-muted">No parts recorded yet.</p>
           )}
         </div>
       )}
 
       {/* Read-only parts for terminal states */}
       {isTerminal && wo.spare_parts && wo.spare_parts.length > 0 && (
-        <div className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-canvas dark:bg-zinc-900 p-4">
+        <div className="rounded-md border border-default bg-canvas p-4">
           <h2 className="text-base font-medium mb-3">Parts Used</h2>
           <div className="space-y-2">
             {wo.spare_parts.map((sp: SparePartUsage) => (
               <div
                 key={sp.id}
-                className="flex items-center justify-between p-2 rounded bg-zinc-50 dark:bg-zinc-800/50 text-sm"
+                className="flex items-center justify-between p-2 rounded bg-surface text-sm"
               >
                 <div>
                   <div className="font-medium">{sp.item?.name ?? 'Unknown'}</div>
-                  <div className="text-xs text-zinc-500">
+                  <div className="text-xs text-muted">
                     Qty: <span className="font-mono tabular-nums">{sp.quantity}</span>
                   </div>
                 </div>
-                <div className="font-mono tabular-nums text-xs text-zinc-500">
+                <div className="font-mono tabular-nums text-xs text-muted">
                   {formatPeso(sp.total_cost)}
                 </div>
               </div>
@@ -269,12 +269,12 @@ export default function MobileWorkOrderDetail() {
             e.preventDefault();
             completeMutation.mutate();
           }}
-          className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-canvas dark:bg-zinc-900 p-4 space-y-4"
+          className="rounded-md border border-default bg-canvas p-4 space-y-4"
         >
           <h2 className="text-base font-medium">Complete Work Order</h2>
 
           <div>
-            <label htmlFor="remarks" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+            <label htmlFor="remarks" className="block text-sm font-medium text-secondary mb-1">
               Work Performed
             </label>
             <textarea
@@ -283,12 +283,12 @@ export default function MobileWorkOrderDetail() {
               onChange={e => setRemarks(e.target.value)}
               rows={3}
               placeholder="Describe what was done..."
-              className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-canvas dark:bg-zinc-800 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"
+              className="w-full rounded-md border border-default bg-canvas px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent resize-none"
             />
           </div>
 
           <div>
-            <label htmlFor="downtime" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+            <label htmlFor="downtime" className="block text-sm font-medium text-secondary mb-1">
               Downtime (minutes)
             </label>
             <input
@@ -299,14 +299,14 @@ export default function MobileWorkOrderDetail() {
               value={downtimeMinutes}
               onChange={e => setDowntimeMinutes(e.target.value)}
               placeholder="0"
-              className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-canvas dark:bg-zinc-800 px-4 py-4 text-2xl font-mono tabular-nums text-center focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full rounded-md border border-default bg-canvas px-4 py-4 text-2xl font-mono tabular-nums text-center focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent"
             />
           </div>
 
           <button
             type="submit"
             disabled={completeMutation.isPending}
-            className="w-full min-h-[52px] rounded-md bg-indigo-600 hover:bg-indigo-700 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 text-white font-medium text-base transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 inline-flex items-center justify-center gap-2"
+            className="w-full min-h-[52px] rounded-md bg-accent hover:bg-accent-hover disabled:bg-elevated text-white font-medium text-base transition-colors focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 inline-flex items-center justify-center gap-2"
           >
             <CheckCircle2 className="w-5 h-5" />
             {completeMutation.isPending ? 'Completing...' : 'Complete Work Order'}
@@ -316,13 +316,13 @@ export default function MobileWorkOrderDetail() {
 
       {/* Activity log */}
       {wo.logs && wo.logs.length > 0 && (
-        <div className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-canvas dark:bg-zinc-900 p-4">
+        <div className="rounded-md border border-default bg-canvas p-4">
           <h2 className="text-base font-medium mb-3">Activity Log</h2>
           <div className="space-y-2">
             {wo.logs.map(log => (
               <div key={log.id} className="text-sm">
-                <div className="text-zinc-700 dark:text-zinc-300">{log.description}</div>
-                <div className="text-xs text-zinc-400 mt-0.5 font-mono tabular-nums">
+                <div className="text-secondary">{log.description}</div>
+                <div className="text-xs text-muted mt-0.5 font-mono tabular-nums">
                   {log.logger?.name ?? 'System'}
                   {log.created_at && ` — ${formatDateTime(log.created_at)}`}
                 </div>
@@ -349,7 +349,7 @@ export default function MobileWorkOrderDetail() {
           {!selectedItem ? (
             <>
               <div>
-                <label htmlFor="part_search" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                <label htmlFor="part_search" className="block text-sm font-medium text-secondary mb-1">
                   Search spare parts
                 </label>
                 <input
@@ -359,7 +359,7 @@ export default function MobileWorkOrderDetail() {
                   onChange={e => setPartSearch(e.target.value)}
                   placeholder="Type to search..."
                   autoFocus
-                  className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-canvas dark:bg-zinc-800 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  className="w-full rounded-md border border-default bg-canvas px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent"
                 />
               </div>
 
@@ -370,26 +370,26 @@ export default function MobileWorkOrderDetail() {
                       key={item.id}
                       type="button"
                       onClick={() => setSelectedItem(item)}
-                      className="w-full text-left p-3 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-800 active:bg-zinc-100 dark:active:bg-zinc-700 min-h-[44px] focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="w-full text-left p-3 rounded-md hover:bg-surface active:bg-elevated min-h-[44px] focus:outline-none focus:ring-2 focus:ring-accent"
                     >
                       <div className="text-sm font-medium">{item.name}</div>
-                      <div className="text-xs text-zinc-500">{item.code} &middot; {item.unit_of_measure}</div>
+                      <div className="text-xs text-muted">{item.code} &middot; {item.unit_of_measure}</div>
                     </button>
                   ))}
                 </div>
               )}
 
               {partSearch.length >= 2 && itemsData?.data?.length === 0 && (
-                <p className="text-sm text-zinc-500 text-center py-4">No spare parts found.</p>
+                <p className="text-sm text-muted text-center py-4">No spare parts found.</p>
               )}
             </>
           ) : (
             <>
               {/* Selected item summary */}
-              <div className="flex items-center justify-between p-3 rounded-md bg-zinc-50 dark:bg-zinc-800/50">
+              <div className="flex items-center justify-between p-3 rounded-md bg-surface">
                 <div>
                   <div className="text-sm font-medium">{selectedItem.name}</div>
-                  <div className="text-xs text-zinc-500">{selectedItem.code}</div>
+                  <div className="text-xs text-muted">{selectedItem.code}</div>
                 </div>
                 <button
                   type="button"
@@ -406,14 +406,14 @@ export default function MobileWorkOrderDetail() {
 
               {/* Location picker */}
               <div>
-                <label htmlFor="part_location" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                <label htmlFor="part_location" className="block text-sm font-medium text-secondary mb-1">
                   Source Location
                 </label>
                 <select
                   id="part_location"
                   value={partLocationId}
                   onChange={e => setPartLocationId(e.target.value)}
-                  className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-canvas dark:bg-zinc-800 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 min-h-[44px]"
+                  className="w-full rounded-md border border-default bg-canvas px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent min-h-[44px]"
                 >
                   <option value="">Select location...</option>
                   {stockData?.data?.map(
@@ -428,7 +428,7 @@ export default function MobileWorkOrderDetail() {
 
               {/* Quantity */}
               <div>
-                <label htmlFor="part_qty" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                <label htmlFor="part_qty" className="block text-sm font-medium text-secondary mb-1">
                   Quantity ({selectedItem.unit_of_measure})
                 </label>
                 <input
@@ -440,7 +440,7 @@ export default function MobileWorkOrderDetail() {
                   value={partQty}
                   onChange={e => setPartQty(e.target.value)}
                   placeholder="0"
-                  className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-canvas dark:bg-zinc-800 px-4 py-4 text-xl font-mono tabular-nums text-center focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  className="w-full rounded-md border border-default bg-canvas px-4 py-4 text-xl font-mono tabular-nums text-center focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent"
                 />
               </div>
 
@@ -456,7 +456,7 @@ export default function MobileWorkOrderDetail() {
                     quantity: partQty,
                   });
                 }}
-                className="w-full min-h-[52px] rounded-md bg-indigo-600 hover:bg-indigo-700 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 text-white font-medium text-base transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                className="w-full min-h-[52px] rounded-md bg-accent hover:bg-accent-hover disabled:bg-elevated text-white font-medium text-base transition-colors focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
               >
                 {sparePartMutation.isPending ? 'Recording...' : 'Add Part'}
               </button>

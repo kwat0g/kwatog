@@ -15,7 +15,7 @@ use App\Modules\B2B\Models\PortalShippingDocument;
 use App\Modules\Edge\Services\EdgeSystemUserResolver;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Purchasing\Models\PurchaseOrder;
-use App\Modules\Purchasing\Resources\PurchaseOrderResource;
+use App\Modules\Quality\Models\PpapSubmission;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
@@ -61,12 +61,12 @@ class SupplierPortalService
             ->orderByDesc('created_at')->limit(5)->get();
 
         return [
-            'open_po_count'          => $openPoCount,
+            'open_po_count' => $openPoCount,
             'pending_delivery_count' => $pendingDeliveryCount,
-            'unpaid_invoice_count'   => $unpaidInvoiceCount,
-            'total_unpaid_amount'    => number_format((float) $totalUnpaid, 2),
-            'recent_pos'             => $recentPos,
-            'recent_invoices'        => $recentInvoices,
+            'unpaid_invoice_count' => $unpaidInvoiceCount,
+            'total_unpaid_amount' => number_format((float) $totalUnpaid, 2),
+            'recent_pos' => $recentPos,
+            'recent_invoices' => $recentInvoices,
         ];
     }
 
@@ -86,8 +86,8 @@ class SupplierPortalService
         }
 
         $sortField = $filters['sort'] ?? 'created_at';
-        $sortDir   = $filters['dir'] ?? 'desc';
-        $allowed   = ['po_number', 'date', 'total_amount', 'status', 'created_at'];
+        $sortDir = $filters['dir'] ?? 'desc';
+        $allowed = ['po_number', 'date', 'total_amount', 'status', 'created_at'];
         if (in_array($sortField, $allowed, true)) {
             $query->orderBy($sortField, $sortDir === 'asc' ? 'asc' : 'desc');
         }
@@ -118,9 +118,9 @@ class SupplierPortalService
 
         return $this->systemUser->impersonate(function () use ($purchaseOrder, $data) {
             $purchaseOrder->expected_delivery_date = $data['expected_delivery_date'] ?? $purchaseOrder->expected_delivery_date;
-            $purchaseOrder->remarks                = $data['notes'] ?? $purchaseOrder->remarks;
-            $purchaseOrder->status                 = 'sent';
-            $purchaseOrder->sent_to_supplier_at    = now();
+            $purchaseOrder->remarks = $data['notes'] ?? $purchaseOrder->remarks;
+            $purchaseOrder->status = 'sent';
+            $purchaseOrder->sent_to_supplier_at = now();
             $purchaseOrder->save();
 
             return $purchaseOrder;
@@ -133,12 +133,12 @@ class SupplierPortalService
 
         return $this->systemUser->impersonate(function () use ($purchaseOrder, $data) {
             $estimatedArrival = $data['estimated_arrival'] ?? $purchaseOrder->expected_delivery_date;
-            $carrier   = $data['carrier'] ?? 'N/A';
-            $tracking  = $data['tracking_number'] ?? 'N/A';
-            $prevNotes = $purchaseOrder->remarks ? $purchaseOrder->remarks . "\n" : '';
+            $carrier = $data['carrier'] ?? 'N/A';
+            $tracking = $data['tracking_number'] ?? 'N/A';
+            $prevNotes = $purchaseOrder->remarks ? $purchaseOrder->remarks."\n" : '';
 
             $purchaseOrder->expected_delivery_date = $estimatedArrival;
-            $purchaseOrder->remarks                = $prevNotes . "Shipment: {$carrier} / {$tracking}";
+            $purchaseOrder->remarks = $prevNotes."Shipment: {$carrier} / {$tracking}";
             $purchaseOrder->save();
 
             return $purchaseOrder;
@@ -158,18 +158,26 @@ class SupplierPortalService
 
         $folder = "portal/shipping-docs/{$purchaseOrder->id}";
         $path = $file->store($folder, 'local');
+        if ($path === false) {
+            throw new \RuntimeException('Unable to store the shipping document.');
+        }
 
-        return PortalShippingDocument::create([
-            'purchase_order_id' => $purchaseOrder->id,
-            'document_type'     => $data['document_type'],
-            'file_path'         => $path,
-            'original_filename' => $file->getClientOriginalName(),
-            'file_size_bytes'   => $file->getSize(),
-            'mime_type'         => $file->getMimeType(),
-            'notes'             => $data['notes'] ?? null,
-            'uploaded_by'       => $portalUserId,
-            'uploaded_at'       => now(),
-        ]);
+        try {
+            return PortalShippingDocument::create([
+                'purchase_order_id' => $purchaseOrder->id,
+                'document_type' => $data['document_type'],
+                'file_path' => $path,
+                'original_filename' => $file->getClientOriginalName(),
+                'file_size_bytes' => $file->getSize(),
+                'mime_type' => $file->getMimeType(),
+                'notes' => $data['notes'] ?? null,
+                'uploaded_by' => $portalUserId,
+                'uploaded_at' => now(),
+            ]);
+        } catch (\Throwable $e) {
+            Storage::disk('local')->delete($path);
+            throw $e;
+        }
     }
 
     public function shippingDocuments(int $vendorId, PurchaseOrder $purchaseOrder): Collection
@@ -219,53 +227,64 @@ class SupplierPortalService
 
         $items = $purchaseOrder->items->map(fn ($poItem) => [
             'expense_account_id' => $defaultAccountHashId,
-            'description'        => $poItem->description,
-            'quantity'           => (string) $poItem->quantity,
-            'unit'               => $poItem->unit ?? 'pcs',
-            'unit_price'         => (string) $poItem->unit_price,
+            'description' => $poItem->description,
+            'quantity' => (string) $poItem->quantity,
+            'unit' => $poItem->unit ?? 'pcs',
+            'unit_price' => (string) $poItem->unit_price,
         ])->toArray();
 
         if (empty($items)) {
             throw new \RuntimeException('This purchase order has no items to bill.');
         }
 
-        return DB::transaction(function () use ($purchaseOrder, $data, $items, $file, $portalUserId) {
-            $systemUser = app(EdgeSystemUserResolver::class);
+        $storedPath = null;
+        try {
+            return DB::transaction(function () use ($purchaseOrder, $data, $items, $file, $portalUserId, &$storedPath) {
+                $systemUser = app(EdgeSystemUserResolver::class);
 
-            $bill = $systemUser->impersonate(fn () => $this->bills->create([
-                'bill_number'       => $data['bill_number'],
-                'vendor_id'         => $purchaseOrder->vendor->hash_id,
-                'purchase_order_id' => $purchaseOrder->hash_id,
-                'date'              => $data['date'],
-                'due_date'          => $data['due_date'] ?? $data['date'],
-                'is_vatable'        => $data['is_vatable'] ?? true,
-                'remarks'           => $data['remarks'] ?? null,
-                'items'             => $items,
-            ], User::find($systemUser->id())));
+                $bill = $systemUser->impersonate(fn () => $this->bills->create([
+                    'bill_number' => $data['bill_number'],
+                    'vendor_id' => $purchaseOrder->vendor->hash_id,
+                    'purchase_order_id' => $purchaseOrder->hash_id,
+                    'date' => $data['date'],
+                    'due_date' => $data['due_date'] ?? $data['date'],
+                    'is_vatable' => $data['is_vatable'] ?? true,
+                    'remarks' => $data['remarks'] ?? null,
+                    'items' => $items,
+                ], User::find($systemUser->id())));
 
-            if ($file) {
-                $folder = "portal/supplier-invoices/{$bill->id}";
-                $path = $file->store($folder, 'local');
+                if ($file) {
+                    $folder = "portal/supplier-invoices/{$bill->id}";
+                    $storedPath = $file->store($folder, 'local');
+                    if ($storedPath === false) {
+                        throw new \RuntimeException('Unable to store the supplier invoice.');
+                    }
 
-                PortalShippingDocument::create([
-                    'purchase_order_id' => $purchaseOrder->id,
-                    'bill_id'           => $bill->id,
-                    'document_type'     => 'supplier_invoice',
-                    'file_path'         => $path,
-                    'original_filename' => $file->getClientOriginalName(),
-                    'file_size_bytes'   => $file->getSize(),
-                    'mime_type'         => $file->getMimeType(),
-                    'notes'             => 'Supplier-submitted invoice for bill ' . $bill->bill_number,
-                    'uploaded_by'       => $portalUserId,
-                    'uploaded_at'       => now(),
-                ]);
+                    PortalShippingDocument::create([
+                        'purchase_order_id' => $purchaseOrder->id,
+                        'bill_id' => $bill->id,
+                        'document_type' => 'supplier_invoice',
+                        'file_path' => $storedPath,
+                        'original_filename' => $file->getClientOriginalName(),
+                        'file_size_bytes' => $file->getSize(),
+                        'mime_type' => $file->getMimeType(),
+                        'notes' => 'Supplier-submitted invoice for bill '.$bill->bill_number,
+                        'uploaded_by' => $portalUserId,
+                        'uploaded_at' => now(),
+                    ]);
+                }
+
+                return [
+                    'bill' => $bill,
+                    'message' => 'Invoice submitted successfully. Bill has been created in Accounts Payable.',
+                ];
+            });
+        } catch (\Throwable $e) {
+            if (is_string($storedPath)) {
+                Storage::disk('local')->delete($storedPath);
             }
-
-            return [
-                'bill'    => $bill,
-                'message' => 'Invoice submitted successfully. Bill has been created in Accounts Payable.',
-            ];
-        });
+            throw $e;
+        }
     }
 
     /**
@@ -352,13 +371,13 @@ class SupplierPortalService
         $vendor = Vendor::find($vendorId);
 
         return [
-            'vendor_name'       => $vendor?->name,
+            'vendor_name' => $vendor?->name,
             'total_outstanding' => number_format($totalOutstanding, 2),
-            'aging_buckets'     => [
-                'current'  => number_format($aging['current'], 2),
-                'd1_30'    => number_format($aging['d1_30'], 2),
-                'd31_60'   => number_format($aging['d31_60'], 2),
-                'd61_90'   => number_format($aging['d61_90'], 2),
+            'aging_buckets' => [
+                'current' => number_format($aging['current'], 2),
+                'd1_30' => number_format($aging['d1_30'], 2),
+                'd31_60' => number_format($aging['d31_60'], 2),
+                'd61_90' => number_format($aging['d61_90'], 2),
                 'd91_plus' => number_format($aging['d91_plus'], 2),
             ],
             'open_bills' => $openBills,
@@ -380,14 +399,17 @@ class SupplierPortalService
     public function storeDeliverySchedule(int $vendorId, array $data): DeliverySchedule
     {
         $decodedPoId = HashIdFilter::decode($data['purchase_order_id'], PurchaseOrder::class);
-        $po = PurchaseOrder::findOrFail($decodedPoId);
+        $po = PurchaseOrder::query()
+            ->whereKey($decodedPoId)
+            ->where('vendor_id', $vendorId)
+            ->firstOrFail();
 
         return DeliverySchedule::create([
-            'vendor_id'         => $vendorId,
+            'vendor_id' => $vendorId,
             'purchase_order_id' => $po->id,
-            'month'             => $data['month'],
-            'status'            => 'submitted',
-            'lines'             => $data['lines'],
+            'month' => $data['month'],
+            'status' => 'submitted',
+            'lines' => $data['lines'],
         ]);
     }
 
@@ -395,7 +417,7 @@ class SupplierPortalService
 
     public function ppapSubmissions(int $vendorId, array $filters): LengthAwarePaginator
     {
-        $query = \App\Modules\Quality\Models\PpapSubmission::query()
+        $query = PpapSubmission::query()
             ->where('vendor_id', $vendorId)
             ->with(['item:id,code,name', 'elements'])
             ->orderByDesc('created_at');

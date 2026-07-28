@@ -39,6 +39,12 @@ const config: Config = {
           fg: 'var(--accent-fg)',
         },
 
+        // Links — colored per design-system ("color is for meaning")
+        link: {
+          DEFAULT: 'var(--text-link)',
+          hover: 'var(--text-link-hover)',
+        },
+
         // Semantic
         success: {
           DEFAULT: 'var(--success)',

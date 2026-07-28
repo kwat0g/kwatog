@@ -5,15 +5,30 @@ declare(strict_types=1);
 namespace Database\Seeders;
 
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\Bill;
+use App\Modules\Accounting\Models\BillItem;
 use App\Modules\Accounting\Models\Budget;
 use App\Modules\Accounting\Models\BudgetLineItem;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Services\CreditNoteService;
 use App\Modules\Auth\Models\User;
+use App\Modules\B2B\Models\CustomerPortalUser;
+use App\Modules\B2B\Models\SupplierPortalUser;
 use App\Modules\CRM\Models\SalesOrder;
+use App\Modules\CRM\Models\Product;
+use App\Modules\Forecasting\Models\DemandForecast;
 use App\Modules\HR\Models\Department;
 use App\Modules\Payroll\Models\DisbursementProof;
 use App\Modules\Payroll\Models\PayrollPeriod;
+use App\Modules\Inventory\Models\StockCountSession;
+use App\Modules\Inventory\Services\StockCountService;
+use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
+use App\Modules\Purchasing\Models\PurchaseRequest;
+use App\Modules\Purchasing\Models\PurchaseRequestItem;
+use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
+use App\Modules\ReturnManagement\Enums\ReturnRequestType;
+use App\Modules\ReturnManagement\Models\ReturnRequest;
+use App\Modules\ReturnManagement\Models\ReturnRequestItem;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\DeliveryProof;
@@ -21,6 +36,7 @@ use App\Modules\SupplyChain\Models\ShipmentLot;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Throwable;
 
 /**
@@ -46,18 +62,263 @@ class GoldenPathDemoSeeder extends Seeder
         $this->section('disbursement proof (ADV1)', fn () => $this->seedDisbursement());
         $this->section('credit note (ADV12)', fn () => $this->seedCreditNote());
         $this->section('budgets (ADV9)', fn () => $this->seedBudgets());
+        $this->section('B2B portal accounts (ADV10)', fn () => $this->seedPortalAccounts());
+        $this->section('stock-count freeze rehearsal (ADV8)', fn () => $this->seedStockCountRehearsal());
+        $this->section('PR conversion and budget rehearsal (ADV6/9)', fn () => $this->seedProcurementRehearsal());
+        $this->section('supplier-return rehearsal (ADV12)', fn () => $this->seedSupplierReturnRehearsal());
+        $this->section('forecast-to-MRP opt-in (ADV11)', fn () => $this->seedForecastMrpOptIn());
 
         $this->command?->info('Golden-path demo seed complete.');
     }
 
-    /** Run one section, logging + swallowing failures so the rest still seed. */
+    /** ADV11 — ensure the forecasting screen has one product opted into MRP. */
+    private function seedForecastMrpOptIn(): void
+    {
+        $forecastProductIds = DemandForecast::query()->select('product_id');
+        $product = Product::query()
+            ->where('is_active', true)
+            ->whereIn('id', $forecastProductIds)
+            ->orderBy('id')
+            ->first() ?? Product::query()->where('is_active', true)->orderBy('id')->first();
+
+        if (! $product) {
+            throw new \RuntimeException('An active product is required for forecast-to-MRP rehearsal.');
+        }
+
+        $product->update(['include_forecast_in_mrp' => true]);
+        $this->command?->info("  {$product->part_number} forecast opted into MRP projection.");
+    }
+
+    /** Run one section and fail loudly: a partial "successful" demo seed is unsafe. */
     private function section(string $label, callable $fn): void
     {
         try {
             $fn();
         } catch (Throwable $e) {
-            $this->command?->warn("  [$label] skipped: " . $e->getMessage());
+            $this->command?->error("  [$label] failed: " . $e->getMessage());
+            throw $e;
         }
+    }
+
+    /** ADV10 — stable credentials for the two isolated B2B portal guards. */
+    private function seedPortalAccounts(): void
+    {
+        $vendorId = DB::table('vendors')->where('is_active', true)->orderBy('id')->value('id')
+            ?? DB::table('vendors')->orderBy('id')->value('id');
+        $customerId = DB::table('customers')->orderBy('id')->value('id');
+        if (! $vendorId || ! $customerId) {
+            throw new \RuntimeException('A vendor and customer are required for portal demo accounts.');
+        }
+
+        $supplier = SupplierPortalUser::withTrashed()->updateOrCreate(
+            ['email' => 'portal@supp.test'],
+            [
+                'vendor_id' => $vendorId,
+                'name' => 'Taiwan Plastics Portal',
+                'password' => Hash::make('password'),
+                'is_active' => true,
+                'failed_login_attempts' => 0,
+                'locked_until' => null,
+                'password_changed_at' => now(),
+            ],
+        );
+        $supplier->restore();
+        $customer = CustomerPortalUser::withTrashed()->updateOrCreate(
+            ['email' => 'portal@cust.test'],
+            [
+                'customer_id' => $customerId,
+                'name' => 'Toyota Purchasing Portal',
+                'password' => Hash::make('password'),
+                'is_active' => true,
+                'failed_login_attempts' => 0,
+                'locked_until' => null,
+                'password_changed_at' => now(),
+            ],
+        );
+        $customer->restore();
+
+        $this->command?->info('  Portal accounts ready (portal@supp.test / portal@cust.test).');
+    }
+
+    /** ADV8 — a draft zone count that can be started live to demonstrate freezing. */
+    private function seedStockCountRehearsal(): void
+    {
+        if (StockCountSession::where('title', 'Defense Demo — Zone Freeze')->exists()) {
+            $this->command?->info('  Stock-count rehearsal already present.');
+            return;
+        }
+
+        $zone = DB::table('warehouse_zones')
+            ->whereExists(fn ($q) => $q->selectRaw('1')->from('warehouse_locations')
+                ->whereColumn('warehouse_locations.zone_id', 'warehouse_zones.id'))
+            ->orderBy('id')->first();
+        $admin = $this->admin();
+        if (! $zone || ! $admin) {
+            throw new \RuntimeException('A populated warehouse zone and admin are required for stock-count rehearsal.');
+        }
+
+        app(StockCountService::class)->createSession([
+            'title' => 'Defense Demo — Zone Freeze',
+            'scope' => 'zone',
+            'warehouse_id' => $zone->warehouse_id,
+            'zone_id' => $zone->id,
+        ], $admin);
+        $this->command?->info('  Draft stock count ready to start from Inventory › Stock Count.');
+    }
+
+    /** ADV6/9 — stable rows for PR conversion and budget-warning acknowledgment. */
+    private function seedProcurementRehearsal(): void
+    {
+        $requester = User::where('email', 'purchasing@ogami.test')->first() ?? $this->admin();
+        $departmentId = DB::table('departments')->where('code', 'MAINT')->value('id')
+            ?? DB::table('departments')->orderBy('id')->value('id');
+        $itemId = DB::table('items')->where('is_active', true)->orderBy('id')->value('id');
+        $vendorId = DB::table('vendors')->where('is_active', true)->orderBy('id')->value('id')
+            ?? DB::table('vendors')->orderBy('id')->value('id');
+        if (! $requester || ! $departmentId || ! $itemId || ! $vendorId) {
+            throw new \RuntimeException('Requester, department, item, and vendor are required for PR rehearsal.');
+        }
+
+        $convert = PurchaseRequest::firstOrCreate(
+            ['pr_number' => 'PR-DEMO-CONVERT'],
+            [
+                'requested_by' => $requester->id,
+                'department_id' => $departmentId,
+                'date' => now()->toDateString(),
+                'reason' => 'Defense demo — convert approved PR to supplier PO',
+                'priority' => 'normal',
+            ],
+        );
+        if ($convert->wasRecentlyCreated) {
+            $convert->forceFill(['status' => PurchaseRequestStatus::Approved, 'approved_at' => now()])->save();
+            PurchaseRequestItem::create([
+                'purchase_request_id' => $convert->id,
+                'item_id' => $itemId,
+                'description' => 'Defense demo replenishment line',
+                'quantity' => '25.00',
+                'unit' => 'pcs',
+                'estimated_unit_price' => '250.00',
+                'purpose' => 'PR-to-PO conversion demonstration',
+                'suggested_vendor_id' => $vendorId,
+            ]);
+        }
+
+        $budget = PurchaseRequest::firstOrCreate(
+            ['pr_number' => 'PR-DEMO-BUDGET'],
+            [
+                'requested_by' => $requester->id,
+                'department_id' => $departmentId,
+                'date' => now()->toDateString(),
+                'reason' => 'Defense demo — over-budget Finance acknowledgment',
+                'priority' => 'urgent',
+                'budget_warning_level' => 'critical',
+                'budget_warning_message' => 'Maintenance budget is at or above 100%. Finance acknowledgment is required before approval.',
+            ],
+        );
+        if ($budget->wasRecentlyCreated) {
+            $budget->forceFill(['status' => PurchaseRequestStatus::Pending, 'submitted_at' => now()])->save();
+            PurchaseRequestItem::create([
+                'purchase_request_id' => $budget->id,
+                'item_id' => $itemId,
+                'description' => 'Emergency maintenance procurement',
+                'quantity' => '10.00',
+                'unit' => 'pcs',
+                'estimated_unit_price' => '50000.00',
+                'purpose' => 'Budget acknowledgment demonstration',
+                'suggested_vendor_id' => $vendorId,
+            ]);
+        }
+
+        $this->command?->info('  Approved conversion PR and critical budget-warning PR ready.');
+    }
+
+    /** ADV12b — inspected supplier RMA with exact PO/GRN/bill lineage, ready to dispose. */
+    private function seedSupplierReturnRehearsal(): void
+    {
+        if (ReturnRequest::where('rma_number', 'RMA-DEMO-SUP-READY')->exists()) {
+            $this->command?->info('  Supplier-return rehearsal already present.');
+            return;
+        }
+
+        $source = DB::table('grn_items as gi')
+            ->join('goods_receipt_notes as g', 'g.id', '=', 'gi.goods_receipt_note_id')
+            ->join('purchase_order_items as pi', 'pi.id', '=', 'gi.purchase_order_item_id')
+            ->join('purchase_orders as p', 'p.id', '=', 'pi.purchase_order_id')
+            ->where('gi.quantity_accepted', '>', 0)
+            ->select([
+                'gi.id as grn_item_id', 'gi.item_id', 'gi.quantity_accepted',
+                'g.vendor_id', 'p.id as po_id', 'pi.id as po_item_id',
+                'pi.unit', 'pi.unit_price',
+            ])->orderBy('gi.id')->first();
+        $admin = $this->admin();
+        $expense = Account::where('type', 'expense')->orderBy('id')->first();
+        if (! $source || ! $admin || ! $expense) {
+            throw new \RuntimeException('Accepted GRN lineage, admin, and expense account are required for supplier-return rehearsal.');
+        }
+
+        $accepted = (float) $source->quantity_accepted;
+        $returnQty = number_format(min(2.0, $accepted), 3, '.', '');
+        $unitPrice = number_format(max((float) $source->unit_price, 1.0), 2, '.', '');
+        $billSubtotal = number_format($accepted * (float) $unitPrice, 2, '.', '');
+
+        $bill = Bill::firstOrCreate(
+            ['bill_number' => 'BILL-DEMO-SUP-001'],
+            [
+                'vendor_id' => $source->vendor_id,
+                'purchase_order_id' => $source->po_id,
+                'date' => now()->toDateString(),
+                'due_date' => now()->addDays(30)->toDateString(),
+                'is_vatable' => false,
+                'subtotal' => $billSubtotal,
+                'vat_amount' => '0.00',
+                'total_amount' => $billSubtotal,
+                'amount_paid' => '0.00',
+                'balance' => $billSubtotal,
+                'status' => 'unpaid',
+                'created_by' => $admin->id,
+                'remarks' => 'Defense demo supplier-return source bill',
+            ],
+        );
+        $billItem = BillItem::firstOrCreate(
+            ['bill_id' => $bill->id, 'item_id' => $source->item_id],
+            [
+                'expense_account_id' => $expense->id,
+                'description' => 'Defense demo received material',
+                'quantity' => $accepted,
+                'unit' => $source->unit,
+                'unit_price' => $unitPrice,
+                'total' => $billSubtotal,
+            ],
+        );
+
+        $rma = ReturnRequest::create([
+            'rma_number' => 'RMA-DEMO-SUP-READY',
+            'type' => ReturnRequestType::SupplierReturn->value,
+            'status' => ReturnRequestStatus::Inspected->value,
+            'purchase_order_id' => $source->po_id,
+            'bill_id' => $bill->id,
+            'vendor_id' => $source->vendor_id,
+            'reason_code' => 'quality_issue',
+            'reason_description' => 'Defense demo — incoming material failed QC.',
+            'return_date' => now()->toDateString(),
+            'inspected_at' => now(),
+            'created_by' => $admin->id,
+        ]);
+        ReturnRequestItem::create([
+            'return_request_id' => $rma->id,
+            'item_id' => $source->item_id,
+            'quantity' => $returnQty,
+            'returned_quantity' => $returnQty,
+            'unit_price' => $unitPrice,
+            'total' => bcmul($returnQty, $unitPrice, 2),
+            'reason' => 'Failed incoming QC',
+            'condition' => 'defective',
+            'source_po_item_id' => $source->po_item_id,
+            'source_grn_item_id' => $source->grn_item_id,
+            'source_bill_item_id' => $billItem->id,
+        ]);
+
+        $this->command?->info('  Inspected supplier RMA ready for Return to Supplier disposition.');
     }
 
     private function admin(): ?User

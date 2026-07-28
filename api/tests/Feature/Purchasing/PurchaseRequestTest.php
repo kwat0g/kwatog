@@ -6,8 +6,12 @@ namespace Tests\Feature\Purchasing;
 
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Modules\Accounting\Models\Vendor;
+use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
+use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseRequest;
+use App\Modules\Purchasing\Models\PurchaseRequestItem;
 use App\Modules\Purchasing\Services\PurchaseRequestService;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\WorkflowSeeder;
@@ -147,5 +151,58 @@ class PurchaseRequestTest extends TestCase
         // The permission middleware will block an 'employee' who lacks
         // purchasing.pr.approve permission.
         $response->assertForbidden();
+    }
+
+    public function test_approved_pr_converts_with_hash_id_vendor_map_and_preserves_links(): void
+    {
+        $admin = $this->makeAdmin();
+        $pr = PurchaseRequest::factory()->create();
+        $pr->forceFill(['status' => PurchaseRequestStatus::Approved->value])->save();
+        $item = Item::factory()->create();
+        $line = PurchaseRequestItem::create([
+            'purchase_request_id' => $pr->id,
+            'item_id' => $item->id,
+            'description' => 'Conversion test',
+            'quantity' => '2.00',
+            'unit' => 'pcs',
+            'estimated_unit_price' => '25.00',
+        ]);
+        $vendor = Vendor::factory()->create();
+
+        $response = $this->actingAs($admin)
+            ->postJson("/api/v1/purchasing/purchase-requests/{$pr->hash_id}/convert", [
+                'vendor_map' => [$line->hash_id => $vendor->hash_id],
+            ]);
+        $response->assertCreated()
+            ->assertJsonCount(1, 'data');
+
+        $poId = app('hashids')->decode($response->json('data.0.id'))[0];
+        $po = PurchaseOrder::with('items')->findOrFail($poId);
+        $this->assertSame($pr->id, $po->purchase_request_id);
+        $this->assertSame($vendor->id, $po->vendor_id);
+        $this->assertSame($line->id, $po->items->first()->purchase_request_item_id);
+        $this->assertSame('converted', $pr->fresh()->status->value);
+    }
+
+    public function test_conversion_rejects_missing_vendor_assignment_without_creating_po(): void
+    {
+        $admin = $this->makeAdmin();
+        $pr = PurchaseRequest::factory()->create();
+        $pr->forceFill(['status' => PurchaseRequestStatus::Approved->value])->save();
+        $line = PurchaseRequestItem::create([
+            'purchase_request_id' => $pr->id,
+            'description' => 'Missing assignment',
+            'quantity' => '1.00',
+            'unit' => 'pcs',
+            'estimated_unit_price' => '10.00',
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson("/api/v1/purchasing/purchase-requests/{$pr->hash_id}/convert", ['vendor_map' => []])
+            ->assertUnprocessable();
+
+        $this->assertDatabaseMissing('purchase_orders', ['purchase_request_id' => $pr->id]);
+        $this->assertSame('approved', $pr->fresh()->status->value);
+        $this->assertNotNull($line->id);
     }
 }

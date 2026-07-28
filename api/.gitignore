@@ -22,6 +22,12 @@ yarn-error.log
 /.vscode
 /.zed
 storage/app/admin-credentials.txt
-# Runtime-generated documents (CoC, work-order travelers, proofs, payslips)
+# Runtime and private data must never enter source control or container images.
+/storage/app/**
+storage/app/audit-backups/
+storage/app/bank-files/
+storage/app/dompdf-tmp/
 storage/app/documents/
 storage/app/public/
+storage/app/quote-drawings/
+storage/app/recruitment/

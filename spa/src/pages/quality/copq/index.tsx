@@ -46,14 +46,14 @@ const PERIOD_OPTIONS = [
 const COLORS = {
   scrap: 'var(--danger)',      // red — scrapped material
   rework: 'var(--warning)',    // amber — rework effort
-  returns: '#7c3aed',         // purple — external returns
+  returns: 'var(--purple)',     // purple — external returns
   trend: 'var(--accent)',      // indigo — total COPQ line
 } as const;
 
 // ─── Tooltip styling (matches project conventions) ──
 const TOOLTIP_STYLE = {
-  background: 'var(--color-surface)',
-  border: '1px solid var(--color-border)',
+  background: 'var(--bg-surface)',
+  border: '1px solid var(--border-default)',
   borderRadius: 6,
   fontSize: 12,
 };
@@ -149,15 +149,15 @@ export default function CopqAnalyticsPage() {
           {trend.data && trend.data.length > 0 && (
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={trend.data} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" />
                 <XAxis
                   dataKey="month"
-                  tick={{ fontSize: 11, fill: 'var(--color-muted)' }}
+                  tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
                   axisLine={false}
                   tickLine={false}
                 />
                 <YAxis
-                  tick={{ fontSize: 11, fill: 'var(--color-muted)' }}
+                  tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
                   axisLine={false}
                   tickLine={false}
                   tickFormatter={(v) => PESO_SHORT(v)}
@@ -209,15 +209,15 @@ export default function CopqAnalyticsPage() {
           {trend.data && trend.data.length > 0 && (
             <ResponsiveContainer width="100%" height={280}>
               <LineChart data={trend.data} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-default)" />
                 <XAxis
                   dataKey="month"
-                  tick={{ fontSize: 11, fill: 'var(--color-muted)' }}
+                  tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
                   axisLine={false}
                   tickLine={false}
                 />
                 <YAxis
-                  tick={{ fontSize: 11, fill: 'var(--color-muted)' }}
+                  tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
                   axisLine={false}
                   tickLine={false}
                   tickFormatter={(v) => PESO_SHORT(v)}

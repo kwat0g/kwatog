@@ -39,9 +39,9 @@ const STATUS_DOT: Record<string, string> = {
 };
 
 const TREND_COLOR: Record<string, string> = {
-  on_target: 'var(--color-success)',
-  warning: 'var(--color-warning)',
-  off_target: 'var(--color-danger)',
+  on_target: 'var(--success)',
+  warning: 'var(--warning)',
+  off_target: 'var(--danger)',
 };
 
 const MONTHS = [
@@ -217,7 +217,7 @@ function KpiCard({ item }: { item: KpiScorecardItem }) {
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 mb-2">
             <span
-              className={`inline-block h-2 w-2 rounded-full shrink-0 ${STATUS_DOT[status] ?? 'bg-gray-400'}`}
+              className={`inline-block h-2 w-2 rounded-full shrink-0 ${STATUS_DOT[status] ?? 'bg-muted'}`}
               title={status.replace(/_/g, ' ')}
               aria-label={`Status: ${status.replace(/_/g, ' ')}`}
             />
@@ -244,7 +244,7 @@ function KpiCard({ item }: { item: KpiScorecardItem }) {
                 <Line
                   type="monotone"
                   dataKey="v"
-                  stroke={TREND_COLOR[status] ?? 'var(--color-accent)'}
+                  stroke={TREND_COLOR[status] ?? 'var(--accent)'}
                   strokeWidth={1.5}
                   dot={false}
                 />

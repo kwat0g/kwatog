@@ -4,17 +4,11 @@ declare(strict_types=1);
 
 namespace App\Modules\Payroll\Exports\Government;
 
+use App\Common\Exports\SpreadsheetExport;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use Illuminate\Support\Collection;
-use Maatwebsite\Excel\Concerns\FromCollection;
-use Maatwebsite\Excel\Concerns\ShouldAutoSize;
-use Maatwebsite\Excel\Concerns\WithHeadings;
-use Maatwebsite\Excel\Concerns\WithMapping;
-use Maatwebsite\Excel\Concerns\WithStyles;
-use Maatwebsite\Excel\Concerns\WithTitle;
-use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 /**
  * Series E (Task E2) — SSS R-3 (Contribution Collection List).
@@ -23,7 +17,7 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
  * configurable column registry; the agency rejects files that don't
  * match the spec. Reference: SSS R-3 (Reg. No. R-3) layout.
  */
-class SssR3Export implements FromCollection, WithHeadings, WithMapping, WithStyles, WithTitle, ShouldAutoSize
+class SssR3Export implements SpreadsheetExport
 {
     public function __construct(private readonly PayrollPeriod $period) {}
 
@@ -33,7 +27,7 @@ class SssR3Export implements FromCollection, WithHeadings, WithMapping, WithStyl
         // with the 1601-C / RF-1 / MCRF / 1604-CF exporters. The injected
         // period may be any status, so guard here rather than trust the caller.
         if (! in_array((string) $this->period->status->value, ['finalized', 'disbursed'], true)) {
-            return new Collection();
+            return new Collection;
         }
 
         return Payroll::query()
@@ -92,13 +86,6 @@ class SssR3Export implements FromCollection, WithHeadings, WithMapping, WithStyl
 
     public function title(): string
     {
-        return 'SSS R-3 ' . $this->period->period_start?->format('Y-m');
-    }
-
-    public function styles(Worksheet $sheet): array
-    {
-        return [
-            1 => ['font' => ['bold' => true]],
-        ];
+        return 'SSS R-3 '.$this->period->period_start?->format('Y-m');
     }
 }

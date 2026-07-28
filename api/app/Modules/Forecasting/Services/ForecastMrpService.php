@@ -41,6 +41,9 @@ class ForecastMrpService
     {
         $forecasts = DemandForecast::query()
             ->with('product:id,name')
+            ->whereHas('product', fn ($query) => $query
+                ->where('is_active', true)
+                ->where('include_forecast_in_mrp', true))
             ->where('forecast_year', $year)
             ->where('forecast_month', $month)
             ->where('forecasted_quantity', '>', 0)

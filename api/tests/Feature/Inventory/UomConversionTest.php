@@ -6,7 +6,6 @@ namespace Tests\Feature\Inventory;
 
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
-use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Events\StockMovementCompleted;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\ItemUomConversion;
@@ -18,6 +17,7 @@ use App\Modules\Inventory\Services\UomConversionService;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
+use App\Modules\Quality\Models\Inspection;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use RuntimeException;
@@ -36,7 +36,9 @@ class UomConversionTest extends TestCase
     use RefreshDatabase;
 
     private UomConversionService $svc;
+
     private Uom $kg;
+
     private Uom $bag;
 
     protected function setUp(): void
@@ -48,7 +50,7 @@ class UomConversionTest extends TestCase
         Event::fake([StockMovementCompleted::class]);
 
         $this->svc = app(UomConversionService::class);
-        $this->kg  = Uom::create(['code' => 'KG',  'name' => 'Kilogram']);
+        $this->kg = Uom::create(['code' => 'KG',  'name' => 'Kilogram']);
         $this->bag = Uom::create(['code' => 'BAG', 'name' => 'Bag']);
     }
 
@@ -57,11 +59,12 @@ class UomConversionTest extends TestCase
     {
         $item = Item::factory()->create(['unit_of_measure' => 'KG']);
         ItemUomConversion::create([
-            'item_id'     => $item->id,
+            'item_id' => $item->id,
             'from_uom_id' => $this->bag->id,
-            'to_uom_id'   => $this->kg->id,
-            'factor'      => '25.000000',
+            'to_uom_id' => $this->kg->id,
+            'factor' => '25.000000',
         ]);
+
         return $item;
     }
 
@@ -113,7 +116,7 @@ class UomConversionTest extends TestCase
 
     public function test_receiving_in_bags_increments_base_stock_in_kg(): void
     {
-        $item     = $this->bagToKgItem();
+        $item = $this->bagToKgItem();
         $location = WarehouseLocation::factory()->create();
 
         $role = Role::firstOrCreate(['slug' => 'warehouse_staff'], ['name' => 'Warehouse Staff']);
@@ -122,17 +125,17 @@ class UomConversionTest extends TestCase
         // PO ordered in KG (PO-line uom capture is a follow-up; quantity treated
         // as base). 100 KG ordered.
         $po = PurchaseOrder::factory()->create([
-            'status'     => PurchaseOrderStatus::Approved->value,
+            'status' => PurchaseOrderStatus::Approved->value,
             'created_by' => $user->id,
         ]);
         $poItem = PurchaseOrderItem::create([
             'purchase_order_id' => $po->id,
-            'item_id'           => $item->id,
-            'description'       => 'Resin',
-            'quantity'          => '100.000',
-            'unit'              => 'KG',
-            'unit_price'        => '10.00',
-            'total'             => '1000.00',
+            'item_id' => $item->id,
+            'description' => 'Resin',
+            'quantity' => '100.000',
+            'unit' => 'KG',
+            'unit_price' => '10.00',
+            'total' => '1000.00',
             'quantity_received' => '0.000',
         ]);
 
@@ -143,11 +146,11 @@ class UomConversionTest extends TestCase
             $po,
             [[
                 'purchase_order_item_id' => $poItem->id,
-                'item_id'                => $item->id,
-                'location_id'            => $location->id,
-                'quantity_received'      => '2',
-                'received_uom_code'      => 'BAG',
-                'unit_cost'              => '10.00',
+                'item_id' => $item->id,
+                'location_id' => $location->id,
+                'quantity_received' => '2',
+                'received_uom_code' => 'BAG',
+                'unit_cost' => '10.00',
             ]],
             ['received_date' => now()->toDateString()],
             $user,
@@ -162,6 +165,8 @@ class UomConversionTest extends TestCase
         $this->assertSame('50.000', number_format((float) $poItem->quantity_received, 3, '.', ''));
 
         // Accept the GRN → stock level must hold 50 KG.
+        Inspection::query()->findOrFail($grn->fresh()->qc_inspection_id)
+            ->update(['status' => 'passed']);
         $grnSvc->accept($grn->fresh(), $user);
 
         $level = StockLevel::where('item_id', $item->id)

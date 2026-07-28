@@ -6,7 +6,7 @@
  *   → Purchasing converts to PO → PO goes through approval workflow.
  */
 import { test, expect } from '@playwright/test';
-import { loginAs, ROLES } from './helpers-extended';
+import { loginAs } from './helpers-extended';
 import { BasePage } from './pages/BasePage';
 import { PurchaseRequestListPage, PurchaseOrderListPage, PurchaseOrderDetailPage } from './pages/ModulePages';
 
@@ -19,9 +19,11 @@ function makePurchaseRequest(status: string) {
   return {
     id: PR_ID, pr_number: 'PR-202607-0001',
     status, status_label: status.charAt(0).toUpperCase() + status.slice(1),
-    vendor: null, department: { id: 'dep1', name: 'Production' },
-    requested_by: { id: 'emp_pur', full_name: 'Elena Cruz' },
-    total_amount: '25000.00', items: [],
+    vendor: null, department: { id: 'dep1', code: 'PROD', name: 'Production' },
+    requester: { id: 'emp_pur', name: 'Elena Cruz' },
+    priority: 'normal', is_auto_generated: false, is_urgent: false,
+    has_overdue_approval: false, total_estimated_amount: '25000.00', items: [],
+    date: '2026-07-01',
     created_at: '2026-07-01T00:00:00Z',
   };
 }
@@ -31,7 +33,9 @@ function makePurchaseOrder(status: string) {
     id: PO_ID, po_number: 'PO-202607-0001',
     status, status_label: status.charAt(0).toUpperCase() + status.slice(1),
     vendor: { id: 'v1', name: 'Asia Pacific Polymers' },
-    items: [], total_amount: '25000.00',
+    items: [], total_amount: '25000.00', date: '2026-07-01',
+    expected_delivery_date: null, quantity_received_pct: 0,
+    is_auto_generated: false, has_overdue_approval: false,
     created_at: '2026-07-01T00:00:00Z',
   };
 }
@@ -58,7 +62,7 @@ test.describe('Procure-to-Pay chain — PR lifecycle', () => {
     await expect(listPage.heading).toBeVisible();
     // The table should show our PR
     await expect(page.getByText('PR-202607-0001')).toBeVisible();
-    await expect(page.getByText(/pending/i)).toBeVisible();
+    await expect(page.getByText('pending', { exact: true })).toBeVisible();
   });
 
   test('warehouse cannot view purchase requests (forbidden)', async ({ page }) => {
@@ -111,11 +115,11 @@ test.describe('Procure-to-Pay chain — PO lifecycle', () => {
     await page.goto(`/purchasing/purchase-orders/${PO_ID}`);
     await page.waitForLoadState('networkidle');
 
-    const detail = new PurchaseOrderDetailPage(page);
-    await expect(page.getByText('PO-202607-0001')).toBeVisible();
+    const detailPage = new PurchaseOrderDetailPage(page);
+    await expect(page.getByRole('heading').getByText('PO-202607-0001')).toBeVisible();
 
-    if (await detail.sendButton.isVisible()) {
-      await detail.sendButton.click();
+    if (await detailPage.sendButton.isVisible()) {
+      await detailPage.sendButton.click();
       await expect(page.getByText('Sent')).toBeVisible({ timeout: 5000 });
     }
   });

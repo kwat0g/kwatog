@@ -21,6 +21,7 @@ use Database\Seeders\GovernmentTableSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class PayrollCalculatorServiceTest extends TestCase
@@ -633,8 +634,8 @@ class PayrollCalculatorServiceTest extends TestCase
      *
      * hourly = 20000 / 22 / 8 ≈ 113.6364; 4 OT hours per case.
      *
-     * @dataProvider otDayTypeProvider
      */
+    #[DataProvider('otDayTypeProvider')]
     public function test_overtime_premium_stacks_day_type_factor(float $dayTypeRate, bool $isRestDay, string $expectedOt): void
     {
         $emp = $this->makeEmployee(); // 20,000 monthly

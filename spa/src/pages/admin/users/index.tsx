@@ -117,7 +117,7 @@ export default function AdminUsersIndexPage() {
     {
       key: 'role',
       header: 'Role',
-      cell: (row) => row.role?.name ?? <span className="text-subtle">—</span>,
+      cell: (row) => row.role?.name ?? <span className="text-text-subtle">—</span>,
     },
     {
       key: 'employee',
@@ -131,7 +131,7 @@ export default function AdminUsersIndexPage() {
             {row.employee.employee_no}
           </Link>
         ) : (
-          <span className="text-subtle">—</span>
+          <span className="text-text-subtle">—</span>
         ),
     },
     {

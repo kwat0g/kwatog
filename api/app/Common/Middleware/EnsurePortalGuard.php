@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Common\Middleware;
 
+use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\B2B\Models\SupplierPortalUser;
 use App\Modules\Edge\Models\EdgeDevice;
@@ -13,7 +14,7 @@ use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Asserts that the user resolved under a B2B portal guard is actually the
- * portal model for that guard — never an internal {@see \App\Modules\Auth\Models\User}.
+ * portal model for that guard — never an internal {@see User}.
  *
  * Why this exists: the portal guards use the `sanctum` driver, and
  * config('sanctum.guard') is ['web'] (required so the SPA's auth:sanctum
@@ -38,7 +39,7 @@ class EnsurePortalGuard
     private const MODELS = [
         'customer_portal' => CustomerPortalUser::class,
         'supplier_portal' => SupplierPortalUser::class,
-        'edge_device'     => EdgeDevice::class,
+        'edge_device' => EdgeDevice::class,
     ];
 
     public function handle(Request $request, Closure $next, string $guard): Response
@@ -49,7 +50,16 @@ class EnsurePortalGuard
         if ($expected === null || ! $user instanceof $expected) {
             return response()->json([
                 'message' => 'Unauthenticated.',
-                'code'    => 'portal_guard_mismatch',
+                'code' => 'portal_guard_mismatch',
+            ], 401);
+        }
+
+        if (in_array($guard, ['customer_portal', 'supplier_portal'], true) && ! $user->is_active) {
+            $user->tokens()->delete();
+
+            return response()->json([
+                'message' => 'Unauthenticated.',
+                'code' => 'portal_account_inactive',
             ], 401);
         }
 

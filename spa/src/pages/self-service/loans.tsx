@@ -152,15 +152,15 @@ function LoanCard({ loan, active = false }: { loan: SelfServiceLoan; active?: bo
       </div>
       <div className="grid grid-cols-2 gap-2 mt-3 text-xs">
         <div>
-          <div className="text-subtle">Principal</div>
+          <div className="text-text-subtle">Principal</div>
           <div className="font-mono tabular-nums">₱ {loan.principal}</div>
         </div>
         <div>
-          <div className="text-subtle">Outstanding</div>
+          <div className="text-text-subtle">Outstanding</div>
           <div className="font-mono tabular-nums font-medium">₱ {loan.outstanding_balance}</div>
         </div>
         <div>
-          <div className="text-subtle">Monthly</div>
+          <div className="text-text-subtle">Monthly</div>
           <div className="font-mono tabular-nums">₱ {loan.monthly_amortization}</div>
         </div>
       </div>

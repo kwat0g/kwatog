@@ -1,6 +1,6 @@
 import { client } from '../client';
 import type { ApiSuccess, PaginatedResponse, ListParams } from '@/types';
-import type { Item, CreateItemData, UpdateItemData, ItemCategory } from '@/types/inventory';
+import type { Item, CreateItemData, UpdateItemData, ItemCategory, ItemQualityPlan, QualityPlanParameter } from '@/types/inventory';
 
 export interface ItemListParams extends ListParams {
   item_type?: string;
@@ -21,6 +21,23 @@ export const itemsApi = {
     client.put<ApiSuccess<Item>>(`/inventory/items/${id}`, data).then((r) => r.data.data),
   delete: (id: string) =>
     client.delete(`/inventory/items/${id}`),
+};
+
+export const itemQualityPlansApi = {
+  list: (itemId: string) =>
+    client.get<{ data: ItemQualityPlan[] }>(`/inventory/items/${itemId}/quality-plans`).then((r) => r.data.data),
+  createRevision: (itemId: string, data: {
+    vendor_id?: string | null;
+    sampling_method: 'aql' | 'fixed' | 'full';
+    fixed_sample_size?: number | null;
+    aql_level?: string | null;
+    effective_from?: string;
+    effective_to?: string | null;
+    notes?: string | null;
+    parameters: QualityPlanParameter[];
+  }) => client.post<{ data: ItemQualityPlan }>(`/inventory/items/${itemId}/quality-plans`, data).then((r) => r.data.data),
+  deactivate: (id: string) =>
+    client.patch<{ data: ItemQualityPlan }>(`/inventory/quality-plans/${id}/deactivate`).then((r) => r.data.data),
 };
 
 export const itemCategoriesApi = {

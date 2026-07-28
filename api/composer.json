@@ -1,24 +1,24 @@
 {
     "name": "ogami/erp-api",
     "type": "project",
-    "description": "Ogami ERP — Laravel 11 modular monolith API.",
+    "description": "Ogami ERP — Laravel modular monolith API.",
     "license": "proprietary",
     "require": {
         "php": "^8.3",
         "barryvdh/laravel-dompdf": "^3.0",
-        "laravel/framework": "^11.0",
+        "laravel/framework": "^12.64",
         "laravel/reverb": "^1.0",
         "laravel/sanctum": "^4.0",
         "laravel/scout": "^10.0",
         "laravel/tinker": "^2.9",
-        "maatwebsite/excel": "^3.1",
+        "phpoffice/phpspreadsheet": "^5.9",
         "meilisearch/meilisearch-php": "^1.10",
         "predis/predis": "^2.2",
-        "vinkla/hashids": "^12.0"
+        "vinkla/hashids": "^13.0"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
-        "larastan/larastan": "^2.9",
+        "larastan/larastan": "^3.10",
         "laravel/pint": "^1.13",
         "mockery/mockery": "^1.6",
         "nunomaduro/collision": "^8.1",
@@ -66,7 +66,7 @@
             "php-http/discovery": true
         },
         "audit": {
-            "block-insecure": false
+            "block-insecure": true
         }
     },
     "minimum-stability": "stable",

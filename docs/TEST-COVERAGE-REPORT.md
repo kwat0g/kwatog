@@ -1,7 +1,12 @@
-# OGAMI ERP — Comprehensive Test Coverage Report
+# OGAMI ERP — Comprehensive Test Coverage Report (Historical Baseline)
 
 > Generated live against the running Docker stack (2026-06-23). Combined summary
 > of 4 test layers.
+
+> **Important:** the counts and gap list below are the 2026-06-23 baseline and
+> are retained for history. For the current 2026-07-27 defense verification,
+> including the strict live browser gate and latest backend count, use
+> `docs/SYSTEM-AUDIT-2026-07-27.md`.
 
 ## Executive summary
 

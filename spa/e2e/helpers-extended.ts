@@ -37,7 +37,7 @@ export const ROLES: Record<string, MockUser> = {
       'attendance.holidays.manage', 'attendance.ot.create', 'attendance.ot.approve',
       'leave.view', 'leave.create', 'leave.approve_dept', 'leave.approve_hr', 'leave.types.manage',
       'loans.view', 'loans.create', 'loans.approve', 'loans.write_off',
-      'payroll.view', 'payroll.payslip.view_all', 'payroll.periods.create', 'payroll.periods.compute',
+      'payroll.view', 'payroll.periods.view', 'payroll.payslip.view_all', 'payroll.periods.create', 'payroll.periods.compute',
       'payroll.periods.approve', 'payroll.adjustments.create', 'payroll.thirteenth_month.run',
       'payroll.anomalies.review', 'payroll.gov_tables.manage',
       'dashboard.hr.view', 'search.global', 'notifications.view', 'notifications.preferences.manage',
@@ -49,7 +49,7 @@ export const ROLES: Record<string, MockUser> = {
     id: 'fin0001', name: 'Ana Reyes', email: 'finance@ogami.test',
     roleSlug: 'finance_officer', roleName: 'Finance Officer',
     permissions: [
-      'payroll.view', 'payroll.periods.create', 'payroll.periods.compute', 'payroll.periods.approve',
+      'payroll.view', 'payroll.periods.view', 'payroll.periods.create', 'payroll.periods.compute', 'payroll.periods.approve',
       'payroll.periods.finalize', 'payroll.payslip.view_all', 'payroll.adjustments.create',
       'payroll.thirteenth_month.run', 'payroll.periods.force_unlock', 'payroll.gov_tables.manage',
       'payroll.anomalies.review',
@@ -159,6 +159,7 @@ export const ROLES: Record<string, MockUser> = {
     id: 'qc00001', name: 'Rosa Villareal', email: 'qc@ogami.test',
     roleSlug: 'qc_inspector', roleName: 'QC Inspector',
     permissions: [
+      'inventory.view',
       'quality.view', 'quality.inspections.create', 'quality.inspections.edit',
       'quality.inspections.view', 'quality.inspections.manage',
       'quality.specs.view', 'quality.specs.manage', 'quality.ncr.view', 'quality.ncr.manage',
@@ -264,9 +265,20 @@ export async function mockHang(page: Page, urlPattern: string): Promise<void> {
  * bootstrapped (networkidle).
  */
 export async function loginAs(page: Page, role: keyof typeof ROLES, goto: string = '/dashboard/default'): Promise<void> {
+  const pageErrors: string[] = [];
+  const authResponses: number[] = [];
+  const unauthorizedUrls: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+  page.on('response', (response) => {
+    if (response.url().includes('/api/v1/auth/user')) authResponses.push(response.status());
+    if (response.status() === 401) unauthorizedUrls.push(response.url());
+  });
   await mockAuth(page, ROLES[role]);
   await page.goto(goto);
   await page.waitForLoadState('networkidle');
+  if (new URL(page.url()).pathname === '/login') {
+    throw new Error(`Mock authentication failed (auth responses: ${authResponses.join(', ') || 'none'}; unauthorized: ${unauthorizedUrls.join(', ') || 'none'})${pageErrors.length > 0 ? `: ${pageErrors.join('; ')}` : ''}`);
+  }
 }
 
 /**

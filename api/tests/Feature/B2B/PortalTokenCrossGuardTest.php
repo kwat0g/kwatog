@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Feature\B2B;
 
+use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Vendor;
+use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\B2B\Models\SupplierPortalUser;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -31,9 +33,9 @@ class PortalTokenCrossGuardTest extends TestCase
 
         return SupplierPortalUser::create([
             'vendor_id' => $vendor->id,
-            'name'      => 'Portal Tester',
-            'email'     => 'portal+'.uniqid().'@t.test',
-            'password'  => Hash::make('SupplierPass-1!'),
+            'name' => 'Portal Tester',
+            'email' => 'portal+'.uniqid().'@t.test',
+            'password' => Hash::make('SupplierPass-1!'),
             'is_active' => true,
         ]);
     }
@@ -61,5 +63,42 @@ class PortalTokenCrossGuardTest extends TestCase
 
         $this->assertContains($status, [401, 403],
             "Portal token reaching /hr/employees should be 401/403, got {$status}");
+    }
+
+    public function test_existing_portal_token_is_rejected_after_account_deactivation(): void
+    {
+        $portal = $this->portalUser();
+        $portal->createToken('supplier-portal');
+        $portal->update(['is_active' => false]);
+
+        Sanctum::actingAs($portal, ['*'], 'supplier_portal');
+
+        $this->getJson('/api/v1/b2b/supplier/me')
+            ->assertStatus(401)
+            ->assertJsonPath('code', 'portal_account_inactive');
+
+        $this->assertSame(0, $portal->tokens()->count());
+    }
+
+    public function test_existing_customer_token_is_rejected_after_account_deactivation(): void
+    {
+        $customer = Customer::factory()->create();
+        $portal = CustomerPortalUser::create([
+            'customer_id' => $customer->id,
+            'name' => 'Customer Portal Tester',
+            'email' => 'customer-portal+'.uniqid().'@t.test',
+            'password' => Hash::make('CustomerPass-1!'),
+            'is_active' => true,
+        ]);
+        $portal->createToken('customer-portal');
+        $portal->update(['is_active' => false]);
+
+        Sanctum::actingAs($portal, ['*'], 'customer_portal');
+
+        $this->getJson('/api/v1/b2b/customer/me')
+            ->assertStatus(401)
+            ->assertJsonPath('code', 'portal_account_inactive');
+
+        $this->assertSame(0, $portal->tokens()->count());
     }
 }

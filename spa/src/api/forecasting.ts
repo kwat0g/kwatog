@@ -10,6 +10,7 @@ import type {
   ProductAccuracy,
   StockOutResponse,
 } from '@/types/forecasting';
+import type { Product } from '@/types/crm';
 
 export const forecastingApi = {
   list: (params?: {
@@ -78,5 +79,12 @@ export const forecastingApi = {
   accuracyByProduct: (year?: number) =>
     client
       .get<{ data: ProductAccuracy[] }>('/forecasting/accuracy/products', { params: { year } })
+      .then((r) => r.data.data),
+
+  updateMrpInclusion: (productId: string, include: boolean) =>
+    client
+      .patch<{ data: Product }>(`/forecasting/products/${productId}/mrp-inclusion`, {
+        include_forecast_in_mrp: include,
+      })
       .then((r) => r.data.data),
 };
