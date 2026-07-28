@@ -357,7 +357,7 @@ export default function MobileWorkOrderDetail() {
                   type="text"
                   value={partSearch}
                   onChange={e => setPartSearch(e.target.value)}
-                  placeholder="Type to search..."
+                  placeholder="Search items…"
                   autoFocus
                   className="w-full rounded-md border border-default bg-canvas px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent"
                 />

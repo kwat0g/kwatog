@@ -197,7 +197,7 @@ export default function AdminUsersIndexPage() {
         values={filters as unknown as Record<string, unknown>}
         onFilter={setFilter}
         onSearch={(s) => setFilter('search', s)}
-        searchPlaceholder="Search by name or email…"
+        searchPlaceholder="Search name or email…"
       />
 
       <div className="p-5 space-y-4">

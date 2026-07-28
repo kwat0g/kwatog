@@ -85,7 +85,7 @@ export default function WorkOrdersListPage() {
         filters={filterConfig} values={filters}
         onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
         onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
-        searchPlaceholder="Search by WO number or product…"
+        searchPlaceholder="Search WO number or product…"
       />
       {isLoading && !data && <SkeletonTable columns={8} rows={8} />}
       {isError && <EmptyState icon="alert-circle" title="Failed to load work orders"

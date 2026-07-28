@@ -159,7 +159,7 @@ export default function InspectionsListPage() {
         values={filters}
         onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
         onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
-        searchPlaceholder="Search by inspection number or product…"
+        searchPlaceholder="Search inspection number or product…"
       />
       {isLoading && !data && <SkeletonTable columns={7} rows={6} />}
       {isError && (

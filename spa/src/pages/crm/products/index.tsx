@@ -123,7 +123,7 @@ export default function ProductsListPage() {
         values={filters}
         onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
         onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
-        searchPlaceholder="Search by part number or name…"
+        searchPlaceholder="Search part number or name…"
       />
       {isLoading && !data && <SkeletonTable columns={canManage ? 7 : 6} rows={8} />}
       {isError && (

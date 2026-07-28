@@ -166,7 +166,7 @@ export default function EmployeesListPage() {
         values={filters}
         onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
         onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
-        searchPlaceholder="Search by name or employee no…"
+        searchPlaceholder="Search name or employee no…"
       />
 
       {isLoading && !data && <SkeletonTable columns={6} rows={10} />}

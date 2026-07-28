@@ -144,7 +144,7 @@ export default function PerformanceCyclesPage() {
         values={filters}
         onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
         onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
-        searchPlaceholder="Search cycles..."
+        searchPlaceholder="Search cycles…"
       />
       {isLoading && !data && <SkeletonTable columns={6} rows={5} />}
       {isError && (

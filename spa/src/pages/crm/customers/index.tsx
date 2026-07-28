@@ -106,7 +106,7 @@ export default function CrmCustomersListPage() {
         values={filters}
         onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
         onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
-        searchPlaceholder="Search by name or contact…"
+        searchPlaceholder="Search name or contact…"
       />
       {isLoading && !data && <SkeletonTable columns={8} rows={8} />}
       {isError && (

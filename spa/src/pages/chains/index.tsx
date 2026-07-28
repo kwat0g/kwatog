@@ -111,7 +111,8 @@ function ChainPicker({ onPick }: { onPick: (id: string) => void }) {
       <Panel title="Track a sales order">
         <Input
           label="Search"
-          placeholder="Search by SO number or customer…"
+          placeholder="Search SO number or customer…"
+          prefix={<Search size={12} />}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           autoFocus

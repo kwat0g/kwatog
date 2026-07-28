@@ -84,7 +84,7 @@ export default function ComplaintsListPage() {
         values={filters}
         onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
         onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
-        searchPlaceholder="Search by complaint number or description…"
+        searchPlaceholder="Search complaint number or description…"
       />
       {isLoading && !data && <SkeletonTable columns={7} rows={6} />}
       {isError && (

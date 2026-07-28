@@ -123,7 +123,7 @@ export default function AttendancePage() {
         values={filters}
         onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
         onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
-        searchPlaceholder="Search by employee no or name…"
+        searchPlaceholder="Search employee no or name…"
       />
 
       <div className="px-5 py-2 flex gap-3 text-sm border-b border-default">

@@ -85,7 +85,7 @@ export default function SalesOrdersListPage() {
         values={filters}
         onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
         onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
-        searchPlaceholder="Search by SO number or customer…"
+        searchPlaceholder="Search SO number or customer…"
       />
       {isLoading && !data && <SkeletonTable columns={6} rows={8} />}
       {isError && (

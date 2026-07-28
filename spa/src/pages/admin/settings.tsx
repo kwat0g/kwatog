@@ -222,15 +222,14 @@ export default function SettingsPage() {
 
         {data && (
           <>
-            <div className="relative max-w-sm">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-              <Input
-                placeholder="Search settings..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9"
-              />
-            </div>
+            <Input
+              placeholder="Search settings…"
+              aria-label="Search settings"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              prefix={<Search size={12} />}
+              containerClassName="max-w-sm"
+            />
 
             {groups.length === 0 && search && (
               <EmptyState

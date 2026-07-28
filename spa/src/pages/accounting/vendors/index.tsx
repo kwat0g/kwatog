@@ -61,7 +61,7 @@ export default function VendorsPage() {
         values={filters}
         onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
         onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
-        searchPlaceholder="Search by name or contact…"
+        searchPlaceholder="Search name or contact…"
       />
       {isLoading && !data && <SkeletonTable columns={6} rows={6} />}
       {isError && <EmptyState icon="alert-circle" title="Failed to load vendors" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />}

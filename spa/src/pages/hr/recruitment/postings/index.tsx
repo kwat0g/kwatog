@@ -156,7 +156,7 @@ export default function PostingsListPage() {
         values={filters}
         onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
         onFilter={() => {}}
-        searchPlaceholder="Search by title or posting number…"
+        searchPlaceholder="Search title or posting number…"
       />
 
       {isLoading && !data && <SkeletonTable columns={7} rows={10} />}

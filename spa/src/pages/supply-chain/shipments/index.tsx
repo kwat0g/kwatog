@@ -85,7 +85,7 @@ export default function ShipmentsListPage() {
         values={filters}
         onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
         onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
-        searchPlaceholder="Search by shipment, container, or B/L number…"
+        searchPlaceholder="Search shipment, container, or B/L number…"
       />
       {isLoading && !data && <SkeletonTable columns={6} rows={6} />}
       {isError && <EmptyState icon="alert-circle" title="Failed to load shipments"

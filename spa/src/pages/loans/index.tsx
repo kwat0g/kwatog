@@ -83,7 +83,7 @@ export default function LoansPage() {
         values={filters}
         onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
         onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
-        searchPlaceholder="Search by loan no or employee…"
+        searchPlaceholder="Search loan no or employee…"
       />
 
       {isLoading && !data && <SkeletonTable columns={8} rows={6} />}

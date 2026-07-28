@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { permissionsApi } from '@/api/admin/permissions';
 import { rolesApi } from '@/api/admin/roles';
+import { Search } from 'lucide-react';
 import { Input } from '@/components/ui/Input';
 import { Chip } from '@/components/ui/Chip';
 import { Panel } from '@/components/ui/Panel';
@@ -73,10 +74,11 @@ export default function PermissionSearchPage() {
       <div className="px-5 py-4">
         <div className="max-w-md mb-4">
           <Input
-            placeholder="Search permissions (e.g. inventory.view, payroll.create)..."
+            placeholder="Search permissions (e.g. inventory.view, payroll.create)…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             aria-label="Search permissions"
+            prefix={<Search size={12} />}
           />
         </div>
 

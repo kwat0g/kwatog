@@ -168,7 +168,7 @@ export default function NcrsListPage() {
         values={filters}
         onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
         onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
-        searchPlaceholder="Search by NCR number or description…"
+        searchPlaceholder="Search NCR number or description…"
       />
       {isLoading && !data && <SkeletonTable columns={8} rows={6} />}
       {isError && (

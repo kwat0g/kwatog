@@ -121,7 +121,7 @@ export default function AssetTransfersListPage() {
         values={filters}
         onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
         onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
-        searchPlaceholder="Search by transfer # or asset..."
+        searchPlaceholder="Search transfer # or asset…"
       />
       {isLoading && !data && <SkeletonTable columns={7} rows={6} />}
       {isError && (

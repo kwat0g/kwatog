@@ -159,7 +159,7 @@ export default function DocumentsListPage() {
         values={filters}
         onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
         onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
-        searchPlaceholder="Search by code or title..."
+        searchPlaceholder="Search code or title…"
       />
       {isLoading && !data && <SkeletonTable columns={6} rows={6} />}
       {isError && (

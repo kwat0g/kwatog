@@ -95,18 +95,14 @@ export default function EmployeeDirectoryPage() {
 
       {/* Search */}
       <div className="px-5 py-3 border-b border-default">
-        <div className="relative max-w-md">
-          <Search
-            size={14}
-            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none"
-          />
-          <Input
-            placeholder="Search by name, position, employee no…"
-            value={search}
-            onChange={(e: { target: { value: string } }) => setSearch(e.target.value)}
-            className="pl-7"
-          />
-        </div>
+        <Input
+          placeholder="Search name, position, employee no…"
+          aria-label="Search directory"
+          value={search}
+          onChange={(e: { target: { value: string } }) => setSearch(e.target.value)}
+          prefix={<Search size={12} />}
+          containerClassName="max-w-md"
+        />
       </div>
 
       {isLoading && !data && (

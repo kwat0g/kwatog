@@ -173,7 +173,7 @@ export default function SpcChartsListPage() {
         values={filters}
         onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
         onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
-        searchPlaceholder="Search by product or parameter..."
+        searchPlaceholder="Search product or parameter…"
       />
 
       {/* ─── LOADING STATE ─── */}

@@ -136,7 +136,7 @@ export default function ApplicationsListPage() {
         values={filters}
         onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
         onFilter={() => {}}
-        searchPlaceholder="Search by name or application number…"
+        searchPlaceholder="Search name or application number…"
       />
 
       {isLoading && !data && <SkeletonTable columns={5} rows={10} />}

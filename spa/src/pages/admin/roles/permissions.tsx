@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Save, ChevronDown, ChevronRight, Lock } from 'lucide-react';
+import { Save, ChevronDown, ChevronRight, Lock, Search } from 'lucide-react';
 import { rolesApi } from '@/api/admin/roles';
 import { formatDateTime } from '@/lib/formatDate';
 import { permissionsApi } from '@/api/admin/permissions';
@@ -12,6 +12,7 @@ import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
 import { Panel } from '@/components/ui/Panel';
+import { Select } from '@/components/ui/Select';
 import { Spinner } from '@/components/ui/Spinner';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { cn } from '@/lib/cn';
@@ -257,19 +258,19 @@ export default function RolePermissionsPage() {
               }
             >
               <div className="flex items-center gap-3 mb-3">
-                <div className="flex-1 max-w-sm">
-                  <Input
-                    placeholder="Search permissions…"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    aria-label="Search permissions"
-                  />
-                </div>
-                <select
+                <Input
+                  placeholder="Search permissions…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  aria-label="Search permissions"
+                  prefix={<Search size={12} />}
+                  containerClassName="flex-1 max-w-sm"
+                />
+                <Select
                   value={moduleFilter}
                   onChange={(e) => setModuleFilter(e.target.value)}
                   aria-label="Module filter"
-                  className="h-8 px-3 rounded-md border border-default bg-canvas text-sm"
+                  containerClassName="min-w-[160px]"
                 >
                   <option value="all">All modules</option>
                   {Object.keys(matrix.data).map((m) => (
@@ -277,7 +278,7 @@ export default function RolePermissionsPage() {
                       {m}
                     </option>
                   ))}
-                </select>
+                </Select>
               </div>
 
               {Object.keys(visibleMatrix).length === 0 && (

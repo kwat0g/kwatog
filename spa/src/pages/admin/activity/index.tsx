@@ -76,6 +76,7 @@ export default function AdminActivityFeedPage() {
       {/* Filters */}
       <div className="px-5 py-3 border-b border-default flex flex-wrap items-end gap-3">
         <Input
+          label="Search"
           placeholder="Search summary…"
           value={filters.search ?? ''}
           onChange={(e: { target: { value: string } }) => update({ search: e.target.value })}

@@ -162,7 +162,7 @@ export default function SuccessionPlansListPage() {
         values={filters}
         onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
         onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
-        searchPlaceholder="Search by position or employee name…"
+        searchPlaceholder="Search position or employee name…"
       />
       {isLoading && !data && <SkeletonTable columns={8} rows={6} />}
       {isError && (

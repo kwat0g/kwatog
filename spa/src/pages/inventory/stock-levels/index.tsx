@@ -52,7 +52,7 @@ export default function StockLevelsPage() {
       <FilterBar filters={filterConfig} values={filters}
         onSearch={(s) => setFilters(f => ({ ...f, search: s, page: 1 }))}
         onFilter={(k, v) => setFilters(f => ({ ...f, [k]: v, page: 1 }))}
-        searchPlaceholder="Search by item…" />
+        searchPlaceholder="Search item…" />
       {isLoading && !data && <SkeletonTable columns={7} rows={8} />}
       {isError && <EmptyState icon="alert-circle" title="Failed to load stock" action={<Button onClick={() => refetch()}>Retry</Button>} />}
       {data && data.data.length === 0 && <EmptyState icon="inbox" title="No stock found" />}

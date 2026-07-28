@@ -140,7 +140,7 @@ export default function MaintenanceWorkOrdersListPage() {
         values={filters}
         onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
         onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
-        searchPlaceholder="Search by WO number or description…"
+        searchPlaceholder="Search WO number or description…"
       />
       {isLoading && !data && <SkeletonTable columns={7} rows={6} />}
       {isError && (

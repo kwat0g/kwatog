@@ -153,7 +153,7 @@ export default function ReturnManagementListPage() {
         values={filters}
         onSearch={(s) => setFilters((f) => ({ ...f, search: s, page: 1 }))}
         onFilter={(k, v) => setFilters((f) => ({ ...f, [k]: v, page: 1 }))}
-        searchPlaceholder="Search RMA number..."
+        searchPlaceholder="Search RMA number…"
       />
       {isLoading && !data && <SkeletonTable columns={7} rows={6} />}
       {isError && (

@@ -109,7 +109,7 @@ export default function ShiftsPage() {
         filters={[]}
         values={filters}
         onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
-        searchPlaceholder="Search by name…"
+        searchPlaceholder="Search name…"
       />
 
       {isLoading && !data && <SkeletonTable columns={7} rows={5} />}

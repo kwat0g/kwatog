@@ -134,7 +134,7 @@ export default function PositionsPage() {
         values={filters}
         onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
         onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
-        searchPlaceholder="Search by title…"
+        searchPlaceholder="Search title…"
       />
 
       {isLoading && !data && <SkeletonTable columns={4} rows={10} />}

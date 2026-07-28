@@ -126,7 +126,7 @@ export default function ActionCenterPage() {
               </div>
               <Input
                 aria-label="Search action queue"
-                placeholder="Search work, reference, or owner"
+                placeholder="Search work, reference, or owner…"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 prefix={<Search size={12} />}

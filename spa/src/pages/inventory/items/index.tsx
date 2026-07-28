@@ -140,7 +140,7 @@ export default function ItemsListPage() {
         values={filters}
         onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
         onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
-        searchPlaceholder="Search by code or name…"
+        searchPlaceholder="Search code or name…"
       />
       {isLoading && !data && <SkeletonTable columns={canManage ? 10 : 9} rows={8} />}
       {isError && <EmptyState icon="alert-circle" title="Failed to load items" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />}

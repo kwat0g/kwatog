@@ -147,7 +147,7 @@ export default function CommissionsListPage() {
         values={filters}
         onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
         onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
-        searchPlaceholder="Search by employee or SO number…"
+        searchPlaceholder="Search employee or SO number…"
       />
       {isLoading && !data && <SkeletonTable columns={7} rows={6} />}
       {isError && (

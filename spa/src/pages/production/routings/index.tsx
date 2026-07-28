@@ -118,7 +118,7 @@ export default function RoutingsListPage() {
       <FilterBar
         values={filters}
         onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
-        searchPlaceholder="Search by product part number or name..."
+        searchPlaceholder="Search product part number or name…"
       />
       {isLoading && !data && <div className="px-5 py-4"><SkeletonTable columns={6} rows={8} /></div>}
       {isError && (

@@ -138,7 +138,7 @@ export default function MaintenanceSchedulesListPage() {
         values={filters}
         onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
         onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
-        searchPlaceholder="Search by description…"
+        searchPlaceholder="Search description…"
       />
       {isLoading && !data && <SkeletonTable columns={5} rows={6} />}
       {isError && (
