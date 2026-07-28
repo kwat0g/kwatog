@@ -220,20 +220,24 @@ export default function CreateGrnPage() {
                       <Td align="right" mono>{Number(line.ordered).toFixed(2)}</Td>
                       <Td align="right" mono>{Number(line.remaining).toFixed(2)}</Td>
                       <Td align="right" mono>
-                        <input
-                          className={`h-7 w-24 px-2 rounded-sm border text-right font-mono tabular-nums ${errors.itemErrors[i]?.quantity ? 'border-danger' : 'border-default'}`}
+                        <Input
+                          fieldSize="sm"
+                          containerClassName="w-24 inline-flex"
+                          className="text-right font-mono tabular-nums"
+                          aria-label="Receive quantity"
                           type="text"
                           value={line.quantity_received}
                           {...numberInputProps()}
                           onChange={(e) => setItems(items.map((it, k) => k === i ? { ...it, quantity_received: e.target.value } : it))}
+                          error={errors.itemErrors[i]?.quantity}
                         />
-                        {errors.itemErrors[i]?.quantity && (
-                          <div className="text-2xs text-danger-fg mt-0.5">{errors.itemErrors[i].quantity}</div>
-                        )}
                       </Td>
                       <Td align="right" mono>
-                        <input
-                          className="h-7 w-24 px-2 rounded-sm border border-default text-right font-mono tabular-nums"
+                        <Input
+                          fieldSize="sm"
+                          containerClassName="w-24 inline-flex"
+                          className="text-right font-mono tabular-nums"
+                          aria-label="Unit cost"
                           type="text"
                           value={line.unit_cost}
                           {...numberInputProps()}
@@ -241,29 +245,31 @@ export default function CreateGrnPage() {
                         />
                       </Td>
                       <Td>
-                        <select
-                          className={`h-7 w-44 px-1 rounded-sm border text-2xs ${errors.itemErrors[i]?.location ? 'border-danger' : 'border-default'}`}
+                        <Select
+                          fieldSize="sm"
+                          containerClassName="w-44"
+                          aria-label="Location"
                           value={line.location_id}
                           onChange={(e) => setItems(items.map((it, k) => k === i ? { ...it, location_id: e.target.value } : it))}
+                          error={errors.itemErrors[i]?.location}
                         >
                           <option value="">Select location…</option>
                           {locations.map((l) => (
                             <option key={l.id} value={l.id}>{l.label}</option>
                           ))}
-                        </select>
-                        {errors.itemErrors[i]?.location && (
-                          <div className="text-2xs text-danger-fg mt-0.5">{errors.itemErrors[i].location}</div>
-                        )}
+                        </Select>
                       </Td>
                       <Td align="right" mono>
-                        <button
+                        <Button
                           type="button"
+                          variant="ghost"
+                          size="sm"
+                          iconOnly
+                          icon={<Trash2 size={12} />}
                           onClick={() => setItems(items.filter((_, k) => k !== i))}
-                          className="p-1 text-text-muted hover:text-danger hover:bg-elevated rounded-sm"
                           aria-label="Remove line"
-                        >
-                          <Trash2 size={12} />
-                        </button>
+                          className="text-muted hover:text-danger"
+                        />
                       </Td>
                     </tr>
                   ))}

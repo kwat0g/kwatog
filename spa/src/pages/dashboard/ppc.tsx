@@ -289,7 +289,7 @@ function ProductionGanttPanel({ rows }: { rows: ProductionGanttRow[] }) {
       <div className="overflow-x-auto">
         <table className={tableCls}>
           <thead>
-            <tr>
+            <tr className={theadTrCls}>
               <Th className="pr-2">Machine</Th>
               {days.map((d) => (
                 <Th key={d} align="center" className="px-1">
@@ -386,7 +386,7 @@ function MachineAvailabilityGrid({ rows }: { rows: GanttRow[] }) {
       <div className="overflow-x-auto">
         <table className={tableCls}>
           <thead>
-            <tr>
+            <tr className={theadTrCls}>
               <Th className="pr-2">Machine</Th>
               {days.map(([date, label]) => (
                 <Th key={date} align="center" className="px-1">{label}</Th>

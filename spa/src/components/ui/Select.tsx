@@ -2,15 +2,49 @@ import { forwardRef, type SelectHTMLAttributes } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
+/**
+ * Named `fieldSize` because the native `size` attribute on <select> is a row
+ * count. `sm` is for controls inside table rows, `lg` for the touch targets on
+ * the factory kiosk and mobile pages.
+ */
+export type FieldSize = 'sm' | 'md' | 'lg';
+
+const shellSize: Record<FieldSize, string> = {
+  sm: 'h-7',
+  md: 'h-8',
+  lg: 'h-11',
+};
+
+const textSize: Record<FieldSize, string> = {
+  sm: 'pl-2 pr-7 text-xs',
+  md: 'pl-3 pr-8 text-sm',
+  lg: 'pl-3 pr-8 text-base',
+};
+
 export interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   label?: string;
   helper?: string;
   error?: string;
   containerClassName?: string;
+  fieldSize?: FieldSize;
 }
 
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(
-  ({ label, helper, error, required, id, className, containerClassName, children, ...rest }, ref) => {
+  (
+    {
+      label,
+      helper,
+      error,
+      required,
+      id,
+      className,
+      containerClassName,
+      fieldSize = 'md',
+      children,
+      ...rest
+    },
+    ref,
+  ) => {
     const selectId = id ?? `select-${rest.name ?? Math.random().toString(36).slice(2, 8)}`;
     return (
       <div className={cn('flex flex-col gap-1', containerClassName)}>
@@ -22,9 +56,10 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
         )}
         <div
           className={cn(
-            'relative flex items-stretch h-8 rounded-md border bg-elevated overflow-hidden transition-colors duration-fast',
+            'relative flex items-stretch rounded-md border bg-elevated overflow-hidden transition-colors duration-fast',
             'focus-within:ring-2 focus-within:ring-accent focus-within:border-accent focus-within:bg-canvas',
             'hover:bg-canvas',
+            shellSize[fieldSize],
             error ? 'border-danger' : 'border-default',
           )}
         >
@@ -34,8 +69,9 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
             aria-invalid={!!error}
             aria-describedby={error ? `${selectId}-error` : helper ? `${selectId}-helper` : undefined}
             className={cn(
-              'flex-1 pl-3 pr-8 text-sm bg-transparent appearance-none outline-none cursor-pointer',
+              'flex-1 min-w-0 bg-transparent appearance-none outline-none cursor-pointer',
               'disabled:cursor-not-allowed disabled:opacity-60',
+              textSize[fieldSize],
               className,
             )}
             {...rest}
@@ -46,7 +82,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
             aria-hidden
             className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted"
           >
-            <ChevronDown size={14} />
+            <ChevronDown size={fieldSize === 'sm' ? 12 : 14} />
           </span>
         </div>
         {error && (

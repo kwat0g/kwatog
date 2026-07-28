@@ -23,7 +23,7 @@ import { itemsApi } from '@/api/inventory/items';
 import { bomsApi } from '@/api/mrp/boms';
 import type { CreateBomData } from '@/api/mrp/boms';
 import type { Path } from 'react-hook-form';
-import { Td, Th, tableCls, trCls } from '@/components/ui/table-cells';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 const itemSchema = z.object({
   item_id:           z.string().min(1, 'Item is required'),
@@ -172,7 +172,7 @@ export default function EditBomPage() {
           <div className="border border-default rounded-md overflow-hidden">
             <table className={tableCls}>
               <thead>
-                <tr>
+                <tr className={theadTrCls}>
                   <Th className="w-2/5">Item</Th>
                   <Th align="right">Qty / unit</Th>
                   <Th>UOM</Th>

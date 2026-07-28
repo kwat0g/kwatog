@@ -9,7 +9,7 @@ import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatInt } from '@/lib/formatNumber';
 import type { MoldStatus } from '@/types/mrp';
-import { Td, Th, tableCls, trCls } from '@/components/ui/table-cells';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 const variant: Record<MoldStatus, 'success' | 'neutral' | 'info' | 'danger' | 'warning'> = {
   available: 'success',
@@ -115,7 +115,7 @@ export default function MoldDetailPage() {
             ) : (
               <table className={tableCls}>
                 <thead>
-                  <tr>
+                  <tr className={theadTrCls}>
                     <Th>Date</Th>
                     <Th>Event</Th>
                     <Th>Description</Th>

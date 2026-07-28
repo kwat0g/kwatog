@@ -17,7 +17,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
 import type { Invoice } from '@/types/accounting';
-import { Td, Th, tableCls, trCls } from '@/components/ui/table-cells';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 export default function CustomerDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
@@ -130,7 +130,7 @@ export default function CustomerDetailPage() {
             ) : (
               <table className={tableCls}>
                 <thead>
-                  <tr>
+                  <tr className={theadTrCls}>
                     <Th>Product</Th>
                     <Th align="right">Price</Th>
                     <Th align="right">Effective from</Th>
@@ -172,7 +172,7 @@ export default function CustomerDetailPage() {
             ) : (
               <table className={tableCls}>
                 <thead>
-                  <tr>
+                  <tr className={theadTrCls}>
                     <Th>SO no</Th>
                     <Th align="right">Date</Th>
                     <Th align="right">Total</Th>

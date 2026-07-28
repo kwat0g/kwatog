@@ -151,37 +151,48 @@ export default function CreatePurchaseRequestPage() {
               {fields.map((f, i) => (
                 <tr key={f.id} className={cn(trCls, 'align-top')}>
                   <Td>
-                    <select
-                      className="h-7 w-32 px-1 rounded-sm border border-default text-2xs font-mono"
+                    <Select
+                      fieldSize="sm"
+                      containerClassName="w-32"
+                      className="font-mono"
+                      aria-label="Item"
                       {...register(`items.${i}.item_id` as const)}
                     >
                       <option value="">— ad hoc —</option>
                       {items.data?.data.map((it) => (
                         <option key={it.id} value={it.id}>{it.code}</option>
                       ))}
-                    </select>
+                    </Select>
                   </Td>
                   <Td>
-                    <Input className="h-7" {...register(`items.${i}.description` as const)} error={errors.items?.[i]?.description?.message} />
+                    <Input fieldSize="sm" aria-label="Description" {...register(`items.${i}.description` as const)} error={errors.items?.[i]?.description?.message} />
                   </Td>
                   <Td align="right" mono>
-                    <input
-                      className="h-7 w-20 px-2 rounded-sm border border-default text-right font-mono tabular-nums text-xs"
+                    <Input
+                      fieldSize="sm"
+                      containerClassName="w-20 inline-flex"
+                      className="text-right font-mono tabular-nums"
+                      aria-label="Quantity"
                       type="text"
                       {...numberInputProps()}
                       {...register(`items.${i}.quantity` as const)}
+                      error={errors.items?.[i]?.quantity?.message}
                     />
-                    {errors.items?.[i]?.quantity && <div className="text-2xs text-danger-fg mt-0.5">{errors.items[i]?.quantity?.message}</div>}
                   </Td>
                   <Td>
-                    <input
-                      className="h-7 w-16 px-2 rounded-sm border border-default text-xs"
+                    <Input
+                      fieldSize="sm"
+                      containerClassName="w-16"
+                      aria-label="Unit"
                       {...register(`items.${i}.unit` as const)}
                     />
                   </Td>
                   <Td align="right" mono>
-                    <input
-                      className="h-7 w-24 px-2 rounded-sm border border-default text-right font-mono tabular-nums text-xs"
+                    <Input
+                      fieldSize="sm"
+                      containerClassName="w-24 inline-flex"
+                      className="text-right font-mono tabular-nums"
+                      aria-label="Estimated unit price"
                       type="text"
                       {...numberInputProps()}
                       {...register(`items.${i}.estimated_unit_price` as const)}
@@ -192,14 +203,16 @@ export default function CreatePurchaseRequestPage() {
                   </Td>
                   <Td align="right" mono>
                     {fields.length > 1 && (
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="sm"
+                        iconOnly
+                        icon={<Trash2 size={12} />}
                         onClick={() => remove(i)}
-                        className="p-1 text-text-muted hover:text-danger hover:bg-elevated rounded-sm"
                         aria-label="Remove line"
-                      >
-                        <Trash2 size={12} />
-                      </button>
+                        className="text-muted hover:text-danger"
+                      />
                     )}
                   </Td>
                 </tr>

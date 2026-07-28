@@ -13,7 +13,7 @@ import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { usePermission } from '@/hooks/usePermission';
 import { cn } from '@/lib/cn';
 import type { DirectoryEmployee, OrgChartGroup } from '@/types/directory';
-import { Td, Th, tableCls } from '@/components/ui/table-cells';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 type ViewMode = 'grid' | 'list' | 'org';
 
@@ -179,7 +179,7 @@ export default function EmployeeDirectoryPage() {
           <div className="border border-default rounded-md overflow-hidden">
             <table className={tableCls}>
               <thead>
-                <tr>
+                <tr className={theadTrCls}>
                   <Th>Name</Th>
                   <Th>Position</Th>
                   <Th>Department</Th>
@@ -193,10 +193,7 @@ export default function EmployeeDirectoryPage() {
                   <tr
                     key={e.id}
                     onClick={() => canViewFull && navigate(`/hr/employees/${e.id}`)}
-                    className={cn(
-                      'h-8 border-t border-subtle',
-                      canViewFull ? 'hover:bg-subtle cursor-pointer' : '',
-                    )}
+                    className={cn(trCls, canViewFull && 'cursor-pointer')}
                   >
                     <Td>
                       <div className="font-medium">{e.full_name}</div>

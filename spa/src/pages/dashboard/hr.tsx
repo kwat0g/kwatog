@@ -195,7 +195,7 @@ function AttendanceSummaryPanel({
               <span className={`font-mono tabular-nums ${i.color}`}>{i.value}</span>
             </div>
           ))}
-          <div className="flex items-center justify-between text-sm pt-1 border-t border-border">
+          <div className="flex items-center justify-between text-sm pt-1 border-t border-default">
             <span className="font-medium">Total active</span>
             <span className="font-mono tabular-nums font-medium">{total}</span>
           </div>

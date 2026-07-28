@@ -1,6 +1,21 @@
 import { forwardRef, type InputHTMLAttributes, type ReactNode } from 'react';
 import { Check, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import type { FieldSize } from './Select';
+
+// Matches <Select>'s scale so a field and a dropdown sitting side by side line
+// up. `size` is taken by the native attribute, hence `fieldSize`.
+const shellSize: Record<FieldSize, string> = {
+  sm: 'h-7',
+  md: 'h-8',
+  lg: 'h-11',
+};
+
+const textSize: Record<FieldSize, string> = {
+  sm: 'px-2 text-xs',
+  md: 'px-3 text-sm',
+  lg: 'px-3 text-base',
+};
 
 export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'prefix'> {
   label?: string;
@@ -9,6 +24,7 @@ export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 
   prefix?: ReactNode;
   suffix?: ReactNode;
   containerClassName?: string;
+  fieldSize?: FieldSize;
   /** Series X / Task X2 — show inline check / X based on validation state. */
   validState?: 'idle' | 'valid' | 'invalid';
 }
@@ -30,6 +46,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       className,
       containerClassName,
       type,
+      fieldSize = 'md',
       validState = 'idle',
       ...rest
     },
@@ -57,7 +74,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         )}
         <div
           className={cn(
-            'flex items-stretch h-8 rounded-md border overflow-hidden transition-colors duration-fast',
+            'flex items-stretch rounded-md border overflow-hidden transition-colors duration-fast',
+            shellSize[fieldSize],
             'focus-within:ring-2 focus-within:ring-accent focus-within:border-accent focus-within:bg-canvas',
             isPicker ? 'bg-elevated hover:bg-canvas cursor-pointer' : 'bg-canvas',
             error ? 'border-danger' : 'border-default',
@@ -75,7 +93,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             aria-invalid={!!error}
             aria-describedby={error ? `${inputId}-error` : helper ? `${inputId}-helper` : undefined}
             className={cn(
-              'flex-1 px-3 text-sm bg-transparent placeholder:text-text-subtle outline-none',
+              'flex-1 min-w-0 bg-transparent placeholder:text-text-subtle outline-none',
+              textSize[fieldSize],
               className,
             )}
             {...rest}

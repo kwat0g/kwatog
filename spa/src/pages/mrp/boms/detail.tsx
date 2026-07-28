@@ -11,7 +11,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { Td, Th, tableCls, trCls } from '@/components/ui/table-cells';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 export default function BomDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -89,7 +89,7 @@ export default function BomDetailPage() {
         <Panel title="Materials" meta={`${data.item_count} ${data.item_count === 1 ? 'line' : 'lines'}`} noPadding>
           <table className={tableCls}>
             <thead>
-              <tr>
+              <tr className={theadTrCls}>
                 <Th className="w-12">#</Th>
                 <Th>Item</Th>
                 <Th align="right">Qty / unit</Th>

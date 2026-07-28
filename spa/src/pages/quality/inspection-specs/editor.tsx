@@ -32,7 +32,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { productsApi } from '@/api/crm/products';
 import { inspectionSpecsApi, type SpcResult } from '@/api/quality/inspectionSpecs';
 import type { UpsertInspectionSpecData } from '@/types/quality';
-import { Td, Th, tableCls, trCls } from '@/components/ui/table-cells';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 const itemSchema = z.object({
   parameter_name:  z.string().min(1, 'Parameter name is required').max(150),
@@ -248,7 +248,7 @@ export default function InspectionSpecEditorPage() {
           <div className="border border-default rounded-md overflow-hidden">
             <table className={tableCls}>
               <thead>
-                <tr>
+                <tr className={theadTrCls}>
                   <Th className="w-1/4">Parameter</Th>
                   <Th>Type</Th>
                   <Th>UOM</Th>
@@ -358,7 +358,7 @@ export default function InspectionSpecEditorPage() {
             <div className="border border-default rounded-md overflow-hidden">
               <table className={tableCls}>
                 <thead>
-                  <tr>
+                  <tr className={theadTrCls}>
                     <Th>Parameter</Th>
                     <Th align="right" className="font-mono">Cp</Th>
                     <Th align="right" className="font-mono">Cpk</Th>

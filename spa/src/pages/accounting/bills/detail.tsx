@@ -283,7 +283,7 @@ export default function BillDetailPage() {
                     const chip = MATCH_LINE_CHIP[l.status];
                     const isBlock = l.severity === 'block';
                     return (
-                      <tr key={`${l.item_id}-${idx}`} className={`h-8 border-b border-subtle ${isBlock ? 'bg-danger-bg/30' : ''}`}>
+                      <tr key={`${l.item_id}-${idx}`} className={cn(trCls, isBlock && 'bg-danger-bg/30')}>
                         <Td>
                           {l.item_code && <span className="font-mono text-xs text-muted mr-1">{l.item_code}</span>}
                           {l.description}

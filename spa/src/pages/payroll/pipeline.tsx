@@ -11,7 +11,8 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { formatPeso } from '@/lib/formatNumber';
 import type { PipelinePeriod } from '@/types/payroll';
-import { Td, Th, tableCls } from '@/components/ui/table-cells';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { cn } from '@/lib/cn';
 
 const statusVariant = (status: PipelinePeriod['status']): ChipVariant => {
   switch (status) {
@@ -115,7 +116,7 @@ export default function PayrollPipelinePage() {
         <Panel noPadding>
           <table className={tableCls}>
             <thead>
-              <tr>
+              <tr className={theadTrCls}>
                 <Th className="w-8" />
                 <Th>Period</Th>
                 <Th align="right">Employees</Th>
@@ -150,7 +151,11 @@ function PipelineRow({
 
   return (
     <tr
-      className={`border-t border-subtle ${period.exists ? 'hover:bg-subtle cursor-pointer' : 'opacity-60'} ${period.status === 'draft' ? 'bg-warning-bg/10' : ''}`}
+      className={cn(
+        trCls,
+        period.exists ? 'cursor-pointer' : 'opacity-60',
+        period.status === 'draft' && 'bg-warning-bg/10',
+      )}
       onClick={handleRowClick}
     >
       <Td align="center">{statusIcon(period.status)}</Td>

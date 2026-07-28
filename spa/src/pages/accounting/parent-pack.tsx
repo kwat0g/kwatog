@@ -213,7 +213,7 @@ function TransSection({ title, rows, total, currency, highlightCode }: {
         <tbody>
           {rows.length === 0 && <tr className={trCls}><Td className="text-muted italic" colSpan={2}>No movement</Td></tr>}
           {rows.map((r) => (
-            <tr key={r.code ?? r.name} className={'h-7 border-b border-subtle' + (r.code === highlightCode ? ' bg-warning-subtle' : '')}>
+            <tr key={r.code ?? r.name} className={cn(trCls, r.code === highlightCode && 'bg-warning-subtle')}>
               <Td>
                 {r.code && <span className="font-mono text-muted">{r.code}</span>} {r.name}
                 <span className="block text-2xs text-muted">PHP {formatDecimal(r.amount_php)} @ {Number(r.rate_applied).toFixed(6)}</span>

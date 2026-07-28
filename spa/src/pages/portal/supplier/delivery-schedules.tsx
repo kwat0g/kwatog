@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Plus, X } from 'lucide-react';
 import { supplierPortalApi } from '@/api/b2b/supplier';
 import type { DeliverySchedule, PortalPoSummary } from '@/types/b2b';
 import { Panel } from '@/components/ui/Panel';
 import { Button } from '@/components/ui/Button';
+import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
+import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { formatDate } from '@/lib/formatDate';
@@ -90,104 +94,95 @@ export default function SupplierDeliverySchedulesPage() {
     }
   };
 
-  const statusColors: Record<string, string> = {
-    submitted: 'bg-info-bg text-info-fg',
-    confirmed: 'bg-success-bg text-success-fg',
-    rejected: 'bg-danger-bg text-danger-fg',
-  };
-
   return (
     <div className="max-w-5xl space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-medium">Delivery Schedules</h2>
+          <h2 className="text-lg font-medium">Delivery schedules</h2>
           <p className="text-xs text-muted">Submit and manage your delivery plans</p>
         </div>
         <Button onClick={() => setShowForm(!showForm)}>
-          {showForm ? 'Cancel' : 'New Schedule'}
+          {showForm ? 'Cancel' : 'New schedule'}
         </Button>
       </div>
 
       {/* New schedule form */}
       {showForm && (
         <Panel className="p-4 space-y-4">
-          <h3 className="text-sm font-medium">New Delivery Schedule</h3>
+          <h3 className="text-sm font-medium">New delivery schedule</h3>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted">Purchase Order</label>
-                <select
-                  value={form.purchase_order_id}
-                  onChange={(e) => setForm((p) => ({ ...p, purchase_order_id: e.target.value }))}
-                  className="w-full rounded-md border border-border bg-canvas px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-accent"
-                  required
-                >
-                  <option value="">Select PO...</option>
-                  {pos.map((po) => (
-                    <option key={po.id} value={po.id}>{po.po_number}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted">Month</label>
-                <input
-                  type="month"
-                  value={form.month}
-                  onChange={(e) => setForm((p) => ({ ...p, month: e.target.value }))}
-                  className="w-full rounded-md border border-border bg-canvas px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-accent"
-                  required
-                />
-              </div>
+              <Select
+                label="Purchase order"
+                required
+                value={form.purchase_order_id}
+                onChange={(e) => setForm((p) => ({ ...p, purchase_order_id: e.target.value }))}
+              >
+                <option value="">Select PO…</option>
+                {pos.map((po) => (
+                  <option key={po.id} value={po.id}>{po.po_number}</option>
+                ))}
+              </Select>
+              <Input
+                label="Month"
+                type="month"
+                required
+                value={form.month}
+                onChange={(e) => setForm((p) => ({ ...p, month: e.target.value }))}
+              />
             </div>
 
             {/* Line items */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-medium text-muted">Line Items</label>
-                <button
-                  type="button"
-                  onClick={handleAddLine}
-                  className="text-2xs text-accent hover:underline"
-                >
-                  + Add line
-                </button>
+                <span className="text-xs font-medium text-muted">Line items</span>
+                <Button type="button" variant="ghost" size="sm" icon={<Plus size={12} />} onClick={handleAddLine}>
+                  Add line
+                </Button>
               </div>
               {form.lines.map((line, idx) => (
                 <div key={idx} className="flex gap-2 items-start">
-                  <input
+                  <Input
                     type="text"
                     placeholder="Product name"
+                    aria-label="Product name"
+                    containerClassName="flex-1"
                     value={line.product_name}
                     onChange={(e) => handleLineChange(idx, 'product_name', e.target.value)}
-                    className="flex-1 rounded-md border border-border bg-canvas px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-accent"
                     required
                   />
-                  <input
+                  <Input
                     type="number"
                     step="0.01"
                     min="0.01"
                     placeholder="Qty"
+                    aria-label="Quantity"
+                    className="font-mono tabular-nums"
+                    containerClassName="w-24"
                     value={line.quantity || ''}
                     onChange={(e) => handleLineChange(idx, 'quantity', parseFloat(e.target.value) || 0)}
-                    className="w-24 rounded-md border border-border bg-canvas px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-accent"
                     required
                   />
-                  <input
+                  <Input
                     type="text"
                     placeholder="Notes"
+                    aria-label="Notes"
+                    containerClassName="w-32"
                     value={line.notes}
                     onChange={(e) => handleLineChange(idx, 'notes', e.target.value)}
-                    className="w-32 rounded-md border border-border bg-canvas px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-accent"
                   />
                   {form.lines.length > 1 && (
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
+                      size="sm"
+                      iconOnly
+                      icon={<X size={14} />}
                       onClick={() => handleRemoveLine(idx)}
-                      className="text-xs text-danger hover:underline shrink-0 mt-2"
-                    >
-                      Remove
-                    </button>
+                      aria-label="Remove line"
+                      className="shrink-0 text-muted hover:text-danger"
+                    />
                   )}
                 </div>
               ))}
@@ -196,7 +191,7 @@ export default function SupplierDeliverySchedulesPage() {
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="secondary" onClick={() => setShowForm(false)}>Cancel</Button>
               <Button type="submit" disabled={submitting}>
-                {submitting ? 'Submitting...' : 'Submit Schedule'}
+                {submitting ? 'Submitting…' : 'Submit schedule'}
               </Button>
             </div>
           </form>
@@ -220,11 +215,7 @@ export default function SupplierDeliverySchedulesPage() {
                   <span className="text-2xs text-muted">
                     {s.purchase_order?.po_number ?? ''}
                   </span>
-                  <span className={`inline-block px-2 py-0.5 rounded text-2xs font-medium ${
-                    statusColors[s.status] ?? 'bg-subtle text-secondary'
-                  }`}>
-                    {s.status}
-                  </span>
+                  <Chip variant={chipVariantForStatus(s.status)}>{s.status}</Chip>
                 </div>
                 <p className="text-2xs text-muted">
                   {formatDate(s.created_at)}

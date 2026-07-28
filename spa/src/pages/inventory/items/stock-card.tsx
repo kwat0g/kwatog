@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/Input';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { StatCard } from '@/components/ui/StatCard';
-import { Td, Th, tableCls, trCls } from '@/components/ui/table-cells';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 function todayStr(): string {
   const d = new Date();
@@ -150,7 +150,7 @@ export default function StockCardPage() {
           <div className="overflow-x-auto border border-default rounded-md">
             <table className={tableCls}>
               <thead>
-                <tr>
+                <tr className={theadTrCls}>
                   <Th>Date</Th>
                   <Th>Reference</Th>
                   <Th>Movement</Th>

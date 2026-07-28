@@ -11,7 +11,7 @@ import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
-import { Td, Th, tableCls, trCls } from '@/components/ui/table-cells';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 export default function MrpPlanDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -107,7 +107,7 @@ export default function MrpPlanDetailPage() {
             ) : (
               <table className={tableCls}>
                 <thead>
-                  <tr>
+                  <tr className={theadTrCls}>
                     <Th>Item</Th>
                     <Th align="right">Gross</Th>
                     <Th align="right">On hand</Th>

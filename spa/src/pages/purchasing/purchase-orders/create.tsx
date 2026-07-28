@@ -199,36 +199,48 @@ export default function CreatePurchaseOrderPage() {
               {fields.map((f, i) => (
                 <tr key={f.id} className={cn(trCls, 'align-top')}>
                   <Td>
-                    <select
-                      className={`h-7 w-32 px-1 rounded-sm border text-2xs font-mono ${errors.items?.[i]?.item_id ? 'border-danger' : 'border-default'}`}
+                    <Select
+                      fieldSize="sm"
+                      containerClassName="w-32"
+                      className="font-mono"
+                      aria-label="Item"
+                      error={errors.items?.[i]?.item_id?.message}
                       {...register(`items.${i}.item_id` as const)}
                     >
                       <option value="">—</option>
                       {items.data?.data.map((it) => (
                         <option key={it.id} value={it.id}>{it.code}</option>
                       ))}
-                    </select>
+                    </Select>
                   </Td>
                   <Td>
-                    <Input className="h-7" {...register(`items.${i}.description` as const)} error={errors.items?.[i]?.description?.message} />
+                    <Input fieldSize="sm" aria-label="Description" {...register(`items.${i}.description` as const)} error={errors.items?.[i]?.description?.message} />
                   </Td>
                   <Td align="right" mono>
-                    <input
-                      className="h-7 w-20 px-2 rounded-sm border border-default text-right font-mono tabular-nums text-xs"
+                    <Input
+                      fieldSize="sm"
+                      containerClassName="w-20 inline-flex"
+                      className="text-right font-mono tabular-nums"
+                      aria-label="Quantity"
                       type="text"
                       {...numberInputProps()}
                       {...register(`items.${i}.quantity` as const)}
                     />
                   </Td>
                   <Td>
-                    <input
-                      className="h-7 w-16 px-2 rounded-sm border border-default text-xs"
+                    <Input
+                      fieldSize="sm"
+                      containerClassName="w-16"
+                      aria-label="Unit"
                       {...register(`items.${i}.unit` as const)}
                     />
                   </Td>
                   <Td align="right" mono>
-                    <input
-                      className="h-7 w-24 px-2 rounded-sm border border-default text-right font-mono tabular-nums text-xs"
+                    <Input
+                      fieldSize="sm"
+                      containerClassName="w-24 inline-flex"
+                      className="text-right font-mono tabular-nums"
+                      aria-label="Unit price"
                       type="text"
                       {...numberInputProps()}
                       {...register(`items.${i}.unit_price` as const)}
@@ -239,14 +251,16 @@ export default function CreatePurchaseOrderPage() {
                   </Td>
                   <Td align="right" mono>
                     {fields.length > 1 && (
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="sm"
+                        iconOnly
+                        icon={<Trash2 size={12} />}
                         onClick={() => remove(i)}
-                        className="p-1 text-text-muted hover:text-danger hover:bg-elevated rounded-sm"
                         aria-label="Remove line"
-                      >
-                        <Trash2 size={12} />
-                      </button>
+                        className="text-muted hover:text-danger"
+                      />
                     )}
                   </Td>
                 </tr>
@@ -257,7 +271,7 @@ export default function CreatePurchaseOrderPage() {
                 <Td />
               </tr>
               {isVatable && (
-                <tr>
+                <tr className={trCls}>
                   <Td align="right" mono className="text-muted" colSpan={5}>VAT (12%)</Td>
                   <Td align="right" mono>₱ {vat.toFixed(2)}</Td>
                   <Td />

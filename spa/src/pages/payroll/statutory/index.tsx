@@ -1,10 +1,39 @@
 import { useState } from 'react';
+import { Download } from 'lucide-react';
 import { statutoryApi } from '@/api/payroll/statutory';
+import { PageHeader } from '@/components/layout/PageHeader';
+import { Panel } from '@/components/ui/Panel';
+import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
+
+interface ExportCardProps {
+  title: string;
+  description: string;
+  onClick: () => void;
+}
+
+function ExportCard({ title, description, onClick }: ExportCardProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex items-start gap-3 text-left rounded-md border border-default bg-canvas px-4 py-3 transition-colors duration-fast hover:bg-subtle hover:border-strong cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+    >
+      <span className="mt-0.5 text-muted group-hover:text-primary" aria-hidden>
+        <Download size={15} />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm font-medium text-primary">{title}</span>
+        <span className="block text-xs text-muted">{description}</span>
+      </span>
+    </button>
+  );
+}
 
 export default function StatutoryExportsPage() {
   const now = new Date();
@@ -12,67 +41,60 @@ export default function StatutoryExportsPage() {
   const [month, setMonth] = useState(now.getMonth() + 1);
 
   return (
-    <div className="p-5 space-y-6">
-      <div>
-        <h1 className="text-xl font-medium">Statutory Filing Exports</h1>
-        <p className="text-sm text-muted-foreground">
-          Generate BIR, PhilHealth, and Pag-IBIG remittance files for finalized payroll periods.
-        </p>
-      </div>
+    <div>
+      <PageHeader
+        title="Statutory filing exports"
+        subtitle="Generate BIR, PhilHealth, and Pag-IBIG remittance files for finalized payroll periods."
+      />
 
-      <div className="flex items-end gap-4">
-        <label className="flex flex-col text-sm">
-          Year
-          <input
-            type="number"
-            className="mt-1 rounded-md border px-2 py-1 font-mono tabular-nums"
-            value={year}
-            onChange={(e) => setYear(Number(e.target.value))}
-          />
-        </label>
-        <label className="flex flex-col text-sm">
-          Month
-          <select
-            className="mt-1 rounded-md border px-2 py-1"
-            value={month}
-            onChange={(e) => setMonth(Number(e.target.value))}
-          >
-            {MONTHS.map((m, i) => (
-              <option key={m} value={i + 1}>{m}</option>
-            ))}
-          </select>
-        </label>
-      </div>
+      <div className="px-5 py-4 space-y-3">
+        <Panel title="Filing period">
+          <div className="flex flex-wrap items-end gap-3">
+            <Input
+              label="Year"
+              type="number"
+              value={year}
+              onChange={(e) => setYear(Number(e.target.value))}
+              className="font-mono tabular-nums"
+              containerClassName="w-28"
+            />
+            <Select
+              label="Month"
+              value={month}
+              onChange={(e) => setMonth(Number(e.target.value))}
+              containerClassName="w-40"
+            >
+              {MONTHS.map((m, i) => (
+                <option key={m} value={i + 1}>{m}</option>
+              ))}
+            </Select>
+          </div>
+        </Panel>
 
-      <div className="grid gap-3 sm:grid-cols-2 max-w-2xl">
-        <button
-          className="rounded-md border px-4 py-3 text-left hover:bg-accent"
-          onClick={() => void statutoryApi.bir1601c(year, month)}
-        >
-          <div className="font-medium">BIR 1601-C</div>
-          <div className="text-sm text-muted-foreground">Monthly WHT on compensation</div>
-        </button>
-        <button
-          className="rounded-md border px-4 py-3 text-left hover:bg-accent"
-          onClick={() => void statutoryApi.philhealthRf1(year, month)}
-        >
-          <div className="font-medium">PhilHealth RF-1</div>
-          <div className="text-sm text-muted-foreground">Monthly employer remittance</div>
-        </button>
-        <button
-          className="rounded-md border px-4 py-3 text-left hover:bg-accent"
-          onClick={() => void statutoryApi.pagibigMcrf(year, month)}
-        >
-          <div className="font-medium">Pag-IBIG MCRF</div>
-          <div className="text-sm text-muted-foreground">Monthly contribution remittance</div>
-        </button>
-        <button
-          className="rounded-md border px-4 py-3 text-left hover:bg-accent"
-          onClick={() => void statutoryApi.bir1604cf(year)}
-        >
-          <div className="font-medium">BIR 1604-CF</div>
-          <div className="text-sm text-muted-foreground">Annual return ({year})</div>
-        </button>
+        <Panel title="Available files" meta={`${MONTHS[month - 1]} ${year}`}>
+          <div className="grid gap-3 sm:grid-cols-2 max-w-3xl">
+            <ExportCard
+              title="BIR 1601-C"
+              description="Monthly withholding tax on compensation"
+              onClick={() => void statutoryApi.bir1601c(year, month)}
+            />
+            <ExportCard
+              title="PhilHealth RF-1"
+              description="Monthly employer remittance"
+              onClick={() => void statutoryApi.philhealthRf1(year, month)}
+            />
+            <ExportCard
+              title="Pag-IBIG MCRF"
+              description="Monthly contribution remittance"
+              onClick={() => void statutoryApi.pagibigMcrf(year, month)}
+            />
+            <ExportCard
+              title="BIR 1604-CF"
+              description={`Annual return for ${year}`}
+              onClick={() => void statutoryApi.bir1604cf(year)}
+            />
+          </div>
+        </Panel>
       </div>
     </div>
   );

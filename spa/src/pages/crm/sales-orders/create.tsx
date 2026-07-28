@@ -30,7 +30,7 @@ import { productsApi } from '@/api/crm/products';
 import { salesOrdersApi } from '@/api/crm/salesOrders';
 import type { CreateSalesOrderData } from '@/types/crm';
 import { formatPeso } from '@/lib/formatNumber';
-import { Td, Th, tableCls, trCls } from '@/components/ui/table-cells';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 const itemSchema = z.object({
   product_id:    z.string().min(1, 'Product is required'),
@@ -182,7 +182,7 @@ export default function CreateSalesOrderPage() {
           <div className="border border-default rounded-md overflow-hidden">
             <table className={tableCls}>
               <thead>
-                <tr>
+                <tr className={theadTrCls}>
                   <Th className="w-1/2">Product</Th>
                   <Th align="right">Quantity</Th>
                   <Th align="right">Delivery date</Th>

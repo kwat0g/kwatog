@@ -27,7 +27,7 @@ import { productsApi } from '@/api/crm/products';
 import { machinesApi } from '@/api/mrp/machines';
 import { moldsApi } from '@/api/mrp/molds';
 import { routingsApi } from '@/api/production/routings';
-import { Td, Th, tableCls, trCls } from '@/components/ui/table-cells';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { cn } from '@/lib/cn';
 
 // ─── Schema ──────────────────────────────────────────────────────
@@ -253,7 +253,7 @@ export default function RoutingEditorPage() {
           <div className="border border-default rounded-md overflow-hidden">
             <table className={tableCls}>
               <thead>
-                <tr>
+                <tr className={theadTrCls}>
                   <Th className="w-10">#</Th>
                   <Th>Operation</Th>
                   <Th>Work center</Th>

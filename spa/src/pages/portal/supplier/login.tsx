@@ -59,7 +59,7 @@ export default function SupplierPortalLoginPage() {
           <p className="text-xs text-muted mt-0.5">Sign in to view purchase orders, invoices, and more.</p>
         </div>
 
-        <form onSubmit={onSubmit} className="bg-elevated border border-border rounded-md p-5 flex flex-col gap-3">
+        <form onSubmit={onSubmit} className="bg-elevated border border-default rounded-md p-5 flex flex-col gap-3">
           <Input
             type="email"
             name="email"

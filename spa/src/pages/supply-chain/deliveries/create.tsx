@@ -225,69 +225,57 @@ export default function CreateDeliveryPage() {
                 className="grid grid-cols-[1fr_120px_auto] gap-2 items-end p-3 bg-subtle rounded-md border border-default"
               >
                 {/* SO Item select */}
-                <div>
-                  <label className="text-2xs uppercase tracking-wider text-muted block mb-1">
-                    Sales order line <span className="text-danger">*</span>
-                  </label>
-                  <select
-                    {...register(`items.${index}.sales_order_item_id`)}
-                    disabled={!selectedSoId || soDetailLoading}
-                    className="w-full text-sm rounded-md border border-default bg-canvas px-2 py-1.5 disabled:opacity-50"
-                  >
-                    <option value="">
-                      {!selectedSoId
-                        ? 'Select SO first'
-                        : soDetailLoading
-                        ? 'Loading items…'
-                        : soItems.length === 0
-                        ? 'No line items on this order'
-                        : '— Select item —'}
+                <Select
+                  label="Sales order line"
+                  required
+                  {...register(`items.${index}.sales_order_item_id`)}
+                  disabled={!selectedSoId || soDetailLoading}
+                  error={errors.items?.[index]?.sales_order_item_id?.message}
+                >
+                  <option value="">
+                    {!selectedSoId
+                      ? 'Select SO first'
+                      : soDetailLoading
+                      ? 'Loading items…'
+                      : soItems.length === 0
+                      ? 'No line items on this order'
+                      : '— Select item —'}
+                  </option>
+                  {soItems.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.product?.part_number
+                        ? `${item.product.part_number} — ${item.product.name}`
+                        : `Line ${item.id}`}
+                      {' '}(Qty: {item.quantity} {item.product?.unit_of_measure ?? ''})
                     </option>
-                    {soItems.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.product?.part_number
-                          ? `${item.product.part_number} — ${item.product.name}`
-                          : `Line ${item.id}`}
-                        {' '}(Qty: {item.quantity} {item.product?.unit_of_measure ?? ''})
-                      </option>
-                    ))}
-                  </select>
-                  {errors.items?.[index]?.sales_order_item_id && (
-                    <p className="text-2xs text-danger mt-0.5">
-                      {errors.items[index]!.sales_order_item_id!.message}
-                    </p>
-                  )}
-                </div>
+                  ))}
+                </Select>
 
                 {/* Quantity */}
-                <div>
-                  <label className="text-2xs uppercase tracking-wider text-muted block mb-1">
-                    Qty <span className="text-danger">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    step="any"
-                    min="0.001"
-                    {...register(`items.${index}.quantity`)}
-                    className="w-full text-sm rounded-md border border-default bg-canvas px-2 py-1.5 font-mono tabular-nums"
-                  />
-                  {errors.items?.[index]?.quantity && (
-                    <p className="text-2xs text-danger mt-0.5">
-                      {errors.items[index]!.quantity!.message}
-                    </p>
-                  )}
-                </div>
+                <Input
+                  label="Qty"
+                  required
+                  type="number"
+                  step="any"
+                  min="0.001"
+                  {...register(`items.${index}.quantity`)}
+                  error={errors.items?.[index]?.quantity?.message}
+                  className="font-mono tabular-nums"
+                />
 
                 {/* Remove button */}
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
+                  size="sm"
+                  iconOnly
+                  icon={<X size={14} />}
                   onClick={() => remove(index)}
                   disabled={fields.length === 1}
                   title="Remove line"
-                  className="mb-px inline-flex items-center justify-center w-7 h-7 rounded-md border border-default text-muted hover:text-danger hover:border-danger disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                >
-                  <X size={14} />
-                </button>
+                  aria-label="Remove line"
+                  className="hover:text-danger hover:border-danger"
+                />
               </div>
             ))}
           </div>

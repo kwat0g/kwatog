@@ -9,6 +9,7 @@ import { Chip } from '@/components/ui/Chip';
 import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
+import { Select } from '@/components/ui/Select';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
@@ -68,8 +69,9 @@ export default function MachinesListPage() {
         const allowed = ALLOWED[r.status] ?? [];
         if (allowed.length === 0) return null;
         return (
-          <select
-            className="h-7 px-1.5 text-xs rounded-md border border-default bg-canvas"
+          <Select
+            fieldSize="sm"
+            containerClassName="inline-flex min-w-[140px]"
             value=""
             onChange={(e) => {
               const to = e.target.value as MachineStatus;
@@ -80,7 +82,7 @@ export default function MachinesListPage() {
           >
             <option value="">Change status…</option>
             {allowed.map((s) => <option key={s} value={s}>→ {s}</option>)}
-          </select>
+          </Select>
         );
       },
     }] : []),

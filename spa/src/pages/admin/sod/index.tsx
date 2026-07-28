@@ -2,7 +2,8 @@ import { useQuery } from '@tanstack/react-query';
 import { Button, Chip, EmptyState, SkeletonTable, Td, Th } from '@/components/ui';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { sodApi, type SodSeverity } from '@/api/admin/sod';
-import { tableCls, theadTrCls } from '@/components/ui/table-cells';
+import { tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { cn } from '@/lib/cn';
 
 const SEVERITY_CHIP: Record<SodSeverity, 'danger' | 'warning' | 'info'> = {
   high: 'danger',
@@ -109,7 +110,7 @@ export default function SodMatrixPage() {
                   {matrix.data.map((rule) => (
                     <tr
                       key={rule.id}
-                      className={`border-b border-default last:border-0 ${rule.active ? '' : 'opacity-50'}`}
+                      className={cn(trCls, !rule.active && 'opacity-50')}
                     >
                       <Td>
                         <div className="font-medium">{rule.name}</div>

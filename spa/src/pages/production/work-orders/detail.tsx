@@ -25,7 +25,7 @@ import { cn } from '@/lib/cn';
 import { formatInt } from '@/lib/formatNumber';
 import type { WorkOrderStatus } from '@/types/production';
 import type { WoOperationStatus } from '@/types/production/routing';
-import { Td, Th, tableCls, trCls } from '@/components/ui/table-cells';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 const variant: Record<WorkOrderStatus, 'success' | 'info' | 'warning' | 'danger' | 'neutral'> = {
   planned: 'neutral', confirmed: 'info', in_progress: 'info',
@@ -227,7 +227,7 @@ export default function WorkOrderDetailPage() {
                   </div>
                   <table className={tableCls}>
                     <thead>
-                      <tr>
+                      <tr className={theadTrCls}>
                         <Th>Item</Th>
                         <Th>GRN</Th>
                         <Th>Material lot</Th>
@@ -291,7 +291,7 @@ export default function WorkOrderDetailPage() {
             {data.materials?.length ? (
               <table className={tableCls}>
                 <thead>
-                  <tr>
+                  <tr className={theadTrCls}>
                     <Th>Item</Th>
                     <Th align="right">BOM qty</Th>
                     <Th align="right">Issued</Th>
@@ -321,7 +321,7 @@ export default function WorkOrderDetailPage() {
             {data.outputs?.length ? (
               <table className={tableCls}>
                 <thead>
-                  <tr>
+                  <tr className={theadTrCls}>
                     <Th>Recorded</Th>
                     <Th>Batch</Th>
                     <Th align="right">Good</Th>
@@ -441,7 +441,7 @@ export default function WorkOrderDetailPage() {
           {operations.data && operations.data.length > 0 && (
             <table className={tableCls}>
               <thead>
-                <tr>
+                <tr className={theadTrCls}>
                   <Th align="right" className="w-14">#</Th>
                   <Th>Operation</Th>
                   <Th>Status</Th>

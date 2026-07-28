@@ -37,7 +37,7 @@ import { OeeGaugeChart } from '@/components/charts/OeeGaugeChart';
 import { oeeApi } from '@/api/production/oee';
 import { formatDate } from '@/lib/formatDate';
 import type { MachineOeeRow } from '@/types/production';
-import { Td, Th, tableCls, trCls } from '@/components/ui/table-cells';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { cn } from '@/lib/cn';
 
 type Preset = 'today' | 'week' | 'month' | 'custom';
@@ -316,7 +316,7 @@ export default function OeeReportPage() {
             ) : (
               <table className={tableCls}>
                 <thead>
-                  <tr>
+                  <tr className={theadTrCls}>
                     <Th>Code</Th>
                     <Th>Name</Th>
                     <Th>Status</Th>

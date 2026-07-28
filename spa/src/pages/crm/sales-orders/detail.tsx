@@ -20,7 +20,7 @@ import { formatPeso, formatInt, formatDecimal } from '@/lib/formatNumber';
 import { useChainProgress } from '@/hooks/useChainProgress';
 import { ChainResultModal, ChainErrorPanel } from './chain-result';
 import type { SalesOrderStatus, SoChainResult } from '@/types/crm';
-import { Td, Th, tableCls, trCls } from '@/components/ui/table-cells';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { cn } from '@/lib/cn';
 
 const statusVariant: Record<SalesOrderStatus, 'success' | 'info' | 'warning' | 'neutral' | 'danger'> = {
@@ -194,7 +194,7 @@ export default function SalesOrderDetailPage() {
           <Panel title="Line items" meta={`${data.item_count} ${data.item_count === 1 ? 'line' : 'lines'}`} noPadding>
             <table className={tableCls}>
               <thead>
-                <tr>
+                <tr className={theadTrCls}>
                   <Th className="w-12">#</Th>
                   <Th>Product</Th>
                   <Th align="right">Qty</Th>

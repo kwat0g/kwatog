@@ -19,7 +19,7 @@ import { fromApprovalRecords } from '@/lib/approvals';
 import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
-import { Td, Th, tableCls, trCls } from '@/components/ui/table-cells';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 export default function LoanDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
@@ -140,7 +140,7 @@ export default function LoanDetailPage() {
             ) : (
               <table className={tableCls}>
                 <thead>
-                  <tr>
+                  <tr className={theadTrCls}>
                     <Th>Date</Th>
                     <Th align="right">Amount</Th>
                     <Th>Type</Th>

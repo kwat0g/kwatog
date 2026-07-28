@@ -10,12 +10,20 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   size?: Size;
   loading?: boolean;
   icon?: ReactNode;
+  /** Square button with no label. Requires an `aria-label`. */
+  iconOnly?: boolean;
 }
 
 const sizeClasses: Record<Size, string> = {
   sm: 'h-7 px-2.5 text-xs',
   md: 'h-8 px-3 text-sm',
   lg: 'h-9 px-4 text-sm',
+};
+
+const iconOnlySizeClasses: Record<Size, string> = {
+  sm: 'h-7 w-7 text-xs',
+  md: 'h-8 w-8 text-sm',
+  lg: 'h-9 w-9 text-sm',
 };
 
 const variantClasses: Record<Variant, string> = {
@@ -30,7 +38,7 @@ const variantClasses: Record<Variant, string> = {
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ variant = 'secondary', size = 'md', loading, icon, disabled, className, children, ...rest }, ref) => {
+  ({ variant = 'secondary', size = 'md', loading, icon, iconOnly, disabled, className, children, ...rest }, ref) => {
     const isDisabled = disabled || loading;
     return (
       <button
@@ -41,7 +49,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           'inline-flex items-center justify-center gap-1.5 rounded-md transition-colors duration-fast cursor-pointer',
           'disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1',
-          sizeClasses[size],
+          iconOnly ? iconOnlySizeClasses[size] : sizeClasses[size],
           variantClasses[variant],
           className,
         )}

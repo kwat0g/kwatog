@@ -15,6 +15,7 @@ import type { AxiosError } from 'axios';
 import { inspectionsApi } from '@/api/quality/inspections';
 import { analyticsApi, type SpcCapabilityItem } from '@/api/quality/analytics';
 import { Button } from '@/components/ui/Button';
+import { Select } from '@/components/ui/Select';
 import { Chip } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -330,7 +331,7 @@ export default function InspectionDetailPage() {
             >
               <table className={tableCls}>
                 <thead>
-                  <tr>
+                  <tr className={theadTrCls}>
                     <Th>
                       Parameter
                     </Th>
@@ -387,9 +388,11 @@ export default function InspectionDetailPage() {
                         </Td>
                         <Td align="center">
                           {m.parameter_type === 'visual' ? (
-                            <select
+                            <Select
+                              fieldSize="sm"
+                              containerClassName="inline-flex w-24"
+                              aria-label="Visual result"
                               disabled={isTerminal}
-                              className="px-2 py-1 text-xs border border-default rounded-md bg-canvas"
                               value={draft.is_pass === null ? '' : draft.is_pass ? 'pass' : 'fail'}
                               onChange={(e) =>
                                 updateDraft(m.id, {
@@ -401,7 +404,7 @@ export default function InspectionDetailPage() {
                               <option value="">—</option>
                               <option value="pass">Pass</option>
                               <option value="fail">Fail</option>
-                            </select>
+                            </Select>
                           ) : draft.is_pass === null ? (
                             <span className="text-muted text-2xs">—</span>
                           ) : draft.is_pass ? (

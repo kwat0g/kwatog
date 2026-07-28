@@ -18,7 +18,7 @@ import { OeeGauge } from '@/components/production/OeeGauge';
 import { BreakdownAlertCard } from '@/components/production/BreakdownAlertCard';
 import { useEcho } from '@/hooks/useEcho';
 import { formatInt } from '@/lib/formatNumber';
-import { Td, Th, tableCls, trCls } from '@/components/ui/table-cells';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 export default function ProductionDashboardPage() {
   const qc = useQueryClient();
@@ -160,7 +160,7 @@ export default function ProductionDashboardPage() {
           <Panel title="Machine utilization (today)" noPadding>
             <table className={tableCls}>
               <thead>
-                <tr>
+                <tr className={theadTrCls}>
                   <Th>Machine</Th>
                   <Th>Status</Th>
                   <Th className="w-1/3">OEE</Th>

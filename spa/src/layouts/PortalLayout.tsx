@@ -55,9 +55,9 @@ function PortalSidebar({ type, nav, pathname, onLogout }: {
   const BrandIcon = isSupplier ? Building2 : Package;
 
   return (
-    <aside className="w-56 shrink-0 border-r border-border bg-elevated flex flex-col h-screen sticky top-0">
+    <aside className="w-56 shrink-0 border-r border-default bg-elevated flex flex-col h-screen sticky top-0">
       {/* Brand */}
-      <div className="flex items-center gap-2 px-4 h-14 border-b border-border">
+      <div className="flex items-center gap-2 px-4 h-14 border-b border-default">
         <span className="h-7 w-7 rounded-md bg-accent text-canvas inline-flex items-center justify-center font-medium text-xs">
           <BrandIcon size={14} />
         </span>
@@ -88,7 +88,7 @@ function PortalSidebar({ type, nav, pathname, onLogout }: {
       </nav>
 
       {/* Logout */}
-      <div className="px-2 pb-3 border-t border-border pt-2">
+      <div className="px-2 pb-3 border-t border-default pt-2">
         <button
           onClick={onLogout}
           className="flex items-center gap-2.5 px-3 py-2 rounded-md text-xs font-medium text-muted hover:text-danger hover:bg-danger/5 w-full transition-colors"
@@ -111,7 +111,7 @@ export default function PortalLayout({ type, user, onLogout, title, subtitle, ch
 
       <main className="flex-1 flex flex-col overflow-auto">
         {/* Top bar */}
-        <header className="h-14 border-b border-border flex items-center justify-between px-5 shrink-0 bg-elevated/50 backdrop-blur-sm">
+        <header className="h-14 border-b border-default flex items-center justify-between px-5 shrink-0 bg-elevated/50 backdrop-blur-sm">
           <div>
             <h1 className="text-sm font-medium">{title}</h1>
             <p className="text-2xs text-muted">{subtitle}</p>

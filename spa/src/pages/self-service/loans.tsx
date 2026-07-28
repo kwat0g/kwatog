@@ -9,7 +9,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { BottomSheet, Button, Chip, EmptyState, Input, Select, SkeletonBlock, Textarea, Td, Th } from '@/components/ui';
 import { selfServiceApi } from '@/api/self-service';
 import type { SelfServiceLoan, SelfServiceLoansResponse } from '@/types/self-service';
-import { tableCls, theadTrCls } from '@/components/ui/table-cells';
+import { tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { cn } from '@/lib/cn';
 
 const schema = z.object({
@@ -259,9 +259,9 @@ function ApplyLoanSheet({
                       <Th align="right" className="font-normal">Balance</Th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-subtle">
+                  <tbody>
                     {preview.schedule.slice(0, 24).map((row) => (
-                      <tr key={row.period}>
+                      <tr key={row.period} className={trCls}>
                         <Td>{row.period}</Td>
                         <Td align="right" mono>₱{row.amount}</Td>
                         <Td align="right" mono className="text-muted">₱{row.running_balance}</Td>

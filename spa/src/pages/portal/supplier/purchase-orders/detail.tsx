@@ -6,6 +6,10 @@ import { supplierPortalApi } from '@/api/b2b/supplier';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
+import { FileInput } from '@/components/ui/FileInput';
+import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
+import { Textarea } from '@/components/ui/Textarea';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useState } from 'react';
 import { formatPeso } from '@/lib/formatNumber';
@@ -154,32 +158,34 @@ export default function SupplierPurchaseOrderDetailPage() {
             </Button>
           )}
           <Button variant="secondary" size="sm" icon={<Truck size={14} />} onClick={() => setShowShipmentForm(!showShipmentForm)}>
-            Update Shipment
+            Update shipment
           </Button>
           <Button variant="secondary" size="sm" icon={<Upload size={14} />} onClick={() => setShowUploadForm(!showUploadForm)}>
-            Upload Doc
+            Upload doc
           </Button>
           <Button variant="secondary" size="sm" icon={<Send size={14} />} onClick={() => setShowInvoiceForm(!showInvoiceForm)}>
-            Submit Invoice
+            Submit invoice
           </Button>
         </div>
       </div>
 
       {/* Shipment form */}
       {showShipmentForm && (
-        <Panel title="Update Shipment Information">
+        <Panel title="Update shipment information">
           <form onSubmit={(e) => { e.preventDefault(); shipmentMut.mutate(); }} className="flex flex-col gap-3">
-            <div>
-              <label className="text-2xs uppercase tracking-wide text-muted mb-1 block">Tracking Number</label>
-              <input type="text" value={trackingNumber} onChange={(e) => setTrackingNumber(e.target.value)}
-                className="w-full rounded-md border border-border bg-canvas px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-accent" />
-            </div>
-            <div>
-              <label className="text-2xs uppercase tracking-wide text-muted mb-1 block">Estimated Arrival</label>
-              <input type="date" value={estimatedArrival} onChange={(e) => setEstimatedArrival(e.target.value)}
-                className="w-full rounded-md border border-border bg-canvas px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-accent" />
-            </div>
-            <Button type="submit" variant="primary" size="sm" loading={shipmentMut.isPending}>
+            <Input
+              label="Tracking number"
+              type="text"
+              value={trackingNumber}
+              onChange={(e) => setTrackingNumber(e.target.value)}
+            />
+            <Input
+              label="Estimated arrival"
+              type="date"
+              value={estimatedArrival}
+              onChange={(e) => setEstimatedArrival(e.target.value)}
+            />
+            <Button type="submit" variant="primary" size="sm" loading={shipmentMut.isPending} className="self-start">
               Save
             </Button>
           </form>
@@ -188,29 +194,27 @@ export default function SupplierPurchaseOrderDetailPage() {
 
       {/* Upload Shipping Document form */}
       {showUploadForm && (
-        <Panel title="Upload Shipping Document">
+        <Panel title="Upload shipping document">
           <form onSubmit={(e) => { e.preventDefault(); if (uploadFile) uploadDocMut.mutate(); }} className="flex flex-col gap-3">
-            <div>
-              <label className="text-2xs uppercase tracking-wide text-muted mb-1 block">Document Type</label>
-              <select value={uploadDocType} onChange={(e) => setUploadDocType(e.target.value)}
-                className="w-full rounded-md border border-border bg-canvas px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-accent">
-                <option value="commercial_invoice">Commercial Invoice</option>
-                <option value="packing_list">Packing List</option>
-                <option value="bill_of_lading">Bill of Lading</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-2xs uppercase tracking-wide text-muted mb-1 block">File (PDF, JPG, PNG — max 10MB)</label>
-              <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => setUploadFile(e.target.files?.[0] ?? null)}
-                className="w-full text-xs" />
-            </div>
-            <div>
-              <label className="text-2xs uppercase tracking-wide text-muted mb-1 block">Notes (optional)</label>
-              <textarea value={uploadNotes} onChange={(e) => setUploadNotes(e.target.value)} rows={2}
-                className="w-full rounded-md border border-border bg-canvas px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-accent" />
-            </div>
-            <Button type="submit" variant="primary" size="sm" disabled={!uploadFile} loading={uploadDocMut.isPending}>
+            <Select label="Document type" value={uploadDocType} onChange={(e) => setUploadDocType(e.target.value)}>
+              <option value="commercial_invoice">Commercial invoice</option>
+              <option value="packing_list">Packing list</option>
+              <option value="bill_of_lading">Bill of lading</option>
+              <option value="other">Other</option>
+            </Select>
+            <FileInput
+              label="File"
+              helper="PDF, JPG, or PNG — max 10MB"
+              accept=".pdf,.jpg,.jpeg,.png"
+              onChange={(e) => setUploadFile(e.target.files?.[0] ?? null)}
+            />
+            <Textarea
+              label="Notes (optional)"
+              value={uploadNotes}
+              onChange={(e) => setUploadNotes(e.target.value)}
+              rows={2}
+            />
+            <Button type="submit" variant="primary" size="sm" disabled={!uploadFile} loading={uploadDocMut.isPending} className="self-start">
               Upload
             </Button>
           </form>
@@ -219,40 +223,55 @@ export default function SupplierPurchaseOrderDetailPage() {
 
       {/* Submit Invoice form */}
       {showInvoiceForm && (
-        <Panel title="Submit Invoice (Create Draft Bill)">
+        <Panel title="Submit invoice (creates a draft bill)">
           <form onSubmit={(e) => { e.preventDefault(); submitInvoiceMut.mutate(); }} className="flex flex-col gap-3">
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-2xs uppercase tracking-wide text-muted mb-1 block">Your Invoice # *</label>
-                <input type="text" value={billNumber} onChange={(e) => setBillNumber(e.target.value)} required
-                  className="w-full rounded-md border border-border bg-canvas px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-accent" />
-              </div>
-              <div>
-                <label className="text-2xs uppercase tracking-wide text-muted mb-1 block">Invoice Date *</label>
-                <input type="date" value={billDate} onChange={(e) => setBillDate(e.target.value)} required
-                  className="w-full rounded-md border border-border bg-canvas px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-accent" />
-              </div>
+              <Input
+                label="Your invoice #"
+                required
+                type="text"
+                value={billNumber}
+                onChange={(e) => setBillNumber(e.target.value)}
+                className="font-mono"
+              />
+              <Input
+                label="Invoice date"
+                required
+                type="date"
+                value={billDate}
+                onChange={(e) => setBillDate(e.target.value)}
+              />
             </div>
-            <div>
-              <label className="text-2xs uppercase tracking-wide text-muted mb-1 block">Due Date (optional)</label>
-              <input type="date" value={billDueDate} onChange={(e) => setBillDueDate(e.target.value)}
-                className="w-full rounded-md border border-border bg-canvas px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-accent" />
-            </div>
-            <div>
-              <label className="text-2xs uppercase tracking-wide text-muted mb-1 block">Attach Invoice File (optional)</label>
-              <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => setInvoiceFile(e.target.files?.[0] ?? null)}
-                className="w-full text-xs" />
-            </div>
-            <div>
-              <label className="text-2xs uppercase tracking-wide text-muted mb-1 block">Remarks (optional)</label>
-              <textarea value={billRemarks} onChange={(e) => setBillRemarks(e.target.value)} rows={2}
-                className="w-full rounded-md border border-border bg-canvas px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-accent" />
-            </div>
+            <Input
+              label="Due date (optional)"
+              type="date"
+              value={billDueDate}
+              onChange={(e) => setBillDueDate(e.target.value)}
+            />
+            <FileInput
+              label="Attach invoice file (optional)"
+              accept=".pdf,.jpg,.jpeg,.png"
+              onChange={(e) => setInvoiceFile(e.target.files?.[0] ?? null)}
+            />
+            <Textarea
+              label="Remarks (optional)"
+              value={billRemarks}
+              onChange={(e) => setBillRemarks(e.target.value)}
+              rows={2}
+            />
             <div className="text-2xs text-muted">
               Bill items will be auto-populated from the PO line items. A draft bill will be created in Accounts Payable for review.
             </div>
-            <Button type="submit" variant="primary" size="sm" disabled={!billNumber || !billDate} loading={submitInvoiceMut.isPending}>
-              <Send size={14} className="mr-1" /> Submit Invoice
+            <Button
+              type="submit"
+              variant="primary"
+              size="sm"
+              icon={<Send size={14} />}
+              disabled={!billNumber || !billDate}
+              loading={submitInvoiceMut.isPending}
+              className="self-start"
+            >
+              Submit invoice
             </Button>
           </form>
         </Panel>
@@ -268,7 +287,7 @@ export default function SupplierPurchaseOrderDetailPage() {
                 <Th>Description</Th>
                 <Th align="right">Ordered</Th>
                 <Th align="right">Received</Th>
-                <Th align="right">Unit Price</Th>
+                <Th align="right">Unit price</Th>
                 <Th align="right">Total</Th>
               </tr>
             </thead>

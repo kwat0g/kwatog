@@ -62,7 +62,7 @@ export default function CustomerDeliveryDetailPage() {
         <Panel title="Delivery Proofs">
           <div className="grid grid-cols-2 gap-3">
             {delivery.proofs.map((proof) => (
-              <div key={proof.id} className="border border-border rounded-md p-3">
+              <div key={proof.id} className="border border-default rounded-md p-3">
                 <p className="text-xs font-medium capitalize mb-1">{proof.proof_type}</p>
                 {proof.view_url ? (
                   <a href={proof.view_url} target="_blank" rel="noopener noreferrer"

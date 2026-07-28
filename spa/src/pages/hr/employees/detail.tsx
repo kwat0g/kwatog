@@ -29,7 +29,7 @@ import { formatPeso } from '@/lib/formatNumber';
 import { formatMobile, maskByKind } from '@/lib/phFormat';
 import type { ApiValidationError } from '@/types';
 import { onFormInvalid } from '@/lib/formErrors';
-import { Td, Th, tableCls, trCls } from '@/components/ui/table-cells';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 const TABS = ['Overview', 'Employment history', 'Attendance', 'Leaves', 'Loans', 'Documents', 'Property', 'Payroll', 'Activity'] as const;
 type Tab = typeof TABS[number];
@@ -341,7 +341,7 @@ function DocumentsTab({ employee }: { employee: any }) {
     <Panel title={`Documents (${docs.length})`} noPadding>
       <table className={tableCls}>
         <thead>
-          <tr>
+          <tr className={theadTrCls}>
             <Th>Type</Th>
             <Th>File</Th>
             <Th>Uploaded</Th>
@@ -377,7 +377,7 @@ function AttendanceTab({ employeeId }: { employeeId: string }) {
     <Panel title={`Attendance (last ${rows.length} days)`} noPadding>
       <table className={tableCls}>
         <thead>
-          <tr>
+          <tr className={theadTrCls}>
             <Th>Date</Th>
             <Th>In</Th>
             <Th>Out</Th>
@@ -421,7 +421,7 @@ function LeavesTab({ employeeId }: { employeeId: string }) {
     <Panel title={`Leave requests (${rows.length})`} noPadding>
       <table className={tableCls}>
         <thead>
-          <tr>
+          <tr className={theadTrCls}>
             <Th>No</Th>
             <Th>Type</Th>
             <Th>Dates</Th>
@@ -463,7 +463,7 @@ function LoansTab({ employeeId }: { employeeId: string }) {
     <Panel title={`Loans (${rows.length})`} noPadding>
       <table className={tableCls}>
         <thead>
-          <tr>
+          <tr className={theadTrCls}>
             <Th>Loan no</Th>
             <Th>Type</Th>
             <Th align="right">Principal</Th>
@@ -517,7 +517,7 @@ function PropertyTab({ employee }: { employee: any }) {
     <Panel title={`Issued property (${items.length})`} noPadding>
       <table className={tableCls}>
         <thead>
-          <tr>
+          <tr className={theadTrCls}>
             <Th>Item</Th>
             <Th align="right">Qty</Th>
             <Th>Issued</Th>

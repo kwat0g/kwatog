@@ -93,7 +93,7 @@ export default function SupplierStatementOfAccountPage() {
 
       {/* Open bills table */}
       <Panel className="overflow-hidden">
-        <h3 className="text-sm font-medium px-4 pt-3 pb-2 border-b border-border">
+        <h3 className="text-sm font-medium px-4 pt-3 pb-2 border-b border-default">
           Open Bills ({soa.open_bills.length})
         </h3>
         {soa.open_bills.length === 0 ? (

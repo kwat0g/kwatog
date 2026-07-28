@@ -11,7 +11,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import type { MaterialIssueStatus } from '@/types/inventory';
-import { Td, Th, tableCls, trCls } from '@/components/ui/table-cells';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 const statusVariant = (s: MaterialIssueStatus) => {
   if (s === 'issued')    return 'info' as const;
@@ -59,7 +59,7 @@ export default function MaterialIssueDetailPage() {
         <Panel title="Line items" meta={`${data.items?.length ?? 0} lines`} noPadding>
           <table className={tableCls}>
             <thead>
-              <tr>
+              <tr className={theadTrCls}>
                 <Th>Item</Th>
                 <Th>Location</Th>
                 <Th align="right">Qty issued</Th>

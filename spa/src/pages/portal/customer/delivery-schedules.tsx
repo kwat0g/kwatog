@@ -6,6 +6,8 @@ import { ArrowLeft, Plus, X, Send } from 'lucide-react';
 import { customerPortalApi } from '@/api/b2b/customer';
 import { Panel } from '@/components/ui/Panel';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { formatDate } from '@/lib/formatDate';
@@ -64,87 +66,91 @@ export default function DeliverySchedulesPage() {
           <Link to="/portal/customer" className="text-muted hover:text-primary p-1 -ml-1">
             <ArrowLeft size={16} />
           </Link>
-          <h2 className="text-sm font-medium">Delivery Schedules</h2>
+          <h2 className="text-sm font-medium">Delivery schedules</h2>
         </div>
         <Button variant="primary" size="sm" icon={showForm ? <X size={14} /> : <Plus size={14} />} onClick={() => setShowForm(!showForm)}>
-          {showForm ? 'Cancel' : 'New Schedule'}
+          {showForm ? 'Cancel' : 'New schedule'}
         </Button>
       </div>
 
       {/* Submission form */}
       {showForm && (
-        <Panel title="Submit Monthly Delivery Requirements">
+        <Panel title="Submit monthly delivery requirements">
           <form onSubmit={(e) => { e.preventDefault(); createMut.mutate(); }} className="flex flex-col gap-4">
-            <div>
-              <label className="text-2xs uppercase tracking-wide text-muted mb-1 block">Month</label>
-              <select value={month} onChange={(e) => setMonth(e.target.value)}
-                className="w-full rounded-md border border-border bg-canvas px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-accent">
-                {MONTH_OPTIONS.map((m) => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-              </select>
-            </div>
+            <Select label="Month" value={month} onChange={(e) => setMonth(e.target.value)} containerClassName="max-w-xs">
+              {MONTH_OPTIONS.map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </Select>
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-2xs uppercase tracking-wide text-muted">Line Items</label>
+                <span className="text-xs text-muted font-medium">Line items</span>
                 <Button type="button" variant="ghost" size="sm" icon={<Plus size={12} />} onClick={addLine}>
-                  Add Item
+                  Add item
                 </Button>
               </div>
               {lines.map((line, idx) => (
                 <div key={idx} className="flex items-start gap-2 p-2 bg-surface border border-default rounded-md">
                   <div className="flex-1 space-y-1.5">
-                    <input
+                    <Input
+                      fieldSize="sm"
                       type="text"
                       placeholder="Product name"
+                      aria-label="Product name"
                       value={line.product_name}
                       onChange={(e) => updateLine(idx, 'product_name', e.target.value)}
                       required
-                      className="w-full rounded border border-border bg-canvas px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-accent"
                     />
                     <div className="flex gap-2">
-                      <input
+                      <Input
+                        fieldSize="sm"
                         type="number"
                         placeholder="Qty"
+                        aria-label="Quantity"
+                        className="font-mono tabular-nums"
+                        containerClassName="w-24"
                         value={line.quantity || ''}
                         onChange={(e) => updateLine(idx, 'quantity', parseFloat(e.target.value) || 0)}
                         required
                         min={0.01}
                         step={0.01}
-                        className="w-24 rounded border border-border bg-canvas px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-accent"
                       />
-                      <input
+                      <Input
+                        fieldSize="sm"
                         type="text"
                         placeholder="Notes (optional)"
+                        aria-label="Notes"
+                        containerClassName="flex-1"
                         value={line.notes ?? ''}
                         onChange={(e) => updateLine(idx, 'notes', e.target.value)}
-                        className="flex-1 rounded border border-border bg-canvas px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-accent"
                       />
                     </div>
                   </div>
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="sm"
+                    iconOnly
+                    icon={<X size={14} />}
                     onClick={() => removeLine(idx)}
                     disabled={lines.length <= 1}
-                    className="p-1 text-muted hover:text-danger transition-colors disabled:opacity-30"
                     aria-label="Remove line"
-                  >
-                    <X size={14} />
-                  </button>
+                    className="text-muted hover:text-danger"
+                  />
                 </div>
               ))}
             </div>
 
-            <Button type="submit" variant="primary" size="sm" icon={<Send size={14} />} loading={createMut.isPending}>
-              Submit Schedule
+            <Button type="submit" variant="primary" size="sm" icon={<Send size={14} />} loading={createMut.isPending} className="self-start">
+              Submit schedule
             </Button>
           </form>
         </Panel>
       )}
 
       {/* Submitted schedules list */}
-      <Panel title="Submitted Schedules">
+      <Panel title="Submitted schedules">
         {schedules && schedules.length > 0 ? (
           <div className="space-y-3">
             {schedules.map((s) => (

@@ -236,7 +236,7 @@ function MachineUtilPanel({ machines }: { machines: PlantManagerData['panels']['
             <Link
               key={m.id}
               to={`/mrp/machines/${m.id}`}
-              className="p-2 rounded-md border border-border bg-surface hover:bg-elevated transition-colors"
+              className="p-2 rounded-md border border-default bg-surface hover:bg-elevated transition-colors"
             >
               <div className="text-xs font-medium truncate">{m.code}</div>
               <div className="flex items-center gap-1 mt-1">

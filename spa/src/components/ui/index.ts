@@ -16,13 +16,14 @@ export {
   type ColumnAlign,
 } from './DataTable';
 export { EmptyState } from './EmptyState';
+export { FileInput, type FileInputProps } from './FileInput';
 export { FilterBar, type FilterConfig, type FilterOption } from './FilterBar';
 export { Input, type InputProps } from './Input';
 export { MaskedInput, type MaskedInputProps } from './MaskedInput';
 export { Modal } from './Modal';
 export { Panel } from './Panel';
 export { Radio } from './Radio';
-export { Select, type SelectProps } from './Select';
+export { Select, type SelectProps, type FieldSize } from './Select';
 export { SegmentedControl, ToggleChip, type SegmentedOption } from './SegmentedControl';
 export { SkeletonBlock, SkeletonDetail, SkeletonForm, SkeletonTable } from './Skeleton';
 export { Spinner, FullPageLoader } from './Spinner';

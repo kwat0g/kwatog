@@ -12,7 +12,7 @@ import { Tooltip } from '@/components/ui/Tooltip';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { cn } from '@/lib/cn';
 import type { TrainingMatrixCell, TrainingMatrixCellStatus } from '@/types/hr';
-import { Td, Th, tableCls, trCls } from '@/components/ui/table-cells';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 const STATUS_COLORS: Record<TrainingMatrixCellStatus, string> = {
   trained: 'bg-success-bg border-success',
@@ -168,7 +168,7 @@ export default function TrainingMatrixPage() {
             {/* Category header row */}
             {skillCategories.length > 1 && (
               <thead>
-                <tr>
+                <tr className={theadTrCls}>
                   <Th className="sticky left-0 z-20 bg-canvas" />
                   <Th className="sticky left-0 z-20 bg-canvas" />
                   {skillCategories.map((group) => (
@@ -180,7 +180,7 @@ export default function TrainingMatrixPage() {
               </thead>
             )}
             <thead>
-              <tr>
+              <tr className={theadTrCls}>
                 <Th className="sticky left-0 z-20 bg-canvas min-w-[180px]">
                   Employee
                 </Th>

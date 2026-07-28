@@ -11,6 +11,8 @@ import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
+import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Modal } from '@/components/ui/Modal';
@@ -21,7 +23,7 @@ import { buildDeliveryO2cChain } from '@/lib/chains';
 import { usePermission } from '@/hooks/usePermission';
 import { useChainProgress } from '@/hooks/useChainProgress';
 import type { DeliveryStatus, DeliveryProofType } from '@/types/supplyChain';
-import { Td, Th, tableCls, trCls } from '@/components/ui/table-cells';
+import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 const STATUS_CHIP: Record<DeliveryStatus, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
   scheduled: 'neutral', loading: 'info', in_transit: 'info',
@@ -334,22 +336,23 @@ export default function DeliveryDetailPage() {
             {canUploadProofNow && (
               <div className="border-t border-subtle pt-3">
                 <div className="grid grid-cols-3 gap-2 mb-2">
-                  <select
+                  <Select
                     value={proofType}
                     onChange={(e) => setProofType(e.target.value as DeliveryProofType)}
-                    className="text-sm rounded-md border border-default bg-canvas px-2 py-1.5"
+                    aria-label="Proof type"
                   >
                     <option value="signed_dr">Signed delivery receipt</option>
                     <option value="photo">Photo</option>
                     <option value="customer_po_confirmation">Customer PO confirmation</option>
                     <option value="other">Other</option>
-                  </select>
-                  <input
+                  </Select>
+                  <Input
                     type="text"
                     value={proofNotes}
                     onChange={(e) => setProofNotes(e.target.value)}
                     placeholder="Notes (optional)"
-                    className="col-span-2 text-sm rounded-md border border-default bg-canvas px-2 py-1.5"
+                    aria-label="Proof notes"
+                    containerClassName="col-span-2"
                   />
                 </div>
                 <label className="block w-full">
@@ -378,7 +381,7 @@ export default function DeliveryDetailPage() {
             ) : (
               <table className={tableCls}>
                 <thead>
-                  <tr>
+                  <tr className={theadTrCls}>
                     <Th>Inspection</Th>
                     <Th align="right">Qty</Th>
                     <Th align="right">Unit price</Th>

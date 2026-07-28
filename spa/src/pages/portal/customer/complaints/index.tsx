@@ -7,6 +7,9 @@ import { Panel } from '@/components/ui/Panel';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
+import { Textarea } from '@/components/ui/Textarea';
 import { formatDateTime } from '@/lib/formatDate';
 import type { EightDReportData } from '@/types/b2b';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
@@ -58,43 +61,44 @@ export default function CustomerComplaintsPage() {
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-medium">Complaints</h2>
         <Button variant="primary" size="sm" icon={showForm ? <X size={14} /> : <Plus size={14} />} onClick={() => setShowForm(!showForm)}>
-          {showForm ? 'Cancel' : 'New Complaint'}
+          {showForm ? 'Cancel' : 'New complaint'}
         </Button>
       </div>
 
       {/* New complaint form */}
       {showForm && (
-        <Panel title="Submit a Complaint">
+        <Panel title="Submit a complaint">
           <form onSubmit={(e) => { e.preventDefault(); createMut.mutate(); }} className="flex flex-col gap-3">
-            <div>
-              <label className="text-2xs uppercase tracking-wide text-muted mb-1 block">Severity</label>
-              <select value={severity} onChange={(e) => setSeverity(e.target.value)}
-                className="w-full rounded-md border border-border bg-canvas px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-accent">
-                <option value="minor">Minor</option>
-                <option value="major">Major</option>
-                <option value="critical">Critical</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-2xs uppercase tracking-wide text-muted mb-1 block">Description</label>
-              <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} required
-                className="w-full rounded-md border border-border bg-canvas px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-accent resize-none"
-                placeholder="Describe the issue…" />
-            </div>
-            <div>
-              <label className="text-2xs uppercase tracking-wide text-muted mb-1 block">Affected Quantity</label>
-              <input type="number" value={affectedQty} onChange={(e) => setAffectedQty(e.target.value)} min={0}
-                className="w-full rounded-md border border-border bg-canvas px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-accent" />
-            </div>
-            <Button type="submit" variant="primary" size="sm" loading={createMut.isPending}>
-              Submit Complaint
+            <Select label="Severity" value={severity} onChange={(e) => setSeverity(e.target.value)}>
+              <option value="minor">Minor</option>
+              <option value="major">Major</option>
+              <option value="critical">Critical</option>
+            </Select>
+            <Textarea
+              label="Description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              required
+              placeholder="Describe the issue…"
+            />
+            <Input
+              label="Affected quantity"
+              type="number"
+              min={0}
+              value={affectedQty}
+              onChange={(e) => setAffectedQty(e.target.value)}
+              className="font-mono tabular-nums"
+            />
+            <Button type="submit" variant="primary" size="sm" loading={createMut.isPending} className="self-start">
+              Submit complaint
             </Button>
           </form>
         </Panel>
       )}
 
       {/* Complaints list */}
-      <Panel title="Your Complaints">
+      <Panel title="Your complaints">
         {complaints && complaints.length > 0 ? (
           <table className={tableCls}>
             <thead>
