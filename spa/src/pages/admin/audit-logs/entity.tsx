@@ -47,7 +47,7 @@ function ChangeSummary({ entry }: { entry: AuditLogEntry }) {
         const label = key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
         return (
           <li key={key} className="text-xs flex items-center gap-1.5 flex-wrap">
-            <span className="font-medium text-foreground">{label}</span>
+            <span className="font-medium text-primary">{label}</span>
             {old[key] !== undefined && (
               <span className="font-mono tabular-nums text-muted line-through">
                 {formatFieldValue(old[key])}
@@ -57,7 +57,7 @@ function ChangeSummary({ entry }: { entry: AuditLogEntry }) {
               <ArrowRight size={10} className="text-muted shrink-0" />
             )}
             {nw[key] !== undefined && (
-              <span className="font-mono tabular-nums text-foreground">
+              <span className="font-mono tabular-nums text-primary">
                 {formatFieldValue(nw[key])}
               </span>
             )}
@@ -189,7 +189,7 @@ export default function EntityAuditTrailPage() {
                     }`}
                   />
                   {idx < data.data.length - 1 && (
-                    <div className="w-px flex-1 bg-border" />
+                    <div className="w-px flex-1 bg-border-default" />
                   )}
                 </div>
 

@@ -20,7 +20,6 @@ import type { ChainStep } from '@/types/chain';
 import type { MaintenanceWorkOrderStatus } from '@/types/maintenance';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { Input } from '@/components/ui/Input';
-import { cn } from '@/lib/cn';
 
 const STATUS_FLOW: MaintenanceWorkOrderStatus[] = ['open', 'assigned', 'in_progress', 'completed'];
 const STATUS_CHIP: Record<MaintenanceWorkOrderStatus, 'success' | 'warning' | 'info' | 'danger' | 'neutral'> = {
@@ -148,7 +147,7 @@ export default function MaintenanceWorkOrderDetailPage() {
             {data.spare_parts && data.spare_parts.length > 0 ? (
               <table className={tableCls}>
                 <thead>
-                  <tr className={cn(theadTrCls, 'border-subtle')}>
+                  <tr className={theadTrCls}>
                     <Th>Item</Th>
                     <Th align="right">Qty</Th>
                     <Th align="right">Unit cost</Th>

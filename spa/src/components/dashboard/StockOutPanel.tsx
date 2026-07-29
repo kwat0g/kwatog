@@ -17,7 +17,6 @@ import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
-import { cn } from '@/lib/cn';
 
 interface Props {
   /** Max rows to show. Default 8. */
@@ -109,7 +108,7 @@ export function StockOutPanel({
       <div className="overflow-x-auto">
         <table className={tableCls}>
           <thead>
-            <tr className={cn(theadTrCls, 'border-subtle')}>
+            <tr className={theadTrCls}>
               <Th>Item</Th>
               <Th align="right">On Hand</Th>
               <Th align="right">Safety</Th>

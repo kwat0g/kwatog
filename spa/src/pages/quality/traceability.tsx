@@ -119,7 +119,7 @@ function TraceTree({ result }: { result: TraceabilityResult }) {
       <div className="flex items-center gap-2 text-2xs uppercase tracking-wider text-muted font-medium">
         <span>Match</span>
         <Chip variant="info">{typeLabel}</Chip>
-        <span className="font-mono text-text-primary">{result.term}</span>
+        <span className="font-mono text-primary">{result.term}</span>
       </div>
 
       {result.type === 'batch' && <BatchView result={result} />}

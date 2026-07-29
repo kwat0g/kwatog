@@ -45,14 +45,14 @@ function barClass(woStatus: string | null): string {
   switch (woStatus) {
     case 'in_progress':
     case 'confirmed':
-      return 'bg-info-subtle text-info-fg border-info';
+      return 'bg-info-bg text-info-fg border-info';
     case 'paused':
-      return 'bg-warning-subtle text-warning-fg border-warning';
+      return 'bg-warning-bg text-warning-fg border-warning';
     case 'completed':
     case 'closed':
-      return 'bg-success-subtle text-success-fg border-success';
+      return 'bg-success-bg text-success-fg border-success';
     case 'cancelled':
-      return 'bg-danger-subtle text-danger-fg border-danger';
+      return 'bg-danger-bg text-danger-fg border-danger';
     default:
       return 'bg-elevated text-primary border-default';
   }

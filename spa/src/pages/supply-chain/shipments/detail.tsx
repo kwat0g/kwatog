@@ -201,7 +201,7 @@ export default function ShipmentDetailPage() {
                   </span>
                 </div>
                 {!isLast && (
-                  <div className={['h-0.5 w-10 mb-4', isDone ? 'bg-success' : 'bg-default'].join(' ')} />
+                  <div className={['h-0.5 w-10 mb-4', isDone ? 'bg-success' : 'bg-border-default'].join(' ')} />
                 )}
               </li>
             );

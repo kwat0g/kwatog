@@ -311,7 +311,7 @@ function ApDueThisWeekPanel({
       {items.length === 0 ? (
         <EmptyState size="compact" icon="check-circle" title="Nothing due" description="No bills due in the next 7 days." />
       ) : (
-        <ul className="text-sm divide-y divide-border">
+        <ul className="text-sm divide-y divide-default">
           {items.map((it) => (
             <li key={it.id} className="py-1.5 flex items-center justify-between gap-2">
               <Link to={`/accounting/bills/${it.id}`} className="truncate hover:underline">
@@ -391,7 +391,7 @@ function RecentJesPanel({
       {entries.length === 0 ? (
         <EmptyState size="compact" icon="file-text" title="No journal entries" description="Posted entries will appear here." />
       ) : (
-        <ul className="text-sm divide-y divide-border">
+        <ul className="text-sm divide-y divide-default">
           {entries.slice(0, 6).map((je) => (
             <li key={je.id} className="py-1.5 flex items-center justify-between gap-2">
               <Link to={`/accounting/journal-entries/${je.id}`} className="truncate hover:underline">

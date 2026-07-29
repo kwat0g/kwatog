@@ -154,7 +154,7 @@ function PipelineRow({
       className={cn(
         trCls,
         period.exists ? 'cursor-pointer' : 'opacity-60',
-        period.status === 'draft' && 'bg-warning-bg/10',
+        period.status === 'draft' && 'bg-warning-bg',
       )}
       onClick={handleRowClick}
     >

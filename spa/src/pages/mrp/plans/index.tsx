@@ -112,7 +112,7 @@ export default function MrpPlansListPage() {
               <Activity size={14} className="text-muted" />
               <div className="flex items-center gap-3">
                 <span className="text-muted">Last MRP run</span>
-                <span className="font-mono tabular-nums text-default">{formatDateTime(lastRun.data.run_at)}</span>
+                <span className="font-mono tabular-nums text-primary">{formatDateTime(lastRun.data.run_at)}</span>
                 <Chip variant={lastRun.data.triggered_by === 'scheduled' ? 'info' : 'neutral'}>
                   {lastRun.data.triggered_by}
                 </Chip>
@@ -130,9 +130,9 @@ export default function MrpPlansListPage() {
               </div>
             </div>
             <div className="flex items-center gap-4 font-mono tabular-nums text-muted">
-              <span><span className="text-default">{lastRun.data.shortages_found}</span> shortages</span>
-              <span><span className="text-default">{lastRun.data.prs_created}</span> PRs created</span>
-              <span><span className="text-default">{lastRun.data.prs_updated}</span> PRs updated</span>
+              <span><span className="text-primary">{lastRun.data.shortages_found}</span> shortages</span>
+              <span><span className="text-primary">{lastRun.data.prs_created}</span> PRs created</span>
+              <span><span className="text-primary">{lastRun.data.prs_updated}</span> PRs updated</span>
               {lastRun.data.duration_ms != null && (
                 <span className="text-text-subtle">{(lastRun.data.duration_ms / 1000).toFixed(1)}s</span>
               )}

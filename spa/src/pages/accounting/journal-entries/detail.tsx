@@ -15,8 +15,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
-import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
-import { cn } from '@/lib/cn';
+import { Td, Th, tableCls, theadTrCls, totalsTrCls, trCls } from '@/components/ui/table-cells';
 
 const STATUS_VARIANT: Record<string, ChipVariant> = {
   draft: 'warning', posted: 'success', reversed: 'neutral',
@@ -144,7 +143,7 @@ export default function JournalEntryDetailPage() {
                       <Td align="right" mono>{Number(l.credit) > 0 ? formatPeso(l.credit) : ''}</Td>
                     </tr>
                   ))}
-                  <tr className={cn(trCls, 'border-t-2 border-primary font-medium')}>
+                  <tr className={totalsTrCls}>
                     <Td align="right" mono colSpan={3}>Totals</Td>
                     <Td align="right" mono>{formatPeso(je.total_debit)}</Td>
                     <Td align="right" mono>{formatPeso(je.total_credit)}</Td>

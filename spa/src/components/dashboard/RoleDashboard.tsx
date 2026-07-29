@@ -11,7 +11,6 @@ import { Button } from '@/components/ui/Button';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { alertLink, chainStageLink, kpiLink } from '@/lib/dashboardLinks';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
-import { cn } from '@/lib/cn';
 
 interface ChainStage { key: string; label: string; count: number; percent: number; color?: string }
 interface AlertItem { kind: string; label: string; count: number; severity?: string }
@@ -150,7 +149,7 @@ function RolePanels({ envelope }: { envelope: DashboardEnvelope }) {
         <Panel title="Machine utilisation">
           <table className={tableCls}>
             <thead>
-              <tr className={cn(theadTrCls, 'border-subtle')}>
+              <tr className={theadTrCls}>
                 <Th>Code</Th>
                 <Th>Name</Th>
                 <Th>Status</Th>

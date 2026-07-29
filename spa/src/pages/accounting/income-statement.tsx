@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/Input';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatPeso } from '@/lib/formatNumber';
-import { Td, tableCls, trCls } from '@/components/ui/table-cells';
+import { Td, tableCls, totalsTrCls, trCls } from '@/components/ui/table-cells';
 import { cn } from '@/lib/cn';
 
 export default function IncomeStatementPage() {
@@ -52,9 +52,9 @@ export default function IncomeStatementPage() {
               <tbody>
                 <Section label="REVENUE" rows={data.revenue.accounts} totalLabel="Total Revenue" total={data.revenue.total} />
                 {data.cogs.accounts.length > 0 && <Section label="COST OF GOODS SOLD" rows={data.cogs.accounts} totalLabel="Total COGS" total={data.cogs.total} />}
-                <tr className={cn(trCls, 'border-t-2 border-primary font-medium')}><Td>GROSS PROFIT</Td><Td align="right" mono>{formatPeso(data.gross_profit)}</Td></tr>
+                <tr className={totalsTrCls}><Td>GROSS PROFIT</Td><Td align="right" mono>{formatPeso(data.gross_profit)}</Td></tr>
                 <Section label="OPERATING EXPENSES" rows={data.operating_expenses.accounts} totalLabel="Total OpEx" total={data.operating_expenses.total} />
-                <tr className={cn(trCls, 'border-t-2 border-primary font-medium')}>
+                <tr className={totalsTrCls}>
                   <Td className="text-base">NET INCOME</Td>
                   <Td align="right" mono className={' text-base ' + (Number(data.net_income) >= 0 ? 'text-success-fg' : 'text-danger-fg')}>{formatPeso(data.net_income)}</Td>
                 </tr>

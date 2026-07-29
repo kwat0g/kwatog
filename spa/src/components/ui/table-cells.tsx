@@ -34,6 +34,16 @@ export const trCls = 'h-8 border-b border-subtle hover:bg-subtle';
 /** Header row classes. */
 export const theadTrCls = 'border-b border-default';
 
+/**
+ * Totals / grand-total row — a heavier rule above it and 500 weight.
+ *
+ * Colours the top edge specifically (`border-t-strong`, not `border-primary`)
+ * because `cn` is plain clsx: `trCls` already carries `border-subtle`, and an
+ * all-sides colour appended after it loses on stylesheet order, silently
+ * leaving the rule hairline-grey. A side-specific utility cannot collide.
+ */
+export const totalsTrCls = 'h-8 border-t-2 border-t-strong font-medium';
+
 /** Table element classes. */
 export const tableCls = 'w-full border-collapse text-sm';
 

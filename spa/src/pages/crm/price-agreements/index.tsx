@@ -57,7 +57,7 @@ export default function PriceAgreementsListPage() {
       cell: (r) => (
         <Link
           to={`/crm/price-agreements/${r.id}/edit`}
-          className="p-1 rounded text-muted hover:text-default hover:bg-elevated transition-colors inline-flex items-center justify-center"
+          className="p-1 rounded text-muted hover:text-primary hover:bg-elevated transition-colors inline-flex items-center justify-center"
           aria-label="Edit agreement"
         >
           <Pencil size={14} />

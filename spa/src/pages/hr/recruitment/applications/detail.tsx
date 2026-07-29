@@ -188,7 +188,7 @@ export default function ApplicationDetailPage() {
                   {STAGE_LABEL[stage]}
                 </div>
                 {idx < PIPELINE_STAGES.length - 1 && (
-                  <div className={cn('h-0.5 w-4', isDone ? 'bg-success/40' : 'bg-border')} />
+                  <div className={cn('h-0.5 w-4', isDone ? 'bg-success/40' : 'bg-border-default')} />
                 )}
               </div>
             );

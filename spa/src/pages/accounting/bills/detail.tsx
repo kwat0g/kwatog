@@ -28,7 +28,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
 import { numberInputProps } from '@/lib/numberInput';
-import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { Td, Th, tableCls, theadTrCls, totalsTrCls, trCls } from '@/components/ui/table-cells';
 import { cn } from '@/lib/cn';
 
 const paymentSchema = z.object({
@@ -231,7 +231,7 @@ export default function BillDetailPage() {
                 ))}
                 <tr className={trCls}><Td align="right" mono className="text-muted" colSpan={5}>Subtotal</Td><Td align="right" mono>{formatPeso(bill.subtotal)}</Td></tr>
                 {bill.is_vatable && <tr className={trCls}><Td align="right" mono className="text-muted" colSpan={5}>VAT (12%)</Td><Td align="right" mono>{formatPeso(bill.vat_amount)}</Td></tr>}
-                <tr className={cn(trCls, 'border-t-2 border-primary font-medium')}><Td align="right" mono colSpan={5}>Total</Td><Td align="right" mono>{formatPeso(bill.total_amount)}</Td></tr>
+                <tr className={totalsTrCls}><Td align="right" mono colSpan={5}>Total</Td><Td align="right" mono>{formatPeso(bill.total_amount)}</Td></tr>
               </tbody>
             </table>
           </Panel>

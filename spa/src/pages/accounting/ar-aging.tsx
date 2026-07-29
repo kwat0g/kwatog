@@ -9,8 +9,7 @@ import { Input } from '@/components/ui/Input';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatPeso } from '@/lib/formatNumber';
-import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
-import { cn } from '@/lib/cn';
+import { Td, Th, tableCls, theadTrCls, totalsTrCls, trCls } from '@/components/ui/table-cells';
 
 export default function ArAgingPage() {
   const [asOf, setAsOf] = useState(new Date().toISOString().slice(0, 10));
@@ -69,7 +68,7 @@ export default function ArAgingPage() {
                     <Td align="right" mono className="font-medium">{formatPeso(r.total)}</Td>
                   </tr>
                 ))}
-                <tr className={cn(trCls, 'border-t-2 border-primary font-medium')}>
+                <tr className={totalsTrCls}>
                   <Td>TOTAL</Td>
                   <Td align="right" mono>{formatPeso(data.buckets.current)}</Td>
                   <Td align="right" mono>{formatPeso(data.buckets.d1_30)}</Td>

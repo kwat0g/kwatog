@@ -185,7 +185,7 @@ export default function AlertsListPage() {
                         />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-sm font-medium text-default">{a.title}</span>
+                            <span className="text-sm font-medium text-primary">{a.title}</span>
                             <Chip variant="neutral">{TYPE_LABEL[a.type] ?? a.type}</Chip>
                             {!a.is_read && !a.is_dismissed && (
                               <Chip variant="info">new</Chip>

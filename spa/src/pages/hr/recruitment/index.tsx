@@ -99,12 +99,12 @@ export default function RecruitmentDashboard() {
           <p className="text-2xl font-medium font-mono tabular-nums">{openPostings.length}</p>
           <p className="text-2xs text-muted font-medium uppercase tracking-wider">Open Postings</p>
         </div>
-        <div className="h-8 w-px bg-border" />
+        <div className="h-8 w-px bg-border-default" />
         <div>
           <p className="text-2xl font-medium font-mono tabular-nums">{totalApps}</p>
           <p className="text-2xs text-muted font-medium uppercase tracking-wider">Total Applications</p>
         </div>
-        <div className="h-8 w-px bg-border" />
+        <div className="h-8 w-px bg-border-default" />
         {PIPELINE_STAGES.map((stage) => (
           <div key={stage}>
             <p className="text-lg font-medium font-mono tabular-nums">{stageCounts[stage] ?? 0}</p>

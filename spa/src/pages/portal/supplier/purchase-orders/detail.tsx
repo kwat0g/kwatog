@@ -312,7 +312,7 @@ export default function SupplierPurchaseOrderDetailPage() {
       {/* Shipping Documents */}
       {shippingDocs && shippingDocs.length > 0 && (
         <Panel title={`Shipping Documents (${shippingDocs.length})`}>
-          <div className="divide-y divide-border/50">
+          <div className="divide-y divide-default/50">
             {shippingDocs.map((doc) => (
               <div key={doc.id} className="flex items-center justify-between py-2 px-3">
                 <div className="flex items-center gap-3 min-w-0">

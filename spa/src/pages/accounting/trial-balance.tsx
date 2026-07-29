@@ -9,8 +9,7 @@ import { Input } from '@/components/ui/Input';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatPeso } from '@/lib/formatNumber';
-import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
-import { cn } from '@/lib/cn';
+import { Td, Th, tableCls, theadTrCls, totalsTrCls, trCls } from '@/components/ui/table-cells';
 
 export default function TrialBalancePage() {
   const today = new Date();
@@ -70,7 +69,7 @@ export default function TrialBalancePage() {
                     <Td align="right" mono>{Number(a.credit_total) > 0 ? formatPeso(a.credit_total) : ''}</Td>
                   </tr>
                 ))}
-                <tr className={cn(trCls, 'border-t-2 border-primary font-medium')}>
+                <tr className={totalsTrCls}>
                   <Td align="right" mono colSpan={3}>Totals</Td>
                   <Td align="right" mono>{formatPeso(data.totals.debit)}</Td>
                   <Td align="right" mono>{formatPeso(data.totals.credit)}</Td>

@@ -16,7 +16,6 @@ import { Pencil } from 'lucide-react';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
-import { cn } from '@/lib/cn';
 
 export default function AssetDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
@@ -93,7 +92,7 @@ export default function AssetDetailPage() {
             {data.depreciations && data.depreciations.length > 0 ? (
               <table className={tableCls}>
                 <thead>
-                  <tr className={cn(theadTrCls, 'border-subtle')}>
+                  <tr className={theadTrCls}>
                     <Th>Period</Th>
                     <Th align="right">Amount</Th>
                     <Th align="right">Accumulated</Th>

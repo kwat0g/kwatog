@@ -162,12 +162,12 @@ export function ForecastPanel({
 
                 {/* Divider line between historical and forecast */}
                 {isLastHistorical && hasForecast && (
-                  <div className="absolute right-0 top-0 bottom-0 w-px bg-border" />
+                  <div className="absolute right-0 top-0 bottom-0 w-px bg-border-default" />
                 )}
 
                 {/* Tooltip on hover */}
                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-10">
-                  <div className="bg-popover text-popover-foreground text-xs px-2 py-1 rounded-md whitespace-nowrap">
+                  <div className="bg-elevated text-primary text-xs px-2 py-1 rounded-md whitespace-nowrap">
                     <span className="font-medium">{monthLabel}</span>
                     <span className="ml-1 font-mono">{formatValue(p.value)}</span>
                     {p.isForecast && p.confidence != null && (

@@ -27,8 +27,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
 import { numberInputProps } from '@/lib/numberInput';
-import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
-import { cn } from '@/lib/cn';
+import { Td, Th, tableCls, theadTrCls, totalsTrCls, trCls } from '@/components/ui/table-cells';
 
 const collectionSchema = z.object({
   cash_account_id:  z.string().min(1, 'Required'),
@@ -208,7 +207,7 @@ export default function InvoiceDetailPage() {
                 ))}
                 <tr className={trCls}><Td align="right" mono className="text-muted" colSpan={5}>Subtotal</Td><Td align="right" mono>{formatPeso(invoice.subtotal)}</Td></tr>
                 {invoice.is_vatable && <tr className={trCls}><Td align="right" mono className="text-muted" colSpan={5}>VAT (12%)</Td><Td align="right" mono>{formatPeso(invoice.vat_amount)}</Td></tr>}
-                <tr className={cn(trCls, 'border-t-2 border-primary font-medium')}><Td align="right" mono colSpan={5}>Total</Td><Td align="right" mono>{formatPeso(invoice.total_amount)}</Td></tr>
+                <tr className={totalsTrCls}><Td align="right" mono colSpan={5}>Total</Td><Td align="right" mono>{formatPeso(invoice.total_amount)}</Td></tr>
               </tbody>
             </table>
           </Panel>

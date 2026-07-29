@@ -10,7 +10,7 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatDecimal } from '@/lib/formatNumber';
 import type { TranslatedLine } from '@/types/accounting';
-import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { Td, Th, tableCls, theadTrCls, totalsTrCls, trCls } from '@/components/ui/table-cells';
 import { Tabs } from '@/components/ui/Tabs';
 import { cn } from '@/lib/cn';
 
@@ -152,7 +152,7 @@ function TranslatedIncomeStatement({ from, to, currency }: { from: string; to: s
         Gross Profit: <span className="font-medium ml-2">{currency} {formatDecimal(s.gross_profit)}</span>
       </div>
       <TransSection title="Operating Expenses" rows={s.operating_expenses.accounts} total={s.operating_expenses.total} currency={currency} />
-      <div className="flex justify-end text-sm font-mono tabular-nums border-t-2 border-primary pt-2">
+      <div className="flex justify-end text-sm font-mono tabular-nums border-t-2 border-t-strong pt-2">
         Net Income: <span className="font-medium ml-2">{currency} {formatDecimal(s.net_income)}</span>
       </div>
     </div>
@@ -188,7 +188,7 @@ function TranslatedTrialBalance({ from, to, currency }: { from: string; to: stri
                 <Td align="right" mono>{formatDecimal(a.credit_total)}</Td>
               </tr>
             ))}
-            <tr className={cn(trCls, 'border-t-2 border-primary font-medium')}>
+            <tr className={totalsTrCls}>
               <Td>Totals</Td>
               <Td align="right" mono>{formatDecimal(data.totals.debit)}</Td>
               <Td align="right" mono>{formatDecimal(data.totals.credit)}</Td>
@@ -214,7 +214,7 @@ function TransSection({ title, rows, total, currency, highlightCode }: {
         <tbody>
           {rows.length === 0 && <tr className={trCls}><Td className="text-muted italic" colSpan={2}>No movement</Td></tr>}
           {rows.map((r) => (
-            <tr key={r.code ?? r.name} className={cn(trCls, r.code === highlightCode && 'bg-warning-subtle')}>
+            <tr key={r.code ?? r.name} className={cn(trCls, r.code === highlightCode && 'bg-warning-bg')}>
               <Td>
                 {r.code && <span className="font-mono text-muted">{r.code}</span>} {r.name}
                 <span className="block text-2xs text-muted">PHP {formatDecimal(r.amount_php)} @ {Number(r.rate_applied).toFixed(6)}</span>
@@ -222,7 +222,7 @@ function TransSection({ title, rows, total, currency, highlightCode }: {
               <Td align="right" mono className="align-top">{currency} {formatDecimal(r.amount)}</Td>
             </tr>
           ))}
-          <tr className={cn(trCls, 'border-t-2 border-primary font-medium')}>
+          <tr className={totalsTrCls}>
             <Td>Total</Td>
             <Td align="right" mono>{currency} {formatDecimal(total)}</Td>
           </tr>

@@ -253,7 +253,7 @@ function ApplyLoanSheet({
               <div className="max-h-36 overflow-y-auto">
                 <table className={cn(tableCls, 'font-mono tabular-nums')}>
                   <thead>
-                    <tr className={cn(theadTrCls, 'border-subtle')}>
+                    <tr className={theadTrCls}>
                       <Th className="font-normal">Period</Th>
                       <Th align="right" className="font-normal">Deduction</Th>
                       <Th align="right" className="font-normal">Balance</Th>

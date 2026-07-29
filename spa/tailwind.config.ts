@@ -3,6 +3,13 @@ import type { Config } from 'tailwindcss';
 /**
  * All token values come from spa/src/styles/tokens.css (CSS variables).
  * NEVER hard-code colors or fonts in components — extend here instead.
+ *
+ * Every colour is wrapped in `color-mix(... calc(<alpha-value> * 100%) ...)`.
+ * The tokens are hex literals behind CSS variables, and Tailwind cannot split a
+ * `var()` into channels, so a plain `'var(--accent)'` makes `bg-accent/10` emit
+ * *nothing at all* — the class silently disappears from the stylesheet. The
+ * `<alpha-value>` placeholder plus `color-mix` gives every token working opacity
+ * modifiers (`bg-accent/10`, `border-danger/30`, `bg-landing-canvas/85`).
  */
 const config: Config = {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
@@ -11,98 +18,109 @@ const config: Config = {
     extend: {
       colors: {
         // Canvas
-        canvas: 'var(--bg-canvas)',
-        surface: 'var(--bg-surface)',
-        elevated: 'var(--bg-elevated)',
-        subtle: 'var(--bg-subtle)',
+        canvas: 'color-mix(in srgb, var(--bg-canvas) calc(<alpha-value> * 100%), transparent)',
+        surface: 'color-mix(in srgb, var(--bg-surface) calc(<alpha-value> * 100%), transparent)',
+        elevated: 'color-mix(in srgb, var(--bg-elevated) calc(<alpha-value> * 100%), transparent)',
+        subtle: 'color-mix(in srgb, var(--bg-subtle) calc(<alpha-value> * 100%), transparent)',
 
         // Text — exposed as text-primary / text-secondary / text-muted / text-subtle
-        primary: 'var(--text-primary)',
-        secondary: 'var(--text-secondary)',
-        muted: 'var(--text-muted)',
-        'text-subtle': 'var(--text-subtle)',
+        primary: 'color-mix(in srgb, var(--text-primary) calc(<alpha-value> * 100%), transparent)',
+        secondary: 'color-mix(in srgb, var(--text-secondary) calc(<alpha-value> * 100%), transparent)',
+        muted: 'color-mix(in srgb, var(--text-muted) calc(<alpha-value> * 100%), transparent)',
+        'text-subtle': 'color-mix(in srgb, var(--text-subtle) calc(<alpha-value> * 100%), transparent)',
 
         // Borders
-        'border-subtle': 'var(--border-subtle)',
-        'border-default': 'var(--border-default)',
-        'border-strong': 'var(--border-strong)',
+        'border-subtle': 'color-mix(in srgb, var(--border-subtle) calc(<alpha-value> * 100%), transparent)',
+        'border-default': 'color-mix(in srgb, var(--border-default) calc(<alpha-value> * 100%), transparent)',
+        'border-strong': 'color-mix(in srgb, var(--border-strong) calc(<alpha-value> * 100%), transparent)',
 
         // Convenience: same gray ramp exposed as bg/text utilities
         // (e.g. bg-strong, text-strong) so neutral fills don't need
         // module-specific tokens.
-        strong: 'var(--border-strong)',
+        strong: 'color-mix(in srgb, var(--border-strong) calc(<alpha-value> * 100%), transparent)',
 
         // Accent
         accent: {
-          DEFAULT: 'var(--accent)',
-          hover: 'var(--accent-hover)',
-          fg: 'var(--accent-fg)',
+          DEFAULT: 'color-mix(in srgb, var(--accent) calc(<alpha-value> * 100%), transparent)',
+          hover: 'color-mix(in srgb, var(--accent-hover) calc(<alpha-value> * 100%), transparent)',
+          fg: 'color-mix(in srgb, var(--accent-fg) calc(<alpha-value> * 100%), transparent)',
         },
 
         // Links — colored per design-system ("color is for meaning")
         link: {
-          DEFAULT: 'var(--text-link)',
-          hover: 'var(--text-link-hover)',
+          DEFAULT: 'color-mix(in srgb, var(--text-link) calc(<alpha-value> * 100%), transparent)',
+          hover: 'color-mix(in srgb, var(--text-link-hover) calc(<alpha-value> * 100%), transparent)',
         },
 
         // Semantic
         success: {
-          DEFAULT: 'var(--success)',
-          bg: 'var(--success-bg)',
-          fg: 'var(--success-fg)',
+          DEFAULT: 'color-mix(in srgb, var(--success) calc(<alpha-value> * 100%), transparent)',
+          bg: 'color-mix(in srgb, var(--success-bg) calc(<alpha-value> * 100%), transparent)',
+          fg: 'color-mix(in srgb, var(--success-fg) calc(<alpha-value> * 100%), transparent)',
         },
         warning: {
-          DEFAULT: 'var(--warning)',
-          bg: 'var(--warning-bg)',
-          fg: 'var(--warning-fg)',
+          DEFAULT: 'color-mix(in srgb, var(--warning) calc(<alpha-value> * 100%), transparent)',
+          bg: 'color-mix(in srgb, var(--warning-bg) calc(<alpha-value> * 100%), transparent)',
+          fg: 'color-mix(in srgb, var(--warning-fg) calc(<alpha-value> * 100%), transparent)',
         },
         danger: {
-          DEFAULT: 'var(--danger)',
-          bg: 'var(--danger-bg)',
-          fg: 'var(--danger-fg)',
+          DEFAULT: 'color-mix(in srgb, var(--danger) calc(<alpha-value> * 100%), transparent)',
+          bg: 'color-mix(in srgb, var(--danger-bg) calc(<alpha-value> * 100%), transparent)',
+          fg: 'color-mix(in srgb, var(--danger-fg) calc(<alpha-value> * 100%), transparent)',
         },
         info: {
-          DEFAULT: 'var(--info)',
-          bg: 'var(--info-bg)',
-          fg: 'var(--info-fg)',
+          DEFAULT: 'color-mix(in srgb, var(--info) calc(<alpha-value> * 100%), transparent)',
+          bg: 'color-mix(in srgb, var(--info-bg) calc(<alpha-value> * 100%), transparent)',
+          fg: 'color-mix(in srgb, var(--info-fg) calc(<alpha-value> * 100%), transparent)',
         },
         purple: {
-          DEFAULT: 'var(--purple)',
-          bg: 'var(--purple-bg)',
-          fg: 'var(--purple-fg)',
+          DEFAULT: 'color-mix(in srgb, var(--purple) calc(<alpha-value> * 100%), transparent)',
+          bg: 'color-mix(in srgb, var(--purple-bg) calc(<alpha-value> * 100%), transparent)',
+          fg: 'color-mix(in srgb, var(--purple-fg) calc(<alpha-value> * 100%), transparent)',
         },
 
         // Focus ring
-        ring: 'var(--ring)',
+        ring: 'color-mix(in srgb, var(--ring) calc(<alpha-value> * 100%), transparent)',
 
         // Landing page palette — light monochrome + one indigo accent.
         landing: {
-          canvas: 'var(--landing-canvas)',
-          surface: 'var(--landing-surface)',
-          elevated: 'var(--landing-elevated)',
-          subtle: 'var(--landing-subtle)',
-          border: 'var(--landing-border)',
-          'border-strong': 'var(--landing-border-strong)',
-          text: 'var(--landing-text)',
-          'text-secondary': 'var(--landing-text-secondary)',
-          muted: 'var(--landing-muted)',
-          'subtle-text': 'var(--landing-subtle-text)',
-          accent: 'var(--landing-accent)',
-          'accent-hover': 'var(--landing-accent-hover)',
-          'accent-soft': 'var(--landing-accent-soft)',
-          'accent-fg': 'var(--landing-accent-fg)',
-          'accent-glow': 'var(--landing-accent-glow)',
-          ink: 'var(--landing-ink)',
-          line: 'var(--landing-line)',
-          grid: 'var(--landing-grid)',
+          canvas: 'color-mix(in srgb, var(--landing-canvas) calc(<alpha-value> * 100%), transparent)',
+          surface: 'color-mix(in srgb, var(--landing-surface) calc(<alpha-value> * 100%), transparent)',
+          elevated: 'color-mix(in srgb, var(--landing-elevated) calc(<alpha-value> * 100%), transparent)',
+          subtle: 'color-mix(in srgb, var(--landing-subtle) calc(<alpha-value> * 100%), transparent)',
+          border: 'color-mix(in srgb, var(--landing-border) calc(<alpha-value> * 100%), transparent)',
+          'border-strong': 'color-mix(in srgb, var(--landing-border-strong) calc(<alpha-value> * 100%), transparent)',
+          text: 'color-mix(in srgb, var(--landing-text) calc(<alpha-value> * 100%), transparent)',
+          'text-secondary': 'color-mix(in srgb, var(--landing-text-secondary) calc(<alpha-value> * 100%), transparent)',
+          muted: 'color-mix(in srgb, var(--landing-muted) calc(<alpha-value> * 100%), transparent)',
+          'subtle-text': 'color-mix(in srgb, var(--landing-subtle-text) calc(<alpha-value> * 100%), transparent)',
+          accent: 'color-mix(in srgb, var(--landing-accent) calc(<alpha-value> * 100%), transparent)',
+          'accent-hover': 'color-mix(in srgb, var(--landing-accent-hover) calc(<alpha-value> * 100%), transparent)',
+          'accent-soft': 'color-mix(in srgb, var(--landing-accent-soft) calc(<alpha-value> * 100%), transparent)',
+          'accent-fg': 'color-mix(in srgb, var(--landing-accent-fg) calc(<alpha-value> * 100%), transparent)',
+          'accent-glow': 'color-mix(in srgb, var(--landing-accent-glow) calc(<alpha-value> * 100%), transparent)',
+          ink: 'color-mix(in srgb, var(--landing-ink) calc(<alpha-value> * 100%), transparent)',
+          line: 'color-mix(in srgb, var(--landing-line) calc(<alpha-value> * 100%), transparent)',
+          grid: 'color-mix(in srgb, var(--landing-grid) calc(<alpha-value> * 100%), transparent)',
         },
       },
 
+      // Border-only aliases: `border-default` / `border-subtle` / `border-strong`
+      // read better than `border-border-default`, and DEFAULT lets a bare
+      // `border` pick up the token.
       borderColor: {
-        DEFAULT: 'var(--border-default)',
-        subtle: 'var(--border-subtle)',
-        default: 'var(--border-default)',
-        strong: 'var(--border-strong)',
+        DEFAULT: 'color-mix(in srgb, var(--border-default) calc(<alpha-value> * 100%), transparent)',
+        subtle: 'color-mix(in srgb, var(--border-subtle) calc(<alpha-value> * 100%), transparent)',
+        default: 'color-mix(in srgb, var(--border-default) calc(<alpha-value> * 100%), transparent)',
+        strong: 'color-mix(in srgb, var(--border-strong) calc(<alpha-value> * 100%), transparent)',
+      },
+
+      // `divide-*` follows `border-*` so a divided list uses the same ramp.
+      divideColor: {
+        DEFAULT: 'color-mix(in srgb, var(--border-default) calc(<alpha-value> * 100%), transparent)',
+        subtle: 'color-mix(in srgb, var(--border-subtle) calc(<alpha-value> * 100%), transparent)',
+        default: 'color-mix(in srgb, var(--border-default) calc(<alpha-value> * 100%), transparent)',
+        strong: 'color-mix(in srgb, var(--border-strong) calc(<alpha-value> * 100%), transparent)',
       },
 
       fontFamily: {

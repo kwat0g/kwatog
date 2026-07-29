@@ -156,7 +156,7 @@ export default function ActionCenterPage() {
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-medium text-default">{item.title}</span>
+                          <span className="text-sm font-medium text-primary">{item.title}</span>
                           <Chip variant={PRIORITY_VARIANT[item.priority]}>{item.priority}</Chip>
                           {item.is_overdue && <Chip variant="danger">overdue</Chip>}
                           <Chip variant="neutral">{meta.label}</Chip>
@@ -175,7 +175,7 @@ export default function ActionCenterPage() {
                           {item.due_at && <span title={formatDateTime(item.due_at)}>Due {formatRelative(item.due_at)}</span>}
                         </span>
                       </span>
-                      <ChevronRight size={14} className="mt-2 shrink-0 text-text-subtle group-hover:text-default" />
+                      <ChevronRight size={14} className="mt-2 shrink-0 text-text-subtle group-hover:text-primary" />
                     </button>
                   );
                 })}
