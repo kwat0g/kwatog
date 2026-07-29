@@ -5,6 +5,7 @@ import { workOrdersApi } from '@/api/maintenance/workOrders';
 import { useAuthStore } from '@/stores/authStore';
 import { RefreshCw, Clock, AlertTriangle } from 'lucide-react';
 import { formatDate } from '@/lib/formatDate';
+import { Button } from '@/components/ui/Button';
 import type {
   MaintenanceWorkOrder,
   MaintenanceWorkOrderStatus,
@@ -51,15 +52,16 @@ export default function MobileMaintenanceList() {
       {/* Header + refresh */}
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-medium">Work Orders</h1>
-        <button
-          type="button"
-          onClick={() => refetch()}
+        <Button
+          variant="ghost"
+          size="lg"
+          className="min-h-[44px] text-secondary"
+          icon={<RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />}
           disabled={isFetching}
-          className="inline-flex items-center gap-1.5 text-sm text-secondary min-h-[44px] px-3 rounded focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 disabled:opacity-50"
+          onClick={() => refetch()}
         >
-          <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
           Refresh
-        </button>
+        </Button>
       </div>
 
       {/* Empty state */}
@@ -69,14 +71,15 @@ export default function MobileMaintenanceList() {
             {tab === 'my_assigned' ? 'No work orders assigned to you.' : 'No open work orders.'}
           </p>
           <p className="text-sm mt-1">Pull down or tap refresh to check again.</p>
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="lg"
+            className="mt-4 min-h-[44px]"
+            icon={<RefreshCw className="w-4 h-4" />}
             onClick={() => refetch()}
-            className="mt-4 inline-flex items-center gap-2 text-sm text-accent min-h-[44px] px-4 rounded focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
           >
-            <RefreshCw className="w-4 h-4" />
             Refresh
-          </button>
+          </Button>
         </div>
       )}
 
@@ -199,13 +202,9 @@ function ErrorRetry({ onRetry }: { onRetry: () => void }) {
   return (
     <div className="py-12 text-center" role="alert">
       <div className="text-danger mb-2">Could not load work orders.</div>
-      <button
-        type="button"
-        onClick={onRetry}
-        className="text-sm underline min-h-[44px] px-3 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 rounded"
-      >
+      <Button variant="secondary" size="lg" className="min-h-[44px]" onClick={onRetry}>
         Try again
-      </button>
+      </Button>
     </div>
   );
 }

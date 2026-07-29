@@ -11,6 +11,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { formatDecimal } from '@/lib/formatNumber';
 import type { TranslatedLine } from '@/types/accounting';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { Tabs } from '@/components/ui/Tabs';
 import { cn } from '@/lib/cn';
 
 type Tab = 'balance-sheet' | 'income-statement' | 'trial-balance';
@@ -42,23 +43,23 @@ export default function ParentPackPage() {
       />
 
       <div className="px-5 pt-3">
-        <div className="flex items-center gap-1 border-b border-default">
-          {TABS.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={
-                'px-3 py-2 text-xs border-b-2 -mb-[1px] ' +
-                (tab === t.key ? 'text-primary border-accent' : 'text-muted border-transparent hover:text-primary')
-              }
-            >{t.label}</button>
-          ))}
-          <div className="ml-auto pb-1">
-            <Select value={currency} onChange={(e) => setCurrency(e.target.value)} className="w-28">
+        <Tabs
+          items={TABS}
+          value={tab}
+          onChange={setTab}
+          label="Financial statement"
+          trailing={
+            <Select
+              fieldSize="sm"
+              aria-label="Reporting currency"
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value)}
+              containerClassName="w-24"
+            >
               {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
             </Select>
-          </div>
-        </div>
+          }
+        />
       </div>
 
       <div className="px-5 py-3 border-b border-default flex items-end gap-3">

@@ -22,6 +22,7 @@ import { Chip, type ChipVariant } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
 import { SkeletonTable } from '@/components/ui/Skeleton';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { filterActionItems } from '@/lib/actionCenter';
 import { cn } from '@/lib/cn';
 import { formatDateTime, formatRelative } from '@/lib/formatDate';
@@ -101,28 +102,18 @@ export default function ActionCenterPage() {
 
           <section className="rounded-md border border-default bg-canvas">
             <div className="p-3 border-b border-subtle flex flex-col lg:flex-row lg:items-center gap-3">
-              <div className="flex gap-1.5 flex-wrap flex-1">
-                {FILTERS.map((filter) => {
-                  const count = filter.value === 'all'
-                    ? summary?.total
-                    : summary?.by_category[filter.value];
-                  return (
-                    <button
-                      key={filter.value}
-                      type="button"
-                      onClick={() => setCategory(filter.value)}
-                      aria-pressed={category === filter.value}
-                      className={cn(
-                        'px-2.5 py-1.5 rounded-md text-xs border transition-colors',
-                        category === filter.value
-                          ? 'bg-elevated border-default text-default font-medium'
-                          : 'border-transparent text-muted hover:text-default hover:bg-elevated',
-                      )}
-                    >
-                      {filter.label}{typeof count === 'number' ? ` · ${count}` : ''}
-                    </button>
-                  );
-                })}
+              <div className="flex-1 overflow-x-auto">
+                <SegmentedControl
+                  size="sm"
+                  label="Action category"
+                  value={category}
+                  onChange={setCategory}
+                  options={FILTERS.map((filter) => ({
+                    value: filter.value,
+                    label: filter.label,
+                    count: filter.value === 'all' ? summary?.total : summary?.by_category[filter.value],
+                  }))}
+                />
               </div>
               <Input
                 aria-label="Search action queue"

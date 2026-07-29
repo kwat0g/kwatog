@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
+import { ToggleChip } from '@/components/ui/SegmentedControl';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { cn } from '@/lib/cn';
 import type {
@@ -147,24 +148,13 @@ export default function CalendarPage() {
         {ALL_LAYERS.map((l) => {
           const active = activeLayers.includes(l.key);
           return (
-            <button
-              key={l.key}
-              type="button"
-              onClick={() => toggleLayer(l.key)}
-              className={cn(
-                'inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium border transition-colors',
-                active
-                  ? 'border-default bg-elevated text-primary'
-                  : 'border-subtle text-muted hover:bg-elevated',
-              )}
-              aria-pressed={active}
-            >
+            <ToggleChip key={l.key} active={active} onClick={() => toggleLayer(l.key)}>
               <span
                 className={cn('inline-block w-2 h-2 rounded-full', VARIANT_CLASS[l.variant])}
                 aria-hidden
               />
               {l.label}
-            </button>
+            </ToggleChip>
           );
         })}
       </div>

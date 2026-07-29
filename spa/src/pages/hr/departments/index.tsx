@@ -268,14 +268,22 @@ function TreeRow({
         style={{ paddingLeft: 12 + depth * 16 }}
         onClick={() => onSelect(node.id)}
       >
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); if (hasKids) onToggle(node.id); }}
-          className="w-4 h-4 flex items-center justify-center text-muted shrink-0"
-          aria-label={hasKids ? (isOpen ? 'Collapse' : 'Expand') : ''}
-        >
-          {hasKids ? (isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />) : <span className="w-2 h-2 rounded-full bg-elevated" />}
-        </button>
+        {hasKids ? (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onToggle(node.id); }}
+            className="w-4 h-4 flex items-center justify-center text-muted shrink-0 rounded cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            aria-label={`${isOpen ? 'Collapse' : 'Expand'} ${node.name}`}
+            aria-expanded={isOpen}
+          >
+            {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+          </button>
+        ) : (
+          // Leaf: a dot, not a control — nothing to expand.
+          <span className="w-4 h-4 flex items-center justify-center shrink-0" aria-hidden>
+            <span className="w-2 h-2 rounded-full bg-elevated" />
+          </span>
+        )}
         <Building2 size={13} className="text-muted shrink-0" />
         <span className="font-medium truncate">{node.name}</span>
         <span className="font-mono text-xs text-muted ml-1.5">{node.code}</span>

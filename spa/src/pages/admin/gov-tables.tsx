@@ -15,6 +15,7 @@ import { formatDecimal } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
 import type { ContributionAgency, GovernmentTable } from '@/types/payroll';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { Tabs } from '@/components/ui/Tabs';
 
 const AGENCIES: { key: ContributionAgency; label: string; help: string }[] = [
   { key: 'sss',        label: 'SSS',        help: 'Flat peso amounts per bracket. EE = employee share, ER = employer share.' },
@@ -36,20 +37,12 @@ export default function AdminGovTablesPage() {
       />
 
       <div className="px-5 pt-3">
-        <div className="flex items-center gap-1 border-b border-default">
-          {AGENCIES.map((a) => (
-            <button
-              key={a.key}
-              onClick={() => setActive(a.key)}
-              className={
-                'px-3 py-2 text-xs border-b-2 -mb-[1px] ' +
-                (active === a.key
-                  ? 'text-primary border-accent'
-                  : 'text-muted border-transparent hover:text-primary')
-              }
-            >{a.label}</button>
-          ))}
-        </div>
+        <Tabs
+          items={AGENCIES.map((a) => ({ key: a.key, label: a.label }))}
+          value={active}
+          onChange={setActive}
+          label="Contribution agency"
+        />
       </div>
 
       <AgencyTable agency={active} />

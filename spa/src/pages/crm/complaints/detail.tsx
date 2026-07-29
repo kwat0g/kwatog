@@ -20,12 +20,12 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { Textarea } from '@/components/ui/Textarea';
+import { Tabs } from '@/components/ui/Tabs';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { LinkedRecords } from '@/components/chain/LinkedRecords';
 import { ChainHeader } from '@/components/chain';
 import type { ChainStep } from '@/types/chain';
 import { usePermission } from '@/hooks/usePermission';
-import { cn } from '@/lib/cn';
 import type { ComplaintSeverity, ComplaintStatus, EightDReport } from '@/types/crm';
 
 const STATUS_CHIP: Record<ComplaintStatus, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
@@ -221,22 +221,17 @@ export default function ComplaintDetailPage() {
       </div>
 
       {/* Tabs */}
-      <div className="px-5 border-b border-default flex gap-4">
-        {(['overview', '8d', 'linked'] as Tab[]).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={cn(
-              'px-1 pb-2 text-xs uppercase tracking-wider transition-colors',
-              tab === t
-                ? 'border-b-2 border-accent text-accent font-medium'
-                : 'text-muted hover:text-strong'
-            )}
-          >
-            {t === 'overview' ? 'Overview' : t === '8d' ? '8D Report' : 'Linked records'}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        className="px-5"
+        label="Complaint sections"
+        value={tab}
+        onChange={setTab}
+        items={[
+          { key: 'overview', label: 'Overview' },
+          { key: '8d', label: '8D report' },
+          { key: 'linked', label: 'Linked records' },
+        ]}
+      />
 
       <div className="px-5 py-4">
         {tab === 'overview' && (

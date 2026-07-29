@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { driverApi } from '@/api/driver';
 import type { DriverDelivery, DriverDeliveryStatus } from '@/types/driver';
+import { Button } from '@/components/ui/Button';
 
 export default function DriverDeliveryList() {
   const { data, isLoading, error, refetch } = useQuery({
@@ -84,13 +85,9 @@ function ErrorRetry({ onRetry }: { onRetry: () => void }) {
   return (
     <div className="py-12 text-center" role="alert">
       <div className="text-danger mb-2">Could not load deliveries.</div>
-      <button
-        type="button"
-        onClick={onRetry}
-        className="text-sm text-primary underline min-h-[44px] px-3 focus:outline-none focus:ring-2 focus:ring-accent rounded"
-      >
+      <Button variant="secondary" size="lg" className="min-h-[44px]" onClick={onRetry}>
         Try again
-      </button>
+      </Button>
     </div>
   );
 }

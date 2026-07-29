@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { factoryApi } from '@/api/factory';
 import { RefreshCw } from 'lucide-react';
 import type { WorkOrder, WorkOrderStatus } from '@/types/production';
+import { Button } from '@/components/ui/Button';
 
 export default function ActiveOrders() {
   const { data, isLoading, error, refetch, isFetching } = useQuery({
@@ -20,14 +21,15 @@ export default function ActiveOrders() {
       <div className="py-12 text-center text-muted">
         <p className="text-lg">No active work orders.</p>
         <p className="text-sm mt-1">Pull down or tap refresh to check again.</p>
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="lg"
+          className="mt-4 min-h-[44px]"
+          icon={<RefreshCw className="w-4 h-4" />}
           onClick={() => refetch()}
-          className="mt-4 inline-flex items-center gap-2 text-sm text-accent min-h-[44px] px-4 rounded focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
         >
-          <RefreshCw className="w-4 h-4" />
           Refresh
-        </button>
+        </Button>
       </div>
     );
   }
@@ -36,15 +38,16 @@ export default function ActiveOrders() {
     <div className="space-y-3 touch-manipulation">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-medium">Active Work Orders</h1>
-        <button
-          type="button"
-          onClick={() => refetch()}
+        <Button
+          variant="ghost"
+          size="lg"
+          className="min-h-[44px] text-secondary"
+          icon={<RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />}
           disabled={isFetching}
-          className="inline-flex items-center gap-1.5 text-sm text-secondary min-h-[44px] px-3 rounded focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 disabled:opacity-50"
+          onClick={() => refetch()}
         >
-          <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
           Refresh
-        </button>
+        </Button>
       </div>
 
       {orders.map(wo => (
@@ -131,13 +134,9 @@ function ErrorRetry({ onRetry }: { onRetry: () => void }) {
   return (
     <div className="py-12 text-center" role="alert">
       <div className="text-danger mb-2">Could not load work orders.</div>
-      <button
-        type="button"
-        onClick={onRetry}
-        className="text-sm underline min-h-[44px] px-3 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 rounded"
-      >
+      <Button variant="secondary" size="lg" className="min-h-[44px]" onClick={onRetry}>
         Try again
-      </button>
+      </Button>
     </div>
   );
 }

@@ -39,6 +39,7 @@ import { formatDate } from '@/lib/formatDate';
 import type { MachineOeeRow } from '@/types/production';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { Input } from '@/components/ui/Input';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { cn } from '@/lib/cn';
 
 type Preset = 'today' | 'week' | 'month' | 'custom';
@@ -144,22 +145,18 @@ export default function OeeReportPage() {
 
       {/* ─── Date range presets ─── */}
       <div className="px-5 py-3 border-b border-default flex items-center gap-3 flex-wrap">
-        <div className="flex items-center gap-1">
-          {(['today', 'week', 'month', 'custom'] as Preset[]).map((p) => (
-            <button
-              key={p}
-              onClick={() => setPreset(p)}
-              className={
-                'h-7 px-3 text-xs rounded-md border transition-colors duration-fast ' +
-                (preset === p
-                  ? 'bg-primary text-canvas border-primary'
-                  : 'border-default hover:bg-elevated')
-              }
-            >
-              {p === 'today' ? 'Today' : p === 'week' ? 'Last 7 days' : p === 'month' ? 'This month' : 'Custom'}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          size="sm"
+          label="Date range"
+          value={preset}
+          onChange={setPreset}
+          options={[
+            { value: 'today', label: 'Today' },
+            { value: 'week', label: 'Last 7 days' },
+            { value: 'month', label: 'This month' },
+            { value: 'custom', label: 'Custom' },
+          ]}
+        />
         {preset === 'custom' && (
           <div className="flex items-center gap-2 text-xs">
             <Input

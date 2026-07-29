@@ -12,6 +12,7 @@ import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail, SkeletonTable } from '@/components/ui/Skeleton';
+import { Tabs } from '@/components/ui/Tabs';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
@@ -206,26 +207,16 @@ export default function CrmCustomerDetailPage() {
 
         <div className="lg:col-span-2 space-y-4">
           {/* Tab strip */}
-          <div className="border-b border-default flex gap-0">
-            {[
-              { key: 'orders' as Tab, label: 'Sales Orders' },
-              { key: 'complaints' as Tab, label: 'Complaints' },
-              { key: 'prices' as Tab, label: 'Price Agreements' },
-            ].map(({ key, label }) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setTab(key)}
-                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                  tab === key
-                    ? 'border-accent text-primary'
-                    : 'border-transparent text-secondary hover:text-primary'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          <Tabs
+            label="Customer sections"
+            value={tab}
+            onChange={setTab}
+            items={[
+              { key: 'orders', label: 'Sales orders' },
+              { key: 'complaints', label: 'Complaints' },
+              { key: 'prices', label: 'Price agreements' },
+            ]}
+          />
 
           {/* Sales Orders tab */}
           {tab === 'orders' && (

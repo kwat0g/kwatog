@@ -14,6 +14,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { cn } from '@/lib/cn';
 import type { DirectoryEmployee, OrgChartGroup } from '@/types/directory';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
 
 type ViewMode = 'grid' | 'list' | 'org';
 
@@ -55,41 +56,17 @@ export default function EmployeeDirectoryPage() {
         title="Employee directory"
         subtitle={data ? `${data.meta.total} employee${data.meta.total === 1 ? '' : 's'}` : undefined}
         actions={
-          <div className="flex items-center gap-1 border border-default rounded-md p-0.5 bg-canvas">
-            <button
-              type="button"
-              aria-label="Grid view"
-              onClick={() => setView('grid')}
-              className={cn(
-                'p-1.5 rounded-sm',
-                view === 'grid' ? 'bg-elevated text-primary' : 'text-muted hover:bg-elevated',
-              )}
-            >
-              <LayoutGrid size={14} />
-            </button>
-            <button
-              type="button"
-              aria-label="List view"
-              onClick={() => setView('list')}
-              className={cn(
-                'p-1.5 rounded-sm',
-                view === 'list' ? 'bg-elevated text-primary' : 'text-muted hover:bg-elevated',
-              )}
-            >
-              <ListIcon size={14} />
-            </button>
-            <button
-              type="button"
-              aria-label="Org chart view"
-              onClick={() => setView('org')}
-              className={cn(
-                'p-1.5 rounded-sm',
-                view === 'org' ? 'bg-elevated text-primary' : 'text-muted hover:bg-elevated',
-              )}
-            >
-              <GitBranch size={14} />
-            </button>
-          </div>
+          <SegmentedControl
+            size="sm"
+            label="Directory view"
+            value={view}
+            onChange={setView}
+            options={[
+              { value: 'grid', label: <LayoutGrid size={14} />, ariaLabel: 'Grid view' },
+              { value: 'list', label: <ListIcon size={14} />, ariaLabel: 'List view' },
+              { value: 'org', label: <GitBranch size={14} />, ariaLabel: 'Org chart view' },
+            ]}
+          />
         }
       />
 

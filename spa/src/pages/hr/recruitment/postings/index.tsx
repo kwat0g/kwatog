@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { Plus } from 'lucide-react';
-import { cn } from '@/lib/cn';
 import { recruitmentApi } from '@/api/recruitment';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -10,6 +9,7 @@ import { DataTable, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
+import { Tabs } from '@/components/ui/Tabs';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
@@ -131,25 +131,13 @@ export default function PostingsListPage() {
         }
       />
 
-      <div className="border-b border-default px-5 flex gap-4" role="tablist" aria-label="Posting status">
-        {STATUS_TABS.map((tab) => (
-          <button
-            key={tab.value}
-            type="button"
-            role="tab"
-            aria-selected={statusFilter === tab.value}
-            onClick={() => { setStatusFilter(tab.value); setFilters((f) => ({ ...f, page: 1 })); }}
-            className={cn(
-              'h-10 text-sm border-b-2 -mb-px transition-colors duration-fast cursor-pointer',
-              statusFilter === tab.value
-                ? 'border-accent text-primary font-medium'
-                : 'border-transparent text-muted hover:text-primary',
-            )}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        className="px-5"
+        label="Posting status"
+        value={statusFilter}
+        onChange={(value) => { setStatusFilter(value); setFilters((f) => ({ ...f, page: 1 })); }}
+        items={STATUS_TABS.map((tab) => ({ key: tab.value, label: tab.label }))}
+      />
 
       <FilterBar
         filters={[]}

@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Menu, Moon, Sun, Search } from 'lucide-react';
 import { Tooltip } from '@/components/ui/Tooltip';
+import { Button } from '@/components/ui/Button';
 
 const CommandPalette = lazy(() =>
   import('@/components/ui/CommandPalette').then((m) => ({ default: m.CommandPalette })),
@@ -49,14 +50,15 @@ export function Topbar({ user, onLogout, rightExtras }: TopbarProps) {
 
   return (
     <header className="sticky top-0 z-40 h-12 bg-canvas border-b border-default flex items-center px-3 gap-3">
-      <button
-        type="button"
-        onClick={handleMenuClick}
+      <Button
+        variant="ghost"
+        size="sm"
+        iconOnly
+        icon={<Menu size={14} />}
         aria-label="Toggle sidebar"
-        className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted hover:bg-elevated hover:text-primary"
-      >
-        <Menu size={14} />
-      </button>
+        onClick={handleMenuClick}
+        className="text-muted hover:text-primary"
+      />
 
       <Link to="/dashboard" className="flex items-center gap-2 shrink-0">
         <BrandLogo invertOnDark alt="" className="h-7" />
@@ -81,14 +83,15 @@ export function Topbar({ user, onLogout, rightExtras }: TopbarProps) {
       </button>
 
       <Tooltip content={resolvedTheme === 'dark' ? 'Light mode' : 'Dark mode'}>
-        <button
-          type="button"
-          onClick={toggle}
+        <Button
+          variant="ghost"
+          size="sm"
+          iconOnly
+          icon={resolvedTheme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
           aria-label="Toggle theme"
-          className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted hover:bg-elevated hover:text-primary"
-        >
-          {resolvedTheme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
-        </button>
+          onClick={toggle}
+          className="text-muted hover:text-primary"
+        />
       </Tooltip>
 
       <NotificationBell />

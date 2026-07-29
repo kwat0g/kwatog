@@ -91,27 +91,27 @@ export default function SelfServiceDtrPage() {
 
       {/* Month picker */}
       <div className="flex items-center justify-between px-5 py-3 border-b border-default">
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="lg"
+          iconOnly
+          icon={<ChevronLeft size={18} />}
+          aria-label="Previous month"
           onClick={goBack}
           disabled={isEarliestMonth}
-          className="w-9 h-9 rounded-md flex items-center justify-center hover:bg-elevated disabled:opacity-40"
-          aria-label="Previous month"
-        >
-          <ChevronLeft size={18} />
-        </button>
+        />
         <span className="text-sm font-medium">
           {MONTH_NAMES[month - 1]} {year}
         </span>
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="lg"
+          iconOnly
+          icon={<ChevronRight size={18} />}
+          aria-label="Next month"
           onClick={goForward}
           disabled={isCurrentMonth}
-          className="w-9 h-9 rounded-md flex items-center justify-center hover:bg-elevated disabled:opacity-40"
-          aria-label="Next month"
-        >
-          <ChevronRight size={18} />
-        </button>
+        />
       </div>
 
       <div className="px-5 py-4">

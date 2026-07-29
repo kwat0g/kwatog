@@ -61,6 +61,7 @@ import { cn } from '@/lib/cn';
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 import { useBadges } from '@/hooks/useBadges';
 import type { BadgeSeverity } from '@/api/badges';
 
@@ -447,14 +448,15 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
           <aside className="absolute inset-y-0 left-0 w-72 bg-canvas border-r border-default overflow-y-auto animate-slide-right">
             <div className="h-12 flex items-center justify-between px-3 border-b border-default">
               <span className="text-sm font-medium text-primary">Menu</span>
-              <button
-                type="button"
-                onClick={() => setMobileOpen(false)}
+              <Button
+                variant="ghost"
+                size="sm"
+                iconOnly
+                icon={<X size={14} />}
                 aria-label="Close menu"
-                className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted hover:bg-elevated hover:text-primary"
-              >
-                <X size={14} />
-              </button>
+                onClick={() => setMobileOpen(false)}
+                className="text-muted hover:text-primary"
+              />
             </div>
             {sidebarContent}
           </aside>

@@ -10,6 +10,7 @@ import { cn } from '@/lib/cn';
 import { formatPeso } from '@/lib/formatNumber';
 import type { BudgetVsActual, BudgetVsActualRow } from '@/types/budgeting';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
 
 export default function BudgetVsActualPage() {
   const [groupBy, setGroupBy] = useState<string>('department');
@@ -59,19 +60,17 @@ export default function BudgetVsActualPage() {
         breadcrumbs={[{ label: 'Budgeting', href: '/budgeting' }, { label: 'Budget vs Actual' }]}
         actions={
           <div className="flex items-center gap-2">
-            <span className="text-xs text-muted">Group by:</span>
-            {['department', 'budget_type'].map((g) => (
-              <button
-                key={g}
-                onClick={() => setGroupBy(g)}
-                className={cn(
-                  'px-2 py-0.5 text-xs rounded transition-colors',
-                  groupBy === g ? 'bg-accent text-white' : 'bg-muted text-secondary hover:bg-muted/80'
-                )}
-              >
-                {g === 'department' ? 'Department' : 'Budget Type'}
-              </button>
-            ))}
+            <span className="text-xs text-muted">Group by</span>
+            <SegmentedControl
+              size="sm"
+              label="Group by"
+              value={groupBy}
+              onChange={setGroupBy}
+              options={[
+                { value: 'department', label: 'Department' },
+                { value: 'budget_type', label: 'Budget type' },
+              ]}
+            />
           </div>
         }
       />

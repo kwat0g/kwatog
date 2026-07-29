@@ -6,6 +6,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/Button';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
@@ -69,20 +70,13 @@ const [selectedBin, setSelectedBin] = useState<{ id: string; detail: any } | nul
           <>
             {/* Warehouse selector */}
             {data.length > 1 && (
-              <div className="flex gap-1 flex-wrap">
-                {data.map((w) => (
-                  <button
-                    key={w.id}
-                    type="button"
-                    onClick={() => { setActiveWh(w.id); setActiveZone(null); setSelectedBin(null); }}
-                    className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors ${
-                      wh?.id === w.id ? 'bg-accent text-white' : 'bg-surface text-muted hover:text-primary'
-                    }`}
-                  >
-                    {w.code} — {w.name}
-                  </button>
-                ))}
-              </div>
+              <SegmentedControl
+                size="sm"
+                label="Warehouse"
+                value={wh?.id ?? ''}
+                onChange={(id) => { setActiveWh(id); setActiveZone(null); setSelectedBin(null); }}
+                options={data.map((w) => ({ value: w.id, label: `${w.code} — ${w.name}` }))}
+              />
             )}
 
             <div className="grid grid-cols-12 gap-4">

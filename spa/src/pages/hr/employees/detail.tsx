@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { cn } from '@/lib/cn';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -30,6 +29,7 @@ import { formatMobile, maskByKind } from '@/lib/phFormat';
 import type { ApiValidationError } from '@/types';
 import { onFormInvalid } from '@/lib/formErrors';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { Tabs } from '@/components/ui/Tabs';
 
 const TABS = ['Overview', 'Employment history', 'Attendance', 'Leaves', 'Loans', 'Documents', 'Property', 'Payroll', 'Activity'] as const;
 type Tab = typeof TABS[number];
@@ -100,25 +100,13 @@ export default function EmployeeDetailPage() {
       </div>
 
       {/* Tabs — accessible tab pattern with cursor-pointer and cn() */}
-      <div className="border-b border-default px-5 flex gap-4" role="tablist" aria-label="Employee details">
-        {TABS.map((t) => (
-          <button
-            key={t}
-            type="button"
-            role="tab"
-            aria-selected={tab === t}
-            className={cn(
-              'h-10 text-sm border-b-2 -mb-px transition-colors duration-fast cursor-pointer',
-              tab === t
-                ? 'border-accent text-primary font-medium'
-                : 'border-transparent text-muted hover:text-primary',
-            )}
-            onClick={() => setTab(t)}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        className="px-5"
+        label="Employee details"
+        value={tab}
+        onChange={setTab}
+        items={TABS.map((t) => ({ key: t, label: t }))}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 px-5 py-4">
         <div>

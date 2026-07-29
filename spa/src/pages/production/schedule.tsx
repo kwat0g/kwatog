@@ -19,6 +19,8 @@ import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonTable } from '@/components/ui/Skeleton';
+import { ToggleChip } from '@/components/ui/SegmentedControl';
+import { LinkButton } from '@/components/ui/LinkButton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { GanttChart } from '@/components/production/GanttChart';
 import { usePermission } from '@/hooks/usePermission';
@@ -170,31 +172,22 @@ export default function ProductionSchedulePage() {
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs text-muted">Filter machines:</span>
             {allMachines.map((m) => (
-              <button
+              <ToggleChip
                 key={m.id}
-                type="button"
+                active={machineFilter.includes(m.id)}
                 onClick={() =>
                   setMachineFilter((prev) =>
                     prev.includes(m.id) ? prev.filter((x) => x !== m.id) : [...prev, m.id],
                   )
                 }
-                className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${
-                  machineFilter.includes(m.id)
-                    ? 'bg-primary text-primary-fg border-primary'
-                    : 'border-default text-muted hover:border-primary'
-                }`}
               >
                 {m.machine_code ?? m.name}
-              </button>
+              </ToggleChip>
             ))}
             {machineFilter.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setMachineFilter([])}
-                className="text-xs text-muted hover:text-danger"
-              >
+              <LinkButton tone="muted" className="text-xs" onClick={() => setMachineFilter([])}>
                 Clear
-              </button>
+              </LinkButton>
             )}
           </div>
         )}

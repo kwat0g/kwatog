@@ -1,5 +1,6 @@
 import { Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
+import { Button } from '@/components/ui/Button';
 import { ClipboardList, CheckCircle2 } from 'lucide-react';
 
 /**
@@ -32,16 +33,17 @@ export default function FactoryFloorLayout() {
             <div className="text-xs uppercase tracking-wider text-muted">Factory Floor</div>
             <div className="font-medium leading-tight">{user?.name ?? 'Operator'}</div>
           </div>
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="lg"
+            className="min-h-[44px] text-secondary"
             onClick={async () => {
               await logout();
               navigate('/login');
             }}
-            className="text-sm text-secondary hover:text-primary px-3 py-2 min-h-[44px] rounded focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
           >
-            Logout
-          </button>
+            Log out
+          </Button>
         </div>
       </header>
 

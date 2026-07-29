@@ -26,6 +26,7 @@ import { BottomSheet } from '@/components/ui/BottomSheet';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LinkButton } from '@/components/ui/LinkButton';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import type { ApiValidationError } from '@/types';
 import type { ProfileUpdateRequestRecord, SelfServiceProfile } from '@/types/self-service';
 
@@ -200,18 +201,17 @@ export default function SelfServiceProfilePage() {
         <div className="px-3 py-2 border-b border-subtle text-2xs uppercase tracking-wider text-muted font-medium">
           Theme
         </div>
-        <div className="grid grid-cols-3 gap-1 p-2">
-          {(['light', 'dark', 'system'] as const).map((m) => (
-            <button
-              key={m}
-              onClick={() => setMode(m)}
-              className={`h-8 px-3 rounded-md text-sm capitalize ${
-                mode === m ? 'bg-elevated text-primary font-medium' : 'text-muted'
-              }`}
-            >
-              {m}
-            </button>
-          ))}
+        <div className="p-2">
+          <SegmentedControl
+            label="Theme"
+            value={mode}
+            onChange={setMode}
+            options={[
+              { value: 'light', label: 'Light' },
+              { value: 'dark', label: 'Dark' },
+              { value: 'system', label: 'System' },
+            ]}
+          />
         </div>
       </section>
 

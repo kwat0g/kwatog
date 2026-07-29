@@ -13,6 +13,7 @@ import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { LinkButton } from '@/components/ui/LinkButton';
+import { ToggleChip } from '@/components/ui/SegmentedControl';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDateTime } from '@/lib/formatDate';
@@ -111,20 +112,9 @@ export default function AlertsListPage() {
         {SEVERITIES.map((s) => {
           const active = (filters.severity ?? []).includes(s.value);
           return (
-            <button
-              key={s.value}
-              onClick={() => toggleSeverity(s.value)}
-              className={`px-2 py-1 text-xs rounded-md border transition-colors ${
-                active
-                  ? 'border-default bg-elevated text-default'
-                  : 'border-subtle text-muted hover:border-default hover:text-default'
-              }`}
-              aria-pressed={active}
-            >
-              <span className="flex items-center gap-1.5">
-                <Chip variant={severityVariant(s.value)}>{s.label.toLowerCase()}</Chip>
-              </span>
-            </button>
+            <ToggleChip key={s.value} active={active} onClick={() => toggleSeverity(s.value)}>
+              <Chip variant={severityVariant(s.value)}>{s.label.toLowerCase()}</Chip>
+            </ToggleChip>
           );
         })}
         <span className="text-2xs text-text-subtle ml-2">

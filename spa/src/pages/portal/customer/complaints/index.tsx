@@ -166,9 +166,15 @@ export default function CustomerComplaintsPage() {
                   {viewing8d.severity} &middot; {viewing8d.complaint_status}
                 </p>
               </div>
-              <button onClick={() => setViewing8d(null)} className="p-1 text-muted hover:text-primary transition-colors">
-                <X size={16} />
-              </button>
+              <Button
+                variant="ghost"
+                size="sm"
+                iconOnly
+                icon={<X size={16} />}
+                aria-label="Close 8D report"
+                onClick={() => setViewing8d(null)}
+                className="text-muted hover:text-primary"
+              />
             </div>
             <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
               <p className="text-xs text-muted">{viewing8d.description}</p>

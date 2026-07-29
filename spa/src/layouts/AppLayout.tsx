@@ -18,6 +18,7 @@ const KeyboardShortcutHelp = lazy(() =>
 );
 import { RouteTransition } from '@/components/ui/RouteTransition';
 import { Tooltip } from '@/components/ui/Tooltip';
+import { Button } from '@/components/ui/Button';
 
 // Inner component so the keyboard-shortcut hook lives inside the
 // PageActionsProvider (otherwise the dispatcher context is null).
@@ -58,14 +59,15 @@ function AppLayoutInner() {
         onLogout={onLogout}
         rightExtras={
           <Tooltip content="Keyboard shortcuts (?)">
-            <button
-              type="button"
-              onClick={() => setHelpOpen(true)}
+            <Button
+              variant="ghost"
+              size="sm"
+              iconOnly
+              icon={<CircleHelp size={14} />}
               aria-label="Keyboard shortcuts"
-              className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted hover:bg-elevated hover:text-primary"
-            >
-              <CircleHelp size={14} />
-            </button>
+              onClick={() => setHelpOpen(true)}
+              className="text-muted hover:text-primary"
+            />
           </Tooltip>
         }
       />

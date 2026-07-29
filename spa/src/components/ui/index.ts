@@ -30,6 +30,7 @@ export { SkeletonBlock, SkeletonDetail, SkeletonForm, SkeletonTable } from './Sk
 export { Spinner, FullPageLoader } from './Spinner';
 export { StatCard } from './StatCard';
 export { Switch } from './Switch';
+export { Tabs, type TabItem } from './Tabs';
 export { Textarea, type TextareaProps } from './Textarea';
 export { TabNavigation, type Tab } from './TabNavigation';
 export { Breadcrumb } from './Breadcrumb';

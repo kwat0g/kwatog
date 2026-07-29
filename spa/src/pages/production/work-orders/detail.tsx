@@ -21,11 +21,11 @@ import { ChainHeader, LinkedRecords, ActivityStream } from '@/components/chain';
 import { useEcho } from '@/hooks/useEcho';
 import { useChainProgress } from '@/hooks/useChainProgress';
 import { usePermission } from '@/hooks/usePermission';
-import { cn } from '@/lib/cn';
 import { formatInt } from '@/lib/formatNumber';
 import type { WorkOrderStatus } from '@/types/production';
 import type { WoOperationStatus } from '@/types/production/routing';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { Tabs } from '@/components/ui/Tabs';
 
 const variant: Record<WorkOrderStatus, 'success' | 'info' | 'warning' | 'danger' | 'neutral'> = {
   planned: 'neutral', confirmed: 'info', in_progress: 'info',
@@ -184,22 +184,16 @@ export default function WorkOrderDetailPage() {
       />
 
       {/* Tabs */}
-      <div className="px-5 border-b border-default flex gap-4">
-        {(['details', 'operations'] as DetailTab[]).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={cn(
-              'px-1 pb-2 text-xs uppercase tracking-wider transition-colors',
-              tab === t
-                ? 'border-b-2 border-accent text-accent font-medium'
-                : 'text-muted hover:text-strong'
-            )}
-          >
-            {t === 'details' ? 'Details' : 'Operations'}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        className="px-5"
+        label="Work order sections"
+        value={tab}
+        onChange={setTab}
+        items={[
+          { key: 'details', label: 'Details' },
+          { key: 'operations', label: 'Operations' },
+        ]}
+      />
 
       {tab === 'details' && (
       <div className="px-5 py-4 grid gap-4 lg:grid-cols-3">

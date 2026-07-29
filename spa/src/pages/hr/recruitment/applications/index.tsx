@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { cn } from '@/lib/cn';
 import { recruitmentApi } from '@/api/recruitment';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -9,6 +8,7 @@ import { DataTable, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
+import { Tabs } from '@/components/ui/Tabs';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatDate } from '@/lib/formatDate';
 import type { JobApplication, ApplicationStage } from '@/types/recruitment';
@@ -111,25 +111,13 @@ export default function ApplicationsListPage() {
         backLabel="Recruitment"
       />
 
-      <div className="border-b border-default px-5 flex gap-4" role="tablist" aria-label="Application stage">
-        {STAGE_TABS.map((tab) => (
-          <button
-            key={tab.value}
-            type="button"
-            role="tab"
-            aria-selected={stageFilter === tab.value}
-            onClick={() => { setStageFilter(tab.value); setFilters((f) => ({ ...f, page: 1 })); }}
-            className={cn(
-              'h-10 text-sm border-b-2 -mb-px transition-colors duration-fast cursor-pointer',
-              stageFilter === tab.value
-                ? 'border-accent text-primary font-medium'
-                : 'border-transparent text-muted hover:text-primary',
-            )}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        className="px-5"
+        label="Application stage"
+        value={stageFilter}
+        onChange={(value) => { setStageFilter(value); setFilters((f) => ({ ...f, page: 1 })); }}
+        items={STAGE_TABS.map((tab) => ({ key: tab.value, label: tab.label }))}
+      />
 
       <FilterBar
         filters={[]}

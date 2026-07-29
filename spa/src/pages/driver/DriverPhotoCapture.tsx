@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { isAxiosError } from 'axios';
 import { driverApi } from '@/api/driver';
+import { Button } from '@/components/ui/Button';
 
 const MAX_BYTES = 8 * 1024 * 1024; // mirrors backend image|max:8192
 
@@ -118,30 +119,24 @@ export default function DriverPhotoCapture() {
       )}
 
       <div className="grid grid-cols-2 gap-2">
-        <button
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          className="rounded-md border border-default bg-canvas text-primary py-3 hover:bg-elevated min-h-[44px] focus:outline-none focus:ring-2 focus:ring-accent"
-        >
-          {preview ? 'Retake' : 'Take Photo'}
-        </button>
-        <button
-          type="button"
-          onClick={() => galleryRef.current?.click()}
-          className="rounded-md border border-default bg-canvas text-primary py-3 hover:bg-elevated min-h-[44px] focus:outline-none focus:ring-2 focus:ring-accent"
-        >
-          Choose from Gallery
-        </button>
+        <Button variant="secondary" size="xl" onClick={() => fileRef.current?.click()}>
+          {preview ? 'Retake' : 'Take photo'}
+        </Button>
+        <Button variant="secondary" size="xl" onClick={() => galleryRef.current?.click()}>
+          Choose from gallery
+        </Button>
       </div>
 
-      <button
-        type="button"
-        disabled={!file || upload.isPending}
+      <Button
+        variant="primary"
+        size="xl"
+        className="w-full"
+        disabled={!file}
+        loading={upload.isPending}
         onClick={() => upload.mutate()}
-        className="w-full rounded-md bg-accent text-accent-fg py-3 font-medium hover:bg-accent-hover disabled:opacity-60 min-h-[44px] focus:outline-none focus:ring-2 focus:ring-accent"
       >
-        {upload.isPending ? 'Uploading…' : 'Upload Photo'}
-      </button>
+        {upload.isPending ? 'Uploading…' : 'Upload photo'}
+      </Button>
     </div>
   );
 }

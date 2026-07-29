@@ -15,6 +15,7 @@ import { formatPeso } from '@/lib/formatNumber';
 import { Plus } from 'lucide-react';
 import type { BudgetOverview } from '@/types/budgeting';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
 
 export default function BudgetOverviewPage() {
   const { can } = usePermission();
@@ -170,20 +171,18 @@ export default function BudgetOverviewPage() {
       <Panel
         title="Budgets"
         meta={
-          <div className="flex gap-2">
-            {['', 'draft', 'active', 'closed'].map((s) => (
-              <button
-                key={s}
-                onClick={() => setSelectedStatus(s)}
-                className={cn(
-                  'px-2 py-0.5 text-xs rounded transition-colors',
-                  selectedStatus === s ? 'bg-accent text-white' : 'bg-muted text-secondary hover:bg-muted/80'
-                )}
-              >
-                {s || 'All'}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            size="sm"
+            label="Budget status"
+            value={selectedStatus}
+            onChange={setSelectedStatus}
+            options={[
+              { value: '', label: 'All' },
+              { value: 'draft', label: 'Draft' },
+              { value: 'active', label: 'Active' },
+              { value: 'closed', label: 'Closed' },
+            ]}
+          />
         }
       >
         {budgetList && budgetList.data.length > 0 ? (

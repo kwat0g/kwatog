@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { AlertTriangle, X, Trash2, Copy, ChevronDown, ChevronRight } from 'lucide-react';
 import { useErrorLogStore, type ServerErrorEntry } from '@/stores/errorLogStore';
 import { cn } from '@/lib/cn';
+import { Button } from '@/components/ui/Button';
 
 /**
  * Floating bottom-right panel that surfaces every 4xx/5xx HTTP response
@@ -61,23 +62,24 @@ export function DevErrorPanel() {
               <span className="text-xs text-muted font-mono tabular-nums">{entries.length}</span>
             </div>
             <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={clear}
-                className="p-1.5 text-muted hover:text-primary rounded hover:bg-elevated"
+              <Button
+                variant="ghost"
+                size="sm"
+                iconOnly
+                icon={<Trash2 size={12} />}
                 aria-label="Clear log"
-                title="Clear log"
-              >
-                <Trash2 size={12} />
-              </button>
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                className="p-1.5 text-muted hover:text-primary rounded hover:bg-elevated"
+                onClick={clear}
+                className="text-muted hover:text-primary"
+              />
+              <Button
+                variant="ghost"
+                size="sm"
+                iconOnly
+                icon={<X size={12} />}
                 aria-label="Close panel"
-              >
-                <X size={12} />
-              </button>
+                onClick={() => setOpen(false)}
+                className="text-muted hover:text-primary"
+              />
             </div>
           </header>
 

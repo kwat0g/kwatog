@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { UserBadge } from '@/components/ui/UserBadge';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { cn } from '@/lib/cn';
 import { formatPeso } from '@/lib/formatNumber';
@@ -100,22 +101,14 @@ export default function ApprovalsBoardPage() {
       />
 
       {/* Filter pills */}
-      <div className="px-5 py-3 border-b border-default flex items-center gap-2 overflow-x-auto">
-        {KIND_FILTERS.map((f) => (
-          <button
-            key={f.key}
-            type="button"
-            onClick={() => setKind(f.key)}
-            className={cn(
-              'px-2.5 py-1 rounded text-xs font-medium border whitespace-nowrap',
-              kind === f.key
-                ? 'border-default bg-elevated text-primary'
-                : 'border-subtle text-muted hover:bg-elevated',
-            )}
-          >
-            {f.label}
-          </button>
-        ))}
+      <div className="px-5 py-3 border-b border-default flex items-center overflow-x-auto">
+        <SegmentedControl
+          size="sm"
+          label="Approval type"
+          value={kind}
+          onChange={setKind}
+          options={KIND_FILTERS.map((f) => ({ value: f.key, label: f.label }))}
+        />
       </div>
 
       {isLoading && !data && (

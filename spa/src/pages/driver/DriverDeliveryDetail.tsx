@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { isAxiosError } from 'axios';
 import { driverApi } from '@/api/driver';
 import type { DriverDeliveryStatus } from '@/types/driver';
+import { Button } from '@/components/ui/Button';
 
 const NEXT: Partial<Record<DriverDeliveryStatus, DriverDeliveryStatus>> = {
   scheduled: 'loading',
@@ -72,14 +73,15 @@ export default function DriverDeliveryDetail() {
     return (
       <div className="py-12 text-center" role="alert">
         <div className="text-danger mb-2">Could not load delivery.</div>
-        <button
-          type="button"
-          onClick={() => refetch()}
+        <Button
+          variant="secondary"
+          size="lg"
+          className="min-h-[44px]"
           disabled={isFetching}
-          className="text-sm text-primary underline disabled:opacity-60 min-h-[44px] px-3 focus:outline-none focus:ring-2 focus:ring-accent rounded"
+          onClick={() => refetch()}
         >
           {isFetching ? 'Retrying…' : 'Try again'}
-        </button>
+        </Button>
         <div className="mt-4">
           <Link to="/driver" className="text-sm text-muted underline">All deliveries</Link>
         </div>
@@ -122,24 +124,26 @@ export default function DriverDeliveryDetail() {
       </div>
 
       {next && label && (
-        <button
-          type="button"
-          disabled={transition.isPending}
+        <Button
+          variant="primary"
+          size="xl"
+          className="w-full"
+          loading={transition.isPending}
           onClick={() => transition.mutate(next)}
-          className="w-full rounded-md bg-accent text-accent-fg py-3 font-medium hover:bg-accent-hover disabled:opacity-60 min-h-[44px] focus:outline-none focus:ring-2 focus:ring-accent"
         >
           {transition.isPending ? 'Updating…' : label}
-        </button>
+        </Button>
       )}
 
       {data.status === 'delivered' && (
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="xl"
+          className="w-full"
           onClick={() => navigate(`/driver/${id}/photo`)}
-          className="w-full rounded-md border border-default bg-canvas text-primary py-3 font-medium hover:bg-elevated min-h-[44px] focus:outline-none focus:ring-2 focus:ring-accent"
         >
-          {(data.proofs?.length ?? 0) > 0 ? 'Replace Receipt Photo' : 'Capture Receipt Photo'}
-        </button>
+          {(data.proofs?.length ?? 0) > 0 ? 'Replace receipt photo' : 'Capture receipt photo'}
+        </Button>
       )}
     </div>
   );

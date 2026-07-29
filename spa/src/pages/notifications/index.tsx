@@ -17,6 +17,7 @@ import { notificationsApi, type NotificationRow } from '@/api/notifications';
 import { Button } from '@/components/ui/Button';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { cn } from '@/lib/cn';
 import {
@@ -111,38 +112,21 @@ export default function NotificationsListPage() {
       />
 
       {/* Filter chips */}
-      <div className="px-5 py-3 border-b border-default flex items-center gap-1.5 flex-wrap">
-        {FILTERS.map((f) => {
-          const unreadCount = data?.meta.unread_count ?? 0;
-          const showBadge = f.key === 'unread' && unreadCount > 0;
-          return (
-            <button
-              key={f.key}
-              type="button"
-              onClick={() => setFilter(f.key)}
-              className={cn(
-                'h-7 px-3 text-xs rounded-md border transition-colors duration-fast inline-flex items-center gap-1.5',
-                filter === f.key
-                  ? 'bg-primary text-canvas border-primary'
-                  : 'border-default hover:bg-elevated',
-              )}
-            >
-              {f.label}
-              {showBadge && (
-                <span
-                  className={cn(
-                    'inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-2xs font-mono tabular-nums rounded-full',
-                    filter === f.key
-                      ? 'bg-canvas/20 text-canvas'
-                      : 'bg-accent text-accent-fg',
-                  )}
-                >
-                  {unreadCount}
-                </span>
-              )}
-            </button>
-          );
-        })}
+      <div className="px-5 py-3 border-b border-default flex items-center">
+        <SegmentedControl
+          size="sm"
+          label="Notification filter"
+          value={filter}
+          onChange={setFilter}
+          options={FILTERS.map((f) => ({
+            value: f.key,
+            label: f.label,
+            // Only the unread tab carries a number, and only when there is one.
+            count: f.key === 'unread' && (data?.meta.unread_count ?? 0) > 0
+              ? data?.meta.unread_count
+              : undefined,
+          }))}
+        />
       </div>
 
       <div className="px-5 py-4">

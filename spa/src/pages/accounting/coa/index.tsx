@@ -132,7 +132,13 @@ function TreeRow({
         <div className="col-span-1 font-mono tabular-nums text-muted">{node.code}</div>
         <div className="col-span-5 flex items-center gap-1.5" style={{ paddingLeft: `${depth * 14}px` }}>
           {hasChildren ? (
-            <button onClick={() => onToggle(node.id)} className="text-muted hover:text-primary">
+            <button
+              type="button"
+              onClick={() => onToggle(node.id)}
+              aria-label={`${isOpen ? 'Collapse' : 'Expand'} ${node.name}`}
+              aria-expanded={isOpen}
+              className="text-muted hover:text-primary cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
               {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
             </button>
           ) : (

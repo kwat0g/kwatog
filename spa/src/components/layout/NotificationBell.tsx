@@ -18,6 +18,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { LinkButton } from '@/components/ui/LinkButton';
+import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/cn';
 import { notificationsApi, type NotificationRow } from '@/api/notifications';
 import { notificationMeta, timeAgo } from '@/lib/notificationMeta';
@@ -89,12 +90,14 @@ export function NotificationBell() {
   return (
     <div className="relative" ref={containerRef}>
       <Tooltip content="Notifications">
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="sm"
+          iconOnly
           aria-label={`Notifications${unread > 0 ? `, ${unread} unread` : ''}`}
           aria-expanded={open}
           onClick={() => setOpen((v) => !v)}
-          className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted hover:bg-elevated hover:text-primary relative"
+          className="relative text-muted hover:text-primary"
         >
           <Bell size={14} />
           {unread > 0 && (
@@ -105,7 +108,7 @@ export function NotificationBell() {
               {unread > 99 ? '99+' : unread}
             </span>
           )}
-        </button>
+        </Button>
       </Tooltip>
 
       {open && (

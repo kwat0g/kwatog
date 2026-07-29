@@ -29,6 +29,7 @@ import type { DisbursementProof, Payroll, PayrollPeriod } from '@/types/payroll'
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { Textarea } from '@/components/ui/Textarea';
 import { FileInput } from '@/components/ui/FileInput';
+import { Tabs } from '@/components/ui/Tabs';
 
 const periodStatusVariant = (status: string | null | undefined): ChipVariant => {
   switch (status) {
@@ -355,26 +356,19 @@ export default function PayrollPeriodDetailPage() {
           )}
 
           {/* Tabs */}
-          <div className="flex items-center gap-1 mb-3 border-b border-default">
-            {([
-              { key: 'employees', label: `Employees (${summary?.employee_count ?? 0})` },
-              { key: 'failures',  label: `Failures (${summary?.failed_count ?? 0})` },
+          <Tabs
+            className="mb-3"
+            label="Payroll period sections"
+            value={activeTab}
+            onChange={setActiveTab}
+            items={[
+              { key: 'employees', label: 'Employees', count: summary?.employee_count ?? 0 },
+              { key: 'failures', label: 'Failures', count: summary?.failed_count ?? 0 },
               { key: 'anomalies', label: 'Anomaly review' },
-              { key: 'summary',   label: 'Deduction summary' },
-              { key: 'variance',  label: 'Period variance' },
-            ] as const).map((t) => (
-              <button
-                key={t.key}
-                onClick={() => setActiveTab(t.key)}
-                className={
-                  'px-3 py-2 text-xs border-b-2 -mb-[1px] ' +
-                  (activeTab === t.key
-                    ? 'text-primary border-accent'
-                    : 'text-muted border-transparent hover:text-primary')
-                }
-              >{t.label}</button>
-            ))}
-          </div>
+              { key: 'summary', label: 'Deduction summary' },
+              { key: 'variance', label: 'Period variance' },
+            ]}
+          />
 
           {(activeTab === 'employees' || activeTab === 'failures') && (
             <>
