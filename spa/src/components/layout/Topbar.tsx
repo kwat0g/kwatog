@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
+import { cn } from '@/lib/cn';
 import { Link } from 'react-router-dom';
 import { Menu, Moon, Sun, Search } from 'lucide-react';
 import { Tooltip } from '@/components/ui/Tooltip';
@@ -13,6 +14,7 @@ import { ProfileDropdown } from './ProfileDropdown';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { useTheme } from '@/hooks/useTheme';
+import { focusRing } from '@/lib/focus';
 
 interface TopbarProps {
   user?: { name: string; email: string } | null;
@@ -75,7 +77,7 @@ export function Topbar({ user, onLogout, rightExtras }: TopbarProps) {
       <button
         type="button"
         onClick={() => setPaletteOpen(true)}
-        className="hidden sm:flex items-center gap-2 h-7 w-44 px-2 rounded-md border border-default text-xs text-muted hover:bg-elevated"
+        className={cn('hidden sm:flex items-center gap-2 h-7 w-44 px-2 rounded-md border border-default text-xs text-muted hover:bg-elevated cursor-pointer', focusRing)}
       >
         <Search size={12} />
         <span className="flex-1 text-left">Search…</span>

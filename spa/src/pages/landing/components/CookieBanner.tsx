@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { focusRingLanding } from '@/lib/focus';
 
 const CONSENT_KEY = 'ogami-cookie-consent';
 
@@ -49,7 +50,7 @@ export function CookieBanner() {
         <button
           type="button"
           onClick={() => handleConsent('declined')}
-          className="rounded-md p-1 text-landing-muted transition-colors hover:bg-landing-elevated hover:text-landing-text"
+          className={cn('rounded-md p-1 text-landing-muted transition-colors hover:bg-landing-elevated hover:text-landing-text cursor-pointer', focusRingLanding)}
           aria-label="Decline cookies"
         >
           <X size={16} />
@@ -59,14 +60,14 @@ export function CookieBanner() {
         <button
           type="button"
           onClick={() => handleConsent('accepted')}
-          className="rounded-full bg-landing-accent px-4 py-2 text-xs font-medium text-landing-accent-fg transition-colors hover:bg-landing-accent-hover"
+          className={cn('rounded-full bg-landing-accent px-4 py-2 text-xs font-medium text-landing-accent-fg transition-colors hover:bg-landing-accent-hover cursor-pointer', focusRingLanding)}
         >
           Accept
         </button>
         <button
           type="button"
           onClick={() => handleConsent('declined')}
-          className="rounded-full border border-landing-border px-4 py-2 text-xs font-medium text-landing-text transition-colors hover:bg-landing-elevated"
+          className={cn('rounded-full border border-landing-border px-4 py-2 text-xs font-medium text-landing-text transition-colors hover:bg-landing-elevated cursor-pointer', focusRingLanding)}
         >
           Decline
         </button>

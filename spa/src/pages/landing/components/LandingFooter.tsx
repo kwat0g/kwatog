@@ -12,6 +12,8 @@ import { ArrowRight, CheckCircle } from 'lucide-react';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { COMPANY, NAV_LINKS } from '../data';
 import { landingApi } from '@/api/landing';
+import { focusRingLanding } from '@/lib/focus';
+import { cn } from '@/lib/cn';
 
 const FOOTER_LINKS = {
   company: [
@@ -30,6 +32,18 @@ const FOOTER_LINKS = {
     { label: 'Cookie policy', href: '#' },
   ],
 };
+
+/**
+ * Footer links and link-styled buttons share one underline-on-hover treatment.
+ * The font size stays at the call site — `cn` is plain clsx, so a size baked in
+ * here could not be overridden by the one caller that wants 12px.
+ */
+const footerLinkCls = cn(
+  'relative font-sans text-landing-text-secondary transition-colors hover:text-landing-accent',
+  'after:absolute after:-bottom-0.5 after:left-0 after:h-px after:w-0 after:bg-landing-accent',
+  'after:transition-all after:duration-300 hover:after:w-full cursor-pointer',
+  focusRingLanding,
+);
 
 export function LandingFooter() {
   const year = new Date().getFullYear();
@@ -79,7 +93,7 @@ export function LandingFooter() {
                 <li key={link.href}>
                   <a
                     href={link.href}
-                    className="relative font-sans text-[13px] text-landing-text-secondary transition-colors hover:text-landing-accent after:absolute after:-bottom-0.5 after:left-0 after:h-px after:w-0 after:bg-landing-accent after:transition-all after:duration-300 hover:after:w-full"
+                    className={cn(footerLinkCls, 'text-[13px]')}
                   >
                     {link.label}
                   </a>
@@ -99,7 +113,7 @@ export function LandingFooter() {
                   <a
                     href={link.href}
                     onClick={(e) => link.href === '#' && e.preventDefault()}
-                    className="relative font-sans text-[13px] text-landing-text-secondary transition-colors hover:text-landing-accent after:absolute after:-bottom-0.5 after:left-0 after:h-px after:w-0 after:bg-landing-accent after:transition-all after:duration-300 hover:after:w-full"
+                    className={cn(footerLinkCls, 'text-[13px]')}
                   >
                     {link.label}
                   </a>
@@ -136,7 +150,7 @@ export function LandingFooter() {
                             // Error toast handled by the global axios interceptor.
                           });
                       }}
-                      className="relative font-sans text-[13px] text-landing-text-secondary transition-colors hover:text-landing-accent after:absolute after:-bottom-0.5 after:left-0 after:h-px after:w-0 after:bg-landing-accent after:transition-all after:duration-300 hover:after:w-full"
+                      className={cn(footerLinkCls, 'text-[13px]')}
                     >
                       {link.label}
                     </button>
@@ -146,7 +160,7 @@ export function LandingFooter() {
                     <a
                       href={link.href}
                       onClick={(e) => link.href === '#' && e.preventDefault()}
-                      className="relative font-sans text-[13px] text-landing-text-secondary transition-colors hover:text-landing-accent after:absolute after:-bottom-0.5 after:left-0 after:h-px after:w-0 after:bg-landing-accent after:transition-all after:duration-300 hover:after:w-full"
+                      className={cn(footerLinkCls, 'text-[13px]')}
                     >
                       {link.label}
                     </a>
@@ -184,7 +198,7 @@ export function LandingFooter() {
                     type="submit"
                     disabled={newsletterStatus === 'submitting'}
                     aria-label="Subscribe"
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-landing-border bg-landing-surface text-landing-accent transition-colors hover:bg-landing-elevated hover:border-landing-accent/40 disabled:opacity-60"
+                    className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-landing-border bg-landing-surface text-landing-accent transition-colors hover:bg-landing-elevated hover:border-landing-accent/40 disabled:opacity-60 cursor-pointer', focusRingLanding)}
                   >
                     <ArrowRight size={16} />
                   </button>
@@ -202,7 +216,7 @@ export function LandingFooter() {
               <li>
                 <a
                   href={`mailto:${COMPANY.email}`}
-                  className="relative font-sans text-[13px] text-landing-text-secondary transition-colors hover:text-landing-accent after:absolute after:-bottom-0.5 after:left-0 after:h-px after:w-0 after:bg-landing-accent after:transition-all after:duration-300 hover:after:w-full"
+                  className={cn(footerLinkCls, 'text-[13px]')}
                 >
                   {COMPANY.email}
                 </a>
@@ -232,7 +246,7 @@ export function LandingFooter() {
                 key={link.label}
                 href={link.href}
                 onClick={(e) => e.preventDefault()}
-                className="relative font-sans text-[12px] text-landing-text-secondary transition-colors hover:text-landing-accent after:absolute after:-bottom-0.5 after:left-0 after:h-px after:w-0 after:bg-landing-accent after:transition-all after:duration-300 hover:after:w-full"
+                className={cn(footerLinkCls, 'text-[12px]')}
               >
                 {link.label}
               </a>

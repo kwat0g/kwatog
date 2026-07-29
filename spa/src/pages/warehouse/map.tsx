@@ -10,6 +10,9 @@ import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
+import { focusRingInset } from '@/lib/focus';
+import { focusRing } from '@/lib/focus';
+import { cn } from '@/lib/cn';
 const STATUS_COLORS: Record<string, string> = {
   empty:   'bg-surface text-muted border border-subtle',
   ok:      'bg-success/10 text-success-fg border border-success/20',
@@ -88,7 +91,7 @@ const [selectedBin, setSelectedBin] = useState<{ id: string; detail: any } | nul
                     key={z.id}
                     type="button"
                     onClick={() => { setActiveZone(z.id); setSelectedBin(null); }}
-                    className={`w-full text-left px-2 py-1.5 text-xs rounded-md transition-colors ${
+                    className={`w-full text-left px-2 py-1.5 text-xs rounded-md transition-colors cursor-pointer ${focusRingInset} ${
                       zone?.id === z.id ? 'bg-accent/10 text-accent border border-accent/20' : 'text-muted hover:text-primary hover:bg-elevated'
                     }`}
                   >
@@ -111,9 +114,12 @@ const [selectedBin, setSelectedBin] = useState<{ id: string; detail: any } | nul
                         key={loc.id}
                         type="button"
                         onClick={() => setSelectedBin({ id: loc.id, detail: loc })}
-                        className={`text-left p-2 rounded-md text-xs transition-all hover: ${
-                          STATUS_COLORS[loc.stock_status] || STATUS_COLORS['empty']
-                        } ${selectedBin?.id === loc.id ? 'ring-2 ring-accent' : ''}`}
+                        className={cn(
+                          'text-left p-2 rounded-md text-xs transition-all cursor-pointer',
+                          focusRing,
+                          STATUS_COLORS[loc.stock_status] || STATUS_COLORS['empty'],
+                          selectedBin?.id === loc.id && 'ring-2 ring-accent',
+                        )}
                       >
                         <div className="font-mono font-medium truncate">{loc.code}</div>
                         <div className="text-2xs mt-0.5">

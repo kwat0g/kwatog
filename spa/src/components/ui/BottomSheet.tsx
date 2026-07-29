@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
+import { focusRingInset } from '@/lib/focus';
 
 interface BottomSheetProps {
   isOpen: boolean;
@@ -38,7 +39,7 @@ export function BottomSheet({ isOpen, onClose, title, children, className }: Bot
         type="button"
         aria-label="Close"
         onClick={onClose}
-        className="absolute inset-0 bg-black/40"
+        className={cn('absolute inset-0 bg-black/40 cursor-pointer', focusRingInset)}
       />
       <div
         className={cn(

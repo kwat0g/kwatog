@@ -12,6 +12,7 @@
  */
 import { useMemo } from 'react';
 import { cn } from '@/lib/cn';
+import { focusRing } from '@/lib/focus';
 import type { GanttRow } from '@/types/mrp';
 
 type ViewMode = 'Day' | 'Week' | 'Month';
@@ -167,6 +168,7 @@ export function GanttChart({ rows, viewMode = 'Week', onBarClick }: Props) {
                     disabled={!clickable}
                     className={cn(
                       'absolute top-1 bottom-1 px-2 rounded-sm border text-2xs font-mono truncate text-left',
+                      focusRing,
                       barClass(bar.wo_status),
                       clickable ? 'cursor-pointer hover:brightness-110' : 'cursor-default',
                     )}

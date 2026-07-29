@@ -81,17 +81,19 @@ export default function SelfServiceDocumentsPage() {
                       <div className="text-xs text-muted truncate">{cert.note}</div>
                     </div>
                     {cert.available && url ? (
-                      <button
-                        type="button"
+                      <Button
+                        variant="secondary"
+                        size="lg"
+                        icon={<Download size={14} />}
+                        aria-label={`Download ${cert.label}`}
+                        className="shrink-0 min-h-[44px]"
                         onClick={() => void downloadAuthenticatedFile(url, {
                           openInNewTab: true,
                           errorMessage: `Failed to generate ${cert.label}.`,
                         })}
-                        className="shrink-0 inline-flex items-center gap-1 px-3 h-11 text-sm rounded-md border border-default bg-canvas text-primary hover:bg-elevated"
-                        aria-label={`Download ${cert.label}`}
                       >
-                        <Download size={14} /> PDF
-                      </button>
+                        PDF
+                      </Button>
                     ) : (
                       <span className="shrink-0 text-2xs text-text-subtle px-2">Unavailable</span>
                     )}

@@ -5,6 +5,8 @@ import { isAxiosError } from 'axios';
 import { driverApi } from '@/api/driver';
 import type { DriverDeliveryStatus } from '@/types/driver';
 import { Button } from '@/components/ui/Button';
+import { focusRing } from '@/lib/focus';
+import { cn } from '@/lib/cn';
 
 const NEXT: Partial<Record<DriverDeliveryStatus, DriverDeliveryStatus>> = {
   scheduled: 'loading',
@@ -96,7 +98,7 @@ export default function DriverDeliveryDetail() {
     <div className="space-y-4">
       <Link
         to="/driver"
-        className="inline-block text-sm text-muted underline min-h-[44px] py-2 focus:outline-none focus:ring-2 focus:ring-accent rounded"
+        className={cn('inline-block text-sm text-muted underline min-h-[44px] py-2 rounded', focusRing)}
       >
         ← All deliveries
       </Link>

@@ -8,6 +8,7 @@ import { publicRecruitmentApi } from '@/api/public-recruitment';
 import type { PublicJobPosting } from '@/types/recruitment';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
+import { Button } from '@/components/ui/Button';
 
 const EMPLOYMENT_LABELS: Record<string, string> = {
   regular: 'Regular',
@@ -112,17 +113,17 @@ export default function CareersPage() {
             {lastPage > 1 && (
               <div className="mt-8 flex justify-center gap-2">
                 {Array.from({ length: lastPage }, (_, i) => i + 1).map((p) => (
-                  <button
+                  <Button
                     key={p}
+                    variant={p === page ? 'primary' : 'secondary'}
+                    size="md"
+                    iconOnly
+                    aria-label={`Page ${p}`}
+                    aria-current={p === page ? 'page' : undefined}
                     onClick={() => setPage(p)}
-                    className={`h-8 w-8 rounded text-sm ${
-                      p === page
-                        ? 'bg-primary text-canvas'
-                        : 'bg-elevated text-secondary hover:bg-strong'
-                    }`}
                   >
                     {p}
-                  </button>
+                  </Button>
                 ))}
               </div>
             )}

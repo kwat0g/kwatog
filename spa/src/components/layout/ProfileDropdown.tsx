@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
 import { cn } from '@/lib/cn';
+import { focusRing, focusRingInset } from '@/lib/focus';
 
 interface ProfileDropdownProps {
   user?: { name: string; email: string } | null;
@@ -76,7 +77,7 @@ export function ProfileDropdown({ user, onLogout }: ProfileDropdownProps) {
         ref={btnRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 pl-2 ml-1 border-l border-default hover:bg-elevated rounded-md pr-1.5 py-0.5 transition-colors duration-fast"
+        className={cn('flex items-center gap-1.5 pl-2 ml-1 border-l border-default hover:bg-elevated rounded-md pr-1.5 py-0.5 transition-colors duration-fast cursor-pointer', focusRing)}
         aria-label="Profile menu"
         aria-expanded={open}
         aria-haspopup="true"
@@ -128,7 +129,7 @@ export function ProfileDropdown({ user, onLogout }: ProfileDropdownProps) {
                 onLogout?.();
               }}
               role="menuitem"
-              className="flex items-center gap-2.5 w-full px-3 py-1.5 text-sm text-danger-fg hover:bg-danger-bg transition-colors duration-fast"
+              className={cn('flex items-center gap-2.5 w-full px-3 py-1.5 text-sm text-danger-fg hover:bg-danger-bg transition-colors duration-fast cursor-pointer', focusRingInset)}
             >
               <LogOut size={14} className="shrink-0" />
               Sign out

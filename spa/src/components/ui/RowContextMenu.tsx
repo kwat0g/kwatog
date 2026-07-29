@@ -5,6 +5,7 @@
 
 import { useEffect, useRef, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
+import { focusRingInset } from '@/lib/focus';
 
 export interface RowContextMenuItem {
   label: ReactNode;
@@ -72,7 +73,8 @@ export function RowContextMenu({ open, x, y, items, onClose }: Props) {
             onClose();
           }}
           className={cn(
-            'w-full flex items-center gap-2 px-2.5 h-7 text-xs text-left',
+            'w-full flex items-center gap-2 px-2.5 h-7 text-xs text-left cursor-pointer',
+            focusRingInset,
             item.disabled && 'opacity-40 cursor-not-allowed',
             !item.disabled && 'hover:bg-subtle',
             item.variant === 'danger' ? 'text-danger' : 'text-primary',

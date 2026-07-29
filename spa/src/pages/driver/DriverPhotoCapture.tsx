@@ -5,6 +5,8 @@ import toast from 'react-hot-toast';
 import { isAxiosError } from 'axios';
 import { driverApi } from '@/api/driver';
 import { Button } from '@/components/ui/Button';
+import { focusRing } from '@/lib/focus';
+import { cn } from '@/lib/cn';
 
 const MAX_BYTES = 8 * 1024 * 1024; // mirrors backend image|max:8192
 
@@ -82,7 +84,7 @@ export default function DriverPhotoCapture() {
     <div className="space-y-4">
       <Link
         to={`/driver/${id}`}
-        className="inline-block text-sm text-muted underline min-h-[44px] py-2 focus:outline-none focus:ring-2 focus:ring-accent rounded"
+        className={cn('inline-block text-sm text-muted underline min-h-[44px] py-2 rounded', focusRing)}
       >
         ← Back to delivery
       </Link>

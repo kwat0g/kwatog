@@ -4,6 +4,8 @@ import { factoryApi } from '@/api/factory';
 import { RefreshCw } from 'lucide-react';
 import type { WorkOrder, WorkOrderStatus } from '@/types/production';
 import { Button } from '@/components/ui/Button';
+import { focusRing } from '@/lib/focus';
+import { cn } from '@/lib/cn';
 
 export default function ActiveOrders() {
   const { data, isLoading, error, refetch, isFetching } = useQuery({
@@ -54,7 +56,7 @@ export default function ActiveOrders() {
         <Link
           key={wo.id}
           to={`/factory/${wo.id}/output`}
-          className="block rounded-md border border-default bg-canvas p-4 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 active:bg-subtle"
+          className={cn('block rounded-md border border-default bg-canvas p-4 active:bg-subtle', focusRing)}
         >
           {/* Header: WO number + status */}
           <div className="flex items-center justify-between">

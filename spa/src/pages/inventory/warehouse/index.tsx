@@ -24,6 +24,7 @@ import type { ApiValidationError } from '@/types';
 import type { Warehouse, WarehouseLocation, WarehouseZone } from '@/types/inventory';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { cn } from '@/lib/cn';
+import { focusRingInset } from '@/lib/focus';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Schemas
@@ -167,7 +168,7 @@ export default function WarehousePage() {
                       <button
                         type="button"
                         onClick={() => { setActiveWh(w.id); setActiveZone(null); }}
-                        className="flex-1 text-left py-1.5 px-2"
+                        className={cn('flex-1 text-left py-1.5 px-2 cursor-pointer', focusRingInset)}
                       >
                         <div className="font-mono text-xs">{w.code}</div>
                         <div className="text-2xs text-muted">{w.name}</div>
@@ -208,7 +209,7 @@ export default function WarehousePage() {
                         <button
                           type="button"
                           onClick={() => setActiveZone(z.id)}
-                          className="flex-1 text-left py-2 px-2 flex items-center gap-2"
+                          className={cn('flex-1 text-left py-2 px-2 flex items-center gap-2 cursor-pointer', focusRingInset)}
                         >
                           <span className="font-mono text-xs">{z.code}</span>
                           <span className="flex-1 truncate">{z.name}</span>

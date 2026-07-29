@@ -10,6 +10,7 @@ import { Modal } from '@/components/ui/Modal';
 import { ToggleChip } from '@/components/ui/SegmentedControl';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { cn } from '@/lib/cn';
+import { focusRingInset } from '@/lib/focus';
 import type {
   CalendarEvent,
   CalendarLayer,
@@ -220,7 +221,8 @@ export default function CalendarPage() {
                         type="button"
                         onClick={() => setSelected(ev)}
                         className={cn(
-                          'text-2xs px-1.5 py-0.5 rounded truncate text-left',
+                          'text-2xs px-1.5 py-0.5 rounded truncate text-left cursor-pointer',
+                    focusRingInset,
                           VARIANT_CLASS[ev.color_variant],
                         )}
                         title={ev.title}

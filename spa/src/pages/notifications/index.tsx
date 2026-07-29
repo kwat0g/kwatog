@@ -20,6 +20,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { cn } from '@/lib/cn';
+import { focusRingInset } from '@/lib/focus';
 import {
   bucketLabel,
   dateBucket,
@@ -186,7 +187,8 @@ export default function NotificationsListPage() {
                             type="button"
                             onClick={() => handleClickRow(n)}
                             className={cn(
-                              'w-full text-left px-3 py-2.5 flex items-start gap-3 hover:bg-elevated transition-colors duration-fast',
+                              'w-full text-left px-3 py-2.5 flex items-start gap-3 hover:bg-elevated transition-colors duration-fast cursor-pointer',
+                      focusRingInset,
                               isUnread && 'border-l-2 border-accent',
                             )}
                           >

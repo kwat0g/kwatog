@@ -1,5 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import type { ReactNode } from 'react';
+import { focusRingInset } from '@/lib/focus';
+import { cn } from '@/lib/cn';
 import {
   LayoutDashboard,
   FileText,
@@ -91,7 +93,7 @@ function PortalSidebar({ type, nav, pathname, onLogout }: {
       <div className="px-2 pb-3 border-t border-default pt-2">
         <button
           onClick={onLogout}
-          className="flex items-center gap-2.5 px-3 py-2 rounded-md text-xs font-medium text-muted hover:text-danger hover:bg-danger/5 w-full transition-colors"
+          className={cn('flex items-center gap-2.5 px-3 py-2 rounded-md text-xs font-medium text-muted hover:text-danger hover:bg-danger/5 w-full transition-colors cursor-pointer', focusRingInset)}
         >
           <LogOut size={15} />
           Sign out

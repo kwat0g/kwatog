@@ -10,7 +10,9 @@ import { ShieldCheck, Download, Award } from 'lucide-react';
 import { SectionHeading } from '../components/SectionHeading';
 import { QUALITY_PILLARS, QUALITY_METHODS } from '../data';
 import { landingApi } from '@/api/landing';
+import { focusRingLanding } from '@/lib/focus';
 import { section, container, cardGap } from '../styles';
+import { cn } from '@/lib/cn';
 
 type PillarData = (typeof QUALITY_PILLARS)[number];
 
@@ -109,7 +111,7 @@ export function QualitySection() {
                       // Error toast is handled by the global axios interceptor.
                     });
                 }}
-                className="mt-5 inline-flex items-center gap-2 rounded-full border border-landing-border px-4 py-2 font-sans text-[12px] font-medium text-landing-text transition-colors hover:border-landing-accent/40 hover:bg-landing-elevated"
+                className={cn('mt-5 inline-flex items-center gap-2 rounded-full border border-landing-border px-4 py-2 font-sans text-[12px] font-medium text-landing-text transition-colors hover:border-landing-accent/40 hover:bg-landing-elevated cursor-pointer', focusRingLanding)}
               >
                 <Download size={14} />
                 Download quality policy

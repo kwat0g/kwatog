@@ -11,6 +11,7 @@ import { SkeletonBlock, SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
+import { focusRingInset } from '@/lib/focus';
 
 
 export default function PickingListPage() {
@@ -62,7 +63,7 @@ export default function PickingListPage() {
                   key={slip.id}
                   type="button"
                   onClick={() => setSelectedMis(slip.id)}
-                  className={`w-full text-left px-2 py-1.5 text-xs rounded-md transition-colors ${
+                  className={`w-full text-left px-2 py-1.5 text-xs rounded-md transition-colors cursor-pointer ${focusRingInset} ${
                     selectedMis === slip.id ? 'bg-accent/10 text-accent border border-accent/20' : 'text-muted hover:text-primary hover:bg-elevated'
                   }`}
                 >

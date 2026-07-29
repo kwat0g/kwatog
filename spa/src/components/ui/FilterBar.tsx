@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Search, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { focusRing } from '@/lib/focus';
 import { Select } from './Select';
 
 export interface FilterOption {
@@ -111,7 +112,7 @@ export function FilterBar({
             type="button"
             onClick={clearSearch}
             aria-label="Clear search"
-            className="shrink-0 text-muted hover:text-primary rounded-sm cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className={cn('shrink-0 text-muted hover:text-primary rounded-sm cursor-pointer', focusRing)}
           >
             <X size={13} />
           </button>
@@ -139,7 +140,7 @@ export function FilterBar({
         <button
           type="button"
           onClick={clearAll}
-          className="h-8 px-2 text-xs text-muted hover:text-primary rounded-md cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className={cn('h-8 px-2 text-xs text-muted hover:text-primary rounded-md cursor-pointer', focusRing)}
         >
           Clear all
         </button>

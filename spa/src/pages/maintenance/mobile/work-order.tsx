@@ -16,6 +16,9 @@ import { client } from '@/api/client';
 import type { ApiSuccess, PaginatedResponse } from '@/types';
 import { formatDateTime } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
+import { focusRingInset } from '@/lib/focus';
+import { cn } from '@/lib/cn';
+import { focusRing } from '@/lib/focus';
 
 export default function MobileWorkOrderDetail() {
   const { mwoId } = useParams<{ mwoId: string }>();
@@ -134,7 +137,7 @@ export default function MobileWorkOrderDetail() {
       {/* Back link */}
       <Link
         to="/maintenance/mobile"
-        className="inline-flex items-center gap-1.5 text-sm text-secondary min-h-[44px] rounded focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
+        className={cn('inline-flex items-center gap-1.5 text-sm text-secondary min-h-[44px] rounded', focusRing)}
       >
         <ArrowLeft className="w-4 h-4" />
         Back to list
@@ -365,7 +368,7 @@ export default function MobileWorkOrderDetail() {
                       key={item.id}
                       type="button"
                       onClick={() => setSelectedItem(item)}
-                      className="w-full text-left p-3 rounded-md hover:bg-surface active:bg-elevated min-h-[44px] focus:outline-none focus:ring-2 focus:ring-accent"
+                      className={cn('w-full text-left p-3 rounded-md hover:bg-surface active:bg-elevated min-h-[44px] cursor-pointer', focusRingInset)}
                     >
                       <div className="text-sm font-medium">{item.name}</div>
                       <div className="text-xs text-muted">{item.code} &middot; {item.unit_of_measure}</div>

@@ -22,6 +22,7 @@ import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LinkButton } from '@/components/ui/LinkButton';
 import { formatPeso } from '@/lib/formatNumber';
+import { focusRing } from '@/lib/focus';
 import type { ApiValidationError } from '@/types';
 import type {
   SelfServiceOvertimeRequest,
@@ -265,7 +266,7 @@ function ApplyOvertimeSheet({
                 key={h}
                 type="button"
                 onClick={() => setHours(h)}
-                className={`h-9 min-w-[3rem] px-3 rounded-md border text-sm font-mono tabular-nums ${
+                className={`h-9 min-w-[3rem] px-3 rounded-md border text-sm font-mono tabular-nums cursor-pointer ${focusRing} ${
                   hours === h
                     ? 'border-accent bg-accent text-accent-fg font-medium'
                     : 'border-default bg-canvas text-primary hover:bg-elevated'

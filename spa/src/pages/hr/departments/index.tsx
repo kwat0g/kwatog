@@ -23,6 +23,7 @@ import type { ApiValidationError } from '@/types';
 import { onFormInvalid } from '@/lib/formErrors';
 import type { Department } from '@/types/hr';
 import { cn } from '@/lib/cn';
+import { focusRing } from '@/lib/focus';
 
 const schema = z.object({
   name: z.string().trim().min(1, 'Name is required').max(100)
@@ -272,7 +273,7 @@ function TreeRow({
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onToggle(node.id); }}
-            className="w-4 h-4 flex items-center justify-center text-muted shrink-0 rounded cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className={cn('w-4 h-4 flex items-center justify-center text-muted shrink-0 rounded cursor-pointer', focusRing)}
             aria-label={`${isOpen ? 'Collapse' : 'Expand'} ${node.name}`}
             aria-expanded={isOpen}
           >

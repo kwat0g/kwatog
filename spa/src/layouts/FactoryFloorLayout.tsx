@@ -1,6 +1,7 @@
 import { Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { Button } from '@/components/ui/Button';
+import { focusRingInset } from '@/lib/focus';
 import { ClipboardList, CheckCircle2 } from 'lucide-react';
 
 /**
@@ -62,7 +63,7 @@ export default function FactoryFloorLayout() {
               <Link
                 key={tab.to}
                 to={tab.to}
-                className={`flex-1 flex flex-col items-center justify-center py-2 min-h-[56px] transition-colors focus:outline-none focus:ring-2 focus:ring-inset focus:ring-accent ${
+                className={`flex-1 flex flex-col items-center justify-center py-2 min-h-[56px] transition-colors ${focusRingInset} ${
                   active
                     ? 'text-accent'
                     : 'text-muted hover:text-secondary'

@@ -24,6 +24,7 @@ import { numberInputProps } from '@/lib/numberInput';
 import { onFormInvalid } from '@/lib/formErrors';
 import type { StockCountItem } from '@/types/warehouse';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { focusRingInset } from '@/lib/focus';
 
 const statusVariant: Record<string, 'warning' | 'success' | 'info' | 'danger' | 'neutral'> = {
   draft: 'neutral', in_progress: 'warning', completed: 'success', cancelled: 'danger',
@@ -170,7 +171,7 @@ export default function StockCountPage() {
                   key={s.id}
                   type="button"
                   onClick={() => setActiveSessionId(s.id)}
-                  className={`w-full text-left px-2 py-1.5 text-xs rounded-md transition-colors ${
+                  className={`w-full text-left px-2 py-1.5 text-xs rounded-md transition-colors cursor-pointer ${focusRingInset} ${
                     activeSessionId === s.id ? 'bg-accent/10 text-accent border border-accent/20' : 'text-muted hover:text-primary hover:bg-elevated'
                   }`}
                 >

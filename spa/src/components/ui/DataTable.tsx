@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useRef, useMemo, useState, type ReactNode, type KeyboardEvent } from 'react';
 import { ArrowDown, ArrowUp, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { focusRingInset } from '@/lib/focus';
 import { Button } from './Button';
 import { Checkbox } from './Checkbox';
 import { RowContextMenu, type RowContextMenuItem } from './RowContextMenu';
@@ -418,7 +419,10 @@ export function DataTable<T>({
                           type="button"
                           aria-label={isExpanded ? 'Collapse row' : 'Expand row'}
                           onClick={() => toggleExpanded(rid)}
-                          className="h-5 w-5 inline-flex items-center justify-center rounded text-muted hover:bg-subtle hover:text-primary"
+                          className={cn(
+                            'h-5 w-5 inline-flex items-center justify-center rounded text-muted hover:bg-subtle hover:text-primary cursor-pointer',
+                            focusRingInset,
+                          )}
                         >
                           <ChevronDown
                             size={12}

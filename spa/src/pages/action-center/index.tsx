@@ -26,6 +26,7 @@ import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { filterActionItems } from '@/lib/actionCenter';
 import { cn } from '@/lib/cn';
 import { formatDateTime, formatRelative } from '@/lib/formatDate';
+import { focusRingInset } from '@/lib/focus';
 import type { ActionCategory, ActionPriority } from '@/types/actionCenter';
 
 const CATEGORY_META: Record<ActionCategory, { label: string; icon: LucideIcon }> = {
@@ -144,7 +145,8 @@ export default function ActionCenterPage() {
                       key={item.id}
                       onClick={() => navigate(item.link)}
                       className={cn(
-                        'w-full text-left px-3 py-3 flex items-start gap-3 hover:bg-elevated/60 transition-colors group',
+                        'w-full text-left px-3 py-3 flex items-start gap-3 hover:bg-elevated/60 transition-colors group cursor-pointer',
+                        focusRingInset,
                         item.priority === 'critical' && 'border-l-2 border-l-danger',
                         item.priority === 'high' && 'border-l-2 border-l-warning',
                       )}

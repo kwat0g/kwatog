@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/cn';
 import { notificationsApi, type NotificationRow } from '@/api/notifications';
 import { notificationMeta, timeAgo } from '@/lib/notificationMeta';
+import { focusRingInset } from '@/lib/focus';
 import { useNotificationRealtime } from '@/hooks/useNotificationRealtime';
 
 const POLL_MS = 30_000;
@@ -144,7 +145,8 @@ export function NotificationBell() {
                       type="button"
                       onClick={() => handleClick(n)}
                       className={cn(
-                        'w-full text-left px-3 py-2.5 flex items-start gap-2.5 hover:bg-elevated transition-colors duration-fast',
+                        'w-full text-left px-3 py-2.5 flex items-start gap-2.5 hover:bg-elevated transition-colors duration-fast cursor-pointer',
+                        focusRingInset,
                         isUnread && 'border-l-2 border-accent',
                       )}
                     >

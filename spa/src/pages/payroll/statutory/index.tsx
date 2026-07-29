@@ -5,6 +5,8 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Panel } from '@/components/ui/Panel';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
+import { focusRing } from '@/lib/focus';
+import { cn } from '@/lib/cn';
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -22,7 +24,7 @@ function ExportCard({ title, description, onClick }: ExportCardProps) {
     <button
       type="button"
       onClick={onClick}
-      className="group flex items-start gap-3 text-left rounded-md border border-default bg-canvas px-4 py-3 transition-colors duration-fast hover:bg-subtle hover:border-strong cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      className={cn('group flex items-start gap-3 text-left rounded-md border border-default bg-canvas px-4 py-3 transition-colors duration-fast hover:bg-subtle hover:border-strong cursor-pointer', focusRing)}
     >
       <span className="mt-0.5 text-muted group-hover:text-primary" aria-hidden>
         <Download size={15} />

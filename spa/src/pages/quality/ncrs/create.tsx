@@ -26,7 +26,9 @@ import { Panel } from '@/components/ui/Panel';
 import { Chip, type ChipVariant } from '@/components/ui/Chip';
 import { Modal } from '@/components/ui/Modal';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { focusRingInset } from '@/lib/focus';
 import type { CreateNcrData, NcrTemplate } from '@/types/quality';
+import { cn } from '@/lib/cn';
 
 const schema = z.object({
   source: z.enum(['inspection_fail', 'customer_complaint']),
@@ -209,7 +211,7 @@ export default function CreateNcrPage() {
                   key={tpl.id}
                   type="button"
                   onClick={() => applyTemplate(tpl)}
-                  className="w-full text-left px-3 py-2.5 rounded-md hover:bg-elevated transition-colors border border-transparent hover:border-default mb-1"
+                  className={cn('w-full text-left px-3 py-2.5 rounded-md hover:bg-elevated transition-colors border border-transparent hover:border-default mb-1 cursor-pointer', focusRingInset)}
                 >
                   <div className="text-sm font-medium">{tpl.name}</div>
                   <div className="text-xs text-muted mt-0.5 flex items-center gap-2">

@@ -12,6 +12,7 @@ import { formatPeso } from '@/lib/formatNumber';
 import { cn } from '@/lib/cn';
 import { usePermission } from '@/hooks/usePermission';
 import type { Account } from '@/types/accounting';
+import { focusRing } from '@/lib/focus';
 
 export default function ChartOfAccountsPage() {
   const { can } = usePermission();
@@ -137,7 +138,7 @@ function TreeRow({
               onClick={() => onToggle(node.id)}
               aria-label={`${isOpen ? 'Collapse' : 'Expand'} ${node.name}`}
               aria-expanded={isOpen}
-              className="text-muted hover:text-primary cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className={cn('text-muted hover:text-primary cursor-pointer rounded', focusRing)}
             >
               {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
             </button>

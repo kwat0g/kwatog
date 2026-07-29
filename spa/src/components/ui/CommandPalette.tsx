@@ -1,5 +1,6 @@
 /** Global ⌘K command palette: recent items, page navigation, record search. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { cn } from '@/lib/cn';
 import { useNavigate } from 'react-router-dom';
 import {
   Search, Loader2, Clock, X,
@@ -10,6 +11,8 @@ import {
 import { client } from '@/api/client';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { formatPeso } from '@/lib/formatNumber';
+import { focusRingInset } from '@/lib/focus';
+import { LinkButton } from './LinkButton';
 import { SECTIONS, isNavItemVisible } from '@/components/layout/Sidebar';
 import { useAuthStore } from '@/stores/authStore';
 import { useRecentItemsStore } from '@/stores/recentItemsStore';
@@ -353,14 +356,14 @@ export function CommandPalette({ open, onClose }: Props) {
                 <span className="flex-1">{section.label}</span>
                 <span className="font-mono text-text-subtle tabular-nums">{section.rows.length}</span>
                 {section.headerAction && (
-                  <button
-                    type="button"
+                  <LinkButton
+                    tone="muted"
                     onClick={section.headerAction.onClick}
-                    className="inline-flex items-center gap-0.5 normal-case tracking-normal font-normal text-text-subtle hover:text-primary"
+                    icon={<X size={10} />}
+                    className="normal-case tracking-normal font-normal"
                   >
-                    <X size={10} />
                     {section.headerAction.label}
-                  </button>
+                  </LinkButton>
                 )}
               </div>
               <ul>
@@ -373,9 +376,11 @@ export function CommandPalette({ open, onClose }: Props) {
                         data-flat-index={flatIdx}
                         onClick={() => pick(row)}
                         onMouseEnter={() => setActiveIndex(flatIdx)}
-                        className={`w-full text-left px-3 py-2 text-sm flex items-center gap-3 ${
-                          isActive ? 'bg-elevated' : 'hover:bg-subtle'
-                        }`}
+                        className={cn(
+                          'w-full text-left px-3 py-2 text-sm flex items-center gap-3 cursor-pointer',
+                          focusRingInset,
+                          isActive ? 'bg-elevated' : 'hover:bg-subtle',
+                        )}
                       >
                         <row.icon size={14} className="text-muted shrink-0" />
                         <div className="flex-1 min-w-0">

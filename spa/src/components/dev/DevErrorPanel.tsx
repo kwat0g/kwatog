@@ -3,6 +3,7 @@ import { AlertTriangle, X, Trash2, Copy, ChevronDown, ChevronRight } from 'lucid
 import { useErrorLogStore, type ServerErrorEntry } from '@/stores/errorLogStore';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/Button';
+import { focusRing, focusRingInset } from '@/lib/focus';
 
 /**
  * Floating bottom-right panel that surfaces every 4xx/5xx HTTP response
@@ -38,7 +39,8 @@ export function DevErrorPanel() {
           'fixed bottom-4 right-4 z-50 flex items-center gap-2 px-3 py-1.5 rounded-full',
           'border border-default bg-canvas text-xs',
           unread > 0 ? 'text-danger-fg border-danger-bg' : 'text-muted',
-          'hover:bg-elevated transition-colors',
+          'hover:bg-elevated transition-colors cursor-pointer',
+          focusRing,
         )}
         aria-label="Toggle server error log"
       >
@@ -129,7 +131,7 @@ function ErrorRow({
       <button
         type="button"
         onClick={onToggle}
-        className="w-full text-left px-3 py-2 hover:bg-elevated flex items-start gap-2"
+        className={cn('w-full text-left px-3 py-2 hover:bg-elevated flex items-start gap-2 cursor-pointer', focusRingInset)}
       >
         {expanded
           ? <ChevronDown size={12} className="mt-0.5 text-muted shrink-0" />
@@ -181,7 +183,7 @@ function ErrorRow({
             <button
               type="button"
               onClick={copyAll}
-              className="inline-flex items-center gap-1 px-2 py-1 rounded border border-default text-muted hover:text-primary hover:bg-elevated"
+              className={cn('inline-flex items-center gap-1 px-2 py-1 rounded border border-default text-muted hover:text-primary hover:bg-elevated cursor-pointer', focusRing)}
             >
               <Copy size={10} /> Copy JSON
             </button>

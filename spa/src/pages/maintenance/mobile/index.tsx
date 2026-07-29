@@ -6,6 +6,8 @@ import { useAuthStore } from '@/stores/authStore';
 import { RefreshCw, Clock, AlertTriangle } from 'lucide-react';
 import { formatDate } from '@/lib/formatDate';
 import { Button } from '@/components/ui/Button';
+import { focusRing } from '@/lib/focus';
+import { cn } from '@/lib/cn';
 import type {
   MaintenanceWorkOrder,
   MaintenanceWorkOrderStatus,
@@ -88,7 +90,7 @@ export default function MobileMaintenanceList() {
         <Link
           key={wo.id}
           to={`/maintenance/mobile/${wo.id}`}
-          className="block rounded-md border border-default bg-canvas p-4 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 active:bg-surface"
+          className={cn('block rounded-md border border-default bg-canvas p-4 active:bg-surface', focusRing)}
         >
           {/* Header: MWO number + priority */}
           <div className="flex items-center justify-between">
@@ -141,11 +143,11 @@ function TabButton({
     <button
       type="button"
       onClick={onClick}
-      className={`flex-1 text-sm font-medium py-2 rounded-md min-h-[44px] transition-colors focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 ${
-        active
-          ? 'bg-canvas text-primary'
-          : 'text-muted'
-      }`}
+      className={cn(
+        'flex-1 text-sm font-medium py-2 rounded-md min-h-[44px] transition-colors cursor-pointer',
+        focusRing,
+        active ? 'bg-canvas text-primary' : 'text-muted',
+      )}
     >
       {children}
     </button>

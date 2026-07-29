@@ -22,6 +22,7 @@ import { StatCard } from '@/components/ui/StatCard';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatPeso } from '@/lib/formatNumber';
+import { focusRingInset } from '@/lib/focus';
 
 export default function QualityDashboardPage() {
   const [selectedDefect, setSelectedDefect] = useState<string | null>(null);
@@ -123,7 +124,7 @@ export default function QualityDashboardPage() {
                   <button
                     key={row.parameter_name}
                     onClick={() => setSelectedDefect(row.parameter_name)}
-                    className={`w-full text-left px-2 py-1 rounded-md hover:bg-subtle transition-colors flex items-center gap-2 text-xs ${
+                    className={`w-full text-left px-2 py-1 rounded-md hover:bg-subtle transition-colors flex items-center gap-2 text-xs cursor-pointer ${focusRingInset} ${
                       selectedDefect === row.parameter_name ? 'bg-subtle' : ''
                     }`}
                   >

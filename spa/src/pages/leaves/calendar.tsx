@@ -13,6 +13,7 @@ import { Tooltip } from '@/components/ui/Tooltip';
 import { PageHeader } from '@/components/layout/PageHeader';
 import type { LeaveCalendarDay } from '@/types/leave';
 import { cn } from '@/lib/cn';
+import { focusRing } from '@/lib/focus';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 const MONTH_NAMES = [
@@ -174,6 +175,7 @@ export default function LeaveCalendarPage() {
                     className={cn(
                       'h-20 w-full rounded-md border p-1.5 text-left transition-colors cursor-pointer',
                       'hover:ring-2 hover:ring-accent/30',
+                      focusRing,
                       cell.date === new Date().toISOString().split('T')[0]
                         ? 'ring-2 ring-accent'
                         : '',

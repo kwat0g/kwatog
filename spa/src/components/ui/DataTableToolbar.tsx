@@ -4,6 +4,7 @@ import { cn } from '@/lib/cn';
 import { Checkbox } from './Checkbox';
 import type { Column } from './DataTable';
 import type { TableDensity } from '@/stores/tablePrefsStore';
+import { focusRing } from '@/lib/focus';
 
 interface ToolbarProps<T> {
   columns: Column<T>[];
@@ -39,7 +40,7 @@ export function DataTableToolbar<T>({
             title="Customize columns"
             aria-label="Customize columns"
             onClick={() => setVisMenuOpen((v) => !v)}
-            className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-default text-muted hover:bg-elevated transition-colors duration-fast cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className={cn('h-7 w-7 inline-flex items-center justify-center rounded-md border border-default text-muted hover:bg-elevated transition-colors duration-fast cursor-pointer', focusRing)}
           >
             <Settings2 size={14} />
           </button>
@@ -82,7 +83,8 @@ export function DataTableToolbar<T>({
               aria-pressed={density === d}
               onClick={() => onDensityChange?.(d)}
               className={cn(
-                'h-7 w-7 inline-flex items-center justify-center rounded-md border border-default transition-colors duration-fast cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                'h-7 w-7 inline-flex items-center justify-center rounded-md border border-default transition-colors duration-fast cursor-pointer',
+                focusRing,
                 density === d ? 'bg-elevated text-primary' : 'text-muted hover:bg-elevated',
               )}
             >

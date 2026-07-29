@@ -15,6 +15,7 @@ import { cn } from '@/lib/cn';
 import type { DirectoryEmployee, OrgChartGroup } from '@/types/directory';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { focusRing } from '@/lib/focus';
 
 type ViewMode = 'grid' | 'list' | 'org';
 
@@ -122,6 +123,7 @@ export default function EmployeeDirectoryPage() {
                     onClick={() => canViewFull && navigate(`/hr/employees/${e.id}`)}
                     className={cn(
                       'bg-canvas border border-default rounded-md p-3 text-left transition-colors',
+                focusRing,
                       canViewFull ? 'hover:bg-elevated cursor-pointer' : 'cursor-default',
                     )}
                   >

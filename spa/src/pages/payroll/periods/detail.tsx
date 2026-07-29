@@ -676,13 +676,16 @@ function DisbursementProofCard({ proof, periodId }: { proof: DisbursementProof; 
         </div>
       </div>
       <div className="shrink-0 flex items-center gap-1">
-        <button
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          iconOnly
+          icon={<Eye size={14} />}
+          aria-label="View disbursement proof"
           onClick={() => void downloadAuthenticatedFile(periodsApi.downloadProof(periodId, proof.id), { openInNewTab: true, errorMessage: 'Failed to open disbursement proof.' })}
-          className="inline-flex items-center justify-center h-8 w-8 rounded hover:bg-elevated text-muted hover:text-primary transition-colors"
-          title="View proof"
-        >
-          <Eye size={14} />
-        </button>
+          className="text-muted hover:text-primary"
+        />
         <Button
           type="button"
           variant="ghost"

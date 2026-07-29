@@ -25,9 +25,12 @@ import { Spinner } from '@/components/ui/Spinner';
 import { Input } from '@/components/ui/Input';
 import { LinkButton } from '@/components/ui/LinkButton';
 import { ChainHeader, LinkedRecords, ActivityStream } from '@/components/chain';
+import { focusRingInset } from '@/lib/focus';
+import { Button } from '@/components/ui/Button';
 import { useChainProgress } from '@/hooks/useChainProgress';
 import type { SalesOrderStatus } from '@/types/crm';
 import type { ChainBottleneckRow } from '@/types/chain';
+import { cn } from '@/lib/cn';
 
 const SO_STATUS_VARIANT: Record<SalesOrderStatus, ChipVariant> = {
   draft: 'neutral',
@@ -137,7 +140,7 @@ function ChainPicker({ onPick }: { onPick: (id: string) => void }) {
                 key={so.id}
                 type="button"
                 onClick={() => onPick(so.id)}
-                className="flex w-full items-center gap-3 py-2.5 text-left transition-colors hover:bg-subtle"
+                className={cn('flex w-full items-center gap-3 py-2.5 text-left transition-colors hover:bg-subtle cursor-pointer', focusRingInset)}
               >
                 <Workflow size={15} className="shrink-0 text-muted" />
                 <span className="font-mono text-sm text-primary">{so.so_number}</span>
@@ -253,13 +256,9 @@ function ChainDetail({ id, onClear }: { id: string; onClear: () => void }) {
           <span className="font-mono text-lg font-medium text-primary">{so.so_number}</span>
           <Chip variant={SO_STATUS_VARIANT[so.status] ?? 'neutral'}>{so.status_label}</Chip>
         </div>
-        <button
-          type="button"
-          onClick={onClear}
-          className="inline-flex items-center gap-1.5 rounded-md border border-default px-3 py-1.5 text-sm text-secondary transition-colors hover:bg-elevated"
-        >
-          <Search size={13} /> Track another
-        </button>
+        <Button variant="secondary" size="md" icon={<Search size={13} />} onClick={onClear}>
+          Track another
+        </Button>
       </div>
 
       {/* Chain stepper */}

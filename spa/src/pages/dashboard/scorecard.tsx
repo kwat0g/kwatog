@@ -13,6 +13,8 @@ import { usePermission } from '@/hooks/usePermission';
 import { formatInt, formatPeso } from '@/lib/formatNumber';
 import { kpiApi } from '@/api/kpi';
 import type { KpiScorecardItem, KpiTrendPoint } from '@/types/dashboard/kpi';
+import { focusRing } from '@/lib/focus';
+import { cn } from '@/lib/cn';
 
 const MODULE_LINKS: Record<string, string> = {
   production: '/production/work-orders',
@@ -244,7 +246,7 @@ function KpiCard({ item }: { item: KpiScorecardItem }) {
 
   if (moduleLink) {
     return (
-      <Link to={moduleLink} className="block rounded-md focus:outline-none focus:ring-2 focus:ring-accent">
+      <Link to={moduleLink} className={cn('block rounded-md', focusRing)}>
         {card}
       </Link>
     );

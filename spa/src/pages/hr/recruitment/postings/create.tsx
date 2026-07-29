@@ -17,7 +17,9 @@ import { Panel } from '@/components/ui/Panel';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { onFormInvalid } from '@/lib/formErrors';
+import { focusRing } from '@/lib/focus';
 import toast from 'react-hot-toast';
+import { cn } from '@/lib/cn';
 
 const schema = z.object({
   title: z.string().min(1, 'Title is required').max(200),
@@ -209,7 +211,7 @@ export default function PostingCreatePage() {
                       <button
                         type="button"
                         onClick={() => removeTag(i)}
-                        className="ml-2 text-muted hover:text-danger transition-colors shrink-0"
+                        className={cn('ml-2 text-muted hover:text-danger transition-colors shrink-0 cursor-pointer rounded', focusRing)}
                       >
                         <X size={14} />
                       </button>

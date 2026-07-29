@@ -5,6 +5,8 @@
 // excluded at write-time by `stripSensitive`.
 
 import { Clock } from 'lucide-react';
+import { cn } from '@/lib/cn';
+import { focusRing } from '@/lib/focus';
 
 interface Props {
   ageMs: number | null;
@@ -41,14 +43,14 @@ export function DraftRestoreBanner({ ageMs, onRestore, onDiscard }: Props) {
         <button
           type="button"
           onClick={onRestore}
-          className="h-7 px-2.5 rounded-md text-xs font-medium bg-warning text-canvas hover:opacity-90"
+          className={cn('h-7 px-2.5 rounded-md text-xs font-medium bg-warning text-canvas hover:opacity-90 cursor-pointer', focusRing)}
         >
           Restore
         </button>
         <button
           type="button"
           onClick={onDiscard}
-          className="h-7 px-2.5 rounded-md text-xs text-warning-fg hover:bg-warning/20"
+          className={cn('h-7 px-2.5 rounded-md text-xs text-warning-fg hover:bg-warning/20 cursor-pointer', focusRing)}
         >
           Discard
         </button>

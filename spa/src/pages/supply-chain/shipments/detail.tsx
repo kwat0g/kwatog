@@ -18,6 +18,7 @@ import { Select } from '@/components/ui/Select';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { Textarea } from '@/components/ui/Textarea';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { LinkButton } from '@/components/ui/LinkButton';
 import { usePermission } from '@/hooks/usePermission';
 import type { ShipmentDocumentType, ShipmentStatus } from '@/types/supplyChain';
 
@@ -288,16 +289,15 @@ export default function ShipmentDetailPage() {
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       {doc.url && (
-                        <button
-                          type="button"
+                        <LinkButton
+                          className="text-xs"
                           onClick={() => void downloadAuthenticatedFile(doc.url!, {
                             filename: doc.original_filename ?? undefined,
                             errorMessage: 'Failed to download the shipment document.',
                           })}
-                          className="text-xs text-accent hover:underline"
                         >
                           Download
-                        </button>
+                        </LinkButton>
                       )}
                       {canManage && (
                         <Button

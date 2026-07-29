@@ -16,6 +16,7 @@ import { dashboardsApi } from '@/api/dashboards';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Button } from '@/components/ui/Button';
 
 /* ───────────────────────── Typed interface ───────────────────────── */
 
@@ -90,12 +91,9 @@ function SelfServiceContent() {
           title="Couldn't load your dashboard"
           description="Pull-to-refresh or tap retry."
           action={
-            <button
-              onClick={() => refetch()}
-              className="h-8 px-3 rounded-md border border-default text-sm hover:bg-elevated"
-            >
+            <Button variant="secondary" onClick={() => refetch()}>
               Retry
-            </button>
+            </Button>
           }
         />
       </div>

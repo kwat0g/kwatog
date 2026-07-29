@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { driverApi } from '@/api/driver';
 import type { DriverDelivery, DriverDeliveryStatus } from '@/types/driver';
 import { Button } from '@/components/ui/Button';
+import { focusRing } from '@/lib/focus';
+import { cn } from '@/lib/cn';
 
 export default function DriverDeliveryList() {
   const { data, isLoading, error, refetch } = useQuery({
@@ -29,7 +31,7 @@ export default function DriverDeliveryList() {
         <Link
           key={d.id}
           to={`/driver/${d.id}`}
-          className="block rounded-md border border-default bg-canvas p-4 hover:bg-surface focus:outline-none focus:ring-2 focus:ring-accent"
+          className={cn('block rounded-md border border-default bg-canvas p-4 hover:bg-surface', focusRing)}
         >
           <div className="flex items-baseline justify-between">
             <div className="font-mono text-sm text-primary">{d.delivery_number}</div>

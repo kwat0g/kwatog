@@ -107,17 +107,19 @@ export default function SelfServicePayslipsPage() {
               </div>
 
               {!p.error_message && (
-                <button
-                  type="button"
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  icon={<Download size={14} />}
+                  aria-label={`Download payslip PDF for ${p.computed_at ? formatDate(p.computed_at) : 'this period'}`}
+                  className="shrink-0 min-h-[44px]"
                   onClick={() => void downloadAuthenticatedFile(payrollsApi.payslipUrl(p.id), {
                     openInNewTab: true,
                     errorMessage: 'Failed to generate the payslip.',
                   })}
-                  className="shrink-0 inline-flex items-center gap-1 px-3 h-11 text-sm rounded-md border border-default bg-canvas text-primary hover:bg-elevated"
-                  aria-label={`Download payslip PDF for ${p.computed_at ? formatDate(p.computed_at) : 'this period'}`}
                 >
-                  <Download size={14} /> PDF
-                </button>
+                  PDF
+                </Button>
               )}
             </li>
           ))}

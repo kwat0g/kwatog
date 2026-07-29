@@ -9,6 +9,8 @@ import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import type { WorkOrderOutput } from '@/types/production';
 import { formatTime } from '@/lib/formatDate';
+import { focusRing } from '@/lib/focus';
+import { cn } from '@/lib/cn';
 
 export default function RecordOutput() {
   const { woId } = useParams<{ woId: string }>();
@@ -70,7 +72,7 @@ export default function RecordOutput() {
       {/* Back link */}
       <Link
         to="/factory"
-        className="inline-flex items-center gap-1.5 text-sm text-secondary min-h-[44px] rounded focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
+        className={cn('inline-flex items-center gap-1.5 text-sm text-secondary min-h-[44px] rounded', focusRing)}
       >
         <ArrowLeft className="w-4 h-4" />
         Back to orders

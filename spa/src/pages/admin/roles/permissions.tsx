@@ -16,6 +16,7 @@ import { Select } from '@/components/ui/Select';
 import { Spinner } from '@/components/ui/Spinner';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { cn } from '@/lib/cn';
+import { focusRingInset } from '@/lib/focus';
 
 /**
  * Series R — Task R1.
@@ -301,7 +302,7 @@ export default function RolePermissionsPage() {
                       <button
                         type="button"
                         onClick={() => toggleCollapsed(module)}
-                        className="w-full flex items-center justify-between px-3 py-2 text-left text-sm"
+                        className={cn('w-full flex items-center justify-between px-3 py-2 text-left text-sm cursor-pointer', focusRingInset)}
                       >
                         <span className="flex items-center gap-2 font-medium uppercase tracking-wide text-2xs text-muted">
                           {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}

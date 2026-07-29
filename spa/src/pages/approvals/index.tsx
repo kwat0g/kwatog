@@ -11,6 +11,7 @@ import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { cn } from '@/lib/cn';
 import { formatPeso } from '@/lib/formatNumber';
+import { focusRing } from '@/lib/focus';
 import type {
   ApprovalKind,
   ApprovalCardActive,
@@ -243,7 +244,7 @@ function ActiveCard({
     <button
       type="button"
       onClick={onOpen}
-      className="w-full text-left bg-canvas border border-default rounded-md p-2.5 hover:bg-elevated transition-colors"
+      className={cn('w-full text-left bg-canvas border border-default rounded-md p-2.5 hover:bg-elevated transition-colors cursor-pointer', focusRing)}
     >
       <div className="flex items-center justify-between mb-1">
         <span className="text-2xs uppercase tracking-wider text-muted font-medium">
@@ -298,7 +299,7 @@ function ActionedCard({
     <button
       type="button"
       onClick={onOpen}
-      className="w-full text-left bg-canvas border border-default rounded-md p-2.5 hover:bg-elevated transition-colors"
+      className={cn('w-full text-left bg-canvas border border-default rounded-md p-2.5 hover:bg-elevated transition-colors cursor-pointer', focusRing)}
     >
       <div className="flex items-center justify-between mb-1">
         <span className="text-2xs uppercase tracking-wider text-muted font-medium">

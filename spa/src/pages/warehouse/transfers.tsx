@@ -22,6 +22,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
 import { numberInputProps } from '@/lib/numberInput';
 import { onFormInvalid } from '@/lib/formErrors';
+import { focusRingInset } from '@/lib/focus';
 import type { TransferOrder } from '@/types/warehouse';
 import type { WarehouseLocation } from '@/types/inventory';
 
@@ -128,7 +129,7 @@ export default function TransferOrdersPage() {
                   key={t.id}
                   type="button"
                   onClick={() => setActiveId(t.id)}
-                  className={`w-full text-left px-2 py-1.5 text-xs rounded-md transition-colors ${
+                  className={`w-full text-left px-2 py-1.5 text-xs rounded-md transition-colors cursor-pointer ${focusRingInset} ${
                     activeId === t.id ? 'bg-accent/10 text-accent border border-accent/20' : 'text-muted hover:text-primary hover:bg-elevated'
                   }`}
                 >

@@ -26,6 +26,8 @@ import type { DeliveryStatus, DeliveryProofType } from '@/types/supplyChain';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { Textarea } from '@/components/ui/Textarea';
 import { LinkButton } from '@/components/ui/LinkButton';
+import { focusRingInset } from '@/lib/focus';
+import { cn } from '@/lib/cn';
 
 const STATUS_CHIP: Record<DeliveryStatus, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
   scheduled: 'neutral', loading: 'info', in_transit: 'info',
@@ -296,7 +298,7 @@ export default function DeliveryDetailPage() {
                       <button type="button" onClick={() => void downloadAuthenticatedFile(p.view_url!, {
                         openInNewTab: true,
                         errorMessage: 'Failed to open the delivery proof.',
-                      })} className="block w-full aspect-video bg-subtle">
+                      })} className={cn('block w-full aspect-video bg-subtle cursor-pointer', focusRingInset)}>
                         <img src={p.view_url} alt={p.file_name} className="w-full h-full object-cover" />
                       </button>
                     ) : (
@@ -305,7 +307,7 @@ export default function DeliveryDetailPage() {
                           openInNewTab: true,
                           errorMessage: 'Failed to open the delivery proof.',
                         })}
-                        className="flex w-full items-center justify-center aspect-video bg-subtle text-muted hover:text-accent">
+                        className={cn('flex w-full items-center justify-center aspect-video bg-subtle text-muted hover:text-accent cursor-pointer', focusRingInset)}>
                         <FileText size={32} />
                       </button>
                     )}
@@ -415,7 +417,7 @@ export default function DeliveryDetailPage() {
               <button type="button" onClick={() => void downloadAuthenticatedFile(data.receipt_photo_url!, {
                 openInNewTab: true,
                 errorMessage: 'Failed to open the receipt photo.',
-              })} className="block w-full">
+              })} className={cn('block w-full cursor-pointer', focusRingInset)}>
                 <img src={data.receipt_photo_url} alt="Receipt" className="w-full rounded-md border border-default" />
               </button>
             </Panel>
