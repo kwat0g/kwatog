@@ -129,8 +129,9 @@ export default function PortalLayout({ type, user, onLogout, title, subtitle, ch
           </div>
         </header>
 
-        {/* Content */}
-        <div className="flex-1 p-5">
+        {/* Content — no padding here. Portal pages own the same anatomy as app
+            pages: a full-bleed <PageHeader /> followed by a `px-5 py-4` body. */}
+        <div className="flex-1 min-w-0">
           {children}
         </div>
       </main>

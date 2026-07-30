@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
+import { Chip } from '@/components/ui/Chip';
+import { PageHeader } from '@/components/layout/PageHeader';
 import { formatDateTime } from '@/lib/formatDate';
 import type { EightDReportData } from '@/types/b2b';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
@@ -23,7 +25,7 @@ export default function CustomerComplaintsPage() {
   const [affectedQty, setAffectedQty] = useState('0');
   const [viewing8d, setViewing8d] = useState<EightDReportData | null>(null);
 
-  const { data: complaints, isLoading } = useQuery({
+  const { data: complaints, isLoading, isError, refetch } = useQuery({
     queryKey: ['portal', 'customer', 'complaints'],
     queryFn: () => customerPortalApi.listComplaints(),
     placeholderData: (prev) => prev,
@@ -55,105 +57,117 @@ export default function CustomerComplaintsPage() {
     }
   };
 
-  if (isLoading) return <SkeletonBlock className="h-64 rounded-md" />;
-
   return (
-    <div className="space-y-4 max-w-4xl">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-medium">Complaints</h2>
-        <Button variant="primary" size="sm" icon={showForm ? <X size={14} /> : <Plus size={14} />} onClick={() => setShowForm(!showForm)}>
-          {showForm ? 'Cancel' : 'New complaint'}
-        </Button>
-      </div>
+    <div>
+      <PageHeader
+        title="Complaints"
+        subtitle="Quality issues you have reported to Ogami"
+        actions={
+          <Button variant="primary" size="sm" icon={showForm ? <X size={14} /> : <Plus size={14} />} onClick={() => setShowForm(!showForm)}>
+            {showForm ? 'Cancel' : 'New complaint'}
+          </Button>
+        }
+      />
 
-      {/* New complaint form */}
-      {showForm && (
-        <Panel title="Submit a complaint">
-          <form onSubmit={(e) => { e.preventDefault(); createMut.mutate(); }} className="flex flex-col gap-3">
-            <Select label="Severity" value={severity} onChange={(e) => setSeverity(e.target.value)}>
-              <option value="minor">Minor</option>
-              <option value="major">Major</option>
-              <option value="critical">Critical</option>
-            </Select>
-            <Textarea
-              label="Description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-              required
-              placeholder="Describe the issue…"
-            />
-            <Input
-              label="Affected quantity"
-              type="number"
-              min={0}
-              value={affectedQty}
-              onChange={(e) => setAffectedQty(e.target.value)}
-              className="font-mono tabular-nums"
-            />
-            <Button type="submit" variant="primary" size="sm" loading={createMut.isPending} className="self-start">
-              Submit complaint
-            </Button>
-          </form>
-        </Panel>
-      )}
+      {/* One padded body holds every state, so loading and loaded agree on width. */}
+      <div className="px-5 py-4 space-y-4 max-w-5xl">
+        {isLoading && <SkeletonBlock className="h-64 rounded-md" />}
 
-      {/* Complaints list */}
-      <Panel title="Your complaints">
-        {complaints && complaints.length > 0 ? (
-          <table className={tableCls}>
-            <thead>
-              <tr className={theadTrCls}>
-                <Th>#</Th>
-                <Th>Severity</Th>
-                <Th>Description</Th>
-                <Th align="right">Qty</Th>
-                <Th>Date</Th>
-                <Th align="right">Status</Th>
-                <Th align="right">8D</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {complaints.map((c) => (
-                <tr key={c.id} className={trCls}>
-                  <Td mono className="text-muted">{c.complaint_number}</Td>
-                  <Td>
-                    <span className={`inline-block px-2 py-0.5 rounded-full text-2xs font-medium ${
-                      c.severity === 'critical' ? 'bg-danger/10 text-danger' :
-                      c.severity === 'major' ? 'bg-warning/10 text-warning' :
-                      'bg-subtle text-muted'
-                    }`}>{c.severity}</span>
-                  </Td>
-                  <Td className="max-w-xs truncate">{c.description}</Td>
-                  <Td align="right" mono>{c.affected_quantity}</Td>
-                  <Td className="text-muted">{c.received_date ?? '—'}</Td>
-                  <Td align="right" mono>
-                    <span className={`inline-block px-2 py-0.5 rounded-full text-2xs font-medium uppercase ${
-                      c.status === 'closed' ? 'bg-success/10 text-success' :
-                      c.status === 'resolved' ? 'bg-accent/10 text-accent' :
-                      'bg-warning/10 text-warning'
-                    }`}>{c.status}</span>
-                  </Td>
-                  <Td align="right" mono>
-                    {(c.status === 'resolved' || c.status === 'closed') && (
-                      <LinkButton
-                        onClick={() => open8d(c.id)}
-                        icon={<FileText size={12} />}
-                        className="text-2xs"
-                        title="View 8D report"
-                      >
-                        8D
-                      </LinkButton>
-                    )}
-                  </Td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <EmptyState icon="message-square" title="No complaints" description="Any reported issues will appear here." />
+        {isError && (
+          <EmptyState
+            icon="alert-circle"
+            title="Failed to load complaints"
+            action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
+          />
         )}
-      </Panel>
+
+        {/* New complaint form */}
+        {!isLoading && !isError && showForm && (
+          <Panel title="Submit a complaint">
+            <form onSubmit={(e) => { e.preventDefault(); createMut.mutate(); }} className="flex flex-col gap-3">
+              <Select label="Severity" value={severity} onChange={(e) => setSeverity(e.target.value)}>
+                <option value="minor">Minor</option>
+                <option value="major">Major</option>
+                <option value="critical">Critical</option>
+              </Select>
+              <Textarea
+                label="Description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={3}
+                required
+                placeholder="Describe the issue…"
+              />
+              <Input
+                label="Affected quantity"
+                type="number"
+                min={0}
+                value={affectedQty}
+                onChange={(e) => setAffectedQty(e.target.value)}
+                className="font-mono tabular-nums"
+              />
+              <Button type="submit" variant="primary" size="sm" loading={createMut.isPending} className="self-start">
+                Submit complaint
+              </Button>
+            </form>
+          </Panel>
+        )}
+
+        {/* Complaints list */}
+        {!isLoading && !isError && (
+          <Panel noPadding>
+            {complaints && complaints.length > 0 ? (
+              <table className={tableCls}>
+                <thead>
+                  <tr className={theadTrCls}>
+                    <Th>#</Th>
+                    <Th>Severity</Th>
+                    <Th>Description</Th>
+                    <Th align="right">Qty</Th>
+                    <Th>Date</Th>
+                    <Th align="right">Status</Th>
+                    <Th align="right">8D</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {complaints.map((c) => (
+                    <tr key={c.id} className={trCls}>
+                      <Td mono className="text-muted">{c.complaint_number}</Td>
+                      <Td>
+                        <Chip variant={c.severity === 'critical' ? 'danger' : c.severity === 'major' ? 'warning' : 'neutral'}>
+                          {c.severity}
+                        </Chip>
+                      </Td>
+                      <Td className="max-w-xs truncate">{c.description}</Td>
+                      <Td align="right" mono>{c.affected_quantity}</Td>
+                      <Td className="text-muted">{c.received_date ?? '—'}</Td>
+                      <Td align="right" mono>
+                        <Chip variant={c.status === 'closed' ? 'success' : c.status === 'resolved' ? 'info' : 'warning'}>
+                          {c.status}
+                        </Chip>
+                      </Td>
+                      <Td align="right" mono>
+                        {(c.status === 'resolved' || c.status === 'closed') && (
+                          <LinkButton
+                            onClick={() => open8d(c.id)}
+                            icon={<FileText size={12} />}
+                            className="text-2xs"
+                            title="View 8D report"
+                          >
+                            8D
+                          </LinkButton>
+                        )}
+                      </Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <EmptyState icon="message-square" title="No complaints" description="Any reported issues will appear here." />
+            )}
+          </Panel>
+        )}
+      </div>
 
       {/* 8D Report Modal */}
       {viewing8d && (

@@ -6,6 +6,7 @@ import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
+import { PageHeader } from '@/components/layout/PageHeader';
 import { formatPeso } from '@/lib/formatNumber';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
@@ -16,45 +17,61 @@ export default function CustomerInvoicesPage() {
     placeholderData: (prev) => prev,
   });
 
-  if (isLoading) return <SkeletonBlock className="h-64 rounded-md" />;
-  if (isError) return <EmptyState icon="alert-circle" title="Failed to load invoices" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />;
-
   return (
-    <Panel title="Invoices">
-      {invoices && invoices.length > 0 ? (
-        <table className={tableCls}>
-          <thead>
-            <tr className={theadTrCls}>
-              <Th>Invoice #</Th>
-              <Th>Date</Th>
-              <Th align="right">Amount</Th>
-              <Th align="right">Balance</Th>
-              <Th>Due</Th>
-              <Th align="right">Status</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {invoices.map((inv) => (
-              <tr key={inv.id} className={trCls}>
-                <Td>
-                  <Link to={`/portal/customer/invoices/${inv.id}`} className="font-mono text-accent hover:underline font-medium">
-                    {inv.invoice_number}
-                  </Link>
-                </Td>
-                <Td className="text-muted">{inv.date ?? '—'}</Td>
-                <Td align="right" mono>{formatPeso(inv.total_amount)}</Td>
-                <Td align="right" mono>{formatPeso(inv.balance)}</Td>
-                <Td className="text-muted">{inv.due_date ?? '—'}</Td>
-                <Td align="right" mono>
-                  <Chip variant={chipVariantForStatus(inv.status)}>{inv.status}</Chip>
-                </Td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      ) : (
-        <EmptyState icon="receipt" title="No invoices" description="Your invoices will appear here once issued." />
-      )}
-    </Panel>
+    <div>
+      <PageHeader title="Invoices" subtitle="Billing documents issued by Ogami" />
+
+      {/* One padded body holds every state, so loading and loaded agree on width. */}
+      <div className="px-5 py-4 max-w-5xl">
+        {isLoading && <SkeletonBlock className="h-64 rounded-md" />}
+
+        {isError && (
+          <EmptyState
+            icon="alert-circle"
+            title="Failed to load invoices"
+            action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
+          />
+        )}
+
+        {!isLoading && !isError && (
+          <Panel noPadding>
+            {invoices && invoices.length > 0 ? (
+              <table className={tableCls}>
+                <thead>
+                  <tr className={theadTrCls}>
+                    <Th>Invoice #</Th>
+                    <Th>Date</Th>
+                    <Th align="right">Amount</Th>
+                    <Th align="right">Balance</Th>
+                    <Th>Due</Th>
+                    <Th align="right">Status</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {invoices.map((inv) => (
+                    <tr key={inv.id} className={trCls}>
+                      <Td>
+                        <Link to={`/portal/customer/invoices/${inv.id}`} className="font-mono text-accent hover:underline font-medium">
+                          {inv.invoice_number}
+                        </Link>
+                      </Td>
+                      <Td className="text-muted">{inv.date ?? '—'}</Td>
+                      <Td align="right" mono>{formatPeso(inv.total_amount)}</Td>
+                      <Td align="right" mono>{formatPeso(inv.balance)}</Td>
+                      <Td className="text-muted">{inv.due_date ?? '—'}</Td>
+                      <Td align="right" mono>
+                        <Chip variant={chipVariantForStatus(inv.status)}>{inv.status}</Chip>
+                      </Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <EmptyState icon="receipt" title="No invoices" description="Your invoices will appear here once issued." />
+            )}
+          </Panel>
+        )}
+      </div>
+    </div>
   );
 }

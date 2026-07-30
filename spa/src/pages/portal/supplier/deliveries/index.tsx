@@ -5,6 +5,7 @@ import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
+import { PageHeader } from '@/components/layout/PageHeader';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 export default function SupplierDeliveriesPage() {
@@ -14,35 +15,51 @@ export default function SupplierDeliveriesPage() {
     placeholderData: (prev) => prev,
   });
 
-  if (isLoading) return <SkeletonBlock className="h-64 rounded-md" />;
-  if (isError) return <EmptyState icon="alert-circle" title="Failed to load deliveries" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />;
-
   return (
-    <Panel title="Deliveries">
-      {deliveries && deliveries.length > 0 ? (
-        <table className={tableCls}>
-          <thead>
-            <tr className={theadTrCls}>
-              <Th>DR #</Th>
-              <Th>Date</Th>
-              <Th align="right">Status</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {deliveries.map((d) => (
-              <tr key={d.id} className={trCls}>
-                <Td mono>{d.delivery_number}</Td>
-                <Td className="text-muted">{d.delivered_at ?? '—'}</Td>
-                <Td align="right" mono>
-                  <Chip variant={chipVariantForStatus(d.status)}>{d.status}</Chip>
-                </Td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      ) : (
-        <EmptyState icon="truck" title="No deliveries" />
-      )}
-    </Panel>
+    <div>
+      <PageHeader title="Deliveries" subtitle="Shipments you have sent to Ogami" />
+
+      {/* One padded body holds every state, so loading and loaded agree on width. */}
+      <div className="px-5 py-4 max-w-5xl">
+        {isLoading && <SkeletonBlock className="h-64 rounded-md" />}
+
+        {isError && (
+          <EmptyState
+            icon="alert-circle"
+            title="Failed to load deliveries"
+            action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
+          />
+        )}
+
+        {!isLoading && !isError && (
+          <Panel noPadding>
+            {deliveries && deliveries.length > 0 ? (
+              <table className={tableCls}>
+                <thead>
+                  <tr className={theadTrCls}>
+                    <Th>DR #</Th>
+                    <Th>Date</Th>
+                    <Th align="right">Status</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {deliveries.map((d) => (
+                    <tr key={d.id} className={trCls}>
+                      <Td mono>{d.delivery_number}</Td>
+                      <Td className="text-muted">{d.delivered_at ?? '—'}</Td>
+                      <Td align="right" mono>
+                        <Chip variant={chipVariantForStatus(d.status)}>{d.status}</Chip>
+                      </Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <EmptyState icon="truck" title="No deliveries" description="Deliveries you send to Ogami will appear here." />
+            )}
+          </Panel>
+        )}
+      </div>
+    </div>
   );
 }

@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-import { useParams, Link } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { ArrowLeft, FileDown } from 'lucide-react';
+import { FileDown } from 'lucide-react';
 import { customerPortalApi } from '@/api/b2b/customer';
 import { Panel } from '@/components/ui/Panel';
 import { Button } from '@/components/ui/Button';
@@ -9,6 +9,7 @@ import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { formatPeso } from '@/lib/formatNumber';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
+import { PageHeader } from '@/components/layout/PageHeader';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -25,7 +26,7 @@ function downloadBlob(blob: Blob, filename: string) {
 export default function CustomerInvoiceDetailPage() {
   const { id } = useParams<{ id: string }>();
 
-  const { data: invoice, isLoading } = useQuery({
+  const { data: invoice, isLoading, isError, refetch } = useQuery({
     queryKey: ['portal', 'customer', 'invoice', id],
     queryFn: () => customerPortalApi.getInvoice(id!),
     enabled: !!id,
@@ -40,84 +41,103 @@ export default function CustomerInvoiceDetailPage() {
     }
   };
 
-  if (isLoading) return <SkeletonBlock className="h-80 rounded-md" />;
-  if (!invoice) return <EmptyState icon="file-x" title="Invoice not found" />;
-
   return (
-    <div className="space-y-4 max-w-4xl">
-      <div className="flex items-center gap-3">
-        <Link to="/portal/customer/invoices" className="text-muted hover:text-primary p-1 -ml-1">
-          <ArrowLeft size={16} />
-        </Link>
-        <div>
-          <h2 className="text-sm font-medium">{invoice.invoice_number}</h2>
-          <p className="text-2xs text-muted">{invoice.date ?? '—'}</p>
-        </div>
-        <Button variant="ghost" size="sm" icon={<FileDown size={14} />} onClick={downloadPdf} className="ml-auto">
-          PDF
-        </Button>
-        <Chip variant={chipVariantForStatus(invoice.status)}>{invoice.status}</Chip>
+    <div>
+      <PageHeader
+        title={invoice?.invoice_number ?? 'Invoice'}
+        subtitle={invoice?.date ?? undefined}
+        backTo="/portal/customer/invoices"
+        backLabel="Invoices"
+        actions={invoice ? (
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" icon={<FileDown size={14} />} onClick={downloadPdf}>
+              PDF
+            </Button>
+            <Chip variant={chipVariantForStatus(invoice.status)}>{invoice.status}</Chip>
+          </div>
+        ) : undefined}
+      />
+
+      {/* One padded body holds every state, so loading and loaded agree on width. */}
+      <div className="px-5 py-4 space-y-4 max-w-4xl">
+        {isLoading && <SkeletonBlock className="h-80 rounded-md" />}
+
+        {isError && (
+          <EmptyState
+            icon="alert-circle"
+            title="Failed to load invoice"
+            action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
+          />
+        )}
+
+        {!isLoading && !isError && !invoice && (
+          <EmptyState icon="file-x" title="Invoice not found" />
+        )}
+
+        {!isLoading && !isError && invoice && (
+          <>
+            <div className="grid grid-cols-3 gap-3">
+              <Panel title="Total Amount" bodyClassName="p-4 text-center">
+                <p className="text-lg font-medium font-mono tabular-nums">{formatPeso(invoice.total_amount)}</p>
+              </Panel>
+              <Panel title="Balance Due" bodyClassName="p-4 text-center">
+                <p className="text-lg font-medium font-mono tabular-nums">{formatPeso(invoice.balance)}</p>
+              </Panel>
+              <Panel title="Due Date" bodyClassName="p-4 text-center">
+                <p className="text-lg font-medium">{invoice.due_date ?? '—'}</p>
+              </Panel>
+            </div>
+
+            {invoice.items && invoice.items.length > 0 && (
+              <Panel title={`Items (${invoice.items.length})`} noPadding>
+                <table className={tableCls}>
+                  <thead>
+                    <tr className={theadTrCls}>
+                      <Th>Description</Th>
+                      <Th align="right">Qty</Th>
+                      <Th align="right">Unit Price</Th>
+                      <Th align="right">Total</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {invoice.items.map((item, i) => (
+                      <tr key={i} className={trCls}>
+                        <Td>{item.description}</Td>
+                        <Td align="right" mono>{item.quantity}</Td>
+                        <Td align="right" mono>{formatPeso(item.unit_price)}</Td>
+                        <Td align="right" mono>{formatPeso(item.total_price)}</Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </Panel>
+            )}
+
+            {invoice.payments && invoice.payments.length > 0 && (
+              <Panel title="Payments Made" noPadding>
+                <table className={tableCls}>
+                  <thead>
+                    <tr className={theadTrCls}>
+                      <Th>Date</Th>
+                      <Th>Method</Th>
+                      <Th align="right">Amount</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {invoice.payments.map((p, i) => (
+                      <tr key={i} className={trCls}>
+                        <Td className="text-muted">{p.paid_at ?? '—'}</Td>
+                        <Td className="capitalize">{p.payment_method}</Td>
+                        <Td align="right" mono>{formatPeso(p.amount)}</Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </Panel>
+            )}
+          </>
+        )}
       </div>
-
-      <div className="grid grid-cols-3 gap-3">
-        <Panel title="Total Amount" className="text-center">
-          <p className="text-lg font-medium font-mono tabular-nums">{formatPeso(invoice.total_amount)}</p>
-        </Panel>
-        <Panel title="Balance Due" className="text-center">
-          <p className="text-lg font-medium font-mono tabular-nums">{formatPeso(invoice.balance)}</p>
-        </Panel>
-        <Panel title="Due Date" className="text-center">
-          <p className="text-lg font-medium">{invoice.due_date ?? '—'}</p>
-        </Panel>
-      </div>
-
-      {invoice.items && invoice.items.length > 0 && (
-        <Panel title={`Items (${invoice.items.length})`}>
-          <table className={tableCls}>
-            <thead>
-              <tr className={theadTrCls}>
-                <Th>Description</Th>
-                <Th align="right">Qty</Th>
-                <Th align="right">Unit Price</Th>
-                <Th align="right">Total</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {invoice.items.map((item, i) => (
-                <tr key={i} className={trCls}>
-                  <Td>{item.description}</Td>
-                  <Td align="right" mono>{item.quantity}</Td>
-                  <Td align="right" mono>{formatPeso(item.unit_price)}</Td>
-                  <Td align="right" mono>{formatPeso(item.total_price)}</Td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Panel>
-      )}
-
-      {invoice.payments && invoice.payments.length > 0 && (
-        <Panel title="Payments Made">
-          <table className={tableCls}>
-            <thead>
-              <tr className={theadTrCls}>
-                <Th>Date</Th>
-                <Th>Method</Th>
-                <Th align="right">Amount</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {invoice.payments.map((p, i) => (
-                <tr key={i} className={trCls}>
-                  <Td className="text-muted">{p.paid_at ?? '—'}</Td>
-                  <Td className="capitalize">{p.payment_method}</Td>
-                  <Td align="right" mono>{formatPeso(p.amount)}</Td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Panel>
-      )}
     </div>
   );
 }

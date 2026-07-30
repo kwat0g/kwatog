@@ -10,6 +10,7 @@ import { Select } from '@/components/ui/Select';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { formatDate } from '@/lib/formatDate';
+import { PageHeader } from '@/components/layout/PageHeader';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 interface ScheduleForm {
@@ -95,133 +96,140 @@ export default function SupplierDeliverySchedulesPage() {
   };
 
   return (
-    <div className="max-w-5xl space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-medium">Delivery schedules</h2>
-          <p className="text-xs text-muted">Submit and manage your delivery plans</p>
-        </div>
-        <Button onClick={() => setShowForm(!showForm)}>
-          {showForm ? 'Cancel' : 'New schedule'}
-        </Button>
-      </div>
+    <div>
+      <PageHeader
+        title="Delivery schedules"
+        subtitle="Submit and manage your delivery plans"
+        backTo="/portal/supplier"
+        backLabel="Portal"
+        actions={
+          <Button variant="primary" size="sm" icon={showForm ? <X size={14} /> : <Plus size={14} />} onClick={() => setShowForm(!showForm)}>
+            {showForm ? 'Cancel' : 'New schedule'}
+          </Button>
+        }
+      />
 
-      {/* New schedule form */}
-      {showForm && (
-        <Panel className="p-4 space-y-4">
-          <h3 className="text-sm font-medium">New delivery schedule</h3>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Select
-                label="Purchase order"
-                required
-                value={form.purchase_order_id}
-                onChange={(e) => setForm((p) => ({ ...p, purchase_order_id: e.target.value }))}
-              >
-                <option value="">Select PO…</option>
-                {pos.map((po) => (
-                  <option key={po.id} value={po.id}>{po.po_number}</option>
+      {/* One padded body holds every state, so loading and loaded agree on width. */}
+      <div className="px-5 py-4 space-y-4 max-w-5xl">
+        {/* New schedule form */}
+        {showForm && (
+          <Panel title="New delivery schedule">
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Select
+                  label="Purchase order"
+                  required
+                  value={form.purchase_order_id}
+                  onChange={(e) => setForm((p) => ({ ...p, purchase_order_id: e.target.value }))}
+                >
+                  <option value="">Select PO…</option>
+                  {pos.map((po) => (
+                    <option key={po.id} value={po.id}>{po.po_number}</option>
+                  ))}
+                </Select>
+                <Input
+                  label="Month"
+                  type="month"
+                  required
+                  value={form.month}
+                  onChange={(e) => setForm((p) => ({ ...p, month: e.target.value }))}
+                />
+              </div>
+
+              {/* Line items */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-muted">Line items</span>
+                  <Button type="button" variant="ghost" size="sm" icon={<Plus size={12} />} onClick={handleAddLine}>
+                    Add line
+                  </Button>
+                </div>
+                {form.lines.map((line, idx) => (
+                  <div key={idx} className="flex gap-2 items-start">
+                    <Input
+                      fieldSize="sm"
+                      type="text"
+                      placeholder="Product name"
+                      aria-label="Product name"
+                      containerClassName="flex-1"
+                      value={line.product_name}
+                      onChange={(e) => handleLineChange(idx, 'product_name', e.target.value)}
+                      required
+                    />
+                    <Input
+                      fieldSize="sm"
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      placeholder="Qty"
+                      aria-label="Quantity"
+                      className="font-mono tabular-nums"
+                      containerClassName="w-24"
+                      value={line.quantity || ''}
+                      onChange={(e) => handleLineChange(idx, 'quantity', parseFloat(e.target.value) || 0)}
+                      required
+                    />
+                    <Input
+                      fieldSize="sm"
+                      type="text"
+                      placeholder="Notes"
+                      aria-label="Notes"
+                      containerClassName="w-32"
+                      value={line.notes}
+                      onChange={(e) => handleLineChange(idx, 'notes', e.target.value)}
+                    />
+                    {form.lines.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        iconOnly
+                        icon={<X size={14} />}
+                        onClick={() => handleRemoveLine(idx)}
+                        aria-label="Remove line"
+                        className="shrink-0 text-muted hover:text-danger"
+                      />
+                    )}
+                  </div>
                 ))}
-              </Select>
-              <Input
-                label="Month"
-                type="month"
-                required
-                value={form.month}
-                onChange={(e) => setForm((p) => ({ ...p, month: e.target.value }))}
-              />
-            </div>
+              </div>
 
-            {/* Line items */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-muted">Line items</span>
-                <Button type="button" variant="ghost" size="sm" icon={<Plus size={12} />} onClick={handleAddLine}>
-                  Add line
+              <div className="flex justify-end gap-2 pt-2">
+                <Button type="button" variant="secondary" size="sm" onClick={() => setShowForm(false)}>Cancel</Button>
+                <Button type="submit" variant="primary" size="sm" loading={submitting}>
+                  Submit schedule
                 </Button>
               </div>
-              {form.lines.map((line, idx) => (
-                <div key={idx} className="flex gap-2 items-start">
-                  <Input
-                    type="text"
-                    placeholder="Product name"
-                    aria-label="Product name"
-                    containerClassName="flex-1"
-                    value={line.product_name}
-                    onChange={(e) => handleLineChange(idx, 'product_name', e.target.value)}
-                    required
-                  />
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    placeholder="Qty"
-                    aria-label="Quantity"
-                    className="font-mono tabular-nums"
-                    containerClassName="w-24"
-                    value={line.quantity || ''}
-                    onChange={(e) => handleLineChange(idx, 'quantity', parseFloat(e.target.value) || 0)}
-                    required
-                  />
-                  <Input
-                    type="text"
-                    placeholder="Notes"
-                    aria-label="Notes"
-                    containerClassName="w-32"
-                    value={line.notes}
-                    onChange={(e) => handleLineChange(idx, 'notes', e.target.value)}
-                  />
-                  {form.lines.length > 1 && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      iconOnly
-                      icon={<X size={14} />}
-                      onClick={() => handleRemoveLine(idx)}
-                      aria-label="Remove line"
-                      className="shrink-0 text-muted hover:text-danger"
-                    />
-                  )}
-                </div>
-              ))}
-            </div>
+            </form>
+          </Panel>
+        )}
 
-            <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="secondary" onClick={() => setShowForm(false)}>Cancel</Button>
-              <Button type="submit" disabled={submitting}>
-                {submitting ? 'Submitting…' : 'Submit schedule'}
-              </Button>
-            </div>
-          </form>
-        </Panel>
-      )}
+        {loading && (
+          <div className="space-y-3">
+            {Array.from({ length: 3 }).map((_, i) => <SkeletonBlock key={i} className="h-20 rounded-md" />)}
+          </div>
+        )}
 
-      {/* Schedules list */}
-      {loading ? (
-        <div className="space-y-3">
-          {Array.from({ length: 3 }).map((_, i) => <SkeletonBlock key={i} className="h-20" />)}
-        </div>
-      ) : schedules.length === 0 ? (
-        <EmptyState icon="clipboard-list" title="No delivery schedules yet" description="Submit your first delivery schedule using the button above." />
-      ) : (
-        <div className="space-y-3">
-          {schedules.map((s) => (
-            <Panel key={s.id} className="p-4 space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <p className="text-sm font-medium">{s.month}</p>
-                  <span className="text-2xs text-muted">
-                    {s.purchase_order?.po_number ?? ''}
-                  </span>
-                  <Chip variant={chipVariantForStatus(s.status)}>{s.status}</Chip>
+        {!loading && schedules.length === 0 && (
+          <EmptyState icon="clipboard-list" title="No delivery schedules yet" description="Submit your first delivery schedule using the button above." />
+        )}
+
+        {!loading && schedules.length > 0 && (
+          <div className="space-y-3">
+            {schedules.map((s) => (
+              <Panel key={s.id} bodyClassName="p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <p className="text-sm font-medium">{s.month}</p>
+                    <span className="text-2xs text-muted">
+                      {s.purchase_order?.po_number ?? ''}
+                    </span>
+                    <Chip variant={chipVariantForStatus(s.status)}>{s.status}</Chip>
+                  </div>
+                  <p className="text-2xs text-muted">
+                    {formatDate(s.created_at)}
+                  </p>
                 </div>
-                <p className="text-2xs text-muted">
-                  {formatDate(s.created_at)}
-                </p>
-              </div>
-              <div className="overflow-x-auto">
                 <table className={tableCls}>
                   <thead>
                     <tr className={theadTrCls}>
@@ -240,11 +248,11 @@ export default function SupplierDeliverySchedulesPage() {
                     ))}
                   </tbody>
                 </table>
-              </div>
-            </Panel>
-          ))}
-        </div>
-      )}
+              </Panel>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
