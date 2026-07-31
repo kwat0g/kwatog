@@ -17,13 +17,13 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { formatPeso } from '@/lib/formatNumber';
 import type { ApiValidationError } from '@/types';
 import { onFormInvalid } from '@/lib/formErrors';
-import type { LoanType } from '@/types/loans';
+import type { AmortizationItem, LoanType } from '@/types/loans';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { cn } from '@/lib/cn';
 
 const schema = z.object({
   employee_id: z.string().min(1, 'Employee is required'),
-  loan_type: z.enum(['company_loan', 'cash_advance']),
+  loan_type: z.string().min(1, 'Loan type is required'),
   principal: z.coerce.number({ invalid_type_error: 'Enter a number' })
     .positive('Must be positive').max(9_999_999.99, 'Maximum ₱9,999,999.99'),
   pay_periods: z.coerce.number({ invalid_type_error: 'Enter a number' })
@@ -43,11 +43,11 @@ export default function CreateLoanPage() {
   const employees = employeesResp?.data ?? [];
 
   const {
-    register, handleSubmit, watch, setError,
+    register, handleSubmit, watch, setError, setValue,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { loan_type: 'cash_advance', pay_periods: 6 },
+    defaultValues: { loan_type: '', pay_periods: 6 },
   });
 
   const employeeId = watch('employee_id');
@@ -55,27 +55,38 @@ export default function CreateLoanPage() {
   const principal = watch('principal');
   const periods = watch('pay_periods');
 
+  const { data: loanTypes = [] } = useQuery({
+    queryKey: ['loans', 'types'],
+    queryFn: loansApi.types,
+  });
+
+  useEffect(() => {
+    if (!loanType && loanTypes.length > 0) {
+      setValue('loan_type', loanTypes[0].value, { shouldValidate: true });
+    }
+  }, [loanType, loanTypes, setValue]);
+
   const { data: limits } = useQuery({
     queryKey: ['loans', 'limits', employeeId, loanType],
     queryFn: () => loansApi.limits(employeeId, loanType),
     enabled: !!employeeId && !!loanType,
   });
 
-  const [schedule, setSchedule] = useState<{ period: number; amount: string; remaining_after: string }[]>([]);
+  const [schedule, setSchedule] = useState<AmortizationItem[]>([]);
   useEffect(() => {
-    if (principal && principal > 0 && periods && periods > 0) {
-      loansApi.previewAmortization(Number(principal), Number(periods))
+    if (loanType && principal && principal > 0 && periods && periods > 0) {
+      loansApi.previewAmortization(loanType, Number(principal), Number(periods))
         .then(setSchedule)
         .catch(() => setSchedule([]));
     } else {
       setSchedule([]);
     }
-  }, [principal, periods]);
+  }, [loanType, principal, periods]);
 
   const mutation = useMutation({
     mutationFn: (d: FormValues) => loansApi.create({
       employee_id: d.employee_id,
-      loan_type: d.loan_type,
+      loan_type: d.loan_type as LoanType,
       principal: d.principal,
       pay_periods: d.pay_periods,
       purpose: d.purpose || undefined,
@@ -107,16 +118,20 @@ export default function CreateLoanPage() {
           <div className="space-y-3">
             <fieldset>
               <legend className="text-2xs uppercase tracking-wider text-muted font-medium mb-2">Loan type</legend>
-              <div className="flex gap-4">
-                <label className="flex items-center gap-2 text-sm">
-                  <input type="radio" value="cash_advance" {...register('loan_type')} />
-                  <span>Cash advance · 3-step approval</span>
-                </label>
-                <label className="flex items-center gap-2 text-sm">
-                  <input type="radio" value="company_loan" {...register('loan_type')} />
-                  <span>Company loan · 4-step approval</span>
-                </label>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {loanTypes.map((type) => (
+                  <label key={type.value} className="flex items-start gap-2 rounded border border-default p-3 text-sm">
+                    <input type="radio" value={type.value} {...register('loan_type')} className="mt-0.5" />
+                    <span>
+                      <span className="block font-medium">{type.label}</span>
+                      <span className="block text-xs text-muted">
+                        {type.approval_steps} approval steps · {(Number(type.interest_rate) * 100).toFixed(2)}% annual interest
+                      </span>
+                    </span>
+                  </label>
+                ))}
               </div>
+              {errors.loan_type && <p className="mt-1 text-xs text-danger-fg">{errors.loan_type.message}</p>}
             </fieldset>
             <Select label="Employee" required {...register('employee_id')} error={errors.employee_id?.message}>
               <option value="">— Select —</option>
@@ -147,6 +162,7 @@ export default function CreateLoanPage() {
                   <tr className={theadTrCls}>
                     <Th>#</Th>
                     <Th align="right">Amount</Th>
+                    <Th align="right">Interest</Th>
                     <Th align="right">Remaining</Th>
                   </tr>
                 </thead>
@@ -155,12 +171,13 @@ export default function CreateLoanPage() {
                     <tr key={s.period} className={trCls}>
                       <Td mono className="text-muted">{String(s.period).padStart(2, '0')}</Td>
                       <Td align="right" mono>{formatPeso(s.amount)}</Td>
+                      <Td align="right" mono>{formatPeso(s.interest)}</Td>
                       <Td align="right" mono className="text-muted">{formatPeso(s.remaining_after)}</Td>
                     </tr>
                   ))}
                   {schedule.length > 12 && (
                     <tr className={cn(trCls, 'text-muted')}>
-                      <Td className="italic" colSpan={3}>+ {schedule.length - 12} more periods</Td>
+                      <Td className="italic" colSpan={4}>+ {schedule.length - 12} more periods</Td>
                     </tr>
                   )}
                 </tbody>

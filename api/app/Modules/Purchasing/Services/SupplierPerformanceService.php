@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Purchasing\Services;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Purchasing\Events\SupplierPerformanceComputed;
 use App\Modules\Purchasing\Models\SupplierPerformanceSnapshot;
@@ -32,7 +33,7 @@ use Illuminate\Support\Facades\DB;
  */
 class SupplierPerformanceService
 {
-    public const SCORE_ALERT_THRESHOLD = 80.0;
+    public function __construct(private readonly SettingsService $settings) {}
 
     public function compute(Vendor $vendor, int $year, int $month): SupplierPerformanceSnapshot
     {
@@ -104,9 +105,15 @@ class SupplierPerformanceService
     private function tierFromScore(?float $score): ?string
     {
         if ($score === null) return null;
-        if ($score >= 90) return 'A';
-        if ($score >= 75) return 'B';
-        if ($score >= 60) return 'C';
+        $a = $this->setting('purchasing.supplier_score.tier_a_min');
+        $b = $this->setting('purchasing.supplier_score.tier_b_min');
+        $c = $this->setting('purchasing.supplier_score.tier_c_min');
+        if (! ($a > $b && $b > $c)) {
+            throw new \App\Common\Exceptions\BusinessRuleException('Supplier tier thresholds must be strictly descending.');
+        }
+        if ($score >= $a) return 'A';
+        if ($score >= $b) return 'B';
+        if ($score >= $c) return 'C';
         return 'D';
     }
 
@@ -350,16 +357,34 @@ class SupplierPerformanceService
         // Score each on 0–100 (higher is better).
         $onTimeScore   = $onTime ?? 0;                                   // already 0-100
         $qualityScore  = $quality ?? 0;                                  // already 0-100
-        $ncrScore      = $ncrRate === null ? 50 : max(0, 100 - $ncrRate * 2);  // 0% NCR → 100
-        $priceScore    = $price === null ? 50 : max(0, 100 - $price * 2);       // 0% var → 100
-        $leadTimeScore = $leadTime === null ? 50 : max(0, 100 - abs($leadTime) * 5);
+        $neutral = $this->setting('purchasing.supplier_score.neutral_missing_metric');
+        $ncrScore      = $ncrRate === null ? $neutral : max(0, 100 - $ncrRate * $this->setting('purchasing.supplier_score.ncr_penalty_factor'));
+        $priceScore    = $price === null ? $neutral : max(0, 100 - $price * $this->setting('purchasing.supplier_score.price_penalty_factor'));
+        $leadTimeScore = $leadTime === null ? $neutral : max(0, 100 - abs($leadTime) * $this->setting('purchasing.supplier_score.lead_time_penalty_factor'));
 
-        $score = ($onTimeScore * 0.25)
-               + ($qualityScore * 0.35)
-               + ($ncrScore     * 0.10)
-               + ($priceScore   * 0.15)
-               + ($leadTimeScore * 0.15);
+        $weights = [
+            $this->setting('purchasing.supplier_score.weight_on_time'),
+            $this->setting('purchasing.supplier_score.weight_quality'),
+            $this->setting('purchasing.supplier_score.weight_ncr'),
+            $this->setting('purchasing.supplier_score.weight_price'),
+            $this->setting('purchasing.supplier_score.weight_lead_time'),
+        ];
+        if (abs(array_sum($weights) - 1.0) > 0.0001) {
+            throw new \App\Common\Exceptions\BusinessRuleException('Supplier score weights must total 1.0.');
+        }
+        $score = ($onTimeScore * $weights[0]) + ($qualityScore * $weights[1])
+               + ($ncrScore * $weights[2]) + ($priceScore * $weights[3])
+               + ($leadTimeScore * $weights[4]);
 
         return round($score, 2);
+    }
+
+    private function setting(string $key): float
+    {
+        $value = $this->settings->get($key);
+        if (! is_numeric($value) || (float) $value < 0) {
+            throw new \App\Common\Exceptions\BusinessRuleException("Required supplier policy {$key} is missing or invalid.");
+        }
+        return (float) $value;
     }
 }

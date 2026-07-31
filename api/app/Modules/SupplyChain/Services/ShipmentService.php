@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\SupplyChain\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Support\HashIdFilter;
 use App\Common\Support\SearchOperator;
 use App\Modules\Auth\Models\User;
 use App\Modules\Purchasing\Models\PurchaseOrder;
@@ -17,7 +19,6 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
-use RuntimeException;
 
 /**
  * Sprint 7 — Task 65. Inbound shipment lifecycle service.
@@ -47,7 +48,9 @@ class ShipmentService
             }
         }
         if (! empty($filters['purchase_order_id'])) {
-            $q->where('purchase_order_id', (int) $filters['purchase_order_id']);
+            // ShipmentController::index() forwards the raw query bag. A (int) cast
+            // on a hash yields 0, so the list came back empty instead of filtered.
+            $q->where('purchase_order_id', HashIdFilter::decode($filters['purchase_order_id'], PurchaseOrder::class) ?? 0);
         }
         if (! empty($filters['search'])) {
             $term = '%'.trim((string) $filters['search']).'%';
@@ -104,7 +107,7 @@ class ShipmentService
     {
         $current = $s->status instanceof ShipmentStatus ? $s->status : ShipmentStatus::from((string) $s->status);
         if (! $current->canTransitionTo($next)) {
-            throw new RuntimeException("Cannot transition shipment {$s->shipment_number} from {$current->value} to {$next->value}.");
+            throw new BusinessRuleException("Cannot transition shipment {$s->shipment_number} from {$current->value} to {$next->value}.");
         }
         $patch = ['status' => $next->value];
         // Auto-stamp date columns at known transitions.
@@ -157,7 +160,7 @@ class ShipmentService
         $folder = "shipments/{$s->id}";
         $path = $file->store($folder, 'local');
         if ($path === false) {
-            throw new RuntimeException('Unable to store shipment document.');
+            throw new BusinessRuleException('Unable to store shipment document.');
         }
 
         try {
@@ -194,7 +197,7 @@ class ShipmentService
     public function delete(Shipment $s): void
     {
         if ($s->status === ShipmentStatus::Received) {
-            throw new RuntimeException('Cannot delete a received shipment.');
+            throw new BusinessRuleException('Cannot delete a received shipment.');
         }
         DB::transaction(function () use ($s) {
             $paths = $s->documents->pluck('file_path')->filter()->values()->all();

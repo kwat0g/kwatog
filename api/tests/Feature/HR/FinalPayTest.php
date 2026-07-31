@@ -25,17 +25,14 @@ use Tests\TestCase;
  * P2.9 — FinalPayService behaviour lock-down.
  *
  * What is tested:
- *   1. Pro-rated salary formula (monthly: monthly/2, daily: rate×11)
+ *   1. Final-period salary from live payroll/DTR records
  *   2. Unused convertible leave value conversion (days × daily_rate)
  *   3. Outstanding loan balance deducted from final pay
  *   4. Negative-total clamped to 0.00 via max(0, plus−less)
  *   5. postJournalEntry() produces a balanced, posted JE (total_debit == total_credit)
  *
  * Gaps / stubs noted inline:
- *   - lastSalaryProRated() is a STUB: monthly always returns salary/2 regardless of
- *     actual days worked; daily always uses 11 working days. Tests pin this stub.
- *   - proRatedThirteenthMonth() falls back to salary/12 when no accrual row exists.
- *   - unreturnedPropertyValue() uses ₱500 per 'lost' item (placeholder — no cost field).
+ *   - unreturnedPropertyValue() uses each property's persisted replacement cost.
  *   - postJournalEntry() uses account codes 6010/5050, 1020, 2100, 2070 — test seeds
  *     the minimum required accounts.
  */
@@ -117,34 +114,61 @@ class FinalPayTest extends TestCase
         return app(FinalPayService::class);
     }
 
+    private function seedOpenPayrollPeriod(string $status = 'draft'): int
+    {
+        return DB::table('payroll_periods')->insertGetId([
+            'period_start' => '2026-05-16',
+            'period_end' => '2026-05-31',
+            'payroll_date' => '2026-06-05',
+            'is_first_half' => false,
+            'is_thirteenth_month' => false,
+            'status' => $status,
+            'created_by' => User::query()->firstOrFail()->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    /** @param array<string, float> $hoursByDate */
+    private function seedAttendanceHours(Employee $employee, array $hoursByDate): void
+    {
+        foreach ($hoursByDate as $date => $hours) {
+            DB::table('attendances')->insert([
+                'employee_id' => $employee->id,
+                'date' => $date,
+                'regular_hours' => $hours,
+                'status' => $hours > 0 ? 'present' : 'absent',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+    }
+
     // ──────────────────────────────────────────────────────────────────────
     // 1. Pro-rated salary — monthly employee
     // ──────────────────────────────────────────────────────────────────────
 
-    /**
-     * STUB behaviour: monthly employee → last_salary_pro_rated = monthly_salary / 2
-     * regardless of actual days worked. Pin this so a future real implementation
-     * change produces a test failure with a clear message.
-     */
-    public function test_pro_rated_salary_monthly_is_half_monthly_salary(): void
+    public function test_final_period_salary_monthly_uses_live_dtr_day_equivalents(): void
     {
-        $employee  = $this->makeEmployee(['basic_monthly_salary' => '30000.00', 'pay_type' => 'monthly']);
+        $employee  = $this->makeEmployee(['basic_monthly_salary' => '22000.00', 'pay_type' => 'monthly']);
         $clearance = $this->makeClearance($employee);
+        $this->seedOpenPayrollPeriod();
+        $this->seedAttendanceHours($employee, [
+            '2026-05-16' => 8.0,
+            '2026-05-17' => 8.0,
+            '2026-05-18' => 4.0,
+        ]);
 
         $result = $this->service()->compute($clearance);
 
         $breakdown = $result->final_pay_breakdown;
         $this->assertNotNull($breakdown, 'Breakdown must be set after compute()');
 
-        // 30 000 / 2 = 15 000.00
-        $this->assertSame('15000.00', $breakdown['last_salary_pro_rated'],
-            'Monthly pay_type: pro-rated salary must equal basic_monthly_salary / 2 (stub formula)');
+        $this->assertSame('2500.00', $breakdown['last_salary_pro_rated'],
+            '₱22,000 / 22 × 2.5 persisted DTR day-equivalents must be paid.');
     }
 
-    /**
-     * STUB behaviour: daily employee → last_salary_pro_rated = daily_rate × 11
-     */
-    public function test_pro_rated_salary_daily_is_rate_times_eleven(): void
+    public function test_final_period_salary_daily_uses_live_dtr_day_equivalents(): void
     {
         $employee  = $this->makeEmployee([
             'pay_type'             => 'daily',
@@ -152,13 +176,54 @@ class FinalPayTest extends TestCase
             'basic_monthly_salary' => null,
         ]);
         $clearance = $this->makeClearance($employee);
+        $this->seedOpenPayrollPeriod();
+        $this->seedAttendanceHours($employee, [
+            '2026-05-16' => 8.0,
+            '2026-05-17' => 8.0,
+            '2026-05-18' => 4.0,
+        ]);
 
         $result = $this->service()->compute($clearance);
 
         $breakdown = $result->final_pay_breakdown;
-        // 650 × 11 = 7 150.00
-        $this->assertSame('7150.00', $breakdown['last_salary_pro_rated'],
-            'Daily pay_type: pro-rated salary must equal daily_rate × 11 (stub formula)');
+        $this->assertSame('1625.00', $breakdown['last_salary_pro_rated'],
+            '₱650 × 2.5 persisted DTR day-equivalents must be paid.');
+    }
+
+    public function test_final_period_salary_prefers_computed_payroll_result(): void
+    {
+        $employee = $this->makeEmployee(['basic_monthly_salary' => '22000.00']);
+        $clearance = $this->makeClearance($employee);
+        $periodId = $this->seedOpenPayrollPeriod('computed');
+
+        DB::table('payrolls')->insert([
+            'payroll_period_id' => $periodId,
+            'employee_id' => $employee->id,
+            'pay_type' => 'monthly',
+            'basic_pay' => '6200.00',
+            'leave_pay' => '800.00',
+            'tardiness_deduction' => '100.00',
+            'undertime_deduction' => '50.00',
+            'computed_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $breakdown = $this->service()->compute($clearance)->final_pay_breakdown;
+
+        $this->assertSame('6850.00', $breakdown['last_salary_pro_rated']);
+    }
+
+    public function test_disbursed_period_is_not_paid_again_in_final_pay(): void
+    {
+        $employee = $this->makeEmployee(['basic_monthly_salary' => '22000.00']);
+        $clearance = $this->makeClearance($employee);
+        $this->seedOpenPayrollPeriod('disbursed');
+        $this->seedAttendanceHours($employee, ['2026-05-16' => 8.0]);
+
+        $breakdown = $this->service()->compute($clearance)->final_pay_breakdown;
+
+        $this->assertSame('0.00', $breakdown['last_salary_pro_rated']);
     }
 
     // ──────────────────────────────────────────────────────────────────────
@@ -407,7 +472,8 @@ class FinalPayTest extends TestCase
     {
         $employee  = $this->makeEmployee(['basic_monthly_salary' => '40000.00', 'pay_type' => 'monthly']);
         $clearance = $this->makeClearance($employee);
-        // No loans seeded — deductions = 0
+        $this->seedOpenPayrollPeriod();
+        $this->seedAttendanceHours($employee, ['2026-05-16' => 8.0]);
 
         $result    = $this->service()->compute($clearance);
         $breakdown = $result->final_pay_breakdown;
@@ -430,6 +496,12 @@ class FinalPayTest extends TestCase
     {
         $employee  = $this->makeEmployee(['basic_monthly_salary' => '24000.00', 'pay_type' => 'monthly']);
         $clearance = $this->makeClearance($employee);
+        $this->seedOpenPayrollPeriod();
+        $this->seedAttendanceHours($employee, [
+            '2026-05-16' => 8.0,
+            '2026-05-17' => 8.0,
+            '2026-05-18' => 8.0,
+        ]);
 
         // Add a loan to exercise the loans_payable credit line
         DB::table('employee_loans')->insert([
@@ -539,22 +611,26 @@ class FinalPayTest extends TestCase
         $this->assertNotNull($fresh->final_pay_breakdown);
     }
 
-    /**
-     * STUB NOTE: pro_rated_13th_month falls back to salary/12 when no
-     * thirteenth_month_accruals row exists. Pin this fallback.
-     */
-    public function test_thirteenth_month_fallback_is_salary_over_twelve(): void
+    public function test_thirteenth_month_rebuilds_from_computed_ytd_basic_pay(): void
     {
-        // salary = 24000; 24000/12 = 2000.00
         $employee  = $this->makeEmployee(['basic_monthly_salary' => '24000.00', 'pay_type' => 'monthly']);
         $clearance = $this->makeClearance($employee);
-        // No thirteenth_month_accruals row seeded
+        $periodId = $this->seedOpenPayrollPeriod('computed');
+        DB::table('payrolls')->insert([
+            'payroll_period_id' => $periodId,
+            'employee_id' => $employee->id,
+            'pay_type' => 'monthly',
+            'basic_pay' => '120000.00',
+            'computed_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
 
         $result    = $this->service()->compute($clearance);
         $breakdown = $result->final_pay_breakdown;
 
-        $this->assertSame('2000.00', $breakdown['pro_rated_13th_month'],
-            'Fallback 13th month must equal basic_monthly_salary / 12');
+        $this->assertSame('10000.00', $breakdown['pro_rated_13th_month'],
+            '13th month must equal persisted year-to-date basic pay divided by 12.');
     }
 
     /**
@@ -584,10 +660,9 @@ class FinalPayTest extends TestCase
     }
 
     /**
-     * STUB NOTE: unreturnedPropertyValue() is approximated at ₱500 per 'lost'
-     * item (no cost field in employee_property). Pin this stub.
+     * Unreturned property uses real replacement values stored with each asset.
      */
-    public function test_unreturned_property_approximated_at_500_per_lost_item(): void
+    public function test_unreturned_property_uses_persisted_replacement_cost(): void
     {
         $employee  = $this->makeEmployee(['basic_monthly_salary' => '40000.00', 'pay_type' => 'monthly']);
         $clearance = $this->makeClearance($employee);
@@ -595,17 +670,16 @@ class FinalPayTest extends TestCase
         // Seed 2 lost items
         $now = now();
         DB::table('employee_property')->insert([
-            ['employee_id' => $employee->id, 'item_name' => 'Safety Helmet', 'quantity' => 1,
+            ['employee_id' => $employee->id, 'item_name' => 'Safety Helmet', 'quantity' => 1, 'replacement_unit_cost' => '1750.00',
              'date_issued' => '2025-01-01', 'status' => 'lost', 'created_at' => $now, 'updated_at' => $now],
-            ['employee_id' => $employee->id, 'item_name' => 'Work Gloves',   'quantity' => 1,
+            ['employee_id' => $employee->id, 'item_name' => 'Work Gloves',   'quantity' => 1, 'replacement_unit_cost' => '250.00',
              'date_issued' => '2025-01-01', 'status' => 'lost', 'created_at' => $now, 'updated_at' => $now],
         ]);
 
         $result    = $this->service()->compute($clearance);
         $breakdown = $result->final_pay_breakdown;
 
-        // 2 × 500 = 1000.00
-        $this->assertSame('1000.00', $breakdown['less_unreturned_property_value'],
-            'Unreturned property stub: 2 lost items × ₱500 each = ₱1000.00');
+        $this->assertSame('2000.00', $breakdown['less_unreturned_property_value'],
+            'Final pay must sum the persisted replacement value of each lost property item.');
     }
 }

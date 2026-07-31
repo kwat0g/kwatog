@@ -51,7 +51,7 @@ class EmployeeSkillController
         $data = $this->service->matrix(
             departmentId: $request->integer('department_id') ?: null,
             skillId: $request->has('skill_id')
-                ? (app('hashids')->decode($request->string('skill_id'))[0] ?? null)
+                ? (app('hashids')->decode((string) $request->string('skill_id'))[0] ?? null)
                 : null,
         );
 
@@ -60,7 +60,7 @@ class EmployeeSkillController
 
     public function gapAnalysis(Request $request): JsonResponse
     {
-        $skillId = app('hashids')->decode($request->string('skill_id'))[0] ?? 0;
+        $skillId = app('hashids')->decode((string) $request->string('skill_id'))[0] ?? 0;
         $data = $this->service->gapAnalysis($skillId);
 
         return response()->json(['data' => $data]);

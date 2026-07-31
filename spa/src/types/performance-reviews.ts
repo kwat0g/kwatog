@@ -32,9 +32,10 @@ export interface CreateCycleData {
 }
 
 export interface CreateReviewData {
-  cycle_id: string;
+  review_cycle_id: string;
   employee_id: string;
   reviewer_id: string;
+  template_id?: string;
 }
 
 export interface SubmitReviewData {

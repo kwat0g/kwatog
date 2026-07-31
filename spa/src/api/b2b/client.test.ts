@@ -1,7 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { createPortalClient } from './client';
 
 describe('createPortalClient', () => {
+  beforeEach(() => window.sessionStorage.clear());
+
   it('attaches and clears the bearer token', () => {
     const { client, setToken } = createPortalClient();
 
@@ -20,5 +22,16 @@ describe('createPortalClient', () => {
 
     expect(supplier.client.defaults.headers.common.Authorization).toBe('Bearer supplier-token');
     expect(customer.client.defaults.headers.common.Authorization).toBeUndefined();
+  });
+
+  it('restores a portal token after a hard navigation in the same tab', () => {
+    const firstClient = createPortalClient('supplier-token');
+    firstClient.setToken('persisted-token');
+
+    const reloadedClient = createPortalClient('supplier-token');
+
+    expect(reloadedClient.client.defaults.headers.common.Authorization).toBe('Bearer persisted-token');
+    reloadedClient.setToken(null);
+    expect(window.sessionStorage.getItem('supplier-token')).toBeNull();
   });
 });

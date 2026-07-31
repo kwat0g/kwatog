@@ -6,6 +6,7 @@ namespace App\Modules\Dashboard\Controllers;
 
 use App\Modules\Dashboard\Requests\SaveDashboardLayoutRequest;
 use App\Modules\Dashboard\Services\DashboardLayoutService;
+use App\Modules\Dashboard\Services\DashboardWidgetDataService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -22,6 +23,7 @@ class DashboardLayoutController
 {
     public function __construct(
         private readonly DashboardLayoutService $service,
+        private readonly DashboardWidgetDataService $widgetData,
     ) {}
 
     public function widgets(Request $request): JsonResponse
@@ -36,6 +38,15 @@ class DashboardLayoutController
         return response()->json([
             'data' => $this->service->getEffectiveLayout($request->user()),
         ]);
+    }
+
+    public function data(Request $request): JsonResponse
+    {
+        $requested = $request->validate(['keys' => ['required', 'array', 'max:50'], 'keys.*' => ['string', 'max:100']])['keys'];
+        $allowed = collect($this->service->listAvailableWidgets($request->user()))->pluck('key');
+        $keys = collect($requested)->intersect($allowed)->values()->all();
+
+        return response()->json(['data' => $this->widgetData->summaries($keys, $request->user())]);
     }
 
     public function save(SaveDashboardLayoutRequest $request): JsonResponse

@@ -27,6 +27,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { chainStageLink, alertRefLink, kpiLink } from '@/lib/dashboardLinks';
 import { StockOutPanel } from '@/components/dashboard/StockOutPanel';
 import { DemandForecastPanel } from '@/components/dashboard/DemandForecastPanel';
+import { ForecastAccuracyPanel } from '@/components/dashboard/ForecastAccuracyPanel';
 import { DonutBreakdown, BarComparison } from '@/components/charts';
 import { KpiStrip } from '@/components/dashboard/KpiStrip';
 
@@ -590,9 +591,10 @@ export default function PpcDashboard() {
             </PanelRow>
 
             {/* ── Row 7: Demand Forecast + Stock-out Risk ── */}
-            <PanelRow>
-              <DemandForecastPanel hideWhenEmpty />
-              <StockOutPanel horizonDays={60} hideWhenEmpty />
+            <PanelRow cols={3}>
+              <DemandForecastPanel />
+              <StockOutPanel horizonDays={60} />
+              <ForecastAccuracyPanel />
             </PanelRow>
 
             {/* ── Row 8: Chain bottleneck widget (gated by permission, Series C — Task C5) ── */}

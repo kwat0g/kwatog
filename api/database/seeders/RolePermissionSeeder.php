@@ -240,6 +240,8 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'production.schedule.view',         'name' => 'View Production Schedule'],
                 ['slug' => 'production.schedule.confirm',      'name' => 'Confirm Production Schedule'],
                 ['slug' => 'production.dashboard.view',        'name' => 'View Production Dashboard'],
+                ['slug' => 'production.routings.view',         'name' => 'View Product Routings'],
+                ['slug' => 'production.routings.manage',       'name' => 'Manage Product Routings'],
                 ['slug' => 'production.operator.access',       'name' => 'Access Factory Floor PWA'],
             ],
 
@@ -515,12 +517,12 @@ class RolePermissionSeeder extends Seeder
                     $this->module('production'),
                     $this->selfService(),
                     [
-                        'mrp.view', 'mrp.schedule', 'mrp.boms.view',
+                        'mrp.view', 'mrp.schedule', 'mrp.boms.view', 'mrp.machines.view',
                         'inventory.view',
                         // Quality: view + read sub-resources for quality dashboard / NCR/inspection pages
                         'quality.view', 'quality.inspections.view', 'quality.ncr.view',
                         'quality.copq.view', 'quality.ppap.view', 'quality.spc.view',
-                        'dashboard.plant_manager.view', 'dashboard.ppc.view',
+                        'dashboard.plant_manager.view',
                         'maintenance.view', 'assets.view',
                         'search.global', 'notifications.preferences.manage',
                         'alerts.view', 'alerts.dismiss',
@@ -544,6 +546,8 @@ class RolePermissionSeeder extends Seeder
                     [
                         'production.view', 'production.work_orders.view',
                         'production.wo.create', 'production.wo.confirm',
+                        // Routings (process plans) are PPC's to author.
+                        'production.routings.view', 'production.routings.manage',
                         'dashboard.ppc.view', 'maintenance.view', 'assets.view',
                         'search.global', 'notifications.preferences.manage',
                         'alerts.view', 'alerts.dismiss',
@@ -616,6 +620,8 @@ class RolePermissionSeeder extends Seeder
                     $this->selfService(),
                     [
                         'maintenance.view', 'maintenance.wo.create', 'maintenance.wo.complete',
+                        // Mobile condition readings select from the machine master.
+                        'mrp.machines.view',
                         'assets.view',
                         'search.global', 'notifications.preferences.manage',
                     ],
@@ -631,7 +637,7 @@ class RolePermissionSeeder extends Seeder
             ],
             'department_head' => [
                 'name' => 'Department Head',
-                'description' => 'Approves leaves, OT, PRs for their department.',
+                'description' => 'Approves leaves, OT, loans, and PRs for their department.',
                 'permissions' => array_merge(
                     $this->selfService(),
                     [
@@ -639,6 +645,9 @@ class RolePermissionSeeder extends Seeder
                         'hr.employees.trainings.view',
                         'attendance.ot.approve',
                         'leave.approve_dept',
+                        // Department Head is the first approver in both loan
+                        // workflows; list/show remain department-scoped.
+                        'loans.view', 'loans.approve',
                         'purchasing.view', 'purchasing.pr.approve',
                         'hr.clearance.sign',
                         'search.global', 'notifications.preferences.manage',
@@ -689,14 +698,9 @@ class RolePermissionSeeder extends Seeder
     {
         return [
             'attendance.view',      // DTR page → /attendance/attendances (scoped to self)
-            'attendance.ot.create', // Overtime page
             'leave.view',           // Leave page
             'leave.create',         // File leave request
-            'loans.view',           // Loans list → /hr/self-service/loans + /loans (scoped)
-            'loans.create',         // Apply loan + preview amortization
             'payroll.view',         // Payslips → /payroll (scoped to self)
-            // T3.5 — every employee can see their pending document acknowledgments.
-            'quality.documents.view',
         ];
     }
 
@@ -750,10 +754,13 @@ class RolePermissionSeeder extends Seeder
 
             $ids = $permissions === '*'
                 ? $allSlugs->values()->all()
-                : array_values(array_filter(array_map(
-                    fn (string $s) => $allSlugs[$s] ?? null,
-                    (array) $permissions,
-                )));
+                : array_map(function (string $slug) use ($allSlugs, $role): int {
+                    if (! isset($allSlugs[$slug])) {
+                        throw new \LogicException("Role {$role->slug} references undefined permission {$slug}.");
+                    }
+
+                    return (int) $allSlugs[$slug];
+                }, (array) $permissions);
 
             $role->permissions()->sync($ids);
         }

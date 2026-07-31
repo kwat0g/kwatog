@@ -1,15 +1,21 @@
+/** U3 — Self-service > Loans. Lists active + history; lets employee apply. */
 import { useState } from 'react';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { BottomSheet, Button, Chip, EmptyState, Input, Select, SkeletonBlock, Textarea, Td, Th } from '@/components/ui';
+import {
+  Button, Chip, EmptyState, Input, Modal, Select, SkeletonTable, Textarea, Td, Th,
+} from '@/components/ui';
+import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
 import { selfServiceApi } from '@/api/self-service';
 import type { SelfServiceLoan, SelfServiceLoansResponse } from '@/types/self-service';
 import { tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { formatDate } from '@/lib/formatDate';
 import { cn } from '@/lib/cn';
 
 const schema = z.object({
@@ -21,7 +27,68 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
-/** U3 — Self-service > Loans. Lists active + history; lets employee apply. */
+function loanColumns(active: boolean): Column<SelfServiceLoan>[] {
+  return [
+    {
+      key: 'loan_type',
+      header: 'Type',
+      cell: (l) => <span className="font-medium">{l.loan_type ?? 'Loan'}</span>,
+    },
+    {
+      key: 'principal',
+      header: 'Principal',
+      align: 'right',
+      cell: (l) => <NumCell>₱ {l.principal}</NumCell>,
+    },
+    {
+      key: 'outstanding_balance',
+      header: 'Outstanding',
+      align: 'right',
+      cell: (l) => <NumCell className="font-medium">₱ {l.outstanding_balance}</NumCell>,
+    },
+    {
+      key: 'monthly_amortization',
+      header: 'Amortization',
+      align: 'right',
+      cell: (l) => <NumCell>₱ {l.monthly_amortization}</NumCell>,
+    },
+    {
+      key: 'progress',
+      header: 'Periods',
+      align: 'right',
+      cell: (l) => (
+        <NumCell>
+          {l.periods - l.periods_remaining}/{l.periods} paid
+        </NumCell>
+      ),
+    },
+    {
+      key: 'created_at',
+      header: 'Filed',
+      cell: (l) => <NumCell>{l.created_at ? formatDate(l.created_at) : '—'}</NumCell>,
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      cell: (l) => (
+        <Chip
+          variant={
+            l.status === 'pending'
+              ? 'warning'
+              : active
+              ? 'info'
+              : l.status === 'paid' || l.status === 'closed'
+              ? 'neutral'
+              : 'success'
+          }
+        >
+          {l.status.replace(/_/g, ' ')}
+        </Chip>
+      ),
+    },
+  ];
+}
+
 export default function SelfServiceLoansPage() {
   const queryClient = useQueryClient();
   const [showApply, setShowApply] = useState(false);
@@ -47,121 +114,78 @@ export default function SelfServiceLoansPage() {
     onError: () => toast.error('Failed to submit loan request.'),
   });
 
+  const totalCount = (data?.active.length ?? 0) + (data?.history.length ?? 0);
+
   return (
     <div>
-      <PageHeader title="Loans" backTo="/self-service" backLabel="Dashboard" />
-      <div className="px-5 py-4 space-y-4">
-        <div className="flex items-center justify-end">
-          <Button variant="primary" size="sm" onClick={() => setShowApply(true)}>
-            Apply
+      <PageHeader
+        title="Loans & Cash Advances"
+        subtitle={data ? `${data.active.length} active · ${data.history.length} past` : undefined}
+        actions={
+          <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => setShowApply(true)}>
+            Apply for a loan
           </Button>
-        </div>
-
-      {isLoading && (
-        <div className="space-y-3">
-          {[1, 2].map((i) => (
-            <SkeletonBlock key={i} className="h-20 rounded-md" />
-          ))}
-        </div>
-      )}
-
-      {isError && (
-        <EmptyState
-          icon="alert-circle"
-          title="Couldn't load loans"
-          description="Tap retry to try again."
-          action={
-            <Button variant="secondary" onClick={() => refetch()}>
-              Retry
-            </Button>
-          }
-        />
-      )}
-
-      {data && data.active.length === 0 && data.history.length === 0 && (
-        <EmptyState icon="inbox" title="No loans yet" description="You have no loan history." />
-      )}
-
-      {data && data.active.length > 0 && (
-        <section>
-          <h2 className="text-2xs uppercase tracking-wider text-muted font-medium mb-2">
-            Active
-          </h2>
-          <div className="space-y-2">
-            {data.active.map((loan) => (
-              <LoanCard key={loan.id} loan={loan} active />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {data && data.history.length > 0 && (
-        <section>
-          <h2 className="text-2xs uppercase tracking-wider text-muted font-medium mb-2 mt-4">
-            History
-          </h2>
-          <div className="space-y-2">
-            {data.history.map((loan) => (
-              <LoanCard key={loan.id} loan={loan} />
-            ))}
-          </div>
-        </section>
-      )}
-
-      <ApplyLoanSheet
-        isOpen={showApply}
-        onClose={() => setShowApply(false)}
-        onSubmit={(v) => apply.mutate(v)}
-        pending={apply.isPending}
+        }
       />
-      </div>{/* .px-5 py-4 */}
+      <div className="px-5 py-4 space-y-4">
+        {isLoading && <SkeletonTable columns={7} rows={4} />}
+
+        {isError && (
+          <EmptyState
+            icon="alert-circle"
+            title="Couldn't load loans"
+            description="An error occurred while loading your loans. Please try again."
+            action={
+              <Button variant="secondary" onClick={() => refetch()}>
+                Retry
+              </Button>
+            }
+          />
+        )}
+
+        {data && totalCount === 0 && (
+          <EmptyState
+            icon="inbox"
+            title="No loans yet"
+            description="You have no loan history. Apply for a company loan or cash advance to get started."
+            action={
+              <Button variant="primary" icon={<Plus size={14} />} onClick={() => setShowApply(true)}>
+                Apply for a loan
+              </Button>
+            }
+          />
+        )}
+
+        {data && data.active.length > 0 && (
+          <section aria-label="Active loans">
+            <h2 className="text-2xs uppercase tracking-wider text-muted font-medium mb-2">
+              Active · {data.active.length}
+            </h2>
+            <DataTable columns={loanColumns(true)} data={data.active} stickyHeader={false} />
+          </section>
+        )}
+
+        {data && data.history.length > 0 && (
+          <section aria-label="Loan history">
+            <h2 className="text-2xs uppercase tracking-wider text-muted font-medium mb-2">
+              History · {data.history.length}
+            </h2>
+            <DataTable columns={loanColumns(false)} data={data.history} stickyHeader={false} />
+          </section>
+        )}
+
+        <ApplyLoanModal
+          isOpen={showApply}
+          onClose={() => setShowApply(false)}
+          onSubmit={(v) => apply.mutate(v)}
+          pending={apply.isPending}
+        />
+      </div>
     </div>
   );
 }
 
-function LoanCard({ loan, active = false }: { loan: SelfServiceLoan; active?: boolean }) {
-  return (
-    <article className="border border-default rounded-md p-3 bg-canvas">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="text-sm font-medium">{loan.loan_type ?? 'Loan'}</div>
-          <div className="text-xs text-muted">
-            {loan.periods_remaining}/{loan.periods} periods remaining
-          </div>
-        </div>
-        <Chip
-          variant={
-            loan.status === 'pending'
-              ? 'warning'
-              : active
-              ? 'info'
-              : loan.status === 'paid' || loan.status === 'closed'
-              ? 'neutral'
-              : 'success'
-          }
-        >
-          {loan.status}
-        </Chip>
-      </div>
-      <div className="grid grid-cols-2 gap-2 mt-3 text-xs">
-        <div>
-          <div className="text-text-subtle">Principal</div>
-          <div className="font-mono tabular-nums">₱ {loan.principal}</div>
-        </div>
-        <div>
-          <div className="text-text-subtle">Outstanding</div>
-          <div className="font-mono tabular-nums font-medium">₱ {loan.outstanding_balance}</div>
-        </div>
-        <div>
-          <div className="text-text-subtle">Monthly</div>
-          <div className="font-mono tabular-nums">₱ {loan.monthly_amortization}</div>
-        </div>
-      </div>
-    </article>
-  );
-}
-
-function ApplyLoanSheet({
+function ApplyLoanModal({
   isOpen,
   onClose,
   onSubmit,
@@ -199,7 +223,7 @@ function ApplyLoanSheet({
   });
 
   return (
-    <BottomSheet
+    <Modal
       isOpen={isOpen}
       onClose={() => {
         reset();
@@ -209,7 +233,7 @@ function ApplyLoanSheet({
     >
       <form
         onSubmit={handleSubmit((v) => onSubmit(v))}
-        className="space-y-4"
+        className="space-y-4 py-4"
       >
         <Select
           label="Type"
@@ -220,23 +244,25 @@ function ApplyLoanSheet({
           <option value="company_loan">Company Loan</option>
           <option value="cash_advance">Cash Advance</option>
         </Select>
-        <Input
-          label="Amount"
-          type="number"
-          step="0.01"
-          {...register('amount')}
-          error={errors.amount?.message}
-          prefix="₱"
-          className="font-mono"
-          required
-        />
-        <Input
-          label="Periods (months)"
-          type="number"
-          {...register('periods')}
-          error={errors.periods?.message}
-          required
-        />
+        <div className="grid grid-cols-2 gap-3">
+          <Input
+            label="Amount"
+            type="number"
+            step="0.01"
+            {...register('amount')}
+            error={errors.amount?.message}
+            prefix="₱"
+            className="font-mono"
+            required
+          />
+          <Input
+            label="Periods (months)"
+            type="number"
+            {...register('periods')}
+            error={errors.periods?.message}
+            required
+          />
+        </div>
         {/* Amortization preview */}
         {Number(watchedAmount) > 0 && Number(watchedPeriods) >= 1 && (
           <div className="rounded-md border border-default bg-surface p-3 space-y-2">
@@ -250,7 +276,7 @@ function ApplyLoanSheet({
               )}
             </div>
             {preview && preview.schedule.length > 0 && (
-              <div className="max-h-36 overflow-y-auto">
+              <div className="max-h-44 overflow-y-auto rounded border border-subtle">
                 <table className={cn(tableCls, 'font-mono tabular-nums')}>
                   <thead>
                     <tr className={theadTrCls}>
@@ -287,10 +313,10 @@ function ApplyLoanSheet({
             Cancel
           </Button>
           <Button type="submit" variant="primary" disabled={pending} loading={pending}>
-            {pending ? 'Submitting…' : 'Submit Request'}
+            {pending ? 'Submitting…' : 'Submit request'}
           </Button>
         </div>
       </form>
-    </BottomSheet>
+    </Modal>
   );
 }

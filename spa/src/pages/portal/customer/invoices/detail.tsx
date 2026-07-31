@@ -105,7 +105,7 @@ export default function CustomerInvoiceDetailPage() {
                         <Td>{item.description}</Td>
                         <Td align="right" mono>{item.quantity}</Td>
                         <Td align="right" mono>{formatPeso(item.unit_price)}</Td>
-                        <Td align="right" mono>{formatPeso(item.total_price)}</Td>
+                        <Td align="right" mono>{formatPeso(item.total)}</Td>
                       </tr>
                     ))}
                   </tbody>
@@ -113,7 +113,7 @@ export default function CustomerInvoiceDetailPage() {
               </Panel>
             )}
 
-            {invoice.payments && invoice.payments.length > 0 && (
+            {invoice.collections && invoice.collections.length > 0 && (
               <Panel title="Payments Made" noPadding>
                 <table className={tableCls}>
                   <thead>
@@ -124,9 +124,9 @@ export default function CustomerInvoiceDetailPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {invoice.payments.map((p, i) => (
+                    {invoice.collections.map((p, i) => (
                       <tr key={i} className={trCls}>
-                        <Td className="text-muted">{p.paid_at ?? '—'}</Td>
+                        <Td className="text-muted">{p.collection_date ?? '—'}</Td>
                         <Td className="capitalize">{p.payment_method}</Td>
                         <Td align="right" mono>{formatPeso(p.amount)}</Td>
                       </tr>

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Payroll\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Auth\Models\User;
 use App\Modules\Payroll\Enums\PayrollPeriodStatus;
 use App\Modules\Payroll\Models\BankFileRecord;
@@ -33,11 +34,14 @@ class BankFileService
     public function generate(PayrollPeriod $period, User $generator, string $format = 'generic'): BankFileRecord
     {
         if (! in_array($format, self::FORMATS, true)) {
-            throw new RuntimeException("Unsupported bank file format: {$format}");
+            throw new BusinessRuleException("Unsupported bank file format: {$format}");
         }
 
+        // Business rule, not a server fault: a bare RuntimeException is unmapped
+        // in bootstrap/app.php and reached the browser as a 500 "Server Error"
+        // toast whenever a user opened Bank File on a non-finalized period.
         if ($period->status !== PayrollPeriodStatus::Finalized) {
-            throw new RuntimeException('Bank file can only be generated for finalized periods.');
+            throw new BusinessRuleException('Bank file can only be generated for finalized periods.');
         }
 
         return DB::transaction(function () use ($period, $generator, $format) {
@@ -117,7 +121,7 @@ class BankFileService
     public function preview(PayrollPeriod $period, string $format = 'generic', int $limit = 3): array
     {
         if (! in_array($format, self::FORMATS, true)) {
-            throw new RuntimeException("Unsupported bank file format: {$format}");
+            throw new BusinessRuleException("Unsupported bank file format: {$format}");
         }
 
         $payrolls = Payroll::query()

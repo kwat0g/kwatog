@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\SettingsService;
 use App\Common\Support\Money;
 use App\Modules\Accounting\Services\JournalEntryService;
@@ -46,14 +47,14 @@ class GrnGlPostingService
     public function post(GoodsReceiptNote $grn): ?int
     {
         if ($grn->status !== GrnStatus::Accepted && $grn->status !== GrnStatus::PartialAccepted) {
-            throw new RuntimeException('Only accepted GRNs can be posted to the GL.');
+            throw new BusinessRuleException('Only accepted GRNs can be posted to the GL.');
         }
 
         if ($grn->journal_entry_id) {
             return (int) $grn->journal_entry_id;
         }
 
-        $accountingEnabled = (bool) $this->settings->get('modules.accounting', false);
+        $accountingEnabled = $this->settings->requiredBool('modules.accounting');
         if (! $accountingEnabled) {
             Log::info('GrnGlPostingService: accounting module disabled; skipping GL post', [
                 'grn_id' => $grn->id,
@@ -116,7 +117,7 @@ class GrnGlPostingService
                 ]);
                 $fallback = $accountIds['1200'] ?? null;
                 if (! $fallback) {
-                    throw new RuntimeException("Inventory account {$code} missing and 1200 fallback also missing.");
+                    throw new BusinessRuleException("Inventory account {$code} missing and 1200 fallback also missing.");
                 }
                 $lines[] = [
                     'account_id'  => $fallback,

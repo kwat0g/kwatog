@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Payroll\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\SettingsService;
 use App\Common\Support\Money;
@@ -13,7 +14,6 @@ use App\Modules\Payroll\Models\PayrollPeriod;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
-use RuntimeException;
 
 /**
  * Posts a finalized payroll period to the General Ledger as a balanced JE.
@@ -40,7 +40,7 @@ class PayrollGlPostingService
     public function post(PayrollPeriod $period): ?int
     {
         if ($period->status !== PayrollPeriodStatus::Finalized) {
-            throw new RuntimeException('Only finalized periods can be posted to the GL.');
+            throw new BusinessRuleException('Only finalized periods can be posted to the GL.');
         }
         if ($period->journal_entry_id) {
             // Already posted — idempotent.
@@ -48,7 +48,7 @@ class PayrollGlPostingService
         }
 
         // Feature flag check.
-        $accountingEnabled = (bool) $this->settings->get('modules.accounting', false);
+        $accountingEnabled = $this->settings->requiredBool('modules.accounting');
         if (! $accountingEnabled) {
             Log::info('PayrollGlPostingService: accounting module disabled; skipping GL post', [
                 'period_id' => $period->id,
@@ -77,6 +77,9 @@ class PayrollGlPostingService
                     COALESCE(SUM(overtime_pay),    0) as overtime,
                     COALESCE(SUM(night_diff_pay),  0) as night_diff,
                     COALESCE(SUM(holiday_pay),     0) as holiday,
+                    COALESCE(SUM(tardiness_deduction), 0) as tardiness,
+                    COALESCE(SUM(undertime_deduction), 0) as undertime,
+                    COALESCE(SUM(adjustment_amount),   0) as adjustments,
                     COALESCE(SUM(sss_ee),          0) as sss_ee,
                     COALESCE(SUM(sss_er),          0) as sss_er,
                     COALESCE(SUM(philhealth_ee),   0) as ph_ee,
@@ -85,6 +88,7 @@ class PayrollGlPostingService
                     COALESCE(SUM(pagibig_er),      0) as pg_er,
                     COALESCE(SUM(withholding_tax), 0) as wht,
                     COALESCE(SUM(loan_deductions), 0) as loans,
+                    COALESCE(SUM(gross_pay),       0) as gross,
                     COALESCE(SUM(net_pay),         0) as net
                 ')
                 ->first();
@@ -135,6 +139,23 @@ class PayrollGlPostingService
             $wht          = (string) $totals->wht;
             $loans        = (string) $totals->loans;
             $net          = (string) $totals->net;
+            // Lateness withheld from pay. Earnings are debited at their full
+            // gross, so this must come back as a credit or the entry cannot
+            // balance — this omission is why payroll GL posting had never
+            // succeeded on any period that had a single late employee.
+            $lateness     = Money::add((string) $totals->tardiness, (string) $totals->undertime);
+            // Signed net effect of applied adjustments (positive = extra pay).
+            $adjustments  = (string) $totals->adjustments;
+            $grossTotal   = (string) $totals->gross;
+            // Employee-borne deductions — the withholdings that reduce take-home
+            // pay. Used to derive the net-pay-floor remainder below.
+            $eeDeductions = Money::add(
+                (string) $totals->sss_ee,
+                (string) $totals->ph_ee,
+                (string) $totals->pg_ee,
+                $wht,
+                $loans,
+            );
 
             if ($isThirteenth) {
                 // 13th-month: gross is in basic_pay slot in the calc-and-pay flow,
@@ -146,6 +167,18 @@ class PayrollGlPostingService
                 // Salary expense
                 $debit('5050',  $basicLine, 'Salaries Expense');
                 $debit('5060',  $otLine,    'Overtime + Night Diff + Holiday Premium Expense');
+
+                // Tardiness / undertime withheld — contra to Salaries Expense.
+                $credit('5050', $lateness, 'Tardiness + Undertime Withheld');
+
+                // Applied adjustments (back-pay, corrections). Signed: a
+                // positive figure is extra pay owed (more expense), a negative
+                // one recovers an overpayment.
+                if (Money::lt($adjustments, '0')) {
+                    $credit('5050', Money::negate($adjustments), 'Payroll Adjustments (recovery)');
+                } else {
+                    $debit('5050', $adjustments, 'Payroll Adjustments (back-pay)');
+                }
 
                 // Employer expenses
                 $debit('6030',  $sssEr, 'SSS Employer Share Expense');
@@ -163,10 +196,26 @@ class PayrollGlPostingService
 
                 // Cash outflow for net pay
                 $credit('1010', $net, 'Cash in Bank — Net Pay Disbursed');
+
+                // Net pay is clamped at zero when deductions would exceed pay,
+                // so the un-recovered remainder is not cash that ever left the
+                // bank. Credit it back explicitly rather than letting it show
+                // up as a mystery imbalance. Derived, not plugged: it is the
+                // exact shortfall between what was withheld and what the payroll
+                // rows could actually absorb.
+                $unrecovered = Money::sub(
+                    Money::add(Money::sub($grossTotal, $eeDeductions), $adjustments),
+                    $net,
+                );
+                if (Money::lt($unrecovered, '0')) {
+                    $debit('5050', Money::negate($unrecovered), 'Net Pay Floor Adjustment');
+                } else {
+                    $credit('5050', $unrecovered, 'Unrecovered Deductions (net pay floored at zero)');
+                }
             }
 
             if (Money::cmp($totalDebit, $totalCredit) !== 0) {
-                throw new RuntimeException(sprintf(
+                throw new BusinessRuleException(sprintf(
                     'Payroll GL posting unbalanced: debits=%s credits=%s',
                     $totalDebit, $totalCredit,
                 ));

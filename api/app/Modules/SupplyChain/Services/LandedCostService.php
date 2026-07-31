@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\SupplyChain\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use App\Modules\SupplyChain\Models\Shipment;
@@ -11,7 +12,6 @@ use App\Modules\SupplyChain\Models\ShipmentLandedCost;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
-use RuntimeException;
 
 /**
  * OGAMI-104 — Landed cost calculation for inbound shipments.
@@ -47,7 +47,7 @@ class LandedCostService
 
             $poItems = $shipment->purchaseOrder?->items;
             if (! $poItems || $poItems->isEmpty()) {
-                throw new RuntimeException('Shipment has no purchase order items to allocate costs against.');
+                throw new BusinessRuleException('Shipment has no purchase order items to allocate costs against.');
             }
 
             $freightCost   = (float) ($shipment->freight_cost ?? 0);

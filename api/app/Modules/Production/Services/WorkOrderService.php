@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Production\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\SearchOperator;
@@ -115,6 +116,7 @@ class WorkOrderService
             'creator:id,name,role_id',
             'materials.item:id,code,name,unit_of_measure',
             'outputs.recorder:id,name,role_id', 'outputs.defects.defectType',
+            'inspections:id,inspection_number,stage,status,entity_type,entity_id,completed_at',
             'downtimes', 'schedules.machine:id,machine_code,name',
         ]);
     }
@@ -193,7 +195,7 @@ class WorkOrderService
             $wo->refresh();
 
             if (! $wo->machine_id || ! $wo->mold_id) {
-                throw new RuntimeException('Confirming a work order requires both a machine and a mold.');
+                throw new BusinessRuleException('Confirming a work order requires both a machine and a mold.');
             }
 
             // OGAMI-015 — machine double-booking guard. A machine already
@@ -262,13 +264,13 @@ class WorkOrderService
             $machine = $wo->machine_id ? Machine::lockForUpdate()->find($wo->machine_id) : null;
             $mold    = $wo->mold_id    ? Mold::lockForUpdate()->find($wo->mold_id)       : null;
             if (! $machine || ! $mold) {
-                throw new RuntimeException('Cannot start a work order without an assigned machine and mold.');
+                throw new BusinessRuleException('Cannot start a work order without an assigned machine and mold.');
             }
             if (! in_array($machine->status, [MachineStatus::Idle, MachineStatus::Running], true)) {
-                throw new RuntimeException('Assigned machine is not available to start production.');
+                throw new BusinessRuleException('Assigned machine is not available to start production.');
             }
             if (! in_array($mold->status, [MoldStatus::Available, MoldStatus::InUse], true)) {
-                throw new RuntimeException('Assigned mold is not available.');
+                throw new BusinessRuleException('Assigned mold is not available.');
             }
 
             $machine->update([
@@ -454,7 +456,7 @@ class WorkOrderService
     public function delete(WorkOrder $wo): void
     {
         if ($wo->status !== WorkOrderStatus::Planned) {
-            throw new RuntimeException('Only planned work orders can be deleted.');
+            throw new BusinessRuleException('Only planned work orders can be deleted.');
         }
         $wo->delete();
     }

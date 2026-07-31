@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\SupplyChain\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\DocumentSequenceService;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\SalesOrder;
@@ -11,7 +12,6 @@ use App\Modules\Production\Models\WorkOrder;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\ShipmentLot;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 /**
  * ADV3 — Shipment Lot service.
@@ -31,7 +31,7 @@ class ShipmentLotService
     public function createForDelivery(Delivery $delivery, array $data, User $by): ShipmentLot
     {
         if (empty($data['work_order_ids'])) {
-            throw new RuntimeException('At least one work-order batch is required to create a shipment lot.');
+            throw new BusinessRuleException('At least one work-order batch is required to create a shipment lot.');
         }
 
         return DB::transaction(function () use ($delivery, $data, $by) {
@@ -44,7 +44,7 @@ class ShipmentLotService
 
             $missing = $workOrders->filter(fn (WorkOrder $wo) => empty($wo->batch_number));
             if ($missing->isNotEmpty()) {
-                throw new RuntimeException(
+                throw new BusinessRuleException(
                     'All work orders must have a batch_number (i.e. be started) before being added to a shipment lot.'
                 );
             }

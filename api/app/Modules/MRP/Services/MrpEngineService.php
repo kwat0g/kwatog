@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\MRP\Services;
 
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\SettingsService;
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\SalesOrderItem;
 use App\Modules\Inventory\Models\Item;
@@ -49,13 +51,11 @@ use Illuminate\Support\Facades\Log;
  */
 class MrpEngineService
 {
-    /** @var int Safety buffer days subtracted from order_by_date. */
-    private const SAFETY_BUFFER_DAYS = 2;
-
     public function __construct(
         private readonly DocumentSequenceService $sequences,
         private readonly BomService $boms,
         private readonly WorkOrderService $workOrders,
+        private readonly SettingsService $settings,
     ) {}
 
     /**
@@ -166,8 +166,11 @@ class MrpEngineService
 
                 if ($net > 0) {
                     $leadTime = $this->effectiveLeadTime($itemId, $item);
-                    $earliest = $earliestNeedPerItem[$itemId] ?? Carbon::now()->addDays(7);
-                    $orderBy  = $earliest->copy()->subDays($leadTime + self::SAFETY_BUFFER_DAYS);
+                    $earliest = $earliestNeedPerItem[$itemId] ?? null;
+                    if (! $earliest) {
+                        throw new BusinessRuleException("No required delivery date is available for item {$item->code}.");
+                    }
+                    $orderBy  = $earliest->copy()->subDays($leadTime + $this->safetyBufferDays());
 
                     $priority = $orderBy->lte(Carbon::today()) ? 'urgent' : 'normal';
                     $shortages[$itemId] = [
@@ -406,7 +409,7 @@ class MrpEngineService
 
     /**
      * Largest of (preferred approved supplier lead time, item.lead_time_days).
-     * Falls back to 14 days only when neither is configured.
+     * Uses the persisted MRP policy only when neither source is configured.
      *
      * Sprint 6 audit §1.5: previous max(14, ...) clamp inflated urgency
      * flagging for items with rush suppliers; respect configured values.
@@ -420,6 +423,31 @@ class MrpEngineService
         $supplierLT = (int) ($approved?->lead_time_days ?? 0);
         $itemLT     = (int) $item->lead_time_days;
         $configured = max($supplierLT, $itemLT);
-        return $configured > 0 ? $configured : 14;
+        return $configured > 0 ? $configured : $this->positiveIntSetting('mrp.default_lead_time_days');
+    }
+
+    private function safetyBufferDays(): int
+    {
+        return $this->nonNegativeIntSetting('mrp.safety_buffer_days');
+    }
+
+    private function positiveIntSetting(string $key): int
+    {
+        $value = $this->nonNegativeIntSetting($key);
+        if ($value < 1) {
+            throw new BusinessRuleException("MRP setting {$key} must be at least one.");
+        }
+
+        return $value;
+    }
+
+    private function nonNegativeIntSetting(string $key): int
+    {
+        $value = $this->settings->get($key, '__missing_mrp_policy__');
+        if (! is_numeric($value) || (int) $value < 0) {
+            throw new BusinessRuleException("Required MRP setting {$key} is not configured or invalid.");
+        }
+
+        return (int) $value;
     }
 }

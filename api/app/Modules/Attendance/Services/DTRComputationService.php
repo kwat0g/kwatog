@@ -14,6 +14,8 @@ use Carbon\Carbon;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use InvalidArgumentException;
+use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\SettingsService;
 
 /**
  * Daily Time Record (DTR) computation engine.
@@ -29,12 +31,10 @@ use InvalidArgumentException;
  */
 class DTRComputationService
 {
-    private const NIGHT_BAND_START_HOUR = 22; // 22:00
-    private const NIGHT_BAND_END_HOUR   = 6;  // 06:00 next day
-
     public function __construct(
         private readonly ShiftAssignmentService $shiftAssignments,
         private readonly HolidayService $holidays,
+        private readonly SettingsService $settings,
     ) {}
 
     /**
@@ -46,13 +46,15 @@ class DTRComputationService
 
         $shift = $a->shift_id ? Shift::find($a->shift_id) : $this->resolveShift($a);
         if (! $shift) {
-            // Default fallback — Day Shift 06:00-14:00, 30 min break.
-            $shift = $this->fallbackShift();
-        } else {
-            // Make sure relation is set if we resolved it ourselves.
-            if (! $a->shift_id) {
-                $a->shift_id = $shift->id;
-            }
+            $shift = Shift::query()->where('is_default', true)->where('is_active', true)->first();
+        }
+        if (! $shift) {
+            throw new BusinessRuleException('No active default shift is configured. Set one in Attendance > Shifts.');
+        }
+
+        // Persist the resolved assignment/default so downstream records retain the actual rule used.
+        if (! $a->shift_id) {
+            $a->shift_id = $shift->id;
         }
 
         $holiday = $this->holidays->forDate($date);
@@ -185,7 +187,7 @@ class DTRComputationService
 
         // Tardiness — late arrival vs scheduled start, minus grace period.
         $graceEnd = $shiftStart->addMinutes($graceMin);
-        $tardyMin = $timeIn->gt($graceEnd) ? (int) min(480, $graceEnd->diffInMinutes($timeIn)) : 0;
+        $tardyMin = $timeIn->gt($graceEnd) ? (int) min($this->settings->requiredInt('attendance.tardiness.maximum_minutes', 1), $graceEnd->diffInMinutes($timeIn)) : 0;
 
         // Undertime — left before scheduled end (only when worked < scheduled). Extended OT period
         // does not contribute to undertime (we measure relative to shift_end).
@@ -208,9 +210,10 @@ class DTRComputationService
             $autoOtMin   = (int) round($autoOtHours * 60);
             $otMin = min($excess, $autoOtMin);
         } elseif ($hasApprovedOt) {
-            // Min 30 minutes; cap at 4 hours (240 min). Rounded down to whole minutes.
-            if ($excess >= 30) {
-                $otMin = min($excess, 240);
+            $minimumOt = $this->settings->requiredInt('attendance.ot.minimum_minutes', 0);
+            $maximumOt = $this->settings->requiredInt('attendance.ot.maximum_minutes', 1);
+            if ($excess >= $minimumOt) {
+                $otMin = min($excess, $maximumOt);
             }
         }
 
@@ -295,14 +298,18 @@ class DTRComputationService
 
         if ($type === HolidayType::Regular->value) {
             if (! $worked) return 1.00;             // paid even when not worked
-            return $isRestDay ? 2.60 : 2.00;
+            return $isRestDay
+                ? $this->settings->requiredFloat('payroll.day_rate.regular_holiday_rest_day', 0)
+                : $this->settings->requiredFloat('payroll.day_rate.regular_holiday', 0);
         }
         if ($type === HolidayType::SpecialNonWorking->value) {
             if (! $worked) return 0.00;             // no work no pay
-            return $isRestDay ? 1.50 : 1.30;
+            return $isRestDay
+                ? $this->settings->requiredFloat('payroll.day_rate.special_holiday_rest_day', 0)
+                : $this->settings->requiredFloat('payroll.day_rate.special_holiday', 0);
         }
         if ($isRestDay) {
-            return $worked ? 1.30 : 0.00;
+            return $worked ? $this->settings->requiredFloat('payroll.day_rate.rest_day', 0) : 0.00;
         }
         return 1.00;
     }
@@ -319,7 +326,7 @@ class DTRComputationService
             if ($isRestDay) return AttendanceStatus::RestDay->value;
             return AttendanceStatus::Absent->value;
         }
-        if ($scheduledMin > 0 && $workedMin < ($scheduledMin / 2)) {
+        if ($scheduledMin > 0 && $workedMin < ($scheduledMin * $this->settings->requiredFloat('attendance.half_day_work_ratio', 0, 1))) {
             return AttendanceStatus::Halfday->value;
         }
         if ($tardyMin > 0) {
@@ -347,6 +354,11 @@ class DTRComputationService
      */
     private function nightDiffMinutes(CarbonInterface $in, CarbonInterface $out): int
     {
+        $nightStartHour = $this->settings->requiredInt('attendance.night_band_start_hour', 0, 23);
+        $nightEndHour = $this->settings->requiredInt('attendance.night_band_end_hour', 0, 23);
+        if ($nightStartHour <= $nightEndHour) {
+            throw new BusinessRuleException('Night differential start hour must be later than its next-day end hour.');
+        }
         $startDate = $in->copy()->startOfDay();
         $endDate   = $out->copy()->startOfDay();
 
@@ -354,14 +366,14 @@ class DTRComputationService
         for ($d = $startDate; $d->lte($endDate); $d = $d->addDay()) {
             // Two bands per day: previous-night band (00:00-06:00 of $d) and current-night band ($d 22:00 - $d+1 06:00).
             // The "previous-night" band of date X is the same as "current-night" of date X-1, so we only count current.
-            $bandStart = $d->copy()->setTime(self::NIGHT_BAND_START_HOUR, 0);
-            $bandEnd   = $d->copy()->addDay()->setTime(self::NIGHT_BAND_END_HOUR, 0);
+            $bandStart = $d->copy()->setTime($nightStartHour, 0);
+            $bandEnd   = $d->copy()->addDay()->setTime($nightEndHour, 0);
             $minutes += $this->minutesIntersection($in, $out, $bandStart, $bandEnd);
         }
 
         // Also account for the early-morning portion of the *first* day (00:00-06:00 of startDate).
         $earlyStart = $startDate->copy()->setTime(0, 0);
-        $earlyEnd   = $startDate->copy()->setTime(self::NIGHT_BAND_END_HOUR, 0);
+        $earlyEnd   = $startDate->copy()->setTime($nightEndHour, 0);
         $minutes += $this->minutesIntersection($in, $out, $earlyStart, $earlyEnd);
 
         return $minutes;
@@ -388,17 +400,4 @@ class DTRComputationService
         return $this->shiftAssignments->current($a->employee, $date);
     }
 
-    private function fallbackShift(): Shift
-    {
-        return new Shift([
-            'name'           => 'Default',
-            'start_time'     => '08:00',
-            'end_time'       => '17:00',
-            'break_minutes'  => 60,
-            'grace_minutes'  => 0,
-            'is_night_shift' => false,
-            'is_extended'    => false,
-            'auto_ot_hours'  => null,
-        ]);
-    }
 }

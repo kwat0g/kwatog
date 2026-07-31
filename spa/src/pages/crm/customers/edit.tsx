@@ -36,7 +36,6 @@ export default function CrmCustomerEditPage() {
       email: '',
       phone: '',
       address: '',
-      payment_terms_days: 30,
       is_active: true,
     },
   });

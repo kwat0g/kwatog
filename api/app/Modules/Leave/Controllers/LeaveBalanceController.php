@@ -21,17 +21,31 @@ class LeaveBalanceController
             ->where('employee_id', $user->employee_id)
             ->where('year', $year)
             ->get();
+
         return EmployeeLeaveBalanceResource::collection($rows);
     }
 
     public function forEmployee(Employee $employee, Request $request): AnonymousResourceCollection
     {
+        $user = $request->user();
+        $canView = $user?->role?->slug === 'system_admin'
+            || $user?->hasPermission('leave.approve_hr')
+            || (int) $user?->employee_id === (int) $employee->id;
+
+        if (! $canView && $user?->hasPermission('leave.approve_dept') && $user->employee_id) {
+            $ownDepartment = Employee::query()->whereKey($user->employee_id)->value('department_id');
+            $canView = $ownDepartment && (int) $ownDepartment === (int) $employee->department_id;
+        }
+
+        abort_unless($canView, 403, 'You do not have permission to view this leave balance.');
+
         $year = (int) ($request->query('year') ?? now()->year);
         $rows = EmployeeLeaveBalance::query()
             ->with('leaveType')
             ->where('employee_id', $employee->id)
             ->where('year', $year)
             ->get();
+
         return EmployeeLeaveBalanceResource::collection($rows);
     }
 }

@@ -22,7 +22,7 @@ export interface SegmentedOption<T extends string> {
   disabled?: boolean;
 }
 
-type Size = 'sm' | 'md';
+type Size = 'sm' | 'md' | 'touch';
 
 interface SegmentedControlProps<T extends string> {
   options: Array<SegmentedOption<T>>;
@@ -31,12 +31,17 @@ interface SegmentedControlProps<T extends string> {
   /** Names the group for assistive tech, e.g. "Time range". */
   label: string;
   size?: Size;
+  /** Stretch to fill the container, splitting width evenly. For touch tab bars. */
+  fullWidth?: boolean;
   className?: string;
 }
 
 const sizeClasses: Record<Size, string> = {
   sm: 'h-7 px-2.5 text-xs',
   md: 'h-8 px-3 text-sm',
+  // 44px — the touch-target floor the PWAs use. Deliberately larger than the
+  // desktop scale in DESIGN-SYSTEM.md, which assumes a mouse.
+  touch: 'min-h-[44px] px-4 text-base',
 };
 
 export function SegmentedControl<T extends string>({
@@ -45,6 +50,7 @@ export function SegmentedControl<T extends string>({
   onChange,
   label,
   size = 'md',
+  fullWidth = false,
   className,
 }: SegmentedControlProps<T>) {
   const move = (from: number, delta: number) => {
@@ -61,6 +67,7 @@ export function SegmentedControl<T extends string>({
       aria-label={label}
       className={cn(
         'inline-flex items-center rounded-md border border-default bg-canvas overflow-hidden',
+        fullWidth && 'flex w-full',
         className,
       )}
     >
@@ -87,10 +94,11 @@ export function SegmentedControl<T extends string>({
               }
             }}
             className={cn(
-              'inline-flex items-center gap-1.5 transition-colors duration-fast cursor-pointer',
+              'inline-flex items-center justify-center gap-1.5 transition-colors duration-fast cursor-pointer',
               'border-r border-default last:border-r-0',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset',
               'disabled:opacity-60 disabled:cursor-not-allowed',
+              fullWidth && 'flex-1',
               sizeClasses[size],
               selected
                 ? 'bg-accent text-accent-fg font-medium'

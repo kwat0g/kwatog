@@ -4,16 +4,19 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\BusinessPolicyService;
 use App\Common\Support\SearchOperator;
 
 use App\Modules\Accounting\Models\Vendor;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 class VendorService
 {
+    public function __construct(private readonly BusinessPolicyService $policies) {}
+
     public function list(array $filters): LengthAwarePaginator
     {
         $q = Vendor::query();
@@ -40,6 +43,7 @@ class VendorService
 
     public function create(array $data): Vendor
     {
+        $data['payment_terms_days'] ??= $this->policies->vendorPaymentTermsDays();
         // OGAMI audit DEFECT-2 — record the vendor's creator so the PO
         // vendor-creator SoD guard (PurchaseOrderService::assertVendorSod) can
         // fire. Caller-supplied created_by wins (seeders/imports); otherwise the
@@ -63,7 +67,7 @@ class VendorService
     public function delete(Vendor $vendor): void
     {
         if ($vendor->bills()->exists()) {
-            throw new RuntimeException('Cannot delete a vendor with bills. Deactivate instead.');
+            throw new BusinessRuleException('Cannot delete a vendor with bills. Deactivate instead.');
         }
         $vendor->delete();
     }

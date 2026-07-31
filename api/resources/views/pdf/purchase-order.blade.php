@@ -55,7 +55,7 @@
         </td>
         <td style="width:50%;">
             <div class="muted" style="font-size:9px;">STATUS</div>
-            <div>{{ str_replace('_', ' ', strtoupper((string) $po->status)) }}</div>
+            <div>{{ str_replace('_', ' ', strtoupper((string) ($po->status?->value ?? $po->status))) }}</div>
         </td>
     </tr>
 </table>

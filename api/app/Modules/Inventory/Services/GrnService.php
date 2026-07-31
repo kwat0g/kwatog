@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\ChainBroadcaster;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Support\HashIdFilter;
@@ -95,7 +96,7 @@ class GrnService
             PurchaseOrderStatus::Sent,
             PurchaseOrderStatus::PartiallyReceived,
         ], true)) {
-            throw new RuntimeException("PO {$po->po_number} is not open for receiving (status={$po->status->value}).");
+            throw new BusinessRuleException("PO {$po->po_number} is not open for receiving (status={$po->status->value}).");
         }
 
         return DB::transaction(function () use ($po, $items, $meta, $by) {
@@ -114,7 +115,7 @@ class GrnService
                     ?? (is_int($row['purchase_order_item_id']) ? $row['purchase_order_item_id'] : null);
                 $poi = PurchaseOrderItem::query()->whereKey($poiId)->lockForUpdate()->firstOrFail();
                 if ($poi->purchase_order_id !== $po->id) {
-                    throw new RuntimeException("PO line {$poi->id} does not belong to PO {$po->id}.");
+                    throw new BusinessRuleException("PO line {$poi->id} does not belong to PO {$po->id}.");
                 }
 
                 $locationId = HashIdFilter::decode($row['location_id'], WarehouseLocation::class)
@@ -151,7 +152,7 @@ class GrnService
                     $allowance = bcmul((string) $poi->quantity, bcdiv($tolerancePct, '100', 6), 3);
                     $maxReceivable = bcadd($remaining, $allowance, 3);
                     if (bccomp($qtyReceived, $maxReceivable, 3) > 0) {
-                        throw new RuntimeException(
+                        throw new BusinessRuleException(
                             "Cannot receive {$qtyReceived} for PO line {$poi->id}: only {$remaining} remaining"
                             .($tolerancePct !== '0' ? " (tolerance {$tolerancePct}% → max {$maxReceivable})" : '').'.'
                         );
@@ -199,7 +200,7 @@ class GrnService
     public function accept(GoodsReceiptNote $grn, User $by): GoodsReceiptNote
     {
         if ($grn->status !== GrnStatus::PendingQc) {
-            throw new RuntimeException('Only pending_qc GRNs can be accepted.');
+            throw new BusinessRuleException('Only pending_qc GRNs can be accepted.');
         }
         $this->assertQcGate($grn);
 
@@ -253,7 +254,7 @@ class GrnService
     public function partialAccept(GoodsReceiptNote $grn, array $itemAcceptedMap, User $by): GoodsReceiptNote
     {
         if ($grn->status !== GrnStatus::PendingQc) {
-            throw new RuntimeException('Only pending_qc GRNs can be partially accepted.');
+            throw new BusinessRuleException('Only pending_qc GRNs can be partially accepted.');
         }
         $this->assertQcGate($grn);
 
@@ -262,7 +263,7 @@ class GrnService
             foreach ($grn->items as $row) {
                 $accepted = (string) ($itemAcceptedMap[$row->id] ?? '0');
                 if (bccomp($accepted, (string) $row->quantity_received, 3) > 0) {
-                    throw new RuntimeException("Accepted quantity exceeds received for line {$row->id}.");
+                    throw new BusinessRuleException("Accepted quantity exceeds received for line {$row->id}.");
                 }
                 if (bccomp($accepted, (string) $row->quantity_received, 3) < 0) {
                     $allFull = false;
@@ -306,7 +307,7 @@ class GrnService
     public function reject(GoodsReceiptNote $grn, string $reason, User $by): GoodsReceiptNote
     {
         if ($grn->status !== GrnStatus::PendingQc) {
-            throw new RuntimeException('Only pending_qc GRNs can be rejected.');
+            throw new BusinessRuleException('Only pending_qc GRNs can be rejected.');
         }
         $result = DB::transaction(function () use ($grn, $reason, $by) {
             $grn->update([

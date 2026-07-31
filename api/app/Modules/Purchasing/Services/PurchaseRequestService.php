@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Purchasing\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\ApprovalService;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Support\HashIdFilter;
@@ -137,7 +138,7 @@ class PurchaseRequestService
     public function update(PurchaseRequest $pr, array $data): PurchaseRequest
     {
         if ($pr->status !== PurchaseRequestStatus::Draft) {
-            throw new RuntimeException('Only draft PRs can be edited.');
+            throw new BusinessRuleException('Only draft PRs can be edited.');
         }
         return DB::transaction(function () use ($pr, $data) {
             $pr->update([
@@ -175,7 +176,7 @@ class PurchaseRequestService
     public function submit(PurchaseRequest $pr): PurchaseRequest
     {
         if ($pr->status !== PurchaseRequestStatus::Draft) {
-            throw new RuntimeException('Only draft PRs can be submitted.');
+            throw new BusinessRuleException('Only draft PRs can be submitted.');
         }
         return DB::transaction(function () use ($pr) {
             $total = (float) $pr->totalEstimatedAmount();
@@ -303,7 +304,7 @@ class PurchaseRequestService
     public function approve(PurchaseRequest $pr, User $by, ?string $remarks = null): PurchaseRequest
     {
         if ($pr->status !== PurchaseRequestStatus::Pending) {
-            throw new RuntimeException('Only pending PRs can be approved.');
+            throw new BusinessRuleException('Only pending PRs can be approved.');
         }
         $this->budget->assertAcknowledged($pr);
         return DB::transaction(function () use ($pr, $by, $remarks) {
@@ -356,7 +357,7 @@ class PurchaseRequestService
     public function reject(PurchaseRequest $pr, User $by, string $reason): PurchaseRequest
     {
         if ($pr->status !== PurchaseRequestStatus::Pending) {
-            throw new RuntimeException('Only pending PRs can be rejected.');
+            throw new BusinessRuleException('Only pending PRs can be rejected.');
         }
         return DB::transaction(function () use ($pr, $by, $reason) {
             $this->approvals->reject($pr, $by, $reason);
@@ -368,7 +369,7 @@ class PurchaseRequestService
     public function cancel(PurchaseRequest $pr): PurchaseRequest
     {
         if (! in_array($pr->status, [PurchaseRequestStatus::Draft, PurchaseRequestStatus::Pending], true)) {
-            throw new RuntimeException('Cannot cancel a PR in this status.');
+            throw new BusinessRuleException('Cannot cancel a PR in this status.');
         }
         $pr->forceFill(['status' => PurchaseRequestStatus::Cancelled])->save();
         return $pr->fresh();
@@ -377,7 +378,7 @@ class PurchaseRequestService
     public function delete(PurchaseRequest $pr): void
     {
         if ($pr->status !== PurchaseRequestStatus::Draft) {
-            throw new RuntimeException('Only draft PRs can be deleted.');
+            throw new BusinessRuleException('Only draft PRs can be deleted.');
         }
         $pr->delete();
     }

@@ -107,9 +107,9 @@ class ComplaintController
 
         $payload = [
             'company'   => [
-                'name'    => (string) $settings->get('company.name', 'Philippine Ogami Corporation'),
-                'address' => (string) $settings->get('company.address', 'FCIE, Dasmariñas, Cavite, Philippines'),
-                'tin'     => $settings->get('company.tin'),
+                'name'    => $settings->requiredString('company.legal_name'),
+                'address' => $settings->requiredString('company.address'),
+                'tin'     => $settings->requiredString('company.tin'),
             ],
             'user'      => optional(request()->user())->name,
             'complaint' => $complaint,

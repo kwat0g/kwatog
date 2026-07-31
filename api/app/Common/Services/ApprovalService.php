@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace App\Common\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Models\ApprovalRecord;
 use App\Common\Models\WorkflowDefinition;
 use App\Modules\Auth\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 class ApprovalService
 {
@@ -61,7 +61,7 @@ class ApprovalService
                 ->lockForUpdate()
                 ->first();
             if (! $next) {
-                throw new RuntimeException('Nothing pending to approve.');
+                throw new BusinessRuleException('Nothing pending to approve.');
             }
             $submitterId = $this->resolveSubmitterUserId($approvable);
             if ($submitterId !== null && $submitterId === $user->id) {
@@ -88,7 +88,7 @@ class ApprovalService
                 ->lockForUpdate()
                 ->first();
             if (! $next) {
-                throw new RuntimeException('Nothing pending to reject.');
+                throw new BusinessRuleException('Nothing pending to reject.');
             }
             $submitterId = $this->resolveSubmitterUserId($approvable);
             if ($submitterId !== null && $submitterId === $user->id) {

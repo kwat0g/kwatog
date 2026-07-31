@@ -11,6 +11,7 @@ import { creditNotesApi, type CreditNoteListParams } from '@/api/accounting/cred
 import { accountsApi } from '@/api/accounting/accounts';
 import { customersApi } from '@/api/accounting/customers';
 import { vendorsApi } from '@/api/accounting/vendors';
+import { businessPoliciesApi } from '@/api/businessPolicies';
 import { Button } from '@/components/ui/Button';
 import { Chip, type ChipVariant } from '@/components/ui/Chip';
 import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
@@ -133,15 +134,16 @@ function CreateCreditNoteModal({ onClose, onCreated }: { onClose: () => void; on
   const { data: accountsResp } = useQuery({ queryKey: ['accounting', 'accounts', 'flat-active'], queryFn: () => accountsApi.list({ per_page: 200, is_active: true }) });
   const { data: customersResp } = useQuery({ queryKey: ['accounting', 'customers', 'all'], queryFn: () => customersApi.list({ per_page: 200 }), enabled: type === 'customer' });
   const { data: vendorsResp } = useQuery({ queryKey: ['accounting', 'vendors', 'all'], queryFn: () => vendorsApi.list({ per_page: 200 }), enabled: type === 'supplier' });
+  const { data: policies } = useQuery({ queryKey: ['business-policies'], queryFn: businessPoliciesApi.get });
   const accounts = accountsResp?.data ?? [];
   const customers = customersResp?.data ?? [];
   const vendors = vendorsResp?.data ?? [];
 
   const totals = useMemo(() => {
     const sub = lines.reduce((s, l) => s + (Number(l.amount) || 0), 0);
-    const vat = isVatable ? sub * 0.12 : 0;
+    const vat = isVatable ? sub * Number(policies?.vat_rate ?? 0) : 0;
     return { sub: sub.toFixed(2), vat: vat.toFixed(2), total: (sub + vat).toFixed(2) };
-  }, [lines, isVatable]);
+  }, [lines, isVatable, policies?.vat_rate]);
 
   const mutation = useMutation({
     mutationFn: (d: FormValues) => creditNotesApi.create({
@@ -169,7 +171,7 @@ function CreateCreditNoteModal({ onClose, onCreated }: { onClose: () => void; on
           </Select>
           <Input label="Date" type="date" required {...register('date')} error={errors.date?.message} />
           <div className="flex items-end">
-            <Checkbox label="VAT-able (12%)" {...register('is_vatable')} />
+            <Checkbox label={`VAT-able (${(Number(policies?.vat_rate ?? 0) * 100).toLocaleString()}%)`} {...register('is_vatable')} />
           </div>
           {type === 'customer' ? (
             <Select label="Customer" required containerClassName="col-span-2" {...register('customer_id')} error={errors.customer_id?.message}>

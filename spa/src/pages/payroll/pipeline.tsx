@@ -19,6 +19,7 @@ const statusVariant = (status: PipelinePeriod['status']): ChipVariant => {
     case 'disbursed':   return 'success';
     case 'finalized':   return 'success';
     case 'approved':    return 'info';
+    case 'computed':    return 'info';
     case 'processing':  return 'info';
     case 'draft':       return 'warning';
     case 'scheduled':   return 'neutral';
@@ -32,6 +33,7 @@ const statusIcon = (status: PipelinePeriod['status']): string => {
     case 'disbursed':   return '✅';
     case 'finalized':   return '✅';
     case 'approved':    return '✅';
+    case 'computed':    return '◑';
     case 'processing':  return '⌛';
     case 'draft':       return '⚠';
     case 'scheduled':   return '○';
@@ -176,7 +178,7 @@ function PipelineRow({
         <Chip variant={statusVariant(period.status)}>{period.status_label}</Chip>
       </Td>
       <Td align="right" mono>
-        {period.exists && period.status === 'draft' && (
+        {period.exists && (period.status === 'draft' || period.status === 'computed') && (
           <Button
             variant="secondary"
             size="sm"
@@ -185,7 +187,7 @@ function PipelineRow({
             Review
           </Button>
         )}
-        {period.exists && period.id && period.status !== 'draft' && (
+        {period.exists && period.id && period.status !== 'draft' && period.status !== 'computed' && (
           <Button
             variant="secondary"
             size="sm"

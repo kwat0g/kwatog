@@ -187,7 +187,7 @@ export default function BillDetailPage() {
               <div><dt className="text-2xs uppercase tracking-wider text-muted mb-0.5">Vendor</dt><dd>{bill.vendor?.name}</dd></div>
               <div><dt className="text-2xs uppercase tracking-wider text-muted mb-0.5">Date</dt><dd className="font-mono">{formatDate(bill.date)}</dd></div>
               <div><dt className="text-2xs uppercase tracking-wider text-muted mb-0.5">Due date</dt><dd className="font-mono">{formatDate(bill.due_date)}</dd></div>
-              <div><dt className="text-2xs uppercase tracking-wider text-muted mb-0.5">VAT</dt><dd>{bill.is_vatable ? 'Yes (12%)' : 'No'}</dd></div>
+              <div><dt className="text-2xs uppercase tracking-wider text-muted mb-0.5">VAT</dt><dd>{bill.is_vatable ? 'Yes' : 'No'}</dd></div>
               {bill.purchase_order && (
                 <div><dt className="text-2xs uppercase tracking-wider text-muted mb-0.5">Purchase order</dt>
                   <dd><a className="text-accent hover:underline font-mono" href={`/purchasing/purchase-orders/${bill.purchase_order.id}`}>{bill.purchase_order.po_number}</a></dd>
@@ -230,7 +230,7 @@ export default function BillDetailPage() {
                   </tr>
                 ))}
                 <tr className={trCls}><Td align="right" mono className="text-muted" colSpan={5}>Subtotal</Td><Td align="right" mono>{formatPeso(bill.subtotal)}</Td></tr>
-                {bill.is_vatable && <tr className={trCls}><Td align="right" mono className="text-muted" colSpan={5}>VAT (12%)</Td><Td align="right" mono>{formatPeso(bill.vat_amount)}</Td></tr>}
+                {bill.is_vatable && <tr className={trCls}><Td align="right" mono className="text-muted" colSpan={5}>VAT</Td><Td align="right" mono>{formatPeso(bill.vat_amount)}</Td></tr>}
                 <tr className={totalsTrCls}><Td align="right" mono colSpan={5}>Total</Td><Td align="right" mono>{formatPeso(bill.total_amount)}</Td></tr>
               </tbody>
             </table>

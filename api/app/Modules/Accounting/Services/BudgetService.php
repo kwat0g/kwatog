@@ -137,7 +137,7 @@ class BudgetService
      */
     public function budgetVsActual(int $fiscalYearId): array
     {
-        $budgets = Budget::with('lineItems.account')
+        $budgets = Budget::with('lineItems.account', 'department')
             ->byFiscalYear($fiscalYearId)
             ->active()
             ->get();

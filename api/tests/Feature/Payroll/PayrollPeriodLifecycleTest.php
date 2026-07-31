@@ -88,10 +88,18 @@ class PayrollPeriodLifecycleTest extends TestCase
             'payroll_date' => '2026-05-15', 'is_first_half' => true,
         ], $user);
 
+        // approve() requires a completed compute run: status Computed with at
+        // least one payroll row. Draft now strictly means "never computed", and
+        // approving that used to lock in an empty ₱0 payroll.
+        \App\Modules\Payroll\Models\Payroll::factory()->create([
+            'payroll_period_id' => $period->id,
+        ]);
+        $period->forceFill(['status' => PayrollPeriodStatus::Computed->value])->save();
+
         // REC-04 — approve/finalize now take an actor. This period was never
         // computed (computed_by is null), so the maker-checker guard does not
         // trigger; a single user can drive the transition here.
-        $approved = $svc->approve($period, $user);
+        $approved = $svc->approve($period->fresh(), $user);
         $this->assertSame(PayrollPeriodStatus::Approved, $approved->status);
 
         $finalized = $svc->finalize($approved, $user);

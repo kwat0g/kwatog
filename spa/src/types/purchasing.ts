@@ -64,7 +64,7 @@ export interface PurchaseRequest {
 }
 
 export interface PurchaseRequestTemplate {
-  id: number;
+  id: string;
   name: string;
   department: { id: string; name: string; code: string } | null;
   items: Array<{
@@ -81,13 +81,13 @@ export interface PurchaseRequestTemplate {
 }
 
 export interface CreatePurchaseRequestData {
-  department_id?: number;
+  department_id?: string;
   date?: string;
   reason?: string;
   priority?: PurchaseRequestPriority;
   is_urgent?: boolean;
   urgency_reason?: string;
-  template_id?: number;
+  template_id?: string;
   items: Array<{
     item_id?: string | null;
     description: string;

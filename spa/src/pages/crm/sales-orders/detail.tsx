@@ -266,17 +266,33 @@ export default function SalesOrderDetailPage() {
                     chip: { variant: wo.status === 'completed' || wo.status === 'closed' ? 'success' as const : wo.status === 'in_progress' ? 'info' as const : wo.status === 'paused' ? 'warning' as const : wo.status === 'cancelled' ? 'danger' as const : 'neutral' as const, text: wo.status.replace('_', ' ') },
                   })),
                 }] : []),
-                {
-                  label: 'Quality',
-                  items: [{ id: 'Inspections', meta: 'Sprint 7 — incoming + in-process + outgoing AQL' }],
-                },
-                {
-                  label: 'Fulfilment',
-                  items: [
-                    { id: 'Deliveries', meta: 'Sprint 7' },
-                    { id: 'Invoice',    meta: 'Sprint 7 (auto on delivery confirm)' },
-                  ],
-                },
+                ...(data.inspections && data.inspections.length > 0 ? [{
+                  label: 'Quality inspections',
+                  items: data.inspections.map((inspection) => ({
+                    id: inspection.inspection_number,
+                    href: `/quality/inspections/${inspection.id}`,
+                    meta: inspection.stage.replace('_', ' '),
+                    chip: { variant: inspection.status === 'passed' ? 'success' as const : inspection.status === 'failed' ? 'danger' as const : inspection.status === 'in_progress' ? 'info' as const : 'neutral' as const, text: inspection.status.replace('_', ' ') },
+                  })),
+                }] : []),
+                ...(data.deliveries && data.deliveries.length > 0 ? [{
+                  label: 'Deliveries',
+                  items: data.deliveries.map((delivery) => ({
+                    id: delivery.delivery_number,
+                    href: `/supply-chain/deliveries/${delivery.id}`,
+                    meta: delivery.scheduled_date ?? undefined,
+                    chip: { variant: delivery.status === 'confirmed' || delivery.status === 'delivered' ? 'success' as const : delivery.status === 'in_transit' ? 'info' as const : delivery.status === 'cancelled' ? 'danger' as const : 'neutral' as const, text: delivery.status.replace('_', ' ') },
+                  })),
+                }] : []),
+                ...(data.invoices && data.invoices.length > 0 ? [{
+                  label: 'Invoices',
+                  items: data.invoices.map((invoice) => ({
+                    id: invoice.invoice_number,
+                    href: `/accounting/invoices/${invoice.id}`,
+                    meta: `${formatPeso(invoice.total_amount)} · balance ${formatPeso(invoice.balance)}`,
+                    chip: { variant: invoice.status === 'paid' ? 'success' as const : invoice.status === 'overdue' ? 'danger' as const : invoice.status === 'partial' ? 'warning' as const : 'neutral' as const, text: invoice.status.replace('_', ' ') },
+                  })),
+                }] : []),
               ]}
             />
           </Panel>

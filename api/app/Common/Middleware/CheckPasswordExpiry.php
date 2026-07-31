@@ -48,7 +48,7 @@ class CheckPasswordExpiry
 
         $expired = $user->must_change_password === true;
 
-        $expiryDays = (int) $this->settings->get('security.password_expiry_days', 90);
+        $expiryDays = $this->settings->requiredInt('security.password_expiry_days', 0);
         if (! $expired && $expiryDays > 0 && $user->password_changed_at) {
             $expired = Carbon::parse($user->password_changed_at)->lt(now()->subDays($expiryDays));
         }

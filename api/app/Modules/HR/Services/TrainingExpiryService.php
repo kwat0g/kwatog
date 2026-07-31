@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\HR\Services;
 
 use App\Common\Services\NotificationService;
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Enums\EmployeeTrainingStatus;
@@ -32,14 +33,10 @@ class TrainingExpiryService
      *
      * @var list<array{days:int, level:TrainingAlertLevel}>
      */
-    private const TIERS = [
-        ['days' => 30, 'level' => TrainingAlertLevel::T30],
-        ['days' => 14, 'level' => TrainingAlertLevel::T14],
-        ['days' => 7,  'level' => TrainingAlertLevel::T7],
-        ['days' => 0,  'level' => TrainingAlertLevel::Expired],
-    ];
-
-    public function __construct(private readonly NotificationService $notifications) {}
+    public function __construct(
+        private readonly NotificationService $notifications,
+        private readonly SettingsService $settings,
+    ) {}
 
     /**
      * Scan completed training records whose expiry is within 30 days (or past),
@@ -50,7 +47,8 @@ class TrainingExpiryService
     public function check(): array
     {
         $today = now()->startOfDay();
-        $horizon = $today->copy()->addDays(30)->toDateString();
+        $tiers = $this->tiers();
+        $horizon = $today->copy()->addDays(max(array_column($tiers, 'days')))->toDateString();
 
         $rows = EmployeeTraining::query()
             ->with(['employee.department', 'training'])
@@ -69,7 +67,7 @@ class TrainingExpiryService
             $daysUntil = (int) $today->diffInDays($expires, false);
 
             $tier = null;
-            foreach (self::TIERS as $candidate) {
+            foreach ($tiers as $candidate) {
                 if ($daysUntil <= $candidate['days']) {
                     $tier = $candidate;
                 }
@@ -82,7 +80,7 @@ class TrainingExpiryService
                 continue;
             }
 
-            $this->notify($r, $tier['level']);
+            $this->notify($r, $tier['level'], $tier['days']);
 
             $update = [
                 'last_alert_level' => $tier['level']->value,
@@ -117,7 +115,7 @@ class TrainingExpiryService
         return $current->ordinal() >= $candidate->ordinal();
     }
 
-    private function notify(EmployeeTraining $r, TrainingAlertLevel $level): void
+    private function notify(EmployeeTraining $r, TrainingAlertLevel $level, int $thresholdDays): void
     {
         $recipients = $this->resolveRecipients($r);
         if ($recipients->isEmpty()) {
@@ -132,15 +130,15 @@ class TrainingExpiryService
         [$title, $message] = match ($level) {
             TrainingAlertLevel::T30 => [
                 "Training expiry reminder: {$name}",
-                "{$employee?->full_name} — {$name} expires on {$expiresStr} (30 days).",
+                "{$employee?->full_name} — {$name} expires on {$expiresStr} ({$thresholdDays} days).",
             ],
             TrainingAlertLevel::T14 => [
                 "Training expiring soon: {$name}",
-                "{$employee?->full_name} — {$name} expires on {$expiresStr} (14 days).",
+                "{$employee?->full_name} — {$name} expires on {$expiresStr} ({$thresholdDays} days).",
             ],
             TrainingAlertLevel::T7 => [
                 "Training expiring urgently: {$name}",
-                "{$employee?->full_name} — {$name} expires on {$expiresStr} (7 days).",
+                "{$employee?->full_name} — {$name} expires on {$expiresStr} ({$thresholdDays} days).",
             ],
             TrainingAlertLevel::Expired => [
                 "Training overdue: {$name}",
@@ -155,6 +153,23 @@ class TrainingExpiryService
             'entity_id'   => $r->hash_id,
             'link_to'     => $employee ? "/hr/employees/{$employee->hash_id}" : null,
         ]);
+    }
+
+    /** @return list<array{days:int,level:TrainingAlertLevel}> */
+    private function tiers(): array
+    {
+        $t30 = $this->settings->requiredInt('hr.training_expiry.t30_days', 1);
+        $t14 = $this->settings->requiredInt('hr.training_expiry.t14_days', 1);
+        $t7 = $this->settings->requiredInt('hr.training_expiry.t7_days', 1);
+        if (! ($t30 > $t14 && $t14 > $t7)) {
+            throw new \App\Common\Exceptions\BusinessRuleException('Training expiry reminder thresholds must be strictly descending.');
+        }
+        return [
+            ['days' => $t30, 'level' => TrainingAlertLevel::T30],
+            ['days' => $t14, 'level' => TrainingAlertLevel::T14],
+            ['days' => $t7, 'level' => TrainingAlertLevel::T7],
+            ['days' => 0, 'level' => TrainingAlertLevel::Expired],
+        ];
     }
 
     /**

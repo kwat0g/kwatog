@@ -47,7 +47,7 @@ class CopqSpikeAlertTest extends TestCase
     private function dispatch(CopqSnapshot $snap): void
     {
         // Run listener synchronously — bypasses queue config + Event::fake gymnastics.
-        (new AlertOnCopqSpike(app(NotificationService::class)))
+        (new AlertOnCopqSpike(app(NotificationService::class), app(\App\Common\Services\SettingsService::class)))
             ->handle(new CopqSnapshotComputed($snap));
     }
 

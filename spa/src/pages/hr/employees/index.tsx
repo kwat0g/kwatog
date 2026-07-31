@@ -24,6 +24,7 @@ export default function EmployeesListPage() {
   const { can } = usePermission();
   const queryClient = useQueryClient();
   const [bulkResult, setBulkResult] = useState<BulkProvisionResponse | null>(null);
+  const canViewDepartments = can('hr.departments.view');
 
   const [filters, setFilters] = useState<EmployeeListParams>({
     page: 1, per_page: 25, sort: 'employee_no', direction: 'desc',
@@ -52,6 +53,7 @@ export default function EmployeesListPage() {
   const { data: depts = [] } = useQuery({
     queryKey: ['hr', 'departments', 'tree'],
     queryFn: () => departmentsApi.tree(),
+    enabled: canViewDepartments,
   });
 
   const { data, isLoading, isError, refetch } = useQuery({
@@ -103,12 +105,12 @@ export default function EmployeesListPage() {
   ];
 
   const filterConfig: FilterConfig[] = [
-    {
+    ...(canViewDepartments ? [{
       key: 'department_id',
       label: 'Department',
-      type: 'select',
+      type: 'select' as const,
       options: [{ value: '', label: 'All departments' }, ...depts.map((d) => ({ value: d.id, label: d.name }))],
-    },
+    }] : []),
     {
       key: 'status',
       label: 'Status',

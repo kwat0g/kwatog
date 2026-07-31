@@ -8,6 +8,7 @@ use App\Common\Enums\AlertSeverity;
 use App\Common\Enums\AlertType;
 use App\Common\Services\AlertEngineService;
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\TaxPolicyService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Models\ApprovedSupplier;
@@ -31,6 +32,7 @@ class AutoPurchaseOrderService
     public function __construct(
         private readonly DocumentSequenceService $sequences,
         private readonly AlertEngineService $alerts,
+        private readonly TaxPolicyService $taxPolicy,
     ) {}
 
     public function createForCriticalShortage(Item $item): ?PurchaseOrder
@@ -62,7 +64,7 @@ class AutoPurchaseOrderService
         $qty   = max(1.0, $reorder + (float) $item->safety_stock - $onHand);
         $price = (float) ($supplier->last_price ?? $item->standard_cost ?? 0);
         $sub   = round($qty * $price, 2);
-        $vat   = round($sub * 0.12, 2);
+        $vat   = round($sub * (float) $this->taxPolicy->vatRate(), 2);
 
         return DB::transaction(function () use ($item, $supplier, $qty, $price, $sub, $vat) {
             $po = PurchaseOrder::create([

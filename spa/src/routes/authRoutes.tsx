@@ -1,6 +1,7 @@
 import { lazy } from 'react';
 import { Route } from 'react-router-dom';
 import { AuthGuard } from '@/components/guards/AuthGuard';
+import { GuestGuard } from '@/components/guards/GuestGuard';
 import { AuthLayout } from '@/layouts/AuthLayout';
 
 const LoginPage = lazy(() => import('@/pages/auth/login'));
@@ -10,9 +11,19 @@ const ResetPasswordPage = lazy(() => import('@/pages/auth/reset-password'));
 
 export const authRoutes = (
   <>
-    {/* Auth (no AuthGuard) */}
-    <Route element={<AuthLayout />}>
+    {/* Restore an existing cookie session before showing the login form. */}
+    <Route
+      element={
+        <GuestGuard>
+          <AuthLayout />
+        </GuestGuard>
+      }
+    >
       <Route path="/login" element={<LoginPage />} />
+    </Route>
+
+    {/* Password recovery remains available without a session. */}
+    <Route element={<AuthLayout />}>
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
     </Route>

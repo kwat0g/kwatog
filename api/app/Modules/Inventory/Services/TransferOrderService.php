@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Models\TransferOrder;
 use App\Common\Services\DocumentSequenceService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 class TransferOrderService
 {
@@ -58,7 +58,7 @@ class TransferOrderService
         return DB::transaction(function () use ($id, $user) {
             $order = TransferOrder::findOrFail($id);
             if ($order->status !== 'pending') {
-                throw new RuntimeException('Transfer order is not pending.');
+                throw new BusinessRuleException('Transfer order is not pending.');
             }
 
             // Execute via existing StockTransferService
@@ -91,7 +91,7 @@ class TransferOrderService
     {
         $order = TransferOrder::findOrFail($id);
         if ($order->status !== 'pending') {
-            throw new RuntimeException('Can only cancel pending transfer orders.');
+            throw new BusinessRuleException('Can only cancel pending transfer orders.');
         }
         $order->update(['status' => 'cancelled']);
         return $order->fresh();

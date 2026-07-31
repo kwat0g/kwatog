@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Payroll\Controllers;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Payroll\Models\DisbursementProof;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Payroll\Resources\DisbursementProofResource;
@@ -14,7 +15,6 @@ use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
-use RuntimeException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class DisbursementProofController extends Controller
@@ -62,7 +62,7 @@ class DisbursementProofController extends Controller
         );
         $relative = $dir.DIRECTORY_SEPARATOR.$filename;
         if ($disk->putFileAs($dir, $file, $filename) === false) {
-            throw new RuntimeException('Unable to store disbursement proof.');
+            throw new BusinessRuleException('Unable to store disbursement proof.');
         }
 
         try {
@@ -97,12 +97,12 @@ class DisbursementProofController extends Controller
     public function show(PayrollPeriod $period, DisbursementProof $proof): StreamedResponse
     {
         if ($proof->payroll_period_id !== $period->id) {
-            throw new RuntimeException('Proof does not belong to this period.');
+            abort(404, 'Proof does not belong to this period.');
         }
 
         $disk = Storage::disk('local');
         if (! $disk->exists($proof->file_path)) {
-            throw new RuntimeException('Proof file not found on disk.');
+            abort(404, 'Proof file not found on disk.');
         }
 
         $mime = $disk->mimeType($proof->file_path) ?? 'application/octet-stream';
@@ -139,7 +139,7 @@ class DisbursementProofController extends Controller
         $this->authorizeFinance($request);
 
         if ($proof->payroll_period_id !== $period->id) {
-            throw new RuntimeException('Proof does not belong to this period.');
+            abort(404, 'Proof does not belong to this period.');
         }
 
         if ($period->status === 'disbursed') {

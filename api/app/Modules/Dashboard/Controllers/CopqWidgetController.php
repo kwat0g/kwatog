@@ -17,48 +17,51 @@ class CopqWidgetController
     public function index(Request $request): JsonResponse
     {
         $months = max(1, min($request->integer('months', 6), 12));
+        $today = now();
 
         // Current month live computation
-        $current = $this->copq->compute(now()->startOfMonth(), now()->endOfMonth());
+        $current = $this->copq->compute($today->copy()->startOfMonth(), $today->copy()->endOfMonth());
 
         // Historical trend from snapshots — query by period_year/period_month.
         // Exclude the current month since it's already returned as live `current`.
-        $cutoff = now()->subMonths($months)->startOfMonth();
-        $currentYear = (int) now()->year;
-        $currentMonth = (int) now()->month;
+        // Anchor at day 1 before subtracting. Subtracting directly from dates
+        // such as August 31 can overflow February and silently skip a month.
+        $cutoff = $today->copy()->startOfMonth()->subMonths($months);
+        $currentYear = (int) $today->year;
+        $currentMonth = (int) $today->month;
 
         $trend = DB::table('copq_snapshots')
             ->where(function ($q) use ($cutoff) {
                 $q->where('period_year', '>', $cutoff->year)
-                  ->orWhere(function ($q2) use ($cutoff) {
-                      $q2->where('period_year', $cutoff->year)
-                         ->where('period_month', '>=', $cutoff->month);
-                  });
+                    ->orWhere(function ($q2) use ($cutoff) {
+                        $q2->where('period_year', $cutoff->year)
+                            ->where('period_month', '>=', $cutoff->month);
+                    });
             })
             ->where(function ($q) use ($currentYear, $currentMonth) {
                 $q->where('period_year', '<', $currentYear)
-                  ->orWhere(function ($q2) use ($currentYear, $currentMonth) {
-                      $q2->where('period_year', $currentYear)
-                         ->where('period_month', '<', $currentMonth);
-                  });
+                    ->orWhere(function ($q2) use ($currentYear, $currentMonth) {
+                        $q2->where('period_year', $currentYear)
+                            ->where('period_month', '<', $currentMonth);
+                    });
             })
             ->orderBy('period_year')
             ->orderBy('period_month')
             ->get()
             ->map(fn ($row) => [
-                'month'           => Carbon::create((int) $row->period_year, (int) $row->period_month, 1)->format('M Y'),
-                'scrap_cost'      => (float) $row->internal_scrap_cost,
-                'rework_cost'     => (float) $row->internal_rework_cost,
-                'warranty_cost'   => (float) $row->external_return_cost,
+                'month' => Carbon::create((int) $row->period_year, (int) $row->period_month, 1)->format('M Y'),
+                'scrap_cost' => (float) $row->internal_scrap_cost,
+                'rework_cost' => (float) $row->internal_rework_cost,
+                'warranty_cost' => (float) $row->external_return_cost,
                 'inspection_cost' => (float) $row->external_complaint_cost,
-                'total'           => (float) $row->total_cost,
+                'total' => (float) $row->total_cost,
             ]);
 
         return response()->json([
             'data' => [
                 'current' => $current,
-                'trend'   => $trend,
-                'period'  => now()->format('M Y'),
+                'trend' => $trend,
+                'period' => $today->format('M Y'),
             ],
         ]);
     }

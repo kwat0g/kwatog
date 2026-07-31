@@ -74,7 +74,7 @@ class EmployeeSkillService
     public function matrix(?int $departmentId = null, ?int $skillId = null): array
     {
         $query = Employee::query()
-            ->with(['skills.skill'])
+            ->with(['skills.skill', 'department'])
             ->where('status', \App\Modules\HR\Enums\EmployeeStatus::Active->value);
 
         if ($departmentId) {

@@ -31,6 +31,11 @@ class LoanController
         return EmployeeLoanResource::collection($this->service->list($request->query(), $request->user()));
     }
 
+    public function types(): JsonResponse
+    {
+        return response()->json(['data' => $this->service->types()]);
+    }
+
     public function store(StoreLoanRequest $request): JsonResponse
     {
         $d = $request->validatedData();
@@ -43,6 +48,7 @@ class LoanController
         } catch (\RuntimeException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
+
         return (new EmployeeLoanResource($loan))->response()->setStatusCode(201);
     }
 
@@ -53,11 +59,11 @@ class LoanController
         $canApprove = $user?->hasPermission('loans.approve') ?? false;
 
         if (! $isAdmin && ! $canApprove) {
-            $isOwn = (int) $loan->employee?->user_id === (int) $user?->id;
+            $isOwn = (int) $loan->employee_id === (int) $user?->employee_id;
             $isDeptMember = false;
             $isDeptHead = $user?->role?->slug === 'department_head';
             if ($isDeptHead && $user?->employee_id) {
-                $deptId = \App\Modules\HR\Models\Employee::query()
+                $deptId = Employee::query()
                     ->whereKey($user->employee_id)->value('department_id');
                 $isDeptMember = (int) $loan->employee?->department_id === (int) $deptId;
             }
@@ -76,6 +82,7 @@ class LoanController
         } catch (\RuntimeException $e) {
             abort(422, $e->getMessage());
         }
+
         return new EmployeeLoanResource($loan);
     }
 
@@ -86,6 +93,7 @@ class LoanController
         } catch (\RuntimeException $e) {
             abort(422, $e->getMessage());
         }
+
         return new EmployeeLoanResource($loan);
     }
 
@@ -96,15 +104,27 @@ class LoanController
         } catch (\RuntimeException $e) {
             abort(422, $e->getMessage());
         }
+
         return new EmployeeLoanResource($loan);
     }
 
     /** GET /loans/limits/{employee}?loan_type=... — used by the create form. */
     public function limits(Request $request, Employee $employee): JsonResponse
     {
+        $user = $request->user();
+        if ($user?->role?->slug === 'department_head') {
+            $ownDepartment = Employee::query()->whereKey($user->employee_id)->value('department_id');
+            abort_unless(
+                $ownDepartment && (int) $ownDepartment === (int) $employee->department_id,
+                403,
+                'You may only view loan limits for your department.',
+            );
+        }
+
         $type = LoanType::tryFrom((string) $request->query('loan_type'));
-        abort_if(!$type, 422, 'Invalid loan_type.');
+        abort_if(! $type, 422, 'Invalid loan_type.');
         $limits = $this->service->limitsFor($employee, $type);
+
         return response()->json(['data' => $limits]);
     }
 
@@ -112,11 +132,17 @@ class LoanController
     public function previewAmortization(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'principal'   => ['required', 'decimal:0,2', 'min:1'],
+            'loan_type' => ['required', \Illuminate\Validation\Rule::in(LoanType::values())],
+            'principal' => ['required', 'decimal:0,2', 'min:1'],
             'pay_periods' => ['required', 'integer', 'min:1', 'max:60'],
         ]);
+
         return response()->json([
-            'data' => $this->amortization->generate((string) $data['principal'], (int) $data['pay_periods']),
+            'data' => $this->amortization->generateWithInterest(
+                (string) $data['principal'],
+                $this->service->interestRateFor(LoanType::from($data['loan_type'])),
+                (int) $data['pay_periods'],
+            ),
         ]);
     }
 
@@ -127,8 +153,8 @@ class LoanController
     public function bulkApprove(Request $request): JsonResponse
     {
         $validated = Validator::make($request->all(), [
-            'ids'     => 'required|array|min:1',
-            'ids.*'   => 'string',
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'string',
             'remarks' => 'nullable|string|max:500',
         ])->validate();
 
@@ -145,7 +171,7 @@ class LoanController
         return response()->json([
             'data' => [
                 'approved' => array_map(fn ($r) => (new EmployeeLoanResource($r))->toArray($request), $results['approved']),
-                'failed'   => $results['failed'],
+                'failed' => $results['failed'],
             ],
         ]);
     }

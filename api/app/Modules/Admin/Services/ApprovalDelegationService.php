@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace App\Modules\Admin\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Models\ApprovalDelegation;
 use App\Common\Support\HashIdFilter;
 use App\Modules\Auth\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 /**
  * OGAMI-013 — CRUD for approval delegations.
@@ -55,11 +55,11 @@ class ApprovalDelegationService
             ?? (int) $data['delegate_user_id'];
 
         if ($delegateId === $delegatorId) {
-            throw new RuntimeException('A user cannot delegate approval authority to themselves.');
+            throw new BusinessRuleException('A user cannot delegate approval authority to themselves.');
         }
 
         if (! User::whereKey($delegateId)->exists()) {
-            throw new RuntimeException('The selected delegate does not exist.');
+            throw new BusinessRuleException('The selected delegate does not exist.');
         }
 
         return DB::transaction(function () use ($data, $delegatorId, $delegateId) {
@@ -84,7 +84,7 @@ class ApprovalDelegationService
     {
         $isAdmin = $actor->role?->slug === 'system_admin';
         if (! $isAdmin && $delegation->delegator_user_id !== $actor->id) {
-            throw new RuntimeException('Only the delegator or an administrator may revoke this delegation.');
+            throw new BusinessRuleException('Only the delegator or an administrator may revoke this delegation.');
         }
 
         $delegation->update(['is_active' => false]);

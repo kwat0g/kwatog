@@ -70,7 +70,7 @@ class GlobalSearchService
         }
 
         // Purchase orders -------------------------------------------------------
-        if ($user->can('purchasing.po.view') && Schema::hasTable('purchase_orders')) {
+        if ($user->can('purchasing.view') && Schema::hasTable('purchase_orders')) {
             $rows = DB::table('purchase_orders as po')
                 ->leftJoin('vendors as v', 'v.id', '=', 'po.vendor_id')
                 ->select('po.id', 'po.po_number', 'po.status', 'po.total_amount', 'v.name as vendor_name')
@@ -165,7 +165,7 @@ class GlobalSearchService
         }
 
         // Items (inventory) -----------------------------------------------------
-        if ($user->can('inventory.items.view') && Schema::hasTable('items')) {
+        if ($user->can('inventory.view') && Schema::hasTable('items')) {
             $rows = DB::table('items')
                 ->select('id', 'code', 'name', 'item_type')
                 ->where(fn ($q) => $q

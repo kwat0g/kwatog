@@ -110,7 +110,7 @@ export const hrRoutes = (
     <Route element={<ModuleGuard module="attendance" />}>
       <Route
         path="/hr/attendance"
-        element={<PermissionGuard permission="attendance.view"><AttendancePage /></PermissionGuard>}
+        element={<PermissionGuard anyOf={['attendance.edit', 'attendance.import', 'attendance.ot.approve']}><AttendancePage /></PermissionGuard>}
       />
       <Route
         path="/hr/attendance/import"
@@ -118,7 +118,7 @@ export const hrRoutes = (
       />
       <Route
         path="/hr/attendance/shifts"
-        element={<PermissionGuard permission="attendance.view"><ShiftsPage /></PermissionGuard>}
+        element={<PermissionGuard anyOf={['attendance.edit', 'attendance.shifts.manage']}><ShiftsPage /></PermissionGuard>}
       />
       <Route
         path="/hr/attendance/shifts/assign"
@@ -126,15 +126,15 @@ export const hrRoutes = (
       />
       <Route
         path="/hr/attendance/holidays"
-        element={<PermissionGuard permission="attendance.view"><HolidaysPage /></PermissionGuard>}
+        element={<PermissionGuard anyOf={['attendance.edit', 'attendance.holidays.manage']}><HolidaysPage /></PermissionGuard>}
       />
       <Route
         path="/hr/attendance/overtime"
-        element={<PermissionGuard permission="attendance.view"><OvertimeListPage /></PermissionGuard>}
+        element={<PermissionGuard permission="attendance.ot.approve"><OvertimeListPage /></PermissionGuard>}
       />
       <Route
         path="/hr/attendance/overtime/create"
-        element={<PermissionGuard permission="attendance.ot.create"><OvertimeCreatePage /></PermissionGuard>}
+        element={<PermissionGuard permission="attendance.edit"><OvertimeCreatePage /></PermissionGuard>}
       />
     </Route>
 
@@ -142,19 +142,19 @@ export const hrRoutes = (
     <Route element={<ModuleGuard module="leave" />}>
       <Route
         path="/hr/leaves"
-        element={<PermissionGuard permission="leave.view"><LeavesPage /></PermissionGuard>}
+        element={<PermissionGuard anyOf={['leave.approve_dept', 'leave.approve_hr']}><LeavesPage /></PermissionGuard>}
       />
       <Route
         path="/hr/leaves/calendar"
-        element={<PermissionGuard permission="leave.view"><LeaveCalendarPage /></PermissionGuard>}
+        element={<PermissionGuard anyOf={['leave.approve_dept', 'leave.approve_hr']}><LeaveCalendarPage /></PermissionGuard>}
       />
       <Route
         path="/hr/leaves/create"
-        element={<PermissionGuard permission="leave.create"><CreateLeavePage /></PermissionGuard>}
+        element={<PermissionGuard anyOf={['leave.approve_dept', 'leave.approve_hr']}><CreateLeavePage /></PermissionGuard>}
       />
       <Route
         path="/hr/leaves/:id"
-        element={<PermissionGuard permission="leave.view"><LeaveDetailPage /></PermissionGuard>}
+        element={<PermissionGuard anyOf={['leave.approve_dept', 'leave.approve_hr']}><LeaveDetailPage /></PermissionGuard>}
       />
     </Route>
 
@@ -162,15 +162,15 @@ export const hrRoutes = (
     <Route element={<ModuleGuard module="loans" />}>
       <Route
         path="/hr/loans"
-        element={<PermissionGuard permission="loans.view"><LoansPage /></PermissionGuard>}
+        element={<PermissionGuard anyOf={['loans.approve', 'loans.write_off']}><LoansPage /></PermissionGuard>}
       />
       <Route
         path="/hr/loans/create"
-        element={<PermissionGuard permission="loans.create"><CreateLoanPage /></PermissionGuard>}
+        element={<PermissionGuard anyOf={['loans.approve', 'loans.write_off']}><CreateLoanPage /></PermissionGuard>}
       />
       <Route
         path="/hr/loans/:id"
-        element={<PermissionGuard permission="loans.view"><LoanDetailPage /></PermissionGuard>}
+        element={<PermissionGuard anyOf={['loans.approve', 'loans.write_off']}><LoanDetailPage /></PermissionGuard>}
       />
     </Route>
 

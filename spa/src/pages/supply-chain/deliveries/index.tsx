@@ -12,12 +12,8 @@ import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
-import type { Delivery, DeliveryStatus } from '@/types/supplyChain';
-
-const STATUS_CHIP: Record<DeliveryStatus, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
-  scheduled: 'neutral', loading: 'info', in_transit: 'info',
-  delivered: 'warning', confirmed: 'success', cancelled: 'neutral',
-};
+import { deliveryStatusVariant } from '@/lib/statusVariants';
+import type { Delivery } from '@/types/supplyChain';
 
 export default function DeliveriesListPage() {
   const [filters, setFilters] = useState<DeliveryListParams>({ page: 1, per_page: 25 });
@@ -39,7 +35,7 @@ export default function DeliveriesListPage() {
     { key: 'scheduled', header: 'Scheduled', align: 'right',
       cell: (r) => <NumCell>{r.scheduled_date ?? '—'}</NumCell> },
     { key: 'status', header: 'Status',
-      cell: (r) => <Chip variant={STATUS_CHIP[r.status]}>{r.status.replace('_', ' ')}</Chip> },
+      cell: (r) => <Chip variant={deliveryStatusVariant[r.status]}>{r.status.replace('_', ' ')}</Chip> },
   ];
 
   const filterConfig: FilterConfig[] = [

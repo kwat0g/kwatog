@@ -7,6 +7,7 @@ namespace Tests\Feature\Attendance;
 use App\Modules\Attendance\Models\OvertimeRequest;
 use App\Modules\Attendance\Models\Shift;
 use App\Modules\Attendance\Services\AttendanceService;
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\HR\Models\Employee;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -120,5 +121,46 @@ class AutoDetectOvertimeFeatureTest extends TestCase
                 ->whereDate('date', '2026-06-15')
                 ->exists()
         );
+    }
+
+    public function test_unassigned_employee_uses_persisted_default_shift(): void
+    {
+        $employee = Employee::factory()->create();
+        $default = $this->makeShift([
+            'name' => 'Configured Default',
+            'start_time' => '07:00:00',
+            'end_time' => '15:00:00',
+            'break_minutes' => 60,
+            'is_default' => true,
+        ]);
+
+        $attendance = app(AttendanceService::class)->create([
+            'employee_id' => $employee->id,
+            'date' => '2026-06-16',
+            'time_in' => '2026-06-16 07:00:00',
+            'time_out' => '2026-06-16 15:00:00',
+        ]);
+
+        $this->assertSame($default->id, $attendance->shift_id);
+        $this->assertSame('7.00', $attendance->regular_hours);
+        $this->assertDatabaseHas('attendances', [
+            'id' => $attendance->id,
+            'shift_id' => $default->id,
+        ]);
+    }
+
+    public function test_missing_default_shift_fails_instead_of_inventing_schedule(): void
+    {
+        $employee = Employee::factory()->create();
+
+        $this->expectException(BusinessRuleException::class);
+        $this->expectExceptionMessage('No active default shift is configured');
+
+        app(AttendanceService::class)->create([
+            'employee_id' => $employee->id,
+            'date' => '2026-06-16',
+            'time_in' => '2026-06-16 08:00:00',
+            'time_out' => '2026-06-16 17:00:00',
+        ]);
     }
 }

@@ -113,9 +113,15 @@ class PayrollPeriod extends Model
         return $q->whereYear('period_start', $year);
     }
 
+    /**
+     * Delegate to the enum so there is ONE definition of "locked". This method
+     * previously only checked Finalized while the enum also counted Disbursed,
+     * so a disbursed period read as unlocked and could be recomputed after the
+     * money had already left the bank.
+     */
     public function isLocked(): bool
     {
-        return $this->status === PayrollPeriodStatus::Finalized;
+        return $this->status?->isLocked() ?? false;
     }
 
     public function label(): string

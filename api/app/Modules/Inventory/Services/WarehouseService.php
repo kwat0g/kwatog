@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Models\WarehouseZone;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 class WarehouseService
 {
@@ -52,7 +52,7 @@ class WarehouseService
             ->whereIn('location_id', $w->zones()->with('locations:id,zone_id')->get()
                 ->flatMap(fn ($z) => $z->locations->pluck('id')))
             ->where('quantity', '>', 0)->exists();
-        if ($hasStock) throw new RuntimeException('Cannot delete a warehouse with stock. Deactivate instead.');
+        if ($hasStock) throw new BusinessRuleException('Cannot delete a warehouse with stock. Deactivate instead.');
         $w->delete();
     }
 
@@ -73,7 +73,7 @@ class WarehouseService
     {
         $locIds = $z->locations()->pluck('id');
         $hasStock = StockLevel::query()->whereIn('location_id', $locIds)->where('quantity', '>', 0)->exists();
-        if ($hasStock) throw new RuntimeException('Cannot delete a zone with stock.');
+        if ($hasStock) throw new BusinessRuleException('Cannot delete a zone with stock.');
         $z->delete();
     }
 
@@ -93,7 +93,7 @@ class WarehouseService
     public function deleteLocation(WarehouseLocation $l): void
     {
         if (StockLevel::query()->where('location_id', $l->id)->where('quantity', '>', 0)->exists()) {
-            throw new RuntimeException('Cannot delete a location with stock.');
+            throw new BusinessRuleException('Cannot delete a location with stock.');
         }
         $l->delete();
     }

@@ -262,7 +262,9 @@ export async function mockHang(page: Page, urlPattern: string): Promise<void> {
 
 /**
  * Mock auth as the given role then goto a page. Returns once the SPA has
- * bootstrapped (networkidle).
+ * authenticated and mounted its application layout. Waiting for network idle
+ * is incorrect here because dashboards and self-service pages legitimately
+ * poll in the background.
  */
 export async function loginAs(page: Page, role: keyof typeof ROLES, goto: string = '/dashboard/default'): Promise<void> {
   const pageErrors: string[] = [];
@@ -274,8 +276,12 @@ export async function loginAs(page: Page, role: keyof typeof ROLES, goto: string
     if (response.status() === 401) unauthorizedUrls.push(response.url());
   });
   await mockAuth(page, ROLES[role]);
-  await page.goto(goto);
-  await page.waitForLoadState('networkidle');
+  await page.goto(goto, { waitUntil: 'domcontentloaded' });
+  // A reused page may already have authenticated Zustand state, in which case
+  // AuthGuard correctly skips a second /auth/user request. The mounted app
+  // shell is therefore the stable readiness signal for both fresh and reused
+  // sessions.
+  await page.locator('#main-content').waitFor({ state: 'attached', timeout: 10_000 });
   if (new URL(page.url()).pathname === '/login') {
     throw new Error(`Mock authentication failed (auth responses: ${authResponses.join(', ') || 'none'}; unauthorized: ${unauthorizedUrls.join(', ') || 'none'})${pageErrors.length > 0 ? `: ${pageErrors.join('; ')}` : ''}`);
   }

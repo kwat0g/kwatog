@@ -22,7 +22,7 @@ class EmailPayslipPdfOnPayrollFinalized implements ShouldQueue
 
     public function handle(PayrollPeriodFinalized $event): void
     {
-        if (! (bool) $this->settings->get('payroll.payslip_email.enabled', true)) {
+        if (! $this->settings->requiredBool('payroll.payslip_email.enabled')) {
             return;
         }
 

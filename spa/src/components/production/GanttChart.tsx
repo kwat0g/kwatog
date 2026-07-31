@@ -11,6 +11,7 @@
  * Drag-reschedule is a Sprint 7 nice-to-have anyway.
  */
 import { useMemo } from 'react';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { cn } from '@/lib/cn';
 import { focusRing } from '@/lib/focus';
 import type { GanttRow } from '@/types/mrp';
@@ -97,9 +98,11 @@ export function GanttChart({ rows, viewMode = 'Week', onBarClick }: Props) {
 
   if (rows.length === 0) {
     return (
-      <div className="px-5 py-12 text-center text-sm text-muted">
-        Nothing scheduled in this window. Run the scheduler to fill it.
-      </div>
+      <EmptyState
+        icon="calendar"
+        title="Nothing scheduled in this window"
+        description="Run the scheduler to fill it."
+      />
     );
   }
 

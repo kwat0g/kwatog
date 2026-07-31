@@ -7,7 +7,7 @@ interface AvatarProps {
   className?: string;
 }
 
-const sizes = { sm: 'h-6 w-6 text-[10px]', md: 'h-7 w-7 text-xs', lg: 'h-8 w-8 text-sm' } as const;
+const sizes = { sm: 'h-6 w-6 text-2xs', md: 'h-7 w-7 text-xs', lg: 'h-8 w-8 text-sm' } as const;
 
 const initials = (name?: string): string =>
   (name ?? '')

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Quality\Services;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Quality\Events\CopqSnapshotComputed;
 use App\Modules\Quality\Models\CopqSnapshot;
 use Carbon\Carbon;
@@ -24,6 +25,8 @@ use Illuminate\Support\Facades\Schema;
  */
 class CopqService
 {
+    public function __construct(private readonly SettingsService $settings) {}
+
     public function compute(CarbonInterface $from, CarbonInterface $to): array
     {
         if ($this->isFullCalendarMonth($from, $to)) {
@@ -61,8 +64,9 @@ class CopqService
         $to     = $from->copy()->endOfMonth();
         $fromTs = $from->toDateTimeString();
         $toTs   = $to->toDateTimeString();
+        $reworkRatio = $this->reworkCostRatio();
 
-        return DB::transaction(function () use ($year, $month, $from, $fromTs, $toTs) {
+        return DB::transaction(function () use ($year, $month, $from, $fromTs, $toTs, $reworkRatio) {
 
             // --- Internal failure: scrap cost (product-cost JOIN) ---
             $scrapCost = (float) (DB::table('non_conformance_reports as n')
@@ -85,7 +89,7 @@ class CopqService
                 ->join('products as p', 'n.product_id', '=', 'p.id')
                 ->whereNotNull('w.parent_ncr_id')
                 ->whereBetween('w.created_at', [$fromTs, $toTs])
-                ->sum(DB::raw('w.quantity_target * p.standard_cost * 0.30')) ?? 0);
+                ->sum(DB::raw('w.quantity_target * p.standard_cost * '.(string) $reworkRatio)) ?? 0);
 
             $reworkUnits = (int) (DB::table('work_orders')
                 ->whereNotNull('parent_ncr_id')
@@ -189,6 +193,7 @@ class CopqService
         $fromTs = $from->toDateTimeString();
         $toTs = $to->toDateTimeString();
 
+        $reworkRatio = $this->reworkCostRatio();
         $rows = DB::table('non_conformance_reports as n')
             ->join('products as p', 'n.product_id', '=', 'p.id')
             ->where('n.status', 'closed')
@@ -199,7 +204,7 @@ class CopqService
                 'p.part_number',
                 DB::raw('COUNT(n.id) as ncr_count'),
                 DB::raw("SUM(CASE WHEN n.disposition = 'scrap' THEN n.affected_quantity * p.standard_cost ELSE 0 END) as scrap_cost"),
-                DB::raw("SUM(CASE WHEN n.disposition = 'rework' THEN n.affected_quantity * p.standard_cost * 0.30 ELSE 0 END) as rework_cost"),
+                DB::raw("SUM(CASE WHEN n.disposition = 'rework' THEN n.affected_quantity * p.standard_cost * {$reworkRatio} ELSE 0 END) as rework_cost"),
                 DB::raw('SUM(n.affected_quantity * p.standard_cost) as total_cost'),
             ])
             ->groupBy('p.id', 'p.name', 'p.part_number')
@@ -223,12 +228,20 @@ class CopqService
         $fromTs = $from->toDateTimeString();
         $toTs = $to->toDateTimeString();
 
-        if (!Schema::hasTable('vendors')) {
+        if (!Schema::hasTable('vendors') || !Schema::hasTable('goods_receipt_notes')) {
             return [];
         }
 
+        // NCRs carry no vendor_id. The supplier is reached the same way
+        // SupplierPerformanceService::ncrRate() does it:
+        //   ncr -> inspection -> (entity_type='grn') goods_receipt_note -> vendor
         $rows = DB::table('non_conformance_reports as n')
-            ->join('vendors as v', 'n.vendor_id', '=', 'v.id')
+            ->join('inspections as i', 'n.inspection_id', '=', 'i.id')
+            ->join('goods_receipt_notes as grn', function ($join) {
+                $join->on('i.entity_id', '=', 'grn.id')
+                     ->where('i.entity_type', '=', 'grn');
+            })
+            ->join('vendors as v', 'grn.vendor_id', '=', 'v.id')
             ->where('n.status', 'closed')
             ->where('n.source', 'inspection_fail')
             ->whereBetween('n.closed_at', [$fromTs, $toTs])
@@ -251,10 +264,6 @@ class CopqService
         ])->toArray();
     }
 
-    /**
-     * Preserved legacy ad-hoc path (avg(items.standard_cost) fallback) for
-     * non-month-aligned ranges. Dashboards never hit this in practice.
-     */
     private function computeAdHoc(CarbonInterface $from, CarbonInterface $to): array
     {
         $fromDate = $from->toDateString();
@@ -280,9 +289,18 @@ class CopqService
             ->whereBetween('created_at', [$fromDate, $toDate])
             ->count();
 
-        $avgCost    = (float) (DB::table('items')->avg('standard_cost') ?? 50.0);
-        $scrapCost  = $scrap * $avgCost;
-        $reworkCost = $rework * $avgCost * 0.3;
+        $scrapCost = (float) (DB::table('non_conformance_reports as n')
+            ->join('products as p', 'n.product_id', '=', 'p.id')
+            ->where('n.status', 'closed')
+            ->where('n.disposition', 'scrap')
+            ->whereBetween('n.closed_at', [$fromDate, $toDate])
+            ->sum(DB::raw('n.affected_quantity * p.standard_cost')) ?? 0);
+        $reworkCost = (float) (DB::table('work_orders as w')
+            ->join('non_conformance_reports as n', 'w.parent_ncr_id', '=', 'n.id')
+            ->join('products as p', 'n.product_id', '=', 'p.id')
+            ->whereNotNull('w.parent_ncr_id')
+            ->whereBetween('w.created_at', [$fromDate, $toDate])
+            ->sum(DB::raw('w.quantity_target * p.standard_cost * '.(string) $this->reworkCostRatio())) ?? 0);
 
         return [
             'internal_failure' => [
@@ -299,5 +317,14 @@ class CopqService
             'total'        => round($scrapCost + $reworkCost, 2),
             'period_label' => $from->format('M Y') . ' – ' . $to->format('M Y'),
         ];
+    }
+
+    private function reworkCostRatio(): float
+    {
+        $value = $this->settings->get('quality.copq.rework_cost_ratio');
+        if (! is_numeric($value) || (float) $value < 0 || (float) $value > 1) {
+            throw new \App\Common\Exceptions\BusinessRuleException('Required business setting quality.copq.rework_cost_ratio is missing or invalid.');
+        }
+        return (float) $value;
     }
 }

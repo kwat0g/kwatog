@@ -29,6 +29,25 @@ class AuditLogSearchTest extends TestCase
     // Entity trail
     // ------------------------------------------------------------------
 
+    public function test_detail_accepts_the_hash_id_emitted_by_the_index(): void
+    {
+        $admin = $this->seedAdmin();
+        $log = AuditLog::create([
+            'user_id' => $admin->id,
+            'action' => 'updated',
+            'model_type' => 'App\\Modules\\Inventory\\Models\\Item',
+            'model_id' => 7,
+            'old_values' => ['name' => 'Old'],
+            'new_values' => ['name' => 'New'],
+            'created_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->getJson("/api/v1/admin/audit-logs/{$log->hash_id}")
+            ->assertOk()
+            ->assertJsonPath('data.id', $log->hash_id);
+    }
+
     public function test_entity_trail_returns_scoped_audit_logs(): void
     {
         $admin = $this->seedAdmin();
@@ -37,10 +56,10 @@ class AuditLogSearchTest extends TestCase
         $modelType = 'App\\Modules\\Purchasing\\Models\\PurchaseOrder';
         foreach (range(1, 3) as $i) {
             AuditLog::create([
-                'user_id'    => $admin->id,
-                'action'     => 'updated',
+                'user_id' => $admin->id,
+                'action' => 'updated',
                 'model_type' => $modelType,
-                'model_id'   => 42,
+                'model_id' => 42,
                 'old_values' => ['status' => 'draft'],
                 'new_values' => ['status' => 'approved'],
                 'ip_address' => '127.0.0.1',
@@ -50,10 +69,10 @@ class AuditLogSearchTest extends TestCase
         }
         foreach (range(1, 2) as $i) {
             AuditLog::create([
-                'user_id'    => $admin->id,
-                'action'     => 'created',
+                'user_id' => $admin->id,
+                'action' => 'created',
                 'model_type' => $modelType,
-                'model_id'   => 99,
+                'model_id' => 99,
                 'old_values' => null,
                 'new_values' => ['status' => 'draft'],
                 'ip_address' => '127.0.0.1',
@@ -117,10 +136,10 @@ class AuditLogSearchTest extends TestCase
 
         // Seed at least one audit log.
         AuditLog::create([
-            'user_id'    => $admin->id,
-            'action'     => 'created',
+            'user_id' => $admin->id,
+            'action' => 'created',
             'model_type' => 'App\\Modules\\HR\\Models\\Employee',
-            'model_id'   => 1,
+            'model_id' => 1,
             'old_values' => null,
             'new_values' => ['first_name' => 'Test'],
             'ip_address' => '10.0.0.1',
@@ -143,10 +162,10 @@ class AuditLogSearchTest extends TestCase
         $admin = $this->seedAdmin();
 
         AuditLog::create([
-            'user_id'    => $admin->id,
-            'action'     => 'deleted',
+            'user_id' => $admin->id,
+            'action' => 'deleted',
             'model_type' => 'App\\Modules\\Inventory\\Models\\Item',
-            'model_id'   => 5,
+            'model_id' => 5,
             'old_values' => ['name' => 'Widget'],
             'new_values' => null,
             'ip_address' => '10.0.0.2',
@@ -192,17 +211,17 @@ class AuditLogSearchTest extends TestCase
     {
         return User::factory()->create([
             'role_id' => Role::where('slug', 'system_admin')->value('id'),
-            'email'   => 'admin+' . uniqid() . '@test.local',
+            'email' => 'admin+'.uniqid().'@test.local',
         ]);
     }
 
     private function seedUserWithoutAuditPerm(): User
     {
         $role = Role::create([
-            'name'        => 'No Audit',
-            'slug'        => 'no_audit_' . substr(uniqid(), -5),
+            'name' => 'No Audit',
+            'slug' => 'no_audit_'.substr(uniqid(), -5),
             'description' => 'No audit log permission',
-            'is_system'   => false,
+            'is_system' => false,
         ]);
         // Grant some benign permission, NOT admin.audit_logs.view
         $ids = Permission::whereIn('slug', ['hr.employees.view'])->pluck('id')->all();
@@ -210,7 +229,7 @@ class AuditLogSearchTest extends TestCase
 
         return User::factory()->create([
             'role_id' => $role->id,
-            'email'   => 'user+' . uniqid() . '@test.local',
+            'email' => 'user+'.uniqid().'@test.local',
         ]);
     }
 }

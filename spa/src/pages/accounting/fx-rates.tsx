@@ -53,7 +53,7 @@ export default function FxRatesPage() {
         subtitle="PHP per 1 unit of the foreign currency (functional currency is PHP)"
         backTo="/accounting/journal-entries"
         backLabel="Accounting"
-        actions={can('accounting.fx.manage') ? (
+        actions={can('accounting.currency.manage') ? (
           <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => setAddOpen(true)}>Add rate</Button>
         ) : undefined}
       />
@@ -62,8 +62,8 @@ export default function FxRatesPage() {
       {isError && <EmptyState icon="alert-circle" title="Failed to load FX rates" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />}
       {data && data.data.length === 0 && (
         <EmptyState icon="inbox" title="No FX rates yet"
-          description={can('accounting.fx.manage') ? 'Add a daily rate so the parent-pack statements can translate to JPY.' : 'Nothing here yet.'}
-          action={can('accounting.fx.manage') ? <Button variant="primary" onClick={() => setAddOpen(true)}>Add rate</Button> : undefined} />
+          description={can('accounting.currency.manage') ? 'Add a daily rate so the parent-pack statements can translate to JPY.' : 'Nothing here yet.'}
+          action={can('accounting.currency.manage') ? <Button variant="primary" onClick={() => setAddOpen(true)}>Add rate</Button> : undefined} />
       )}
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">

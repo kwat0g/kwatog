@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Modules\Maintenance\Controllers;
 
+use App\Common\Support\HashIdFilter;
 use App\Modules\Maintenance\Models\MachineConditionReading;
 use App\Modules\Maintenance\Resources\MachineConditionReadingResource;
 use App\Modules\Maintenance\Services\PredictiveMaintenanceService;
+use App\Modules\MRP\Models\Machine;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -22,8 +24,24 @@ class MachineConditionReadingController
         private readonly PredictiveMaintenanceService $predictive,
     ) {}
 
+    /**
+     * The SPA sends machine_id as a hash_id (per the ID-obfuscation rule), while the
+     * validation rules below expect a raw integer. Decode before validating so these
+     * endpoints are reachable from the UI at all.
+     */
+    private function decodeMachineId(Request $request): void
+    {
+        $raw = $request->input('machine_id');
+        if ($raw === null || $raw === '') {
+            return;
+        }
+        // Replace even when undecodable so `integer`/`exists` fails predictably.
+        $request->merge(['machine_id' => HashIdFilter::decode($raw, Machine::class)]);
+    }
+
     public function index(Request $request): AnonymousResourceCollection
     {
+        $this->decodeMachineId($request);
         $request->validate([
             'machine_id' => ['required', 'integer', 'exists:machines,id'],
             'metric'     => ['nullable', 'string', 'in:temperature,vibration,pressure,current,oil_quality'],
@@ -44,6 +62,7 @@ class MachineConditionReadingController
 
     public function store(Request $request): JsonResponse
     {
+        $this->decodeMachineId($request);
         $data = $request->validate([
             'machine_id'  => ['required', 'integer', 'exists:machines,id'],
             'metric'      => ['required', 'string', 'in:temperature,vibration,pressure,current,oil_quality'],
@@ -91,6 +110,7 @@ class MachineConditionReadingController
 
     public function trend(Request $request): JsonResponse
     {
+        $this->decodeMachineId($request);
         $request->validate([
             'machine_id' => ['required', 'integer', 'exists:machines,id'],
             'metric'     => ['required', 'string', 'in:temperature,vibration,pressure,current,oil_quality'],
@@ -108,6 +128,7 @@ class MachineConditionReadingController
 
     public function healthSnapshot(Request $request): JsonResponse
     {
+        $this->decodeMachineId($request);
         $request->validate([
             'machine_id' => ['required', 'integer', 'exists:machines,id'],
         ]);

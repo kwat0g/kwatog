@@ -161,7 +161,7 @@ function poBarClass(status: string): string {
   if (status === 'received' || status === 'closed') return 'h-full bg-success rounded-full';
   if (status === 'sent') return 'h-full bg-info rounded-full';
   if (status === 'approved') return 'h-full bg-warning rounded-full';
-  return 'h-full bg-muted rounded-full';
+  return 'h-full bg-strong rounded-full';
 }
 
 function SupplierPerformancePanel({ items }: { items: SupplierScoreItem[] }) {

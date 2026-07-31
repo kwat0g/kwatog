@@ -22,6 +22,7 @@ const periodStatusVariant = (status: string | null | undefined): ChipVariant => 
   switch (status) {
     case 'finalized': return 'success';
     case 'approved':  return 'info';
+    case 'computed':  return 'info';
     case 'processing': return 'info';
     case 'draft':     return 'warning';
     default:          return 'neutral';
@@ -103,6 +104,7 @@ export default function PayrollPeriodsPage() {
         { value: '', label: 'All' },
         { value: 'draft', label: 'Draft' },
         { value: 'processing', label: 'Processing' },
+        { value: 'computed', label: 'Computed' },
         { value: 'approved', label: 'Approved' },
         { value: 'finalized', label: 'Finalized' },
       ],

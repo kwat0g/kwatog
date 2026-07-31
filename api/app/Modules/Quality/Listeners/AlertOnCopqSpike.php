@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Quality\Listeners;
 
 use App\Common\Services\NotificationService;
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Quality\Events\CopqSnapshotComputed;
 use App\Modules\Quality\Models\CopqSnapshot;
@@ -25,9 +26,10 @@ use Illuminate\Support\Facades\Log;
  */
 class AlertOnCopqSpike implements ShouldQueue
 {
-    private const THRESHOLD = 0.25;
-
-    public function __construct(private readonly NotificationService $notifications) {}
+    public function __construct(
+        private readonly NotificationService $notifications,
+        private readonly SettingsService $settings,
+    ) {}
 
     public function handle(CopqSnapshotComputed $event): void
     {
@@ -47,7 +49,11 @@ class AlertOnCopqSpike implements ShouldQueue
             $newTotal = (float) $snap->total_cost;
             $delta    = ($newTotal - $priorTotal) / $priorTotal;
 
-            if ($delta < self::THRESHOLD) {
+            $threshold = $this->settings->get('quality.copq.spike_ratio');
+            if (! is_numeric($threshold) || (float) $threshold < 0) {
+                throw new \App\Common\Exceptions\BusinessRuleException('Required business setting quality.copq.spike_ratio is missing or invalid.');
+            }
+            if ($delta < (float) $threshold) {
                 return;
             }
 

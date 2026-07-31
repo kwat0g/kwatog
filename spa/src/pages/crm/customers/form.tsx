@@ -15,7 +15,7 @@ export const customerSchema = z.object({
   phone:              z.string().max(20).optional().or(z.literal('')),
   address:            z.string().max(500).optional().or(z.literal('')),
   credit_limit:       z.coerce.number().min(0).max(99999999.99).optional().or(z.literal('').transform(() => undefined)),
-  payment_terms_days: z.coerce.number().int().min(0).max(365).default(30),
+  payment_terms_days: z.coerce.number().int().min(0).max(365),
   is_active:          z.boolean().default(true),
 });
 

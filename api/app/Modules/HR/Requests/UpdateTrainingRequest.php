@@ -4,13 +4,24 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Requests;
 
+use App\Common\Concerns\ResolvesHashIds;
+use App\Modules\HR\Models\Department;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UpdateTrainingRequest extends FormRequest
 {
+    use ResolvesHashIds;
+
     public function authorize(): bool
     {
         return (bool) $this->user()?->can('hr.trainings.manage');
+    }
+
+    protected function hashIdFields(): array
+    {
+        return [
+            'department_id' => Department::class,
+        ];
     }
 
     public function rules(): array

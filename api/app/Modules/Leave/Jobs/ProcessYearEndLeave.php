@@ -192,10 +192,11 @@ class ProcessYearEndLeave implements ShouldQueue
         ]);
     }
 
-    /** Daily rate, mirroring FinalPayService: daily_rate else monthly/22. */
+    /** Daily rate, mirroring FinalPayService and the configured payroll divisor. */
     private function dailyRate(Employee $emp): float
     {
-        return (float) ($emp->daily_rate ?: ((float) ($emp->basic_monthly_salary ?? 0) / 22));
+        $days = app(\App\Common\Services\SettingsService::class)->requiredInt('payroll.work_days_per_month', 1);
+        return (float) ($emp->daily_rate ?: ((float) ($emp->basic_monthly_salary ?? 0) / $days));
     }
 
     /**

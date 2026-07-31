@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Play, CheckCircle2, Lock, LockOpen, Download, AlertCircle, Upload, Eye, Trash2, Banknote, Ban } from 'lucide-react';
+import { Play, CheckCircle2, Lock, LockOpen, Download, AlertCircle, Upload, Eye, Trash2, Banknote, Ban, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { periodsApi } from '@/api/payroll/periods';
 import { downloadAuthenticatedFile } from '@/api/download';
@@ -36,6 +36,7 @@ const periodStatusVariant = (status: string | null | undefined): ChipVariant => 
     case 'disbursed': return 'success';
     case 'finalized': return 'info';
     case 'approved':  return 'info';
+    case 'computed':  return 'info';
     case 'processing': return 'info';
     case 'draft':     return 'warning';
     case 'voided':    return 'danger';
@@ -84,11 +85,19 @@ export default function PayrollPeriodDetailPage() {
 
   const computeMutation = useMutation({
     mutationFn: () => periodsApi.compute(id!),
-    onSuccess: () => {
-      toast.success('Computation queued.');
+    onSuccess: (updated) => {
+      toast.success('Computation started.');
+      // The 202 already carries status=processing, so seed the cache with it.
+      // The button disables and polling starts on this render rather than
+      // waiting for the next refetch — the window in which the old code let a
+      // user click Compute again.
+      qc.setQueryData(['payroll-period', id], updated);
       qc.invalidateQueries({ queryKey: ['payroll-period', id] });
     },
-    onError: () => toast.error('Failed to start computation.'),
+    // Surface the backend's reason (already computing, wrong status, …) instead
+    // of a generic failure message.
+    onError: (err: { response?: { data?: { message?: string } } }) =>
+      toast.error(err.response?.data?.message ?? 'Failed to start computation.'),
   });
   const approveMutation = useMutation({
     mutationFn: () => periodsApi.approve(id!),
@@ -106,6 +115,7 @@ export default function PayrollPeriodDetailPage() {
   // ADV1 — Disbursement proof
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showApproveDialog, setShowApproveDialog] = useState(false);
+  const [showRecomputeDialog, setShowRecomputeDialog] = useState(false);
   const [showFinalizeDialog, setShowFinalizeDialog] = useState(false);
   const [showDisbursedDialog, setShowDisbursedDialog] = useState(false);
 
@@ -174,14 +184,22 @@ export default function PayrollPeriodDetailPage() {
   const summary = period.summary;
   const chainSteps = [
     { key: 'draft',      label: 'Draft',      state: 'done' as const },
-    { key: 'processing', label: 'Computed',   state: (period.status === 'draft' ? 'pending' : 'done') as 'pending' | 'done' | 'active' },
-    { key: 'approved',   label: 'Approved',   state: (['approved','finalized','disbursed'].includes(period.status) ? 'done' : (period.status === 'processing' ? 'active' : 'pending')) as 'pending' | 'done' | 'active' },
+    { key: 'processing', label: 'Computed',   state: (period.status === 'draft' ? 'pending' : period.status === 'processing' ? 'active' : 'done') as 'pending' | 'done' | 'active' },
+    { key: 'approved',   label: 'Approved',   state: (['approved','finalized','disbursed'].includes(period.status) ? 'done' : 'pending') as 'pending' | 'done' | 'active' },
     { key: 'finalized',  label: 'Finalized',  state: (['finalized','disbursed'].includes(period.status) ? 'done' : 'pending') as 'pending' | 'done' | 'active' },
     { key: 'disbursed',  label: 'Disbursed',  state: (period.status === 'disbursed' ? 'done' : 'pending') as 'pending' | 'done' | 'active' },
   ];
 
-  const canCompute    = can('payroll.periods.compute')  && period.status === 'draft' && !period.is_thirteenth_month;
-  const canApprove    = can('payroll.periods.approve')  && period.status === 'draft';
+  // Compute (first run) and Recompute (replace an existing run) are separate
+  // affordances. Recompute is destructive — it rewrites every payroll row, so it
+  // asks for confirmation. The backend rejects either one for any status outside
+  // draft/computed, so this is UX only.
+  const hasRows       = (summary?.employee_count ?? 0) > 0;
+  const canCompute    = can('payroll.periods.compute')  && period.status === 'draft'    && !period.is_thirteenth_month;
+  const canRecompute  = can('payroll.periods.compute')  && period.status === 'computed' && !period.is_thirteenth_month;
+  // Approve requires a completed run with rows. Previously this was gated on
+  // 'draft', so an uncomputed period could be approved into an empty ₱0 payroll.
+  const canApprove    = can('payroll.periods.approve')  && period.status === 'computed' && hasRows;
   const canFinalize   = can('payroll.periods.finalize') && period.status === 'approved';
   const canBankFile   = can('payroll.periods.finalize') && (period.status === 'finalized' || period.status === 'disbursed');
   const canDisburse   = can('payroll.periods.finalize') && period.status === 'finalized';
@@ -252,9 +270,16 @@ export default function PayrollPeriodDetailPage() {
                 Compute
               </Button>
             )}
+            {canRecompute && (
+              <Button variant="secondary" size="sm" icon={<RefreshCw size={14} />}
+                onClick={() => setShowRecomputeDialog(true)}
+                disabled={computeMutation.isPending} loading={computeMutation.isPending}>
+                Recompute
+              </Button>
+            )}
             {isProc && (
               <span className="inline-flex items-center gap-2 text-xs text-muted">
-                <Spinner /> Processing…
+                <Spinner /> Computing…
               </span>
             )}
             {canForceUnlock && (
@@ -472,6 +497,19 @@ export default function PayrollPeriodDetailPage() {
         }}
       />
 
+      {/* Recompute rewrites every payroll row in the period, reverses the loan
+          deductions and adjustments the previous run applied, then re-applies
+          them. Destructive enough to confirm. */}
+      <ConfirmDialog
+        isOpen={showRecomputeDialog}
+        onClose={() => setShowRecomputeDialog(false)}
+        onConfirm={() => { computeMutation.mutate(); setShowRecomputeDialog(false); }}
+        title="Recompute this payroll period?"
+        description={`This replaces all ${summary?.employee_count ?? 0} existing payroll row(s). Loan deductions and applied adjustments from the previous run are reversed and re-applied. Anomaly flags are re-evaluated.`}
+        variant="warning"
+        confirmLabel="Recompute"
+        pending={computeMutation.isPending}
+      />
       <ConfirmDialog
         isOpen={showApproveDialog}
         onClose={() => setShowApproveDialog(false)}
@@ -572,8 +610,8 @@ function VariancePanel({
               <thead>
                 <tr className={theadTrCls}>
                   <Th>Metric</Th>
-                  <Th align="right">Previous<br /><span className="font-mono text-[10px] normal-case">{varianceData.previous.period_label}</span></Th>
-                  <Th align="right">Current<br /><span className="font-mono text-[10px] normal-case">{varianceData.current.period_label}</span></Th>
+                  <Th align="right">Previous<br /><span className="font-mono text-2xs normal-case">{varianceData.previous.period_label}</span></Th>
+                  <Th align="right">Current<br /><span className="font-mono text-2xs normal-case">{varianceData.current.period_label}</span></Th>
                   <Th align="right">Delta</Th>
                   <Th align="right">Change %</Th>
                 </tr>

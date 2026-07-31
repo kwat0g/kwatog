@@ -75,7 +75,7 @@ export const inventoryRoutes = (
       <Route path="/inventory/warehouse-map"
         element={<PermissionGuard permission="inventory.view"><WarehouseMapPage /></PermissionGuard>} />
       <Route path="/inventory/stock-count"
-        element={<PermissionGuard permission="inventory.view"><StockCountPage /></PermissionGuard>} />
+        element={<PermissionGuard permission="inventory.stock_count.view"><StockCountPage /></PermissionGuard>} />
       <Route path="/inventory/picking"
         element={<PermissionGuard permission="inventory.view"><PickingListPage /></PermissionGuard>} />
       <Route path="/inventory/transfer-orders"

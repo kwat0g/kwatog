@@ -18,14 +18,20 @@ class LeaveCalendarController
 {
     public function index(Request $request): JsonResponse
     {
-        $year  = $request->integer('year', now()->year);
+        $year = $request->integer('year', now()->year);
         $month = $request->integer('month', now()->month);
         $deptId = $request->filled('department_id')
             ? HashIdFilter::decode($request->input('department_id'), Department::class)
             : null;
 
+        $user = $request->user();
+        if ($user?->role?->slug !== 'system_admin' && ! $user?->hasPermission('leave.approve_hr')) {
+            $deptId = Employee::query()->whereKey($user?->employee_id)->value('department_id');
+            abort_unless($deptId, 403, 'Your account is not assigned to a department.');
+        }
+
         $start = Carbon::create($year, $month, 1)->startOfMonth();
-        $end   = $start->copy()->endOfMonth();
+        $end = $start->copy()->endOfMonth();
 
         $headcount = Employee::query()
             ->where('status', 'active')
@@ -43,38 +49,36 @@ class LeaveCalendarController
         $days = [];
         foreach (CarbonPeriod::create($start, $end) as $day) {
             $dateStr = $day->toDateString();
-            $onLeave = $leaves->filter(fn ($l) =>
-                $l->start_date->lte($day) && $l->end_date->gte($day)
+            $onLeave = $leaves->filter(fn ($l) => $l->start_date->lte($day) && $l->end_date->gte($day)
             );
             $approvedCount = $onLeave->where('status', LeaveRequestStatus::Approved)->count();
-            $pendingCount  = $onLeave->filter(fn ($l) =>
-                $l->status === LeaveRequestStatus::PendingDept || $l->status === LeaveRequestStatus::PendingHr
+            $pendingCount = $onLeave->filter(fn ($l) => $l->status === LeaveRequestStatus::PendingDept || $l->status === LeaveRequestStatus::PendingHr
             )->count();
-            $present       = max(0, $headcount - $approvedCount);
-            $coverage      = $headcount > 0 ? round($present / $headcount * 100, 1) : 100;
+            $present = max(0, $headcount - $approvedCount);
+            $coverage = $headcount > 0 ? round($present / $headcount * 100, 1) : 100;
 
             $days[] = [
-                'date'                => $dateStr,
-                'day_of_week'         => $day->dayOfWeek,
-                'approved_count'      => $approvedCount,
-                'pending_count'       => $pendingCount,
-                'present_count'       => $present,
-                'headcount'           => $headcount,
-                'coverage_pct'        => $coverage,
-                'employees_on_leave'  => $onLeave->map(fn ($l) => [
+                'date' => $dateStr,
+                'day_of_week' => $day->dayOfWeek,
+                'approved_count' => $approvedCount,
+                'pending_count' => $pendingCount,
+                'present_count' => $present,
+                'headcount' => $headcount,
+                'coverage_pct' => $coverage,
+                'employees_on_leave' => $onLeave->map(fn ($l) => [
                     'employee_name' => $l->employee?->full_name ?? '',
-                    'status'        => $l->status instanceof \BackedEnum ? $l->status->value : (string) $l->status,
-                    'leave_type'    => $l->leaveType?->name ?? '',
+                    'status' => $l->status instanceof \BackedEnum ? $l->status->value : (string) $l->status,
+                    'leave_type' => $l->leaveType?->name ?? '',
                 ])->values()->toArray(),
             ];
         }
 
         return response()->json([
             'data' => [
-                'year'      => $year,
-                'month'     => $month,
+                'year' => $year,
+                'month' => $month,
                 'headcount' => $headcount,
-                'days'      => $days,
+                'days' => $days,
             ],
         ]);
     }

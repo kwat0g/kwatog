@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\SearchOperator;
 
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\TaxPolicyService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\Money;
 use App\Modules\Accounting\Enums\InvoiceStatus;
@@ -25,7 +27,6 @@ use RuntimeException;
 
 class InvoiceService
 {
-    private const VAT_RATE   = '0.12';
     private const AR_CODE    = '1100';
     private const VAT_OUTPUT = '2060';
     // OGAMI-008 — contra-revenue account debited for Senior/PWD discounts.
@@ -38,6 +39,7 @@ class InvoiceService
         private readonly DocumentSequenceService $sequences,
         private readonly JournalEntryService $journals,
         private readonly AccountingPeriodService $periods,
+        private readonly TaxPolicyService $taxPolicy,
     ) {}
 
     public function list(array $filters): LengthAwarePaginator
@@ -137,7 +139,7 @@ class InvoiceService
     public function update(Invoice $invoice, array $data, User $by): Invoice
     {
         if ($invoice->status !== InvoiceStatus::Draft) {
-            throw new RuntimeException('Only draft invoices can be edited.');
+            throw new BusinessRuleException('Only draft invoices can be edited.');
         }
 
         return DB::transaction(function () use ($invoice, $data) {
@@ -179,7 +181,7 @@ class InvoiceService
     public function finalize(Invoice $invoice, User $by): Invoice
     {
         if ($invoice->status !== InvoiceStatus::Draft) {
-            throw new RuntimeException('Only draft invoices can be finalized.');
+            throw new BusinessRuleException('Only draft invoices can be finalized.');
         }
 
         return DB::transaction(function () use ($invoice, $by) {
@@ -257,7 +259,7 @@ class InvoiceService
     public function cancel(Invoice $invoice, User $by): Invoice
     {
         if (! Money::isZero((string) $invoice->amount_paid)) {
-            throw new RuntimeException('Cannot cancel an invoice that has collections.');
+            throw new BusinessRuleException('Cannot cancel an invoice that has collections.');
         }
         if ($invoice->status === InvoiceStatus::Cancelled) {
             return $invoice;
@@ -281,21 +283,21 @@ class InvoiceService
     public function recordCollection(Invoice $invoice, array $data, User $by): InvoiceCollection
     {
         if (in_array($invoice->status, [InvoiceStatus::Draft, InvoiceStatus::Cancelled, InvoiceStatus::Paid], true)) {
-            throw new RuntimeException("Cannot record a collection while invoice status is {$invoice->status->value}.");
+            throw new BusinessRuleException("Cannot record a collection while invoice status is {$invoice->status->value}.");
         }
 
         $amount = Money::round2((string) $data['amount']);
         if (Money::lte($amount, '0')) {
-            throw new RuntimeException('Amount must be > 0.');
+            throw new BusinessRuleException('Amount must be > 0.');
         }
         if (Money::gt($amount, (string) $invoice->balance)) {
-            throw new RuntimeException("Amount {$amount} exceeds outstanding balance " . $invoice->balance . '.');
+            throw new BusinessRuleException("Amount {$amount} exceeds outstanding balance " . $invoice->balance . '.');
         }
 
         return DB::transaction(function () use ($invoice, $data, $amount, $by) {
             $cashAccountId = HashIdFilter::decode($data['cash_account_id'], Account::class);
             if (! $cashAccountId) {
-                throw new RuntimeException('Invalid cash account.');
+                throw new BusinessRuleException('Invalid cash account.');
             }
 
             $coll = InvoiceCollection::create([
@@ -466,7 +468,7 @@ class InvoiceService
     private function computeTotals(VatClassification $classification, string $subtotal, string $discount): array
     {
         $netBase = Money::sub($subtotal, $discount);
-        $vat = $classification->chargesVat() ? Money::mul($netBase, self::VAT_RATE) : Money::zero();
+        $vat = $classification->chargesVat() ? Money::mul($netBase, $this->taxPolicy->vatRate()) : Money::zero();
         $total = Money::add($netBase, $vat);
         return [$vat, $total];
     }

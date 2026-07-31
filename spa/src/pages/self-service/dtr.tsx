@@ -5,10 +5,11 @@ import { useQuery } from '@tanstack/react-query';
 import { client } from '@/api/client';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Chip } from '@/components/ui/Chip';
-import { SkeletonBlock } from '@/components/ui/Skeleton';
+import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
+import { SkeletonTable } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
-import { cn } from '@/lib/cn';
+import { formatDate } from '@/lib/formatDate';
 
 interface AttendanceRow {
   id: string;
@@ -21,6 +22,11 @@ interface AttendanceRow {
   is_late?: boolean;
 }
 
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
 const STATUS_VARIANT: Record<string, 'success' | 'info' | 'warning' | 'danger' | 'neutral'> = {
   present:  'success',
   late:     'warning',
@@ -30,16 +36,18 @@ const STATUS_VARIANT: Record<string, 'success' | 'info' | 'warning' | 'danger' |
   holiday:  'neutral',
 };
 
-const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-];
-
 function fmtTime(value: string | null): string {
   if (!value) return '—';
   const s = String(value);
   if (s.includes('T')) return s.slice(11, 16);
   return s.slice(0, 5);
+}
+
+function fmtHours(value: string | number | null | undefined): string {
+  if (value == null || value === '') return '—';
+  const n = Number(value);
+  if (Number.isNaN(n) || n === 0) return '—';
+  return n.toFixed(1);
 }
 
 function monthRange(year: number, month: number): { from: string; to: string } {
@@ -48,6 +56,48 @@ function monthRange(year: number, month: number): { from: string; to: string } {
   const to = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
   return { from, to };
 }
+
+const columns: Column<AttendanceRow>[] = [
+  {
+    key: 'date',
+    header: 'Date',
+    cell: (r) => <NumCell>{formatDate(r.date)}</NumCell>,
+  },
+  {
+    key: 'time_in',
+    header: 'Time in',
+    cell: (r) => <NumCell>{fmtTime(r.time_in)}</NumCell>,
+  },
+  {
+    key: 'time_out',
+    header: 'Time out',
+    cell: (r) => <NumCell>{fmtTime(r.time_out)}</NumCell>,
+  },
+  {
+    key: 'regular_hours',
+    header: 'Regular hrs',
+    align: 'right',
+    cell: (r) => <NumCell>{fmtHours(r.regular_hours)}</NumCell>,
+  },
+  {
+    key: 'overtime_hours',
+    header: 'OT hrs',
+    align: 'right',
+    cell: (r) => <NumCell>{fmtHours(r.overtime_hours)}</NumCell>,
+  },
+  {
+    key: 'status',
+    header: 'Status',
+    cell: (r) =>
+      r.status ? (
+        <Chip variant={STATUS_VARIANT[r.status] ?? 'neutral'}>
+          {r.status.replace(/_/g, ' ')}
+        </Chip>
+      ) : (
+        '—'
+      ),
+  },
+];
 
 export default function SelfServiceDtrPage() {
   const now = new Date();
@@ -81,91 +131,65 @@ export default function SelfServiceDtrPage() {
           params: { per_page: 100, scope: 'self', from, to },
         })
         .then((r) => r.data),
+    placeholderData: (prev) => prev,
   });
 
   const rows: AttendanceRow[] = data?.data ?? [];
 
   return (
     <div>
-      <PageHeader title="Daily Time Record" backTo="/self-service" backLabel="Dashboard" />
-
-      {/* Month picker */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-default">
-        <Button
-          variant="ghost"
-          size="lg"
-          iconOnly
-          icon={<ChevronLeft size={18} />}
-          aria-label="Previous month"
-          onClick={goBack}
-          disabled={isEarliestMonth}
-        />
-        <span className="text-sm font-medium">
-          {MONTH_NAMES[month - 1]} {year}
-        </span>
-        <Button
-          variant="ghost"
-          size="lg"
-          iconOnly
-          icon={<ChevronRight size={18} />}
-          aria-label="Next month"
-          onClick={goForward}
-          disabled={isCurrentMonth}
-        />
-      </div>
+      <PageHeader
+        title="Daily Time Record"
+        subtitle={`${MONTH_NAMES[month - 1]} ${year}`}
+        actions={
+          <div className="flex items-center gap-1.5">
+            <Button
+              variant="secondary"
+              size="sm"
+              iconOnly
+              icon={<ChevronLeft size={14} />}
+              aria-label="Previous month"
+              onClick={goBack}
+              disabled={isEarliestMonth}
+            />
+            <span className="text-sm font-mono tabular-nums text-primary w-32 text-center select-none">
+              {MONTH_NAMES[month - 1]} {year}
+            </span>
+            <Button
+              variant="secondary"
+              size="sm"
+              iconOnly
+              icon={<ChevronRight size={14} />}
+              aria-label="Next month"
+              onClick={goForward}
+              disabled={isCurrentMonth}
+            />
+          </div>
+        }
+      />
 
       <div className="px-5 py-4">
-        {isLoading && (
-          <div className="space-y-2">
-            {[1, 2, 3, 4, 5].map((i) => <SkeletonBlock key={i} className="h-14 rounded-md" />)}
-          </div>
-        )}
+        {isLoading && !data && <SkeletonTable columns={6} rows={10} />}
+
         {isError && (
           <EmptyState
             icon="alert-circle"
             title="Couldn't load attendance"
+            description="An error occurred while loading your records. Please try again."
             action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
           />
         )}
+
         {!isLoading && !isError && rows.length === 0 && (
           <EmptyState
             icon="calendar"
             title={`No records for ${MONTH_NAMES[month - 1]} ${year}`}
+            description="Attendance entries appear here once your biometric logs are processed."
           />
         )}
+
         {rows.length > 0 && (
-          <ul className="rounded-md border border-default divide-y divide-subtle bg-canvas">
-            {rows.map((row) => (
-              <li
-                key={row.id}
-                className={cn(
-                  'px-3 py-2.5',
-                  row.status === 'absent' && 'bg-danger/5',
-                )}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="text-sm font-mono tabular-nums font-medium">
-                      {row.date}
-                    </div>
-                    <div className="text-xs text-muted">
-                      {fmtTime(row.time_in)} → {fmtTime(row.time_out)}
-                      {row.regular_hours != null && (
-                        <span className="ml-2 font-mono tabular-nums">
-                          {Number(row.regular_hours).toFixed(1)}h
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  {row.status && (
-                    <Chip variant={STATUS_VARIANT[row.status] ?? 'neutral'}>
-                      {row.status.replace(/_/g, ' ')}
-                    </Chip>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
+          <DataTable columns={columns} data={rows} stickyHeader={false} />
         )}
       </div>
     </div>

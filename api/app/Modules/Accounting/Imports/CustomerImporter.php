@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Accounting\Imports;
 
 use App\Common\Services\Import\EntityImporter;
+use App\Common\Services\BusinessPolicyService;
 use App\Modules\Accounting\Models\Customer;
 use Illuminate\Database\Eloquent\Model;
 use RuntimeException;
@@ -16,6 +17,8 @@ use RuntimeException;
  */
 class CustomerImporter implements EntityImporter
 {
+    public function __construct(private readonly BusinessPolicyService $policies) {}
+
     public function key(): string
     {
         return 'customers';
@@ -53,7 +56,7 @@ class CustomerImporter implements EntityImporter
             'address'            => trim($row['address'] ?? '') ?: null,
             'tin'                => trim($row['tin'] ?? '') ?: null,
             'credit_limit'       => $credit !== '' ? $credit : null,
-            'payment_terms_days' => $terms !== '' ? (int) $terms : 30,
+            'payment_terms_days' => $terms !== '' ? (int) $terms : $this->policies->customerPaymentTermsDays(),
             'is_active'          => true,
         ]);
     }

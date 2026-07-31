@@ -11,7 +11,7 @@ class StoreFxRateRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->can('accounting.fx.manage') ?? false;
+        return $this->user()?->can('accounting.currency.manage') ?? false;
     }
 
     /** @return array<string, mixed> */

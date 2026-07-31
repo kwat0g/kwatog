@@ -35,7 +35,7 @@ export default function WarehouseScannerPage() {
           {workflow !== 'lookup' && <Input label="Record ID" value={contextId} onChange={(event) => setContextId(event.target.value)} placeholder="Scan or enter the active record ID" />}
         </div>
       </Panel>
-      <form onSubmit={submit} className="rounded-lg border-2 border-accent/40 bg-canvas p-6">
+      <form onSubmit={submit} className="rounded-md border border-default bg-canvas p-4">
         <label className="block text-sm font-medium mb-2" htmlFor="warehouse-barcode">Barcode</label>
         <div className="flex gap-2"><Input id="warehouse-barcode" ref={inputRef} autoFocus value={barcode} onChange={(event) => setBarcode(event.target.value)} prefix={<ScanBarcode size={16} />} containerClassName="flex-1" placeholder="Scan now…" /><Button type="submit" variant="primary" disabled={scan.isPending}><Search size={14} /> Resolve</Button></div>
       </form>

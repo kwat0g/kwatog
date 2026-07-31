@@ -26,15 +26,6 @@ enum LoanType: string
         return in_array($this, [self::SssLoan, self::PagibigLoan]);
     }
 
-    public function defaultInterestRate(): string
-    {
-        return match ($this) {
-            self::SssLoan => '0.10',
-            self::PagibigLoan => '0.105',
-            default => '0.00',
-        };
-    }
-
     /** Workflow type for ApprovalService. */
     public function workflowType(): string
     {

@@ -18,7 +18,7 @@ class StoreBillRequest extends FormRequest
         return [
             'bill_number'                  => ['required', 'string', 'max:50'],
             'vendor_id'                    => ['required', 'string'],
-            'purchase_order_id'            => ['nullable'],
+            'purchase_order_id'            => ['nullable', 'string'],
             'department_id'                => ['nullable', 'string'],
             'allow_override'               => ['nullable', 'boolean'],
             'date'                         => ['required', 'date'],

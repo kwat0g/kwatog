@@ -112,7 +112,7 @@ export default function MachinesListPage() {
       {isError && <EmptyState icon="alert-circle" title="Failed to load machines"
         action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />}
       {data && data.data.length === 0 && (
-        <EmptyState icon="cog" title="No machines configured" description="Seed the demo data via make seed." />
+        <EmptyState icon="cog" title="No machines configured" description="Add machine master records to begin production planning." />
       )}
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">

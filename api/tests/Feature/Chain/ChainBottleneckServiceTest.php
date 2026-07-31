@@ -69,6 +69,50 @@ class ChainBottleneckServiceTest extends TestCase
         $this->assertSame('INV-202604-0001', $rows[0]['doc_number']);
     }
 
+    /**
+     * Regression: the hourly `chain:check-bottlenecks` cron must survive the
+     * hash_id → bigint boundary.
+     *
+     * detectAll() emits `entity_id` as a hash_id (its other consumer is the SPA
+     * widget), but `alerts.entity_id` is a bigint. The command passed the hash
+     * straight into the query and died with
+     * SQLSTATE[22P02] invalid input syntax for type bigint — every hour, on any
+     * database that had even one stuck record.
+     */
+    public function test_bottleneck_cron_writes_decoded_entity_ids_to_alerts(): void
+    {
+        $this->bootstrap();
+        $this->insertSalesOrder(301, 'SO-202604-0301', 'confirmed', Carbon::now()->subHours(72));
+
+        $this->artisan('chain:check-bottlenecks')->assertSuccessful();
+
+        $alert = DB::table('alerts')
+            ->where('type', 'chain_bottleneck')
+            ->where('entity_type', 'sales_order')
+            ->first();
+
+        $this->assertNotNull($alert, 'the cron should have raised an alert for the stuck SO');
+        $this->assertSame(301, (int) $alert->entity_id);
+    }
+
+    /** Re-running within the dedup window must not duplicate the alert. */
+    public function test_bottleneck_cron_is_idempotent_within_dedup_window(): void
+    {
+        $this->bootstrap();
+        $this->insertSalesOrder(302, 'SO-202604-0302', 'confirmed', Carbon::now()->subHours(72));
+
+        $this->artisan('chain:check-bottlenecks')->assertSuccessful();
+        $this->artisan('chain:check-bottlenecks')->assertSuccessful();
+
+        $count = DB::table('alerts')
+            ->where('type', 'chain_bottleneck')
+            ->where('entity_type', 'sales_order')
+            ->where('entity_id', 302)
+            ->count();
+
+        $this->assertSame(1, $count);
+    }
+
     // ─── Helpers ───────────────────────────────────────────────────
 
     /**

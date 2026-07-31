@@ -1,6 +1,6 @@
 # Ogami ERP — Full-System Audit and Defense Readiness
 
-**Audit dates:** 2026-07-27 to 2026-07-28  
+**Audit dates:** 2026-07-27 to 2026-07-30
 **Scope:** backend and SPA code, database migrations, dependency security,
 authentication and authorization, file lifecycle, exports, seeded demo state,
 automated tests, container packaging, production orchestration, and a live Chrome
@@ -164,6 +164,181 @@ production packaging, and seeded/live integrations.
     in the backend value while the shared panel also appended its percent unit,
     rendering values such as `2.3%%`. The API now returns an unformatted numeric
     string and the shared formatter produces one correct percentage.
+34. **Strict-lint drift in shared UI primitives:** the upgraded React refresh
+    lint rule began rejecting the intentional helper exports in the dashboard
+    shell and table-cell modules. Those colocated layout/style exports are now
+    explicitly documented at file scope, restoring the zero-warning lint gate
+    without changing runtime behavior.
+35. **Stale forecast-dashboard failure assertions:** finance, HR, and quality
+    forecast browser specs still expected their old role-specific error copy
+    after the dashboards adopted the shared accessible error shell. The specs
+    now assert the shared error heading by role, and all forecast trend, empty,
+    loading, and API-failure cases pass again.
+36. **Duplicate mobile leave action:** an empty self-service leave page rendered
+    the same “New request” action in both the page header and empty state. The
+    header action is now reserved for populated/loading states, leaving one
+    unambiguous mobile action while preserving the normal shortcut once rows
+    exist.
+37. **Polling-page E2E readiness:** shared browser helpers waited for network
+    idle even though dashboards and self-service pages legitimately poll, and
+    repeated role checks could skip a second auth bootstrap because the session
+    was already hydrated. Readiness now follows the mounted application shell;
+    multi-navigation RBAC cases have an honest Firefox time budget, isolated
+    self-service home tests mock both current APIs, and HashID/payroll checks
+    assert stable accessible UI instead of timing-dependent or ambiguous text.
+38. **SPA/API route contracts were not mechanically enforced:** frontend request
+    paths could drift from Laravel routes while mocked browser tests remained
+    green. A TypeScript-AST audit now resolves static strings, template IDs,
+    shared path constants, public recruitment prefixes, and both B2B portal
+    clients against the live Laravel route table. All 702 declared SPA requests
+    currently match an endpoint and HTTP method.
+39. **Forecasting still looked like a standalone global module:** demand,
+    stock-out, and accuracy pages remained a separate sidebar section even after
+    role dashboards gained partial forecast widgets. The duplicate global
+    section is removed; PPC and Plant Manager dashboards now show demand,
+    stock-out, and accuracy together, including honest empty/error states and
+    drill-down links. Purchasing and Warehouse retain the operational forecast
+    slices relevant to their responsibilities, while full pages remain available
+    as task/detail drill-downs rather than top-level destinations.
+40. **Zero-demand forecast variance:** the compact dashboard calculated a
+    percentage against a zero forecast quantity, which could render an infinite
+    variance. Zero baselines are now excluded from the percentage aggregate.
+41. **Mocked tests did not prove live page contracts:** a role-aware browser
+    walker now discovers every literal SPA route and exercises public, internal,
+    employee self-service, driver, maintenance-mobile, supplier, and customer
+    contexts against the live seeded API. It performs one hard/deep-link load
+    per session and then real client-side navigation, monitoring API failures,
+    browser exceptions, blank/error pages, and unauthorized redirects. All 230
+    static route surfaces currently pass.
+42. **Self-service overtime SQL 500:** the shift lookup referenced four obsolete
+    columns (`effective_from`, `effective_until`, `time_in`, and `time_out`). It
+    now queries the migrated assignment and shift schema and returns the stable
+    `time_in`/`time_out` response aliases. A feature regression proves an
+    effective shift returns successfully.
+43. **Warehouse HashID detail failures:** warehouse-map bin and MIS picking
+    endpoints accepted integer scalars while the SPA sent public HashIDs,
+    causing a controller type error on bin selection. Both routes now use
+    implicit HasHashId model binding, and bin detail no longer leaks raw IDs.
+44. **Duplicate dashboard records and React keys:** the warehouse low-stock
+    query produced one row per approved supplier rather than per item, while the
+    finance budget table keyed repeated categories by label alone. The warehouse
+    query now selects one preferred supplier without multiplying items and the
+    finance table uses stable row-position disambiguation.
+45. **Maintenance-mobile machine selector forbidden:** technicians could open
+    condition readings but their role lacked the read permission required by
+    its machine selector. The role now includes `mrp.machines.view`; the live
+    technician route loads without a 403.
+46. **Portal sessions failed on refresh/deep links:** supplier and customer
+    bearer tokens existed only in module memory, so every hard navigation lost
+    authentication. Each portal now persists its isolated token in tab-scoped
+    session storage, restores it when its API client boots, and clears it on
+    logout. Unit coverage proves reload restoration and cross-portal isolation.
+47. **Customer statement response-shape crash:** the portal page expected an
+    obsolete open-invoice DTO while the shared accounting service returns a
+    customer ledger with `aging` and `transactions`. Types and rendering now
+    match the authoritative API contract, including four aging buckets and the
+    running-balance ledger.
+48. **Parent-pack demo configuration gap:** translated statements defaulted to
+    JPY but a fresh/demo database contained no FX rate, immediately producing a
+    422 empty state. The additive golden-path seeder now idempotently creates JPY
+    and USD reporting rates, and the live parent-pack page renders successfully.
+49. **Parameterized pages were outside the static route gate:** a second live
+    browser audit now discovers route templates, extracts real HashID links from
+    rendered pages, derives sibling edit/action URLs, and sources remaining
+    fixtures from authenticated list APIs. It evaluates record pages for failed
+    APIs, browser exceptions, error states, blank screens, and auth redirects.
+50. **Demo delivery proofs referenced nonexistent files:** the golden-path
+    seeder created proof database rows without their backing assets, so delivery
+    detail generated automatic 404 image requests. The idempotent seeder now
+    creates or repairs a valid local proof image for every demo proof row.
+51. **Forecast and warehouse dashboard links used business codes as route IDs:**
+    stock-out, warehouse low-stock, demand-forecast, and top-consumption widgets
+    constructed detail URLs from item codes, product part numbers, or raw SQL
+    IDs although the target routes require public HashIDs. The APIs now emit
+    linkable HashIDs and each widget targets the correct inventory or CRM entity.
+52. **Customer invoice detail 500:** the portal service eagerly loaded a
+    nonexistent `payments` relationship. It now loads the authoritative
+    `collections` relationship, and the portal type/table use collection dates
+    and the actual invoice-item `total` field.
+53. **Customer delivery detail used raw IDs and internal proof URLs:** raw
+    Eloquent serialization produced `/portal/customer/deliveries/1`, which
+    cannot bind to a HasHashId model, and exposed proof URLs inaccessible to the
+    customer guard. A portal-specific resource now emits scoped HashIDs, stable
+    item fields, and customer-authenticated proof URLs backed by an ownership
+    checked streaming endpoint.
+54. **Supplier invoice UI used the customer invoice contract:** supplier portal
+    records are AP bills, but the dashboard/list/detail pages expected AR fields
+    such as `invoice_number`, `total_price`, and `paid_at`. Supplier bill types
+    are now separate and match `BillResource` (`bill_number`, `total`, and
+    `payment_date`).
+55. **Audit-log detail HashIDs rejected by route constraint:** the index emitted
+    HashIDs and the controller decoded them, but `whereNumber('id')` rejected the
+    request before controller dispatch. The contradictory constraint is removed
+    and a feature regression opens the exact HashID emitted by the index.
+56. **Public-career and driver detail routes lacked demo fixtures:** the
+    golden-path seeder now provides an open job posting and assigns a scheduled
+    delivery to the demo driver, making the public detail/application and driver
+    detail/photo flows reproducible in manual and automated testing.
+57. **PR-template pages mixed raw IDs and HashIDs:** list results exposed raw
+    template IDs, the edit page converted route and department HashIDs with
+    `Number(...)`, and “Use template” silently discarded `template_id` during
+    purchase-request validation. A dedicated resource now emits HashIDs, template
+    CRUD decodes department HashIDs safely, PR creation resolves template HashIDs,
+    and the SPA keeps all identifiers as strings. An HTTP regression covers list,
+    show, update, and PR creation from the emitted template ID.
+58. **Eleven parameterized routes had no reproducible record:** the golden-path
+    seeder now idempotently supplies complaint, performance-review, recruitment,
+    separation, succession, MRB, routing, PR-template, controlled-document,
+    NCR-template, and SPC records. The dynamic browser audit consequently covers
+    every discovered route template instead of reporting unseeded exclusions.
+59. **COPQ trend arithmetic overflowed at month end:** subtracting months from
+    dates such as August 31 can roll into March and omit February from the trend
+    window. The widget now anchors calculations at the first day of the month,
+    reuses one request timestamp, and its tests use overflow-safe month fixtures.
+    A July 31 full-suite run exposed and verified the regression.
+60. **Role dashboards crashed while rendering their KPI strip:** permission
+    filtering preserved Laravel collection indexes, so PPC and six other roles
+    received an object such as `{ "3": {...} }` where the React widget expected
+    an array. The server now reindexes filtered scorecards, the SPA normalizes
+    legacy or cached object-shaped responses, and focused API/component tests
+    cover both formats. The reported Firefox `dispatcher is null` / `useRef`
+    message was a secondary React render symptom; the first application error
+    was `data.find is not a function` in `KpiStrip`.
+61. **Default KPI recomputation used the wrong period at year boundaries:** the
+    controller independently selected the current year and previous month, so a
+    January request targeted December of the current year. It now derives both
+    values from one overflow-safe previous-calendar-month date, with a January
+    regression proving the `2025-12` result from `2026-01-31`.
+62. **Self-service grants exposed back-office navigation:** operational pages
+    reused `attendance.view`, `leave.view`, and `payroll.view`, even though those
+    permissions are intentionally universal and row-scoped for personal DTR,
+    leave, and payslips. PPC and other non-HR roles consequently saw Attendance,
+    Leave, Payroll, and Statutory links that either failed with 403 or exposed a
+    broader page than their responsibility. Sidebar and SPA route guards now use
+    the precise operational permissions, while self-service remains available.
+63. **Role pages depended on permissions their visible route did not require:**
+    Production routings and machine health needed machine-master reads; Stock
+    Count was exposed by generic inventory access; Department Head employee and
+    attendance pages fetched the HR department tree unconditionally. Production
+    now has the machine read needed for its work, Stock Count requires its own
+    permission end to end, and department filters only load when authorized.
+64. **Department employee detail bypassed list scoping:** the employee list
+    correctly limited a Department Head to their department, but a guessed
+    employee HashID reached an unscoped detail service. Detail retrieval now
+    applies the same permission-driven department scope and returns 404 for an
+    out-of-scope identifier; feature coverage proves both same-department access
+    and cross-department denial.
+65. **Generic export authorization was too broad for sensitive future modules:**
+    payroll register, statutory, and accounting-aging exports could inherit a
+    generic module-view gate when registered. The export map now requires
+    all-payslip, statutory-export, or statement-export privileges respectively,
+    with negative PPC regressions for payroll and government export metadata.
+66. **Department-scoped employee view still returned sensitive HR fields:** a
+    manager allowed to see their team also received salary values, salary-change
+    history, document metadata, and the onboarding workflow. Employee resources
+    now redact pay and salary-history values without the sensitive-data grant,
+    omit document metadata without its dedicated grant, and reserve onboarding
+    for HR editors. HR and self-view retain the information they require.
 
 ## Verification evidence
 
@@ -172,20 +347,35 @@ production packaging, and seeded/live integrations.
 | Focused auth/session/GRN/QC regressions | **PASS — 37 tests, 152 assertions** |
 | SPA strict lint (`--max-warnings=0`) | **PASS — 0 errors, 0 warnings** |
 | SPA TypeScript | **PASS** |
-| SPA unit tests | **PASS — 13 files, 60 tests** |
+| SPA unit tests | **PASS — 16 files, 67 tests** |
 | SPA production build | **PASS** |
 | Playwright browser matrix | **PASS — 171 cases (82 desktop Chromium, 82 desktop Firefox, 7 mobile Chromium)** |
 | PHP syntax lint | **PASS — application, config, migrations, routes, and tests** |
 | PHPStan level 0 | **PASS — 0 errors** |
+| Structural route audit | **PASS — 861 routes, 0 missing/shadowed routes or unresolved middleware** |
+| SPA → Laravel API contract audit | **PASS — 702 static requests match 1,253 API method/routes** |
+| Live static SPA route audit | **PASS — 230 public/authenticated/role/portal route surfaces, 0 failures** |
+| Live dynamic SPA route audit | **PASS — all 77 seeded parameterized URLs/templates, 0 failures or uncovered templates** |
+| Authenticated GET endpoint sweep | **PASS — 0 internal HTTP 500 responses** |
+| Model/schema/binding/permission audit | **PASS — 195 models, 0 binding errors, 221 referenced permissions all seeded** |
+| PostgreSQL relational integrity | **PASS — 461 foreign keys and 201 sequences; 0 orphans, invalid indexes, unvalidated constraints, or lagging sequences** |
 | Composer validation and security audit | **PASS — valid metadata; 0 advisories at the last successful registry check** |
 | Production Compose rendering | **PASS** |
 | Production PHP image | **PASS — build and production-mode boot/cache smoke test** |
-| Migrations 0275–0276 | **PASS — applied** |
+| Migrations through 0280 | **PASS — applied** |
 | Golden-path seeder | **PASS — two idempotent runs** |
-| Strict live browser gate | **PASS — 17 internal screens + exact trace + 2 portals** |
+| Strict live browser gate | **PASS — login + 19 internal screens + 2 portals** |
 | Forced-stale CSRF login | **PASS — 419 → 200, dashboard reached, no toast** |
 | Authenticated PR PDF | **PASS — HTTP 200, `application/pdf`** |
-| Full backend suite | **PASS — 1,130 tests, 3,591 assertions** |
+| Full backend suite | **PASS — 1,138 tests, 3,629 assertions** |
+| Forecast role-dashboard browser regressions | **PASS — 18 desktop-Chromium cases** |
+| Actual role-dashboard browser matrix | **PASS — all 18 role/browser combinations (9 roles × Chromium/Firefox), 0 failures** |
+| KPI scorecard regressions | **PASS — 2 backend tests/7 assertions and 3 SPA tests** |
+| Role-responsibility and department-scope regressions | **PASS — 20 backend tests, 127 assertions** |
+| All-role live permission/navigation matrix | **PASS — 443 checks across all 13 internal roles, 0 failures** |
+| Department Head employee-detail click-through | **PASS — overview plus Attendance, Leaves, and Loans tabs, 0 failed APIs/browser errors** |
+| RBAC static catalog audit | **PASS — 243 seeded permissions, 235 referenced, 0 missing references** |
+| Current SPA verification | **PASS — 17 files/71 tests, strict lint, TypeScript, and production build** |
 
 The live gate specifically verified `BATCH-20260709-0001`, the forecast MRP
 control, `Defense Demo — Zone Freeze`, `PR-DEMO-CONVERT`/`PR-DEMO-BUDGET`,

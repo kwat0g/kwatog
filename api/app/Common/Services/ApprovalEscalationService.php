@@ -11,19 +11,6 @@ use Illuminate\Support\Facades\Log;
 
 class ApprovalEscalationService
 {
-    private const REMINDER_HOURS = 24;
-    private const ESCALATE_HOURS = 48;
-    private const DEFAULT_AUTO_RESOLVE_HOURS  = 72;
-    // OGAMI-013 — The safe default is to ESCALATE (re-notify the superior and
-    // leave the step pending) rather than auto-REJECT, so a single approver on
-    // leave can no longer auto-kill an entire queue. The hardcoded constant
-    // below stays 'reject' ONLY because ApprovalAutoResolveTest pins reject as
-    // the fallback when no policy/setting is present; flipping it would break
-    // two existing tests. Operators opt into the safe behavior by setting
-    // `approvals.auto_resolve.default_action = 'escalate'` (or per workflow
-    // step `auto_resolve_action: escalate`). See note for orchestrator.
-    private const DEFAULT_AUTO_RESOLVE_ACTION = 'reject';
-
     public function __construct(
         private readonly NotificationService $notifications,
         private readonly \App\Common\Services\SettingsService $settings,
@@ -31,11 +18,12 @@ class ApprovalEscalationService
 
     public function runReminders(): int
     {
+        $reminderHours = $this->positiveIntSetting('approvals.reminder_hours');
         $count = 0;
         $stale = ApprovalRecord::query()
             ->where('action', 'pending')
             ->whereNull('reminder_sent_at')
-            ->where('created_at', '<', now()->subHours(self::REMINDER_HOURS))
+            ->where('created_at', '<', now()->subHours($reminderHours))
             ->get();
 
         foreach ($stale as $rec) {
@@ -64,11 +52,12 @@ class ApprovalEscalationService
 
     public function runEscalations(): int
     {
+        $escalationHours = $this->positiveIntSetting('approvals.escalation_hours');
         $count = 0;
         $stale = ApprovalRecord::query()
             ->where('action', 'pending')
             ->whereNull('escalated_at')
-            ->where('created_at', '<', now()->subHours(self::ESCALATE_HOURS))
+            ->where('created_at', '<', now()->subHours($escalationHours))
             ->get();
 
         foreach ($stale as $rec) {
@@ -108,12 +97,19 @@ class ApprovalEscalationService
      */
     public function runAutoResolve(): int
     {
-        if (! (bool) $this->settings->get('approvals.auto_resolve.enabled', false)) {
+        $enabled = $this->settings->get('approvals.auto_resolve.enabled');
+        if (! is_bool($enabled)) {
+            throw new \App\Common\Exceptions\BusinessRuleException('Required business setting approvals.auto_resolve.enabled is missing or invalid.');
+        }
+        if (! $enabled) {
             return 0;
         }
 
-        $defaultHours  = (int) $this->settings->get('approvals.auto_resolve.default_hours', self::DEFAULT_AUTO_RESOLVE_HOURS);
-        $defaultAction = (string) $this->settings->get('approvals.auto_resolve.default_action', self::DEFAULT_AUTO_RESOLVE_ACTION);
+        $defaultHours = $this->positiveIntSetting('approvals.auto_resolve.default_hours');
+        $defaultAction = (string) $this->settings->get('approvals.auto_resolve.default_action');
+        if (! in_array($defaultAction, ['approve', 'reject', 'escalate'], true)) {
+            throw new \App\Common\Exceptions\BusinessRuleException('Required business setting approvals.auto_resolve.default_action is missing or invalid.');
+        }
 
         $count = 0;
         $stale = ApprovalRecord::query()
@@ -142,6 +138,16 @@ class ApprovalEscalationService
             }
         }
         return $count;
+    }
+
+    private function positiveIntSetting(string $key): int
+    {
+        $value = $this->settings->get($key);
+        if (! is_numeric($value) || (int) $value <= 0) {
+            throw new \App\Common\Exceptions\BusinessRuleException("Required business setting {$key} is missing or invalid.");
+        }
+
+        return (int) $value;
     }
 
     /**

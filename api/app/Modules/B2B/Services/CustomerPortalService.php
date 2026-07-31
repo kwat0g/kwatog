@@ -66,14 +66,14 @@ class CustomerPortalService
             ->orderByDesc('created_at')->limit(5)->get();
 
         return [
-            'open_so_count'          => $openSoCount,
+            'open_so_count' => $openSoCount,
             'pending_delivery_count' => $pendingDeliveryCount,
-            'open_invoice_count'     => $openInvoiceCount,
-            'total_outstanding'      => number_format((float) $totalOutstanding, 2),
-            'recent_orders'          => $recentOrders,
-            'recent_invoices'        => $recentInvoices,
-            'recent_deliveries'      => $recentDeliveries,
-            'recent_complaints'      => $recentComplaints,
+            'open_invoice_count' => $openInvoiceCount,
+            'total_outstanding' => number_format((float) $totalOutstanding, 2),
+            'recent_orders' => $recentOrders,
+            'recent_invoices' => $recentInvoices,
+            'recent_deliveries' => $recentDeliveries,
+            'recent_complaints' => $recentComplaints,
         ];
     }
 
@@ -135,7 +135,7 @@ class CustomerPortalService
     {
         abort_if($invoice->customer_id !== $customerId, 403);
 
-        $invoice->load(['salesOrder:id,so_number', 'items', 'payments']);
+        $invoice->load(['salesOrder:id,so_number', 'items', 'collections']);
 
         return $invoice;
     }
@@ -166,7 +166,7 @@ class CustomerPortalService
 
         $delivery->load([
             'salesOrder:id,so_number',
-            'items',
+            'items.salesOrderItem.product:id,part_number,name',
             'proofs',
             'driver:id,name',
         ]);
@@ -189,15 +189,15 @@ class CustomerPortalService
         // HasAuditLog writes a valid users.id into audit_logs.user_id.
         return $this->systemUser->impersonate(function () use ($customerId, $data) {
             return CustomerComplaint::create([
-                'customer_id'       => $customerId,
-                'sales_order_id'    => $data['order_id'] ?? null,
-                'severity'          => $data['severity'],
-                'description'       => $data['description'],
+                'customer_id' => $customerId,
+                'sales_order_id' => $data['order_id'] ?? null,
+                'severity' => $data['severity'],
+                'description' => $data['description'],
                 'affected_quantity' => $data['affected_quantity'],
-                'status'            => 'open',
-                'complaint_number'  => 'CC-' . strtoupper(uniqid()),
-                'received_date'     => now(),
-                'created_by'        => $this->systemUser->id(),
+                'status' => 'open',
+                'complaint_number' => 'CC-'.strtoupper(uniqid()),
+                'received_date' => now(),
+                'created_by' => $this->systemUser->id(),
             ]);
         });
     }
@@ -215,19 +215,19 @@ class CustomerPortalService
         return [
             'complaint_number' => $complaint->complaint_number,
             'complaint_status' => $complaint->status?->value ?? $complaint->status,
-            'severity'         => $complaint->severity?->value ?? $complaint->severity,
-            'description'      => $complaint->description,
+            'severity' => $complaint->severity?->value ?? $complaint->severity,
+            'description' => $complaint->description,
             'report' => [
-                'id'                   => $report->hash_id,
-                'd1_team'              => $report->d1_team,
-                'd2_problem'           => $report->d2_problem,
-                'd3_containment'       => $report->d3_containment,
-                'd4_root_cause'        => $report->d4_root_cause,
+                'id' => $report->hash_id,
+                'd1_team' => $report->d1_team,
+                'd2_problem' => $report->d2_problem,
+                'd3_containment' => $report->d3_containment,
+                'd4_root_cause' => $report->d4_root_cause,
                 'd5_corrective_action' => $report->d5_corrective_action,
-                'd6_verification'      => $report->d6_verification,
-                'd7_prevention'        => $report->d7_prevention,
-                'd8_recognition'       => $report->d8_recognition,
-                'finalized_at'         => optional($report->finalized_at)->toIso8601String(),
+                'd6_verification' => $report->d6_verification,
+                'd7_prevention' => $report->d7_prevention,
+                'd8_recognition' => $report->d8_recognition,
+                'finalized_at' => optional($report->finalized_at)->toIso8601String(),
             ],
         ];
     }
@@ -252,9 +252,9 @@ class CustomerPortalService
     {
         return DeliverySchedule::create([
             'customer_id' => $customerId,
-            'month'       => $data['month'],
-            'status'      => 'submitted',
-            'lines'       => $data['lines'],
+            'month' => $data['month'],
+            'status' => 'submitted',
+            'lines' => $data['lines'],
         ]);
     }
 }

@@ -71,8 +71,8 @@ class SessionTimeout
 
         $isEmployee = ($user->role?->slug ?? null) === 'employee';
         $minutes = $isEmployee
-            ? (int) $this->settings->get('security.session_timeout_employee', 15)
-            : (int) $this->settings->get('security.session_timeout_default', 30);
+            ? $this->settings->requiredInt('security.session_timeout_employee', 1)
+            : $this->settings->requiredInt('security.session_timeout_default', 1);
         $lastActivity = $user->last_activity ? Carbon::parse($user->last_activity) : null;
 
         if ($lastActivity && $lastActivity->diffInMinutes(now()) >= $minutes) {

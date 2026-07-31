@@ -4,15 +4,26 @@ declare(strict_types=1);
 
 namespace App\Modules\Assets\Requests;
 
+use App\Common\Concerns\ResolvesHashIds;
 use App\Modules\Assets\Enums\AssetCategory;
+use App\Modules\HR\Models\Department;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class StoreAssetRequest extends FormRequest
 {
+    use ResolvesHashIds;
+
     public function authorize(): bool
     {
         return (bool) $this->user()?->can('assets.create');
+    }
+
+    protected function hashIdFields(): array
+    {
+        return [
+            'department_id' => Department::class,
+        ];
     }
 
     public function rules(): array

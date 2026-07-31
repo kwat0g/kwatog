@@ -1,7 +1,7 @@
 import { client } from '../client';
 import type { ApiSuccess, PaginatedResponse, ListParams } from '@/types';
 import type { ChainStep } from '@/types/production';
-import type { CreateWorkOrderData, RecordOutputData, WorkOrder, WorkOrderOutput } from '@/types/production';
+import type { CreateWorkOrderData, MachineDowntimeCategoryOption, RecordOutputData, WorkOrder, WorkOrderOutput } from '@/types/production';
 
 export interface WorkOrderListParams extends ListParams {
   status?: string;
@@ -10,6 +10,8 @@ export interface WorkOrderListParams extends ListParams {
 }
 
 export const workOrdersApi = {
+  downtimeCategories: () =>
+    client.get<ApiSuccess<MachineDowntimeCategoryOption[]>>('/production/downtime-categories').then((r) => r.data.data),
   list: (params?: WorkOrderListParams) =>
     client.get<PaginatedResponse<WorkOrder>>('/production/work-orders', { params }).then((r) => r.data),
   show: (id: string) =>

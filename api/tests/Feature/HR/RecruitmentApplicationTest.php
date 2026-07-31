@@ -140,6 +140,9 @@ class RecruitmentApplicationTest extends TestCase
                 'action' => 'advance',
             ]);
 
-        $response->assertStatus(500);
+        // Advancing past a terminal stage is a business-rule violation, so the
+        // SPA gets a 422 with the message — not an opaque 500.
+        $response->assertStatus(422);
+        $response->assertJsonPath('message', 'Cannot advance from terminal stage: hired');
     }
 }

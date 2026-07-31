@@ -79,6 +79,8 @@ export interface NavItem {
   badgeKey?: string;
   /** Optional permission gate slug; sidebar hides items the user can't access. */
   permission?: string;
+  /** Show when the user has at least one permission in this list. */
+  anyPermissions?: string[];
   /** Optional feature flag (e.g. 'hr', 'inventory'). */
   feature?: string;
   /**
@@ -148,14 +150,6 @@ export const SECTIONS: NavSection[] = [
     ],
   },
   {
-    label: 'Forecasting',
-    items: [
-      { to: '/forecasting/demand',    label: 'Demand Forecast', icon: BarChart3, feature: 'forecasting', permission: 'forecasting.view' },
-      { to: '/forecasting/stock-out', label: 'Stock-out Plan',  icon: Target,    feature: 'forecasting', permission: 'forecasting.view' },
-      { to: '/forecasting/accuracy',  label: 'Accuracy',        icon: Activity,  feature: 'forecasting', permission: 'forecasting.view' },
-    ],
-  },
-  {
     label: 'Procurement',
     items: [
       { to: '/purchasing/chain',              label: 'Procurement Chain',  icon: Workflow,     feature: 'purchasing', permission: 'purchasing.view' },
@@ -174,7 +168,7 @@ export const SECTIONS: NavSection[] = [
       { to: '/inventory/stock-levels',    label: 'Stock Levels',    icon: BarChart2,      feature: 'inventory', permission: 'inventory.view' },
       { to: '/inventory/movements',       label: 'Movements',       icon: ArrowLeftRight, feature: 'inventory', permission: 'inventory.view' },
       { to: '/inventory/warehouse-map',   label: 'Warehouse Map',   icon: Boxes,          feature: 'inventory', permission: 'inventory.view' },
-      { to: '/inventory/stock-count',     label: 'Stock Count',     icon: ClipboardList,  feature: 'inventory', permission: 'inventory.view' },
+      { to: '/inventory/stock-count',     label: 'Stock Count',     icon: ClipboardList,  feature: 'inventory', permission: 'inventory.stock_count.view' },
       { to: '/inventory/transfer-orders', label: 'Transfer Orders', icon: ArrowLeftRight, feature: 'inventory', permission: 'inventory.view' },
       { to: '/inventory/picking',         label: 'Picking',         icon: Package,        feature: 'inventory', permission: 'inventory.view' },
       { to: '/inventory/scanner',         label: 'Warehouse Scanner', icon: ScanBarcode,  feature: 'inventory', permission: 'inventory.view' },
@@ -192,13 +186,13 @@ export const SECTIONS: NavSection[] = [
     label: 'Quality',
     items: [
       { to: '/quality/inspection-specs', label: 'Inspection Specs', icon: ClipboardList, feature: 'quality', permission: 'quality.specs.view' },
-      { to: '/quality/inspections',      label: 'Inspections',      icon: ShieldCheck,   feature: 'quality', permission: 'quality.view' },
-      { to: '/quality/ncrs',             label: 'NCRs',             icon: AlertTriangle, feature: 'quality', permission: 'quality.view', badgeKey: 'ncrs' },
+      { to: '/quality/inspections',      label: 'Inspections',      icon: ShieldCheck,   feature: 'quality', permission: 'quality.inspections.view' },
+      { to: '/quality/ncrs',             label: 'NCRs',             icon: AlertTriangle, feature: 'quality', permission: 'quality.ncr.view', badgeKey: 'ncrs' },
       { to: '/quality/ncr-templates',    label: 'NCR Templates',    icon: FileText,      feature: 'quality', permission: 'quality.ncr.manage' },
       { to: '/quality/traceability',     label: 'Traceability',     icon: GitFork,       feature: 'quality', permission: 'quality.inspections.view' },
       { to: '/quality/spc',               label: 'SPC',              icon: Activity,      feature: 'quality', permission: 'quality.spc.view' },
       { to: '/quality/copq',              label: 'COPQ',             icon: Coins,         feature: 'quality', permission: 'quality.copq.view' },
-      { to: '/quality/documents',          label: 'Documents',        icon: FileText,      feature: 'quality', permission: 'quality.documents.view' },
+      { to: '/quality/documents',          label: 'Documents',        icon: FileText,      feature: 'quality', permission: 'quality.documents.manage' },
     ],
   },
   {
@@ -212,8 +206,8 @@ export const SECTIONS: NavSection[] = [
       { to: '/accounting/vendors',         label: 'Vendors',           icon: Store,         feature: 'accounting', permission: 'accounting.vendors.view' },
       { to: '/accounting/opening-balances', label: 'Opening Balances', icon: Landmark,      feature: 'accounting', permission: 'accounting.opening_balance.manage' },
       { to: '/accounting/periods',         label: 'Periods',           icon: CalendarClock, feature: 'accounting', permission: 'accounting.periods.view' },
-      { to: '/accounting/fx-rates',        label: 'FX Rates',          icon: Coins,         feature: 'accounting', permission: 'accounting.statements.view' },
-      { to: '/accounting/parent-pack',     label: 'JP Parent Pack',    icon: Building2,     feature: 'accounting', permission: 'accounting.statements.view' },
+      { to: '/accounting/fx-rates',        label: 'FX Rates',          icon: Coins,         feature: 'accounting', permission: 'accounting.currency.view' },
+      { to: '/accounting/parent-pack',     label: 'JP Parent Pack',    icon: Building2,     feature: 'accounting', permission: 'accounting.currency.view' },
       { to: '/budgeting',                  label: 'Budgets',           icon: PieChart,       feature: 'budgeting', permission: 'budgeting.view' },
       { to: '/budgeting/budget-vs-actual', label: 'Budget vs Actual',  icon: Target,         feature: 'budgeting', permission: 'budgeting.view' },
       { to: '/budgeting/transfers',        label: 'Budget Transfers',  icon: ArrowLeftRight, feature: 'budgeting', permission: 'budgeting.view' },
@@ -224,11 +218,11 @@ export const SECTIONS: NavSection[] = [
     items: [
       { to: '/hr/employees',    label: 'Employees',  icon: Users,        feature: 'hr',         permission: 'hr.employees.view', badgeKey: 'profile_requests' },
       { to: '/hr/departments',  label: 'Departments', icon: Building2,   feature: 'hr',         permission: 'hr.departments.view' },
-      { to: '/hr/attendance',   label: 'Attendance',  icon: Clock4,      feature: 'attendance', permission: 'attendance.view', badgeKey: 'leaves' },
-      { to: '/hr/leaves',       label: 'Leave',       icon: CalendarDays, feature: 'leave',     permission: 'leave.view' },
+      { to: '/hr/attendance',   label: 'Attendance',  icon: Clock4,      feature: 'attendance', anyPermissions: ['attendance.edit', 'attendance.import', 'attendance.ot.approve'], badgeKey: 'leaves' },
+      { to: '/hr/leaves',       label: 'Leave',       icon: CalendarDays, feature: 'leave',     anyPermissions: ['leave.approve_dept', 'leave.approve_hr', 'leave.types.manage'] },
       { to: '/hr/salary-adjustments', label: 'Salary Adjustments', icon: Coins, feature: 'hr', permission: 'hr.salary_adjustments.view' },
-      { to: '/payroll/periods', label: 'Payroll',     icon: Wallet,      feature: 'payroll',    permission: 'payroll.view', badgeKey: 'payroll' },
-      { to: '/payroll/statutory', label: 'Statutory Exports', icon: FileText, feature: 'payroll', permission: 'payroll.view' },
+      { to: '/payroll/periods', label: 'Payroll',     icon: Wallet,      feature: 'payroll',    permission: 'payroll.periods.view', badgeKey: 'payroll' },
+      { to: '/payroll/statutory', label: 'Statutory Exports', icon: FileText, feature: 'payroll', permission: 'payroll.statutory.export' },
       { to: '/hr/succession-plans',      label: 'Succession',          icon: UserPlus,    feature: 'hr', permission: 'hr.succession.manage' },
       { to: '/hr/performance-reviews',   label: 'Performance Reviews', icon: Star,        feature: 'hr', permission: 'hr.performance.view' },
       { to: '/hr/recruitment',              label: 'Recruitment',         icon: Briefcase,   feature: 'recruitment', permission: 'hr.recruitment.view' },
@@ -284,6 +278,7 @@ export function isNavItemVisible(item: NavItem, { permissions, features, roleSlu
   const isAdmin = roleSlug === 'system_admin';
   if (item.feature && features && !features.has(item.feature)) return false;
   if (!isAdmin && item.permission && permissions && !permissions.has(item.permission)) return false;
+  if (!isAdmin && item.anyPermissions && permissions && !item.anyPermissions.some((permission) => permissions.has(permission))) return false;
   if (!isAdmin && item.roles && roleSlug && !item.roles.includes(roleSlug)) return false;
   return true;
 }

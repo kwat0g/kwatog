@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\Assets\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Support\HashIdFilter;
 use App\Modules\Assets\Enums\TransferStatus;
 use App\Modules\Assets\Models\Asset;
 use App\Modules\Assets\Models\AssetTransfer;
@@ -12,7 +14,6 @@ use App\Modules\Auth\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 class AssetTransferService
 {
@@ -27,7 +28,7 @@ class AssetTransferService
             $q->where('status', $filters['status']);
         }
         if (! empty($filters['asset_id'])) {
-            $q->where('asset_id', $filters['asset_id']);
+            $q->where('asset_id', HashIdFilter::decode($filters['asset_id'], Asset::class) ?? 0);
         }
 
         return $q->orderByDesc('created_at')
@@ -40,7 +41,7 @@ class AssetTransferService
             $asset = Asset::findOrFail($data['asset_id']);
 
             if ((int) $asset->department_id !== (int) $data['from_department_id']) {
-                throw new RuntimeException('Asset is not currently in the specified source department.');
+                throw new BusinessRuleException('Asset is not currently in the specified source department.');
             }
 
             $transfer = new AssetTransfer();
@@ -57,11 +58,11 @@ class AssetTransferService
     public function approve(AssetTransfer $transfer, User $by): AssetTransfer
     {
         if ($transfer->status !== TransferStatus::Pending) {
-            throw new RuntimeException('Only pending transfers can be approved.');
+            throw new BusinessRuleException('Only pending transfers can be approved.');
         }
 
         if ((int) $transfer->requested_by === $by->id) {
-            throw new RuntimeException('Cannot approve a transfer you requested.');
+            throw new BusinessRuleException('Cannot approve a transfer you requested.');
         }
 
         return DB::transaction(function () use ($transfer, $by) {
@@ -82,7 +83,7 @@ class AssetTransferService
     public function reject(AssetTransfer $transfer, User $by): AssetTransfer
     {
         if ($transfer->status !== TransferStatus::Pending) {
-            throw new RuntimeException('Only pending transfers can be rejected.');
+            throw new BusinessRuleException('Only pending transfers can be rejected.');
         }
 
         $transfer->forceFill([
@@ -91,6 +92,8 @@ class AssetTransferService
             'approved_at' => now(),
         ])->save();
 
-        return $transfer->fresh();
+        // Match create()/approve(): fresh() with no arguments drops eager loads,
+        // so the resource would omit asset / departments.
+        return $transfer->fresh(['asset:id,asset_code,name', 'fromDepartment:id,name', 'toDepartment:id,name']);
     }
 }

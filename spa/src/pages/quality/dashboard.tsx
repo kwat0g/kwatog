@@ -11,7 +11,6 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { analyticsApi, type ParetoDrillRow } from '@/api/quality/analytics';
 import { ncrsApi } from '@/api/quality/ncrs';
-import { inspectionsApi } from '@/api/quality/inspections';
 import { dashboardsApi } from '@/api/dashboards';
 import { DowntimeParetoChart } from '@/components/charts/DowntimeParetoChart';
 import { Button } from '@/components/ui/Button';
@@ -26,22 +25,20 @@ import { focusRingInset } from '@/lib/focus';
 
 export default function QualityDashboardPage() {
   const [selectedDefect, setSelectedDefect] = useState<string | null>(null);
+  const to = new Date();
+  const from = new Date(to);
+  from.setDate(from.getDate() - 30);
+  const period = { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
 
   const pareto = useQuery({
     queryKey: ['quality', 'pareto', 'last30'],
-    queryFn: () => analyticsApi.defectPareto({ limit: 10 }),
+    queryFn: () => analyticsApi.defectPareto({ ...period, limit: 10 }),
   });
 
   // Pass-rate KPI: aggregate from inspections list (last 30 days).
   const passRate = useQuery({
     queryKey: ['quality', 'pass-rate'],
-    queryFn: async () => {
-      const res = await inspectionsApi.list({ per_page: 100 });
-      const completed = res.data.filter((i) => i.status === 'passed' || i.status === 'failed');
-      if (completed.length === 0) return { rate: 0, sample: 0 };
-      const passed = completed.filter((i) => i.status === 'passed').length;
-      return { rate: (passed / completed.length) * 100, sample: completed.length };
-    },
+    queryFn: () => analyticsApi.inspectionSummary(period),
   });
 
   const openNcrs = useQuery({
@@ -84,8 +81,8 @@ export default function QualityDashboardPage() {
       <div className="px-5 grid grid-cols-3 gap-4 mb-4">
         <StatCard
           label="Pass rate"
-          value={passRate.isLoading ? '—' : `${passRate.data?.rate.toFixed(1) ?? 0}%`}
-          helper={passRate.data ? `${passRate.data.sample} inspections` : 'loading…'}
+          value={passRate.isLoading ? '—' : `${passRate.data?.pass_rate.toFixed(1) ?? 0}%`}
+          helper={passRate.data ? `${passRate.data.total} inspections` : 'loading…'}
         />
         <StatCard
           label="Open NCRs"

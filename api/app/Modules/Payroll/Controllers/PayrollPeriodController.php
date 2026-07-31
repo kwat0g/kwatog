@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Payroll\Controllers;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\HashIdFilter;
 use App\Modules\Payroll\Jobs\PostPayrollToGlJob;
 use App\Modules\Payroll\Jobs\ProcessPayrollJob;
@@ -57,11 +58,30 @@ class PayrollPeriodController
         return new PayrollPeriodResource($this->service->show($period));
     }
 
+    /**
+     * Claim the period and queue the compute run.
+     *
+     * The claim is synchronous (a conditional UPDATE inside
+     * PayrollPeriodService::claimForCompute) so the 202 already carries
+     * status=processing. Previously this dispatched blind and returned the
+     * still-Draft period, so the SPA could not tell a queued run from an
+     * untouched one — the Compute button stayed enabled and every extra click
+     * queued another full recompute. A rejected claim is a 422 with the reason.
+     */
     public function compute(PayrollPeriod $period, Request $request): JsonResponse
     {
-        ProcessPayrollJob::dispatch($period, $request->user()?->id);
+        try {
+            $claimed = $this->service->claimForCompute($period, $request->user());
+        } catch (RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
 
-        return (new PayrollPeriodResource($period->fresh()))
+        // claimForCompute() commits its own UPDATE (no wrapping transaction), so
+        // the Processing status is already durable and the worker cannot observe
+        // a pre-claim row.
+        ProcessPayrollJob::dispatch($claimed, $request->user()?->id);
+
+        return (new PayrollPeriodResource($claimed))
             ->response()
             ->setStatusCode(202);
     }
@@ -135,11 +155,11 @@ class PayrollPeriodController
     public function markDisbursed(PayrollPeriod $period, Request $request): PayrollPeriodResource
     {
         if (! class_exists(DisbursementProof::class)) {
-            throw new RuntimeException('DisbursementProof model not yet available.');
+            throw new BusinessRuleException('DisbursementProof model not yet available.');
         }
         $user = $request->user();
         if (! $user) {
-            throw new RuntimeException('Authenticated user required.');
+            throw new BusinessRuleException('Authenticated user required.');
         }
 
         return new PayrollPeriodResource($this->service->markDisbursed($period, $user));

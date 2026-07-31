@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\HR\Enums\ReviewCycleStatus;
 use App\Modules\HR\Enums\ReviewStatus;
 use App\Modules\HR\Models\PerformanceReview;
@@ -12,7 +13,6 @@ use App\Modules\HR\Models\ReviewTemplate;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 class PerformanceReviewService
 {
@@ -43,7 +43,7 @@ class PerformanceReviewService
     public function activateCycle(ReviewCycle $cycle): ReviewCycle
     {
         if ($cycle->status !== ReviewCycleStatus::Draft) {
-            throw new RuntimeException('Only draft cycles can be activated.');
+            throw new BusinessRuleException('Only draft cycles can be activated.');
         }
 
         $cycle->forceFill(['status' => ReviewCycleStatus::Active->value])->save();
@@ -53,7 +53,7 @@ class PerformanceReviewService
     public function closeCycle(ReviewCycle $cycle): ReviewCycle
     {
         if ($cycle->status !== ReviewCycleStatus::Active) {
-            throw new RuntimeException('Only active cycles can be closed.');
+            throw new BusinessRuleException('Only active cycles can be closed.');
         }
 
         $cycle->forceFill(['status' => ReviewCycleStatus::Closed->value])->save();
@@ -97,7 +97,7 @@ class PerformanceReviewService
     public function submitReview(PerformanceReview $review, array $data): PerformanceReview
     {
         if (! in_array($review->status, [ReviewStatus::Pending, ReviewStatus::InProgress])) {
-            throw new RuntimeException('Review already submitted.');
+            throw new BusinessRuleException('Review already submitted.');
         }
 
         return DB::transaction(function () use ($review, $data) {
@@ -114,7 +114,7 @@ class PerformanceReviewService
     public function acknowledge(PerformanceReview $review): PerformanceReview
     {
         if ($review->status !== ReviewStatus::Submitted) {
-            throw new RuntimeException('Only submitted reviews can be acknowledged.');
+            throw new BusinessRuleException('Only submitted reviews can be acknowledged.');
         }
 
         $review->forceFill([

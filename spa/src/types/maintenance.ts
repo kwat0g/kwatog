@@ -115,6 +115,9 @@ export interface MachineHealthSnapshot {
   unit: string;
   recorded_at: string | null;
   status: HealthStatus;
+  min_threshold: number | null;
+  max_threshold: number | null;
+  breach_window: number;
 }
 
 export interface ConditionTrendPoint {

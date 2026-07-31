@@ -16,15 +16,13 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { ChainHeader } from '@/components/chain/ChainHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDateTime } from '@/lib/formatDate';
+import { maintenanceStatusVariant as STATUS_CHIP } from '@/lib/statusVariants';
 import type { ChainStep } from '@/types/chain';
 import type { MaintenanceWorkOrderStatus } from '@/types/maintenance';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { Input } from '@/components/ui/Input';
 
 const STATUS_FLOW: MaintenanceWorkOrderStatus[] = ['open', 'assigned', 'in_progress', 'completed'];
-const STATUS_CHIP: Record<MaintenanceWorkOrderStatus, 'success' | 'warning' | 'info' | 'danger' | 'neutral'> = {
-  open: 'warning', assigned: 'info', in_progress: 'info', completed: 'success', cancelled: 'neutral',
-};
 
 export default function MaintenanceWorkOrderDetailPage() {
   const { id = '' } = useParams<{ id: string }>();

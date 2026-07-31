@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Modules\SupplyChain\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\ChainBroadcaster;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
+use App\Common\Support\HashIdFilter;
 use App\Common\Support\SearchOperator;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Services\InvoiceService;
@@ -64,7 +66,9 @@ class DeliveryService
             }
         }
         if (! empty($filters['sales_order_id'])) {
-            $q->where('sales_order_id', (int) $filters['sales_order_id']);
+            // DeliveryController::index() forwards the raw query bag. A (int) cast
+            // on a hash yields 0, so the list came back empty instead of filtered.
+            $q->where('sales_order_id', HashIdFilter::decode($filters['sales_order_id'], SalesOrder::class) ?? 0);
         }
         if (! empty($filters['search'])) {
             $term = '%'.trim((string) $filters['search']).'%';
@@ -118,7 +122,7 @@ class DeliveryService
     {
         $so = SalesOrder::query()->findOrFail((int) $data['sales_order_id']);
         if (empty($data['items'])) {
-            throw new RuntimeException('At least one delivery item is required.');
+            throw new BusinessRuleException('At least one delivery item is required.');
         }
 
         return DB::transaction(function () use ($so, $data, $by) {
@@ -194,7 +198,7 @@ class DeliveryService
     {
         $current = $d->status instanceof DeliveryStatus ? $d->status : DeliveryStatus::from((string) $d->status);
         if (! $current->canTransitionTo($next)) {
-            throw new RuntimeException("Cannot transition delivery {$d->delivery_number} from {$current->value} to {$next->value}.");
+            throw new BusinessRuleException("Cannot transition delivery {$d->delivery_number} from {$current->value} to {$next->value}.");
         }
         $patch = ['status' => $next->value];
         $now = now();
@@ -238,7 +242,7 @@ class DeliveryService
     {
         $current = $d->status instanceof DeliveryStatus ? $d->status : DeliveryStatus::from((string) $d->status);
         if (! in_array($current, [DeliveryStatus::Delivered, DeliveryStatus::Confirmed], true)) {
-            throw new RuntimeException('Receipt photo can only be uploaded after delivery is marked delivered.');
+            throw new BusinessRuleException('Receipt photo can only be uploaded after delivery is marked delivered.');
         }
 
         // P3.2 — Store the file BEFORE opening the transaction so that a DB
@@ -246,7 +250,7 @@ class DeliveryService
         // If the transaction fails we delete the file and re-throw.
         $path = $file->store("deliveries/{$d->id}", 'local');
         if ($path === false) {
-            throw new RuntimeException('Unable to store receipt photo.');
+            throw new BusinessRuleException('Unable to store receipt photo.');
         }
 
         try {
@@ -295,7 +299,7 @@ class DeliveryService
     {
         $current = $d->status instanceof DeliveryStatus ? $d->status : DeliveryStatus::from((string) $d->status);
         if ($current !== DeliveryStatus::Delivered && $current !== DeliveryStatus::Confirmed) {
-            throw new RuntimeException('Only delivered deliveries can be confirmed.');
+            throw new BusinessRuleException('Only delivered deliveries can be confirmed.');
         }
 
         return DB::transaction(function () use ($d, $by, $receiverData) {
@@ -305,7 +309,7 @@ class DeliveryService
             $locked = Delivery::whereKey($d->id)->lockForUpdate()->first();
 
             if (! $locked) {
-                throw new RuntimeException('Delivery not found.');
+                throw new BusinessRuleException('Delivery not found.');
             }
 
             $lockedStatus = $locked->status instanceof DeliveryStatus
@@ -318,13 +322,13 @@ class DeliveryService
             }
 
             if ($lockedStatus !== DeliveryStatus::Delivered) {
-                throw new RuntimeException('Only delivered deliveries can be confirmed.');
+                throw new BusinessRuleException('Only delivered deliveries can be confirmed.');
             }
 
             // ADV7 — Block confirmation without proof. This is the legally
             // defensible record for any future customer dispute.
             if ($locked->proofs()->count() === 0) {
-                throw new RuntimeException('At least one proof of delivery (signed DR or photo) must be uploaded before confirming.');
+                throw new BusinessRuleException('At least one proof of delivery (signed DR or photo) must be uploaded before confirming.');
             }
 
             $patch = [
@@ -504,12 +508,8 @@ class DeliveryService
             return null;
         }
 
-        // C-1 — Resolve the default revenue account once per call. Falls back
-        // to '4010' (Sales Revenue) if the setting was never seeded.
-        $defaultCode = (string) $this->settings->get('accounting.default_sales_revenue_account_code', '4010');
-        $defaultAccountId = $defaultCode === ''
-            ? null
-            : Account::query()->where('code', $defaultCode)->value('id');
+        $defaultCode = $this->settings->requiredString('accounting.default_sales_revenue_account_code');
+        $defaultAccountId = Account::query()->where('code', $defaultCode)->value('id');
 
         $customerHashId = app('hashids')->encode($d->salesOrder->customer_id);
         $hashids = app('hashids');
@@ -575,11 +575,11 @@ class DeliveryService
     public function delete(Delivery $d): void
     {
         if ($d->invoice_id !== null) {
-            throw new RuntimeException('Cannot delete a delivery with a linked invoice. Cancel the invoice first.');
+            throw new BusinessRuleException('Cannot delete a delivery with a linked invoice. Cancel the invoice first.');
         }
         $current = $d->status instanceof DeliveryStatus ? $d->status : DeliveryStatus::from((string) $d->status);
         if ($current === DeliveryStatus::Confirmed) {
-            throw new RuntimeException('Cannot delete a confirmed delivery (an invoice may be attached).');
+            throw new BusinessRuleException('Cannot delete a confirmed delivery (an invoice may be attached).');
         }
         $paths = DeliveryProof::query()
             ->where('delivery_id', $d->id)

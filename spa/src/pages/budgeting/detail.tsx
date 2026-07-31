@@ -141,7 +141,7 @@ export default function BudgetDetailPage() {
             {budget.utilization_pct}%
           </span>
         </div>
-        <div className="h-3 bg-muted rounded-full overflow-hidden">
+        <div className="h-3 bg-subtle rounded-full overflow-hidden">
           <div
             className={cn(
               'h-full rounded-full transition-all duration-500',

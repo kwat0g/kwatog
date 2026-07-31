@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Modules\CRM\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\SearchOperator;
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Enums\ComplaintStatus;
 use App\Modules\CRM\Models\Complaint8DReport;
@@ -16,7 +18,6 @@ use App\Modules\Quality\Services\NcrService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 /**
  * Sprint 7 — Task 68. Customer complaints lifecycle.
@@ -31,6 +32,7 @@ class ComplaintService
 {
     public function __construct(
         private readonly DocumentSequenceService $sequences,
+        private readonly SettingsService $settings,
     ) {}
 
     public function list(array $filters): LengthAwarePaginator
@@ -91,9 +93,9 @@ class ComplaintService
                 'affected_quantity' => (int) ($data['affected_quantity'] ?? 0),
                 'created_by'        => $by->id,
                 'assigned_to'       => $data['assigned_to'] ?? null,
-                'd3_due_at'         => now()->addHours(48),
-                'd4_due_at'         => now()->addDays(7),
-                'finalize_due_at'   => now()->addDays(30),
+                'd3_due_at'         => now()->addHours($this->settings->requiredInt('crm.complaint_8d.d3_due_hours', 1)),
+                'd4_due_at'         => now()->addDays($this->settings->requiredInt('crm.complaint_8d.d4_due_days', 1)),
+                'finalize_due_at'   => now()->addDays($this->settings->requiredInt('crm.complaint_8d.finalize_due_days', 1)),
                 'sla_alert_levels'  => [],
             ]);
 
@@ -127,7 +129,7 @@ class ComplaintService
     {
         $report = $c->eightDReport ?? Complaint8DReport::firstOrCreate(['complaint_id' => $c->id]);
         if ($report->finalized_at) {
-            throw new RuntimeException('8D report is finalised and cannot be edited.');
+            throw new BusinessRuleException('8D report is finalised and cannot be edited.');
         }
         $allowed = ['d1_team','d2_problem','d3_containment','d4_root_cause','d5_corrective_action','d6_verification','d7_prevention','d8_recognition'];
         $patch = array_intersect_key($data, array_flip($allowed));
@@ -139,7 +141,7 @@ class ComplaintService
 
     public function finalize8D(CustomerComplaint $c, User $by): Complaint8DReport
     {
-        $report = $c->eightDReport ?? throw new RuntimeException('No 8D report exists for this complaint.');
+        $report = $c->eightDReport ?? throw new BusinessRuleException('No 8D report exists for this complaint.');
         if ($report->finalized_at) return $report;
 
         // T3.2.A — every D must be populated (non-empty after trim).
@@ -149,7 +151,7 @@ class ComplaintService
         ];
         foreach ($required as $field) {
             if (trim((string) $report->{$field}) === '') {
-                throw new RuntimeException("Cannot finalize 8D: {$field} is required.");
+                throw new BusinessRuleException("Cannot finalize 8D: {$field} is required.");
             }
         }
 
@@ -164,7 +166,7 @@ class ComplaintService
     {
         $current = $c->status instanceof ComplaintStatus ? $c->status : ComplaintStatus::from((string) $c->status);
         if ($current->isTerminal()) {
-            throw new RuntimeException('Complaint is already terminal.');
+            throw new BusinessRuleException('Complaint is already terminal.');
         }
         $c->forceFill([
             'status'      => ComplaintStatus::Resolved->value,

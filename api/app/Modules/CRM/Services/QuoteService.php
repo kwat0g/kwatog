@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace App\Modules\CRM\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\TaxPolicyService;
+use App\Common\Services\BusinessPolicyService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\SearchOperator;
 use App\Modules\Accounting\Models\Customer;
@@ -15,16 +18,14 @@ use App\Modules\CRM\Models\SalesOrder;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 class QuoteService
 {
-    /** Philippines VAT rate — mirrors SalesOrderService::VAT_RATE. */
-    private const VAT_RATE = 0.12;
-
     public function __construct(
         private readonly DocumentSequenceService $sequences,
         private readonly SalesOrderService $salesOrderService,
+        private readonly TaxPolicyService $taxPolicy,
+        private readonly BusinessPolicyService $businessPolicies,
     ) {}
 
     public function list(array $filters): LengthAwarePaginator
@@ -113,7 +114,7 @@ class QuoteService
     public function update(Quote $quote, array $data): Quote
     {
         if (! $quote->status->isEditable()) {
-            throw new RuntimeException('Only draft quotes can be updated.');
+            throw new BusinessRuleException('Only draft quotes can be updated.');
         }
 
         return DB::transaction(function () use ($quote, $data) {
@@ -148,7 +149,7 @@ class QuoteService
     public function send(Quote $quote): Quote
     {
         if ($quote->status !== QuoteStatus::Draft) {
-            throw new RuntimeException('Only draft quotes can be sent.');
+            throw new BusinessRuleException('Only draft quotes can be sent.');
         }
         $quote->status = QuoteStatus::Sent;
         $quote->save();
@@ -158,7 +159,7 @@ class QuoteService
     public function accept(Quote $quote): Quote
     {
         if ($quote->status !== QuoteStatus::Sent) {
-            throw new RuntimeException('Only sent quotes can be accepted.');
+            throw new BusinessRuleException('Only sent quotes can be accepted.');
         }
         $quote->status = QuoteStatus::Accepted;
         $quote->save();
@@ -168,7 +169,7 @@ class QuoteService
     public function reject(Quote $quote): Quote
     {
         if (! in_array($quote->status, [QuoteStatus::Draft, QuoteStatus::Sent], true)) {
-            throw new RuntimeException('Only draft or sent quotes can be rejected.');
+            throw new BusinessRuleException('Only draft or sent quotes can be rejected.');
         }
         $quote->status = QuoteStatus::Rejected;
         $quote->save();
@@ -194,27 +195,27 @@ class QuoteService
     public function convertToSalesOrder(Quote $quote, int $userId): SalesOrder
     {
         if (! in_array($quote->status, [QuoteStatus::Accepted, QuoteStatus::Sent], true)) {
-            throw new RuntimeException('Only accepted or sent quotes can be converted to a sales order.');
+            throw new BusinessRuleException('Only accepted or sent quotes can be converted to a sales order.');
         }
         if ($quote->converted_to_sales_order_id) {
-            throw new RuntimeException('This quote has already been converted to a sales order.');
+            throw new BusinessRuleException('This quote has already been converted to a sales order.');
         }
         if ($quote->items()->count() === 0) {
-            throw new RuntimeException('Cannot convert a quote with no line items.');
+            throw new BusinessRuleException('Cannot convert a quote with no line items.');
         }
 
         return DB::transaction(function () use ($quote, $userId) {
-            // Default delivery date: valid_until or today + 30 days.
+            $quote->loadMissing('customer');
             $deliveryDate = $quote->valid_until
                 ? $quote->valid_until->toDateString()
-                : Carbon::today()->addDays(30)->toDateString();
+                : Carbon::today()->addDays($this->businessPolicies->salesDeliveryLeadDays())->toDateString();
 
             $quote->load('items');
             $soData = [
                 'customer_id'        => $quote->customer_id,
                 'date'               => Carbon::today()->toDateString(),
                 'notes'              => $quote->terms,
-                'payment_terms_days' => 30,
+                'payment_terms_days' => (int) $quote->customer->payment_terms_days,
                 'items'              => $quote->items->map(fn ($item) => [
                     'product_id'    => $item->product_id,
                     'quantity'      => (float) $item->quantity,
@@ -245,7 +246,7 @@ class QuoteService
             $unitPrice = (float) ($item['unit_price'] ?? 0);
             $subtotal += round($qty * $unitPrice, 2);
         }
-        $tax   = round($subtotal * self::VAT_RATE, 2);
+        $tax   = round($subtotal * (float) $this->taxPolicy->vatRate(), 2);
         $total = round($subtotal + $tax, 2);
         return [$subtotal, $tax, $total];
     }

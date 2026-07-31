@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\StockAdjustmentReason;
 use App\Modules\Inventory\Enums\StockMovementType;
@@ -85,7 +86,7 @@ class StockAdjustmentService
         StockAdjustmentReason|string|null $reasonCode = null,
     ): StockAdjustment {
         if (! in_array($direction, ['in', 'out'], true)) {
-            throw new RuntimeException("Invalid adjustment direction '{$direction}'.");
+            throw new BusinessRuleException("Invalid adjustment direction '{$direction}'.");
         }
         $reasonCode = $this->normalizeReason($reasonCode);
 
@@ -134,10 +135,10 @@ class StockAdjustmentService
     public function approve(StockAdjustment $adj, User $by): StockAdjustment
     {
         if (! ($by->hasPermission('inventory.adjust.approve'))) {
-            throw new RuntimeException('You are not authorized to approve stock adjustments.');
+            throw new BusinessRuleException('You are not authorized to approve stock adjustments.');
         }
         if ($adj->getRawOriginal('status') === 'approved' || $adj->stock_movement_id) {
-            throw new RuntimeException('Adjustment is already approved.');
+            throw new BusinessRuleException('Adjustment is already approved.');
         }
 
         return DB::transaction(function () use ($adj, $by) {

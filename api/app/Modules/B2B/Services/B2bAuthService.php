@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\B2B\Services;
 
 use App\Common\Models\AuditLog;
+use App\Common\Services\SettingsService;
 use App\Modules\Admin\Services\LoginHistoryService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
@@ -23,10 +24,10 @@ use Illuminate\Validation\ValidationException;
  */
 class B2bAuthService
 {
-    private const MAX_ATTEMPTS = 5;
-    private const LOCK_MINUTES = 15;
-
-    public function __construct(private readonly LoginHistoryService $loginHistory) {}
+    public function __construct(
+        private readonly LoginHistoryService $loginHistory,
+        private readonly SettingsService $settings,
+    ) {}
 
     /**
      * Authenticate a portal user and return the issued token + user model.
@@ -73,8 +74,8 @@ class B2bAuthService
         if (! Hash::check($password, $user->password)) {
             $user->failed_login_attempts++;
             $crossedThreshold = false;
-            if ($user->failed_login_attempts >= self::MAX_ATTEMPTS) {
-                $user->locked_until = now()->addMinutes(self::LOCK_MINUTES);
+            if ($user->failed_login_attempts >= $this->settings->requiredInt('security.max_login_attempts', 1)) {
+                $user->locked_until = now()->addMinutes($this->settings->requiredInt('security.lockout_minutes', 1));
                 $crossedThreshold = true;
             }
             $user->save();

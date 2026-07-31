@@ -65,7 +65,7 @@ function StepNode({ step }: { step: OnboardingStep; isLast: boolean }) {
     <div className="flex items-center gap-2 min-w-0">
       <span
         className={cn(
-          'inline-flex items-center justify-center w-4 h-4 rounded-full border text-[9px] font-medium',
+          'inline-flex items-center justify-center w-4 h-4 rounded-full border',
           done
             ? 'bg-success-bg text-success-fg border-success-fg'
             : 'bg-elevated text-text-subtle border-default',
@@ -79,7 +79,7 @@ function StepNode({ step }: { step: OnboardingStep; isLast: boolean }) {
           {step.label}
         </div>
         {done && step.completed_at && (
-          <div className="text-[10px] font-mono tabular-nums text-muted leading-tight">
+          <div className="text-2xs font-mono tabular-nums text-muted leading-tight">
             {new Date(step.completed_at).toLocaleDateString()}
           </div>
         )}

@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace App\Modules\Loans\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\ApprovalService;
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\SettingsService;
+use App\Common\Models\WorkflowDefinition;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Loans\Enums\LoanPaymentType;
@@ -18,7 +21,6 @@ use App\Modules\Loans\Events\LoanSubmitted;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
-use RuntimeException;
 
 class LoanService
 {
@@ -26,7 +28,31 @@ class LoanService
         private readonly DocumentSequenceService $sequences,
         private readonly AmortizationService $amortization,
         private readonly ApprovalService $approvals,
+        private readonly SettingsService $settings,
     ) {}
+
+    /** @return array<int, array{value:string,label:string,interest_rate:string,approval_steps:int}> */
+    public function types(): array
+    {
+        $workflows = WorkflowDefinition::query()
+            ->whereIn('workflow_type', LoanType::values())
+            ->get()
+            ->keyBy('workflow_type');
+
+        return collect(LoanType::cases())
+            ->filter(fn (LoanType $type) => $workflows->has($type->value))
+            ->map(function (LoanType $type) use ($workflows) {
+                $workflow = $workflows->get($type->value);
+                return [
+                    'value' => $type->value,
+                    'label' => $type->label(),
+                    'interest_rate' => $this->interestRateFor($type),
+                    'approval_steps' => count($workflow->steps ?? []),
+                ];
+            })
+            ->values()
+            ->all();
+    }
 
     public function list(array $filters, ?User $user = null): LengthAwarePaginator
     {
@@ -86,12 +112,11 @@ class LoanService
     /** @return array{principal_max:string, has_active:bool} */
     public function limitsFor(Employee $employee, LoanType $type): array
     {
-        $multiplier = (float) (app(\App\Common\Services\SettingsService::class)
-            ->get('loans.cash_advance.max_multiplier', 1.0));
+        $multiplier = (float) $this->requiredSetting("loans.{$type->value}.max_salary_multiplier");
         $base = $employee->basic_monthly_salary
             ? (float) $employee->basic_monthly_salary
-            : (float) ($employee->daily_rate ?? 0) * 22;
-        $max = $type === LoanType::CashAdvance ? $base * $multiplier : $base; // company loan max = 1 month basic
+            : (float) ($employee->daily_rate ?? 0) * $this->settings->requiredInt('payroll.work_days_per_month', 1);
+        $max = $base * $multiplier;
         $hasActive = EmployeeLoan::query()
             ->where('employee_id', $employee->id)
             ->where('loan_type', $type->value)
@@ -113,31 +138,46 @@ class LoanService
                 ->whereIn('status', [LoanStatus::Pending->value, LoanStatus::Active->value])
                 ->exists();
             if ($hasActive) {
-                throw new RuntimeException("An active or pending {$type->value} already exists for this employee.");
+                throw new BusinessRuleException("An active or pending {$type->value} already exists for this employee.");
             }
 
             // Cap check.
             $limits = $this->limitsFor($employee, $type);
             if (bccomp((string) $data['principal'], $limits['principal_max'], 2) > 0) {
-                throw new RuntimeException("Principal exceeds maximum of ₱{$limits['principal_max']} for {$type->value}.");
+                throw new BusinessRuleException("Principal exceeds maximum of ₱{$limits['principal_max']} for {$type->value}.");
             }
 
             $sequenceKey = $type === LoanType::CashAdvance ? 'cash_advance' : 'loan';
             $loanNo = $this->sequences->generate($sequenceKey);
 
             $periods = (int) $data['pay_periods'];
-            $perPeriod = $this->amortization->monthlyAmortization((string) $data['principal'], $periods);
-            $chainSize = $type === LoanType::CompanyLoan ? 4 : 3;
+            $interestRate = $this->interestRateFor($type);
+            $schedule = $this->amortization->generateWithInterest(
+                (string) $data['principal'],
+                $interestRate,
+                $periods,
+            );
+            $perPeriod = $schedule[0]['amount'];
+            $totalDue = array_reduce(
+                $schedule,
+                fn (string $total, array $row) => bcadd($total, $row['amount'], 2),
+                '0.00',
+            );
+            $workflow = WorkflowDefinition::query()->where('workflow_type', $type->workflowType())->first();
+            if (! $workflow) {
+                throw new BusinessRuleException("No approval workflow is configured for {$type->label()}.");
+            }
+            $chainSize = count($workflow->steps ?? []);
 
             $loan = EmployeeLoan::create([
                 'loan_no'                => $loanNo,
                 'employee_id'            => $employeeId,
                 'loan_type'              => $type->value,
                 'principal'              => $data['principal'],
-                'interest_rate'          => 0.00,
+                'interest_rate'          => $interestRate,
                 'monthly_amortization'   => $perPeriod,
                 'total_paid'             => 0,
-                'balance'                => $data['principal'],
+                'balance'                => $totalDue,
                 'pay_periods_total'      => $periods,
                 'pay_periods_remaining'  => $periods,
                 'approval_chain_size'    => $chainSize,
@@ -158,7 +198,7 @@ class LoanService
     {
         return DB::transaction(function () use ($loan, $user, $remarks) {
             if ($loan->status !== LoanStatus::Pending) {
-                throw new RuntimeException('Only pending loans can be approved.');
+                throw new BusinessRuleException('Only pending loans can be approved.');
             }
             $this->approvals->approve($loan, $user, $remarks);
 
@@ -205,7 +245,7 @@ class LoanService
     {
         return DB::transaction(function () use ($loan, $user, $reason) {
             if ($loan->status !== LoanStatus::Pending) {
-                throw new RuntimeException('Only pending loans can be rejected.');
+                throw new BusinessRuleException('Only pending loans can be rejected.');
             }
             $this->approvals->reject($loan, $user, $reason);
             $loan->forceFill(['status' => LoanStatus::Rejected->value])->save();
@@ -219,7 +259,7 @@ class LoanService
     {
         return DB::transaction(function () use ($loan) {
             if (! in_array($loan->status, [LoanStatus::Pending, LoanStatus::Active], true)) {
-                throw new RuntimeException('Cannot cancel a finalized loan.');
+                throw new BusinessRuleException('Cannot cancel a finalized loan.');
             }
             $loan->forceFill(['status' => LoanStatus::Cancelled->value])->save();
             return $loan->fresh(['employee', 'payments']);
@@ -235,7 +275,7 @@ class LoanService
     ): LoanPayment {
         return DB::transaction(function () use ($loan, $amount, $type, $payrollId, $remarks) {
             if ($loan->status !== LoanStatus::Active) {
-                throw new RuntimeException('Only active loans accept payments.');
+                throw new BusinessRuleException('Only active loans accept payments.');
             }
             /** @var LoanPayment $payment */
             $payment = $loan->payments()->create([
@@ -248,7 +288,10 @@ class LoanService
             ]);
 
             $newPaid    = bcadd((string) $loan->total_paid, $amount, 2);
-            $newBalance = bcsub((string) $loan->principal, $newPaid, 2);
+            $newBalance = bcsub((string) $loan->balance, $amount, 2);
+            if (bccomp($newBalance, '0', 2) < 0) {
+                $newBalance = '0.00';
+            }
             // Single save → single audit row.
             $loan->fill([
                 'total_paid'             => $newPaid,
@@ -272,5 +315,26 @@ class LoanService
             ->where('employee_id', $employeeId)
             ->where('status', LoanStatus::Active->value)
             ->get();
+    }
+
+    public function interestRateFor(LoanType $type): string
+    {
+        $rate = (float) $this->requiredSetting("loans.{$type->value}.annual_interest_rate");
+        if ($rate < 0 || $rate > 1) {
+            throw new BusinessRuleException("Annual interest rate for {$type->label()} must be between 0 and 1.");
+        }
+
+        return rtrim(rtrim(number_format($rate, 6, '.', ''), '0'), '.') ?: '0';
+    }
+
+    private function requiredSetting(string $key): mixed
+    {
+        $sentinel = '__missing_loan_policy_setting__';
+        $value = $this->settings->get($key, $sentinel);
+        if ($value === $sentinel || ! is_numeric($value)) {
+            throw new BusinessRuleException("Required loan setting {$key} is not configured.");
+        }
+
+        return $value;
     }
 }

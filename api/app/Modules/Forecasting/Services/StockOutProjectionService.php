@@ -29,7 +29,7 @@ class StockOutProjectionService
     /** @return array<int, array<string, mixed>> */
     public function projectAll(int $horizonDays = 60): array
     {
-        $now    = Carbon::now();
+        $now = Carbon::now();
         $monthY = $now->year;
         $monthM = $now->month;
 
@@ -81,19 +81,19 @@ class StockOutProjectionService
         $rows = [];
         foreach ($items as $it) {
             $available = (float) $it->available;
-            $safety    = (float) $it->safety_stock;
-            $reorder   = (float) $it->reorder_point;
-            $leadTime  = (int) ($it->lead_time_days ?? 0);
+            $safety = (float) $it->safety_stock;
+            $reorder = (float) $it->reorder_point;
+            $leadTime = (int) ($it->lead_time_days ?? 0);
 
             // Daily demand: forecast first, else 30-day moving average.
             $dailyDemand = 0.0;
-            $source      = 'none';
+            $source = 'none';
             if (isset($forecastByPart[$it->code])) {
                 $dailyDemand = (float) $forecastByPart[$it->code] / 30.0;
-                $source      = 'forecast';
+                $source = 'forecast';
             } elseif (isset($consumption[$it->id]) && (float) $consumption[$it->id] > 0) {
                 $dailyDemand = (float) $consumption[$it->id] / 30.0;
-                $source      = 'historical';
+                $source = 'historical';
             }
 
             $daysUntilStockout = null;
@@ -108,7 +108,7 @@ class StockOutProjectionService
                 // Order in time for lead time + 1 buffer day before depletion.
                 $reorderDate = $now->copy()->addDays(max(0, $daysUntilStockout - $leadTime))->toDateString();
                 // Suggested qty = MAX(MOQ, lead_time × daily_demand × 1.2 safety buffer).
-                $suggested   = max(
+                $suggested = max(
                     (float) $it->minimum_order_quantity,
                     $leadTime > 0 ? ($leadTime * $dailyDemand * 1.2) : ($reorder * 0.5)
                 );
@@ -117,10 +117,15 @@ class StockOutProjectionService
 
             $risk = 'ok';
             if ($daysUntilStockout !== null) {
-                if ($daysUntilStockout <= $leadTime)        $risk = 'critical';
-                elseif ($daysUntilStockout <= ($leadTime + 7)) $risk = 'high';
-                elseif ($daysUntilStockout <= 30)             $risk = 'medium';
-                else                                          $risk = 'low';
+                if ($daysUntilStockout <= $leadTime) {
+                    $risk = 'critical';
+                } elseif ($daysUntilStockout <= ($leadTime + 7)) {
+                    $risk = 'high';
+                } elseif ($daysUntilStockout <= 30) {
+                    $risk = 'medium';
+                } else {
+                    $risk = 'low';
+                }
             }
 
             // Only surface items within the horizon (or already breached).
@@ -129,20 +134,20 @@ class StockOutProjectionService
             }
 
             $rows[] = [
-                'item_id'             => (int) $it->id,
-                'code'                => $it->code,
-                'name'                => $it->name,
-                'unit_of_measure'     => $it->unit_of_measure,
-                'available'           => round($available, 3),
-                'safety_stock'        => round($safety, 3),
-                'reorder_point'       => round($reorder, 3),
-                'lead_time_days'      => $leadTime,
-                'daily_demand'        => round($dailyDemand, 3),
-                'demand_source'       => $source,
+                'item_id' => app('hashids')->encode((int) $it->id),
+                'code' => $it->code,
+                'name' => $it->name,
+                'unit_of_measure' => $it->unit_of_measure,
+                'available' => round($available, 3),
+                'safety_stock' => round($safety, 3),
+                'reorder_point' => round($reorder, 3),
+                'lead_time_days' => $leadTime,
+                'daily_demand' => round($dailyDemand, 3),
+                'demand_source' => $source,
                 'days_until_stockout' => $daysUntilStockout,
-                'reorder_date'        => $reorderDate,
-                'suggested_qty'       => $suggestedQty,
-                'risk'                => $risk,
+                'reorder_date' => $reorderDate,
+                'suggested_qty' => $suggestedQty,
+                'risk' => $risk,
             ];
         }
 
@@ -151,7 +156,10 @@ class StockOutProjectionService
         usort($rows, function ($a, $b) use ($riskRank) {
             $ra = $riskRank[$a['risk']] ?? 99;
             $rb = $riskRank[$b['risk']] ?? 99;
-            if ($ra !== $rb) return $ra <=> $rb;
+            if ($ra !== $rb) {
+                return $ra <=> $rb;
+            }
+
             return ($a['days_until_stockout'] ?? PHP_INT_MAX) <=> ($b['days_until_stockout'] ?? PHP_INT_MAX);
         });
 

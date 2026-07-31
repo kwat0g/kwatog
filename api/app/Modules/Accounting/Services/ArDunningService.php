@@ -28,7 +28,7 @@ class ArDunningService
      */
     public function run(?Carbon $asOf = null): array
     {
-        if (! (bool) $this->settings->get('accounting.ar_dunning.enabled', true)) {
+        if (! $this->settings->requiredBool('accounting.ar_dunning.enabled')) {
             return ['evaluated' => 0, 'sent' => 0, 'skipped' => 0];
         }
 
@@ -106,9 +106,12 @@ class ArDunningService
     /** @return array<int, int> tier days, descending */
     private function loadTiers(): array
     {
-        $csv = (string) $this->settings->get('accounting.ar_dunning.tier_days_csv', '7,15,30');
+        $csv = $this->settings->requiredString('accounting.ar_dunning.tier_days_csv');
         $tiers = array_map('intval', array_filter(array_map('trim', explode(',', $csv))));
         $tiers = array_values(array_unique(array_filter($tiers, fn ($t) => $t > 0)));
+        if ($tiers === []) {
+            throw new \App\Common\Exceptions\BusinessRuleException('Required setting accounting.ar_dunning.tier_days_csv is invalid.');
+        }
         rsort($tiers);
         return $tiers;
     }
@@ -122,7 +125,7 @@ class ArDunningService
         if ($officers->isEmpty()) return;
 
         $this->notifications->send($officers, 'ar.dunning.escalation', [
-            'title'   => 'AR Escalation — Invoice 30+ days overdue',
+            'title'   => 'AR Escalation — Highest dunning tier reached',
             'message' => "Invoice {$invoice->invoice_number} for ".
                 ($invoice->customer?->name ?? 'unknown customer').
                 " is {$daysOverdue} days overdue (₱".number_format((float) $invoice->balance, 2).").",

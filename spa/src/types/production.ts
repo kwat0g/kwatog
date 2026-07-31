@@ -7,6 +7,12 @@ export type WorkOrderStatus =
 export type MachineDowntimeCategory =
   | 'breakdown' | 'changeover' | 'material_shortage' | 'no_order' | 'planned_maintenance';
 
+export interface MachineDowntimeCategoryOption {
+  value: MachineDowntimeCategory;
+  label: string;
+  is_planned: boolean;
+}
+
 export interface WorkOrderMaterial {
   id: string;
   item: { id: string; code: string; name: string; unit_of_measure: string } | null;
@@ -73,6 +79,13 @@ export interface WorkOrder {
   creator?: { id: string; name: string } | null;
   materials?: WorkOrderMaterial[];
   outputs?: WorkOrderOutput[];
+  inspections?: Array<{
+    id: string;
+    inspection_number: string;
+    stage: string;
+    status: string;
+    completed_at: string | null;
+  }>;
   created_at: string;
   updated_at: string;
 }

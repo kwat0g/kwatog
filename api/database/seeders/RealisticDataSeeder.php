@@ -417,8 +417,19 @@ class RealisticDataSeeder extends Seeder
                     }
                 }
 
-                $period = $periods->approve($period->fresh());
-                $periods->finalize($period->fresh());
+                // Computing rows directly through the calculator bypasses
+                // ProcessPayrollJob, so the period is still Draft. approve()
+                // requires a completed run (Computed), so promote it here the
+                // same way the job's terminal step does.
+                $period->forceFill(['status' => PayrollPeriodStatus::Computed->value])->save();
+
+                // approve() takes (period, actor) — the actor argument was
+                // missing, so every cycle threw ArgumentCountError into the
+                // catch below and silently stayed unapproved. That is why
+                // seeded periods ended up Draft-with-rows and none were ever
+                // finalized or posted to the GL.
+                $period = $periods->approve($period->fresh(), $admin);
+                $periods->finalize($period->fresh(), $admin);
             } catch (\Throwable $e) {
                 $this->command?->warn('[Realistic] Cycle ' . $w['start'] . ' failed: ' . $e->getMessage());
             }

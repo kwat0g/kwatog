@@ -20,7 +20,7 @@ class CheckFeature
 
     public function handle(Request $request, Closure $next, string $feature): Response
     {
-        $enabled = (bool) $this->settings->get("modules.{$feature}", true);
+        $enabled = $this->settings->requiredBool("modules.{$feature}");
 
         if (! $enabled) {
             return response()->json([

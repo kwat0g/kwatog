@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace App\Modules\CRM\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\SearchOperator;
 use App\Modules\CRM\Models\Product;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 class ProductService
 {
@@ -45,7 +45,10 @@ class ProductService
 
     public function show(Product $product): Product
     {
-        return $product->fresh();
+        return $product->load([
+            'activeBom:id,product_id,version,is_active',
+            'inspectionSpec:id,product_id,version,is_active,updated_at',
+        ]);
     }
 
     public function create(array $data): Product
@@ -65,7 +68,7 @@ class ProductService
     {
         // Block deletion if any sales orders or BOMs reference this product.
         if ($product->salesOrderItems()->exists()) {
-            throw new RuntimeException('Cannot delete a product that appears on sales orders. Deactivate it instead.');
+            throw new BusinessRuleException('Cannot delete a product that appears on sales orders. Deactivate it instead.');
         }
         $product->delete();
     }

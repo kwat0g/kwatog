@@ -12,6 +12,7 @@ use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class LowStockNotificationTest extends TestCase
@@ -26,21 +27,21 @@ class LowStockNotificationTest extends TestCase
 
     public function test_listener_sends_to_purchasing_officer_and_warehouse(): void
     {
-        $po        = $this->userWithRole('purchasing_officer');
+        $po = $this->userWithRole('purchasing_officer');
         $warehouse = $this->userWithRole('warehouse_staff');
 
-        $item     = Item::factory()->create(['reorder_point' => 50]);
-        $pr       = PurchaseRequest::factory()->create();
+        $item = Item::factory()->create(['reorder_point' => 50]);
+        $pr = PurchaseRequest::factory()->create();
         $listener = app(NotifyOnLowStockPrCreated::class);
         $listener->handle(new LowStockPrCreated($item, $pr));
 
         $this->assertDatabaseHas('notifications', [
             'notifiable_id' => $po->id,
-            'type'          => 'inventory.low_stock',
+            'type' => 'inventory.low_stock',
         ]);
         $this->assertDatabaseHas('notifications', [
             'notifiable_id' => $warehouse->id,
-            'type'          => 'inventory.low_stock',
+            'type' => 'inventory.low_stock',
         ]);
     }
 
@@ -49,12 +50,12 @@ class LowStockNotificationTest extends TestCase
         $this->userWithRole('purchasing_officer');
 
         $item = Item::factory()->create(['code' => 'ITM-TEST01', 'name' => 'Test Resin Pellets']);
-        $pr   = PurchaseRequest::factory()->create(['pr_number' => 'PR-202606-0001']);
+        $pr = PurchaseRequest::factory()->create(['pr_number' => 'PR-202606-0001']);
 
         $listener = app(NotifyOnLowStockPrCreated::class);
         $listener->handle(new LowStockPrCreated($item, $pr));
 
-        $row = \DB::table('notifications')
+        $row = DB::table('notifications')
             ->where('type', 'inventory.low_stock')
             ->first();
 
@@ -76,18 +77,18 @@ class LowStockNotificationTest extends TestCase
 
     public function test_listener_does_not_notify_inactive_purchasing_officer(): void
     {
-        $role = \App\Modules\Auth\Models\Role::where('slug', 'purchasing_officer')->firstOrFail();
-        $inactive = \App\Modules\Auth\Models\User::factory()->create([
-            'role_id'   => $role->id,
+        $role = Role::where('slug', 'purchasing_officer')->firstOrFail();
+        $inactive = User::factory()->create([
+            'role_id' => $role->id,
             'is_active' => false,
         ]);
-        $item = \App\Modules\Inventory\Models\Item::factory()->create(['reorder_point' => 50]);
-        $pr   = \App\Modules\Purchasing\Models\PurchaseRequest::factory()->create();
+        $item = Item::factory()->create(['reorder_point' => 50]);
+        $pr = PurchaseRequest::factory()->create();
         $listener = app(NotifyOnLowStockPrCreated::class);
         $listener->handle(new LowStockPrCreated($item, $pr));
         $this->assertDatabaseMissing('notifications', [
             'notifiable_id' => $inactive->id,
-            'type'          => 'inventory.low_stock',
+            'type' => 'inventory.low_stock',
         ]);
     }
 

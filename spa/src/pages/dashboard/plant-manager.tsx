@@ -12,6 +12,7 @@ import { DashboardShell, KpiGrid, PanelRow } from '@/components/dashboard/Dashbo
 import { ChainBottleneckWidget } from '@/components/dashboard/ChainBottleneckWidget';
 import { StockOutPanel } from '@/components/dashboard/StockOutPanel';
 import { DemandForecastPanel } from '@/components/dashboard/DemandForecastPanel';
+import { ForecastAccuracyPanel } from '@/components/dashboard/ForecastAccuracyPanel';
 import { KpiStrip } from '@/components/dashboard/KpiStrip';
 import { DonutBreakdown, BarComparison } from '@/components/charts';
 import { usePermission } from '@/hooks/usePermission';
@@ -165,9 +166,10 @@ export default function PlantManagerDashboard() {
 
             {/* Row 5: Forecasting */}
             {can('forecasting.view') && (
-              <PanelRow>
-                <StockOutPanel title="Stock-out Risk Forecast" horizonDays={30} hideWhenEmpty />
-                <DemandForecastPanel hideWhenEmpty />
+              <PanelRow cols={3}>
+                <StockOutPanel title="Stock-out Risk Forecast" horizonDays={30} />
+                <DemandForecastPanel />
+                <ForecastAccuracyPanel />
               </PanelRow>
             )}
 
@@ -290,7 +292,7 @@ function AlertsPanel({ alerts }: { alerts: PlantManagerData['panels']['alerts'] 
     danger: 'bg-danger',
     warning: 'bg-warning',
     success: 'bg-success',
-    neutral: 'bg-muted',
+    neutral: 'bg-strong',
   };
   return (
     <Panel
@@ -308,7 +310,7 @@ function AlertsPanel({ alerts }: { alerts: PlantManagerData['panels']['alerts'] 
                 to={alertRefLink(a.ref, a.ref_id, a.kind)}
                 className="flex items-center gap-2 text-sm rounded-sm -mx-1 px-1 hover:bg-subtle transition-colors duration-fast"
               >
-                <span className={`inline-block h-1.5 w-1.5 rounded-full shrink-0 ${sevDot[a.severity] ?? 'bg-muted'}`} aria-hidden />
+                <span className={`inline-block h-1.5 w-1.5 rounded-full shrink-0 ${sevDot[a.severity] ?? 'bg-strong'}`} aria-hidden />
                 <span className="truncate">{a.label}</span>
               </Link>
             </li>
@@ -360,5 +362,4 @@ function FinancialSnapshotPanel({
     </Panel>
   );
 }
-
 

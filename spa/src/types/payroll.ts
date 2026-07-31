@@ -1,4 +1,7 @@
-export type PayrollPeriodStatus = 'draft' | 'processing' | 'approved' | 'finalized' | 'disbursed' | 'voided';
+// 'computed' = the batch ran and rows exist, awaiting a checker's approval.
+// 'draft' now strictly means "never computed" — the two used to share 'draft',
+// which is why the Compute button never disabled after a successful run.
+export type PayrollPeriodStatus = 'draft' | 'processing' | 'computed' | 'approved' | 'finalized' | 'disbursed' | 'voided';
 export type DisbursementStatus = 'pending' | 'partially_disbursed' | 'disbursed';
 export type ProofType = 'deposit_slip' | 'bank_confirmation' | 'transfer_receipt' | 'other';
 export type PayrollAdjustmentType = 'underpayment' | 'overpayment';

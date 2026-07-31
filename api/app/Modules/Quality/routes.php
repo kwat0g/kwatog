@@ -115,6 +115,8 @@ Route::middleware(['auth:sanctum', 'feature:quality'])->prefix('quality')->group
     /* ─── Analytics (Task 63) ─── */
     Route::get('/analytics/defect-pareto',                      [AnalyticsController::class, 'defectPareto'])
         ->middleware('permission:quality.view');
+    Route::get('/analytics/inspection-summary',                 [AnalyticsController::class, 'inspectionSummary'])
+        ->middleware('permission:quality.view');
     Route::get('/analytics/defect-pareto/drill',                [AnalyticsController::class, 'paretoDrillDown'])
         ->middleware('permission:quality.view');
 

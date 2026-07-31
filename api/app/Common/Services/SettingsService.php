@@ -38,6 +38,50 @@ class SettingsService
         }
     }
 
+    public function requiredString(string $key, bool $allowEmpty = false): string
+    {
+        $value = $this->get($key);
+        if (! is_string($value) || (! $allowEmpty && trim($value) === '')) {
+            throw new \App\Common\Exceptions\BusinessRuleException("Required setting {$key} is missing or invalid.");
+        }
+        return $value;
+    }
+
+    public function requiredInt(string $key, ?int $minimum = null, ?int $maximum = null): int
+    {
+        $value = $this->get($key);
+        if (! is_numeric($value) || (int) $value != (float) $value) {
+            throw new \App\Common\Exceptions\BusinessRuleException("Required setting {$key} is missing or invalid.");
+        }
+        $value = (int) $value;
+        if (($minimum !== null && $value < $minimum) || ($maximum !== null && $value > $maximum)) {
+            throw new \App\Common\Exceptions\BusinessRuleException("Required setting {$key} is outside its valid range.");
+        }
+        return $value;
+    }
+
+    public function requiredBool(string $key): bool
+    {
+        $value = $this->get($key);
+        if (! is_bool($value)) {
+            throw new \App\Common\Exceptions\BusinessRuleException("Required setting {$key} is missing or invalid.");
+        }
+        return $value;
+    }
+
+    public function requiredFloat(string $key, ?float $minimum = null, ?float $maximum = null): float
+    {
+        $value = $this->get($key);
+        if (! is_numeric($value)) {
+            throw new \App\Common\Exceptions\BusinessRuleException("Required setting {$key} is missing or invalid.");
+        }
+        $value = (float) $value;
+        if (($minimum !== null && $value < $minimum) || ($maximum !== null && $value > $maximum)) {
+            throw new \App\Common\Exceptions\BusinessRuleException("Required setting {$key} is outside its valid range.");
+        }
+        return $value;
+    }
+
     private function fetch(string $key, mixed $default): mixed
     {
         $row = DB::table('settings')->where('key', $key)->first();

@@ -30,8 +30,9 @@ class KpiController
 
     public function compute(Request $request): JsonResponse
     {
-        $year = (int) $request->input('year', (string) Carbon::now()->year);
-        $month = (int) $request->input('month', (string) Carbon::now()->subMonth()->month);
+        $previousMonth = Carbon::now()->startOfMonth()->subMonth();
+        $year = (int) $request->input('year', (string) $previousMonth->year);
+        $month = (int) $request->input('month', (string) $previousMonth->month);
 
         $this->service->computeAll($year, $month);
 

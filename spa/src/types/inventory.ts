@@ -274,7 +274,7 @@ export interface InventoryDashboard {
   items_critical: number;
   pending_grns: number;
   low_stock_alerts: Array<{
-    item_id: number;
+    item_id: string;
     code: string;
     name: string;
     available: string;
@@ -288,7 +288,7 @@ export interface InventoryDashboard {
   }>;
   recent_movements: StockMovement[];
   top_consumed_materials: Array<{
-    id: number; code: string; name: string; unit_of_measure: string;
+    id: string; code: string; name: string; unit_of_measure: string;
     qty: string; total_value: string;
   }>;
 }

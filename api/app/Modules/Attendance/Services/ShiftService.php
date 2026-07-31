@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Modules\Attendance\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Attendance\Models\Shift;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 class ShiftService
 {
@@ -23,12 +23,28 @@ class ShiftService
 
     public function create(array $data): Shift
     {
-        return DB::transaction(fn () => Shift::create($data));
+        return DB::transaction(function () use ($data) {
+            if ($data['is_default'] ?? false) {
+                Shift::query()->where('is_default', true)->update(['is_default' => false]);
+                $data['is_active'] = true;
+            }
+
+            return Shift::create($data);
+        });
     }
 
     public function update(Shift $shift, array $data): Shift
     {
         return DB::transaction(function () use ($shift, $data) {
+            if (($data['is_default'] ?? null) === true) {
+                Shift::query()->whereKeyNot($shift->getKey())->where('is_default', true)->update(['is_default' => false]);
+                $data['is_active'] = true;
+            }
+
+            if ($shift->is_default && (($data['is_default'] ?? true) === false || ($data['is_active'] ?? true) === false)) {
+                throw new BusinessRuleException('Choose another default shift before disabling or unmarking this one.');
+            }
+
             $shift->update($data);
             return $shift->fresh();
         });
@@ -36,8 +52,11 @@ class ShiftService
 
     public function delete(Shift $shift): void
     {
+        if ($shift->is_default) {
+            throw new BusinessRuleException('Choose another default shift before deleting this one.');
+        }
         if ($shift->assignments()->exists()) {
-            throw new RuntimeException('Cannot delete shift: employees are assigned.');
+            throw new BusinessRuleException('Cannot delete shift: employees are assigned.');
         }
         $shift->delete();
     }

@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Modules\Purchasing\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\ApprovalService;
+use App\Common\Services\BusinessPolicyService;
 use App\Common\Services\DocumentSequenceService;
-use App\Common\Services\SettingsService;
+use App\Common\Services\TaxPolicyService;
 use App\Common\Support\HashIdFilter;
 use App\Modules\Accounting\Services\BudgetEnforcementService;
 use App\Common\Support\Money;
@@ -26,13 +28,12 @@ use RuntimeException;
 
 class PurchaseOrderService
 {
-    private const VAT_RATE = '0.12';
-
     public function __construct(
         private readonly DocumentSequenceService $sequences,
         private readonly ApprovalService $approvals,
-        private readonly SettingsService $settings,
+        private readonly BusinessPolicyService $businessPolicy,
         private readonly BudgetEnforcementService $budget,
+        private readonly TaxPolicyService $taxPolicy,
     ) {}
 
     private function resolveDepartmentId(array $data): ?int
@@ -120,9 +121,9 @@ class PurchaseOrderService
             $isVatable = (bool) ($data['is_vatable'] ?? true);
 
             [$lines, $subtotal] = $this->normalizeLines($data['items'] ?? []);
-            $vat = $isVatable ? Money::mul($subtotal, self::VAT_RATE) : Money::zero();
+            $vat = $isVatable ? Money::mul($subtotal, $this->taxPolicy->vatRate()) : Money::zero();
             $total = Money::add($subtotal, $vat);
-            $threshold = (float) $this->settings->get('approval.po.vp_threshold', 50000.0);
+            $threshold = $this->businessPolicy->purchaseOrderVpThreshold();
 
             $deptId = $this->resolveDepartmentId($data);
 
@@ -158,7 +159,7 @@ class PurchaseOrderService
     public function convertFromPr(PurchaseRequest $pr, array $vendorMap, User $by): array
     {
         if ($pr->status !== PurchaseRequestStatus::Approved) {
-            throw new RuntimeException('Only approved PRs can be converted to POs.');
+            throw new BusinessRuleException('Only approved PRs can be converted to POs.');
         }
         // vendorMap: { pr_item_id => vendor_id }
         return DB::transaction(function () use ($pr, $vendorMap, $by) {
@@ -166,7 +167,7 @@ class PurchaseOrderService
             foreach ($pr->items as $line) {
                 $vendorId = $vendorMap[$line->id] ?? null;
                 if (! $vendorId) {
-                    throw new RuntimeException("PR line {$line->id} has no vendor assignment.");
+                    throw new BusinessRuleException("PR line {$line->id} has no vendor assignment.");
                 }
                 $byVendor[$vendorId][] = $line;
             }
@@ -202,14 +203,14 @@ class PurchaseOrderService
     public function update(PurchaseOrder $po, array $data): PurchaseOrder
     {
         if ($po->status !== PurchaseOrderStatus::Draft) {
-            throw new RuntimeException('Only draft POs can be edited.');
+            throw new BusinessRuleException('Only draft POs can be edited.');
         }
         return DB::transaction(function () use ($po, $data) {
             $isVatable = (bool) ($data['is_vatable'] ?? $po->is_vatable);
             [$lines, $subtotal] = $this->normalizeLines($data['items'] ?? []);
-            $vat = $isVatable ? Money::mul($subtotal, self::VAT_RATE) : Money::zero();
+            $vat = $isVatable ? Money::mul($subtotal, $this->taxPolicy->vatRate()) : Money::zero();
             $total = Money::add($subtotal, $vat);
-            $threshold = (float) $this->settings->get('approval.po.vp_threshold', 50000.0);
+            $threshold = $this->businessPolicy->purchaseOrderVpThreshold();
 
             $po->update([
                 'date'                 => $data['date'] ?? $po->date,
@@ -233,7 +234,7 @@ class PurchaseOrderService
     public function submit(PurchaseOrder $po): PurchaseOrder
     {
         if ($po->status !== PurchaseOrderStatus::Draft) {
-            throw new RuntimeException('Only draft POs can be submitted.');
+            throw new BusinessRuleException('Only draft POs can be submitted.');
         }
         return DB::transaction(function () use ($po) {
             $this->approvals->submit($po, 'purchase_order', (float) $po->total_amount);
@@ -250,7 +251,7 @@ class PurchaseOrderService
     public function approve(PurchaseOrder $po, User $by, ?string $remarks = null): PurchaseOrder
     {
         if (! in_array($po->status, [PurchaseOrderStatus::PendingApproval, PurchaseOrderStatus::Draft], true)) {
-            throw new RuntimeException('PO is not in an approvable state.');
+            throw new BusinessRuleException('PO is not in an approvable state.');
         }
         $this->budget->assertAcknowledged($po);
         // OGAMI-002 — segregation of duties: the approver must not be the user
@@ -273,7 +274,7 @@ class PurchaseOrderService
             $ppap = app(\App\Modules\Quality\Services\PpapService::class);
             foreach ($po->items()->get() as $line) {
                 if ($line->item_id && ! $ppap->vendorHasActivePpap((int) $po->vendor_id, (int) $line->item_id)) {
-                    throw new RuntimeException(
+                    throw new BusinessRuleException(
                         "Vendor has no approved PPAP for item #{$line->item_id}. Approve the PPAP submission before this PO."
                     );
                 }
@@ -366,7 +367,7 @@ class PurchaseOrderService
     public function markAsSent(PurchaseOrder $po): PurchaseOrder
     {
         if ($po->status !== PurchaseOrderStatus::Approved) {
-            throw new RuntimeException('Only approved POs can be marked as sent.');
+            throw new BusinessRuleException('Only approved POs can be marked as sent.');
         }
         $po->forceFill(['status' => PurchaseOrderStatus::Sent, 'sent_to_supplier_at' => now()])->save();
         $fresh = $po->fresh();
@@ -377,10 +378,10 @@ class PurchaseOrderService
     public function cancel(PurchaseOrder $po, string $reason): PurchaseOrder
     {
         if (in_array($po->status, [PurchaseOrderStatus::Received, PurchaseOrderStatus::Closed], true)) {
-            throw new RuntimeException('Cannot cancel a fully received or closed PO.');
+            throw new BusinessRuleException('Cannot cancel a fully received or closed PO.');
         }
         if ($po->goodsReceiptNotes()->exists()) {
-            throw new RuntimeException('Cannot cancel a PO with GRNs.');
+            throw new BusinessRuleException('Cannot cancel a PO with GRNs.');
         }
         $fresh = DB::transaction(function () use ($po, $reason) {
             // Single save → single audit row for one logical action.
@@ -400,7 +401,7 @@ class PurchaseOrderService
     public function close(PurchaseOrder $po): PurchaseOrder
     {
         if ($po->status !== PurchaseOrderStatus::Received) {
-            throw new RuntimeException('Only fully received POs can be closed.');
+            throw new BusinessRuleException('Only fully received POs can be closed.');
         }
         $po->forceFill(['status' => PurchaseOrderStatus::Closed])->save();
         $fresh = $po->fresh();
@@ -418,7 +419,7 @@ class PurchaseOrderService
     public function delete(PurchaseOrder $po): void
     {
         if ($po->status !== PurchaseOrderStatus::Draft) {
-            throw new RuntimeException('Only draft POs can be deleted.');
+            throw new BusinessRuleException('Only draft POs can be deleted.');
         }
         $po->delete();
     }

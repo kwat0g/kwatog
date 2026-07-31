@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Quality\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\SearchOperator;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\NotificationService;
@@ -23,7 +24,6 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Notifications\Notification as BaseNotification;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 /**
  * Sprint 7 — Task 61. NCR lifecycle service.
@@ -188,7 +188,7 @@ class NcrService
     public function addAction(NonConformanceReport $ncr, array $data, User $by): NcrAction
     {
         if ($ncr->status->isTerminal()) {
-            throw new RuntimeException('Cannot add actions to a closed NCR.');
+            throw new BusinessRuleException('Cannot add actions to a closed NCR.');
         }
         return DB::transaction(function () use ($ncr, $data, $by) {
             $action = NcrAction::create([
@@ -213,7 +213,7 @@ class NcrService
     public function setDisposition(NonConformanceReport $ncr, string $disposition, ?string $rootCause, ?string $correctiveAction): NonConformanceReport
     {
         if ($ncr->status->isTerminal()) {
-            throw new RuntimeException('NCR is already closed.');
+            throw new BusinessRuleException('NCR is already closed.');
         }
         $ncr->forceFill([
             'disposition'       => NcrDisposition::from($disposition)->value,
@@ -232,10 +232,10 @@ class NcrService
     public function close(NonConformanceReport $ncr, User $by): NonConformanceReport
     {
         if ($ncr->status->isTerminal()) {
-            throw new RuntimeException('NCR is already closed.');
+            throw new BusinessRuleException('NCR is already closed.');
         }
         if (! $ncr->disposition) {
-            throw new RuntimeException('Cannot close NCR without a disposition.');
+            throw new BusinessRuleException('Cannot close NCR without a disposition.');
         }
 
         $counts = $ncr->actions()
@@ -245,10 +245,10 @@ class NcrService
             ->pluck('c', 'action_type');
 
         if (((int) ($counts[NcrActionType::Corrective->value] ?? 0)) < 1) {
-            throw new RuntimeException('Cannot close NCR without at least one Corrective action.');
+            throw new BusinessRuleException('Cannot close NCR without at least one Corrective action.');
         }
         if (((int) ($counts[NcrActionType::Preventive->value] ?? 0)) < 1) {
-            throw new RuntimeException('Cannot close NCR without at least one Preventive action.');
+            throw new BusinessRuleException('Cannot close NCR without at least one Preventive action.');
         }
 
         return DB::transaction(function () use ($ncr, $by) {
@@ -319,7 +319,7 @@ class NcrService
     public function cancel(NonConformanceReport $ncr, ?string $reason, User $by): NonConformanceReport
     {
         if ($ncr->status->isTerminal()) {
-            throw new RuntimeException('NCR is already closed.');
+            throw new BusinessRuleException('NCR is already closed.');
         }
         $ncr->forceFill([
             'status'           => NcrStatus::Cancelled->value,

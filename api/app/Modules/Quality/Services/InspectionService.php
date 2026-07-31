@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace App\Modules\Quality\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Support\HashIdFilter;
 use App\Common\Support\SearchOperator;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\GrnItem;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Quality\Enums\InspectionEntityType;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\InspectionStatus;
@@ -21,11 +24,12 @@ use App\Modules\Quality\Models\InspectionMeasurement;
 use App\Modules\Quality\Models\InspectionSpec;
 use App\Modules\Quality\Models\InspectionSpecItem;
 use App\Modules\Quality\Models\ItemQualityPlan;
+use App\Modules\ReturnManagement\Models\ReturnRequest;
+use App\Modules\SupplyChain\Models\Delivery;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use RuntimeException;
 
 /**
  * Sprint 7 — Task 60. Lifecycle service for quality inspections.
@@ -64,11 +68,17 @@ class InspectionService
             $q->where('status', $filters['status']);
         }
         if (! empty($filters['product_id'])) {
-            $q->where('product_id', $filters['product_id']);
+            // InspectionController::index() forwards the raw query bag, so the
+            // SPA's hash string would hit a bigint column (Postgres 22P02 → 500).
+            $q->where('product_id', HashIdFilter::decode($filters['product_id'], Product::class) ?? 0);
         }
         if (! empty($filters['entity_type']) && ! empty($filters['entity_id'])) {
+            // entity_id is polymorphic, so the model to decode against is only
+            // known from entity_type. An unknown type falls through to 0 rather
+            // than casting the hash to 0 silently.
+            $entityModel = $this->entityModelClass((string) $filters['entity_type']);
             $q->where('entity_type', $filters['entity_type'])
-                ->where('entity_id', (int) $filters['entity_id']);
+                ->where('entity_id', $entityModel ? HashIdFilter::decode($filters['entity_id'], $entityModel) ?? 0 : 0);
         }
         if (! empty($filters['search'])) {
             $term = '%'.trim((string) $filters['search']).'%';
@@ -84,6 +94,23 @@ class InspectionService
 
         return $q->orderByDesc('id')
             ->paginate(min((int) ($filters['per_page'] ?? 20), 100));
+    }
+
+    /**
+     * Model backing each polymorphic `entity_type`, for decoding `entity_id`
+     * hashes on the list filter. Mirrors CreateInspectionRequest's map.
+     *
+     * @return class-string<\Illuminate\Database\Eloquent\Model>|null
+     */
+    private function entityModelClass(string $type): ?string
+    {
+        return match ($type) {
+            InspectionEntityType::Grn->value           => GoodsReceiptNote::class,
+            InspectionEntityType::WorkOrder->value     => WorkOrder::class,
+            InspectionEntityType::Delivery->value      => Delivery::class,
+            InspectionEntityType::ReturnRequest->value => ReturnRequest::class,
+            default                                    => null,
+        };
     }
 
     public function show(Inspection $inspection): Inspection
@@ -240,10 +267,10 @@ class InspectionService
             ->first();
 
         if (! $spec) {
-            throw new RuntimeException("Product {$product->part_number} has no active inspection spec.");
+            throw new BusinessRuleException("Product {$product->part_number} has no active inspection spec.");
         }
         if ($spec->items->isEmpty()) {
-            throw new RuntimeException("Inspection spec for {$product->part_number} has no parameters.");
+            throw new BusinessRuleException("Inspection spec for {$product->part_number} has no parameters.");
         }
 
         // AQL plan only applies to outgoing. Incoming + in-process default to
@@ -345,7 +372,7 @@ class InspectionService
     public function recordMeasurements(Inspection $inspection, array $rows, User $by): Inspection
     {
         if ($inspection->status->isTerminal()) {
-            throw new RuntimeException('Inspection is already finalised.');
+            throw new BusinessRuleException('Inspection is already finalised.');
         }
 
         return DB::transaction(function () use ($inspection, $rows, $by) {
@@ -408,7 +435,7 @@ class InspectionService
     public function complete(Inspection $inspection, User $by): Inspection
     {
         if ($inspection->status->isTerminal()) {
-            throw new RuntimeException('Inspection is already finalised.');
+            throw new BusinessRuleException('Inspection is already finalised.');
         }
 
         return DB::transaction(function () use ($inspection, $by) {
@@ -419,7 +446,7 @@ class InspectionService
 
             $unresolved = $rows->whereNull('is_pass')->count();
             if ($unresolved > 0) {
-                throw new RuntimeException("Cannot complete: {$unresolved} measurement(s) have no pass/fail recorded.");
+                throw new BusinessRuleException("Cannot complete: {$unresolved} measurement(s) have no pass/fail recorded.");
             }
 
             $criticalFail = $rows->contains(fn (InspectionMeasurement $r) => $r->is_critical && $r->is_pass === false);
@@ -470,7 +497,7 @@ class InspectionService
     public function cancel(Inspection $inspection, ?string $reason, User $by): Inspection
     {
         if ($inspection->status->isTerminal()) {
-            throw new RuntimeException('Inspection is already finalised.');
+            throw new BusinessRuleException('Inspection is already finalised.');
         }
         $inspection->forceFill([
             'status' => InspectionStatus::Cancelled->value,

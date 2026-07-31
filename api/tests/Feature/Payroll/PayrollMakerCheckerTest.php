@@ -44,11 +44,20 @@ class PayrollMakerCheckerTest extends TestCase
         ]);
     }
 
-    /** A Draft period, optionally already computed by a given user. */
+    /**
+     * A period ready for the approve step: Computed, with one payroll row.
+     *
+     * approve() now requires Computed rather than Draft — Draft means "never
+     * computed", and approving that used to lock in an empty ₱0 payroll. A row
+     * is needed too, since approve() refuses an empty batch.
+     */
     private function draftPeriod(?User $computedBy = null): PayrollPeriod
     {
         $period = PayrollPeriod::factory()->create([
-            'status' => PayrollPeriodStatus::Draft->value,
+            'status' => PayrollPeriodStatus::Computed->value,
+        ]);
+        \App\Modules\Payroll\Models\Payroll::factory()->create([
+            'payroll_period_id' => $period->id,
         ]);
         if ($computedBy !== null) {
             $period->forceFill(['computed_by' => $computedBy->id])->save();
@@ -96,9 +105,9 @@ class PayrollMakerCheckerTest extends TestCase
                 'Maker-checker: the person who computed this payroll cannot also approve it. A different approver is required.',
             );
 
-        // Untouched — still Draft, no approver stamped.
+        // Untouched — still awaiting approval, no approver stamped.
         $fresh = $period->fresh();
-        $this->assertSame(PayrollPeriodStatus::Draft, $fresh->status);
+        $this->assertSame(PayrollPeriodStatus::Computed, $fresh->status);
         $this->assertNull($fresh->approved_by);
         $this->assertNull($fresh->approved_at);
     }
@@ -156,6 +165,6 @@ class PayrollMakerCheckerTest extends TestCase
             ->patchJson("/api/v1/payroll-periods/{$period->hash_id}/approve")
             ->assertStatus(403);
 
-        $this->assertSame(PayrollPeriodStatus::Draft, $period->fresh()->status);
+        $this->assertSame(PayrollPeriodStatus::Computed, $period->fresh()->status);
     }
 }

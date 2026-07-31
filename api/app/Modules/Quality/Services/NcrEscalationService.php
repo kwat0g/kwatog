@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Quality\Services;
 
 use App\Common\Services\NotificationService;
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Quality\Enums\NcrActionType;
 use App\Modules\Quality\Enums\NcrSeverity;
@@ -20,21 +21,16 @@ use Illuminate\Support\Carbon;
  */
 class NcrEscalationService
 {
-    /** Hours since created_at (or last_escalated_at) before next tier fires. */
-    private const SLA_HOURS_BY_SEVERITY = [
-        'critical' => 8,
-        'high'     => 24,
-        'medium'   => 72,
-        'low'      => 168,
-    ];
-
     private const TIERS = [
         1 => ['role' => 'qc_inspector',  'subject' => 'NCR awaiting corrective'],
         2 => ['role' => 'production_manager', 'subject' => 'NCR overdue — manager attention'],
         3 => ['role' => 'system_admin',  'subject' => 'NCR critical overdue — exec escalation'],
     ];
 
-    public function __construct(private readonly NotificationService $notifications) {}
+    public function __construct(
+        private readonly NotificationService $notifications,
+        private readonly SettingsService $settings,
+    ) {}
 
     /** Returns the count of NCRs advanced this run. */
     public function run(): int
@@ -52,7 +48,7 @@ class NcrEscalationService
             $sev = $ncr->severity instanceof NcrSeverity
                 ? $ncr->severity->value
                 : (string) $ncr->severity;
-            $hoursDue = self::SLA_HOURS_BY_SEVERITY[$sev] ?? 72;
+            $hoursDue = $this->settings->requiredInt("quality.ncr.sla_{$sev}_hours", 1);
             $clockStart = $ncr->last_escalated_at ?: $ncr->created_at;
             if (! $clockStart instanceof Carbon) {
                 $clockStart = Carbon::parse((string) $clockStart);

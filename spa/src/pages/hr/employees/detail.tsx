@@ -94,10 +94,12 @@ export default function EmployeeDetailPage() {
         }
       />
 
-      {/* U4 — Onboarding stepper. Above tabs so HR sees it on every visit. */}
-      <div className="px-5 pt-3">
-        <OnboardingStepper employeeId={id} />
-      </div>
+      {/* Onboarding is an HR workflow, not part of a department-scoped manager view. */}
+      {can('hr.employees.edit') && (
+        <div className="px-5 pt-3">
+          <OnboardingStepper employeeId={id} />
+        </div>
+      )}
 
       {/* Tabs — accessible tab pattern with cursor-pointer and cn() */}
       <Tabs
@@ -508,6 +510,7 @@ function PropertyTab({ employee }: { employee: any }) {
           <tr className={theadTrCls}>
             <Th>Item</Th>
             <Th align="right">Qty</Th>
+            <Th align="right">Replacement value</Th>
             <Th>Issued</Th>
             <Th>Returned</Th>
             <Th>Status</Th>
@@ -518,6 +521,7 @@ function PropertyTab({ employee }: { employee: any }) {
             <tr key={p.id} className={trCls}>
               <Td>{p.item_name}</Td>
               <Td align="right" mono>{p.quantity}</Td>
+              <Td align="right" mono>{formatPeso(p.replacement_total ?? 0)}</Td>
               <Td mono>{formatDate(p.date_issued)}</Td>
               <Td mono>{p.date_returned ? formatDate(p.date_returned) : '—'}</Td>
               <Td><Chip variant={chipVariantForStatus(p.status)}>{p.status}</Chip></Td>

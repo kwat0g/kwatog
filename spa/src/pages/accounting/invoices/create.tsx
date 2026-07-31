@@ -10,6 +10,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { customersApi } from '@/api/accounting/customers';
 import { accountsApi } from '@/api/accounting/accounts';
 import { invoicesApi } from '@/api/accounting/invoices';
+import { businessPoliciesApi } from '@/api/businessPolicies';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -55,6 +56,7 @@ export default function CreateInvoicePage() {
     queryKey: ['accounting', 'accounts', 'revenue'],
     queryFn: () => accountsApi.list({ per_page: 200, type: 'revenue', is_active: true }),
   });
+  const { data: policies } = useQuery({ queryKey: ['business-policies'], queryFn: businessPoliciesApi.get });
   const customers = customersResp?.data ?? [];
   const accounts = accountsResp?.data ?? [];
 
@@ -73,9 +75,9 @@ export default function CreateInvoicePage() {
   const totals = useMemo(() => {
     let subtotal = 0;
     for (const it of items) subtotal += (Number(it.quantity) || 0) * (Number(it.unit_price) || 0);
-    const vat = isVatable ? subtotal * 0.12 : 0;
+    const vat = isVatable ? subtotal * Number(policies?.vat_rate ?? 0) : 0;
     return { subtotal: subtotal.toFixed(2), vat: vat.toFixed(2), total: (subtotal + vat).toFixed(2) };
-  }, [items, isVatable]);
+  }, [items, isVatable, policies?.vat_rate]);
 
   const mutation = useMutation({
     mutationFn: (d: FormValues) => invoicesApi.create({
@@ -118,7 +120,7 @@ export default function CreateInvoicePage() {
             </Select>
             <Input label="Date" type="date" required {...register('date')} error={errors.date?.message} />
             <Input label="Due date" type="date" {...register('due_date')} error={errors.due_date?.message} />
-            <div className="flex items-end col-span-2"><Switch label="VAT-able (12%)" {...register('is_vatable')} /></div>
+            <div className="flex items-end col-span-2"><Switch label={`VAT-able (${(Number(policies?.vat_rate ?? 0) * 100).toLocaleString()}%)`} {...register('is_vatable')} /></div>
             <div />
             <Textarea label="Remarks" rows={2} className="col-span-3" {...register('remarks')} error={errors.remarks?.message} />
           </div>

@@ -1,4 +1,4 @@
-import { useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Pencil } from 'lucide-react';
 import { productsApi } from '@/api/crm/products';
@@ -103,11 +103,10 @@ export default function ProductDetailPage() {
           </Panel>
 
           <Panel title="Bill of materials">
-            {data.has_bom ? (
+            {data.active_bom ? (
               <div className="text-sm text-muted">
-                An active BOM exists for this product.{' '}
-                <a href={`/mrp/boms/${data.id}`} className="text-accent hover:underline">View BOM</a>{' '}
-                <span className="text-muted">(Sprint 6 Task 49)</span>
+                Active BOM version {data.active_bom.version}.{' '}
+                <Link to={`/mrp/boms/${data.active_bom.id}`} className="text-accent hover:underline">View BOM →</Link>
               </div>
             ) : (
               <div className="text-sm text-muted">No BOM yet — material planning is unavailable until one is created.</div>
@@ -118,25 +117,26 @@ export default function ProductDetailPage() {
         <div className="space-y-4">
           <Panel title="Quick links">
             <div className="space-y-2 text-sm">
-              <a
-                href={`/crm/sales-orders?product_id=${data.id}`}
+              <Link
+                to={`/crm/sales-orders?product_id=${data.id}`}
                 className="block text-accent hover:underline"
               >
                 Recent sales orders →
-              </a>
-              <a
-                href={`/crm/price-agreements?product_id=${data.id}`}
+              </Link>
+              <Link
+                to={`/crm/price-agreements?product_id=${data.id}`}
                 className="block text-accent hover:underline"
               >
                 Price agreements →
-              </a>
-              <a
-                href={`/quality/inspection-specs/${data.id}`}
-                className="block text-muted"
-                aria-disabled
+              </Link>
+              <Link
+                to={`/quality/inspection-specs/${data.id}`}
+                className="block text-accent hover:underline"
               >
-                Inspection spec (Sprint 7)
-              </a>
+                {data.inspection_spec
+                  ? `Inspection spec v${data.inspection_spec.version} →`
+                  : 'Create inspection spec →'}
+              </Link>
             </div>
           </Panel>
         </div>

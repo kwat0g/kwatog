@@ -15,7 +15,6 @@ use App\Modules\Production\Models\WorkOrder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 /**
  * Sprint 6 — Task 53. MRP II capacity planner.

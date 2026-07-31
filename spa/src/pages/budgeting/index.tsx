@@ -107,7 +107,7 @@ export default function BudgetOverviewPage() {
                 {formatPeso(overview.total_spent + overview.total_committed)} / {formatPeso(overview.total_allocated)}
               </span>
             </div>
-            <div className="h-3 bg-muted rounded-full overflow-hidden">
+            <div className="h-3 bg-subtle rounded-full overflow-hidden">
               <div
                 className={cn(
                   'h-full rounded-full transition-all duration-500',

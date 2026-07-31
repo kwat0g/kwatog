@@ -7,6 +7,7 @@ namespace Tests\Unit;
 use App\Modules\Attendance\Services\DTRComputationService;
 use App\Modules\Attendance\Services\HolidayService;
 use App\Modules\Attendance\Services\ShiftAssignmentService;
+use App\Common\Services\SettingsService;
 use Mockery;
 use PHPUnit\Framework\TestCase;
 
@@ -21,9 +22,26 @@ class DTRComputationServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $settings = Mockery::mock(SettingsService::class);
+        $settings->shouldReceive('requiredInt')->andReturnUsing(fn (string $key) => match ($key) {
+            'attendance.tardiness.maximum_minutes' => 480,
+            'attendance.ot.minimum_minutes' => 30,
+            'attendance.ot.maximum_minutes' => 240,
+            'attendance.night_band_start_hour' => 22,
+            'attendance.night_band_end_hour' => 6,
+        });
+        $settings->shouldReceive('requiredFloat')->andReturnUsing(fn (string $key) => match ($key) {
+            'payroll.day_rate.regular_holiday_rest_day' => 2.60,
+            'payroll.day_rate.regular_holiday' => 2.00,
+            'payroll.day_rate.special_holiday_rest_day' => 1.50,
+            'payroll.day_rate.special_holiday' => 1.30,
+            'payroll.day_rate.rest_day' => 1.30,
+            'attendance.half_day_work_ratio' => 0.50,
+        });
         $this->svc = new DTRComputationService(
             Mockery::mock(ShiftAssignmentService::class),
             Mockery::mock(HolidayService::class),
+            $settings,
         );
     }
 

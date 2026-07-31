@@ -483,9 +483,16 @@ class PayrollCalculatorServiceTest extends TestCase
      *  B) A negative (overpayment) adjustment decreases net pay.
      *  C) Two adjustments in the same period are both applied and their signed
      *     total accumulates correctly on adjustment_amount.
-     *  D) Recompute does NOT double-apply: once an adjustment has applied_at set
-     *     (status = Applied) it is skipped by whereNull('applied_at'), so the
-     *     recomputed payroll shows adjustment_amount = 0.00.
+     *  D) Recompute applies each adjustment EXACTLY ONCE — not zero times and
+     *     not twice. The replaced payroll's adjustments are released back to
+     *     Approved and then re-applied to the new row, so adjustment_amount is
+     *     unchanged across a recompute.
+     *
+     *     This assertion previously expected adjustment_amount = 0.00 after a
+     *     recompute, which described a bug rather than the requirement: the
+     *     adjustment stayed flagged Applied while its money silently vanished
+     *     from the employee's payslip. "Do not double-apply" is satisfied by
+     *     applying once, which is what is asserted now.
      */
     public function test_approved_adjustments_affect_net_and_recompute_does_not_double_apply(): void
     {
@@ -544,17 +551,23 @@ class PayrollCalculatorServiceTest extends TestCase
         $this->assertSame(PayrollAdjustmentStatus::Applied, $overpay->status);
         $this->assertNotNull($overpay->applied_at);
 
-        // (D): Recompute period2 — adjustments already applied, should NOT be picked up again.
+        // (D): Recompute period2 — each adjustment applies exactly once, so the
+        // signed total is identical to the first run. Not doubled (+400) and not
+        // dropped (0.00).
         $recomputed = $this->calc->computeForEmployee($period2, $emp);
 
-        $this->assertSame('0.00', $recomputed->adjustment_amount,
-            'Recompute must not double-apply already-applied adjustments');
-        // Net on recomputed = gross - total_deductions + 0 adj
-        $expectedNetRecomputed = \App\Common\Support\Money::sub(
-            $recomputed->gross_pay,
-            $recomputed->total_deductions,
+        $this->assertSame('200.00', $recomputed->adjustment_amount,
+            'Recompute must apply each adjustment exactly once — neither doubled nor dropped');
+        $expectedNetRecomputed = \App\Common\Support\Money::add(
+            \App\Common\Support\Money::sub($recomputed->gross_pay, $recomputed->total_deductions),
+            '200.00',
         );
         $this->assertSame($expectedNetRecomputed, $recomputed->net_pay);
+
+        // Both adjustments are re-linked to the replacement payroll row, so the
+        // audit trail points at the row that actually paid them.
+        $this->assertSame($recomputed->id, $underpay->fresh()->applied_to_payroll_id);
+        $this->assertSame($recomputed->id, $overpay->fresh()->applied_to_payroll_id);
     }
 
     /**

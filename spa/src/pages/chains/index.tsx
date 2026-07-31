@@ -313,11 +313,30 @@ function ChainDetail({ id, onClear }: { id: string; onClear: () => void }) {
                     chip: { variant: wo.status === 'completed' || wo.status === 'closed' ? 'success' as const : wo.status === 'in_progress' ? 'info' as const : wo.status === 'paused' ? 'warning' as const : wo.status === 'cancelled' ? 'danger' as const : 'neutral' as const, text: wo.status.replace('_', ' ') },
                   })),
                 }] : []),
-                { label: 'Quality', items: [{ id: 'Inspections', meta: 'Incoming · in-process · outgoing AQL 0.65' }] },
-                { label: 'Fulfilment', items: [
-                  { id: 'Deliveries', meta: 'Delivery + customer confirm' },
-                  { id: 'Invoice', meta: 'Auto on delivery confirm' },
-                ] },
+                ...(so.inspections && so.inspections.length > 0 ? [{
+                  label: 'Quality inspections',
+                  items: so.inspections.map((inspection) => ({
+                    id: inspection.inspection_number,
+                    href: `/quality/inspections/${inspection.id}`,
+                    meta: `${inspection.stage.replace('_', ' ')} · ${inspection.status.replace('_', ' ')}`,
+                  })),
+                }] : []),
+                ...(so.deliveries && so.deliveries.length > 0 ? [{
+                  label: 'Deliveries',
+                  items: so.deliveries.map((delivery) => ({
+                    id: delivery.delivery_number,
+                    href: `/supply-chain/deliveries/${delivery.id}`,
+                    meta: `${delivery.status.replace('_', ' ')}${delivery.scheduled_date ? ` · ${delivery.scheduled_date}` : ''}`,
+                  })),
+                }] : []),
+                ...(so.invoices && so.invoices.length > 0 ? [{
+                  label: 'Invoices',
+                  items: so.invoices.map((invoice) => ({
+                    id: invoice.invoice_number,
+                    href: `/accounting/invoices/${invoice.id}`,
+                    meta: `${invoice.status.replace('_', ' ')} · ${peso(invoice.total_amount)}`,
+                  })),
+                }] : []),
               ]}
             />
           </Panel>

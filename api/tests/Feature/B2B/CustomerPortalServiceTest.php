@@ -4,16 +4,19 @@ declare(strict_types=1);
 
 namespace Tests\Feature\B2B;
 
-use App\Modules\Auth\Models\User;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
+use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\B2B\Models\DeliverySchedule;
 use App\Modules\CRM\Models\CustomerComplaint;
 use App\Modules\CRM\Models\SalesOrder;
+use App\Modules\SupplyChain\Models\Delivery;
+use App\Modules\SupplyChain\Models\DeliveryProof;
 use Database\Seeders\RolePermissionSeeder;
 use Database\Seeders\SettingsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -34,22 +37,23 @@ class CustomerPortalServiceTest extends TestCase
 
     /* ─── Helpers ────────────────────────────────────────────────── */
 
-    private function makePortalUser(Customer $customer = null): CustomerPortalUser
+    private function makePortalUser(?Customer $customer = null): CustomerPortalUser
     {
         $customer ??= Customer::factory()->create();
 
         return CustomerPortalUser::create([
             'customer_id' => $customer->id,
-            'name'        => 'CustUser-' . substr(uniqid(), -5),
-            'email'       => 'cu-' . uniqid() . '@t.test',
-            'password'    => bcrypt('Password1!'),
-            'is_active'   => true,
+            'name' => 'CustUser-'.substr(uniqid(), -5),
+            'email' => 'cu-'.uniqid().'@t.test',
+            'password' => bcrypt('Password1!'),
+            'is_active' => true,
         ]);
     }
 
     private function actAs(CustomerPortalUser $user): self
     {
         Sanctum::actingAs($user, ['*'], 'customer_portal');
+
         return $this;
     }
 
@@ -175,6 +179,59 @@ class CustomerPortalServiceTest extends TestCase
         $response->assertStatus(403);
     }
 
+    public function test_invoice_detail_uses_the_collections_contract(): void
+    {
+        $customer = Customer::factory()->create();
+        $user = $this->makePortalUser($customer);
+        $invoice = Invoice::factory()->create(['customer_id' => $customer->id]);
+
+        $this->actAs($user)
+            ->getJson("/api/v1/b2b/customer/invoices/{$invoice->hash_id}")
+            ->assertOk()
+            ->assertJsonPath('data.id', $invoice->hash_id)
+            ->assertJsonPath('data.collections', []);
+    }
+
+    public function test_delivery_list_detail_and_proof_use_portal_safe_hash_ids(): void
+    {
+        Storage::fake('local');
+        $customer = Customer::factory()->create();
+        $user = $this->makePortalUser($customer);
+        $creator = User::factory()->create();
+        $order = SalesOrder::factory()->create(['customer_id' => $customer->id]);
+        $delivery = Delivery::query()->create([
+            'delivery_number' => 'DLV-PORTAL-001',
+            'sales_order_id' => $order->id,
+            'status' => 'delivered',
+            'scheduled_date' => today(),
+            'delivered_at' => now(),
+            'created_by' => $creator->id,
+        ]);
+        $path = 'delivery-proofs/customer-portal.gif';
+        Storage::disk('local')->put($path, 'GIF89a');
+        $proof = DeliveryProof::query()->create([
+            'delivery_id' => $delivery->id,
+            'proof_type' => 'signed_dr',
+            'file_name' => 'signed.gif',
+            'file_path' => $path,
+            'file_size' => 6,
+            'mime_type' => 'image/gif',
+            'uploaded_by' => $creator->id,
+        ]);
+
+        $this->actAs($user);
+        $this->getJson('/api/v1/b2b/customer/deliveries')
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $delivery->hash_id);
+        $this->getJson("/api/v1/b2b/customer/deliveries/{$delivery->hash_id}")
+            ->assertOk()
+            ->assertJsonPath('data.id', $delivery->hash_id)
+            ->assertJsonPath('data.proofs.0.id', $proof->hash_id);
+        $this->get("/api/v1/b2b/customer/deliveries/{$delivery->hash_id}/proofs/{$proof->hash_id}/view")
+            ->assertOk()
+            ->assertHeader('content-type', 'image/gif');
+    }
+
     /* ─── Complaints ─────────────────────────────────────────────── */
 
     public function test_complaints_scoped_to_own_customer(): void
@@ -184,27 +241,27 @@ class CustomerPortalServiceTest extends TestCase
         $internalUser = User::factory()->create();
 
         CustomerComplaint::create([
-            'complaint_number' => 'CC-T-' . substr(uniqid(), -5),
-            'customer_id'      => $customer->id,
-            'severity'         => 'low',
-            'description'      => 'Test complaint A',
+            'complaint_number' => 'CC-T-'.substr(uniqid(), -5),
+            'customer_id' => $customer->id,
+            'severity' => 'low',
+            'description' => 'Test complaint A',
             'affected_quantity' => 5,
-            'status'           => 'open',
-            'received_date'    => now(),
-            'created_by'       => $internalUser->id,
+            'status' => 'open',
+            'received_date' => now(),
+            'created_by' => $internalUser->id,
         ]);
 
         // Other customer's complaint — must NOT appear.
         $other = Customer::factory()->create();
         CustomerComplaint::create([
-            'complaint_number' => 'CC-T-' . substr(uniqid(), -5),
-            'customer_id'      => $other->id,
-            'severity'         => 'high',
-            'description'      => 'Other complaint',
+            'complaint_number' => 'CC-T-'.substr(uniqid(), -5),
+            'customer_id' => $other->id,
+            'severity' => 'high',
+            'description' => 'Other complaint',
             'affected_quantity' => 1,
-            'status'           => 'open',
-            'received_date'    => now(),
-            'created_by'       => $internalUser->id,
+            'status' => 'open',
+            'received_date' => now(),
+            'created_by' => $internalUser->id,
         ]);
 
         $this->actAs($user);
@@ -223,8 +280,8 @@ class CustomerPortalServiceTest extends TestCase
         $this->actAs($user);
 
         $response = $this->postJson('/api/v1/b2b/customer/complaints', [
-            'severity'          => 'critical',
-            'description'       => 'Parts arrived damaged',
+            'severity' => 'critical',
+            'description' => 'Parts arrived damaged',
             'affected_quantity' => 10,
         ]);
 
@@ -245,18 +302,18 @@ class CustomerPortalServiceTest extends TestCase
 
         DeliverySchedule::create([
             'customer_id' => $customer->id,
-            'month'       => '2026-07',
-            'status'      => 'submitted',
-            'lines'       => [['product' => 'A', 'qty' => 100]],
+            'month' => '2026-07',
+            'status' => 'submitted',
+            'lines' => [['product' => 'A', 'qty' => 100]],
         ]);
 
         // Other customer's schedule — must NOT appear.
         $other = Customer::factory()->create();
         DeliverySchedule::create([
             'customer_id' => $other->id,
-            'month'       => '2026-07',
-            'status'      => 'submitted',
-            'lines'       => [['product' => 'B', 'qty' => 200]],
+            'month' => '2026-07',
+            'status' => 'submitted',
+            'lines' => [['product' => 'B', 'qty' => 200]],
         ]);
 
         $this->actAs($user);

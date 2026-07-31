@@ -32,6 +32,7 @@ class StoreShiftRequest extends FormRequest
             'is_extended'    => ['boolean'],
             'auto_ot_hours'  => ['nullable', 'numeric', 'min:0', 'max:8'],
             'is_active'      => ['boolean'],
+            'is_default'     => ['boolean'],
         ];
     }
 

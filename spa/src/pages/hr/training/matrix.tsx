@@ -18,7 +18,7 @@ import { LinkButton } from '@/components/ui/LinkButton';
 const STATUS_COLORS: Record<TrainingMatrixCellStatus, string> = {
   trained: 'bg-success-bg border-success',
   expired: 'bg-danger-bg border-danger',
-  gap:     'bg-muted border-default',
+  gap:     'bg-subtle border-default',
 };
 
 const STATUS_LABELS: Record<TrainingMatrixCellStatus, string> = {
@@ -227,7 +227,7 @@ export default function TrainingMatrixPage() {
                           aria-label={`${data.skills[idx].name}: ${STATUS_LABELS[cell.status]}`}
                         >
                           {cell.level && (
-                            <span className="text-[9px] font-mono leading-7 text-primary/70">
+                            <span className="text-2xs font-mono leading-7 text-primary/70">
                               {cell.level.charAt(0).toUpperCase()}
                             </span>
                           )}
@@ -251,7 +251,7 @@ export default function TrainingMatrixPage() {
               Expired
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-4 h-4 rounded border bg-muted border-default" />
+              <span className="w-4 h-4 rounded border bg-subtle border-default" />
               Gap
             </div>
             <div className="text-muted ml-2">

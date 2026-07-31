@@ -37,6 +37,15 @@ export interface SavedLayoutWidget {
   h?: number;
 }
 
+export interface DashboardWidgetSummary {
+  key: string;
+  value: string | null;
+  kind: 'number' | 'decimal' | 'currency' | 'percent' | 'hours' | 'date';
+  helper: string | null;
+  available: boolean;
+  updated_at: string;
+}
+
 export const dashboardLayoutApi = {
   widgets: () =>
     client
@@ -46,6 +55,13 @@ export const dashboardLayoutApi = {
   layout: () =>
     client
       .get<ApiSuccess<DashboardLayoutItem[]>>('/dashboard/layout')
+      .then((r) => r.data.data),
+
+  data: (keys: string[]) =>
+    client
+      .get<ApiSuccess<Record<string, DashboardWidgetSummary>>>('/dashboard/widget-data', {
+        params: { keys },
+      })
       .then((r) => r.data.data),
 
   save: (widgets: SavedLayoutWidget[]) =>

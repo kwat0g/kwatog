@@ -24,7 +24,12 @@ class StoreDeliveryScheduleRequest extends FormRequest
         }
 
         return [
-            'purchase_order_id' => ['required', function (string $attr, mixed $val, \Closure $fail) use ($user) {
+            // 'string' before the closure: an array payload would otherwise reach
+            // HashIdFilter::decode's (string) cast, and Laravel's error handler
+            // rethrows the "Array to string conversion" warning as a 500. Because
+            // 'required' is an implicit rule, a failed 'string' stops the chain
+            // before the closure runs.
+            'purchase_order_id' => ['required', 'string', function (string $attr, mixed $val, \Closure $fail) use ($user) {
                 $decoded = HashIdFilter::decode($val, PurchaseOrder::class);
                 $po = $decoded ? PurchaseOrder::find($decoded) : null;
                 if (! $po || $po->vendor_id !== $user->vendor_id) {

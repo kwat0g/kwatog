@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\Money;
 use App\Modules\Accounting\Models\Account;
@@ -16,7 +17,6 @@ use App\Modules\Inventory\Services\StockMovementService;
 use App\Modules\Inventory\Support\StockMovementInput;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 /**
  * REC-05 — go-live opening balances.
@@ -50,7 +50,7 @@ class OpeningBalanceService
     {
         $lines = $data['lines'] ?? [];
         if (count($lines) < 2) {
-            throw new RuntimeException('Opening balances require at least two account lines.');
+            throw new BusinessRuleException('Opening balances require at least two account lines.');
         }
 
         // Pre-check the legacy TB nets to zero, with a clear message. (create()
@@ -62,7 +62,7 @@ class OpeningBalanceService
             $credit = Money::add($credit, Money::round2((string) ($l['credit'] ?? '0')));
         }
         if (Money::cmp($debit, $credit) !== 0) {
-            throw new RuntimeException("Legacy trial balance is unbalanced: debit {$debit} != credit {$credit}. Fix the source TB before loading.");
+            throw new BusinessRuleException("Legacy trial balance is unbalanced: debit {$debit} != credit {$credit}. Fix the source TB before loading.");
         }
 
         return DB::transaction(function () use ($data, $lines, $by) {
@@ -91,7 +91,7 @@ class OpeningBalanceService
             ? (int) $locationId
             : HashIdFilter::decode((string) $locationId, WarehouseLocation::class);
         if (! $locId || ! WarehouseLocation::query()->whereKey($locId)->exists()) {
-            throw new RuntimeException('Invalid warehouse location for opening stock.');
+            throw new BusinessRuleException('Invalid warehouse location for opening stock.');
         }
 
         return DB::transaction(function () use ($rows, $locId, $by) {
@@ -103,13 +103,13 @@ class OpeningBalanceService
                     ? (int) $row['item_id']
                     : HashIdFilter::decode((string) ($row['item_id'] ?? ''), \App\Modules\Inventory\Models\Item::class);
                 if (! $itemId) {
-                    throw new RuntimeException('Invalid item in opening-stock row.');
+                    throw new BusinessRuleException('Invalid item in opening-stock row.');
                 }
 
                 $qty  = (string) $row['quantity'];
                 $cost = (string) $row['unit_cost'];
                 if (bccomp($qty, '0', 3) <= 0) {
-                    throw new RuntimeException("Opening-stock quantity must be positive for item {$itemId}.");
+                    throw new BusinessRuleException("Opening-stock quantity must be positive for item {$itemId}.");
                 }
 
                 $this->stock->move(new StockMovementInput(

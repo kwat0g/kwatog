@@ -16,7 +16,9 @@ import { BasePage } from './pages/BasePage';
 test.describe('Error pages', () => {
 
   test('404 not-found page renders', async ({ page }) => {
-    await loginAs(page, 'employee', '/this-route-does-not-exist-xyz');
+    // The catch-all route is intentionally public and therefore never calls
+    // the authenticated-user bootstrap used by loginAs().
+    await page.goto('/this-route-does-not-exist-xyz');
     const bp = new BasePage(page);
     await bp.expectNotFound();
   });
@@ -145,12 +147,11 @@ test.describe('HashID obfuscation', () => {
     });
 
     await loginAs(page, 'hr', '/hr/employees/1');
-    await page.waitForTimeout(1500);
     // The page should NOT redirect to login (it's still an authenticated page)
     await expect(page).not.toHaveURL(/\/login/);
-    // The body should render SOMETHING (not a blank crash)
-    const bodyLen = (await page.textContent('body')).length;
-    expect(bodyLen).toBeGreaterThan(20);
+    // Wait for the actual query error state rather than inspecting a lazy-load
+    // fallback whose text length varies with bundle timing.
+    await expect(page.getByRole('heading', { name: 'Employee not found' })).toBeVisible();
   });
 });
 

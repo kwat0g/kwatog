@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Maintenance\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\SettingsService;
 use App\Modules\Maintenance\Enums\MaintenancePriority;
 use App\Modules\Maintenance\Enums\MaintenanceWorkOrderType;
 use App\Modules\Maintenance\Models\MachineConditionReading;
@@ -18,31 +20,17 @@ use Illuminate\Support\Facades\Log;
  * auto-generates corrective maintenance work orders when readings indicate
  * impending failure.
  *
- * Thresholds are hard-coded per metric for the MVP; future iterations can
- * make them machine-specific and editable via settings.
  */
 class PredictiveMaintenanceService
 {
-    /**
-     * Default thresholds per metric. When a reading exceeds (or drops below)
-     * these bounds a corrective WO is triggered.
-     */
-    private const THRESHOLDS = [
-        'temperature' => ['min' => null, 'max' => 85.0],   // °C — normal ~40-60
-        'vibration'   => ['min' => null, 'max' => 7.1],    // mm/s ISO 10816 severe
-        'pressure'    => ['min' => 2.0,  'max' => 12.0],  // bar hydraulic
-        'current'     => ['min' => null, 'max' => 150.0], // % of rated draw
-        'oil_quality' => ['min' => 70.0, 'max' => null],  // % cleanliness index
-    ];
+    private const METRICS = ['temperature', 'vibration', 'pressure', 'current', 'oil_quality'];
 
-    /**
-     * Number of consecutive threshold breaches required before a WO is
-     * materialised (prevents false positives from single bad readings).
-     */
-    private const BREACH_WINDOW = 3;
+    /** @var array{thresholds: array<string, array{min:?float,max:?float}>, breach_window:int}|null */
+    private ?array $configuration = null;
 
     public function __construct(
         private readonly MaintenanceWorkOrderService $workOrders,
+        private readonly SettingsService $settings,
     ) {}
 
     /**
@@ -109,7 +97,7 @@ class PredictiveMaintenanceService
             ->get();
 
         foreach ($machines as $machine) {
-            foreach (array_keys(self::THRESHOLDS) as $metric) {
+            foreach (self::METRICS as $metric) {
                 $latest = $this->latestReading((int) $machine->id, $metric);
                 if ($latest && $this->isBreach($metric, (float) $latest->value)) {
                     if ($this->shouldTriggerWorkOrder((int) $machine->id, $metric)) {
@@ -171,7 +159,9 @@ class PredictiveMaintenanceService
     public function machineHealthSnapshot(int $machineId): array
     {
         $out = [];
-        foreach (array_keys(self::THRESHOLDS) as $metric) {
+        $configuration = $this->configuration();
+        foreach (self::METRICS as $metric) {
+            $threshold = $configuration['thresholds'][$metric];
             $r = $this->latestReading($machineId, $metric);
             if (! $r) {
                 $out[] = [
@@ -180,6 +170,9 @@ class PredictiveMaintenanceService
                     'unit'         => self::defaultUnit($metric),
                     'recorded_at'  => null,
                     'status'       => 'ok',
+                    'min_threshold'=> $threshold['min'],
+                    'max_threshold'=> $threshold['max'],
+                    'breach_window'=> $configuration['breach_window'],
                 ];
                 continue;
             }
@@ -190,7 +183,10 @@ class PredictiveMaintenanceService
                 'value'        => (float) $r->value,
                 'unit'         => $r->unit,
                 'recorded_at'  => $r->recorded_at->toISOString(),
-                'status'       => $breach && $consecutive >= self::BREACH_WINDOW ? 'critical' : ($breach ? 'warning' : 'ok'),
+                'status'       => $breach && $consecutive >= $configuration['breach_window'] ? 'critical' : ($breach ? 'warning' : 'ok'),
+                'min_threshold'=> $threshold['min'],
+                'max_threshold'=> $threshold['max'],
+                'breach_window'=> $configuration['breach_window'],
             ];
         }
         return $out;
@@ -198,7 +194,7 @@ class PredictiveMaintenanceService
 
     private function isBreach(string $metric, float $value): bool
     {
-        $cfg = self::THRESHOLDS[$metric] ?? null;
+        $cfg = $this->configuration()['thresholds'][$metric] ?? null;
         if (! $cfg) return false;
         if ($cfg['max'] !== null && $value > $cfg['max']) return true;
         if ($cfg['min'] !== null && $value < $cfg['min']) return true;
@@ -207,7 +203,7 @@ class PredictiveMaintenanceService
 
     private function shouldTriggerWorkOrder(int $machineId, string $metric): bool
     {
-        return $this->consecutiveBreachCount($machineId, $metric) >= self::BREACH_WINDOW
+        return $this->consecutiveBreachCount($machineId, $metric) >= $this->configuration()['breach_window']
             && ! $this->hasOpenCorrectiveWoForMachine($machineId, $metric);
     }
 
@@ -217,7 +213,7 @@ class PredictiveMaintenanceService
             ->where('machine_id', $machineId)
             ->where('metric', $metric)
             ->orderByDesc('recorded_at')
-            ->limit(self::BREACH_WINDOW * 2)
+            ->limit($this->configuration()['breach_window'] * 2)
             ->get();
 
         $count = 0;
@@ -270,5 +266,36 @@ class PredictiveMaintenanceService
             'oil_quality' => 'percent',
             default       => 'unit',
         };
+    }
+
+    /** @return array{thresholds: array<string, array{min:?float,max:?float}>, breach_window:int} */
+    private function configuration(): array
+    {
+        if ($this->configuration !== null) {
+            return $this->configuration;
+        }
+
+        $values = $this->settings->getGroup('maintenance');
+        $thresholds = [];
+        foreach (self::METRICS as $metric) {
+            $minKey = "maintenance.predictive.{$metric}.min";
+            $maxKey = "maintenance.predictive.{$metric}.max";
+            $min = array_key_exists($minKey, $values) ? (float) $values[$minKey] : null;
+            $max = array_key_exists($maxKey, $values) ? (float) $values[$maxKey] : null;
+            if ($min === null && $max === null) {
+                throw new BusinessRuleException("No predictive-maintenance threshold is configured for {$metric}.");
+            }
+            if ($min !== null && $max !== null && $min >= $max) {
+                throw new BusinessRuleException("Predictive-maintenance thresholds for {$metric} are invalid.");
+            }
+            $thresholds[$metric] = ['min' => $min, 'max' => $max];
+        }
+
+        $window = (int) ($values['maintenance.predictive.breach_window'] ?? 0);
+        if ($window < 1) {
+            throw new BusinessRuleException('Predictive-maintenance breach window must be at least one.');
+        }
+
+        return $this->configuration = ['thresholds' => $thresholds, 'breach_window' => $window];
     }
 }

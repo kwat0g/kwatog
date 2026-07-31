@@ -33,6 +33,15 @@ export interface SpcCapabilityItem {
   lsl: number;
 }
 
+export interface InspectionSummary {
+  from: string;
+  to: string;
+  passed: number;
+  failed: number;
+  total: number;
+  pass_rate: number;
+}
+
 export const analyticsApi = {
   defectPareto: (filters?: ParetoFilters) =>
     client.get<{ data: ParetoResult }>('/quality/analytics/defect-pareto', { params: filters }).then((r) => r.data.data),
@@ -42,9 +51,10 @@ export const analyticsApi = {
         params: { ...filters, parameter_name },
       })
       .then((r) => r.data.data),
+  inspectionSummary: (filters?: ParetoFilters) =>
+    client.get<{ data: InspectionSummary }>('/quality/analytics/inspection-summary', { params: filters }).then((r) => r.data.data),
   spcForSpec: (specId: string) =>
     client
       .get<{ data: Record<string, SpcCapabilityItem> }>(`/quality/inspection-specs/${specId}/spc`)
       .then((r) => r.data.data),
 };
-

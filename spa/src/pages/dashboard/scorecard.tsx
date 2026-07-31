@@ -76,7 +76,7 @@ export default function ScorecardPage() {
 
   const scorecardQ = useQuery({
     queryKey: ['kpi', 'scorecard', year, month],
-    queryFn: () => kpiApi.scorecard(year, month).then((r) => r.data.data),
+    queryFn: () => kpiApi.scorecard(year, month),
     placeholderData: (prev) => prev,
   });
 
@@ -163,7 +163,7 @@ function KpiCard({ item }: { item: KpiScorecardItem }) {
   // Fetch trend data for the sparkline
   const trendQ = useQuery({
     queryKey: ['kpi', 'trend', def.code],
-    queryFn: () => kpiApi.trend(def.code, 6).then((r) => r.data.data),
+    queryFn: () => kpiApi.trend(def.code, 6),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -199,7 +199,7 @@ function KpiCard({ item }: { item: KpiScorecardItem }) {
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 mb-2">
             <span
-              className={`inline-block h-2 w-2 rounded-full shrink-0 ${STATUS_DOT[status] ?? 'bg-muted'}`}
+              className={`inline-block h-2 w-2 rounded-full shrink-0 ${STATUS_DOT[status] ?? 'bg-strong'}`}
               title={status.replace(/_/g, ' ')}
               aria-label={`Status: ${status.replace(/_/g, ' ')}`}
             />

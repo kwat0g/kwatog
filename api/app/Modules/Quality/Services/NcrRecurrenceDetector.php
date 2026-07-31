@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Quality\Services;
 
 use App\Common\Services\NotificationService;
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Quality\Events\NcrRecurrenceLinked;
 use App\Modules\Quality\Models\NonConformanceReport;
@@ -22,9 +23,10 @@ use Illuminate\Support\Facades\Log;
  */
 class NcrRecurrenceDetector
 {
-    private const WINDOW_DAYS = 30;
-
-    public function __construct(private readonly NotificationService $notifications) {}
+    public function __construct(
+        private readonly NotificationService $notifications,
+        private readonly SettingsService $settings,
+    ) {}
 
     public function scan(NonConformanceReport $ncr): void
     {
@@ -37,10 +39,14 @@ class NcrRecurrenceDetector
                 return;
             }
 
+            $windowDays = $this->settings->get('quality.ncr.recurrence_window_days');
+            if (! is_numeric($windowDays) || (int) $windowDays <= 0) {
+                throw new \App\Common\Exceptions\BusinessRuleException('Required business setting quality.ncr.recurrence_window_days is missing or invalid.');
+            }
             $prior = NonConformanceReport::query()
                 ->where('product_id', $ncr->product_id)
                 ->where('id', '!=', $ncr->id)
-                ->where('created_at', '>=', now()->subDays(self::WINDOW_DAYS))
+                ->where('created_at', '>=', now()->subDays((int) $windowDays))
                 ->orderByDesc('created_at')
                 ->get(['id', 'defect_description'])
                 ->first(fn ($p) => $this->signature((string) $p->defect_description) === $signature);
@@ -69,7 +75,7 @@ class NcrRecurrenceDetector
             foreach ($recipients as $user) {
                 $this->notifications->send($user, 'ncr.recurrence', [
                     'title'   => 'Recurring NCR detected',
-                    'message' => "NCR {$ncr->ncr_number} appears to recur a prior NCR within the last 30 days. Review for systemic corrective action.",
+                    'message' => "NCR {$ncr->ncr_number} appears to recur a prior NCR within the last {$windowDays} days. Review for systemic corrective action.",
                     'link_to' => "/quality/ncrs/{$ncr->hash_id}",
                 ]);
             }

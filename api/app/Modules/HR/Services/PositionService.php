@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\HR\Models\Position;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 class PositionService
 {
@@ -57,7 +57,7 @@ class PositionService
     public function delete(Position $position): void
     {
         if ($position->employees()->exists()) {
-            throw new RuntimeException('Cannot delete position: employees assigned.');
+            throw new BusinessRuleException('Cannot delete position: employees assigned.');
         }
         $position->delete();
     }

@@ -17,8 +17,10 @@ class ApplyCreditNoteRequest extends FormRequest
     {
         return [
             'amount'     => ['required', 'numeric', 'gt:0'],
-            'invoice_id' => ['nullable'],
-            'bill_id'    => ['nullable'],
+            // Typed so an array payload can't reach CreditNoteService::decode(),
+            // whose (string) cast would TypeError into a 500. HashIDs resolved there.
+            'invoice_id' => ['nullable', 'string'],
+            'bill_id'    => ['nullable', 'string'],
         ];
     }
 }

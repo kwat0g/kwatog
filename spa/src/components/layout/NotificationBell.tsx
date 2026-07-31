@@ -14,6 +14,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { Bell } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Tooltip } from '@/components/ui/Tooltip';
@@ -103,7 +104,7 @@ export function NotificationBell() {
           <Bell size={14} />
           {unread > 0 && (
             <span
-              className="absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-accent text-accent-fg text-[10px] font-medium font-mono tabular-nums leading-none"
+              className="absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-accent text-accent-fg text-2xs font-medium font-mono tabular-nums leading-none"
               aria-hidden
             >
               {unread > 99 ? '99+' : unread}
@@ -130,7 +131,7 @@ export function NotificationBell() {
           </div>
 
           {items.length === 0 ? (
-            <div className="px-3 py-4 text-center text-sm text-muted">No notifications yet.</div>
+            <EmptyState size="compact" icon="bell-off" title="No notifications yet" />
           ) : (
             <ul className="max-h-96 overflow-y-auto divide-y divide-subtle">
               {items.map((n) => {

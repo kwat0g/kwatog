@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Assets\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Support\SearchOperator;
 use App\Modules\Accounting\Models\Account;
@@ -15,7 +16,6 @@ use App\Modules\Auth\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 /** Sprint 8 — Task 70. */
 class AssetService
@@ -75,7 +75,7 @@ class AssetService
     {
         return DB::transaction(function () use ($asset, $data) {
             if ($asset->status === AssetStatus::Disposed) {
-                throw new RuntimeException('Disposed assets are immutable.');
+                throw new BusinessRuleException('Disposed assets are immutable.');
             }
             $asset->fill(array_intersect_key($data, array_flip([
                 'name', 'description', 'department_id', 'location',
@@ -99,7 +99,7 @@ class AssetService
     public function dispose(Asset $asset, array $data, User $by): Asset
     {
         if ($asset->status === AssetStatus::Disposed) {
-            throw new RuntimeException('Asset already disposed.');
+            throw new BusinessRuleException('Asset already disposed.');
         }
         return DB::transaction(function () use ($asset, $data, $by) {
             $disposalAmount = (float) ($data['disposal_amount'] ?? 0);
@@ -149,10 +149,10 @@ class AssetService
     public function delete(Asset $asset): void
     {
         if ($asset->status !== AssetStatus::Active) {
-            throw new RuntimeException('Only active assets that have not been depreciated can be deleted.');
+            throw new BusinessRuleException('Only active assets that have not been depreciated can be deleted.');
         }
         if ($asset->depreciations()->exists()) {
-            throw new RuntimeException('Asset has depreciation history; dispose instead.');
+            throw new BusinessRuleException('Asset has depreciation history; dispose instead.');
         }
         $asset->delete();
     }

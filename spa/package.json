@@ -13,6 +13,12 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:defense": "NODE_PATH=./node_modules node ../scripts/defense-smoke-walk.js",
+    "audit:live-routes": "NODE_PATH=./node_modules node ../scripts/live-spa-route-audit.js",
+    "audit:dynamic-routes": "NODE_PATH=./node_modules node ../scripts/dynamic-spa-route-audit.js",
+    "audit:role-dashboards": "NODE_PATH=./node_modules node ../scripts/role-dashboard-audit.js",
+    "audit:rbac": "node ../scripts/rbac-static-audit.js",
+    "audit:role-permissions": "NODE_PATH=./node_modules node ../scripts/role-permission-audit.js",
+    "audit:api-routes": "node scripts/audit-api-routes.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

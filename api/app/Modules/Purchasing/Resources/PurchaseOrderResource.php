@@ -57,7 +57,7 @@ class PurchaseOrderResource extends JsonResource
                 'bill_number'  => $b->bill_number,
                 'total_amount' => (string) $b->total_amount,
                 'balance'      => (string) $b->balance,
-                'status'       => (string) $b->status,
+                'status'       => (string) $b->status?->value,
                 'due_date'     => optional($b->due_date)->toDateString(),
                 'has_variances' => (bool) $b->has_variances,
                 'three_way_overridden' => (bool) $b->three_way_overridden,

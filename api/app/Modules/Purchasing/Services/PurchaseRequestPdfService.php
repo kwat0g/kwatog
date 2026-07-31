@@ -31,9 +31,9 @@ class PurchaseRequestPdfService
         ]);
 
         $company = [
-            'name'    => $this->settings->get('company.name', 'Philippine Ogami Corporation'),
-            'address' => $this->settings->get('company.address', ''),
-            'tin'     => $this->settings->get('company.tin', ''),
+            'name'    => $this->settings->requiredString('company.legal_name'),
+            'address' => $this->settings->requiredString('company.address'),
+            'tin'     => $this->settings->requiredString('company.tin'),
         ];
 
         $pdf = Pdf::loadView('pdf.purchase-request', [

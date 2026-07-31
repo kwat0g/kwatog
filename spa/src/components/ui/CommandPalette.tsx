@@ -323,7 +323,7 @@ export function CommandPalette({ open, onClose }: Props) {
             aria-label="Search query"
           />
           {loading && <Loader2 size={14} className="text-muted animate-spin" />}
-          <kbd className="font-mono text-[10px] text-text-subtle border border-subtle rounded px-1 py-0.5">ESC</kbd>
+          <kbd className="font-mono text-2xs text-text-subtle border border-subtle rounded px-1 py-0.5">ESC</kbd>
         </div>
 
         <div ref={listRef} className="max-h-[420px] overflow-y-auto">

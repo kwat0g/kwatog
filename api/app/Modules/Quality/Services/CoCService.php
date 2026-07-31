@@ -13,7 +13,6 @@ use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\ShipmentLot;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Response;
-use RuntimeException;
 
 /**
  * Sprint 7 — Task 62. Certificate of Conformance generator.
@@ -143,10 +142,10 @@ class CoCService
         $status = $inspection->status instanceof InspectionStatus ? $inspection->status : InspectionStatus::from((string) $inspection->status);
 
         if ($stage !== InspectionStage::Outgoing) {
-            throw new RuntimeException('CoC is only issued for outgoing-stage inspections.');
+            abort(422, 'CoC is only issued for outgoing-stage inspections.');
         }
         if ($status !== InspectionStatus::Passed) {
-            throw new RuntimeException("CoC requires a passed inspection (current: {$status->value}).");
+            abort(422, "CoC requires a passed inspection (current: {$status->value}).");
         }
     }
 
@@ -193,9 +192,9 @@ class CoCService
     private function company(): array
     {
         return [
-            'name'    => (string) $this->settings->get('company.name', 'Philippine Ogami Corporation'),
-            'address' => (string) $this->settings->get('company.address', 'FCIE, Dasmariñas, Cavite, Philippines'),
-            'tin'     => $this->settings->get('company.tin'),
+            'name'    => $this->settings->requiredString('company.legal_name'),
+            'address' => $this->settings->requiredString('company.address'),
+            'tin'     => $this->settings->requiredString('company.tin'),
         ];
     }
 }

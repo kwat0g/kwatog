@@ -17,14 +17,15 @@ use Illuminate\Support\Facades\Log;
 class KpiSnapshotService
 {
     private const MODULE_PERMISSIONS = [
-        'production'   => 'production.dashboard.view',
-        'quality'      => 'dashboard.quality.view',
+        'production' => 'production.dashboard.view',
+        'quality' => 'dashboard.quality.view',
         'supply_chain' => 'dashboard.ppc.view',
-        'purchasing'   => 'dashboard.purchasing.view',
-        'attendance'   => 'dashboard.hr.view',
-        'accounting'   => 'accounting.dashboard.view',
-        'inventory'    => 'dashboard.warehouse.view',
+        'purchasing' => 'dashboard.purchasing.view',
+        'attendance' => 'dashboard.hr.view',
+        'accounting' => 'accounting.dashboard.view',
+        'inventory' => 'dashboard.warehouse.view',
     ];
+
     public function computeAll(int $year, int $month): void
     {
         $definitions = KpiDefinition::active()->orderBy('display_order')->get();
@@ -75,11 +76,12 @@ class KpiSnapshotService
             $definitions = $definitions->filter(fn (KpiDefinition $def) => $this->userCanSeeModule($user, $def->module));
         }
 
-        return $definitions->map(function (KpiDefinition $def) use ($year, $month) {
+        return $definitions->values()->map(function (KpiDefinition $def) use ($year, $month) {
             $snapshot = KpiSnapshot::where('definition_id', $def->id)
                 ->where('period_year', $year)
                 ->where('period_month', $month)
                 ->first();
+
             return [
                 'definition' => [
                     'id' => $def->hash_id,
@@ -100,14 +102,14 @@ class KpiSnapshotService
                     'computed_at' => $snapshot->computed_at?->toIso8601String(),
                 ] : null,
             ];
-        })->all();
+        })->values()->all();
     }
 
     public function getTrend(string $kpiCode, int $months = 12, ?Authenticatable $user = null): array
     {
         $def = KpiDefinition::where('code', $kpiCode)->firstOrFail();
 
-        if ($user && !$this->userCanSeeModule($user, $def->module)) {
+        if ($user && ! $this->userCanSeeModule($user, $def->module)) {
             abort(403, 'You do not have permission to view this KPI.');
         }
 
@@ -133,6 +135,7 @@ class KpiSnapshotService
         if ($permission === null) {
             return true;
         }
+
         return $user->can($permission);
     }
 
@@ -147,6 +150,7 @@ class KpiSnapshotService
         if ($delta < $threshold) {
             return KpiTrend::Flat;
         }
+
         return $actual > $prev ? KpiTrend::Up : KpiTrend::Down;
     }
 
@@ -165,6 +169,7 @@ class KpiSnapshotService
             if ($warning !== null && $actual >= $warning) {
                 return KpiStatus::Warning;
             }
+
             return KpiStatus::OffTarget;
         } else {
             if ($actual <= $target) {
@@ -173,6 +178,7 @@ class KpiSnapshotService
             if ($warning !== null && $actual <= $warning) {
                 return KpiStatus::Warning;
             }
+
             return KpiStatus::OffTarget;
         }
     }
@@ -217,6 +223,7 @@ class KpiSnapshotService
         $performance = min(1.0, $totalProduced / $totalPlanned);
         $quality = $totalGood / $totalProduced;
         $availability = 1.0; // simplified: assume scheduled = actual runtime
+
         return round($availability * $performance * $quality * 100, 2);
     }
 
@@ -235,6 +242,7 @@ class KpiSnapshotService
         if ($totalInspected == 0) {
             return 0.0;
         }
+
         return round(($totalDefects / $totalInspected) * 1_000_000, 2);
     }
 
@@ -254,6 +262,7 @@ class KpiSnapshotService
         if ($total == 0) {
             return 100.0;
         }
+
         return round(($passed / $total) * 100, 2);
     }
 
@@ -275,19 +284,21 @@ class KpiSnapshotService
         if ($total == 0) {
             return 100.0;
         }
+
         return round(($onTime / $total) * 100, 2);
     }
 
     private function computeSupplierQuality(int $year, int $month): float
     {
         // Average supplier performance score for the month
-        if (!DB::getSchemaBuilder()->hasTable('supplier_performance_scores')) {
+        if (! DB::getSchemaBuilder()->hasTable('supplier_performance_scores')) {
             return 0.0;
         }
         $avg = DB::table('supplier_performance_scores')
             ->where('period_year', $year)
             ->where('period_month', $month)
             ->avg('overall_score');
+
         return round((float) ($avg ?? 0), 2);
     }
 
@@ -310,6 +321,7 @@ class KpiSnapshotService
         if ($revenue == 0) {
             return 0.0;
         }
+
         return round(($copqTotal / $revenue) * 100, 4);
     }
 
@@ -329,6 +341,7 @@ class KpiSnapshotService
         if ($total == 0) {
             return 100.0;
         }
+
         return round(($present / $total) * 100, 2);
     }
 
@@ -350,12 +363,13 @@ class KpiSnapshotService
         if ($totalAr == 0) {
             return 0.0;
         }
+
         return round(($overdue / $totalAr) * 100, 2);
     }
 
     private function computeBudgetUtilization(int $year, int $month): float
     {
-        if (!DB::getSchemaBuilder()->hasTable('budget_line_items')) {
+        if (! DB::getSchemaBuilder()->hasTable('budget_line_items')) {
             return 0.0;
         }
         $totalBudget = (float) DB::table('budget_line_items')
@@ -372,6 +386,7 @@ class KpiSnapshotService
         if ($totalBudget == 0) {
             return 0.0;
         }
+
         return round(($totalActual / $totalBudget) * 100, 2);
     }
 
@@ -396,7 +411,7 @@ class KpiSnapshotService
         $from = Carbon::create($year, $month, 1)->startOfDay()->toDateTimeString();
         $to = Carbon::create($year, $month, 1)->endOfMonth()->toDateTimeString();
 
-        if (!DB::getSchemaBuilder()->hasTable('stock_movements')) {
+        if (! DB::getSchemaBuilder()->hasTable('stock_movements')) {
             return 0.0;
         }
 
@@ -411,6 +426,7 @@ class KpiSnapshotService
         if ($avgInventory == 0) {
             return 0.0;
         }
+
         return round($cogs / $avgInventory * 12, 2); // annualized
     }
 
@@ -431,6 +447,7 @@ class KpiSnapshotService
         if ($total == 0) {
             return 100.0;
         }
+
         return round(($completed / $total) * 100, 2);
     }
 }

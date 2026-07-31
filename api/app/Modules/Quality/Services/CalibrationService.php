@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Quality\Services;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Quality\Enums\CalibrationStatus;
 use App\Modules\Quality\Models\CalibrationRecord;
 use Carbon\CarbonImmutable;
@@ -14,8 +15,7 @@ use Illuminate\Support\Facades\DB;
  */
 class CalibrationService
 {
-    /** Days before next_calibration_date at which an item is flagged "due". */
-    private const DUE_WINDOW_DAYS = 30;
+    public function __construct(private readonly SettingsService $settings) {}
 
     public function create(array $data): CalibrationRecord
     {
@@ -111,7 +111,11 @@ class CalibrationService
         if ($today->gt($next)) {
             return CalibrationStatus::Overdue;
         }
-        if ($today->diffInDays($next, false) <= self::DUE_WINDOW_DAYS) {
+        $window = $this->settings->get('quality.calibration.due_window_days');
+        if (! is_numeric($window) || (int) $window < 0) {
+            throw new \App\Common\Exceptions\BusinessRuleException('Required business setting quality.calibration.due_window_days is missing or invalid.');
+        }
+        if ($today->diffInDays($next, false) <= (int) $window) {
             return CalibrationStatus::Due;
         }
 

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Attendance\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\SettingsService;
 use App\Modules\Attendance\Enums\OvertimeStatus;
 use App\Modules\Attendance\Events\OvertimeRequestDecided;
 use App\Modules\Attendance\Events\OvertimeRequestSubmitted;
@@ -11,12 +13,12 @@ use App\Modules\Attendance\Models\OvertimeRequest;
 use App\Modules\Auth\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 class OvertimeService
 {
     public function __construct(
         private readonly AttendanceService $attendance,
+        private readonly SettingsService $settings,
     ) {}
 
     /**
@@ -41,11 +43,18 @@ class OvertimeService
      */
     public function autoDetectFromAttendance(\App\Modules\Attendance\Models\Attendance $a): ?OvertimeRequest
     {
-        $settings = app(\App\Common\Services\SettingsService::class);
-        if (! (bool) $settings->get('attendance.auto_ot_detect.enabled', true)) {
+        $enabled = $this->settings->get('attendance.auto_ot_detect.enabled');
+        if (! is_bool($enabled)) {
+            throw new BusinessRuleException('Required business setting attendance.auto_ot_detect.enabled is missing or invalid.');
+        }
+        if (! $enabled) {
             return null;
         }
-        $threshold = (int) $settings->get('attendance.auto_ot_detect.threshold_minutes', 30);
+        $thresholdValue = $this->settings->get('attendance.auto_ot_detect.threshold_minutes');
+        if (! is_numeric($thresholdValue) || (int) $thresholdValue < 0) {
+            throw new BusinessRuleException('Required business setting attendance.auto_ot_detect.threshold_minutes is missing or invalid.');
+        }
+        $threshold = (int) $thresholdValue;
 
         if (! $a->time_in || ! $a->time_out) {
             return null;
@@ -152,7 +161,7 @@ class OvertimeService
     {
         $result = DB::transaction(function () use ($ot, $approver, $remarks) {
             if ($ot->status !== OvertimeStatus::Pending) {
-                throw new RuntimeException('Only pending overtime requests can be approved.');
+                throw new BusinessRuleException('Only pending overtime requests can be approved.');
             }
 
             // SoD: the requesting employee must not approve their own OT. The
@@ -163,7 +172,7 @@ class OvertimeService
             // DEFECT-1 — the old $ot->employee?->user_id was always null).
             $submitterId = $ot->employee?->user?->id;
             if ($submitterId !== null && (int) $submitterId === (int) $approver->id) {
-                throw new RuntimeException('You cannot approve your own overtime request.');
+                throw new BusinessRuleException('You cannot approve your own overtime request.');
             }
 
             $ot->update([
@@ -214,7 +223,7 @@ class OvertimeService
     {
         $result = DB::transaction(function () use ($ot, $approver, $reason) {
             if ($ot->status !== OvertimeStatus::Pending) {
-                throw new RuntimeException('Only pending overtime requests can be rejected.');
+                throw new BusinessRuleException('Only pending overtime requests can be rejected.');
             }
             $ot->update([
                 'status'           => OvertimeStatus::Rejected->value,

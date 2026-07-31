@@ -183,9 +183,16 @@ export default function NotificationsListPage() {
                       const isUnread = !n.read_at;
                       return (
                         <li key={n.id}>
-                          <button
-                            type="button"
+                          <div
+                            role="button"
+                            tabIndex={0}
                             onClick={() => handleClickRow(n)}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault();
+                                handleClickRow(n);
+                              }
+                            }}
                             className={cn(
                               'w-full text-left px-3 py-2.5 flex items-start gap-3 hover:bg-elevated transition-colors duration-fast cursor-pointer',
                       focusRingInset,
@@ -229,7 +236,7 @@ export default function NotificationsListPage() {
                                 className="ml-auto shrink-0 text-muted hover:text-primary"
                               />
                             )}
-                          </button>
+                          </div>
                         </li>
                       );
                     })}

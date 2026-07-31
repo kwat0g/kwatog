@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\TaxPolicyService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\Money;
 use App\Modules\Accounting\Enums\BillStatus;
@@ -20,7 +22,6 @@ use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Auth\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 /**
  * REC-13 — AR/AP credit notes.
@@ -34,7 +35,6 @@ use RuntimeException;
  */
 class CreditNoteService
 {
-    private const VAT_RATE   = '0.12';
     private const AR_CODE    = '1100';
     private const AP_CODE    = '2010';
     private const VAT_OUTPUT = '2060';
@@ -44,6 +44,7 @@ class CreditNoteService
         private readonly DocumentSequenceService $sequences,
         private readonly JournalEntryService $journals,
         private readonly AccountingPeriodService $periods,
+        private readonly TaxPolicyService $taxPolicy,
     ) {}
 
     /**
@@ -62,12 +63,15 @@ class CreditNoteService
             $q->where('status', $filters['status']);
         }
         if (! empty($filters['customer_id'])) {
-            $cid = HashIdFilter::decode((string) $filters['customer_id'], \App\Modules\Accounting\Models\Customer::class);
-            if ($cid) $q->where('customer_id', $cid);
+            // No (string) cast: HashIdFilter::decode takes mixed, and casting an
+            // array payload (?customer_id[]=x) raised an E_WARNING that Laravel
+            // rethrows as ErrorException — a 500 on a bad query string.
+            $cid = HashIdFilter::decode($filters['customer_id'], \App\Modules\Accounting\Models\Customer::class);
+            $q->where('customer_id', $cid ?? 0);
         }
         if (! empty($filters['vendor_id'])) {
-            $vid = HashIdFilter::decode((string) $filters['vendor_id'], \App\Modules\Accounting\Models\Vendor::class);
-            if ($vid) $q->where('vendor_id', $vid);
+            $vid = HashIdFilter::decode($filters['vendor_id'], \App\Modules\Accounting\Models\Vendor::class);
+            $q->where('vendor_id', $vid ?? 0);
         }
 
         return $q->orderByDesc('date')->orderByDesc('id')
@@ -98,7 +102,7 @@ class CreditNoteService
         $type = CreditNoteType::from($data['type']);
         $lines = $data['lines'] ?? [];
         if (count($lines) < 1) {
-            throw new RuntimeException('A credit note needs at least one line.');
+            throw new BusinessRuleException('A credit note needs at least one line.');
         }
 
         return DB::transaction(function () use ($data, $type, $lines, $by) {
@@ -111,17 +115,17 @@ class CreditNoteService
                     ? (int) $l['account_id']
                     : HashIdFilter::decode((string) ($l['account_id'] ?? ''), Account::class);
                 if (! $accountId) {
-                    throw new RuntimeException('Invalid account on a credit-note line.');
+                    throw new BusinessRuleException('Invalid account on a credit-note line.');
                 }
                 $amount = Money::round2((string) $l['amount']);
                 if (Money::lte($amount, '0')) {
-                    throw new RuntimeException('Credit-note line amount must be > 0.');
+                    throw new BusinessRuleException('Credit-note line amount must be > 0.');
                 }
                 $subtotal = Money::add($subtotal, $amount);
                 $resolvedLines[] = ['account_id' => $accountId, 'description' => $l['description'] ?? '', 'amount' => $amount];
             }
 
-            $vat = $isVatable ? Money::round2(Money::mul($subtotal, self::VAT_RATE)) : Money::zero();
+            $vat = $isVatable ? Money::round2(Money::mul($subtotal, $this->taxPolicy->vatRate())) : Money::zero();
             $total = Money::add($subtotal, $vat);
 
             $cn = new CreditNote();
@@ -162,7 +166,7 @@ class CreditNoteService
     public function finalize(CreditNote $cn, User $by): CreditNote
     {
         if ($cn->status !== CreditNoteStatus::Draft) {
-            throw new RuntimeException('Only draft credit notes can be finalized.');
+            throw new BusinessRuleException('Only draft credit notes can be finalized.');
         }
 
         return DB::transaction(function () use ($cn, $by) {
@@ -199,14 +203,14 @@ class CreditNoteService
     public function apply(CreditNote $cn, array $data, User $by): CreditNoteApplication
     {
         if ($cn->status !== CreditNoteStatus::Finalized) {
-            throw new RuntimeException('Only a finalized credit note can be applied.');
+            throw new BusinessRuleException('Only a finalized credit note can be applied.');
         }
         $amount = Money::round2((string) $data['amount']);
         if (Money::lte($amount, '0')) {
-            throw new RuntimeException('Application amount must be > 0.');
+            throw new BusinessRuleException('Application amount must be > 0.');
         }
         if (Money::gt($amount, (string) $cn->balance)) {
-            throw new RuntimeException("Amount {$amount} exceeds the credit note's remaining balance {$cn->balance}.");
+            throw new BusinessRuleException("Amount {$amount} exceeds the credit note's remaining balance {$cn->balance}.");
         }
 
         return DB::transaction(function () use ($cn, $data, $amount, $by) {
@@ -219,13 +223,13 @@ class CreditNoteService
             if ($cn->type === CreditNoteType::Customer) {
                 $invoice = Invoice::query()->findOrFail(
                     $this->decode($data['invoice_id'] ?? null, Invoice::class)
-                        ?? throw new RuntimeException('invoice_id is required to apply a customer credit.')
+                        ?? throw new BusinessRuleException('invoice_id is required to apply a customer credit.')
                 );
                 if ($invoice->customer_id !== $cn->customer_id) {
-                    throw new RuntimeException('Credit note and invoice belong to different customers.');
+                    throw new BusinessRuleException('Credit note and invoice belong to different customers.');
                 }
                 if (Money::gt($amount, (string) $invoice->balance)) {
-                    throw new RuntimeException("Amount {$amount} exceeds the invoice's outstanding balance {$invoice->balance}.");
+                    throw new BusinessRuleException("Amount {$amount} exceeds the invoice's outstanding balance {$invoice->balance}.");
                 }
                 $newPaid    = Money::add((string) $invoice->amount_paid, $amount);
                 $newBalance = Money::sub((string) $invoice->total_amount, $newPaid);
@@ -238,13 +242,13 @@ class CreditNoteService
             } else {
                 $bill = Bill::query()->findOrFail(
                     $this->decode($data['bill_id'] ?? null, Bill::class)
-                        ?? throw new RuntimeException('bill_id is required to apply a supplier credit.')
+                        ?? throw new BusinessRuleException('bill_id is required to apply a supplier credit.')
                 );
                 if ($bill->vendor_id !== $cn->vendor_id) {
-                    throw new RuntimeException('Credit note and bill belong to different vendors.');
+                    throw new BusinessRuleException('Credit note and bill belong to different vendors.');
                 }
                 if (Money::gt($amount, (string) $bill->balance)) {
-                    throw new RuntimeException("Amount {$amount} exceeds the bill's outstanding balance {$bill->balance}.");
+                    throw new BusinessRuleException("Amount {$amount} exceeds the bill's outstanding balance {$bill->balance}.");
                 }
                 $newPaid    = Money::add((string) $bill->amount_paid, $amount);
                 $newBalance = Money::sub((string) $bill->total_amount, $newPaid);
@@ -305,24 +309,24 @@ class CreditNoteService
     private function assertParty(CreditNote $cn): void
     {
         if ($cn->type === CreditNoteType::Customer && ! $cn->customer_id) {
-            throw new RuntimeException('A customer credit note requires a customer.');
+            throw new BusinessRuleException('A customer credit note requires a customer.');
         }
         if ($cn->type === CreditNoteType::Supplier && ! $cn->vendor_id) {
-            throw new RuntimeException('A supplier credit note requires a vendor.');
+            throw new BusinessRuleException('A supplier credit note requires a vendor.');
         }
     }
 
     private function decode(mixed $value, string $modelClass): ?int
     {
         if ($value === null || $value === '') return null;
-        return is_numeric($value) ? (int) $value : HashIdFilter::decode((string) $value, $modelClass);
+        return is_numeric($value) ? (int) $value : HashIdFilter::decode($value, $modelClass);
     }
 
     private function accountId(string $code): int
     {
         $id = Account::query()->where('code', $code)->value('id');
         if (! $id) {
-            throw new RuntimeException("Required account {$code} not found in COA.");
+            throw new BusinessRuleException("Required account {$code} not found in COA.");
         }
         return (int) $id;
     }

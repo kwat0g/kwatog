@@ -52,7 +52,7 @@ export default function SupplierInvoicesPage() {
                     <tr key={inv.id} className={trCls}>
                       <Td>
                         <Link to={`/portal/supplier/invoices/${inv.id}`} className="font-mono text-accent hover:underline font-medium">
-                          {inv.invoice_number}
+                          {inv.bill_number}
                         </Link>
                       </Td>
                       <Td className="text-muted">{inv.date ?? '—'}</Td>

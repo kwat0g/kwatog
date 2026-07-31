@@ -73,7 +73,7 @@ class BalanceSheetService
             }
 
             // Synthetic line: current-period net income (so equity reflects revenues - expenses YTD).
-            $fiscalStartMonth = (int) ($this->settings->get('fiscal.year_start_month', 1));
+            $fiscalStartMonth = $this->settings->requiredInt('fiscal.year_start_month', 1, 12);
             $fyStart = Carbon::create($asOf->year, $fiscalStartMonth, 1)->startOfDay();
             if ($fyStart->gt($asOf)) $fyStart->subYear();
             $is = $this->incomeStatement->generate($fyStart, $asOf);

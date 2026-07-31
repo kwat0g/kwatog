@@ -5,6 +5,8 @@ import { isAxiosError } from 'axios';
 import { driverApi } from '@/api/driver';
 import type { DriverDeliveryStatus } from '@/types/driver';
 import { Button } from '@/components/ui/Button';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { TouchCardSkeleton } from '@/components/layout/TouchShell';
 import { focusRing } from '@/lib/focus';
 import { cn } from '@/lib/cn';
 
@@ -58,36 +60,32 @@ export default function DriverDeliveryDetail() {
   });
 
   if (isLoading) {
-    return (
-      <div
-        role="status"
-        aria-live="polite"
-        aria-busy="true"
-        className="py-12 text-center text-muted"
-      >
-        <span className="sr-only">Loading delivery…</span>
-        Loading…
-      </div>
-    );
+    return <TouchCardSkeleton count={2} label="Loading delivery" cardClassName="h-40" />;
   }
 
   if (error || !data) {
     return (
-      <div className="py-12 text-center" role="alert">
-        <div className="text-danger mb-2">Could not load delivery.</div>
-        <Button
-          variant="secondary"
-          size="lg"
-          className="min-h-[44px]"
-          disabled={isFetching}
-          onClick={() => refetch()}
-        >
-          {isFetching ? 'Retrying…' : 'Try again'}
-        </Button>
-        <div className="mt-4">
-          <Link to="/driver" className="text-sm text-muted underline">All deliveries</Link>
-        </div>
-      </div>
+      <EmptyState
+        icon="alert-circle"
+        title="Could not load delivery"
+        description="Check your connection and try again."
+        action={
+          <div className="flex flex-col items-center gap-3">
+            <Button
+              variant="secondary"
+              size="lg"
+              className="min-h-[44px]"
+              disabled={isFetching}
+              onClick={() => refetch()}
+            >
+              {isFetching ? 'Retrying…' : 'Try again'}
+            </Button>
+            <Link to="/driver" className="text-sm text-link hover:underline">
+              All deliveries
+            </Link>
+          </div>
+        }
+      />
     );
   }
 

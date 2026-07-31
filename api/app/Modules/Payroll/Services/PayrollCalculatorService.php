@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Payroll\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\SettingsService;
 use App\Common\Support\Money;
 use App\Modules\Attendance\Enums\AttendanceStatus;
 use App\Modules\Attendance\Models\Attendance;
@@ -28,7 +30,6 @@ use App\Modules\Payroll\Services\Government\PhilhealthComputationService;
 use App\Modules\Payroll\Services\Government\SssComputationService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use RuntimeException;
 
 /**
  * The heart of Sprint 3 — orchestrates per-employee payroll computation.
@@ -57,23 +58,13 @@ use RuntimeException;
  */
 class PayrollCalculatorService
 {
-    private const DAYS_PER_MONTH = '22';
-    private const HOURS_PER_DAY  = '8';
-    // REC-09 — DOLE OT premium is +25% of the hourly rate on an ordinary day
-    // but +30% on any premium day (rest day / holiday). Both stack on TOP of
-    // the day_type_rate the DTR engine already resolved. Using a flat 1.25 for
-    // premium days under-paid every rest-day/holiday OT (e.g. rest-day OT paid
-    // 1.25×1.30 = 1.625× instead of the statutory 1.30×1.30 = 1.69×).
-    private const OT_PREMIUM_ORDINARY = '1.25';
-    private const OT_PREMIUM_PREMIUM  = '1.30';
-    private const ND_PREMIUM     = '0.10';
-
     public function __construct(
         private readonly SssComputationService $sss,
         private readonly PhilhealthComputationService $philhealth,
         private readonly PagibigComputationService $pagibig,
         private readonly BirTaxComputationService $bir,
         private readonly ThirteenthMonthService $thirteenthMonth,
+        private readonly SettingsService $settings,
     ) {}
 
     /**
@@ -83,8 +74,14 @@ class PayrollCalculatorService
      */
     public function computeForEmployee(PayrollPeriod $period, Employee $employee): Payroll
     {
-        if ($period->status === PayrollPeriodStatus::Finalized) {
-            throw new RuntimeException('Cannot recompute: payroll period is finalized.');
+        // Locked = Finalized, Disbursed or Voided. Only Finalized was checked
+        // before, so a disbursed run (money already paid) or a voided one could
+        // be silently recomputed row by row via /payrolls/{id}/recompute.
+        if ($period->status?->isLocked()) {
+            throw new BusinessRuleException(sprintf(
+                'Cannot recompute: payroll period is %s.',
+                strtolower($period->status->label()),
+            ));
         }
 
         return DB::transaction(function () use ($period, $employee) {
@@ -95,8 +92,26 @@ class PayrollCalculatorService
             $replacedId = $existing?->id; // remembered so we can re-parent adjustment FKs after new row is inserted
             if ($existing) {
                 PayrollDeductionDetail::where('payroll_id', $existing->id)->delete();
-                LoanPayment::where('payroll_id', $existing->id)->delete(); // reverse loan deductions
+
+                // Restore loan balances BEFORE the payment rows are removed.
+                // reverseLoanDeductions() reads loan_payments to know how much
+                // to give back and deletes each row as it goes; the previous
+                // code bulk-deleted them first, so the reversal always found an
+                // empty set. Loan balances were therefore never restored while
+                // the fresh run deducted the amortization again — every
+                // recompute silently over-credited the loan by one instalment.
                 $this->reverseLoanDeductions($existing);
+
+                // Release adjustments consumed by the run we are replacing so
+                // they are re-applied below. Without resetting applied_at the
+                // re-run's `whereNull('applied_at')` filter skipped them and the
+                // employee silently lost every adjustment on recompute.
+                $this->releaseAppliedAdjustments($existing);
+
+                // Roll back this row's 13th-month accrual contribution — the
+                // accrual is a running additive total, so leaving it in place
+                // double-counted basic pay on every recompute.
+                $this->thirteenthMonth->reverseAccrual($existing);
 
                 // applied_to_payroll_id is nullable — safe to null out before deletion.
                 PayrollAdjustment::where('applied_to_payroll_id', $existing->id)
@@ -114,8 +129,8 @@ class PayrollCalculatorService
             $monthlySalary = (string) ($employee->basic_monthly_salary ?? '0');
             $dailyRate     = $payType === PayType::Daily->value
                 ? (string) ($employee->daily_rate ?? '0')
-                : Money::div($monthlySalary, self::DAYS_PER_MONTH, 4);
-            $hourlyRate    = Money::div($dailyRate, self::HOURS_PER_DAY, 4);
+                : Money::div($monthlySalary, $this->positivePolicy('payroll.work_days_per_month'), 4);
+            $hourlyRate    = Money::div($dailyRate, $this->positivePolicy('payroll.hours_per_day'), 4);
 
             // ─── Load attendance rows for this period ────────────
             /** @var \Illuminate\Support\Collection<int, Attendance> $attendances */
@@ -188,6 +203,11 @@ class PayrollCalculatorService
                 'overtime_pay'      => $overtimePay,
                 'night_diff_pay'    => $nightDiffPay,
                 'holiday_pay'       => $holidayPay,
+                // Persisted so the GL posting can balance (earnings are debited
+                // gross, so the lateness withheld must be credited back) and so
+                // the payslip can itemise what was actually deducted.
+                'tardiness_deduction' => $tardiness,
+                'undertime_deduction' => $undertime,
                 'gross_pay'         => $grossPay,
                 'sss_ee' => $sssEe, 'sss_er' => $sssEr,
                 'philhealth_ee' => $phEe, 'philhealth_er' => $phEr,
@@ -291,14 +311,14 @@ class PayrollCalculatorService
             // already carries the day-type multiplier resolved by the DTR.
             if (bccomp($otHrs, '0', 2) > 0) {
                 $otPremium = bccomp($rate, '1.00', 4) > 0
-                    ? self::OT_PREMIUM_PREMIUM
-                    : self::OT_PREMIUM_ORDINARY;
+                    ? $this->positivePolicy('payroll.overtime.premium_day_multiplier')
+                    : $this->positivePolicy('payroll.overtime.ordinary_multiplier');
                 $otPay = Money::add($otPay, Money::mul(Money::mul(Money::mul($otHrs, $hourlyRate), $otPremium), $rate));
             }
 
             // Night differential: hours × hourly × 0.10 (additive premium)
             if (bccomp($ndHrs, '0', 2) > 0) {
-                $ndPay = Money::add($ndPay, Money::mul(Money::mul($ndHrs, $hourlyRate), self::ND_PREMIUM));
+                $ndPay = Money::add($ndPay, Money::mul(Money::mul($ndHrs, $hourlyRate), $this->nonNegativePolicy('payroll.night_differential_rate')));
             }
 
             // Tardiness / undertime in minutes — convert to hours and deduct.
@@ -421,7 +441,7 @@ class PayrollCalculatorService
             ? (string) $startRow->daily_rate
             : ($payType === PayType::Daily->value
                 ? $dailyRate
-                : Money::div($curMonthly, self::DAYS_PER_MONTH, 4));
+                : Money::div($curMonthly, $this->positivePolicy('payroll.work_days_per_month'), 4));
 
         // Build day-by-day cursor, switching rates as effective dates pass.
         $insideChanges = $history
@@ -451,7 +471,7 @@ class PayrollCalculatorService
                     ? (string) $row->daily_rate
                     : ($payType === PayType::Daily->value
                         ? $curDaily
-                        : Money::div($curMonthly, self::DAYS_PER_MONTH, 4));
+                        : Money::div($curMonthly, $this->positivePolicy('payroll.work_days_per_month'), 4));
                 $changeIdx++;
             }
             $spanDays++;
@@ -599,9 +619,27 @@ class PayrollCalculatorService
     {
         $payType = $employee->pay_type instanceof \BackedEnum ? $employee->pay_type->value : (string) $employee->pay_type;
         if ($payType === PayType::Daily->value) {
-            return Money::mul($dailyRate, self::DAYS_PER_MONTH);
+            return Money::mul($dailyRate, $this->positivePolicy('payroll.work_days_per_month'));
         }
         return $monthlySalary;
+    }
+
+    private function positivePolicy(string $key): string
+    {
+        $value = $this->settings->get($key);
+        if (! is_numeric($value) || (float) $value <= 0) {
+            throw new BusinessRuleException("Required payroll setting {$key} is missing or invalid.");
+        }
+        return (string) $value;
+    }
+
+    private function nonNegativePolicy(string $key): string
+    {
+        $value = $this->settings->get($key);
+        if (! is_numeric($value) || (float) $value < 0) {
+            throw new BusinessRuleException("Required payroll setting {$key} is missing or invalid.");
+        }
+        return (string) $value;
     }
 
     private function addDeductionDetail(Payroll $payroll, DeductionType $type, string $description, string $amount): void
@@ -676,6 +714,30 @@ class PayrollCalculatorService
         }
 
         return $total;
+    }
+
+    /**
+     * Return adjustments consumed by a payroll we are about to replace to the
+     * Approved/unapplied pool so the fresh run picks them up again.
+     *
+     * applyApprovedAdjustments() selects on `whereNull('applied_at')`, so an
+     * adjustment marked Applied by the previous run was invisible to the
+     * recompute — the employee's back-pay or deduction silently vanished from
+     * their payslip while the adjustment row still read "Applied".
+     */
+    private function releaseAppliedAdjustments(Payroll $previous): void
+    {
+        PayrollAdjustment::query()
+            ->where('applied_to_payroll_id', $previous->id)
+            ->where('status', PayrollAdjustmentStatus::Applied->value)
+            ->get()
+            ->each(function (PayrollAdjustment $adj) {
+                $adj->forceFill([
+                    'status'                => PayrollAdjustmentStatus::Approved->value,
+                    'applied_at'            => null,
+                    'applied_to_payroll_id' => null,
+                ])->save();
+            });
     }
 
     /**

@@ -18,7 +18,6 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
-use RuntimeException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ShipmentController
@@ -96,7 +95,7 @@ class ShipmentController
     {
         $disk = Storage::disk('local');
         if (! $disk->exists($document->file_path)) {
-            throw new RuntimeException('Shipment document file not found on disk.');
+            abort(404, 'Shipment document file not found on disk.');
         }
 
         $contents = $disk->get($document->file_path);

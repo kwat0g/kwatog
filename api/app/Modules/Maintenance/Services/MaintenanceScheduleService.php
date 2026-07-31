@@ -14,7 +14,7 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Sprint 8 — Task 69. Preventive maintenance schedules.
@@ -64,16 +64,18 @@ class MaintenanceScheduleService
                 MaintainableType::Mold    => Mold::query()->whereKey((int) $data['maintainable_id'])->exists(),
             };
             if (! $exists) {
-                throw new RuntimeException("Target {$type->value}#{$data['maintainable_id']} not found.");
+                throw ValidationException::withMessages([
+                    'maintainable_id' => ["Target {$type->value}#{$data['maintainable_id']} not found."],
+                ]);
             }
-            if ($interval === MaintenanceScheduleInterval::Shots && $type !== MaintainableType::Mold) {
-                throw new RuntimeException('Shot-based schedules are only valid for molds.');
-            }
+            $this->assertIntervalMatchesTarget($interval, $type);
 
             $schedule = MaintenanceSchedule::create([
                 'maintainable_type' => $type->value,
                 'maintainable_id'   => (int) $data['maintainable_id'],
-                'schedule_type'     => $data['schedule_type'] ?? 'preventive',
+                // Not client-settable: no request rule declares schedule_type, so
+                // validated() always dropped it. Matches MoldService's hardcode.
+                'schedule_type'     => 'preventive',
                 'description'       => $data['description'],
                 'interval_type'     => $interval->value,
                 'interval_value'    => (int) $data['interval_value'],
@@ -94,6 +96,10 @@ class MaintenanceScheduleService
                 'description', 'interval_type', 'interval_value',
                 'is_active', 'last_performed_at',
             ])));
+            // interval_type is editable, so re-run the create-time guard — else a
+            // machine schedule can be PATCHed onto the mold-only shots path and
+            // next_due_at silently becomes null, stranding it from every cron.
+            $this->assertIntervalMatchesTarget($schedule->interval_type, $schedule->maintainable_type);
             $schedule->next_due_at = $this->computeNextDueAt($schedule);
             $schedule->save();
             return $schedule;
@@ -103,6 +109,19 @@ class MaintenanceScheduleService
     public function delete(MaintenanceSchedule $schedule): void
     {
         $schedule->delete();
+    }
+
+    /**
+     * Shot counting only exists on molds — a machine has no current_shot_count,
+     * so a shots schedule pointed at one can never come due.
+     */
+    private function assertIntervalMatchesTarget(MaintenanceScheduleInterval $interval, MaintainableType $type): void
+    {
+        if ($interval === MaintenanceScheduleInterval::Shots && $type !== MaintainableType::Mold) {
+            throw ValidationException::withMessages([
+                'interval_type' => ['Shot-based schedules are only valid for molds.'],
+            ]);
+        }
     }
 
     /**

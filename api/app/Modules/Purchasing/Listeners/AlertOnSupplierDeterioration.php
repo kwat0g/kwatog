@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Purchasing\Listeners;
 
 use App\Common\Services\NotificationService;
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Purchasing\Events\SupplierPerformanceComputed;
 use App\Modules\Purchasing\Models\SupplierPerformanceSnapshot;
@@ -20,9 +21,10 @@ use Illuminate\Support\Facades\Log;
  */
 class AlertOnSupplierDeterioration implements ShouldQueue
 {
-    public const DROP_THRESHOLD = 20.0;
-
-    public function __construct(private readonly NotificationService $notifications) {}
+    public function __construct(
+        private readonly NotificationService $notifications,
+        private readonly SettingsService $settings,
+    ) {}
 
     public function handle(SupplierPerformanceComputed $event): void
     {
@@ -34,7 +36,11 @@ class AlertOnSupplierDeterioration implements ShouldQueue
             if ($prior === null || $prior->overall_score === null) return;
 
             $drop = (float) $prior->overall_score - (float) $current->overall_score;
-            if ($drop < self::DROP_THRESHOLD) return;
+            $threshold = $this->settings->get('purchasing.supplier_score.deterioration_drop');
+            if (! is_numeric($threshold) || (float) $threshold < 0) {
+                throw new \App\Common\Exceptions\BusinessRuleException('Required supplier deterioration policy is missing or invalid.');
+            }
+            if ($drop < (float) $threshold) return;
 
             $audience = User::query()
                 ->whereHas('role', fn ($q) => $q->where('slug', 'purchasing_officer'))

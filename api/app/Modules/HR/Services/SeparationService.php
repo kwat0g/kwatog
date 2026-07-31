@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\DocumentSequenceService;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Enums\ClearanceStatus;
@@ -15,7 +16,6 @@ use App\Modules\Loans\Models\EmployeeLoan;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
-use RuntimeException;
 
 /**
  * Sprint 8 — Task 71. Employee separation orchestrator.
@@ -79,7 +79,7 @@ class SeparationService
     public function initiate(Employee $employee, array $data, User $by): Clearance
     {
         if (in_array($employee->status?->value, ['resigned', 'terminated', 'retired'], true)) {
-            throw new RuntimeException('Employee is already separated.');
+            throw new BusinessRuleException('Employee is already separated.');
         }
         return DB::transaction(function () use ($employee, $data, $by) {
             $reason = SeparationReason::from((string) $data['separation_reason']);
@@ -133,7 +133,7 @@ class SeparationService
     public function signItem(Clearance $clearance, string $itemKey, User $by, ?string $remarks = null): Clearance
     {
         if ($clearance->status->isTerminal()) {
-            throw new RuntimeException('Clearance is closed.');
+            throw new BusinessRuleException('Clearance is closed.');
         }
         return DB::transaction(function () use ($clearance, $itemKey, $by, $remarks) {
             $items = $clearance->clearance_items ?? [];
@@ -153,7 +153,7 @@ class SeparationService
             }
             unset($item);
             if (! $found) {
-                throw new RuntimeException("Item '{$itemKey}' not found on clearance.");
+                throw new BusinessRuleException("Item '{$itemKey}' not found on clearance.");
             }
             $clearance->clearance_items = $items;
 
@@ -183,13 +183,13 @@ class SeparationService
     public function finalize(Clearance $clearance, User $by, FinalPayService $finalPay): Clearance
     {
         if ($clearance->status === ClearanceStatus::Finalized) {
-            throw new RuntimeException('Clearance is already finalized.');
+            throw new BusinessRuleException('Clearance is already finalized.');
         }
         if ($clearance->status !== ClearanceStatus::Completed) {
-            throw new RuntimeException('All clearance items must be signed before finalization.');
+            throw new BusinessRuleException('All clearance items must be signed before finalization.');
         }
         if (! $clearance->final_pay_computed) {
-            throw new RuntimeException('Final pay must be computed before finalization.');
+            throw new BusinessRuleException('Final pay must be computed before finalization.');
         }
 
         // Hard block: outstanding loans must be settled or deducted from final pay

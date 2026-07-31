@@ -43,11 +43,11 @@ export const prTemplatesApi = {
     client.get<PaginatedResponse<PurchaseRequestTemplate>>('/purchasing/pr-templates', { params }).then((r) => r.data),
   active: () =>
     client.get<PurchaseRequestTemplate[]>('/purchasing/pr-templates/active').then((r) => r.data),
-  show: (id: number) =>
+  show: (id: string) =>
     client.get<PurchaseRequestTemplate>(`/purchasing/pr-templates/${id}`).then((r) => r.data),
   create: (data: Partial<PurchaseRequestTemplate> & { items: PurchaseRequestTemplate['items'] }) =>
     client.post<PurchaseRequestTemplate>('/purchasing/pr-templates', data).then((r) => r.data),
-  update: (id: number, data: Partial<PurchaseRequestTemplate>) =>
+  update: (id: string, data: Partial<PurchaseRequestTemplate>) =>
     client.put<PurchaseRequestTemplate>(`/purchasing/pr-templates/${id}`, data).then((r) => r.data),
-  delete: (id: number) => client.delete(`/purchasing/pr-templates/${id}`),
+  delete: (id: string) => client.delete(`/purchasing/pr-templates/${id}`),
 };

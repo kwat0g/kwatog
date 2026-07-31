@@ -9,6 +9,7 @@ import type { PublicJobPosting } from '@/types/recruitment';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import { Button } from '@/components/ui/Button';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 const EMPLOYMENT_LABELS: Record<string, string> = {
   regular: 'Regular',
@@ -27,7 +28,7 @@ export default function CareersPage() {
   const [page, setPage] = useState(1);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['public-postings', page],
     queryFn: () => publicRecruitmentApi.listPostings({ page }).then((r) => r.data),
     placeholderData: (prev) => prev,
@@ -65,11 +66,24 @@ export default function CareersPage() {
         )}
 
         {isError && (
-          <p className="text-center text-muted">Failed to load job postings. Please try again later.</p>
+          <EmptyState
+            icon="alert-circle"
+            title="Could not load job postings"
+            description="Something went wrong on our end. Try again in a moment."
+            action={
+              <Button variant="secondary" onClick={() => refetch()}>
+                Try again
+              </Button>
+            }
+          />
         )}
 
         {!isLoading && !isError && postings.length === 0 && (
-          <p className="text-center text-muted">No open positions at the moment. Check back soon.</p>
+          <EmptyState
+            icon="briefcase"
+            title="No open positions right now"
+            description="We're not hiring for any roles at the moment — check back soon."
+          />
         )}
 
         {!isLoading && postings.length > 0 && (

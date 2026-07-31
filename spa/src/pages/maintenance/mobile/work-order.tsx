@@ -7,9 +7,13 @@ import toast from 'react-hot-toast';
 import { ArrowLeft, Plus, Trash2, Play, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { Button } from '@/components/ui/Button';
+import { Chip } from '@/components/ui/Chip';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
+import { TouchCardSkeleton } from '@/components/layout/TouchShell';
+import { maintenancePriorityVariant } from '@/lib/statusVariants';
 import type { SparePartUsage } from '@/types/maintenance';
 import type { Item } from '@/types/inventory';
 import { client } from '@/api/client';
@@ -107,24 +111,21 @@ export default function MobileWorkOrderDetail() {
 
   // ── Loading / Error states ─────────────────────────────
   if (isLoading) {
-    return (
-      <div role="status" aria-live="polite" aria-busy="true" className="space-y-3 animate-pulse">
-        <span className="sr-only">Loading work order...</span>
-        <div className="h-6 w-24 rounded bg-elevated" />
-        <div className="h-48 rounded-md bg-elevated" />
-        <div className="h-48 rounded-md bg-elevated" />
-      </div>
-    );
+    return <TouchCardSkeleton count={2} label="Loading work order" cardClassName="h-48" />;
   }
 
   if (error || !wo) {
     return (
-      <div className="py-12 text-center" role="alert">
-        <div className="text-danger mb-2">Could not load work order.</div>
-        <Button type="button" variant="secondary" onClick={() => refetch()}>
-          Try again
-        </Button>
-      </div>
+      <EmptyState
+        icon="alert-circle"
+        title="Could not load work order"
+        description="Check your connection and try again."
+        action={
+          <Button type="button" variant="secondary" size="lg" className="min-h-[44px]" onClick={() => refetch()}>
+            Try again
+          </Button>
+        }
+      />
     );
   }
 
@@ -146,19 +147,11 @@ export default function MobileWorkOrderDetail() {
       {/* MWO Summary card */}
       <div className="rounded-md border border-default bg-canvas p-4">
         <div className="flex items-center justify-between">
-          <span className="font-mono text-sm font-medium">{wo.mwo_number}</span>
-          <span
-            className={`text-xs px-2 py-0.5 rounded font-medium ${
-              wo.priority === 'critical'
-                ? 'bg-danger-bg text-danger-fg'
-                : wo.priority === 'high'
-                  ? 'bg-warning-bg text-warning-fg'
-                  : 'bg-info-bg text-info-fg'
-            }`}
-          >
-            {wo.priority === 'critical' && <AlertTriangle className="w-3 h-3 inline mr-1" />}
+          <span className="font-mono tabular-nums text-sm font-medium">{wo.mwo_number}</span>
+          <Chip variant={maintenancePriorityVariant[wo.priority]} className="gap-1">
+            {wo.priority === 'critical' && <AlertTriangle className="w-3 h-3" aria-hidden />}
             {wo.priority}
-          </span>
+          </Chip>
         </div>
 
         <div className="mt-2 text-sm font-medium">{wo.maintainable?.name ?? 'Unknown target'}</div>

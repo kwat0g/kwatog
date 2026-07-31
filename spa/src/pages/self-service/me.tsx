@@ -1,4 +1,4 @@
-// Task SS2 — the "Me" hub now lives in profile.tsx (profile info + account
-// settings). The legacy /self-service/me route re-exports it so existing
-// links keep working; the bottom-nav "Me" tab points at /self-service/profile.
+// Task SS2 — the profile page is the account hub (profile info, bank details,
+// account preferences). The legacy /self-service/me route re-exports it so
+// existing links and bookmarks keep working.
 export { default } from './profile';

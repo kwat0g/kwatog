@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Payroll\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Payroll\Enums\ContributionAgency;
 use App\Modules\Payroll\Models\GovernmentContributionTable;
 use Illuminate\Support\Carbon;
@@ -28,7 +29,7 @@ class GovernmentContributionTableImportService
         bool $deactivatePrior = true,
     ): array {
         if (! is_readable($path)) {
-            throw new RuntimeException("CSV not readable at {$path}.");
+            throw new BusinessRuleException("CSV not readable at {$path}.");
         }
 
         $stream = fopen($path, 'r');
@@ -79,7 +80,7 @@ class GovernmentContributionTableImportService
                             'effective_date' => Carbon::parse((string) $row[$idx['effective_date']])->toDateString(),
                         ];
                         if ($payload['bracket_max'] < $payload['bracket_min']) {
-                            throw new RuntimeException('bracket_max < bracket_min');
+                            throw new BusinessRuleException('bracket_max < bracket_min');
                         }
                         if (! $maxEffective || strcmp($payload['effective_date'], $maxEffective) > 0) {
                             $maxEffective = $payload['effective_date'];

@@ -1,5 +1,4 @@
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
 import { customerPortalApi } from '@/api/b2b/customer';
 import { Panel } from '@/components/ui/Panel';
 import { StatCard } from '@/components/ui/StatCard';
@@ -7,24 +6,22 @@ import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { formatPeso } from '@/lib/formatNumber';
-import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
+import { Chip } from '@/components/ui/Chip';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 const BUCKET_LABELS: Record<string, string> = {
   current: 'Current',
-  d1_30: '1–30 Days',
-  d31_60: '31–60 Days',
-  d61_90: '61–90 Days',
-  d91_plus: '91+ Days',
+  d30_days: '1–30 Days',
+  d60_days: '31–60 Days',
+  d90_plus: '61+ Days',
 };
 
 const BUCKET_COLORS: Record<string, string> = {
   current: 'text-success',
-  d1_30: 'text-warning',
-  d31_60: 'text-warning',
-  d61_90: 'text-danger',
-  d91_plus: 'text-danger',
+  d30_days: 'text-warning',
+  d60_days: 'text-warning',
+  d90_plus: 'text-danger',
 };
 
 export default function StatementOfAccountPage() {
@@ -37,7 +34,7 @@ export default function StatementOfAccountPage() {
     <div>
       <PageHeader
         title="Statement of Account"
-        subtitle={soa ? `${soa.customer_name ?? 'Customer'} · As of ${soa.as_of_date}` : undefined}
+        subtitle={soa ? `${soa.customer.name} · As of ${soa.as_of}` : undefined}
         backTo="/portal/customer"
         backLabel="Portal"
       />
@@ -61,8 +58,8 @@ export default function StatementOfAccountPage() {
         {!isLoading && !isError && soa && (
           <>
             {/* Aging buckets */}
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-              {Object.entries(soa.aging_buckets).map(([key, value]) => (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {Object.entries(soa.aging).map(([key, value]) => (
                 <StatCard
                   key={key}
                   label={BUCKET_LABELS[key] ?? key}
@@ -79,41 +76,35 @@ export default function StatementOfAccountPage() {
               </p>
             </div>
 
-            {/* Open Invoices */}
-            <Panel title={`Open Invoices (${soa.open_invoices.length})`} noPadding>
-              {soa.open_invoices.length > 0 ? (
+            {/* Statement ledger */}
+            <Panel title={`Transactions (${soa.transactions.length})`} noPadding>
+              {soa.transactions.length > 0 ? (
                 <table className={tableCls}>
                   <thead>
                     <tr className={theadTrCls}>
-                      <Th>Invoice #</Th>
                       <Th>Date</Th>
-                      <Th>Due Date</Th>
+                      <Th>Type</Th>
+                      <Th>Reference</Th>
+                      <Th>Description</Th>
                       <Th align="right">Amount</Th>
-                      <Th align="right">Balance</Th>
-                      <Th align="right">Status</Th>
+                      <Th align="right">Running Balance</Th>
                     </tr>
                   </thead>
                   <tbody>
-                    {soa.open_invoices.map((inv) => (
-                      <tr key={inv.id} className={trCls}>
-                        <Td>
-                          <Link to={`/portal/customer/invoices/${inv.id}`} className="font-mono text-accent hover:underline font-medium">
-                            {inv.invoice_number}
-                          </Link>
-                        </Td>
-                        <Td className="text-muted">{inv.date ?? '—'}</Td>
-                        <Td className="text-muted">{inv.due_date ?? '—'}</Td>
-                        <Td align="right" mono>{formatPeso(inv.total_amount)}</Td>
-                        <Td align="right" mono>{formatPeso(inv.balance)}</Td>
-                        <Td align="right" mono>
-                          <Chip variant={chipVariantForStatus(inv.status)}>{inv.status}</Chip>
-                        </Td>
+                    {soa.transactions.map((transaction, index) => (
+                      <tr key={`${transaction.date}-${transaction.reference}-${index}`} className={trCls}>
+                        <Td className="text-muted">{transaction.date}</Td>
+                        <Td><Chip variant={transaction.type === 'payment' ? 'success' : 'info'}>{transaction.type}</Chip></Td>
+                        <Td mono>{transaction.reference}</Td>
+                        <Td>{transaction.description}</Td>
+                        <Td align="right" mono>{formatPeso(transaction.amount)}</Td>
+                        <Td align="right" mono>{formatPeso(transaction.running_balance)}</Td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               ) : (
-                <EmptyState icon="receipt" title="All invoices are paid" description="No outstanding invoices at this time." />
+                <EmptyState icon="receipt" title="No statement activity" description="No invoices or payments exist through this date." />
               )}
             </Panel>
           </>

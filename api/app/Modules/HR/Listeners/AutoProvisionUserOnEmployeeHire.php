@@ -19,7 +19,7 @@ class AutoProvisionUserOnEmployeeHire implements ShouldQueue
 
     public function handle(EmployeeCreated $event): void
     {
-        if (! (bool) $this->settings->get('hr.auto_provision_user.enabled', true)) {
+        if (! $this->settings->requiredBool('hr.auto_provision_user.enabled')) {
             return;
         }
 

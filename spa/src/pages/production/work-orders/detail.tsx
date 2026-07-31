@@ -15,6 +15,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { Panel } from '@/components/ui/Panel';
 import { Select } from '@/components/ui/Select';
+import { Textarea } from '@/components/ui/Textarea';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { ChainHeader, LinkedRecords, ActivityStream } from '@/components/chain';
@@ -22,15 +23,11 @@ import { useEcho } from '@/hooks/useEcho';
 import { useChainProgress } from '@/hooks/useChainProgress';
 import { usePermission } from '@/hooks/usePermission';
 import { formatInt } from '@/lib/formatNumber';
-import type { WorkOrderStatus } from '@/types/production';
+import { workOrderStatusVariant as variant } from '@/lib/statusVariants';
+import type { MachineDowntimeCategory } from '@/types/production';
 import type { WoOperationStatus } from '@/types/production/routing';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { Tabs } from '@/components/ui/Tabs';
-
-const variant: Record<WorkOrderStatus, 'success' | 'info' | 'warning' | 'danger' | 'neutral'> = {
-  planned: 'neutral', confirmed: 'info', in_progress: 'info',
-  paused: 'warning', completed: 'success', closed: 'success', cancelled: 'danger',
-};
 
 const OP_STATUS_CHIP: Record<WoOperationStatus, 'success' | 'info' | 'warning' | 'danger' | 'neutral'> = {
   pending: 'neutral',
@@ -65,6 +62,9 @@ export default function WorkOrderDetailPage() {
 
   const [confirmAction, setConfirmAction] = useState<LifecycleAction | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [showPauseDialog, setShowPauseDialog] = useState(false);
+  const [pauseReason, setPauseReason] = useState('');
+  const [pauseCategory, setPauseCategory] = useState<MachineDowntimeCategory | ''>('');
   const [selectedMachineId, setSelectedMachineId] = useState<string>('');
   const [selectedMoldId, setSelectedMoldId] = useState<string>('');
   const [tab, setTab] = useState<DetailTab>('details');
@@ -77,6 +77,11 @@ export default function WorkOrderDetailPage() {
     queryKey: ['mrp', 'molds', 'all'],
     queryFn: () => moldsApi.list({ per_page: 100 }),
     enabled: showConfirmDialog,
+  });
+  const downtimeCategories = useQuery({
+    queryKey: ['production', 'downtime-categories'],
+    queryFn: workOrdersApi.downtimeCategories,
+    enabled: showPauseDialog,
   });
 
   const { data, isLoading, isError, refetch } = useQuery({
@@ -109,7 +114,7 @@ export default function WorkOrderDetailPage() {
       switch (action) {
         case 'confirm':  return workOrdersApi.confirm(id!, selectedMachineId || undefined, selectedMoldId || undefined);
         case 'start':    return workOrdersApi.start(id!);
-        case 'pause':    return workOrdersApi.pause(id!, 'Manual pause', 'breakdown');
+        case 'pause':    return workOrdersApi.pause(id!, pauseReason.trim(), pauseCategory);
         case 'resume':   return workOrdersApi.resume(id!);
         case 'complete': return workOrdersApi.complete(id!);
         case 'close':    return workOrdersApi.close(id!);
@@ -125,6 +130,9 @@ export default function WorkOrderDetailPage() {
       setShowConfirmDialog(false);
       setSelectedMachineId('');
       setSelectedMoldId('');
+      setShowPauseDialog(false);
+      setPauseReason('');
+      setPauseCategory('');
     },
     onError: (e: AxiosError<{ message?: string }>) => {
       toast.error(e.response?.data?.message ?? 'Action failed.');
@@ -172,7 +180,7 @@ export default function WorkOrderDetailPage() {
               setShowConfirmDialog(true);
             }}>Confirm</Button>}
             {showStart    && <Button size="sm" variant="primary"   icon={<Play size={14} />}        onClick={() => setConfirmAction('start')}>Start</Button>}
-            {showPause    && <Button size="sm" variant="secondary" icon={<Pause size={14} />}      onClick={() => setConfirmAction('pause')}>Pause</Button>}
+            {showPause    && <Button size="sm" variant="secondary" icon={<Pause size={14} />}      onClick={() => setShowPauseDialog(true)}>Pause</Button>}
             {showResume   && <Button size="sm" variant="primary"   icon={<Play size={14} />}        onClick={() => setConfirmAction('resume')}>Resume</Button>}
             {showRecord   && <Button size="sm" variant="primary"   icon={<Activity size={14} />}    onClick={() => navigate(`/production/work-orders/${data.id}/record-output`)}>Record output</Button>}
             {showComplete && <Button size="sm" variant="secondary" icon={<StopCircle size={14} />} onClick={() => setConfirmAction('complete')}>Complete</Button>}
@@ -381,10 +389,15 @@ export default function WorkOrderDetailPage() {
                     meta: `${Number(m.actual_quantity_issued).toFixed(3)} / ${Number(m.bom_quantity).toFixed(3)} ${m.item?.unit_of_measure ?? ''}`,
                   })),
                 }] : []),
-                {
-                  label: 'Quality',
-                  items: [{ id: 'Inspections', meta: 'Sprint 7 — in-process + outgoing AQL' }],
-                },
+                ...(data.inspections && data.inspections.length > 0 ? [{
+                  label: 'Quality inspections',
+                  items: data.inspections.map((inspection) => ({
+                    id: inspection.inspection_number,
+                    href: `/quality/inspections/${inspection.id}`,
+                    meta: inspection.stage.replace('_', ' '),
+                    chip: { variant: inspection.status === 'passed' ? 'success' as const : inspection.status === 'failed' ? 'danger' as const : inspection.status === 'in_progress' ? 'info' as const : 'neutral' as const, text: inspection.status.replace('_', ' ') },
+                  })),
+                }] : []),
               ]}
             />
           </Panel>
@@ -523,6 +536,53 @@ export default function WorkOrderDetailPage() {
               onClick={() => mut.mutate('confirm')}
             >
               {mut.isPending ? 'Confirming…' : 'Confirm work order'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={showPauseDialog}
+        onClose={() => setShowPauseDialog(false)}
+        title={<>Pause work order <span className="font-mono">{data.wo_number}</span></>}
+        size="md"
+      >
+        <div className="px-5 py-4 space-y-4">
+          <Select
+            label="Downtime category"
+            required
+            value={pauseCategory}
+            onChange={(event) => setPauseCategory(event.target.value as MachineDowntimeCategory)}
+            error={downtimeCategories.isError ? 'Could not load downtime categories.' : undefined}
+          >
+            <option value="">Select the actual cause…</option>
+            {downtimeCategories.data?.map((category) => (
+              <option key={category.value} value={category.value}>
+                {category.label}{category.is_planned ? ' (planned)' : ''}
+              </option>
+            ))}
+          </Select>
+          <Textarea
+            label="Reason"
+            required
+            maxLength={200}
+            rows={3}
+            value={pauseReason}
+            onChange={(event) => setPauseReason(event.target.value)}
+            placeholder="Describe what stopped production."
+          />
+          <p className="text-xs text-muted">
+            This reason and category feed the machine downtime and OEE reports.
+          </p>
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-default">
+            <Button variant="secondary" onClick={() => setShowPauseDialog(false)}>Cancel</Button>
+            <Button
+              variant="primary"
+              icon={<Pause size={14} />}
+              disabled={!pauseCategory || !pauseReason.trim() || mut.isPending || downtimeCategories.isError}
+              onClick={() => mut.mutate('pause')}
+            >
+              {mut.isPending ? 'Pausing…' : 'Pause work order'}
             </Button>
           </div>
         </div>

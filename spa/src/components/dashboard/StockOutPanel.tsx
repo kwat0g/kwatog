@@ -122,7 +122,7 @@ export function StockOutPanel({
               <tr key={r.item_id} className={trCls}>
                 <Td>
                   <Link
-                    to={`/inventory/items/${r.code}`}
+                    to={`/inventory/items/${r.item_id}`}
                     className="text-link hover:underline font-mono text-xs"
                     aria-label={`View item ${r.code} - ${r.name}`}
                   >

@@ -30,7 +30,7 @@ export function Tooltip({ content, children, side = 'top', className }: TooltipP
         <span
           role="tooltip"
           className={cn(
-            'absolute z-50 px-2 py-1 rounded text-[11px] bg-primary text-canvas whitespace-nowrap pointer-events-none animate-fade-in',
+            'absolute z-50 px-2 py-1 rounded text-xs bg-primary text-canvas whitespace-nowrap pointer-events-none animate-fade-in',
             sideClasses[side],
             className,
           )}

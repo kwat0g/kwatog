@@ -17,6 +17,17 @@ enum MachineDowntimeCategory: string
         return array_map(fn (self $c) => $c->value, self::cases());
     }
 
+    public function label(): string
+    {
+        return match ($this) {
+            self::Breakdown => 'Machine breakdown',
+            self::Changeover => 'Changeover',
+            self::MaterialShortage => 'Material shortage',
+            self::NoOrder => 'No production order',
+            self::PlannedMaintenance => 'Planned maintenance',
+        };
+    }
+
     public function isPlanned(): bool
     {
         return match ($this) {

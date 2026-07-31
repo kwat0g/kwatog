@@ -5,19 +5,15 @@ declare(strict_types=1);
 namespace App\Modules\Maintenance\Services;
 
 use App\Modules\MRP\Models\Machine;
+use App\Modules\Production\Models\WorkOrder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
  * Task A5 — Running hours tracker for machines.
  *
- * Recompute logic per machine, lifetime:
- *   running_hours_total =
- *     SUM over work_order_outputs.total_minutes / 60
- *     − SUM over machine_downtimes.duration_minutes / 60
- *
- * Falls back to a simple proxy when WO outputs lack duration: counts each
- * output as 1 hour. This is a best-effort tally — its only consumer is the
- * preventive-maintenance evaluator which compares deltas, not absolutes.
+ * Recompute logic uses persisted work-order start/end timestamps and subtracts
+ * recorded downtime. Output-row counts are never converted into invented time.
  */
 class MachineHoursService
 {
@@ -39,22 +35,15 @@ class MachineHoursService
 
     private function computeForMachine(int $machineId): float
     {
-        // Sum of WO outputs as a proxy for run time. If a `total_minutes`
-        // column exists, use it; otherwise count each output as 60 min.
-        $hasMinutes = DB::getSchemaBuilder()->hasColumn('work_order_outputs', 'total_minutes');
-
-        if ($hasMinutes) {
-            $output = (float) DB::table('work_order_outputs as wo')
-                ->join('work_orders as w', 'w.id', '=', 'wo.work_order_id')
-                ->where('w.machine_id', $machineId)
-                ->sum('wo.total_minutes');
-        } else {
-            $count = (int) DB::table('work_order_outputs as wo')
-                ->join('work_orders as w', 'w.id', '=', 'wo.work_order_id')
-                ->where('w.machine_id', $machineId)
-                ->count();
-            $output = $count * 60.0;
-        }
+        $output = WorkOrder::query()
+            ->where('machine_id', $machineId)
+            ->whereNotNull('actual_start')
+            ->get(['actual_start', 'actual_end'])
+            ->sum(function (WorkOrder $workOrder): float {
+                $start = Carbon::parse($workOrder->actual_start);
+                $end = $workOrder->actual_end ? Carbon::parse($workOrder->actual_end) : now();
+                return $end->greaterThan($start) ? $start->diffInMinutes($end) : 0.0;
+            });
 
         $downtime = (float) DB::table('machine_downtimes')
             ->where('machine_id', $machineId)

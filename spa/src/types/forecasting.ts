@@ -30,7 +30,7 @@ export type StockOutRisk = 'critical' | 'high' | 'medium' | 'low' | 'ok';
 export type DemandSource = 'forecast' | 'historical' | 'none';
 
 export interface StockOutRow {
-  item_id: number;
+  item_id: string;
   code: string;
   name: string;
   unit_of_measure: string;

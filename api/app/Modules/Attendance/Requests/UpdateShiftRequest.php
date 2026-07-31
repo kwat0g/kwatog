@@ -34,6 +34,7 @@ class UpdateShiftRequest extends FormRequest
             'is_extended'    => ['sometimes', 'boolean'],
             'auto_ot_hours'  => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:8'],
             'is_active'      => ['sometimes', 'boolean'],
+            'is_default'     => ['sometimes', 'boolean'],
         ];
     }
 

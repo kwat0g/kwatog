@@ -4,33 +4,39 @@
  * Employees update their own contact, address, and emergency-contact details;
  * each change becomes a profile-update request pending HR approval (never
  * auto-applied). Bank-account changes are financial and require HR + Finance
- * dual approval — surfaced as a separate "Request Update" flow.
+ * dual approval — surfaced as a separate "Request update" flow.
  *
- * Also hosts account settings (theme, notification preferences, change
- * password, sign out) so the bottom-nav "Me" tab is a complete hub.
+ * Layout follows the desktop record-detail anatomy used by
+ * [`EmployeeDetailPage`](../hr/employees/detail.tsx): PageHeader with actions,
+ * a wide content column of Panels, and a 320px right rail for identity,
+ * request history, and account preferences. The page renders inside AppLayout
+ * (sidebar + topbar), so it is a web record page — not a phone settings screen.
  */
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Pencil } from 'lucide-react';
+import { KeyRound, LogOut, Pencil } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
 import { selfServiceApi } from '@/api/self-service';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/Input';
-import { BottomSheet } from '@/components/ui/BottomSheet';
+import { Modal } from '@/components/ui/Modal';
+import { Panel } from '@/components/ui/Panel';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LinkButton } from '@/components/ui/LinkButton';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { formatDate } from '@/lib/formatDate';
 import type { ApiValidationError } from '@/types';
 import type { ProfileUpdateRequestRecord, SelfServiceProfile } from '@/types/self-service';
 
-type FieldDef = { key: string; label: string; type?: string; placeholder?: string };
+type FieldDef = { key: string; label: string; type?: string; placeholder?: string; mono?: boolean };
 
 const STATUS_CHIP: Record<string, 'success' | 'warning' | 'info' | 'danger' | 'neutral'> = {
   pending: 'warning',
@@ -61,11 +67,30 @@ const FIELD_LABELS: Record<string, string> = {
   bank_account_no: 'Bank account no.',
 };
 
+const CONTACT_FIELDS: FieldDef[] = [
+  { key: 'mobile_number', label: 'Mobile', placeholder: '09XX-XXX-XXXX', mono: true },
+  { key: 'email', label: 'Email', type: 'email', placeholder: 'you@example.com' },
+];
+
+const EMERGENCY_FIELDS: FieldDef[] = [
+  { key: 'emergency_contact_name', label: 'Name' },
+  { key: 'emergency_contact_relation', label: 'Relationship' },
+  { key: 'emergency_contact_phone', label: 'Phone', mono: true },
+];
+
+const ADDRESS_FIELDS: FieldDef[] = [
+  { key: 'street_address', label: 'Street' },
+  { key: 'barangay', label: 'Barangay' },
+  { key: 'city', label: 'City' },
+  { key: 'province', label: 'Province' },
+  { key: 'zip_code', label: 'ZIP code', mono: true },
+];
+
 export default function SelfServiceProfilePage() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
-  const { mode, setMode } = useThemeStore();
 
   const { data: profile, isLoading, isError, refetch } = useQuery({
     queryKey: ['self-service', 'profile'],
@@ -87,121 +112,256 @@ export default function SelfServiceProfilePage() {
     queryClient.invalidateQueries({ queryKey: ['self-service', 'profile-requests'] });
   };
 
+  const pendingCount = (requests ?? []).filter(
+    (r) => r.status === 'pending' || r.status === 'pending_finance',
+  ).length;
+
+  const subtitle = profile
+    ? [profile.employee_no, profile.position, profile.department].filter(Boolean).join('  ·  ')
+    : 'Your contact details, bank account, and account preferences';
+
   return (
     <div>
-      <PageHeader title="My Profile" backTo="/self-service" backLabel="Dashboard" />
-      <div className="px-5 py-4 space-y-4">
+      <PageHeader
+        title={profile?.full_name ?? 'My Profile'}
+        subtitle={subtitle}
+        backTo="/self-service"
+        backLabel="Self-service"
+        breadcrumbs={[{ label: 'Self-service', href: '/self-service' }, { label: 'Profile' }]}
+        actions={
+          <>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<KeyRound size={12} />}
+              onClick={() => navigate('/change-password')}
+            >
+              Change password
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<LogOut size={12} />}
+              onClick={() => logout()}
+            >
+              Sign out
+            </Button>
+          </>
+        }
+      />
 
-      {/* LOADING */}
-      {isLoading && !profile && (
-        <div className="space-y-2">
-          {[1, 2, 3].map((i) => <SkeletonBlock key={i} className="h-24 rounded-md" />)}
+      <div className="px-5 py-4">
+        {/* LOADING */}
+        {isLoading && !profile && (
+          <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-4 items-start">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {[1, 2, 3, 4].map((i) => <SkeletonBlock key={i} className="h-44 rounded-md" />)}
+            </div>
+            <div className="space-y-4">
+              {[1, 2].map((i) => <SkeletonBlock key={i} className="h-40 rounded-md" />)}
+            </div>
+          </div>
+        )}
+
+        {/* ERROR */}
+        {isError && (
+          <EmptyState
+            icon="alert-circle"
+            title="Couldn't load your profile"
+            description="An error occurred while loading your record. Please try again."
+            action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
+          />
+        )}
+
+        {profile && (
+          <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-4 items-start">
+            {/* ─── Main column ─── */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+              <EditablePanel
+                title="Contact"
+                fields={CONTACT_FIELDS}
+                values={profile}
+                pendingFields={pendingFields}
+                onSubmitted={invalidate}
+              />
+
+              <EditablePanel
+                title="Emergency contact"
+                fields={EMERGENCY_FIELDS}
+                values={profile}
+                pendingFields={pendingFields}
+                onSubmitted={invalidate}
+              />
+
+              <EditablePanel
+                title="Address"
+                fields={ADDRESS_FIELDS}
+                values={profile}
+                pendingFields={pendingFields}
+                onSubmitted={invalidate}
+                className="lg:col-span-2"
+                columns={2}
+              />
+
+              <BankPanel
+                bankName={profile.bank_name}
+                accountLast4={profile.bank_account_last4}
+                pending={pendingFields.has('bank_account_no') || pendingFields.has('bank_name')}
+                onSubmitted={invalidate}
+              />
+
+              <Panel title="Government IDs" meta="managed by HR" noPadding>
+                <dl className="divide-y divide-subtle">
+                  <FieldRow label="SSS" value={profile.sss_no_last4} mono />
+                  <FieldRow label="PhilHealth" value={profile.philhealth_no_last4} mono />
+                  <FieldRow label="Pag-IBIG" value={profile.pagibig_no_last4} mono />
+                  <FieldRow label="TIN" value={profile.tin_last4} mono />
+                </dl>
+              </Panel>
+            </div>
+
+            {/* ─── Right rail ─── */}
+            <div className="space-y-4">
+              <IdentityPanel profile={profile} email={user?.email ?? null} />
+              <UpdateRequestsPanel requests={requests ?? []} pendingCount={pendingCount} />
+              <PreferencesPanel />
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ───────────────────────── Shared rows ───────────────────────── */
+
+/**
+ * One label/value line. Fixed label column so values line up down the panel —
+ * the desktop definition-list look, not the phone-settings right-aligned row.
+ */
+function FieldRow({
+  label,
+  value,
+  mono,
+  pending,
+}: {
+  label: string;
+  value: string | null;
+  mono?: boolean;
+  pending?: boolean;
+}) {
+  return (
+    <div className="grid grid-cols-[120px_minmax(0,1fr)] items-baseline gap-3 px-4 py-2">
+      <dt className="text-xs text-muted truncate">{label}</dt>
+      <dd className="flex items-baseline gap-2 min-w-0">
+        <span className={`text-sm text-primary truncate ${mono ? 'font-mono tabular-nums' : ''}`}>
+          {value || '—'}
+        </span>
+        {pending && <Chip variant="warning">Pending</Chip>}
+      </dd>
+    </div>
+  );
+}
+
+/* ───────────────────────── Identity ───────────────────────── */
+
+function IdentityPanel({ profile, email }: { profile: SelfServiceProfile; email: string | null }) {
+  return (
+    <Panel title="At a glance">
+      <div className="flex items-center gap-3 mb-3">
+        <Avatar name={profile.full_name} src={profile.photo_path} size="lg" className="h-10 w-10 text-sm" />
+        <div className="min-w-0">
+          <div className="text-sm font-medium text-primary truncate">{profile.full_name}</div>
+          <div className="text-xs text-muted font-mono tabular-nums truncate">{profile.employee_no}</div>
         </div>
-      )}
+      </div>
+      <dl className="text-sm space-y-2">
+        <div>
+          <dt className="text-2xs uppercase tracking-wider text-muted font-medium">Position</dt>
+          <dd className="text-primary">{profile.position ?? '—'}</dd>
+        </div>
+        <div>
+          <dt className="text-2xs uppercase tracking-wider text-muted font-medium">Department</dt>
+          <dd className="text-primary">{profile.department ?? '—'}</dd>
+        </div>
+        <div>
+          <dt className="text-2xs uppercase tracking-wider text-muted font-medium">Employment type</dt>
+          <dd className="text-primary">{profile.employment_type?.replace(/_/g, ' ') ?? '—'}</dd>
+        </div>
+        <div>
+          <dt className="text-2xs uppercase tracking-wider text-muted font-medium">Date hired</dt>
+          <dd className="font-mono tabular-nums text-primary">
+            {profile.date_hired ? formatDate(profile.date_hired) : '—'}
+          </dd>
+        </div>
+        {email && (
+          <div>
+            <dt className="text-2xs uppercase tracking-wider text-muted font-medium">Sign-in email</dt>
+            <dd className="text-primary truncate">{email}</dd>
+          </div>
+        )}
+      </dl>
+    </Panel>
+  );
+}
 
-      {/* ERROR */}
-      {isError && (
-        <EmptyState
-          icon="alert-circle"
-          title="Couldn't load your profile"
-          action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
-        />
-      )}
+/* ───────────────────────── Update requests ───────────────────────── */
 
-      {profile && (
-        <>
-          {/* Header card */}
-          <section className="rounded-md border border-default bg-surface p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-elevated flex items-center justify-center text-sm font-medium">
-                {profile.full_name.slice(0, 2).toUpperCase()}
-              </div>
+function UpdateRequestsPanel({
+  requests,
+  pendingCount,
+}: {
+  requests: ProfileUpdateRequestRecord[];
+  pendingCount: number;
+}) {
+  return (
+    <Panel
+      title="Update requests"
+      meta={requests.length > 0 ? `${pendingCount} pending · ${requests.length} total` : undefined}
+      noPadding
+    >
+      {requests.length === 0 ? (
+        <div className="px-4 py-4">
+          <EmptyState
+            size="compact"
+            icon="inbox"
+            title="No change requests"
+            description="Edits you submit appear here until HR reviews them."
+          />
+        </div>
+      ) : (
+        <ul className="divide-y divide-subtle">
+          {requests.slice(0, 8).map((r) => (
+            <li key={r.id} className="px-4 py-2.5 flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <div className="text-sm font-medium truncate">{profile.full_name}</div>
-                <div className="text-xs text-muted font-mono tabular-nums truncate">
-                  {profile.employee_no}
+                <div className="text-xs text-secondary truncate">
+                  {Object.keys(r.changes).map((k) => FIELD_LABELS[k] ?? k).join(', ')}
                 </div>
-                <div className="text-xs text-muted truncate">
-                  {profile.position ?? '—'} · {profile.department ?? '—'}
+                <div className="text-2xs text-muted font-mono tabular-nums">
+                  {r.created_at ? formatDate(r.created_at) : '—'}
                 </div>
               </div>
-            </div>
-          </section>
-
-          {/* Pending requests banner */}
-          {requests && requests.length > 0 && (
-            <PendingRequests requests={requests} />
-          )}
-
-          {/* Editable: Contact */}
-          <EditableBlock
-            title="Contact"
-            fields={[
-              { key: 'mobile_number', label: 'Mobile', placeholder: '09XX-XXX-XXXX' },
-              { key: 'email', label: 'Email', type: 'email', placeholder: 'you@example.com' },
-            ]}
-            values={profile}
-            pendingFields={pendingFields}
-            onSubmitted={invalidate}
-          />
-
-          {/* Editable: Address */}
-          <EditableBlock
-            title="Address"
-            fields={[
-              { key: 'street_address', label: 'Street' },
-              { key: 'barangay', label: 'Barangay' },
-              { key: 'city', label: 'City' },
-              { key: 'province', label: 'Province' },
-              { key: 'zip_code', label: 'ZIP code' },
-            ]}
-            values={profile}
-            pendingFields={pendingFields}
-            onSubmitted={invalidate}
-          />
-
-          {/* Editable: Emergency contact */}
-          <EditableBlock
-            title="Emergency contact"
-            fields={[
-              { key: 'emergency_contact_name', label: 'Name' },
-              { key: 'emergency_contact_relation', label: 'Relationship' },
-              { key: 'emergency_contact_phone', label: 'Phone' },
-            ]}
-            values={profile}
-            pendingFields={pendingFields}
-            onSubmitted={invalidate}
-          />
-
-          {/* Bank account (financial — HR + Finance approval) */}
-          <BankBlock
-            bankName={profile.bank_name}
-            accountLast4={profile.bank_account_last4}
-            pending={pendingFields.has('bank_account_no') || pendingFields.has('bank_name')}
-            onSubmitted={invalidate}
-          />
-
-          {/* Government IDs — masked, read-only (HR-only changes) */}
-          <section className="rounded-md border border-default bg-canvas">
-            <div className="px-3 py-2 border-b border-subtle text-2xs uppercase tracking-wider text-muted font-medium">
-              Government IDs · managed by HR
-            </div>
-            <dl className="divide-y divide-subtle">
-              <ReadOnlyRow label="SSS" value={profile.sss_no_last4} />
-              <ReadOnlyRow label="PhilHealth" value={profile.philhealth_no_last4} />
-              <ReadOnlyRow label="Pag-IBIG" value={profile.pagibig_no_last4} />
-              <ReadOnlyRow label="TIN" value={profile.tin_last4} />
-            </dl>
-          </section>
-        </>
+              <Chip variant={STATUS_CHIP[r.status] ?? 'neutral'}>
+                {STATUS_LABEL[r.status] ?? r.status}
+              </Chip>
+            </li>
+          ))}
+        </ul>
       )}
+    </Panel>
+  );
+}
 
-      {/* Account settings hub */}
-      <section className="rounded-md border border-default bg-canvas">
-        <div className="px-3 py-2 border-b border-subtle text-2xs uppercase tracking-wider text-muted font-medium">
-          Theme
-        </div>
-        <div className="p-2">
+/* ───────────────────────── Preferences ───────────────────────── */
+
+function PreferencesPanel() {
+  const { mode, setMode } = useThemeStore();
+
+  return (
+    <Panel title="Preferences">
+      <div className="space-y-3">
+        <div>
+          <div className="text-2xs uppercase tracking-wider text-muted font-medium mb-1.5">Theme</div>
           <SegmentedControl
             label="Theme"
             value={mode}
@@ -213,83 +373,38 @@ export default function SelfServiceProfilePage() {
             ]}
           />
         </div>
-      </section>
-
-      <section className="rounded-md border border-default bg-canvas overflow-hidden">
-        <Link to="/self-service/documents" className="block px-3 py-3 hover:bg-elevated text-sm">
-          My documents
-        </Link>
-        <Link to="/self-service/overtime" className="block px-3 py-3 hover:bg-elevated text-sm border-t border-subtle">
-          Overtime requests
-        </Link>
-        <Link to="/self-service/notification-preferences" className="block px-3 py-3 hover:bg-elevated text-sm border-t border-subtle">
-          Notification preferences
-        </Link>
-        <Link to="/change-password" className="block px-3 py-3 hover:bg-elevated text-sm border-t border-subtle">
-          Change password
-        </Link>
-      </section>
-
-      <Button variant="danger" className="w-full" onClick={() => logout()}>
-        Sign out
-      </Button>
-
-      {user?.email && (
-        <p className="text-2xs text-muted text-center">{user.email}</p>
-      )}
-      </div>{/* .px-5 py-4 */}
-    </div>
-  );
-}
-
-/* ───────────────────────── Sub-components ───────────────────────── */
-
-function ReadOnlyRow({ label, value }: { label: string; value: string | null }) {
-  return (
-    <div className="flex items-center justify-between px-3 py-2.5">
-      <dt className="text-xs text-muted">{label}</dt>
-      <dd className="text-sm font-mono tabular-nums">{value ?? '—'}</dd>
-    </div>
-  );
-}
-
-function PendingRequests({ requests }: { requests: ProfileUpdateRequestRecord[] }) {
-  return (
-    <section className="rounded-md border border-default bg-canvas">
-      <div className="px-3 py-2 border-b border-subtle text-2xs uppercase tracking-wider text-muted font-medium">
-        Update requests
+        <div className="pt-1 border-t border-subtle">
+          <Link
+            to="/self-service/notification-preferences"
+            className="text-xs text-link hover:underline"
+          >
+            Notification preferences →
+          </Link>
+        </div>
       </div>
-      <ul className="divide-y divide-subtle">
-        {requests.slice(0, 8).map((r) => (
-          <li key={r.id} className="px-3 py-2.5 flex items-start justify-between gap-2">
-            <div className="min-w-0 text-xs">
-              <div className="text-secondary">
-                {Object.keys(r.changes).map((k) => FIELD_LABELS[k] ?? k).join(', ')}
-              </div>
-              <div className="text-muted">{r.created_at?.slice(0, 10)}</div>
-            </div>
-            <Chip variant={STATUS_CHIP[r.status] ?? 'neutral'}>
-              {STATUS_LABEL[r.status] ?? r.status}
-            </Chip>
-          </li>
-        ))}
-      </ul>
-    </section>
+    </Panel>
   );
 }
 
-function EditableBlock({
+/* ───────────────────────── Editable block ───────────────────────── */
+
+function EditablePanel({
   title,
   fields,
   values,
   pendingFields,
   onSubmitted,
+  className,
+  columns = 1,
 }: {
   title: string;
   fields: FieldDef[];
   values: SelfServiceProfile;
   pendingFields: Set<string>;
   onSubmitted: () => void;
+  className?: string;
+  /** Field columns while editing — address gets 2, short blocks get 1. */
+  columns?: 1 | 2;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Record<string, string>>({});
@@ -339,72 +454,72 @@ function EditableBlock({
     },
   });
 
-  const anyPending = fields.some((f) => pendingFields.has(f.key));
-
   return (
-    <section className="rounded-md border border-default bg-canvas">
-      <div className="px-3 py-2 border-b border-subtle flex items-center justify-between">
-        <span className="text-2xs uppercase tracking-wider text-muted font-medium">{title}</span>
-        {!editing && (
+    <Panel
+      title={title}
+      className={className}
+      noPadding={!editing}
+      actions={
+        !editing ? (
           <LinkButton onClick={startEdit} icon={<Pencil size={12} />} className="text-xs">
             Edit
           </LinkButton>
-        )}
-      </div>
-
+        ) : undefined
+      }
+    >
       {!editing ? (
         <dl className="divide-y divide-subtle">
           {fields.map((f) => (
-            <div key={f.key} className="flex items-center justify-between px-3 py-2.5">
-              <dt className="text-xs text-muted">{f.label}</dt>
-              <dd className="text-sm text-right max-w-[60%] truncate">
-                {get(f.key) || '—'}
-              </dd>
-            </div>
-          ))}
-          {anyPending && (
-            <div className="px-3 py-2">
-              <Chip variant="warning">Change pending HR review</Chip>
-            </div>
-          )}
-        </dl>
-      ) : (
-        <div className="p-3 space-y-3">
-          {fields.map((f) => (
-            <Input
+            <FieldRow
               key={f.key}
               label={f.label}
-              type={f.type ?? 'text'}
-              placeholder={f.placeholder}
-              value={draft[f.key] ?? ''}
-              onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))}
+              value={get(f.key)}
+              mono={f.mono}
+              pending={pendingFields.has(f.key)}
             />
           ))}
+        </dl>
+      ) : (
+        <div className="space-y-3">
+          <div className={columns === 2 ? 'grid grid-cols-1 sm:grid-cols-2 gap-3' : 'space-y-3'}>
+            {fields.map((f) => (
+              <Input
+                key={f.key}
+                label={f.label}
+                type={f.type ?? 'text'}
+                placeholder={f.placeholder}
+                value={draft[f.key] ?? ''}
+                onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))}
+              />
+            ))}
+          </div>
           {error && <p className="text-xs text-danger">{error}</p>}
-          <p className="text-2xs text-muted">
-            Changes are reviewed by HR before they take effect.
-          </p>
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" size="sm" onClick={() => setEditing(false)} disabled={mutation.isPending}>
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => mutation.mutate()}
-              disabled={mutation.isPending}
-              loading={mutation.isPending}
-            >
-              {mutation.isPending ? 'Submitting...' : 'Submit for review'}
-            </Button>
+          <div className="flex items-center justify-between gap-3 pt-2 border-t border-default">
+            <p className="text-2xs text-muted">Changes are reviewed by HR before they take effect.</p>
+            <div className="flex gap-2 shrink-0">
+              <Button variant="secondary" size="sm" onClick={() => setEditing(false)} disabled={mutation.isPending}>
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => mutation.mutate()}
+                disabled={mutation.isPending}
+                loading={mutation.isPending}
+              >
+                {mutation.isPending ? 'Submitting…' : 'Submit for review'}
+              </Button>
+            </div>
           </div>
         </div>
       )}
-    </section>
+    </Panel>
   );
 }
 
-function BankBlock({
+/* ───────────────────────── Bank account ───────────────────────── */
+
+function BankPanel({
   bankName,
   accountLast4,
   pending,
@@ -450,35 +565,30 @@ function BankBlock({
   });
 
   return (
-    <section className="rounded-md border border-default bg-canvas">
-      <div className="px-3 py-2 border-b border-subtle flex items-center justify-between">
-        <span className="text-2xs uppercase tracking-wider text-muted font-medium">
-          Bank account · HR + Finance approval
-        </span>
-        {!pending && (
+    <Panel
+      title="Bank account"
+      meta="HR + Finance approval"
+      noPadding
+      actions={
+        !pending ? (
           <LinkButton onClick={() => { setError(null); setOpen(true); }} className="text-xs">
             Request update
           </LinkButton>
-        )}
-      </div>
+        ) : undefined
+      }
+    >
       <dl className="divide-y divide-subtle">
-        <div className="flex items-center justify-between px-3 py-2.5">
-          <dt className="text-xs text-muted">Bank</dt>
-          <dd className="text-sm">{bankName || '—'}</dd>
-        </div>
-        <div className="flex items-center justify-between px-3 py-2.5">
-          <dt className="text-xs text-muted">Account</dt>
-          <dd className="text-sm font-mono tabular-nums">{accountLast4 ?? '—'}</dd>
-        </div>
-        {pending && (
-          <div className="px-3 py-2">
-            <Chip variant="info">Change awaiting HR + Finance</Chip>
-          </div>
-        )}
+        <FieldRow label="Bank" value={bankName} pending={pending} />
+        <FieldRow label="Account" value={accountLast4} mono />
       </dl>
 
-      <BottomSheet isOpen={open} onClose={() => setOpen(false)} title="Request Bank Account Update">
-        <div className="space-y-3">
+      <Modal
+        isOpen={open}
+        onClose={() => setOpen(false)}
+        title="Request Bank Account Update"
+        size="md"
+      >
+        <div className="space-y-3 py-4">
           <p className="text-xs text-muted">
             Bank changes affect payroll disbursement and require approval from
             both HR and Finance. Your current account stays in use until approved.
@@ -494,9 +604,10 @@ function BankBlock({
             value={account}
             onChange={(e) => setAccount(e.target.value)}
             placeholder="Account number"
+            className="font-mono"
           />
           {error && <p className="text-xs text-danger">{error}</p>}
-          <div className="flex justify-end gap-2 pt-1">
+          <div className="flex justify-end gap-2 pt-2 border-t border-default">
             <Button variant="secondary" onClick={() => setOpen(false)} disabled={mutation.isPending}>
               Cancel
             </Button>
@@ -506,11 +617,11 @@ function BankBlock({
               disabled={mutation.isPending}
               loading={mutation.isPending}
             >
-              {mutation.isPending ? 'Submitting...' : 'Submit request'}
+              {mutation.isPending ? 'Submitting…' : 'Submit request'}
             </Button>
           </div>
         </div>
-      </BottomSheet>
-    </section>
+      </Modal>
+    </Panel>
   );
 }

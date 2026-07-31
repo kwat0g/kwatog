@@ -12,22 +12,11 @@ import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
-import type { MaintenancePriority, MaintenanceWorkOrder, MaintenanceWorkOrderStatus } from '@/types/maintenance';
-
-const STATUS_CHIP: Record<MaintenanceWorkOrderStatus, 'success' | 'danger' | 'warning' | 'info' | 'neutral'> = {
-  open:        'warning',
-  assigned:    'info',
-  in_progress: 'info',
-  completed:   'success',
-  cancelled:   'neutral',
-};
-
-const PRIORITY_CHIP: Record<MaintenancePriority, 'success' | 'danger' | 'warning' | 'info' | 'neutral'> = {
-  critical: 'danger',
-  high:     'warning',
-  medium:   'info',
-  low:      'neutral',
-};
+import {
+  maintenancePriorityVariant as PRIORITY_CHIP,
+  maintenanceStatusVariant as STATUS_CHIP,
+} from '@/lib/statusVariants';
+import type { MaintenanceWorkOrder } from '@/types/maintenance';
 
 export default function MaintenanceWorkOrdersListPage() {
   const navigate = useNavigate();

@@ -137,7 +137,7 @@ test.describe('Quality Dashboard — Defect Rate Forecast Panel', () => {
 
   test('shows error state when API fails', async ({ page }) => {
     await setupDashboard(page, API_URL, USERS.qc, {}, { status: 500 });
-    await expect(page.getByText(/Failed to load dashboard/)).toBeVisible();
+    await expect(page.getByRole('heading', { name: "Can't load this dashboard" })).toBeVisible();
   });
 
   test('shows loading skeleton during fetch', async ({ page }) => {

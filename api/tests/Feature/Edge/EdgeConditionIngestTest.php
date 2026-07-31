@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Edge;
 
 use App\Modules\Auth\Models\Role;
+use App\Common\Services\SettingsService;
 use App\Modules\Edge\Models\EdgeDevice;
 use App\Modules\Maintenance\Models\MachineConditionReading;
 use App\Modules\MRP\Models\Machine;
@@ -94,6 +95,25 @@ class EdgeConditionIngestTest extends TestCase
         $r->assertStatus(201);
         $r->assertJsonPath('data.triggered', false);
         $this->assertStringContainsString('exceeds safe threshold', (string) $r->json('data.reason'));
+    }
+
+    public function test_persisted_threshold_setting_controls_breach_evaluation(): void
+    {
+        app(SettingsService::class)->set(
+            'maintenance.predictive.temperature.max',
+            1000.0,
+            'maintenance',
+        );
+
+        $m = $this->machine();
+        $r = $this->send($this->tokenFor($this->iotDevice($m)), [
+            'metric' => 'temperature',
+            'value' => 999,
+        ]);
+
+        $r->assertStatus(201);
+        $r->assertJsonPath('data.triggered', false);
+        $r->assertJsonPath('data.reason', null);
     }
 
     public function test_consecutive_breaches_create_mwo(): void

@@ -3,14 +3,16 @@ import { usePermission } from '@/hooks/usePermission';
 import { EmptyState } from '@/components/ui/EmptyState';
 
 interface PermissionGuardProps {
-  permission: string;
+  permission?: string;
+  anyOf?: string[];
   children: ReactNode;
 }
 
-export function PermissionGuard({ permission, children }: PermissionGuardProps) {
+export function PermissionGuard({ permission, anyOf, children }: PermissionGuardProps) {
   const { can } = usePermission();
+  const allowed = permission ? can(permission) : Boolean(anyOf?.some(can));
 
-  if (!can(permission)) {
+  if (!allowed) {
     return (
       <div className="px-5 py-10">
         <EmptyState

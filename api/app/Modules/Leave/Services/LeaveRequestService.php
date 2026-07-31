@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Leave\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\ApprovalService;
 use App\Common\Services\DocumentSequenceService;
 use App\Modules\Attendance\Enums\AttendanceStatus;
@@ -19,7 +20,6 @@ use App\Modules\Leave\Models\LeaveType;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 class LeaveRequestService
 {
@@ -107,7 +107,7 @@ class LeaveRequestService
                 ->lockForUpdate()
                 ->first();
             if ($bal && (float) $bal->remaining < $days) {
-                throw new RuntimeException("Insufficient leave balance ({$bal->remaining} remaining; {$days} requested).");
+                throw new BusinessRuleException("Insufficient leave balance ({$bal->remaining} remaining; {$days} requested).");
             }
 
             // Overlap check — lock overlapping rows to prevent concurrent
@@ -139,7 +139,7 @@ class LeaveRequestService
                 ->lockForUpdate()
                 ->exists();
             if ($overlap) {
-                throw new RuntimeException('You already have a leave request for these dates.');
+                throw new BusinessRuleException('You already have a leave request for these dates.');
             }
 
             $req = LeaveRequest::create([
@@ -168,7 +168,7 @@ class LeaveRequestService
     {
         return DB::transaction(function () use ($req, $approver, $remarks) {
             if ($req->status !== LeaveRequestStatus::PendingDept) {
-                throw new RuntimeException('Only requests pending department head approval can be approved here.');
+                throw new BusinessRuleException('Only requests pending department head approval can be approved here.');
             }
             $this->approvals->approve($req, $approver, $remarks);
 
@@ -188,7 +188,7 @@ class LeaveRequestService
     {
         return DB::transaction(function () use ($req, $approver, $remarks) {
             if ($req->status !== LeaveRequestStatus::PendingHr) {
-                throw new RuntimeException('Only requests pending HR approval can be approved here.');
+                throw new BusinessRuleException('Only requests pending HR approval can be approved here.');
             }
             $this->approvals->approve($req, $approver, $remarks);
 
@@ -269,7 +269,7 @@ class LeaveRequestService
     {
         return DB::transaction(function () use ($req, $approver, $reason) {
             if (! in_array($req->status, [LeaveRequestStatus::PendingDept, LeaveRequestStatus::PendingHr], true)) {
-                throw new RuntimeException('Only pending requests can be rejected.');
+                throw new BusinessRuleException('Only pending requests can be rejected.');
             }
             $this->approvals->reject($req, $approver, $reason);
             $req->forceFill([
@@ -287,7 +287,7 @@ class LeaveRequestService
     {
         return DB::transaction(function () use ($req, $user) {
             if (in_array($req->status, [LeaveRequestStatus::Cancelled, LeaveRequestStatus::Rejected], true)) {
-                throw new RuntimeException('Already finalized.');
+                throw new BusinessRuleException('Already finalized.');
             }
             $wasApproved = $req->status === LeaveRequestStatus::Approved;
             $req->forceFill(['status' => LeaveRequestStatus::Cancelled->value])->save();

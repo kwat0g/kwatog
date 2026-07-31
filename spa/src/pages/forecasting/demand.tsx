@@ -319,7 +319,7 @@ export default function DemandForecastingPage() {
                           />
                         )}
                       </div>
-                      <span className="text-[9px] text-muted -rotate-45 origin-top-left whitespace-nowrap pt-1">
+                      <span className="text-2xs text-muted -rotate-45 origin-top-left whitespace-nowrap pt-1">
                         {d.label}
                       </span>
                     </div>

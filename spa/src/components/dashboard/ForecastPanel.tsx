@@ -178,7 +178,7 @@ export function ForecastPanel({
 
                 {/* X-axis label */}
                 {i % 2 === 0 && (
-                  <span className="text-[10px] text-muted mt-1 truncate max-w-full text-center">
+                  <span className="text-2xs text-muted mt-1 truncate max-w-full text-center">
                     {monthLabel}
                   </span>
                 )}
@@ -188,7 +188,7 @@ export function ForecastPanel({
         </div>
 
         {/* Legend */}
-        <div className="flex items-center justify-end gap-3 text-[11px] text-muted">
+        <div className="flex items-center justify-end gap-3 text-xs text-muted">
           <span className="flex items-center gap-1">
             <span className="w-2.5 h-2.5 rounded-sm bg-accent/60" />
             Historical

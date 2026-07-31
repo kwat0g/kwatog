@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Models\StockCountItem;
 use App\Modules\Inventory\Models\StockCountSession;
@@ -12,7 +13,6 @@ use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Common\Services\DocumentSequenceService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 class StockCountService
 {
@@ -103,7 +103,7 @@ class StockCountService
         return DB::transaction(function () use ($id) {
             $session = StockCountSession::query()->lockForUpdate()->findOrFail($id);
             if ($session->status !== 'draft') {
-                throw new RuntimeException('Session must be in draft status to start.');
+                throw new BusinessRuleException('Session must be in draft status to start.');
             }
 
             $locationIds = $session->items()->pluck('location_id');
@@ -113,7 +113,7 @@ class StockCountService
                 ->lockForUpdate()
                 ->first();
             if ($overlap) {
-                throw new RuntimeException("Locations are already frozen by stock count {$overlap->session_number}.");
+                throw new BusinessRuleException("Locations are already frozen by stock count {$overlap->session_number}.");
             }
 
             $session->update([
@@ -128,7 +128,7 @@ class StockCountService
     {
         $item = StockCountItem::findOrFail($itemId);
         if ($item->session->status !== 'in_progress') {
-            throw new RuntimeException('Session is not in progress.');
+            throw new BusinessRuleException('Session is not in progress.');
         }
 
         $item->update([
@@ -156,10 +156,10 @@ class StockCountService
     {
         $item = StockCountItem::with('session')->findOrFail($itemId);
         if ($item->session->status !== 'in_progress') {
-            throw new RuntimeException('Session is not in progress.');
+            throw new BusinessRuleException('Session is not in progress.');
         }
         if ($item->status !== 'counted') {
-            throw new RuntimeException('Item must be counted first.');
+            throw new BusinessRuleException('Item must be counted first.');
         }
 
         $item->update([
@@ -174,7 +174,7 @@ class StockCountService
         return DB::transaction(function () use ($id, $user) {
             $session = StockCountSession::with('items')->findOrFail($id);
             if ($session->status !== 'in_progress') {
-                throw new RuntimeException('Session must be in progress to complete.');
+                throw new BusinessRuleException('Session must be in progress to complete.');
             }
 
             $varianceCount = 0;
@@ -191,7 +191,7 @@ class StockCountService
 
                 // If variance > 2% and not verified, require approval
                 if (abs($item->variance_percent) > 2 && $item->status !== 'verified') {
-                    throw new RuntimeException(
+                    throw new BusinessRuleException(
                         "Item #{$item->id} has a variance of {$item->variance_percent}% — requires supervisor sign-off."
                     );
                 }
@@ -242,7 +242,7 @@ class StockCountService
     {
         $session = StockCountSession::findOrFail($id);
         if (in_array($session->status, ['completed', 'cancelled'])) {
-            throw new RuntimeException('Session already completed or cancelled.');
+            throw new BusinessRuleException('Session already completed or cancelled.');
         }
         $session->update(['status' => 'cancelled']);
         return $session->fresh();

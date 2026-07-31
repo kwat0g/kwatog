@@ -64,7 +64,7 @@ export default function DepartmentBudgetDetailPage() {
       </div>
 
       {/* Utilization bar */}
-      <div className="h-3 bg-muted rounded-full overflow-hidden">
+      <div className="h-3 bg-subtle rounded-full overflow-hidden">
         <div
           className={cn('h-full rounded-full transition-all duration-500', getBarColor(utilizationPct))}
           style={{ width: `${Math.min(utilizationPct, 100)}%` }}

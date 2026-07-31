@@ -72,13 +72,6 @@ class InterestBearingAmortizationTest extends TestCase
         $this->assertFalse(LoanType::CashAdvance->isGovernment());
     }
 
-    public function test_loan_type_default_interest_rates(): void
-    {
-        $this->assertEquals('0.10', LoanType::SssLoan->defaultInterestRate());
-        $this->assertEquals('0.105', LoanType::PagibigLoan->defaultInterestRate());
-        $this->assertEquals('0.00', LoanType::CompanyLoan->defaultInterestRate());
-    }
-
     public function test_declining_principal_in_schedule(): void
     {
         $schedule = $this->service->generateWithInterest('30000.00', '0.12', 12);

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\CRM\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\SearchOperator;
@@ -13,7 +14,6 @@ use App\Modules\CRM\Models\Lead;
 use App\Modules\CRM\Models\Opportunity;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 class LeadService
 {
@@ -68,7 +68,7 @@ class LeadService
     public function update(Lead $lead, array $data): Lead
     {
         if ($lead->status === LeadStatus::Converted) {
-            throw new RuntimeException('Cannot update a converted lead.');
+            throw new BusinessRuleException('Cannot update a converted lead.');
         }
         $lead->update($data);
         return $this->show($lead->fresh());
@@ -77,7 +77,7 @@ class LeadService
     public function qualify(Lead $lead): Lead
     {
         if (! in_array($lead->status, [LeadStatus::New, LeadStatus::Contacted], true)) {
-            throw new RuntimeException('Only new or contacted leads can be qualified.');
+            throw new BusinessRuleException('Only new or contacted leads can be qualified.');
         }
         $lead->status = LeadStatus::Qualified;
         $lead->save();
@@ -87,7 +87,7 @@ class LeadService
     public function disqualify(Lead $lead, ?string $reason = null): Lead
     {
         if ($lead->status === LeadStatus::Converted) {
-            throw new RuntimeException('Cannot disqualify a converted lead.');
+            throw new BusinessRuleException('Cannot disqualify a converted lead.');
         }
         $lead->notes = trim(($lead->notes ?? '') . ($reason ? "\n\n[Disqualified: {$reason}]" : "\n\n[Disqualified]"));
         $lead->status = LeadStatus::Disqualified;
@@ -102,10 +102,10 @@ class LeadService
     public function convertToOpportunity(Lead $lead, OpportunityService $opportunityService): Opportunity
     {
         if ($lead->status !== LeadStatus::Qualified) {
-            throw new RuntimeException('Only qualified leads can be converted to an opportunity.');
+            throw new BusinessRuleException('Only qualified leads can be converted to an opportunity.');
         }
         if ($lead->converted_to_opportunity_id) {
-            throw new RuntimeException('This lead has already been converted.');
+            throw new BusinessRuleException('This lead has already been converted.');
         }
 
         return DB::transaction(function () use ($lead, $opportunityService) {

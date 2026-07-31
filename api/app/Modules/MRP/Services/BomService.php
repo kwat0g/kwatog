@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\MRP\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\HashIdFilter;
 use App\Modules\CRM\Models\Product;
 use App\Modules\Inventory\Models\Item;
@@ -90,7 +91,7 @@ class BomService
     {
         // Preserve audit trail — only allow deleting inactive (historical) versions.
         if ($bom->is_active) {
-            throw new RuntimeException('Cannot delete the active BOM. Archive it by creating a new version instead.');
+            throw new BusinessRuleException('Cannot delete the active BOM. Archive it by creating a new version instead.');
         }
         $bom->delete();
     }

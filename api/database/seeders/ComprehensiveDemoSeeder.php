@@ -13,7 +13,6 @@ use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Production\Models\WorkOrder;
-use App\Modules\Quality\Models\DefectType;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -974,7 +973,10 @@ class ComprehensiveDemoSeeder extends Seeder
             ['name' => 'Length',           'type' => 'dimensional', 'uom' => 'mm',  'nominal' => 100,   'tol_min' => -0.5, 'tol_max' => 0.5, 'critical' => true],
             ['name' => 'Width',            'type' => 'dimensional', 'uom' => 'mm',  'nominal' => 50,    'tol_min' => -0.3, 'tol_max' => 0.3, 'critical' => true],
             ['name' => 'Height',           'type' => 'dimensional', 'uom' => 'mm',  'nominal' => 30,    'tol_min' => -0.2, 'tol_max' => 0.2, 'critical' => false],
-            ['name' => 'Weight',           'type' => 'weight',      'uom' => 'g',   'nominal' => 200,   'tol_min' => -5,   'tol_max' => 5,   'critical' => false],
+            // "Weight" is a numeric measurement with a tolerance window, so it
+            // rides the Dimensional path — InspectionParameterType has no
+            // 'weight' case and casting one back out of the DB throws.
+            ['name' => 'Weight',           'type' => 'dimensional', 'uom' => 'g',   'nominal' => 200,   'tol_min' => -5,   'tol_max' => 5,   'critical' => false],
             ['name' => 'Surface Finish',   'type' => 'visual',      'uom' => null,  'nominal' => null,  'tol_min' => null, 'tol_max' => null, 'critical' => false],
         ];
 

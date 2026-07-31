@@ -22,6 +22,7 @@ class ShiftResource extends JsonResource
             'is_extended'    => (bool) $this->is_extended,
             'auto_ot_hours'  => $this->auto_ot_hours !== null ? (string) $this->auto_ot_hours : null,
             'is_active'      => (bool) $this->is_active,
+            'is_default'     => (bool) $this->is_default,
             'created_at'     => optional($this->created_at)->toIso8601String(),
             'updated_at'     => optional($this->updated_at)->toIso8601String(),
         ];

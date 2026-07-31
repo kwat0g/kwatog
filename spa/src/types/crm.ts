@@ -10,6 +10,8 @@ export interface Product {
   is_active: boolean;
   include_forecast_in_mrp: boolean;
   has_bom: boolean;
+  active_bom?: { id: string; version: number } | null;
+  inspection_spec?: { id: string; version: number; updated_at: string | null } | null;
   created_at: string;
   updated_at: string;
 }
@@ -93,6 +95,15 @@ export interface SalesOrder {
     quantity_produced: number;
     planned_start: string | null;
     product: { id: string; part_number: string; name: string } | null;
+  }>;
+  inspections?: Array<{
+    id: string; inspection_number: string; stage: string; status: string; completed_at: string | null;
+  }>;
+  deliveries?: Array<{
+    id: string; delivery_number: string; status: string; scheduled_date: string | null;
+  }>;
+  invoices?: Array<{
+    id: string; invoice_number: string; status: string; total_amount: string; balance: string;
   }>;
   delivery_terms: string | null;
   notes: string | null;

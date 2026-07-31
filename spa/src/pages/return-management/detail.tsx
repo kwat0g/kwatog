@@ -61,13 +61,13 @@ const RESOLUTION_LABELS: Record<string, string> = {
 
 /** Design-token dot class for each timeline event. */
 const TIMELINE_DOT: Record<string, string> = {
-  created: 'bg-muted',
+  created: 'bg-strong',
   approved: 'bg-info',
   received: 'bg-accent',
   inspected: 'bg-purple',
   completed: 'bg-success',
   rejected: 'bg-danger',
-  cancelled: 'bg-muted',
+  cancelled: 'bg-strong',
 };
 
 const errMsg = (e: unknown, fallback: string) =>
@@ -339,7 +339,7 @@ export default function ReturnRequestDetailPage() {
               .filter((t) => t.at)
               .map((t) => (
                 <div key={t.key} className="flex items-center gap-2">
-                  <div className={`h-2 w-2 rounded-full shrink-0 ${TIMELINE_DOT[t.key] ?? 'bg-muted'}`} />
+                  <div className={`h-2 w-2 rounded-full shrink-0 ${TIMELINE_DOT[t.key] ?? 'bg-strong'}`} />
                   <span className="text-muted text-xs">{t.label}</span>
                   <span className="font-mono tabular-nums">{formatDateTime(t.at)}</span>
                   {t.by && <span className="text-muted">by {t.by.name}</span>}

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Payroll\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Payroll\Enums\PayrollAdjustmentStatus;
@@ -12,7 +13,6 @@ use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollAdjustment;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 class PayrollAdjustmentService
 {
@@ -53,7 +53,7 @@ class PayrollAdjustmentService
             // Adjustments are only meaningful against finalized periods (you can
             // edit drafts directly). Reject otherwise.
             if ($period->status !== PayrollPeriodStatus::Finalized) {
-                throw new RuntimeException('Adjustments can only be raised against finalized payroll periods.');
+                throw new BusinessRuleException('Adjustments can only be raised against finalized payroll periods.');
             }
 
             $adj = PayrollAdjustment::create([
@@ -74,10 +74,10 @@ class PayrollAdjustmentService
     public function approve(PayrollAdjustment $adjustment, User $user): PayrollAdjustment
     {
         if ($adjustment->status !== PayrollAdjustmentStatus::Pending) {
-            throw new RuntimeException('Only pending adjustments can be approved.');
+            throw new BusinessRuleException('Only pending adjustments can be approved.');
         }
         if ((int) $adjustment->created_by === (int) $user->id) {
-            throw new RuntimeException('You cannot approve your own payroll adjustment.');
+            throw new BusinessRuleException('You cannot approve your own payroll adjustment.');
         }
         $adjustment->status      = PayrollAdjustmentStatus::Approved;
         $adjustment->approved_by = $user->id;
@@ -88,7 +88,7 @@ class PayrollAdjustmentService
     public function reject(PayrollAdjustment $adjustment, User $user, ?string $remarks = null): PayrollAdjustment
     {
         if ($adjustment->status !== PayrollAdjustmentStatus::Pending) {
-            throw new RuntimeException('Only pending adjustments can be rejected.');
+            throw new BusinessRuleException('Only pending adjustments can be rejected.');
         }
         $adjustment->status      = PayrollAdjustmentStatus::Rejected;
         $adjustment->approved_by = $user->id;

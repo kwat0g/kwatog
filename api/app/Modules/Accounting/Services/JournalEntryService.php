@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\SearchOperator;
 
 use App\Common\Services\DocumentSequenceService;
@@ -100,7 +101,7 @@ class JournalEntryService
                 throw new UnbalancedJournalEntryException($totalDebit, $totalCredit);
             }
             if (count($lines) < 2) {
-                throw new RuntimeException('A journal entry must have at least two lines.');
+                throw new BusinessRuleException('A journal entry must have at least two lines.');
             }
 
             $entryNumber = $this->sequences->generate('journal_entry');
@@ -129,7 +130,7 @@ class JournalEntryService
     public function update(JournalEntry $je, array $data, ?User $user = null): JournalEntry
     {
         if (! $je->isDraft()) {
-            throw new RuntimeException('Only draft entries can be edited.');
+            throw new BusinessRuleException('Only draft entries can be edited.');
         }
 
         return DB::transaction(function () use ($je, $data) {
@@ -138,7 +139,7 @@ class JournalEntryService
                 throw new UnbalancedJournalEntryException($totalDebit, $totalCredit);
             }
             if (count($lines) < 2) {
-                throw new RuntimeException('A journal entry must have at least two lines.');
+                throw new BusinessRuleException('A journal entry must have at least two lines.');
             }
 
             $je->update([
@@ -163,7 +164,7 @@ class JournalEntryService
     public function delete(JournalEntry $je): void
     {
         if (! $je->isDraft()) {
-            throw new RuntimeException('Only draft entries can be deleted.');
+            throw new BusinessRuleException('Only draft entries can be deleted.');
         }
         DB::transaction(function () use ($je) {
             JournalEntryLine::where('journal_entry_id', $je->id)->delete();
@@ -174,7 +175,7 @@ class JournalEntryService
     public function post(JournalEntry $je, User $by): JournalEntry
     {
         if ($je->status !== JournalEntryStatus::Draft) {
-            throw new RuntimeException('Only draft entries can be posted.');
+            throw new BusinessRuleException('Only draft entries can be posted.');
         }
 
         return DB::transaction(function () use ($je, $by) {
@@ -262,10 +263,10 @@ class JournalEntryService
     public function reverse(JournalEntry $je, User $by, ?Carbon $reverseDate = null): JournalEntry
     {
         if ($je->status !== JournalEntryStatus::Posted) {
-            throw new RuntimeException('Only posted entries can be reversed.');
+            throw new BusinessRuleException('Only posted entries can be reversed.');
         }
         if ($je->reversed_by_entry_id !== null) {
-            throw new RuntimeException('This entry has already been reversed.');
+            throw new BusinessRuleException('This entry has already been reversed.');
         }
 
         return DB::transaction(function () use ($je, $by, $reverseDate) {

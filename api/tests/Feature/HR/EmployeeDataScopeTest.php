@@ -41,6 +41,7 @@ class EmployeeDataScopeTest extends TestCase
     private function employeeIn(Department $d, string $last): Employee
     {
         $pos = Position::create(['title' => 'Operator', 'department_id' => $d->id]);
+
         return Employee::create([
             'employee_no' => 'OGM-'.substr(uniqid(), -6),
             'first_name' => 'Test', 'last_name' => $last,
@@ -57,7 +58,7 @@ class EmployeeDataScopeTest extends TestCase
     private function userFor(Employee $emp, string $roleSlug): User
     {
         return User::factory()->create([
-            'role_id'     => Role::query()->where('slug', $roleSlug)->value('id'),
+            'role_id' => Role::query()->where('slug', $roleSlug)->value('id'),
             'employee_id' => $emp->id,
         ]);
     }
@@ -65,8 +66,8 @@ class EmployeeDataScopeTest extends TestCase
     public function test_view_all_permission_sees_every_department(): void
     {
         $prod = $this->dept('Production');
-        $fin  = $this->dept('Finance');
-        $this->employeeIn($prod, 'Alpha');
+        $fin = $this->dept('Finance');
+        $alpha = $this->employeeIn($prod, 'Alpha');
         $this->employeeIn($fin, 'Bravo');
 
         // hr_officer holds hr.employees.view_sensitive → sees all.
@@ -75,12 +76,17 @@ class EmployeeDataScopeTest extends TestCase
 
         $result = $this->svc->list([], $hr);
         $this->assertSame(3, $result->total());
+
+        $this->actingAs($hr, 'sanctum')
+            ->getJson("/api/v1/hr/employees/{$alpha->hash_id}")
+            ->assertOk()
+            ->assertJsonPath('data.basic_monthly_salary', '20000.00');
     }
 
     public function test_department_head_sees_only_their_department(): void
     {
         $prod = $this->dept('Production');
-        $fin  = $this->dept('Finance');
+        $fin = $this->dept('Finance');
         $headEmp = $this->employeeIn($prod, 'Head');
         $this->employeeIn($prod, 'Peer');      // same dept — visible
         $this->employeeIn($fin, 'Outsider');   // other dept — must NOT leak
@@ -92,6 +98,32 @@ class EmployeeDataScopeTest extends TestCase
         $this->assertSame(2, $result->total());
         $depts = collect($result->items())->pluck('department_id')->unique();
         $this->assertSame([$prod->id], $depts->values()->all());
+    }
+
+    public function test_department_head_cannot_open_an_employee_from_another_department(): void
+    {
+        $prod = $this->dept('Production');
+        $fin = $this->dept('Finance');
+        $head = $this->userFor($this->employeeIn($prod, 'Head'), 'department_head');
+        $peer = $this->employeeIn($prod, 'Peer');
+        $outsider = $this->employeeIn($fin, 'Outsider');
+
+        $this->actingAs($head, 'sanctum')
+            ->getJson("/api/v1/hr/employees/{$peer->hash_id}")
+            ->assertOk()
+            ->assertJsonPath('data.basic_monthly_salary', null)
+            ->assertJsonPath('data.daily_rate', null)
+            ->assertJsonMissingPath('data.documents');
+
+        $this->actingAs($head, 'sanctum')
+            ->getJson("/api/v1/hr/employees/{$peer->hash_id}/onboarding")
+            ->assertForbidden();
+
+        // Return 404 so the endpoint does not disclose that an out-of-scope
+        // employee identifier exists.
+        $this->actingAs($head, 'sanctum')
+            ->getJson("/api/v1/hr/employees/{$outsider->hash_id}")
+            ->assertNotFound();
     }
 
     public function test_plain_employee_sees_only_themselves(): void
@@ -114,7 +146,7 @@ class EmployeeDataScopeTest extends TestCase
 
         // A user with no linked employee (no department, no self anchor).
         $orphan = User::factory()->create([
-            'role_id'     => Role::query()->where('slug', 'employee')->value('id'),
+            'role_id' => Role::query()->where('slug', 'employee')->value('id'),
             'employee_id' => null,
         ]);
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Support\HashIdFilter;
 use App\Modules\Auth\Models\User;
@@ -17,7 +18,6 @@ use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Support\StockMovementInput;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 class MaterialIssueService
 {
@@ -97,14 +97,14 @@ class MaterialIssueService
                     \App\Modules\Inventory\Enums\WarehouseZoneType::Quarantine->value,
                     \App\Modules\Inventory\Enums\WarehouseZoneType::Scrap->value,
                 ], true)) {
-                    throw new RuntimeException("Cannot issue stock from a {$zoneValue} location (item held under MRB).");
+                    throw new BusinessRuleException("Cannot issue stock from a {$zoneValue} location (item held under MRB).");
                 }
 
                 $level = StockLevel::query()
                     ->where('item_id', $itemId)->where('location_id', $locId)
                     ->lockForUpdate()->first();
                 if (! $level) {
-                    throw new RuntimeException("No stock at item={$itemId} location={$locId}.");
+                    throw new BusinessRuleException("No stock at item={$itemId} location={$locId}.");
                 }                $unitCost = (string) $level->weighted_avg_cost;
                 $lineTotal = bcmul($qty, $unitCost, 4);
 
@@ -152,7 +152,7 @@ class MaterialIssueService
     public function cancel(MaterialIssueSlip $slip): void
     {
         if ($slip->status !== MaterialIssueStatus::Draft) {
-            throw new RuntimeException('Only draft slips can be cancelled.');
+            throw new BusinessRuleException('Only draft slips can be cancelled.');
         }
         $slip->update(['status' => MaterialIssueStatus::Cancelled]);
     }

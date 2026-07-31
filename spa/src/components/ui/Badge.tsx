@@ -21,7 +21,7 @@ export function Badge({ children, variant = 'accent', className, ...rest }: Badg
     <span
       aria-label={rest['aria-label']}
       className={cn(
-        'inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-[10px] font-medium leading-none',
+        'inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-2xs font-medium leading-none',
         variants[variant],
         className,
       )}

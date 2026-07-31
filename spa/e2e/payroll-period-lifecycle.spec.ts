@@ -371,7 +371,8 @@ test.describe('Payroll Period Lifecycle', () => {
     await expect(page.getByRole('button', { name: /Bank file/i })).toBeVisible();
 
     // Employee count stat card confirms 45 employees processed.
-    await expect(page.getByText('45', { exact: true })).toBeVisible();
+    const employeeStat = page.getByText('Employees', { exact: true }).first().locator('..');
+    await expect(employeeStat.getByText('45', { exact: true })).toBeVisible();
   });
 
 });

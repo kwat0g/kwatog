@@ -49,9 +49,9 @@ class PdfRenderService
             'watermark'    => $watermark,
             'docTitle'     => $title,
             // Legacy keys still consumed by some Blades.
-            'companyName'    => $this->settings->get('company.legal_name', 'Philippine Ogami Corporation'),
-            'companyAddress' => $this->settings->get('company.address', ''),
-            'companyTin'     => $this->settings->get('company.tin', ''),
+            'companyName'    => $this->settings->requiredString('company.legal_name'),
+            'companyAddress' => $this->settings->requiredString('company.address'),
+            'companyTin'     => $this->settings->requiredString('company.tin'),
             'user'           => $generator?->name,
         ]);
 
@@ -93,15 +93,15 @@ class PdfRenderService
     private function companyContext(): array
     {
         return [
-            'name'       => (string) $this->settings->get('company.legal_name', 'Philippine Ogami Corporation'),
-            'address'    => (string) $this->settings->get('company.address', 'FCIE, Dasmariñas, Cavite'),
-            'phone'      => (string) $this->settings->get('company.phone', ''),
-            'email'      => (string) $this->settings->get('company.email', ''),
-            'tin'        => (string) $this->settings->get('company.tin', ''),
-            'vat_status' => (string) $this->settings->get('company.vat_status', 'VAT Registered'),
-            'logo_path'  => (string) $this->settings->get('company.logo_path', ''),
-            'public_url' => (string) $this->settings->get('company.public_url', ''),
-            'disclaimer' => (string) $this->settings->get('pdf.footer_disclaimer', ''),
+            'name'       => $this->settings->requiredString('company.legal_name'),
+            'address'    => $this->settings->requiredString('company.address'),
+            'phone'      => $this->settings->requiredString('company.phone', true),
+            'email'      => $this->settings->requiredString('company.email', true),
+            'tin'        => $this->settings->requiredString('company.tin'),
+            'vat_status' => $this->settings->requiredString('company.vat_status'),
+            'logo_path'  => $this->settings->requiredString('company.logo_path', true),
+            'public_url' => $this->settings->requiredString('company.public_url', true),
+            'disclaimer' => $this->settings->requiredString('pdf.footer_disclaimer', true),
         ];
     }
 

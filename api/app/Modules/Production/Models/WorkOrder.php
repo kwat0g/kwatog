@@ -101,6 +101,14 @@ class WorkOrder extends Model
         return $this->hasMany(WorkOrderOutput::class)->orderByDesc('recorded_at');
     }
 
+    /** Quality inspections whose polymorphic production entity is this work order. */
+    public function inspections(): HasMany
+    {
+        return $this->hasMany(\App\Modules\Quality\Models\Inspection::class, 'entity_id')
+            ->where('entity_type', 'work_order')
+            ->orderByDesc('id');
+    }
+
     public function operations(): HasMany
     {
         return $this->hasMany(WoOperation::class)->orderBy('sequence');

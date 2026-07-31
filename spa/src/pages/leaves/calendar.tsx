@@ -192,18 +192,18 @@ export default function LeaveCalendarPage() {
                         {new Date(cell.date + 'T00:00:00').getDate()}
                       </span>
                       {(cell.approved_count > 0 || cell.pending_count > 0) && (
-                        <span className={cn('text-[10px] font-mono tabular-nums font-medium', coverageTextColor(cell.coverage_pct))}>
+                        <span className={cn('text-2xs font-mono tabular-nums font-medium', coverageTextColor(cell.coverage_pct))}>
                           {cell.coverage_pct}%
                         </span>
                       )}
                     </div>
                     {cell.approved_count > 0 && (
-                      <div className="text-[10px] text-success font-mono tabular-nums mt-0.5">
+                      <div className="text-2xs text-success font-mono tabular-nums mt-0.5">
                         {cell.approved_count} approved
                       </div>
                     )}
                     {cell.pending_count > 0 && (
-                      <div className="text-[10px] text-warning font-mono tabular-nums">
+                      <div className="text-2xs text-warning font-mono tabular-nums">
                         {cell.pending_count} pending
                       </div>
                     )}
@@ -245,7 +245,7 @@ export default function LeaveCalendarPage() {
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-muted">{emp.leave_type}</span>
                     <span className={cn(
-                      'text-[10px] font-medium px-1.5 py-0.5 rounded',
+                      'text-2xs font-medium px-1.5 py-0.5 rounded',
                       emp.status === 'approved'
                         ? 'bg-success-bg text-success'
                         : 'bg-warning-bg text-warning',

@@ -173,7 +173,7 @@ export default function InvoiceDetailPage() {
               <div><dt className="text-2xs uppercase tracking-wider text-muted mb-0.5">Customer</dt><dd>{invoice.customer?.name}</dd></div>
               <div><dt className="text-2xs uppercase tracking-wider text-muted mb-0.5">Date</dt><dd className="font-mono">{formatDate(invoice.date)}</dd></div>
               <div><dt className="text-2xs uppercase tracking-wider text-muted mb-0.5">Due date</dt><dd className="font-mono">{formatDate(invoice.due_date)}</dd></div>
-              <div><dt className="text-2xs uppercase tracking-wider text-muted mb-0.5">VAT</dt><dd>{invoice.is_vatable ? 'Yes (12%)' : 'No'}</dd></div>
+              <div><dt className="text-2xs uppercase tracking-wider text-muted mb-0.5">VAT</dt><dd>{invoice.is_vatable ? 'Yes' : 'No'}</dd></div>
               {invoice.journal_entry && (
                 <div className="col-span-2"><dt className="text-2xs uppercase tracking-wider text-muted mb-0.5">Journal entry</dt>
                   <dd><a className="text-accent hover:underline font-mono" href={`/accounting/journal-entries/${invoice.journal_entry.id}`}>{invoice.journal_entry.entry_number}</a> · {invoice.journal_entry.status}</dd>
@@ -206,7 +206,7 @@ export default function InvoiceDetailPage() {
                   </tr>
                 ))}
                 <tr className={trCls}><Td align="right" mono className="text-muted" colSpan={5}>Subtotal</Td><Td align="right" mono>{formatPeso(invoice.subtotal)}</Td></tr>
-                {invoice.is_vatable && <tr className={trCls}><Td align="right" mono className="text-muted" colSpan={5}>VAT (12%)</Td><Td align="right" mono>{formatPeso(invoice.vat_amount)}</Td></tr>}
+                {invoice.is_vatable && <tr className={trCls}><Td align="right" mono className="text-muted" colSpan={5}>VAT</Td><Td align="right" mono>{formatPeso(invoice.vat_amount)}</Td></tr>}
                 <tr className={totalsTrCls}><Td align="right" mono colSpan={5}>Total</Td><Td align="right" mono>{formatPeso(invoice.total_amount)}</Td></tr>
               </tbody>
             </table>

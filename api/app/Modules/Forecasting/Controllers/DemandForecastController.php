@@ -67,7 +67,7 @@ class DemandForecastController extends Controller
         }
 
         $now    = Carbon::now();
-        $months = (int) ($data['months_back'] ?: 12);
+        $months = (int) ($data['months_back'] ?? 12);
 
         $series = $this->service->historicalDemand(
             $productId,

@@ -1,4 +1,4 @@
-/** Sprint 8 — Task 74 + Sprint P5. Self-service payslips, mobile-card layout. */
+/** Sprint 8 — Task 74 + Sprint P5. Self-service payslips, web table layout. */
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Download, CheckCircle2, Clock } from 'lucide-react';
@@ -7,8 +7,9 @@ import { payrollsApi, type PayrollListParams } from '@/api/payroll/payrolls';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
+import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { SkeletonBlock } from '@/components/ui/Skeleton';
+import { SkeletonTable } from '@/components/ui/Skeleton';
 import { formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
 import type { Payroll } from '@/types/payroll';
@@ -16,11 +17,81 @@ import type { Payroll } from '@/types/payroll';
 /**
  * Self-service payslip list. Backend scopes results to the logged-in
  * employee — they only ever see their own payroll rows.
- *
- * Sprint P5: mobile-first card list (no DataTable). Each card has a 44px+
- * Download tap target so factory workers on phones can grab the PDF
- * without pinch-zoom.
  */
+const columns: Column<Payroll>[] = [
+  {
+    key: 'period',
+    header: 'Period',
+    cell: (p) => (
+      <NumCell className="font-medium">
+        {p.computed_at ? formatDate(p.computed_at) : '—'}
+      </NumCell>
+    ),
+  },
+  {
+    key: 'gross_pay',
+    header: 'Gross',
+    align: 'right',
+    cell: (p) => <NumCell>{formatPeso(p.gross_pay)}</NumCell>,
+  },
+  {
+    key: 'total_deductions',
+    header: 'Deductions',
+    align: 'right',
+    cell: (p) => <NumCell>{formatPeso(p.total_deductions)}</NumCell>,
+  },
+  {
+    key: 'net_pay',
+    header: 'Net pay',
+    align: 'right',
+    cell: (p) => <NumCell className="font-medium">{formatPeso(p.net_pay)}</NumCell>,
+  },
+  {
+    key: 'status',
+    header: 'Status',
+    cell: (p) => (
+      <div className="flex items-center gap-2">
+        {p.error_message ? (
+          <Chip variant="danger">Error</Chip>
+        ) : (
+          <Chip variant="success">Computed</Chip>
+        )}
+        {/* ADV1 — Show disbursement status if available */}
+        {p.period_disbursement_status === 'disbursed' && (
+          <span className="inline-flex items-center gap-1 text-xs text-success">
+            <CheckCircle2 size={12} /> Disbursed
+          </span>
+        )}
+        {p.period_disbursement_status === 'pending' && !p.error_message && (
+          <span className="inline-flex items-center gap-1 text-xs text-muted">
+            <Clock size={12} /> Awaiting disbursement
+          </span>
+        )}
+      </div>
+    ),
+  },
+  {
+    key: 'actions',
+    header: '',
+    align: 'right',
+    cell: (p) =>
+      !p.error_message && (
+        <Button
+          variant="secondary"
+          size="sm"
+          icon={<Download size={14} />}
+          aria-label={`Download payslip PDF for ${p.computed_at ? formatDate(p.computed_at) : 'this period'}`}
+          onClick={() => void downloadAuthenticatedFile(payrollsApi.payslipUrl(p.id), {
+            openInNewTab: true,
+            errorMessage: 'Failed to generate the payslip.',
+          })}
+        >
+          PDF
+        </Button>
+      ),
+  },
+];
+
 export default function SelfServicePayslipsPage() {
   const [filters, setFilters] = useState<PayrollListParams>({
     page: 1, per_page: 25, sort: 'created_at', direction: 'desc',
@@ -33,133 +104,38 @@ export default function SelfServicePayslipsPage() {
 
   return (
     <div>
-      <PageHeader title="My Payslips" backTo="/self-service" backLabel="Dashboard" />
-      <div className="px-5 py-4 space-y-3">
-        {data && (
-          <div className="flex items-baseline justify-end">
-            <span className="text-xs text-muted font-mono tabular-nums">
-              {data.meta.total} total
-            </span>
-          </div>
+      <PageHeader
+        title="My Payslips"
+        subtitle={data ? `${data.meta.total} total` : undefined}
+      />
+      <div className="px-5 py-4">
+        {isLoading && !data && <SkeletonTable columns={6} rows={8} />}
+
+        {isError && (
+          <EmptyState
+            icon="alert-circle"
+            title="Failed to load payslips"
+            description="An error occurred while loading your payslips. Please try again."
+            action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
+          />
         )}
 
-      {isLoading && !data && (
-        <div className="space-y-2">
-          {[1, 2, 3].map((i) => <SkeletonBlock key={i} className="h-24 rounded-md" />)}
-        </div>
-      )}
+        {data && data.data.length === 0 && (
+          <EmptyState
+            icon="receipt"
+            title="No payslips yet"
+            description="Your payslip will appear here after the next payroll run."
+          />
+        )}
 
-      {isError && (
-        <EmptyState
-          icon="alert-circle"
-          title="Failed to load payslips"
-          action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
-        />
-      )}
-
-      {data && data.data.length === 0 && (
-        <EmptyState
-          icon="receipt"
-          title="No payslips yet"
-          description="Your payslip will appear here after the next payroll run."
-        />
-      )}
-
-      {data && data.data.length > 0 && (
-        <ul className="space-y-2">
-          {data.data.map((p: Payroll) => (
-            <li
-              key={p.id}
-              className="rounded-md border border-default bg-canvas p-3 flex items-start gap-3"
-            >
-              <div className="flex-1 min-w-0">
-                <div className="text-2xs uppercase tracking-wider text-muted font-medium">
-                  Period
-                </div>
-                <div className="text-sm font-medium font-mono tabular-nums">
-                  {p.computed_at ? formatDate(p.computed_at) : '—'}
-                </div>
-
-                <div className="grid grid-cols-3 gap-2 mt-2">
-                  <Stat label="Gross" value={formatPeso(p.gross_pay)} />
-                  <Stat label="Deductions" value={formatPeso(p.total_deductions)} />
-                  <Stat label="Net" value={formatPeso(p.net_pay)} bold />
-                </div>
-
-                <div className="mt-2 flex items-center gap-2">
-                  {p.error_message ? (
-                    <Chip variant="danger">Error</Chip>
-                  ) : (
-                    <Chip variant="success">Computed</Chip>
-                  )}
-                  {/* ADV1 — Show disbursement status if available */}
-                  {p.period_disbursement_status === 'disbursed' && (
-                    <span className="inline-flex items-center gap-1 text-xs text-success">
-                      <CheckCircle2 size={12} /> Disbursed
-                    </span>
-                  )}
-                  {p.period_disbursement_status === 'pending' && !p.error_message && (
-                    <span className="inline-flex items-center gap-1 text-xs text-muted">
-                      <Clock size={12} /> Awaiting disbursement
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {!p.error_message && (
-                <Button
-                  variant="secondary"
-                  size="lg"
-                  icon={<Download size={14} />}
-                  aria-label={`Download payslip PDF for ${p.computed_at ? formatDate(p.computed_at) : 'this period'}`}
-                  className="shrink-0 min-h-[44px]"
-                  onClick={() => void downloadAuthenticatedFile(payrollsApi.payslipUrl(p.id), {
-                    openInNewTab: true,
-                    errorMessage: 'Failed to generate the payslip.',
-                  })}
-                >
-                  PDF
-                </Button>
-              )}
-            </li>
-          ))}
-
-          {data.meta.last_page > 1 && (
-            <div className="flex items-center justify-between gap-2 pt-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={(filters.page ?? 1) <= 1}
-                onClick={() => setFilters((f) => ({ ...f, page: (f.page ?? 1) - 1 }))}
-              >
-                Previous
-              </Button>
-              <span className="text-xs text-muted font-mono tabular-nums">
-                Page {data.meta.current_page} of {data.meta.last_page}
-              </span>
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={(filters.page ?? 1) >= data.meta.last_page}
-                onClick={() => setFilters((f) => ({ ...f, page: (f.page ?? 1) + 1 }))}
-              >
-                Next
-              </Button>
-            </div>
-          )}
-        </ul>
-      )}
-      </div>{/* .px-5 py-4 */}
-    </div>
-  );
-}
-
-function Stat({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
-  return (
-    <div>
-      <div className="text-2xs uppercase tracking-wider text-muted font-medium">{label}</div>
-      <div className={`font-mono tabular-nums text-sm ${bold ? 'font-medium text-primary' : ''}`}>
-        {value}
+        {data && data.data.length > 0 && (
+          <DataTable
+            columns={columns}
+            data={data.data}
+            meta={data.meta}
+            onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+          />
+        )}
       </div>
     </div>
   );

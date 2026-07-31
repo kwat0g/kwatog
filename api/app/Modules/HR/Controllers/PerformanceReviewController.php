@@ -4,9 +4,13 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Controllers;
 
+use App\Common\Support\HashIdFilter;
+use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\PerformanceReview;
 use App\Modules\HR\Models\ReviewCycle;
+use App\Modules\HR\Resources\PerformanceReviewResource;
 use App\Modules\HR\Resources\ReviewCycleResource;
+use App\Modules\HR\Resources\ReviewTemplateResource;
 use App\Modules\HR\Services\PerformanceReviewService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -52,11 +56,34 @@ class PerformanceReviewController extends Controller
         $user = $request->user();
         $filters = $request->all();
 
+        // The SPA sends hashed ids as `cycle_id`; the service filters on the raw
+        // `review_cycle_id` column. Decoding here keeps a hash string from ever
+        // reaching a bigint comparison (Postgres 22P02).
+        $filters['review_cycle_id'] = HashIdFilter::decode($filters['cycle_id'] ?? $filters['review_cycle_id'] ?? null, ReviewCycle::class);
+        $filters['employee_id']     = HashIdFilter::decode($filters['employee_id'] ?? null, Employee::class);
+
         if (! $user->can('hr.performance.manage')) {
             $filters['scoped_employee_id'] = $user->employee?->id;
         }
 
-        return response()->json($this->service->listReviews($filters));
+        return PerformanceReviewResource::collection($this->service->listReviews($filters))->response();
+    }
+
+    public function show(PerformanceReview $review, Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (! $user->can('hr.performance.manage')) {
+            $empId = $user->employee?->id;
+            abort_unless(
+                $empId && ($review->employee_id === $empId || $review->reviewer_id === $empId),
+                403,
+                'Access denied.'
+            );
+        }
+
+        $review->loadMissing(['employee:id,first_name,last_name', 'reviewer:id,first_name,last_name', 'cycle:id,name']);
+
+        return response()->json(['data' => new PerformanceReviewResource($review)]);
     }
 
     public function store(Request $request): JsonResponse
@@ -77,7 +104,7 @@ class PerformanceReviewController extends Controller
             }
         }
 
-        return response()->json(['data' => $this->service->createReview($data)], 201);
+        return response()->json(['data' => new PerformanceReviewResource($this->withRefs($this->service->createReview($data)))], 201);
     }
 
     public function submit(PerformanceReview $review, Request $request): JsonResponse
@@ -94,7 +121,7 @@ class PerformanceReviewController extends Controller
             'overall_rating' => ['required', 'string', 'max:30'],
         ]);
 
-        return response()->json(['data' => $this->service->submitReview($review, $data)]);
+        return response()->json(['data' => new PerformanceReviewResource($this->withRefs($this->service->submitReview($review, $data)))]);
     }
 
     public function acknowledge(PerformanceReview $review, Request $request): JsonResponse
@@ -102,12 +129,28 @@ class PerformanceReviewController extends Controller
         $employeeId = $request->user()->employee?->id;
         abort_unless($employeeId && $employeeId === $review->employee_id, 403, 'Only the reviewed employee may acknowledge.');
 
-        return response()->json(['data' => $this->service->acknowledge($review)]);
+        return response()->json(['data' => new PerformanceReviewResource($this->withRefs($this->service->acknowledge($review)))]);
+    }
+
+    /**
+     * The service returns `$review->fresh()` from the write paths, which drops
+     * eager loads. Strict mode forbids lazy loading, so the resource would
+     * throw on `$this->employee` — load the refs it needs up front.
+     */
+    private function withRefs(PerformanceReview $review): PerformanceReview
+    {
+        $review->loadMissing([
+            'employee:id,first_name,last_name',
+            'reviewer:id,first_name,last_name',
+            'cycle:id,name',
+        ]);
+
+        return $review;
     }
 
     public function templates(): JsonResponse
     {
-        return response()->json($this->service->listTemplates());
+        return ReviewTemplateResource::collection($this->service->listTemplates())->response();
     }
 
     public function storeTemplate(Request $request): JsonResponse
@@ -118,6 +161,6 @@ class PerformanceReviewController extends Controller
             'criteria'    => ['required', 'array'],
         ]);
 
-        return response()->json(['data' => $this->service->createTemplate($data)], 201);
+        return response()->json(['data' => new ReviewTemplateResource($this->service->createTemplate($data))], 201);
     }
 }

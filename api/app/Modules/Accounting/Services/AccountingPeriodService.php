@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Accounting\Enums\AccountingPeriodStatus;
 use App\Modules\Accounting\Exceptions\ClosedPeriodException;
 use App\Modules\Accounting\Models\AccountingPeriod;
@@ -90,17 +91,17 @@ class AccountingPeriodService
 
         $reason = trim($reason);
         if ($reason === '') {
-            throw new RuntimeException('A reason is required to reopen a closed period.');
+            throw new BusinessRuleException('A reason is required to reopen a closed period.');
         }
 
         return DB::transaction(function () use ($year, $month, $by, $reason) {
             $period = AccountingPeriod::query()->where('year', $year)->where('month', $month)->first();
 
             if (! $period) {
-                throw new RuntimeException(sprintf('Period %04d-%02d does not exist; nothing to reopen.', $year, $month));
+                throw new BusinessRuleException(sprintf('Period %04d-%02d does not exist; nothing to reopen.', $year, $month));
             }
             if ($period->status !== AccountingPeriodStatus::Closed) {
-                throw new RuntimeException(sprintf('Only a closed period can be reopened (current status: %s).', $period->status->value));
+                throw new BusinessRuleException(sprintf('Only a closed period can be reopened (current status: %s).', $period->status->value));
             }
 
             $period->status        = AccountingPeriodStatus::Reopened;

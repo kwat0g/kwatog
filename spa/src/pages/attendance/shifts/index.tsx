@@ -35,6 +35,7 @@ const schema = z.object({
   is_extended: z.boolean(),
   auto_ot_hours: z.string().optional().or(z.literal('')),
   is_active: z.boolean(),
+  is_default: z.boolean(),
 }).refine((d) => d.start_time !== d.end_time, { message: 'End time cannot equal start time', path: ['end_time'] });
 type FormValues = z.infer<typeof schema>;
 
@@ -73,7 +74,7 @@ export default function ShiftsPage() {
   });
 
   const columns: Column<Shift>[] = [
-    { key: 'name', header: 'Name', cell: (r) => <span className="font-medium">{r.name}</span> },
+    { key: 'name', header: 'Name', cell: (r) => <span className="font-medium flex items-center gap-2">{r.name}{r.is_default && <Chip variant="info">Default</Chip>}</span> },
     { key: 'start_time', header: 'Start', align: 'left', cell: (r) => <NumCell>{r.start_time}</NumCell> },
     { key: 'end_time', header: 'End', align: 'left', cell: (r) => <NumCell>{r.end_time}</NumCell> },
     { key: 'break_minutes', header: 'Break (m)', align: 'right', cell: (r) => <NumCell>{r.break_minutes}</NumCell> },
@@ -159,6 +160,7 @@ export default function ShiftsPage() {
                 <div className="flex gap-2 flex-wrap">
                   {selected.is_night_shift && <Chip variant="info">Night shift</Chip>}
                   {selected.is_extended && <Chip variant="warning">Auto-OT {selected.auto_ot_hours}h</Chip>}
+                  {selected.is_default && <Chip variant="info">Default for unassigned employees</Chip>}
                   <Chip variant={selected.is_active ? 'success' : 'neutral'}>
                     {selected.is_active ? 'Active' : 'Inactive'}
                   </Chip>
@@ -217,6 +219,7 @@ function ShiftFormModal({ editing, onClose, onSaved }: { editing: Shift | null; 
       is_extended: editing?.is_extended ?? false,
       auto_ot_hours: editing?.auto_ot_hours ?? '',
       is_active: editing?.is_active ?? true,
+      is_default: editing?.is_default ?? false,
     },
   });
 
@@ -258,6 +261,7 @@ function ShiftFormModal({ editing, onClose, onSaved }: { editing: Shift | null; 
         <div className="flex flex-col gap-2 pt-1">
           <Switch label="Night shift (22:00-06:00 hours earn 10% premium)" {...register('is_night_shift')} />
           <Switch label="Extended shift (auto-OT, no approval needed)" {...register('is_extended')} />
+          <Switch label="Default for employees without an assignment" {...register('is_default')} />
         </div>
         {isExtended && (
           <Input

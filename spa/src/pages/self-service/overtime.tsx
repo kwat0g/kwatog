@@ -1,8 +1,8 @@
 /**
  * Task SS1 — Self-service overtime requests.
  *
- * Mobile-first: pending + history lists and a bottom-sheet apply form with
- * hour quick-select chips, today's shift, and an estimated-pay preview.
+ * Web layout: pending + history tables and a modal apply form with hour
+ * quick-select, today's shift, and an estimated-pay preview.
  * Backend scopes everything to the session employee (never sends employee_id).
  */
 import { useMemo, useState } from 'react';
@@ -15,14 +15,16 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { BottomSheet } from '@/components/ui/BottomSheet';
+import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
+import { Modal } from '@/components/ui/Modal';
 import { Textarea } from '@/components/ui/Textarea';
 import { Input } from '@/components/ui/Input';
-import { SkeletonBlock } from '@/components/ui/Skeleton';
+import { SkeletonTable } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { LinkButton } from '@/components/ui/LinkButton';
 import { formatPeso } from '@/lib/formatNumber';
+import { formatDate } from '@/lib/formatDate';
 import { focusRing } from '@/lib/focus';
+import { cn } from '@/lib/cn';
 import type { ApiValidationError } from '@/types';
 import type {
   SelfServiceOvertimeRequest,
@@ -46,9 +48,74 @@ function todayIso(): string {
   return new Date(d.getTime() - off).toISOString().slice(0, 10);
 }
 
+function requestColumns(onCancel?: (id: string) => void): Column<SelfServiceOvertimeRequest>[] {
+  return [
+    {
+      key: 'date',
+      header: 'Date',
+      cell: (r) => <NumCell>{r.date ? formatDate(r.date) : '—'}</NumCell>,
+    },
+    {
+      key: 'hours_requested',
+      header: 'Hours',
+      align: 'right',
+      cell: (r) => <NumCell>{r.hours_requested}h</NumCell>,
+    },
+    {
+      key: 'reason',
+      header: 'Reason',
+      cell: (r) => (
+        <div className="max-w-[320px]">
+          <span className="text-muted block truncate">{r.reason || '—'}</span>
+          {r.status === 'rejected' && r.rejection_reason && (
+            <span className="text-xs text-danger block truncate">
+              Rejected: {r.rejection_reason}
+            </span>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'approver',
+      header: 'Approver',
+      cell: (r) => r.approver ?? '—',
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      cell: (r) => (
+        <Chip variant={r.status ? STATUS_CHIP[r.status] : 'neutral'}>
+          {r.status === 'pending' ? 'Pending approval' : r.status ?? '—'}
+        </Chip>
+      ),
+    },
+    ...(onCancel
+      ? [
+          {
+            key: 'actions',
+            header: '',
+            align: 'right' as const,
+            cell: (r: SelfServiceOvertimeRequest) =>
+              r.status === 'pending' ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-danger hover:bg-danger-bg"
+                  onClick={() => onCancel(r.id)}
+                  aria-label="Cancel this overtime request"
+                >
+                  Cancel
+                </Button>
+              ) : null,
+          },
+        ]
+      : []),
+  ];
+}
+
 export default function SelfServiceOvertimePage() {
   const queryClient = useQueryClient();
-  const [sheetOpen, setSheetOpen] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState<string | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
@@ -67,136 +134,102 @@ export default function SelfServiceOvertimePage() {
 
   return (
     <div>
-      <PageHeader title="Overtime Requests" backTo="/self-service" backLabel="Dashboard" />
-      <div className="px-5 py-4 space-y-4">
-        <div className="flex items-center justify-end">
+      <PageHeader
+        title="Overtime Requests"
+        subtitle={
+          data
+            ? `${data.pending.length} pending · ${data.history.length} past`
+            : undefined
+        }
+        actions={
           <Button
             variant="primary"
             size="sm"
             icon={<Plus size={14} />}
-            onClick={() => setSheetOpen(true)}
+            onClick={() => setModalOpen(true)}
           >
             Apply for OT
           </Button>
-        </div>
+        }
+      />
+      <div className="px-5 py-4 space-y-4">
+        {/* LOADING */}
+        {isLoading && !data && <SkeletonTable columns={6} rows={5} />}
 
-      {/* LOADING */}
-      {isLoading && !data && (
-        <div className="space-y-2">
-          {[1, 2, 3].map((i) => <SkeletonBlock key={i} className="h-16 rounded-md" />)}
-        </div>
-      )}
+        {/* ERROR */}
+        {isError && (
+          <EmptyState
+            icon="alert-circle"
+            title="Couldn't load overtime requests"
+            description="An error occurred while loading your requests. Please try again."
+            action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
+          />
+        )}
 
-      {/* ERROR */}
-      {isError && (
-        <EmptyState
-          icon="alert-circle"
-          title="Couldn't load overtime requests"
-          action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
+        {/* DATA */}
+        {data && data.pending.length === 0 && data.history.length === 0 && (
+          <EmptyState
+            icon="clipboard-list"
+            title="No overtime requests yet"
+            description="Apply for overtime to see your requests here."
+            action={
+              <Button variant="primary" icon={<Plus size={14} />} onClick={() => setModalOpen(true)}>
+                Apply for OT
+              </Button>
+            }
+          />
+        )}
+
+        {data && data.pending.length > 0 && (
+          <section aria-label="Pending overtime requests">
+            <h2 className="text-2xs uppercase tracking-wider text-muted font-medium mb-2">
+              Pending · {data.pending.length}
+            </h2>
+            <DataTable
+              columns={requestColumns((id) => setConfirmCancel(id))}
+              data={data.pending}
+              stickyHeader={false}
+            />
+          </section>
+        )}
+
+        {data && data.history.length > 0 && (
+          <section aria-label="Overtime history">
+            <h2 className="text-2xs uppercase tracking-wider text-muted font-medium mb-2">
+              History · {data.history.length}
+            </h2>
+            <DataTable columns={requestColumns()} data={data.history} stickyHeader={false} />
+          </section>
+        )}
+
+        <ApplyOvertimeModal
+          isOpen={modalOpen}
+          onClose={() => setModalOpen(false)}
+          shift={data?.todays_shift ?? null}
+          hourlyRate={data?.hourly_rate ?? null}
+          onApplied={() => {
+            queryClient.invalidateQueries({ queryKey: ['self-service', 'overtime'] });
+            setModalOpen(false);
+          }}
         />
-      )}
 
-      {/* DATA */}
-      {data && (
-        <>
-          <Section title="Pending">
-            {data.pending.length === 0 ? (
-              <p className="text-xs text-muted px-1 py-2">No pending requests.</p>
-            ) : (
-              <RequestList rows={data.pending} onCancel={(id) => setConfirmCancel(id)} />
-            )}
-          </Section>
-
-          <Section title="History">
-            {data.history.length === 0 ? (
-              <p className="text-xs text-muted px-1 py-2">No past requests yet.</p>
-            ) : (
-              <RequestList rows={data.history} />
-            )}
-          </Section>
-        </>
-      )}
-
-      <ApplyOvertimeSheet
-        isOpen={sheetOpen}
-        onClose={() => setSheetOpen(false)}
-        shift={data?.todays_shift ?? null}
-        hourlyRate={data?.hourly_rate ?? null}
-        onApplied={() => {
-          queryClient.invalidateQueries({ queryKey: ['self-service', 'overtime'] });
-          setSheetOpen(false);
-        }}
-      />
-
-      <ConfirmDialog
-        isOpen={confirmCancel !== null}
-        onClose={() => setConfirmCancel(null)}
-        onConfirm={() => { if (confirmCancel) cancel.mutate(confirmCancel); }}
-        title="Cancel overtime request?"
-        variant="danger"
-        confirmLabel="Yes, cancel"
-        pending={cancel.isPending}
-      />
-      </div>{/* .px-5 py-4 */}
+        <ConfirmDialog
+          isOpen={confirmCancel !== null}
+          onClose={() => setConfirmCancel(null)}
+          onConfirm={() => { if (confirmCancel) cancel.mutate(confirmCancel); }}
+          title="Cancel overtime request?"
+          variant="danger"
+          confirmLabel="Yes, cancel"
+          pending={cancel.isPending}
+        />
+      </div>
     </div>
   );
 }
 
-/* ───────────────────────── Sub-components ───────────────────────── */
+/* ───────────────────────── Apply modal ───────────────────────── */
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="space-y-2">
-      <h2 className="text-2xs uppercase tracking-wider text-muted font-medium">{title}</h2>
-      {children}
-    </section>
-  );
-}
-
-function RequestList({
-  rows,
-  onCancel,
-}: {
-  rows: SelfServiceOvertimeRequest[];
-  onCancel?: (id: string) => void;
-}) {
-  return (
-    <ul className="rounded-md border border-default divide-y divide-subtle bg-canvas">
-      {rows.map((r) => (
-        <li key={r.id} className="px-3 py-2.5">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0 flex-1">
-              <div className="text-sm font-medium font-mono tabular-nums">
-                {r.date ?? '—'} · {r.hours_requested}h OT
-              </div>
-              {r.reason && <div className="text-xs text-muted truncate">{r.reason}</div>}
-              {r.status === 'rejected' && r.rejection_reason && (
-                <div className="text-xs text-danger mt-0.5">Reason: {r.rejection_reason}</div>
-              )}
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <Chip variant={r.status ? STATUS_CHIP[r.status] : 'neutral'}>
-                {r.status === 'pending' ? 'Pending approval' : r.status ?? '—'}
-              </Chip>
-              {onCancel && r.status === 'pending' && (
-                <LinkButton
-                  tone="danger"
-                  onClick={() => onCancel(r.id)}
-                  className="text-2xs"
-                  aria-label="Cancel this overtime request"
-                >
-                  Cancel
-                </LinkButton>
-              )}
-            </div>
-          </div>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function ApplyOvertimeSheet({
+function ApplyOvertimeModal({
   isOpen,
   onClose,
   shift,
@@ -249,35 +282,38 @@ function ApplyOvertimeSheet({
   };
 
   return (
-    <BottomSheet isOpen={isOpen} onClose={onClose} title="Apply for Overtime">
-      <div className="space-y-4">
-        <Input
-          label="Date"
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-        />
-
-        <div>
-          <label className="text-xs text-muted font-medium">Hours</label>
-          <div className="flex flex-wrap gap-2 mt-1">
-            {HOUR_OPTIONS.map((h) => (
-              <button
-                key={h}
-                type="button"
-                onClick={() => setHours(h)}
-                className={`h-9 min-w-[3rem] px-3 rounded-md border text-sm font-mono tabular-nums cursor-pointer ${focusRing} ${
-                  hours === h
-                    ? 'border-accent bg-accent text-accent-fg font-medium'
-                    : 'border-default bg-canvas text-primary hover:bg-elevated'
-                }`}
-                aria-pressed={hours === h}
-              >
-                {h.toFixed(1)}
-              </button>
-            ))}
+    <Modal isOpen={isOpen} onClose={onClose} title="Apply for Overtime">
+      <div className="space-y-4 py-4">
+        <div className="grid grid-cols-2 gap-3">
+          <Input
+            label="Date"
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+          />
+          <div>
+            <label className="text-xs text-muted font-medium">Hours</label>
+            <div className="flex flex-wrap gap-1.5 mt-1">
+              {HOUR_OPTIONS.map((h) => (
+                <button
+                  key={h}
+                  type="button"
+                  onClick={() => setHours(h)}
+                  className={cn(
+                    'h-8 min-w-[2.75rem] px-2.5 rounded-md border text-sm font-mono tabular-nums cursor-pointer',
+                    focusRing,
+                    hours === h
+                      ? 'border-accent bg-accent text-accent-fg font-medium'
+                      : 'border-default bg-canvas text-primary hover:bg-elevated',
+                  )}
+                  aria-pressed={hours === h}
+                >
+                  {h.toFixed(1)}
+                </button>
+              ))}
+            </div>
+            <p className="text-2xs text-muted mt-1">Maximum 4 hours per day.</p>
           </div>
-          <p className="text-2xs text-muted mt-1">Maximum 4 hours per day.</p>
         </div>
 
         <Textarea
@@ -315,7 +351,7 @@ function ApplyOvertimeSheet({
           </p>
         </div>
 
-        <div className="flex justify-end gap-2 pt-1">
+        <div className="flex justify-end gap-2 pt-2 border-t border-default">
           <Button variant="secondary" onClick={onClose} disabled={mutation.isPending}>
             Cancel
           </Button>
@@ -325,10 +361,10 @@ function ApplyOvertimeSheet({
             disabled={mutation.isPending}
             loading={mutation.isPending}
           >
-            {mutation.isPending ? 'Submitting...' : 'Submit for Approval'}
+            {mutation.isPending ? 'Submitting…' : 'Submit for approval'}
           </Button>
         </div>
       </div>
-    </BottomSheet>
+    </Modal>
   );
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Purchasing\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Inventory\Models\GrnItem;
@@ -35,8 +36,8 @@ class ThreeWayMatchService
     {
         $po->loadMissing('items');
 
-        $qtyTol = (float) $this->settings->get('purchasing.three_way_tolerance_qty_pct', 5.0);
-        $priceTol = (float) $this->settings->get('purchasing.three_way_tolerance_price_pct', 5.0);
+        $qtyTol = $this->nonNegativeTolerance('purchasing.three_way_tolerance_qty_pct');
+        $priceTol = $this->nonNegativeTolerance('purchasing.three_way_tolerance_price_pct');
 
         // Aggregate accepted GRN qty per po_item.
         $grnAccepted = GrnItem::query()
@@ -128,6 +129,16 @@ class ThreeWayMatchService
             overallStatus: $overall,
             tolerances: ['qty_pct' => $qtyTol, 'price_pct' => $priceTol],
         );
+    }
+
+    private function nonNegativeTolerance(string $key): float
+    {
+        $value = $this->settings->get($key);
+        if (! is_numeric($value) || (float) $value < 0) {
+            throw new BusinessRuleException("Required business setting {$key} is missing or invalid.");
+        }
+
+        return (float) $value;
     }
 
     public function matchForBill(Bill $bill): ?ThreeWayMatchResult

@@ -12,6 +12,7 @@ use App\Modules\Quality\Models\CopqSnapshot;
 use App\Modules\Quality\Models\NonConformanceReport;
 use App\Modules\Quality\Services\CopqService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class CopqSnapshotTest extends TestCase
@@ -24,11 +25,11 @@ class CopqSnapshotTest extends TestCase
         $product = Product::factory()->create(['standard_cost' => 25.00]);
 
         NonConformanceReport::factory()->create([
-            'status'            => 'closed',
-            'disposition'       => 'scrap',
-            'product_id'        => $product->id,
+            'status' => 'closed',
+            'disposition' => 'scrap',
+            'product_id' => $product->id,
             'affected_quantity' => 10,
-            'closed_at'         => $month->copy()->addDay(),
+            'closed_at' => $month->copy()->addDay(),
         ]);
 
         $snap = app(CopqService::class)->snapshot($month->year, $month->month);
@@ -44,15 +45,15 @@ class CopqSnapshotTest extends TestCase
         $product = Product::factory()->create(['standard_cost' => 50.00]);
 
         $ncr = NonConformanceReport::factory()->create([
-            'status'      => 'open',
+            'status' => 'open',
             'disposition' => 'rework',
-            'product_id'  => $product->id,
+            'product_id' => $product->id,
         ]);
         WorkOrder::factory()->create([
-            'parent_ncr_id'   => $ncr->id,
-            'product_id'      => $product->id,
+            'parent_ncr_id' => $ncr->id,
+            'product_id' => $product->id,
             'quantity_target' => 20,
-            'created_at'      => $month->copy()->addDay(),
+            'created_at' => $month->copy()->addDay(),
         ]);
 
         $snap = app(CopqService::class)->snapshot($month->year, $month->month);
@@ -67,27 +68,27 @@ class CopqSnapshotTest extends TestCase
         $month = now()->startOfMonth();
 
         $customer = Customer::factory()->create();
-        $user     = User::factory()->create();
+        $user = User::factory()->create();
 
-        \DB::table('return_requests')->insert([
-            'rma_number'   => 'RMA-T-001',
-            'type'         => 'customer_return',
-            'status'       => 'completed',
-            'reason_code'  => 'defective',
-            'created_at'   => $month->copy()->addDay(),
-            'updated_at'   => $month->copy()->addDay(),
+        DB::table('return_requests')->insert([
+            'rma_number' => 'RMA-T-001',
+            'type' => 'customer_return',
+            'status' => 'completed',
+            'reason_code' => 'defective',
+            'created_at' => $month->copy()->addDay(),
+            'updated_at' => $month->copy()->addDay(),
         ]);
-        \DB::table('customer_complaints')->insert([
+        DB::table('customer_complaints')->insert([
             'complaint_number' => 'CMP-T-001',
-            'customer_id'      => $customer->id,
-            'received_date'    => $month->copy()->addDay()->toDateString(),
-            'severity'         => 'low',
-            'status'           => 'open',
-            'description'      => 'test complaint',
+            'customer_id' => $customer->id,
+            'received_date' => $month->copy()->addDay()->toDateString(),
+            'severity' => 'low',
+            'status' => 'open',
+            'description' => 'test complaint',
             'affected_quantity' => 0,
-            'created_by'       => $user->id,
-            'created_at'       => $month->copy()->addDay(),
-            'updated_at'       => $month->copy()->addDay(),
+            'created_by' => $user->id,
+            'created_at' => $month->copy()->addDay(),
+            'updated_at' => $month->copy()->addDay(),
         ]);
 
         $snap = app(CopqService::class)->snapshot($month->year, $month->month);

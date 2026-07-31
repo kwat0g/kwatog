@@ -33,6 +33,20 @@ class AnalyticsController
         return response()->json(['data' => $this->pareto->run($filters)]);
     }
 
+    public function inspectionSummary(Request $request): JsonResponse
+    {
+        $filters = $request->validate([
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date', 'after_or_equal:from'],
+            'product_id' => ['nullable'],
+            'stage' => ['nullable', 'in:incoming,in_process,outgoing'],
+        ]);
+        if (! empty($filters['product_id']) && is_string($filters['product_id'])) {
+            $filters['product_id'] = \App\Modules\CRM\Models\Product::tryDecodeHash($filters['product_id']);
+        }
+        return response()->json(['data' => $this->pareto->inspectionSummary($filters)]);
+    }
+
     public function paretoDrillDown(Request $request): JsonResponse
     {
         $filters = $request->validate([

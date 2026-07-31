@@ -16,6 +16,17 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth:sanctum', 'feature:production'])->prefix('production')->group(function () {
 
+    Route::get('/downtime-categories', function () {
+        return response()->json(['data' => array_map(
+            fn (\App\Modules\Production\Enums\MachineDowntimeCategory $category) => [
+                'value' => $category->value,
+                'label' => $category->label(),
+                'is_planned' => $category->isPlanned(),
+            ],
+            \App\Modules\Production\Enums\MachineDowntimeCategory::cases(),
+        )]);
+    })->middleware('permission:production.work_orders.view');
+
     /* ─── Defect types (lookup for output recording) ─── */
     Route::get('/defect-types', function () {
         return response()->json([

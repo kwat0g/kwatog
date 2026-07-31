@@ -10,32 +10,34 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth:sanctum', 'feature:leave'])->prefix('leaves')->group(function () {
     // Leave types
-    Route::get('/types',                 [LeaveTypeController::class, 'index'])->middleware('permission:leave.view');
-    Route::post('/types',                [LeaveTypeController::class, 'store'])->middleware('permission:leave.types.manage');
-    Route::get('/types/{leaveType}',     [LeaveTypeController::class, 'show'])->middleware('permission:leave.view');
-    Route::put('/types/{leaveType}',     [LeaveTypeController::class, 'update'])->middleware('permission:leave.types.manage');
-    Route::delete('/types/{leaveType}',  [LeaveTypeController::class, 'destroy'])->middleware('permission:leave.types.manage');
+    Route::get('/types', [LeaveTypeController::class, 'index'])->middleware('permission:leave.view');
+    Route::post('/types', [LeaveTypeController::class, 'store'])->middleware('permission:leave.types.manage');
+    Route::get('/types/{leaveType}', [LeaveTypeController::class, 'show'])->middleware('permission:leave.view');
+    Route::put('/types/{leaveType}', [LeaveTypeController::class, 'update'])->middleware('permission:leave.types.manage');
+    Route::delete('/types/{leaveType}', [LeaveTypeController::class, 'destroy'])->middleware('permission:leave.types.manage');
 
     // Year-end processing (OGAMI-104)
     Route::post('/process-year-end', [LeaveTypeController::class, 'processYearEnd'])->middleware('permission:leave.types.manage');
 
     // Calendar heatmap (must be before {leaveRequest} parameter routes)
-    Route::get('/calendar', [LeaveCalendarController::class, 'index'])->middleware('permission:leave.view');
+    Route::get('/calendar', [LeaveCalendarController::class, 'index'])
+        ->middleware('permission_any:leave.approve_dept,leave.approve_hr');
 
     // Balances
-    Route::get('/balances/me',                [LeaveBalanceController::class, 'me'])->middleware('permission:leave.view');
-    Route::get('/balances/{employee}',        [LeaveBalanceController::class, 'forEmployee'])->middleware('permission:leave.view');
+    Route::get('/balances/me', [LeaveBalanceController::class, 'me'])->middleware('permission:leave.view');
+    Route::get('/balances/{employee}', [LeaveBalanceController::class, 'forEmployee'])
+        ->middleware('permission_any:leave.approve_dept,leave.approve_hr');
 
     // Requests
-    Route::get('/requests',                                      [LeaveRequestController::class, 'index'])->middleware('permission:leave.view');
-    Route::post('/requests',                                     [LeaveRequestController::class, 'store'])->middleware('permission:leave.create');
-    Route::get('/requests/{leaveRequest}',                       [LeaveRequestController::class, 'show'])->middleware('permission:leave.view');
-    Route::patch('/requests/{leaveRequest}/approve-dept',        [LeaveRequestController::class, 'approveDept'])->middleware('permission:leave.approve_dept');
-    Route::patch('/requests/{leaveRequest}/approve-hr',          [LeaveRequestController::class, 'approveHR'])->middleware('permission:leave.approve_hr');
+    Route::get('/requests', [LeaveRequestController::class, 'index'])->middleware('permission:leave.view');
+    Route::post('/requests', [LeaveRequestController::class, 'store'])->middleware('permission:leave.create');
+    Route::get('/requests/{leaveRequest}', [LeaveRequestController::class, 'show'])->middleware('permission:leave.view');
+    Route::patch('/requests/{leaveRequest}/approve-dept', [LeaveRequestController::class, 'approveDept'])->middleware('permission:leave.approve_dept');
+    Route::patch('/requests/{leaveRequest}/approve-hr', [LeaveRequestController::class, 'approveHR'])->middleware('permission:leave.approve_hr');
     Route::post('/requests/bulk-approve-dept', [LeaveRequestController::class, 'bulkApproveDept'])
         ->middleware('permission:leave.approve_dept');
-    Route::post('/requests/bulk-approve-hr',   [LeaveRequestController::class, 'bulkApproveHR'])
+    Route::post('/requests/bulk-approve-hr', [LeaveRequestController::class, 'bulkApproveHR'])
         ->middleware('permission:leave.approve_hr');
-    Route::patch('/requests/{leaveRequest}/reject',              [LeaveRequestController::class, 'reject'])->middleware('permission:leave.approve_dept');
-    Route::patch('/requests/{leaveRequest}/cancel',              [LeaveRequestController::class, 'cancel'])->middleware('permission:leave.create');
+    Route::patch('/requests/{leaveRequest}/reject', [LeaveRequestController::class, 'reject'])->middleware('permission:leave.approve_dept');
+    Route::patch('/requests/{leaveRequest}/cancel', [LeaveRequestController::class, 'cancel'])->middleware('permission:leave.create');
 });

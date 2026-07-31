@@ -5,10 +5,12 @@ import { factoryApi } from '@/api/factory';
 import toast from 'react-hot-toast';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { Chip } from '@/components/ui/Chip';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import type { WorkOrderOutput } from '@/types/production';
 import { formatTime } from '@/lib/formatDate';
+import { workOrderStatusVariant } from '@/lib/statusVariants';
 import { focusRing } from '@/lib/focus';
 import { cn } from '@/lib/cn';
 
@@ -82,10 +84,10 @@ export default function RecordOutput() {
       {workOrder && (
         <div className="rounded-md border border-default bg-canvas p-4">
           <div className="flex items-center justify-between">
-            <span className="font-mono text-sm font-medium">{workOrder.wo_number}</span>
-            <span className="text-xs px-2 py-0.5 rounded bg-success-bg text-success-fg font-medium">
+            <span className="font-mono tabular-nums text-sm font-medium">{workOrder.wo_number}</span>
+            <Chip variant={workOrderStatusVariant[workOrder.status]}>
               {workOrder.status.replace(/_/g, ' ')}
-            </span>
+            </Chip>
           </div>
           <div className="mt-1 text-sm font-medium">{workOrder.product?.name ?? 'Unknown'}</div>
           <div className="mt-2 flex items-baseline gap-2">

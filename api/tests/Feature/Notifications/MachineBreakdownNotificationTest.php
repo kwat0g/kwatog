@@ -11,6 +11,7 @@ use App\Modules\Production\Events\MachineBreakdownDetected;
 use App\Modules\Production\Listeners\NotifyOnMachineBreakdown;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class MachineBreakdownNotificationTest extends TestCase
@@ -26,19 +27,19 @@ class MachineBreakdownNotificationTest extends TestCase
     public function test_listener_sends_to_maintenance_tech_and_production_manager(): void
     {
         $tech = $this->userWithRole('maintenance_tech');
-        $pm   = $this->userWithRole('production_manager');
+        $pm = $this->userWithRole('production_manager');
 
-        $machine  = Machine::factory()->create();
+        $machine = Machine::factory()->create();
         $listener = app(NotifyOnMachineBreakdown::class);
         $listener->handle(new MachineBreakdownDetected($machine, null, [], 'Hydraulic failure'));
 
         $this->assertDatabaseHas('notifications', [
             'notifiable_id' => $tech->id,
-            'type'          => 'maintenance.breakdown',
+            'type' => 'maintenance.breakdown',
         ]);
         $this->assertDatabaseHas('notifications', [
             'notifiable_id' => $pm->id,
-            'type'          => 'maintenance.breakdown',
+            'type' => 'maintenance.breakdown',
         ]);
     }
 
@@ -46,11 +47,11 @@ class MachineBreakdownNotificationTest extends TestCase
     {
         $this->userWithRole('maintenance_tech');
 
-        $machine  = Machine::factory()->create(['machine_code' => 'MC-001', 'name' => 'Test Molder']);
+        $machine = Machine::factory()->create(['machine_code' => 'MC-001', 'name' => 'Test Molder']);
         $listener = app(NotifyOnMachineBreakdown::class);
         $listener->handle(new MachineBreakdownDetected($machine, null, [], 'Oil leak'));
 
-        $row = \DB::table('notifications')
+        $row = DB::table('notifications')
             ->where('type', 'maintenance.breakdown')
             ->first();
 

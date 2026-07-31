@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Payroll\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\Money;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Enums\EmployeeStatus;
@@ -16,7 +17,6 @@ use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Payroll\Models\ThirteenthMonthAccrual;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 /**
  * 13th-month pay tracking.
@@ -62,6 +62,46 @@ class ThirteenthMonthService
     }
 
     /**
+     * Roll back the accrual contribution made by a payroll that is being
+     * replaced by a recompute.
+     *
+     * accrue() adds basic_pay to a running total, so without this every
+     * recompute of the same period inflated the employee's 13th-month base by
+     * another half-month of basic pay. Called by PayrollCalculatorService just
+     * before the old payroll row is deleted.
+     */
+    public function reverseAccrual(Payroll $payroll): ?ThirteenthMonthAccrual
+    {
+        $period = $payroll->relationLoaded('period') ? $payroll->period : $payroll->period()->first();
+        if (! $period || $period->is_thirteenth_month) {
+            return null;
+        }
+
+        $year = (int) $period->period_start->format('Y');
+
+        $accrual = ThirteenthMonthAccrual::query()
+            ->where('employee_id', $payroll->employee_id)
+            ->where('year', $year)
+            ->first();
+
+        // Once the year has been paid out the accrual is closed — accrue()
+        // refuses to add to it, so there is nothing to take back either.
+        if (! $accrual || $accrual->is_paid) {
+            return $accrual;
+        }
+
+        $newTotal = Money::sub((string) $accrual->total_basic_earned, (string) $payroll->basic_pay);
+        if (Money::lt($newTotal, '0')) {
+            $newTotal = Money::zero();
+        }
+        $accrual->total_basic_earned = $newTotal;
+        $accrual->accrued_amount     = Money::div($newTotal, '12', 2);
+        $accrual->save();
+
+        return $accrual;
+    }
+
+    /**
      * @return ThirteenthMonthAccrual|null
      */
     public function getAccrual(Employee $employee, int $year): ?ThirteenthMonthAccrual
@@ -99,7 +139,7 @@ class ThirteenthMonthService
                 ->first();
 
             if ($existing && $existing->status === PayrollPeriodStatus::Finalized) {
-                throw new RuntimeException("13th-month period for {$year} is already finalized.");
+                throw new BusinessRuleException("13th-month period for {$year} is already finalized.");
             }
 
             if ($existing) {

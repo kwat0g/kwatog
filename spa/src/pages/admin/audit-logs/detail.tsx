@@ -27,7 +27,7 @@ interface DiffRow {
   new?: unknown;
 }
 interface AuditLogDetail {
-  id: number;
+  id: string;
   action: 'created' | 'updated' | 'deleted';
   model_type: string;
   model_id: number | null;

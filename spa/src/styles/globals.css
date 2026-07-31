@@ -68,4 +68,17 @@
       border-width: 0.5px;
     }
   }
+
+  /*
+   * Bottom padding that clears the iOS home indicator.
+   *
+   * index.html sets `viewport-fit=cover`, so a `fixed bottom-0` bar renders
+   * *underneath* the home bar on notched phones. The touch PWAs (factory floor,
+   * maintenance) pin their tab bar there, and without this the last few pixels
+   * of a 56px tab target are unreachable. Falls back to 0 on hardware with no
+   * inset, so non-notched devices are unaffected.
+   */
+  .safe-area-pb {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
 }

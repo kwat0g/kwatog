@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Quality\Services;
 
 use App\Common\Services\NotificationService;
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Quality\Models\ControlledDocument;
 use Carbon\CarbonImmutable;
@@ -31,10 +32,12 @@ use Illuminate\Support\Collection;
  */
 class DocumentReviewService
 {
-    private const REARM_DAYS = 7;
     private const RECIPIENT_ROLES = ['system_admin', 'qc_inspector'];
 
-    public function __construct(private readonly NotificationService $notifications) {}
+    public function __construct(
+        private readonly NotificationService $notifications,
+        private readonly SettingsService $settings,
+    ) {}
 
     /**
      * @return array{evaluated:int, alerts_sent:int}
@@ -42,7 +45,11 @@ class DocumentReviewService
     public function check(): array
     {
         $now = CarbonImmutable::now();
-        $rearmThreshold = $now->subDays(self::REARM_DAYS);
+        $rearmDays = $this->settings->get('quality.document_review.rearm_days');
+        if (! is_numeric($rearmDays) || (int) $rearmDays <= 0) {
+            throw new \App\Common\Exceptions\BusinessRuleException('Required business setting quality.document_review.rearm_days is missing or invalid.');
+        }
+        $rearmThreshold = $now->subDays((int) $rearmDays);
 
         $candidates = ControlledDocument::query()
             ->where('is_active', true)

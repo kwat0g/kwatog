@@ -65,6 +65,35 @@ class SalesOrderResource extends JsonResource
                     ] : null,
                 ])->values()
             ),
+            'inspections'        => $this->whenLoaded('workOrders', fn () =>
+                $this->workOrders->flatMap(fn ($wo) => $wo->relationLoaded('inspections')
+                    ? $wo->inspections->map(fn ($inspection) => [
+                        'id' => $inspection->hash_id,
+                        'inspection_number' => $inspection->inspection_number,
+                        'stage' => (string) ($inspection->stage?->value ?? $inspection->stage),
+                        'status' => (string) ($inspection->status?->value ?? $inspection->status),
+                        'completed_at' => optional($inspection->completed_at)->toIso8601String(),
+                    ])
+                    : collect())
+                    ->values()
+            ),
+            'deliveries'         => $this->whenLoaded('deliveries', fn () =>
+                $this->deliveries->map(fn ($delivery) => [
+                    'id' => $delivery->hash_id,
+                    'delivery_number' => $delivery->delivery_number,
+                    'status' => (string) ($delivery->status?->value ?? $delivery->status),
+                    'scheduled_date' => optional($delivery->scheduled_date)->toDateString(),
+                ])->values()
+            ),
+            'invoices'           => $this->whenLoaded('invoices', fn () =>
+                $this->invoices->map(fn ($invoice) => [
+                    'id' => $invoice->hash_id,
+                    'invoice_number' => $invoice->invoice_number,
+                    'status' => (string) ($invoice->status?->value ?? $invoice->status),
+                    'total_amount' => (string) $invoice->total_amount,
+                    'balance' => (string) $invoice->balance,
+                ])->values()
+            ),
             'created_at'         => optional($this->created_at)->toIso8601String(),
             'updated_at'         => optional($this->updated_at)->toIso8601String(),
         ];

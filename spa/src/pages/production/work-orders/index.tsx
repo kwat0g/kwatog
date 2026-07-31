@@ -10,12 +10,8 @@ import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatInt } from '@/lib/formatNumber';
-import type { WorkOrder, WorkOrderStatus } from '@/types/production';
-
-const variant: Record<WorkOrderStatus, 'success' | 'info' | 'warning' | 'danger' | 'neutral'> = {
-  planned: 'neutral', confirmed: 'info', in_progress: 'info',
-  paused: 'warning', completed: 'success', closed: 'success', cancelled: 'danger',
-};
+import { workOrderStatusVariant as variant } from '@/lib/statusVariants';
+import type { WorkOrder } from '@/types/production';
 
 export default function WorkOrdersListPage() {
   const [filters, setFilters] = useState<WorkOrderListParams>({ page: 1, per_page: 25 });

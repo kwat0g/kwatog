@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\SupplyChain\Controllers;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\DeliveryProof;
 use App\Modules\SupplyChain\Resources\DeliveryProofResource;
@@ -49,7 +50,7 @@ class DeliveryProofController
         $dir = "deliveries/{$delivery->id}/proofs";
         $path = $file->store($dir, 'local');
         if ($path === false) {
-            throw new RuntimeException('Unable to store delivery proof.');
+            throw new BusinessRuleException('Unable to store delivery proof.');
         }
 
         try {
@@ -78,12 +79,12 @@ class DeliveryProofController
     public function view(Delivery $delivery, DeliveryProof $proof): StreamedResponse
     {
         if ($proof->delivery_id !== $delivery->id) {
-            throw new RuntimeException('Proof does not belong to this delivery.');
+            abort(404, 'Proof does not belong to this delivery.');
         }
 
         $disk = Storage::disk('local');
         if (! $disk->exists($proof->file_path)) {
-            throw new RuntimeException('Proof file not found on disk.');
+            abort(404, 'Proof file not found on disk.');
         }
 
         $contents = $disk->get($proof->file_path);

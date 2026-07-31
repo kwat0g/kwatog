@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Controllers;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Attendance\Enums\OvertimeStatus;
 use App\Modules\Attendance\Models\OvertimeRequest;
 use App\Modules\Attendance\Services\OvertimeService;
@@ -13,6 +14,7 @@ use App\Modules\HR\Resources\EmployeeTrainingResource;
 use App\Modules\HR\Services\ProfileUpdateRequestService;
 use App\Modules\HR\Services\SelfServiceDocumentService;
 use App\Modules\HR\Services\SelfServiceHomeService;
+use App\Modules\Payroll\Models\Payroll;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -30,6 +32,7 @@ class SelfServiceController
         private readonly OvertimeService $overtime,
         private readonly SelfServiceDocumentService $documents,
         private readonly SelfServiceHomeService $home,
+        private readonly SettingsService $settings,
     ) {}
 
     private function currentEmployee(Request $request): Employee
@@ -43,6 +46,7 @@ class SelfServiceController
             ->whereKey($user->employee_id)
             ->first();
         abort_if(! $emp, 404, 'Employee not found.');
+
         return $emp;
     }
 
@@ -56,19 +60,19 @@ class SelfServiceController
         return response()->json([
             'data' => [
                 'greeting' => $this->greeting(),
-                'today'    => $today,
+                'today' => $today,
                 'employee' => [
-                    'id'          => $employee->hash_id,
+                    'id' => $employee->hash_id,
                     'employee_no' => $employee->employee_no,
-                    'first_name'  => $employee->first_name,
-                    'full_name'   => $employee->full_name,
-                    'department'  => $employee->department?->name,
-                    'position'    => $employee->position?->title,
+                    'first_name' => $employee->first_name,
+                    'full_name' => $employee->full_name,
+                    'department' => $employee->department?->name,
+                    'position' => $employee->position?->title,
                 ],
-                'todays_shift'    => $summary['todays_shift'],
-                'leave_balances'  => $summary['leave_balances'],
-                'pending_count'   => $summary['pending_count'],
-                'latest_payslip'  => $summary['latest_payslip'],
+                'todays_shift' => $summary['todays_shift'],
+                'leave_balances' => $summary['leave_balances'],
+                'pending_count' => $summary['pending_count'],
+                'latest_payslip' => $summary['latest_payslip'],
             ],
         ]);
     }
@@ -87,15 +91,15 @@ class SelfServiceController
             ->get();
 
         $map = fn ($r) => [
-            'id'                     => app('hashids')->encode((int) $r->id),
-            'loan_type'              => $r->loan_type ?? null,
-            'principal'              => (string) ($r->principal ?? '0.00'),
-            'outstanding_balance'    => (string) ($r->outstanding_balance ?? '0.00'),
-            'monthly_amortization'   => (string) ($r->monthly_amortization ?? '0.00'),
-            'periods'                => (int) ($r->periods ?? 0),
-            'periods_remaining'      => (int) ($r->periods_remaining ?? 0),
-            'status'                 => (string) ($r->status ?? 'unknown'),
-            'created_at'             => (string) ($r->created_at ?? ''),
+            'id' => app('hashids')->encode((int) $r->id),
+            'loan_type' => $r->loan_type ?? null,
+            'principal' => (string) ($r->principal ?? '0.00'),
+            'outstanding_balance' => (string) ($r->outstanding_balance ?? '0.00'),
+            'monthly_amortization' => (string) ($r->monthly_amortization ?? '0.00'),
+            'periods' => (int) ($r->periods ?? 0),
+            'periods_remaining' => (int) ($r->periods_remaining ?? 0),
+            'status' => (string) ($r->status ?? 'unknown'),
+            'created_at' => (string) ($r->created_at ?? ''),
         ];
 
         $active = $rows->whereIn('status', ['approved', 'in_progress', 'active'])
@@ -112,9 +116,9 @@ class SelfServiceController
 
         $validated = $request->validate([
             'loan_type' => ['required', 'string', 'max:30'],
-            'amount'    => ['required', 'numeric', 'min:1'],
-            'periods'   => ['required', 'integer', 'min:1', 'max:24'],
-            'reason'    => ['nullable', 'string', 'max:500'],
+            'amount' => ['required', 'numeric', 'min:1'],
+            'periods' => ['required', 'integer', 'min:1', 'max:24'],
+            'reason' => ['nullable', 'string', 'max:500'],
         ]);
 
         if (! Schema::hasTable('employee_loans')) {
@@ -122,22 +126,22 @@ class SelfServiceController
         }
 
         $id = DB::table('employee_loans')->insertGetId([
-            'employee_id'           => $employee->id,
-            'loan_type'             => $validated['loan_type'],
-            'principal'             => $validated['amount'],
-            'outstanding_balance'   => $validated['amount'],
-            'monthly_amortization'  => round(((float) $validated['amount']) / max(1, (int) $validated['periods']), 2),
-            'periods'               => (int) $validated['periods'],
-            'periods_remaining'     => (int) $validated['periods'],
-            'status'                => 'pending',
-            'remarks'               => $validated['reason'] ?? null,
-            'created_at'            => now(),
-            'updated_at'            => now(),
+            'employee_id' => $employee->id,
+            'loan_type' => $validated['loan_type'],
+            'principal' => $validated['amount'],
+            'outstanding_balance' => $validated['amount'],
+            'monthly_amortization' => round(((float) $validated['amount']) / max(1, (int) $validated['periods']), 2),
+            'periods' => (int) $validated['periods'],
+            'periods_remaining' => (int) $validated['periods'],
+            'status' => 'pending',
+            'remarks' => $validated['reason'] ?? null,
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
 
         return response()->json([
             'message' => 'Loan request submitted for approval.',
-            'data'    => ['id' => app('hashids')->encode((int) $id)],
+            'data' => ['id' => app('hashids')->encode((int) $id)],
         ], 201);
     }
 
@@ -167,14 +171,14 @@ class SelfServiceController
             ->get();
 
         $map = fn (OvertimeRequest $r) => [
-            'id'               => $r->hash_id,
-            'date'             => optional($r->date)->toDateString(),
-            'hours_requested'  => (string) $r->hours_requested,
-            'reason'           => $r->reason,
-            'status'           => $r->status?->value,
+            'id' => $r->hash_id,
+            'date' => optional($r->date)->toDateString(),
+            'hours_requested' => (string) $r->hours_requested,
+            'reason' => $r->reason,
+            'status' => $r->status?->value,
             'rejection_reason' => $r->rejection_reason,
-            'approver'         => $r->approver?->name,
-            'created_at'       => optional($r->created_at)->toIso8601String(),
+            'approver' => $r->approver?->name,
+            'created_at' => optional($r->created_at)->toIso8601String(),
         ];
 
         $pending = $rows->where('status', OvertimeStatus::Pending)->map($map)->values()->all();
@@ -182,10 +186,10 @@ class SelfServiceController
 
         return response()->json([
             'data' => [
-                'pending'      => $pending,
-                'history'      => $history,
+                'pending' => $pending,
+                'history' => $history,
                 'todays_shift' => $this->todaysShift($employee),
-                'hourly_rate'  => $this->estimatedHourlyRate($employee),
+                'hourly_rate' => $this->estimatedHourlyRate($employee),
             ],
         ]);
     }
@@ -199,26 +203,26 @@ class SelfServiceController
         $employee = $this->currentEmployee($request);
 
         $validated = $request->validate([
-            'date'            => ['required', 'date', 'after_or_equal:'.now()->toDateString(), 'before_or_equal:'.now()->addDays(30)->toDateString()],
+            'date' => ['required', 'date', 'after_or_equal:'.now()->toDateString(), 'before_or_equal:'.now()->addDays(30)->toDateString()],
             'hours_requested' => ['required', 'numeric', 'min:0.5', 'max:4'],
-            'reason'          => ['required', 'string', 'min:5', 'max:2000'],
+            'reason' => ['required', 'string', 'min:5', 'max:2000'],
         ], [
-            'date.after_or_equal'  => 'Overtime can only be requested for today or a future date.',
+            'date.after_or_equal' => 'Overtime can only be requested for today or a future date.',
             'date.before_or_equal' => 'Overtime cannot be requested more than 30 days ahead.',
-            'hours_requested.max'  => 'Overtime cannot exceed 4 hours per day.',
-            'reason.min'           => 'Please provide a meaningful reason (at least 5 characters).',
+            'hours_requested.max' => 'Overtime cannot exceed 4 hours per day.',
+            'reason.min' => 'Please provide a meaningful reason (at least 5 characters).',
         ]);
 
         $ot = $this->overtime->create([
-            'employee_id'     => $employee->id,
-            'date'            => $validated['date'],
+            'employee_id' => $employee->id,
+            'date' => $validated['date'],
             'hours_requested' => $validated['hours_requested'],
-            'reason'          => trim($validated['reason']),
+            'reason' => trim($validated['reason']),
         ]);
 
         return response()->json([
             'message' => 'Overtime request submitted for Dept Head approval.',
-            'data'    => ['id' => $ot->hash_id, 'status' => $ot->status?->value],
+            'data' => ['id' => $ot->hash_id, 'status' => $ot->status?->value],
         ], 201);
     }
 
@@ -255,36 +259,36 @@ class SelfServiceController
 
         return response()->json([
             'data' => [
-                'id'          => $employee->hash_id,
+                'id' => $employee->hash_id,
                 'employee_no' => $employee->employee_no,
-                'full_name'   => $employee->full_name,
-                'first_name'  => $employee->first_name,
+                'full_name' => $employee->full_name,
+                'first_name' => $employee->first_name,
                 'middle_name' => $employee->middle_name,
-                'last_name'   => $employee->last_name,
-                'department'  => $employee->department?->name,
-                'position'    => $employee->position?->title,
-                'date_hired'  => optional($employee->date_hired)->toDateString(),
+                'last_name' => $employee->last_name,
+                'department' => $employee->department?->name,
+                'position' => $employee->position?->title,
+                'date_hired' => optional($employee->date_hired)->toDateString(),
                 'employment_type' => $employee->employment_type?->value,
-                'photo_path'  => $employee->photo_path,
+                'photo_path' => $employee->photo_path,
                 // Editable
                 'mobile_number' => $employee->mobile_number,
-                'email'         => $employee->email,
+                'email' => $employee->email,
                 'street_address' => $employee->street_address,
-                'barangay'       => $employee->barangay,
-                'city'           => $employee->city,
-                'province'       => $employee->province,
-                'zip_code'       => $employee->zip_code,
-                'emergency_contact_name'     => $employee->emergency_contact_name,
+                'barangay' => $employee->barangay,
+                'city' => $employee->city,
+                'province' => $employee->province,
+                'zip_code' => $employee->zip_code,
+                'emergency_contact_name' => $employee->emergency_contact_name,
                 'emergency_contact_relation' => $employee->emergency_contact_relation,
-                'emergency_contact_phone'    => $employee->emergency_contact_phone,
+                'emergency_contact_phone' => $employee->emergency_contact_phone,
                 // Bank (account masked — last 4 only; change needs HR + Finance).
-                'bank_name'           => $employee->bank_name,
-                'bank_account_last4'  => $this->last4($employee->bank_account_no),
+                'bank_name' => $employee->bank_name,
+                'bank_account_last4' => $this->last4($employee->bank_account_no),
                 // Government IDs are masked (last 4) — never returned in full.
-                'sss_no_last4'        => $this->last4($employee->sss_no),
+                'sss_no_last4' => $this->last4($employee->sss_no),
                 'philhealth_no_last4' => $this->last4($employee->philhealth_no),
-                'pagibig_no_last4'    => $this->last4($employee->pagibig_no),
-                'tin_last4'           => $this->last4($employee->tin),
+                'pagibig_no_last4' => $this->last4($employee->pagibig_no),
+                'tin_last4' => $this->last4($employee->tin),
             ],
         ]);
     }
@@ -295,7 +299,7 @@ class SelfServiceController
 
         $validated = $request->validate([
             'changes' => ['required', 'array'],
-            'note'    => ['nullable', 'string', 'max:500'],
+            'note' => ['nullable', 'string', 'max:500'],
         ]);
 
         $req = $this->profileUpdates->submit(
@@ -307,7 +311,7 @@ class SelfServiceController
 
         return response()->json([
             'message' => 'Profile update request submitted for HR review.',
-            'data'    => ['id' => $req->hash_id, 'status' => $req->status],
+            'data' => ['id' => $req->hash_id, 'status' => $req->status],
         ], 201);
     }
 
@@ -315,13 +319,14 @@ class SelfServiceController
     {
         $employee = $this->currentEmployee($request);
         $rows = $this->profileUpdates->listForEmployee($employee);
+
         return response()->json([
             'data' => $rows->map(fn ($r) => [
-                'id'         => $r->hash_id,
-                'status'     => $r->status,
-                'changes'    => $r->changes,
-                'note'       => $r->note,
-                'reviewed_at'=> optional($r->reviewed_at)->toIso8601String(),
+                'id' => $r->hash_id,
+                'status' => $r->status,
+                'changes' => $r->changes,
+                'note' => $r->note,
+                'reviewed_at' => optional($r->reviewed_at)->toIso8601String(),
                 'created_at' => optional($r->created_at)->toIso8601String(),
             ])->values()->all(),
         ]);
@@ -344,7 +349,7 @@ class SelfServiceController
         // closing (typically January). Available once we have any payroll rows
         // for that year.
         $bir2316Available = Schema::hasTable('payrolls')
-            && \App\Modules\Payroll\Models\Payroll::query()
+            && Payroll::query()
                 ->where('employee_id', $employee->id)
                 ->whereHas('period', fn ($q) => $q->whereYear('period_start', $lastYear))
                 ->exists();
@@ -368,6 +373,7 @@ class SelfServiceController
     {
         $employee = $this->currentEmployee($request);
         $withSalary = $request->boolean('with_salary');
+
         return $this->documents->employmentCertificate($employee, $request->user(), $withSalary);
     }
 
@@ -376,6 +382,7 @@ class SelfServiceController
         abort_unless(in_array($type, ['sss', 'philhealth', 'pagibig'], true), 404);
         $employee = $this->currentEmployee($request);
         $year = (int) ($request->integer('year') ?: now()->format('Y'));
+
         return $this->documents->contributionCertificate($employee, $type, $year, $request->user());
     }
 
@@ -383,6 +390,7 @@ class SelfServiceController
     {
         $employee = $this->currentEmployee($request);
         $year = (int) ($request->integer('year') ?: ((int) now()->format('Y') - 1));
+
         return $this->documents->bir2316($employee, $year, $request->user());
     }
 
@@ -409,10 +417,11 @@ class SelfServiceController
     private function greeting(): string
     {
         $hour = (int) now()->format('G');
+
         return match (true) {
             $hour < 12 => 'Good morning',
             $hour < 18 => 'Good afternoon',
-            default    => 'Good evening',
+            default => 'Good evening',
         };
     }
 
@@ -433,13 +442,13 @@ class SelfServiceController
         $row = DB::table('employee_shift_assignments as a')
             ->join('shifts as s', 's.id', '=', 'a.shift_id')
             ->where('a.employee_id', $employee->id)
-            ->where('a.effective_from', '<=', $today)
+            ->where('a.effective_date', '<=', $today)
             ->where(function ($q) use ($today) {
-                $q->whereNull('a.effective_until')
-                  ->orWhere('a.effective_until', '>=', $today);
+                $q->whereNull('a.end_date')
+                    ->orWhere('a.end_date', '>=', $today);
             })
-            ->orderByDesc('a.effective_from')
-            ->select('s.name', 's.time_in', 's.time_out')
+            ->orderByDesc('a.effective_date')
+            ->select('s.name', 's.start_time as time_in', 's.end_time as time_out')
             ->first();
 
         return $row
@@ -455,14 +464,14 @@ class SelfServiceController
     private function estimatedHourlyRate(Employee $employee): ?string
     {
         $daily = $employee->pay_type?->value === 'monthly'
-            ? ((float) ($employee->basic_monthly_salary ?? 0)) / 22.0
+            ? ((float) ($employee->basic_monthly_salary ?? 0)) / $this->settings->requiredInt('payroll.work_days_per_month', 1)
             : (float) ($employee->daily_rate ?? 0);
 
         if ($daily <= 0) {
             return null;
         }
 
-        return number_format($daily / 8.0, 2, '.', '');
+        return number_format($daily / $this->settings->requiredInt('payroll.hours_per_day', 1), 2, '.', '');
     }
 
     private function last4(?string $value): ?string
@@ -471,6 +480,7 @@ class SelfServiceController
             return null;
         }
         $len = mb_strlen($value);
+
         return $len <= 4 ? str_repeat('•', $len) : '••••'.mb_substr($value, -4);
     }
 }

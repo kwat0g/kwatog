@@ -126,9 +126,9 @@ class PdfService
     private function company(): array
     {
         return [
-            'name'    => (string) $this->settings->get('company.name', 'Philippine Ogami Corporation'),
-            'address' => (string) $this->settings->get('company.address', 'FCIE, Dasmariñas, Cavite, Philippines'),
-            'tin'     => $this->settings->get('company.tin'),
+            'name'    => $this->settings->requiredString('company.legal_name'),
+            'address' => $this->settings->requiredString('company.address'),
+            'tin'     => $this->settings->requiredString('company.tin'),
         ];
     }
 }

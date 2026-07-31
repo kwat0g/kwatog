@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Modules\CRM\Services;
 
+use App\Common\Support\HashIdFilter;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Enums\CommissionStatus;
 use App\Modules\CRM\Models\CommissionEarning;
 use App\Modules\CRM\Models\CommissionRate;
 use App\Modules\CRM\Models\SalesOrder;
+use App\Modules\HR\Models\Employee;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
@@ -20,7 +22,7 @@ class CommissionService
             ->with(['employee:id,first_name,last_name', 'salesOrder:id,so_number']);
 
         if (! empty($filters['employee_id'])) {
-            $q->where('employee_id', $filters['employee_id']);
+            $q->where('employee_id', HashIdFilter::decode($filters['employee_id'], Employee::class) ?? 0);
         }
         if (! empty($filters['status'])) {
             $q->where('status', $filters['status']);
@@ -75,7 +77,7 @@ class CommissionService
 
     public function approve(CommissionEarning $earning, User $by): CommissionEarning
     {
-        $beneficiaryUserId = \App\Modules\Auth\Models\User::where('employee_id', $earning->employee_id)->value('id');
+        $beneficiaryUserId = User::where('employee_id', $earning->employee_id)->value('id');
         if ($beneficiaryUserId && (int) $beneficiaryUserId === $by->id) {
             throw new \RuntimeException('Cannot approve your own commission earning.');
         }
@@ -87,7 +89,9 @@ class CommissionService
                 'approved_at' => now(),
             ])->save();
 
-            return $earning->fresh();
+            // fresh() with no arguments drops the eager loads the resource needs,
+            // leaving `employee` / `sales_order` missing from the approve response.
+            return $earning->fresh(['employee:id,first_name,last_name', 'salesOrder:id,so_number']);
         });
     }
 
@@ -110,7 +114,7 @@ class CommissionService
             ->with(['employee:id,first_name,last_name', 'product:id,code,name']);
 
         if (! empty($filters['employee_id'])) {
-            $q->where('employee_id', $filters['employee_id']);
+            $q->where('employee_id', HashIdFilter::decode($filters['employee_id'], Employee::class) ?? 0);
         }
 
         return $q->orderByDesc('effective_from')

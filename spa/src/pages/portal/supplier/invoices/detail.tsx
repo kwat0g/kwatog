@@ -35,7 +35,7 @@ export default function SupplierInvoiceDetailPage() {
   const downloadPdf = async () => {
     try {
       const blob = await supplierPortalApi.downloadInvoicePdf(id!);
-      downloadBlob(blob, `${invoice?.invoice_number ?? 'Invoice'}.pdf`);
+      downloadBlob(blob, `${invoice?.bill_number ?? 'Invoice'}.pdf`);
     } catch {
       toast.error('Failed to download PDF.');
     }
@@ -44,7 +44,7 @@ export default function SupplierInvoiceDetailPage() {
   return (
     <div>
       <PageHeader
-        title={invoice?.invoice_number ?? 'Invoice'}
+        title={invoice?.bill_number ?? 'Invoice'}
         subtitle={invoice?.date ?? undefined}
         backTo="/portal/supplier/invoices"
         backLabel="Invoices"
@@ -105,7 +105,7 @@ export default function SupplierInvoiceDetailPage() {
                         <Td>{item.description}</Td>
                         <Td align="right" mono>{item.quantity}</Td>
                         <Td align="right" mono>{formatPeso(item.unit_price)}</Td>
-                        <Td align="right" mono>{formatPeso(item.total_price)}</Td>
+                        <Td align="right" mono>{formatPeso(item.total)}</Td>
                       </tr>
                     ))}
                   </tbody>
@@ -126,7 +126,7 @@ export default function SupplierInvoiceDetailPage() {
                   <tbody>
                     {invoice.payments.map((p, i) => (
                       <tr key={i} className={trCls}>
-                        <Td className="text-muted">{p.paid_at ?? '—'}</Td>
+                        <Td className="text-muted">{p.payment_date ?? '—'}</Td>
                         <Td className="capitalize">{p.payment_method}</Td>
                         <Td align="right" mono>{formatPeso(p.amount)}</Td>
                       </tr>

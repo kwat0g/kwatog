@@ -31,7 +31,7 @@ let nextKey = 1;
 export default function PrTemplateFormPage() {
   const { id: paramId } = useParams<{ id: string }>();
   const isEdit = paramId !== undefined && paramId !== 'create';
-  const templateId = isEdit ? Number(paramId) : null;
+  const templateId = isEdit ? paramId : null;
   const navigate = useNavigate();
   const qc = useQueryClient();
 
@@ -81,7 +81,7 @@ export default function PrTemplateFormPage() {
       const payload = {
         name,
         notes: notes || undefined,
-        department_id: departmentId ? Number(departmentId) : undefined,
+        department_id: departmentId || undefined,
         items: lines.map((l) => ({
           item_id: l.item_id || null,
           description: l.description,

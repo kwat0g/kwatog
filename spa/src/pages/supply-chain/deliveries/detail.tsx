@@ -27,12 +27,8 @@ import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells
 import { Textarea } from '@/components/ui/Textarea';
 import { LinkButton } from '@/components/ui/LinkButton';
 import { focusRingInset } from '@/lib/focus';
+import { deliveryStatusVariant as STATUS_CHIP } from '@/lib/statusVariants';
 import { cn } from '@/lib/cn';
-
-const STATUS_CHIP: Record<DeliveryStatus, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
-  scheduled: 'neutral', loading: 'info', in_transit: 'info',
-  delivered: 'warning', confirmed: 'success', cancelled: 'neutral',
-};
 
 const NEXT: Record<DeliveryStatus, DeliveryStatus | null> = {
   scheduled: 'loading',

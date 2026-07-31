@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- dashboard layout helpers are intentionally colocated with the shared shell. */
 /**
  * Shared dashboard shell — one layout for every role dashboard.
  *

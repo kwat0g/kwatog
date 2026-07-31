@@ -9,19 +9,22 @@ use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\BillItem;
 use App\Modules\Accounting\Models\Budget;
 use App\Modules\Accounting\Models\BudgetLineItem;
+use App\Modules\Accounting\Models\FxRate;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Services\CreditNoteService;
 use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\B2B\Models\SupplierPortalUser;
-use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Models\Product;
+use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\Forecasting\Models\DemandForecast;
 use App\Modules\HR\Models\Department;
-use App\Modules\Payroll\Models\DisbursementProof;
-use App\Modules\Payroll\Models\PayrollPeriod;
+use App\Modules\HR\Models\JobPosting;
 use App\Modules\Inventory\Models\StockCountSession;
 use App\Modules\Inventory\Services\StockCountService;
+use App\Modules\Payroll\Models\DisbursementProof;
+use App\Modules\Payroll\Models\PayrollPeriod;
+use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Models\PurchaseRequestItem;
@@ -29,7 +32,6 @@ use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
 use App\Modules\ReturnManagement\Enums\ReturnRequestType;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\ReturnManagement\Models\ReturnRequestItem;
-use App\Modules\Production\Models\WorkOrder;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\DeliveryProof;
 use App\Modules\SupplyChain\Models\ShipmentLot;
@@ -37,6 +39,7 @@ use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Throwable;
 
 /**
@@ -67,6 +70,8 @@ class GoldenPathDemoSeeder extends Seeder
         $this->section('PR conversion and budget rehearsal (ADV6/9)', fn () => $this->seedProcurementRehearsal());
         $this->section('supplier-return rehearsal (ADV12)', fn () => $this->seedSupplierReturnRehearsal());
         $this->section('forecast-to-MRP opt-in (ADV11)', fn () => $this->seedForecastMrpOptIn());
+        $this->section('parent-pack FX rates (REC-12)', fn () => $this->seedParentPackFxRates());
+        $this->section('dynamic route fixtures', fn () => $this->seedDynamicRouteFixtures());
 
         $this->command?->info('Golden-path demo seed complete.');
     }
@@ -89,13 +94,29 @@ class GoldenPathDemoSeeder extends Seeder
         $this->command?->info("  {$product->part_number} forecast opted into MRP projection.");
     }
 
+    /** REC-12 — keep the translated parent pack usable in a fresh demo. */
+    private function seedParentPackFxRates(): void
+    {
+        $adminId = $this->admin()->id;
+        $date = Carbon::today()->toDateString();
+
+        foreach (['JPY' => '0.38000000', 'USD' => '58.50000000'] as $currency => $rate) {
+            FxRate::query()->updateOrCreate(
+                ['currency_code' => $currency, 'rate_date' => $date],
+                ['rate_to_functional' => $rate, 'source' => 'demo_seed', 'created_by' => $adminId],
+            );
+        }
+
+        $this->command?->info("  JPY and USD parent-pack rates seeded for {$date}.");
+    }
+
     /** Run one section and fail loudly: a partial "successful" demo seed is unsafe. */
     private function section(string $label, callable $fn): void
     {
         try {
             $fn();
         } catch (Throwable $e) {
-            $this->command?->error("  [$label] failed: " . $e->getMessage());
+            $this->command?->error("  [$label] failed: ".$e->getMessage());
             throw $e;
         }
     }
@@ -145,6 +166,7 @@ class GoldenPathDemoSeeder extends Seeder
     {
         if (StockCountSession::where('title', 'Defense Demo — Zone Freeze')->exists()) {
             $this->command?->info('  Stock-count rehearsal already present.');
+
             return;
         }
 
@@ -237,6 +259,7 @@ class GoldenPathDemoSeeder extends Seeder
     {
         if (ReturnRequest::where('rma_number', 'RMA-DEMO-SUP-READY')->exists()) {
             $this->command?->info('  Supplier-return rehearsal already present.');
+
             return;
         }
 
@@ -332,34 +355,35 @@ class GoldenPathDemoSeeder extends Seeder
         $wos = WorkOrder::whereNull('batch_number')->orderBy('id')->get();
         if ($wos->isEmpty()) {
             $this->command?->info('  Batch numbers already present.');
+
             return;
         }
 
         $n = 0;
         foreach ($wos as $wo) {
             $date = Carbon::parse($wo->actual_start ?? $wo->planned_start ?? now());
-            $batch = 'BATCH-' . $date->format('Ymd') . '-' . str_pad((string) ($wo->id), 4, '0', STR_PAD_LEFT);
+            $batch = 'BATCH-'.$date->format('Ymd').'-'.str_pad((string) ($wo->id), 4, '0', STR_PAD_LEFT);
 
             $wo->forceFill([
                 'batch_number' => $batch,
                 'material_lot_references' => [
                     [
-                        'item_id'                => null,
-                        'item_code'              => 'RESIN-ABS',
-                        'item_name'              => 'Resin A (ABS)',
-                        'grn_number'             => 'GRN-' . $date->copy()->subDays(5)->format('Ym') . '-0001',
-                        'material_lot_number'    => 'MLOT-' . $date->copy()->subDays(5)->format('Ymd') . '-01',
+                        'item_id' => null,
+                        'item_code' => 'RESIN-ABS',
+                        'item_name' => 'Resin A (ABS)',
+                        'grn_number' => 'GRN-'.$date->copy()->subDays(5)->format('Ym').'-0001',
+                        'material_lot_number' => 'MLOT-'.$date->copy()->subDays(5)->format('Ymd').'-01',
                         'supplier_lot_reference' => 'SL-TW-0234',
-                        'quantity_used'          => 150,
+                        'quantity_used' => 150,
                     ],
                     [
-                        'item_id'                => null,
-                        'item_code'              => 'COL-BLACK',
-                        'item_name'              => 'Black Colorant',
-                        'grn_number'             => 'GRN-' . $date->copy()->subDays(6)->format('Ym') . '-0002',
-                        'material_lot_number'    => 'MLOT-' . $date->copy()->subDays(6)->format('Ymd') . '-02',
+                        'item_id' => null,
+                        'item_code' => 'COL-BLACK',
+                        'item_name' => 'Black Colorant',
+                        'grn_number' => 'GRN-'.$date->copy()->subDays(6)->format('Ym').'-0002',
+                        'material_lot_number' => 'MLOT-'.$date->copy()->subDays(6)->format('Ymd').'-02',
                         'supplier_lot_reference' => 'SL-CN-0891',
-                        'quantity_used'          => 2,
+                        'quantity_used' => 2,
                     ],
                 ],
             ])->save();
@@ -379,39 +403,40 @@ class GoldenPathDemoSeeder extends Seeder
         $wo = WorkOrder::whereNotNull('batch_number')->orderBy('id')->first();
         if (! $wo) {
             $this->command?->warn('  No batch WO; skipping hero trace.');
+
             return;
         }
 
         $machineId = DB::table('machines')->min('id');
-        $moldId    = DB::table('molds')->min('id');
-        $grn       = DB::table('goods_receipt_notes')->orderBy('id')->first();
-        $grnItem   = $grn ? DB::table('grn_items')->where('goods_receipt_note_id', $grn->id)->orderBy('id')->first() : null;
+        $moldId = DB::table('molds')->min('id');
+        $grn = DB::table('goods_receipt_notes')->orderBy('id')->first();
+        $grnItem = $grn ? DB::table('grn_items')->where('goods_receipt_note_id', $grn->id)->orderBy('id')->first() : null;
 
         // Point the WO's material trace at the REAL GRN line, and stamp that
         // GRN line with the matching lot so a material-lot search also resolves.
-        $matLot   = 'MLOT-' . Carbon::parse($grn->received_date ?? now())->format('Ymd') . '-01';
-        $supLot   = 'SL-TW-0234';
+        $matLot = 'MLOT-'.Carbon::parse($grn->received_date ?? now())->format('Ymd').'-01';
+        $supLot = 'SL-TW-0234';
         if ($grnItem) {
             DB::table('grn_items')->where('id', $grnItem->id)->update([
-                'material_lot_number'    => $matLot,
+                'material_lot_number' => $matLot,
                 'supplier_lot_reference' => $supLot,
-                'updated_at'             => now(),
+                'updated_at' => now(),
             ]);
         }
 
         $wo->forceFill([
-            'machine_id'   => $wo->machine_id ?? $machineId,
-            'mold_id'      => $wo->mold_id ?? $moldId,
-            'quantity_good'     => max((int) $wo->quantity_good, 9955),
+            'machine_id' => $wo->machine_id ?? $machineId,
+            'mold_id' => $wo->mold_id ?? $moldId,
+            'quantity_good' => max((int) $wo->quantity_good, 9955),
             'quantity_rejected' => max((int) $wo->quantity_rejected, 45),
             'material_lot_references' => [[
-                'item_id'                => $grnItem->item_id ?? null,
-                'item_code'              => 'RESIN-ABS',
-                'item_name'              => 'Resin A (ABS)',
-                'grn_number'             => $grn->grn_number ?? null,
-                'material_lot_number'    => $matLot,
+                'item_id' => $grnItem->item_id ?? null,
+                'item_code' => 'RESIN-ABS',
+                'item_name' => 'Resin A (ABS)',
+                'grn_number' => $grn->grn_number ?? null,
+                'material_lot_number' => $matLot,
                 'supplier_lot_reference' => $supLot,
-                'quantity_used'          => 150,
+                'quantity_used' => 150,
             ]],
         ])->save();
 
@@ -422,25 +447,25 @@ class GoldenPathDemoSeeder extends Seeder
         if (! $exists) {
             $specId = DB::table('inspection_specs')->where('product_id', $wo->product_id)->value('id');
             DB::table('inspections')->insert([
-                'inspection_number'  => 'QC-' . Carbon::now()->format('Ym') . '-9001',
-                'stage'              => 'outgoing',
-                'status'             => 'passed',
-                'product_id'         => $wo->product_id,
+                'inspection_number' => 'QC-'.Carbon::now()->format('Ym').'-9001',
+                'stage' => 'outgoing',
+                'status' => 'passed',
+                'product_id' => $wo->product_id,
                 'inspection_spec_id' => $specId,
-                'entity_type'        => 'work_order',
-                'entity_id'          => $wo->id,
-                'batch_quantity'     => 10000,
-                'sample_size'        => 200,
-                'aql_code'           => 'II',
-                'accept_count'       => 200,
-                'reject_count'       => 0,
-                'defect_count'       => 0,
-                'inspector_id'       => $this->admin()?->id,
-                'started_at'         => Carbon::now()->subHours(2),
-                'completed_at'       => Carbon::now()->subHour(),
-                'notes'              => 'Demo — AQL 0.65 Level II outgoing inspection, accepted.',
-                'created_at'         => now(),
-                'updated_at'         => now(),
+                'entity_type' => 'work_order',
+                'entity_id' => $wo->id,
+                'batch_quantity' => 10000,
+                'sample_size' => 200,
+                'aql_code' => 'II',
+                'accept_count' => 200,
+                'reject_count' => 0,
+                'defect_count' => 0,
+                'inspector_id' => $this->admin()?->id,
+                'started_at' => Carbon::now()->subHours(2),
+                'completed_at' => Carbon::now()->subHour(),
+                'notes' => 'Demo — AQL 0.65 Level II outgoing inspection, accepted.',
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
         }
 
@@ -452,6 +477,7 @@ class GoldenPathDemoSeeder extends Seeder
     {
         if (ShipmentLot::count() > 0) {
             $this->command?->info('  Shipment lots already present.');
+
             return;
         }
 
@@ -475,15 +501,15 @@ class GoldenPathDemoSeeder extends Seeder
 
             $date = Carbon::parse($del->delivered_at ?? $del->scheduled_date ?? now());
             ShipmentLot::create([
-                'lot_number'     => 'LOT-' . $date->format('Ymd') . '-' . str_pad((string) ($i + 1), 4, '0', STR_PAD_LEFT),
-                'delivery_id'    => $del->id,
-                'customer_id'    => $customerId,
-                'product_id'     => $productId,
+                'lot_number' => 'LOT-'.$date->format('Ymd').'-'.str_pad((string) ($i + 1), 4, '0', STR_PAD_LEFT),
+                'delivery_id' => $del->id,
+                'customer_id' => $customerId,
+                'product_id' => $productId,
                 'work_order_ids' => array_slice($woIds, 0, 2),
-                'quantity'       => 5000,
-                'lot_date'       => $date->toDateString(),
-                'coc_path'       => null,
-                'created_by'     => $admin?->id,
+                'quantity' => 5000,
+                'lot_date' => $date->toDateString(),
+                'coc_path' => null,
+                'created_by' => $admin?->id,
             ]);
             $n++;
         }
@@ -493,37 +519,294 @@ class GoldenPathDemoSeeder extends Seeder
     /** ADV7 — proof-of-delivery record + receiver fields for delivered deliveries. */
     private function seedDeliveryProofs(): void
     {
-        if (DeliveryProof::count() > 0) {
-            $this->command?->info('  Delivery proofs already present.');
-            return;
-        }
-
         $admin = $this->admin();
         $n = 0;
+        $imageBytes = base64_decode('R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==', true);
+        if ($imageBytes === false) {
+            throw new \RuntimeException('Unable to decode the demo proof image.');
+        }
+
         // Any delivery that has left / arrived is a candidate; fall back to all.
         $dels = Delivery::orderBy('id')->get();
 
         foreach ($dels as $del) {
             $when = Carbon::parse($del->delivered_at ?? $del->scheduled_date ?? now());
-            DeliveryProof::create([
+            $filePath = 'delivery-proofs/signed_dr_'.$del->id.'.gif';
+            DeliveryProof::updateOrCreate([
                 'delivery_id' => $del->id,
-                'proof_type'  => 'signed_dr',
-                'file_name'   => 'signed_dr_' . $when->format('Ymd') . '.jpg',
-                'file_path'   => 'delivery-proofs/signed_dr_' . $del->id . '.jpg',
-                'file_size'   => 184320,
-                'mime_type'   => 'image/jpeg',
+                'proof_type' => 'signed_dr',
+                'notes' => 'Demo — signed delivery receipt.',
+            ], [
+                'file_name' => 'signed_dr_'.$when->format('Ymd').'.gif',
+                'file_path' => $filePath,
+                'file_size' => strlen($imageBytes),
+                'mime_type' => 'image/gif',
                 'uploaded_by' => $admin?->id,
-                'notes'       => 'Demo — signed delivery receipt.',
             ]);
+            if (! Storage::disk('local')->exists($filePath)) {
+                Storage::disk('local')->put($filePath, $imageBytes);
+            }
 
             $del->forceFill([
-                'receiver_name'     => $del->receiver_name ?? 'Maria Santos',
+                'receiver_name' => $del->receiver_name ?? 'Maria Santos',
                 'receiver_position' => $del->receiver_position ?? 'Purchasing Officer',
-                'received_at'       => $del->received_at ?? $when->copy()->setTime(10, 45),
+                'received_at' => $del->received_at ?? $when->copy()->setTime(10, 45),
             ])->save();
             $n++;
         }
         $this->command?->info("  Created {$n} delivery proofs.");
+    }
+
+    private function seedDynamicRouteFixtures(): void
+    {
+        $admin = $this->admin();
+        $department = Department::query()->orderBy('id')->first();
+        $posting = null;
+        if ($admin && $department) {
+            $posting = JobPosting::withTrashed()->firstOrNew(['posting_number' => 'JOB-DEMO-001']);
+            $posting->fill([
+                'department_id' => $department->id,
+                'title' => 'Production Quality Engineer',
+                'description' => 'Support process capability, quality planning, and continuous improvement for Ogami production lines.',
+                'requirements' => 'Engineering graduate with strong analytical and cross-functional communication skills.',
+                'employment_type' => 'regular',
+                'show_salary' => false,
+                'slots' => 1,
+                'posted_at' => now()->subDay(),
+                'closes_at' => now()->addMonths(2),
+                'created_by' => $admin->id,
+            ]);
+            $posting->forceFill(['status' => 'open', 'deleted_at' => null])->save();
+        }
+
+        $driver = User::query()->where('email', 'driver@ogami.test')->first();
+        $delivery = Delivery::query()->where('status', 'scheduled')->orderBy('id')->first();
+        if ($driver && $delivery && ! $delivery->driver_id) {
+            $delivery->forceFill(['driver_id' => $driver->id])->save();
+        }
+
+        if (! $admin) {
+            throw new \RuntimeException('An admin user is required for dynamic route fixtures.');
+        }
+
+        $now = now();
+        $customerId = DB::table('customers')->orderBy('id')->value('id');
+        $productId = DB::table('products')->orderBy('id')->value('id');
+        $employeeIds = DB::table('employees')->orderBy('id')->limit(2)->pluck('id');
+        $positionId = DB::table('positions')->orderBy('id')->value('id');
+        $itemId = DB::table('items')->orderBy('id')->value('id');
+        $locationIds = DB::table('warehouse_locations')->orderBy('id')->limit(2)->pluck('id');
+
+        if (! $customerId || ! $productId || $employeeIds->count() < 2 || ! $positionId || ! $itemId || $locationIds->count() < 2) {
+            throw new \RuntimeException('Customer, product, two employees, position, item, and two warehouse locations are required for dynamic route fixtures.');
+        }
+
+        DB::table('customer_complaints')->updateOrInsert(
+            ['complaint_number' => 'CC-DEMO-001'],
+            [
+                'customer_id' => $customerId,
+                'product_id' => $productId,
+                'received_date' => $now->toDateString(),
+                'severity' => 'medium',
+                'status' => 'open',
+                'description' => 'Defense demo complaint for the complete CRM detail workflow.',
+                'affected_quantity' => 5,
+                'created_by' => $admin->id,
+                'assigned_to' => $admin->id,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ],
+        );
+
+        DB::table('review_cycles')->updateOrInsert(
+            ['name' => '2026 Defense Demo Review'],
+            [
+                'cycle_type' => 'annual',
+                'start_date' => $now->copy()->startOfYear()->toDateString(),
+                'end_date' => $now->copy()->endOfYear()->toDateString(),
+                'status' => 'active',
+                'description' => 'Defense demo performance review cycle.',
+                'created_by' => $admin->id,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ],
+        );
+        $reviewCycleId = DB::table('review_cycles')->where('name', '2026 Defense Demo Review')->value('id');
+        DB::table('performance_reviews')->updateOrInsert(
+            [
+                'review_cycle_id' => $reviewCycleId,
+                'employee_id' => $employeeIds[0],
+                'reviewer_id' => $employeeIds[1],
+            ],
+            [
+                'status' => 'pending',
+                'ratings' => null,
+                'deleted_at' => null,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ],
+        );
+
+        if ($posting) {
+            DB::table('job_applications')->updateOrInsert(
+                ['application_number' => 'APP-DEMO-001'],
+                [
+                    'job_posting_id' => $posting->id,
+                    'tracking_code' => 'DEMO000001',
+                    'first_name' => 'Alex',
+                    'last_name' => 'Demo',
+                    'email' => 'applicant.demo@example.test',
+                    'phone' => '+639170000001',
+                    'resume_path' => 'recruitment/demo-resume.pdf',
+                    'resume_original_name' => 'Alex_Demo_Resume.pdf',
+                    'cover_letter' => 'Defense demo application record.',
+                    'stage' => 'new',
+                    'applied_at' => $now,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ],
+            );
+        }
+
+        DB::table('clearances')->updateOrInsert(
+            ['clearance_no' => 'CLR-DEMO-001'],
+            [
+                'employee_id' => $employeeIds[0],
+                'separation_date' => $now->copy()->addMonth()->toDateString(),
+                'separation_reason' => 'resigned',
+                'clearance_items' => json_encode([[
+                    'department' => 'Human Resources',
+                    'item_key' => 'company_id_returned',
+                    'status' => 'pending',
+                    'signed_by' => null,
+                    'signed_at' => null,
+                    'remarks' => null,
+                ]], JSON_THROW_ON_ERROR),
+                'status' => 'pending',
+                'initiated_by' => $admin->id,
+                'remarks' => 'Defense demo separation clearance.',
+                'deleted_at' => null,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ],
+        );
+
+        DB::table('succession_plans')->updateOrInsert(
+            ['position_id' => $positionId, 'successor_id' => $employeeIds[1]],
+            [
+                'incumbent_id' => $employeeIds[0],
+                'readiness' => 'ready_1_year',
+                'priority' => 'high',
+                'development_notes' => 'Defense demo leadership development plan.',
+                'target_date' => $now->copy()->addYear()->toDateString(),
+                'status' => 'active',
+                'created_by' => $admin->id,
+                'deleted_at' => null,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ],
+        );
+
+        DB::table('material_review_records')->updateOrInsert(
+            ['mrb_number' => 'MRB-DEMO-001'],
+            [
+                'item_id' => $itemId,
+                'quantity' => '1.000',
+                'source_location_id' => $locationIds[0],
+                'quarantine_location_id' => $locationIds[1],
+                'status' => 'held',
+                'held_by' => $admin->id,
+                'held_at' => $now,
+                'notes' => 'Defense demo held-material record.',
+                'created_at' => $now,
+                'updated_at' => $now,
+            ],
+        );
+
+        DB::table('product_routings')->updateOrInsert(
+            ['product_id' => $productId, 'version' => 1],
+            [
+                'is_active' => true,
+                'total_cycle_time' => '0.00',
+                'notes' => 'Defense demo routing ready for operation setup.',
+                'created_at' => $now,
+                'updated_at' => $now,
+            ],
+        );
+
+        DB::table('purchase_request_templates')->updateOrInsert(
+            ['name' => 'Defense Demo Monthly Supplies'],
+            [
+                'department_id' => $department?->id,
+                'items' => json_encode([[
+                    'item_id' => app('hashids')->encode($itemId),
+                    'description' => 'Defense demo recurring supply',
+                    'quantity' => '5',
+                    'unit' => 'pcs',
+                    'estimated_unit_price' => '100.00',
+                ]], JSON_THROW_ON_ERROR),
+                'notes' => 'Defense demo recurring purchase template.',
+                'created_by' => $admin->id,
+                'is_active' => true,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ],
+        );
+
+        DB::table('controlled_documents')->updateOrInsert(
+            ['code' => 'QMS-DEMO-001'],
+            [
+                'title' => 'Defense Demo Quality Procedure',
+                'category' => 'sop',
+                'description' => 'Demonstrates the controlled-document detail workflow.',
+                'assignee_role' => 'qc_inspector',
+                'review_interval_months' => 12,
+                'is_active' => true,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ],
+        );
+
+        DB::table('ncr_templates')->updateOrInsert(
+            ['name' => 'Defense Demo Inspection Failure'],
+            [
+                'source' => 'inspection_fail',
+                'severity' => 'medium',
+                'product_id' => $productId,
+                'defect_description' => 'Measured characteristic outside specification.',
+                'notes' => 'Defense demo reusable NCR template.',
+                'created_by' => $admin->id,
+                'is_active' => true,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ],
+        );
+
+        $specItem = DB::table('inspection_spec_items as isi')
+            ->join('inspection_specs as s', 's.id', '=', 'isi.inspection_spec_id')
+            ->select('isi.id', 's.product_id')
+            ->orderBy('isi.id')
+            ->first();
+        if (! $specItem) {
+            throw new \RuntimeException('An inspection specification item is required for the SPC route fixture.');
+        }
+        DB::table('spc_control_charts')->updateOrInsert(
+            [
+                'product_id' => $specItem->product_id,
+                'spec_item_id' => $specItem->id,
+                'chart_type' => 'xbar_r',
+            ],
+            [
+                'subgroup_size' => 5,
+                'limits_locked' => false,
+                'limits_sample_count' => 0,
+                'status' => 'active',
+                'created_at' => $now,
+                'updated_at' => $now,
+            ],
+        );
+
+        $this->command?->info('  All parameterized SPA route fixtures ready.');
     }
 
     /** ADV1 — mark a finalized payroll period disbursed + attach a bank proof. */
@@ -531,6 +814,7 @@ class GoldenPathDemoSeeder extends Seeder
     {
         if (DisbursementProof::count() > 0) {
             $this->command?->info('  Disbursement proof already present.');
+
             return;
         }
 
@@ -538,6 +822,7 @@ class GoldenPathDemoSeeder extends Seeder
             ?? PayrollPeriod::orderByDesc('id')->first();
         if (! $period) {
             $this->command?->warn('  No payroll period; skipping disbursement.');
+
             return;
         }
 
@@ -545,25 +830,25 @@ class GoldenPathDemoSeeder extends Seeder
         $amount = (float) (DB::table('payrolls')->where('payroll_period_id', $period->id)->sum('net_pay') ?: 2847500);
 
         DisbursementProof::create([
-            'payroll_period_id'     => $period->id,
-            'proof_type'            => 'bank_confirmation',
-            'file_name'             => 'BDO_TransferConfirmation.pdf',
-            'file_path'             => 'payroll-proofs/period_' . $period->id . '_confirmation.pdf',
-            'bank_name'             => 'BDO Unibank',
-            'transaction_reference' => 'TXN' . Carbon::now()->format('Ymd') . '001',
-            'disbursed_amount'      => round($amount, 2),
-            'disbursement_date'     => Carbon::now()->toDateString(),
-            'uploaded_by'           => $admin?->id,
-            'notes'                 => 'Demo — salaries transferred via BDO corporate banking.',
+            'payroll_period_id' => $period->id,
+            'proof_type' => 'bank_confirmation',
+            'file_name' => 'BDO_TransferConfirmation.pdf',
+            'file_path' => 'payroll-proofs/period_'.$period->id.'_confirmation.pdf',
+            'bank_name' => 'BDO Unibank',
+            'transaction_reference' => 'TXN'.Carbon::now()->format('Ymd').'001',
+            'disbursed_amount' => round($amount, 2),
+            'disbursement_date' => Carbon::now()->toDateString(),
+            'uploaded_by' => $admin?->id,
+            'notes' => 'Demo — salaries transferred via BDO corporate banking.',
         ]);
 
         $period->forceFill([
             'disbursement_status' => 'disbursed',
-            'disbursed_at'        => Carbon::now(),
-            'disbursed_by'        => $admin?->id,
+            'disbursed_at' => Carbon::now(),
+            'disbursed_by' => $admin?->id,
         ])->save();
 
-        $this->command?->info("  Marked period #{$period->id} disbursed (₱" . number_format($amount, 2) . ').');
+        $this->command?->info("  Marked period #{$period->id} disbursed (₱".number_format($amount, 2).').');
     }
 
     /** ADV12 — one finalized customer credit note against an existing invoice. */
@@ -571,6 +856,7 @@ class GoldenPathDemoSeeder extends Seeder
     {
         if (DB::table('credit_notes')->count() > 0) {
             $this->command?->info('  Credit note already present.');
+
             return;
         }
 
@@ -578,6 +864,7 @@ class GoldenPathDemoSeeder extends Seeder
         $invoice = Invoice::orderBy('id')->first();
         if (! $admin || ! $invoice) {
             $this->command?->warn('  No invoice/admin; skipping credit note.');
+
             return;
         }
 
@@ -588,16 +875,16 @@ class GoldenPathDemoSeeder extends Seeder
         /** @var CreditNoteService $svc */
         $svc = app(CreditNoteService::class);
         $cn = $svc->create([
-            'type'        => 'customer',
+            'type' => 'customer',
             'customer_id' => $invoice->customer_id,
-            'invoice_id'  => $invoice->id,
-            'date'        => Carbon::now()->toDateString(),
-            'is_vatable'  => true,
-            'reason'      => 'Demo — credit for returned units (RMA disposition: scrap).',
-            'lines'       => [[
-                'account_id'  => $account->id,
+            'invoice_id' => $invoice->id,
+            'date' => Carbon::now()->toDateString(),
+            'is_vatable' => true,
+            'reason' => 'Demo — credit for returned units (RMA disposition: scrap).',
+            'lines' => [[
+                'account_id' => $account->id,
                 'description' => 'Sales return — dimensional non-conformance',
-                'amount'      => '12500.00',
+                'amount' => '12500.00',
             ]],
         ], $admin);
 
@@ -610,6 +897,7 @@ class GoldenPathDemoSeeder extends Seeder
     {
         if (Budget::count() > 0) {
             $this->command?->info('  Budgets already present.');
+
             return;
         }
 
@@ -617,10 +905,10 @@ class GoldenPathDemoSeeder extends Seeder
         $fyId = DB::table('fiscal_years')->where('year', 2026)->value('id');
         if (! $fyId) {
             $fyId = DB::table('fiscal_years')->insertGetId([
-                'year'       => 2026,
+                'year' => 2026,
                 'start_date' => '2026-01-01',
-                'end_date'   => '2026-12-31',
-                'status'     => 'active',
+                'end_date' => '2026-12-31',
+                'status' => 'active',
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
@@ -635,7 +923,7 @@ class GoldenPathDemoSeeder extends Seeder
         $plan = [
             ['dept' => 'PROD', 'name' => 'Production Operating Budget', 'alloc' => 18500000, 'spentPct' => 0.50],
             ['dept' => 'FIN',  'name' => 'Finance & Admin Budget',      'alloc' => 5200000,  'spentPct' => 0.60],
-            ['dept' => 'MAINT','name' => 'Maintenance Budget',          'alloc' => 4500000,  'spentPct' => 0.98],
+            ['dept' => 'MAINT', 'name' => 'Maintenance Budget',          'alloc' => 4500000,  'spentPct' => 0.98],
         ];
 
         $n = 0;
@@ -644,18 +932,18 @@ class GoldenPathDemoSeeder extends Seeder
             $spent = round($p['alloc'] * $p['spentPct'], 2);
 
             $budget = Budget::create([
-                'fiscal_year_id'  => $fyId,
-                'department_id'   => $dept?->id,
-                'budget_type'     => 'department',
-                'name'            => $p['name'],
+                'fiscal_year_id' => $fyId,
+                'department_id' => $dept?->id,
+                'budget_type' => 'department',
+                'name' => $p['name'],
                 'total_allocated' => $p['alloc'],
-                'total_spent'     => $spent,
+                'total_spent' => $spent,
                 'total_committed' => round($p['alloc'] * 0.05, 2),
-                'status'          => 'active',
-                'submitted_by'    => $admin?->id,
-                'submitted_at'    => now()->subDays(60),
-                'approved_by'     => $admin?->id,
-                'approved_at'     => now()->subDays(50),
+                'status' => 'active',
+                'submitted_by' => $admin?->id,
+                'submitted_at' => now()->subDays(60),
+                'approved_by' => $admin?->id,
+                'approved_at' => now()->subDays(50),
             ]);
 
             // Spread the allocation across up to 3 expense accounts, evenly by month.
@@ -669,8 +957,8 @@ class GoldenPathDemoSeeder extends Seeder
                     continue;
                 }
                 BudgetLineItem::create([
-                    'budget_id'    => $budget->id,
-                    'account_id'   => $acctId,
+                    'budget_id' => $budget->id,
+                    'account_id' => $acctId,
                     'jan' => $perMonth, 'feb' => $perMonth, 'mar' => $perMonth,
                     'apr' => $perMonth, 'may' => $perMonth, 'jun' => $perMonth,
                     'jul' => $perMonth, 'aug' => $perMonth, 'sep' => $perMonth,

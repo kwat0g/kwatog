@@ -10,6 +10,7 @@ import { purchaseOrdersApi } from '@/api/purchasing/purchase-orders';
 import { purchaseRequestsApi } from '@/api/purchasing/purchase-requests';
 import { itemsApi } from '@/api/inventory/items';
 import { vendorsApi } from '@/api/accounting/vendors';
+import { businessPoliciesApi } from '@/api/businessPolicies';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -46,8 +47,6 @@ const schema = z.object({
 });
 type V = z.infer<typeof schema>;
 
-const VP_THRESHOLD = 50000;
-
 export default function CreatePurchaseOrderPage() {
   const nav = useNavigate();
   const [search] = useSearchParams();
@@ -62,6 +61,10 @@ export default function CreatePurchaseOrderPage() {
   const vendors = useQuery({
     queryKey: ['accounting', 'vendors', { per_page: 200, is_active: 'true' }],
     queryFn: () => vendorsApi.list({ per_page: 200, is_active: 'true' }),
+  });
+  const policies = useQuery({
+    queryKey: ['business-policies'],
+    queryFn: businessPoliciesApi.get,
   });
   const { data: pr } = useQuery({
     queryKey: ['purchasing', 'purchase-requests', prId],
@@ -105,9 +108,11 @@ export default function CreatePurchaseOrderPage() {
   const watchedItems = watch('items');
   const isVatable = watch('is_vatable');
   const subtotal = watchedItems.reduce((s, l) => s + Number(l.quantity || 0) * Number(l.unit_price || 0), 0);
-  const vat = isVatable ? subtotal * 0.12 : 0;
+  const vatRate = Number(policies.data?.vat_rate ?? 0);
+  const vatRateLabel = `${(vatRate * 100).toLocaleString()}%`;
+  const vat = isVatable ? subtotal * vatRate : 0;
   const total = subtotal + vat;
-  const requiresVp = total >= VP_THRESHOLD;
+  const requiresVp = policies.data !== undefined && total >= policies.data.purchase_order_vp_threshold;
 
   const create = useMutation({
     mutationFn: (values: V) => purchaseOrdersApi.create({
@@ -157,7 +162,7 @@ export default function CreatePurchaseOrderPage() {
               {...register('expected_delivery_date')}
               error={errors.expected_delivery_date?.message}
             />
-            <Switch label="VAT-able (12%)" {...register('is_vatable')} />
+            <Switch label={`VAT-able (${vatRateLabel})`} {...register('is_vatable')} />
             <Textarea
               label="Remarks"
               rows={2}
@@ -272,7 +277,7 @@ export default function CreatePurchaseOrderPage() {
               </tr>
               {isVatable && (
                 <tr className={trCls}>
-                  <Td align="right" mono className="text-muted" colSpan={5}>VAT (12%)</Td>
+                  <Td align="right" mono className="text-muted" colSpan={5}>VAT ({vatRateLabel})</Td>
                   <Td align="right" mono>₱ {vat.toFixed(2)}</Td>
                   <Td />
                 </tr>
@@ -287,7 +292,7 @@ export default function CreatePurchaseOrderPage() {
         </Panel>
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={() => nav('/purchasing/purchase-orders')} disabled={create.isPending}>Cancel</Button>
-          <Button type="submit" variant="primary" loading={create.isPending} disabled={create.isPending || isSubmitting}>Create PO</Button>
+          <Button type="submit" variant="primary" loading={create.isPending || policies.isLoading} disabled={create.isPending || isSubmitting || !policies.data}>Create PO</Button>
         </div>
       </form>
 
@@ -302,7 +307,7 @@ export default function CreatePurchaseOrderPage() {
               Total <span className="font-mono font-medium text-primary">₱ {total.toFixed(2)}</span>.
               {requiresVp && (
                 <span className="block mt-1 text-warning-fg">
-                  Total ≥ ₱ {formatInt(VP_THRESHOLD)} — VP approval will be required before send.
+                  Total ≥ ₱ {formatInt(policies.data?.purchase_order_vp_threshold ?? 0)} — VP approval will be required before send.
                 </span>
               )}
             </>

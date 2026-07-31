@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- table style primitives are intentionally exported beside their cell components. */
 /**
  * Table cell primitives — the one source of truth for table typography.
  *

@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\HR\Models\Department;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 class DepartmentService
 {
@@ -84,13 +84,13 @@ class DepartmentService
     public function delete(Department $department): void
     {
         if ($department->positions()->exists()) {
-            throw new RuntimeException('Cannot delete department: positions exist.');
+            throw new BusinessRuleException('Cannot delete department: positions exist.');
         }
         if ($department->employees()->exists()) {
-            throw new RuntimeException('Cannot delete department: employees assigned.');
+            throw new BusinessRuleException('Cannot delete department: employees assigned.');
         }
         if ($department->children()->exists()) {
-            throw new RuntimeException('Cannot delete department: child departments exist.');
+            throw new BusinessRuleException('Cannot delete department: child departments exist.');
         }
         $department->delete();
     }

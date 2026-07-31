@@ -73,7 +73,7 @@ export default function EditSalesOrderPage() {
     defaultValues: {
       customer_id: '',
       date: '',
-      payment_terms_days: '30',
+      payment_terms_days: '',
       delivery_terms: '',
       notes: '',
       items: [{ product_id: '', quantity: '', delivery_date: '' }],
@@ -88,7 +88,7 @@ export default function EditSalesOrderPage() {
     reset({
       customer_id: so.customer?.id ?? '',
       date: so.date,
-      payment_terms_days: String(so.payment_terms_days ?? 30),
+      payment_terms_days: String(so.payment_terms_days),
       delivery_terms: so.delivery_terms ?? '',
       notes: so.notes ?? '',
       items: (so.items ?? []).map((it) => ({

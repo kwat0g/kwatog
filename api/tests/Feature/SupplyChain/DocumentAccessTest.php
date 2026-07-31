@@ -265,6 +265,47 @@ class DocumentAccessTest extends TestCase
             ->assertOk();
     }
 
+    // ─── Missing-file handling ───────────────────────────────────────────────
+    //
+    // A DB row whose file is gone from disk must answer 404, not 500. Both
+    // handlers threw RuntimeException, which surfaces as a server error page in
+    // manual testing. The four sibling download handlers all abort(404).
+
+    public function test_shipment_document_download_404s_when_file_missing_from_disk(): void
+    {
+        $user = $this->seedUserWithPerms(['supply_chain.view', 'supply_chain.shipments.manage']);
+        $shipment = $this->seedShipment($user);
+
+        // Row exists, file deliberately never written.
+        $doc = ShipmentDocument::create([
+            'shipment_id' => $shipment->id,
+            'document_type' => 'commercial_invoice',
+            'file_path' => 'shipments/'.$shipment->id.'/gone.pdf',
+            'original_filename' => 'gone.pdf',
+            'mime_type' => 'application/pdf',
+            'uploaded_by' => $user->id,
+            'uploaded_at' => now(),
+        ]);
+
+        $this->actingAs($user)
+            ->getJson("/api/v1/supply-chain/shipment-documents/{$doc->hash_id}/download")
+            ->assertStatus(404);
+    }
+
+    public function test_receipt_photo_404s_when_file_missing_from_disk(): void
+    {
+        $user = $this->seedUserWithPerms(['supply_chain.view', 'supply_chain.deliveries.create']);
+        $delivery = $this->seedDelivery($user);
+
+        $delivery->forceFill([
+            'receipt_photo_path' => 'deliveries/'.$delivery->id.'/gone.jpg',
+        ])->save();
+
+        $this->actingAs($user)
+            ->getJson("/api/v1/supply-chain/deliveries/{$delivery->hash_id}/receipt-photo")
+            ->assertStatus(404);
+    }
+
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
     private function seedUserWithPerms(array $permSlugs): User

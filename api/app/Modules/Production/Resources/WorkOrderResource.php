@@ -88,6 +88,15 @@ class WorkOrderResource extends JsonResource
                     ]) : [],
                 ])
             ),
+            'inspections'         => $this->whenLoaded('inspections', fn () =>
+                $this->inspections->map(fn ($inspection) => [
+                    'id' => $inspection->hash_id,
+                    'inspection_number' => $inspection->inspection_number,
+                    'stage' => (string) ($inspection->stage?->value ?? $inspection->stage),
+                    'status' => (string) ($inspection->status?->value ?? $inspection->status),
+                    'completed_at' => optional($inspection->completed_at)->toIso8601String(),
+                ])->values()
+            ),
             'created_at'          => optional($this->created_at)->toIso8601String(),
             'updated_at'          => optional($this->updated_at)->toIso8601String(),
         ];

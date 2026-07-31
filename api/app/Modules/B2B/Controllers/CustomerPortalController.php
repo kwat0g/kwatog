@@ -4,22 +4,26 @@ declare(strict_types=1);
 
 namespace App\Modules\B2B\Controllers;
 
+use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Resources\InvoiceResource;
 use App\Modules\Accounting\Services\PdfService;
 use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\B2B\Requests\Customer\CreateComplaintRequest;
 use App\Modules\B2B\Requests\Customer\CustomerStoreDeliveryScheduleRequest;
+use App\Modules\B2B\Resources\CustomerDeliveryResource;
 use App\Modules\B2B\Resources\DeliveryScheduleResource;
 use App\Modules\B2B\Services\CustomerPortalService;
 use App\Modules\CRM\Models\CustomerComplaint;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Resources\SalesOrderResource;
-use App\Modules\Accounting\Models\Invoice;
 use App\Modules\SupplyChain\Models\Delivery;
+use App\Modules\SupplyChain\Models\DeliveryProof;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class CustomerPortalController extends Controller
 {
@@ -32,6 +36,7 @@ class CustomerPortalController extends Controller
     {
         /** @var CustomerPortalUser $user */
         $user = $request->user('customer_portal');
+
         return $user;
     }
 
@@ -44,7 +49,7 @@ class CustomerPortalController extends Controller
         $data = $this->service->dashboard($user->customer_id);
 
         // Wrap collection fields in API Resources for consistent serialization.
-        $data['recent_orders']   = SalesOrderResource::collection($data['recent_orders']);
+        $data['recent_orders'] = SalesOrderResource::collection($data['recent_orders']);
         $data['recent_invoices'] = InvoiceResource::collection($data['recent_invoices']);
 
         return response()->json(['data' => $data]);
@@ -58,8 +63,8 @@ class CustomerPortalController extends Controller
         $user = $this->user($request);
 
         $paginator = $this->service->salesOrders($user->customer_id, [
-            'status'   => $request->query('status'),
-            'search'   => $request->query('search'),
+            'status' => $request->query('status'),
+            'search' => $request->query('search'),
             'per_page' => $request->query('per_page', 25),
         ]);
 
@@ -116,7 +121,7 @@ class CustomerPortalController extends Controller
     /**
      * GET /api/v1/b2b/customer/deliveries
      */
-    public function deliveries(Request $request): JsonResponse
+    public function deliveries(Request $request): AnonymousResourceCollection
     {
         $user = $this->user($request);
 
@@ -124,7 +129,7 @@ class CustomerPortalController extends Controller
             'status' => $request->query('status'),
         ]);
 
-        return response()->json(['data' => $deliveries]);
+        return CustomerDeliveryResource::collection($deliveries);
     }
 
     /**
@@ -142,12 +147,33 @@ class CustomerPortalController extends Controller
     /**
      * GET /api/v1/b2b/customer/deliveries/{id}
      */
-    public function deliveryDetail(Delivery $delivery, Request $request): JsonResponse
+    public function deliveryDetail(Delivery $delivery, Request $request): CustomerDeliveryResource
     {
         $user = $this->user($request);
         $delivery = $this->service->deliveryDetail($user->customer_id, $delivery);
 
-        return response()->json(['data' => $delivery]);
+        return new CustomerDeliveryResource($delivery);
+    }
+
+    public function deliveryProof(Delivery $delivery, DeliveryProof $proof, Request $request): StreamedResponse
+    {
+        $user = $this->user($request);
+        $this->service->deliveryDetail($user->customer_id, $delivery);
+        abort_if($proof->delivery_id !== $delivery->id, 404);
+
+        $disk = Storage::disk('local');
+        abort_unless($disk->exists($proof->file_path), 404, 'Proof file not found on disk.');
+        $mime = $proof->mime_type ?? $disk->mimeType($proof->file_path) ?? 'application/octet-stream';
+
+        return response()->stream(
+            fn () => print $disk->get($proof->file_path),
+            200,
+            [
+                'Content-Type' => $mime,
+                'Cache-Control' => 'private, no-store, max-age=0',
+                'Content-Disposition' => sprintf('inline; filename="%s"', $proof->file_name),
+            ],
+        );
     }
 
     /**
@@ -170,7 +196,7 @@ class CustomerPortalController extends Controller
         $complaint = $this->service->createComplaint($user->customer_id, $request->validated());
 
         return response()->json([
-            'data'    => $complaint,
+            'data' => $complaint,
             'message' => 'Complaint submitted successfully.',
         ], 201);
     }
@@ -230,7 +256,7 @@ class CustomerPortalController extends Controller
         $schedule = $this->service->storeDeliverySchedule($user->customer_id, $request->validated());
 
         return response()->json([
-            'data'    => new DeliveryScheduleResource($schedule),
+            'data' => new DeliveryScheduleResource($schedule),
             'message' => 'Delivery schedule submitted successfully.',
         ], 201);
     }

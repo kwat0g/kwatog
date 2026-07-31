@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -6,6 +7,7 @@ import { z } from 'zod';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { customersApi } from '@/api/accounting/customers';
+import { businessPoliciesApi } from '@/api/businessPolicies';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Switch } from '@/components/ui/Switch';
@@ -24,7 +26,7 @@ const schema = z.object({
   address:            z.string().max(500).optional().or(z.literal('')),
   tin:                z.string().max(20).optional().or(z.literal('')),
   credit_limit:       z.coerce.number().min(0).max(99999999.99).optional().or(z.literal('').transform(() => undefined)),
-  payment_terms_days: z.coerce.number().int().min(0).max(365).default(30),
+  payment_terms_days: z.coerce.number().int().min(0).max(365),
   is_active:          z.boolean().default(true),
 });
 type FormValues = z.infer<typeof schema>;
@@ -39,10 +41,11 @@ export default function CustomerFormPage({ mode }: { mode: 'create' | 'edit' }) 
     queryFn: () => customersApi.show(id),
     enabled: mode === 'edit' && !!id,
   });
+  const { data: policies } = useQuery({ queryKey: ['business-policies'], queryFn: businessPoliciesApi.get });
 
-  const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const { register, handleSubmit, setError, setValue, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { payment_terms_days: 30, is_active: true } as FormValues,
+    defaultValues: { is_active: true } as FormValues,
     values: existing ? {
       name: existing.name, contact_person: existing.contact_person ?? '', email: existing.email ?? '',
       phone: existing.phone ?? '', address: existing.address ?? '', tin: existing.tin ?? '',
@@ -50,6 +53,12 @@ export default function CustomerFormPage({ mode }: { mode: 'create' | 'edit' }) 
       payment_terms_days: existing.payment_terms_days, is_active: existing.is_active,
     } as FormValues : undefined,
   });
+
+  useEffect(() => {
+    if (mode === 'create' && policies) {
+      setValue('payment_terms_days', policies.customer_payment_terms_days);
+    }
+  }, [mode, policies, setValue]);
 
   const mutation = useMutation({
     mutationFn: (d: FormValues) => mode === 'create'

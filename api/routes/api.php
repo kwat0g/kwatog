@@ -6,6 +6,7 @@ use App\Common\Controllers\AlertController;
 use App\Common\Controllers\ApprovalBoardController;
 use App\Common\Controllers\CalendarController;
 use App\Common\Controllers\ChainBottleneckController;
+use App\Common\Controllers\BusinessPolicyController;
 use Illuminate\Broadcasting\BroadcastController;
 use Illuminate\Support\Facades\Route;
 
@@ -78,6 +79,9 @@ Route::get('/health', function () {
         'checks'  => $checks,
     ], $healthy ? 200 : 503);
 });
+
+Route::middleware(['auth:sanctum'])
+    ->get('/business-policies', BusinessPolicyController::class);
 
 /* ─── Alerts (Task A2) — cross-module so registered here ─────────── */
 Route::middleware(['auth:sanctum'])->prefix('alerts')->group(function () {

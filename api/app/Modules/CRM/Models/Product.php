@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Product extends Model
@@ -43,6 +44,16 @@ class Product extends Model
     public function salesOrderItems(): HasMany
     {
         return $this->hasMany(SalesOrderItem::class);
+    }
+
+    public function activeBom(): HasOne
+    {
+        return $this->hasOne(\App\Modules\MRP\Models\Bom::class)->where('is_active', true);
+    }
+
+    public function inspectionSpec(): HasOne
+    {
+        return $this->hasOne(\App\Modules\Quality\Models\InspectionSpec::class)->where('is_active', true);
     }
 
     /**

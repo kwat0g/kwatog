@@ -14,8 +14,6 @@ export interface CommissionEarningListParams extends ListParams {
 export const commissionsApi = {
   list: (params?: CommissionEarningListParams) =>
     client.get<PaginatedResponse<CommissionEarning>>('/crm/commissions', { params }).then((r) => r.data),
-  calculate: (salesOrderId: string) =>
-    client.post<ApiSuccess<CommissionEarning>>(`/crm/commissions/calculate/${salesOrderId}`).then((r) => r.data.data),
   approve: (id: string) =>
     client.post<ApiSuccess<CommissionEarning>>(`/crm/commissions/${id}/approve`).then((r) => r.data.data),
   batchPaid: (ids: string[]) =>

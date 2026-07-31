@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Middleware\CheckFeature;
 use App\Common\Middleware\CheckPasswordExpiry;
 use App\Common\Middleware\CheckPermission;
@@ -48,6 +49,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // Route-level aliases
         $middleware->alias([
             'permission' => CheckPermission::class,
+            'permission_any' => \App\Common\Middleware\CheckAnyPermission::class,
             'feature' => CheckFeature::class,
             'session.timeout' => SessionTimeout::class,
             'password.expired' => CheckPasswordExpiry::class,
@@ -76,6 +78,25 @@ return Application::configure(basePath: dirname(__DIR__))
         // JSON envelope for API errors
         $exceptions->shouldRenderJsonWhen(fn (Request $request) => $request->is('api/*') || $request->is('sanctum/*') || $request->expectsJson()
         );
+
+        // A violated business rule is a 422, not a server fault. Rendered in the
+        // same envelope as a validation failure so the SPA surfaces the message
+        // rather than a generic "Server Error" toast.
+        //
+        // Scoped to BusinessRuleException, never to RuntimeException itself:
+        // Illuminate\Database\QueryException extends PDOException extends
+        // RuntimeException, so a broad rule would disguise real SQL faults as
+        // validation errors and bury genuine 500s.
+        $exceptions->render(function (BusinessRuleException $e, Request $request) {
+            if (! ($request->is('api/*') || $request->expectsJson())) {
+                return null;
+            }
+
+            return response()->json([
+                'message' => $e->getMessage(),
+                'errors'  => [$e->errorKey() => [$e->getMessage()]],
+            ], 422);
+        });
     })
     ->booted(function () {
         RateLimiter::for('auth', fn (Request $r) => Limit::perMinute(5)

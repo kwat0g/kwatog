@@ -1,6 +1,6 @@
 import { client } from '../client';
 import type { ApiSuccess, PaginatedResponse, ListParams } from '@/types';
-import type { EmployeeLoan, CreateLoanData, AmortizationItem, LoanLimits } from '@/types/loans';
+import type { EmployeeLoan, CreateLoanData, AmortizationItem, LoanLimits, LoanType, LoanTypeOption } from '@/types/loans';
 
 export interface LoanListParams extends ListParams {
   employee_id?: string;
@@ -9,6 +9,7 @@ export interface LoanListParams extends ListParams {
 }
 
 export const loansApi = {
+  types: () => client.get<ApiSuccess<LoanTypeOption[]>>('/loans/types').then((r) => r.data.data),
   list: (params?: LoanListParams) =>
     client.get<PaginatedResponse<EmployeeLoan>>('/loans', { params }).then((r) => r.data),
   show: (id: string) =>
@@ -24,7 +25,7 @@ export const loansApi = {
   limits: (employeeId: string, loanType: string) =>
     client.get<{ data: LoanLimits }>(`/loans/limits/${employeeId}`, { params: { loan_type: loanType } })
       .then((r) => r.data.data),
-  previewAmortization: (principal: number, pay_periods: number) =>
-    client.post<{ data: AmortizationItem[] }>('/loans/preview-amortization', { principal, pay_periods })
+  previewAmortization: (loan_type: LoanType, principal: number, pay_periods: number) =>
+    client.post<{ data: AmortizationItem[] }>('/loans/preview-amortization', { loan_type, principal, pay_periods })
       .then((r) => r.data.data),
 };

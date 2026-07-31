@@ -23,7 +23,10 @@ class Shipment extends Model
 
     protected $fillable = [
         'shipment_number', 'purchase_order_id', 'status',
-        'carrier', 'vessel', 'bl_number', 'incoterm',
+        // container_number is a real column the create form submits; it was
+        // missing here, so Shipment::create() threw MassAssignmentException
+        // under preventSilentlyDiscardingAttributes (on outside production).
+        'carrier', 'vessel', 'container_number', 'bl_number', 'incoterm',
         'etd', 'atd', 'eta', 'ata', 'customs_clearance_date',
         'notes', 'created_by',
         // OGAMI-104 — landed cost fields.

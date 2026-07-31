@@ -18,31 +18,31 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('b2b/supplier')->group(function () {
     // Public — throttle:auth (5/min/ip|email) protects against credential
     // spraying. Logout shares the limiter to bound DoS on the token-revoke path.
-    Route::post('login',  [SupplierAuthController::class, 'login'])->middleware('throttle:auth');
+    Route::post('login', [SupplierAuthController::class, 'login'])->middleware('throttle:auth');
     Route::post('logout', [SupplierAuthController::class, 'logout'])->middleware('throttle:auth');
 
     // Authenticated
     Route::middleware(['auth:supplier_portal', 'portal:supplier_portal', 'feature:b2b_portals'])->group(function () {
-        Route::get('me',                                [SupplierAuthController::class, 'me']);
-        Route::get('dashboard',                          [SupplierPortalController::class, 'dashboard']);
-        Route::get('purchase-orders',                    [SupplierPortalController::class, 'purchaseOrders']);
-        Route::get('purchase-orders/{purchaseOrder}',    [SupplierPortalController::class, 'purchaseOrderShow']);
+        Route::get('me', [SupplierAuthController::class, 'me']);
+        Route::get('dashboard', [SupplierPortalController::class, 'dashboard']);
+        Route::get('purchase-orders', [SupplierPortalController::class, 'purchaseOrders']);
+        Route::get('purchase-orders/{purchaseOrder}', [SupplierPortalController::class, 'purchaseOrderShow']);
         Route::get('purchase-orders/{purchaseOrder}/pdf', [SupplierPortalController::class, 'poPdf']);
-        Route::post('purchase-orders/{purchaseOrder}/acknowledge',  [SupplierPortalController::class, 'acknowledgePo']);
+        Route::post('purchase-orders/{purchaseOrder}/acknowledge', [SupplierPortalController::class, 'acknowledgePo']);
         Route::post('purchase-orders/{purchaseOrder}/shipment-update', [SupplierPortalController::class, 'updateShipment']);
         Route::post('purchase-orders/{purchaseOrder}/shipping-documents', [SupplierPortalController::class, 'uploadShippingDocuments']);
         Route::get('purchase-orders/{purchaseOrder}/shipping-documents', [SupplierPortalController::class, 'shippingDocuments']);
         Route::post('purchase-orders/{purchaseOrder}/submit-invoice', [SupplierPortalController::class, 'submitInvoice']);
-        Route::get('shipping-documents/{id}/download',   [SupplierPortalController::class, 'downloadShippingDocument']);
-        Route::get('invoices',                           [SupplierPortalController::class, 'invoices']);
-        Route::get('invoices/{invoice}',                 [SupplierPortalController::class, 'invoiceDetail']);
-        Route::get('invoices/{invoice}/pdf',              [SupplierPortalController::class, 'invoicePdf']);
-        Route::get('deliveries',                         [SupplierPortalController::class, 'deliveries']);
-        Route::get('statement-of-account',               [SupplierPortalController::class, 'statementOfAccount']);
-        Route::get('delivery-schedules',                 [SupplierPortalController::class, 'deliverySchedules']);
-        Route::post('delivery-schedules',                [SupplierPortalController::class, 'storeDeliverySchedule']);
+        Route::get('shipping-documents/{id}/download', [SupplierPortalController::class, 'downloadShippingDocument']);
+        Route::get('invoices', [SupplierPortalController::class, 'invoices']);
+        Route::get('invoices/{invoice}', [SupplierPortalController::class, 'invoiceDetail']);
+        Route::get('invoices/{invoice}/pdf', [SupplierPortalController::class, 'invoicePdf']);
+        Route::get('deliveries', [SupplierPortalController::class, 'deliveries']);
+        Route::get('statement-of-account', [SupplierPortalController::class, 'statementOfAccount']);
+        Route::get('delivery-schedules', [SupplierPortalController::class, 'deliverySchedules']);
+        Route::post('delivery-schedules', [SupplierPortalController::class, 'storeDeliverySchedule']);
         // PPAP submissions (read-only, scoped to this supplier).
-        Route::get('ppap-submissions',                   [SupplierPortalController::class, 'ppapSubmissions']);
+        Route::get('ppap-submissions', [SupplierPortalController::class, 'ppapSubmissions']);
     });
 });
 
@@ -50,26 +50,27 @@ Route::prefix('b2b/supplier')->group(function () {
 Route::prefix('b2b/customer')->group(function () {
     // Public — throttle:auth (5/min/ip|email) protects against credential
     // spraying. Logout shares the limiter to bound DoS on the token-revoke path.
-    Route::post('login',  [CustomerAuthController::class, 'login'])->middleware('throttle:auth');
+    Route::post('login', [CustomerAuthController::class, 'login'])->middleware('throttle:auth');
     Route::post('logout', [CustomerAuthController::class, 'logout'])->middleware('throttle:auth');
 
     // Authenticated
     Route::middleware(['auth:customer_portal', 'portal:customer_portal', 'feature:b2b_portals'])->group(function () {
-        Route::get('me',                                [CustomerAuthController::class, 'me']);
-        Route::get('dashboard',                          [CustomerPortalController::class, 'dashboard']);
-        Route::get('orders',                             [CustomerPortalController::class, 'salesOrders']);
-        Route::get('orders/{salesOrder}',                [CustomerPortalController::class, 'salesOrderShow']);
-        Route::get('orders/{salesOrder}/chain',          [CustomerPortalController::class, 'salesOrderChain']);
-        Route::get('invoices',                           [CustomerPortalController::class, 'invoices']);
-        Route::get('invoices/{invoice}',                 [CustomerPortalController::class, 'invoiceDetail']);
-        Route::get('invoices/{invoice}/pdf',              [CustomerPortalController::class, 'invoicePdf']);
-        Route::get('deliveries',                         [CustomerPortalController::class, 'deliveries']);
-        Route::get('deliveries/{delivery}',              [CustomerPortalController::class, 'deliveryDetail']);
-        Route::get('complaints',                         [CustomerPortalController::class, 'complaints']);
-        Route::post('complaints',                        [CustomerPortalController::class, 'createComplaint']);
-        Route::get('complaints/{complaint}/8d-report',   [CustomerPortalController::class, 'complaint8dReport']);
-        Route::get('statement-of-account',               [CustomerPortalController::class, 'statementOfAccount']);
-        Route::get('delivery-schedules',                 [CustomerPortalController::class, 'deliverySchedules']);
-        Route::post('delivery-schedules',                [CustomerPortalController::class, 'storeDeliverySchedule']);
+        Route::get('me', [CustomerAuthController::class, 'me']);
+        Route::get('dashboard', [CustomerPortalController::class, 'dashboard']);
+        Route::get('orders', [CustomerPortalController::class, 'salesOrders']);
+        Route::get('orders/{salesOrder}', [CustomerPortalController::class, 'salesOrderShow']);
+        Route::get('orders/{salesOrder}/chain', [CustomerPortalController::class, 'salesOrderChain']);
+        Route::get('invoices', [CustomerPortalController::class, 'invoices']);
+        Route::get('invoices/{invoice}', [CustomerPortalController::class, 'invoiceDetail']);
+        Route::get('invoices/{invoice}/pdf', [CustomerPortalController::class, 'invoicePdf']);
+        Route::get('deliveries', [CustomerPortalController::class, 'deliveries']);
+        Route::get('deliveries/{delivery}', [CustomerPortalController::class, 'deliveryDetail']);
+        Route::get('deliveries/{delivery}/proofs/{proof}/view', [CustomerPortalController::class, 'deliveryProof']);
+        Route::get('complaints', [CustomerPortalController::class, 'complaints']);
+        Route::post('complaints', [CustomerPortalController::class, 'createComplaint']);
+        Route::get('complaints/{complaint}/8d-report', [CustomerPortalController::class, 'complaint8dReport']);
+        Route::get('statement-of-account', [CustomerPortalController::class, 'statementOfAccount']);
+        Route::get('delivery-schedules', [CustomerPortalController::class, 'deliverySchedules']);
+        Route::post('delivery-schedules', [CustomerPortalController::class, 'storeDeliverySchedule']);
     });
 });

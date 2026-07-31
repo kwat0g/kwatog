@@ -27,9 +27,16 @@ use Throwable;
  * never breaks the batch. Errors are persisted to payrolls.error_message so
  * the UI can show + retry individuals.
  *
- * Concurrency: ShouldBeUnique on the period prevents two HR users hitting
- * the Compute button at the same time. The lock auto-releases on completion
- * or after the timeout grace.
+ * Concurrency: the period is claimed synchronously by
+ * PayrollPeriodService::claimForCompute() BEFORE this job is dispatched, so by
+ * the time we run the row is already at Processing and no second dispatch can
+ * win. ShouldBeUnique is kept as belt-and-braces against a double-dispatch of
+ * the same claim. This job never claims the period itself; it verifies it owns
+ * one and refuses to touch anything else.
+ *
+ * Terminal status is Computed (never Draft) so the UI can tell "computed,
+ * awaiting approval" apart from "never computed" — that conflation is what let
+ * the Compute button stay live and silently re-run finished payroll.
  */
 class ProcessPayrollJob implements ShouldQueue, ShouldBeUnique
 {
@@ -55,21 +62,29 @@ class ProcessPayrollJob implements ShouldQueue, ShouldBeUnique
         PayrollPeriodService $periods,
     ): void {
         $period = $this->period->fresh();
-        if (! $period || $period->status === PayrollPeriodStatus::Finalized) {
-            return; // nothing to do
+        if (! $period) {
+            return; // period deleted between dispatch and execution
         }
-        if ($period->status === PayrollPeriodStatus::Processing) {
-            // Another worker may already own it; bail.
+
+        // The claim must already be ours. Anything else means the period was
+        // force-unlocked, voided, or otherwise moved on while we sat in the
+        // queue — recomputing it now would clobber state the user has since
+        // acted on, so bail without touching a single row.
+        if ($period->status !== PayrollPeriodStatus::Processing) {
+            Log::info('ProcessPayrollJob: period no longer claimed for compute; skipping', [
+                'period_id' => $period->id,
+                'status'    => $period->status?->value,
+            ]);
             return;
         }
 
-        $period->status = PayrollPeriodStatus::Processing;
         // REC-04 — record the maker (HR user who clicked Compute) so approve()
         // can enforce maker-checker: the computer may not also approve.
-        if ($this->triggeredBy !== null) {
-            $period->computed_by = $this->triggeredBy;
+        // claimForCompute() normally stamps this; keep it for queued dispatches
+        // that bypassed the HTTP path (e.g. AutoPayrollPeriodService).
+        if ($this->triggeredBy !== null && $period->computed_by !== $this->triggeredBy) {
+            $period->forceFill(['computed_by' => $this->triggeredBy])->save();
         }
-        $period->save();
 
         $employees = $periods->availableEmployees($period);
         $total     = $employees->count();
@@ -109,8 +124,16 @@ class ProcessPayrollJob implements ShouldQueue, ShouldBeUnique
                 }
             }
         } finally {
-            $period->status = PayrollPeriodStatus::Draft;
-            $period->save();
+            // Land on Computed — the run produced rows and is awaiting a
+            // checker's approval. Parking back at Draft (the old behaviour)
+            // made a finished run indistinguishable from an untouched one.
+            // Draft is only correct when there is genuinely nothing to show.
+            $period->forceFill([
+                'status' => $period->payrolls()->exists()
+                    ? PayrollPeriodStatus::Computed->value
+                    : PayrollPeriodStatus::Draft->value,
+                'processing_started_at' => null,
+            ])->save();
             PayrollProgressEvent::dispatch($period, $processed, $total, $failures);
 
             // Task A9 — detect anomalies on completed period.
@@ -127,11 +150,17 @@ class ProcessPayrollJob implements ShouldQueue, ShouldBeUnique
 
     public function failed(Throwable $e): void
     {
-        // If the whole job died (queue infra issue), park the period back in draft.
+        // If the whole job died (queue infra issue), release the claim so the
+        // period is computable again. Computed when partial rows survived,
+        // Draft when nothing was written.
         $period = $this->period->fresh();
         if ($period && $period->status === PayrollPeriodStatus::Processing) {
-            $period->status = PayrollPeriodStatus::Draft;
-            $period->save();
+            $period->forceFill([
+                'status' => $period->payrolls()->exists()
+                    ? PayrollPeriodStatus::Computed->value
+                    : PayrollPeriodStatus::Draft->value,
+                'processing_started_at' => null,
+            ])->save();
         }
         Log::error('ProcessPayrollJob failed catastrophically', [
             'period_id' => $this->period->id,

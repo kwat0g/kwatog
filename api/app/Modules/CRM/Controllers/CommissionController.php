@@ -7,6 +7,7 @@ namespace App\Modules\CRM\Controllers;
 use App\Modules\CRM\Models\CommissionEarning;
 use App\Modules\CRM\Requests\StoreCommissionRateRequest;
 use App\Modules\CRM\Resources\CommissionEarningResource;
+use App\Modules\CRM\Resources\CommissionRateResource;
 use App\Modules\CRM\Services\CommissionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,17 +25,19 @@ class CommissionController extends Controller
         );
     }
 
-    public function rates(Request $request): JsonResponse
+    public function rates(Request $request): AnonymousResourceCollection
     {
-        return response()->json(
+        return CommissionRateResource::collection(
             $this->service->ratesList($request->all())
         );
     }
 
     public function setRate(StoreCommissionRateRequest $request): JsonResponse
     {
-        $rate = $this->service->setRate($request->validated());
-        return response()->json(['data' => $rate], 201);
+        $rate = $this->service->setRate($request->validated())
+            ->loadMissing(['employee:id,first_name,last_name', 'product:id,code,name']);
+
+        return (new CommissionRateResource($rate))->response()->setStatusCode(201);
     }
 
     public function approve(CommissionEarning $earning): CommissionEarningResource

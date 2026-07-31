@@ -111,9 +111,9 @@ export const accountingRoutes = (
       <Route path="/accounting/credit-notes/:id"
         element={<PermissionGuard permission="accounting.credit_notes.view"><CreditNoteDetailPage /></PermissionGuard>} />
       <Route path="/accounting/fx-rates"
-        element={<PermissionGuard permission="accounting.statements.view"><FxRatesPage /></PermissionGuard>} />
+        element={<PermissionGuard permission="accounting.currency.view"><FxRatesPage /></PermissionGuard>} />
       <Route path="/accounting/parent-pack"
-        element={<PermissionGuard permission="accounting.statements.view"><ParentPackPage /></PermissionGuard>} />
+        element={<PermissionGuard permission="accounting.currency.view"><ParentPackPage /></PermissionGuard>} />
     </Route>
   </>
 );

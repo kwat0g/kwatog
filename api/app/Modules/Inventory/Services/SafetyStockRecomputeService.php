@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\SettingsService;
 use App\Modules\Inventory\Models\Item;
 use Illuminate\Support\Carbon;
@@ -41,7 +42,11 @@ class SafetyStockRecomputeService
      */
     public function recomputeAll(): array
     {
-        if (! (bool) $this->settings->get('inventory.safety_stock.enabled', true)) {
+        $enabled = $this->settings->get('inventory.safety_stock.enabled');
+        if (! is_bool($enabled)) {
+            throw new BusinessRuleException('Required business setting inventory.safety_stock.enabled is missing or invalid.');
+        }
+        if (! $enabled) {
             return ['evaluated' => 0, 'updated' => 0, 'skipped' => 0];
         }
 
@@ -143,10 +148,19 @@ class SafetyStockRecomputeService
      */
     private function loadOpts(): array
     {
-        return [
-            'z'               => (float) $this->settings->get('inventory.safety_stock.service_level_z', 1.65),
-            'history_days'    => (int)   $this->settings->get('inventory.safety_stock.history_days', 90),
-            'min_demand_days' => (int)   $this->settings->get('inventory.safety_stock.min_demand_days', 14),
-        ];
+        $z = $this->settings->get('inventory.safety_stock.service_level_z');
+        $historyDays = $this->settings->get('inventory.safety_stock.history_days');
+        $minDemandDays = $this->settings->get('inventory.safety_stock.min_demand_days');
+        if (! is_numeric($z) || (float) $z <= 0) {
+            throw new BusinessRuleException('Required business setting inventory.safety_stock.service_level_z is missing or invalid.');
+        }
+        if (! is_numeric($historyDays) || (int) $historyDays <= 0) {
+            throw new BusinessRuleException('Required business setting inventory.safety_stock.history_days is missing or invalid.');
+        }
+        if (! is_numeric($minDemandDays) || (int) $minDemandDays <= 0) {
+            throw new BusinessRuleException('Required business setting inventory.safety_stock.min_demand_days is missing or invalid.');
+        }
+
+        return ['z' => (float) $z, 'history_days' => (int) $historyDays, 'min_demand_days' => (int) $minDemandDays];
     }
 }

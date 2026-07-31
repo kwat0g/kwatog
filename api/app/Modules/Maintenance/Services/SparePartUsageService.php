@@ -14,7 +14,7 @@ use App\Modules\Inventory\Support\StockMovementInput;
 use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\Maintenance\Models\SparePartUsage;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
+use Illuminate\Validation\ValidationException;
 
 /** Sprint 8 — Task 69. */
 class SparePartUsageService
@@ -33,14 +33,23 @@ class SparePartUsageService
         return DB::transaction(function () use ($wo, $data, $by) {
             $item = Item::query()->whereKey((int) $data['item_id'])->lockForUpdate()->firstOrFail();
             if ($item->item_type !== ItemType::SparePart) {
-                throw new RuntimeException('Item must be a spare_part to be issued for maintenance.');
+                throw ValidationException::withMessages([
+                    'item_id' => ['Item must be a spare_part to be issued for maintenance.'],
+                ]);
             }
 
             // Cost-out at current WAC for the source location
             $level = StockLevel::query()
                 ->where('item_id', $item->id)
                 ->where('location_id', (int) $data['location_id'])
-                ->firstOrFail();
+                ->first();
+            if ($level === null) {
+                // firstOrFail() here rendered a bare 404, which reads as "work
+                // order not found" on a POST to the WO endpoint.
+                throw ValidationException::withMessages([
+                    'location_id' => ['This item has no stock record at the selected location.'],
+                ]);
+            }
             $unitCost = (string) $level->weighted_avg_cost;
             $qty = (string) $data['quantity'];
             $totalCost = number_format((float) $unitCost * (float) $qty, 2, '.', '');

@@ -65,27 +65,27 @@ export const EMPTY_STATE_COPY: Record<string, EmptyStateCopy> = {
     title: 'No attendance records yet',
     description:
       'Attendance is captured by importing the biometric DTR CSV or via manual entry. Once imported, payroll will pick it up automatically.',
-    permission: 'attendance.dtr.import',
+    permission: 'attendance.import',
     actionLabel: 'Import DTR',
     actionRoute: '/hr/attendance/import',
   },
-  '/leaves': {
+  '/hr/leaves': {
     icon: 'calendar',
     itemNoun: 'leave requests',
     title: 'No leave requests yet',
     description: 'Approved leave requests appear here. Employees apply for leave from their self-service portal.',
-    permission: 'leaves.requests.create',
+    permission: 'leave.create',
     actionLabel: 'File a Leave',
-    actionRoute: '/leaves/create',
+    actionRoute: '/hr/leaves/create',
   },
-  '/loans': {
+  '/hr/loans': {
     icon: 'dollar-sign',
     itemNoun: 'loans',
     title: 'No loans on record',
     description: 'Active company loans and cash advances appear here once approved by management.',
-    permission: 'loans.requests.create',
+    permission: 'loans.create',
     actionLabel: 'Apply for Loan',
-    actionRoute: '/loans/create',
+    actionRoute: '/hr/loans/create',
   },
   '/payroll/periods': {
     icon: 'calendar',
@@ -103,7 +103,7 @@ export const EMPTY_STATE_COPY: Record<string, EmptyStateCopy> = {
     title: 'No items in inventory',
     description:
       'Items are raw materials, components, finished goods, or consumables tracked through purchasing, production, and warehousing.',
-    permission: 'inventory.items.create',
+    permission: 'inventory.items.manage',
     actionLabel: 'Add First Item',
     actionRoute: '/inventory/items/create',
   },
@@ -122,7 +122,7 @@ export const EMPTY_STATE_COPY: Record<string, EmptyStateCopy> = {
     itemNoun: 'material issues',
     title: 'No material issues yet',
     description: 'Materials are issued from warehouse to production work orders. Each issue updates stock levels.',
-    permission: 'inventory.material_issues.create',
+    permission: 'inventory.issue.create',
     actionLabel: 'Issue Materials',
     actionRoute: '/inventory/material-issues/create',
   },
@@ -152,7 +152,7 @@ export const EMPTY_STATE_COPY: Record<string, EmptyStateCopy> = {
     title: 'No vendors yet',
     description:
       'Vendors are suppliers of materials, services, and overhead. Add them to start placing purchase orders and recording bills.',
-    permission: 'accounting.vendors.create',
+    permission: 'accounting.vendors.manage',
     actionLabel: 'Add First Vendor',
     actionRoute: '/accounting/vendors/create',
   },
@@ -162,7 +162,7 @@ export const EMPTY_STATE_COPY: Record<string, EmptyStateCopy> = {
     title: 'No customers yet',
     description:
       'Customers are the buyers of your products. Add them to start receiving sales orders and recording invoices.',
-    permission: 'accounting.customers.create',
+    permission: 'accounting.customers.manage',
     actionLabel: 'Add First Customer',
     actionRoute: '/accounting/customers/create',
   },
@@ -192,7 +192,7 @@ export const EMPTY_STATE_COPY: Record<string, EmptyStateCopy> = {
     title: 'No journal entries yet',
     description:
       'Journal entries are posted automatically by the system on every financial event. Manual entries are reserved for adjustments.',
-    permission: 'accounting.je.create',
+    permission: 'accounting.journal.create',
     actionLabel: 'Add Manual Entry',
     actionRoute: '/accounting/journal-entries/create',
   },
@@ -202,7 +202,7 @@ export const EMPTY_STATE_COPY: Record<string, EmptyStateCopy> = {
     title: 'No products yet',
     description:
       'Products are the finished goods you sell to customers — wiper bushings, pivot caps, etc. Each links to a Bill of Materials, inspection specs, and price agreements.',
-    permission: 'crm.products.create',
+    permission: 'crm.products.manage',
     actionLabel: 'Add First Product',
     actionRoute: '/crm/products/create',
   },
@@ -212,7 +212,7 @@ export const EMPTY_STATE_COPY: Record<string, EmptyStateCopy> = {
     title: 'No sales orders yet',
     description:
       'Sales Orders kick off the Order-to-Cash chain: confirming an SO triggers MRP planning, work orders, and the rest of production.',
-    permission: 'crm.so.create',
+    permission: 'crm.sales_orders.create',
     actionLabel: 'Create First SO',
     actionRoute: '/crm/sales-orders/create',
   },
@@ -222,7 +222,7 @@ export const EMPTY_STATE_COPY: Record<string, EmptyStateCopy> = {
     title: 'No customer complaints',
     description:
       'Customer complaints kick off the 8D problem-solving workflow. Track root cause, corrective and preventive actions to closure.',
-    permission: 'crm.complaints.create',
+    permission: 'crm.complaints.manage',
     actionLabel: 'Log a Complaint',
     actionRoute: '/crm/complaints/create',
   },
@@ -242,7 +242,7 @@ export const EMPTY_STATE_COPY: Record<string, EmptyStateCopy> = {
     title: 'No bills of materials yet',
     description:
       'A Bill of Materials lists the components and quantities required to produce one unit of a product. Required before MRP can plan the product.',
-    permission: 'mrp.boms.create',
+    permission: 'mrp.boms.manage',
     actionLabel: 'Create First BOM',
     actionRoute: '/mrp/boms/create',
   },
@@ -252,7 +252,7 @@ export const EMPTY_STATE_COPY: Record<string, EmptyStateCopy> = {
     title: 'No machines registered',
     description:
       'Machines (injection molders) drive capacity planning, OEE, and preventive maintenance schedules.',
-    permission: 'mrp.machines.create',
+    permission: 'production.machines.manage',
     actionLabel: 'Add Machine',
     actionRoute: '/mrp/machines',
   },
@@ -262,7 +262,7 @@ export const EMPTY_STATE_COPY: Record<string, EmptyStateCopy> = {
     title: 'No molds registered',
     description:
       'Molds are tooling assets used by injection machines. Each mold tracks shot count and triggers maintenance alerts when nearing its limit.',
-    permission: 'mrp.molds.create',
+    permission: 'production.molds.manage',
     actionLabel: 'Add Mold',
     actionRoute: '/mrp/molds',
   },
@@ -272,7 +272,7 @@ export const EMPTY_STATE_COPY: Record<string, EmptyStateCopy> = {
     title: 'No inspection specs yet',
     description:
       'Inspection specs define the dimensions and tolerances measured during incoming, in-process, and outgoing QC.',
-    permission: 'quality.specs.create',
+    permission: 'quality.specs.manage',
     actionLabel: 'Define First Spec',
     actionRoute: '/quality/inspection-specs',
   },
@@ -292,7 +292,7 @@ export const EMPTY_STATE_COPY: Record<string, EmptyStateCopy> = {
     title: 'No non-conformances yet',
     description:
       'NCRs are created automatically when an inspection fails. Track corrective actions, replacements, and customer notifications to closure.',
-    permission: 'quality.ncrs.view',
+    permission: 'quality.ncr.view',
     actionLabel: 'View Recent Inspections',
     actionRoute: '/quality/inspections',
   },
@@ -312,7 +312,7 @@ export const EMPTY_STATE_COPY: Record<string, EmptyStateCopy> = {
     title: 'No deliveries scheduled',
     description:
       'Deliveries are auto-drafted when outgoing QC passes. Drivers update status and upload signed receipts on the road.',
-    permission: 'supply_chain.deliveries.view',
+    permission: 'supply_chain.view',
     actionLabel: 'View Sales Orders',
     actionRoute: '/crm/sales-orders',
   },
@@ -321,7 +321,7 @@ export const EMPTY_STATE_COPY: Record<string, EmptyStateCopy> = {
     itemNoun: 'shipments',
     title: 'No shipments yet',
     description: 'Shipments track imported materials from foreign suppliers, including ImpEx documents and customs.',
-    permission: 'supply_chain.shipments.view',
+    permission: 'supply_chain.view',
     actionLabel: 'View Open POs',
     actionRoute: '/purchasing/purchase-orders',
   },
@@ -331,7 +331,7 @@ export const EMPTY_STATE_COPY: Record<string, EmptyStateCopy> = {
     title: 'No users yet',
     description:
       'Users are system accounts with permission to log in. Most users are auto-provisioned from employee records.',
-    permission: 'admin.users.create',
+    permission: 'admin.users.manage',
     actionLabel: 'Add First User',
     actionRoute: '/admin/users/create',
   },

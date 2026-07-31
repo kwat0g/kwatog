@@ -14,12 +14,14 @@ import { useAuthStore } from '@/stores/authStore';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
-import { BottomSheet } from '@/components/ui/BottomSheet';
+import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
+import { Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
-import { SkeletonBlock } from '@/components/ui/Skeleton';
+import { SkeletonTable } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { formatDate } from '@/lib/formatDate';
 import type { ApiValidationError } from '@/types';
 import type { SelfServiceLeaveType, SelfServiceLeaveBalanceSelf } from '@/types/self-service';
 
@@ -40,11 +42,55 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
+const columns: Column<any>[] = [
+  {
+    key: 'leave_request_no',
+    header: 'Request no',
+    cell: (r) => <NumCell>{r.leave_request_no ?? r.id}</NumCell>,
+  },
+  {
+    key: 'type',
+    header: 'Type',
+    cell: (r) => r.leave_type?.name ?? '—',
+  },
+  {
+    key: 'dates',
+    header: 'Dates',
+    cell: (r) => (
+      <NumCell>
+        {formatDate(r.start_date)} → {formatDate(r.end_date)}
+      </NumCell>
+    ),
+  },
+  {
+    key: 'days',
+    header: 'Days',
+    align: 'right',
+    cell: (r) => <NumCell>{r.days}</NumCell>,
+  },
+  {
+    key: 'reason',
+    header: 'Reason',
+    cell: (r) => (
+      <span className="text-muted block max-w-[280px] truncate">{r.reason || '—'}</span>
+    ),
+  },
+  {
+    key: 'status',
+    header: 'Status',
+    cell: (r) => (
+      <Chip variant={STATUS_CHIP[r.status] ?? 'neutral'}>
+        {r.status?.replace(/_/g, ' ')}
+      </Chip>
+    ),
+  },
+];
+
 export default function SelfServiceLeavePage() {
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
   const hasEmployeeLink = Boolean(user?.employee?.id);
-  const [sheetOpen, setSheetOpen] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['self-service', 'leave'],
@@ -52,6 +98,7 @@ export default function SelfServiceLeavePage() {
       client.get<{ data: any[] }>('/leaves/requests', {
         params: { per_page: 50, scope: 'self' },
       }).then((r) => r.data),
+    placeholderData: (prev) => prev,
   });
 
   const { data: types } = useQuery({
@@ -102,7 +149,7 @@ export default function SelfServiceLeavePage() {
       queryClient.invalidateQueries({ queryKey: ['self-service', 'leave'] });
       queryClient.invalidateQueries({ queryKey: ['self-service', 'leave-balances'] });
       reset();
-      setSheetOpen(false);
+      setModalOpen(false);
     },
     onError: (err: AxiosError<ApiValidationError>) => {
       const errs = err.response?.data?.errors;
@@ -116,71 +163,61 @@ export default function SelfServiceLeavePage() {
     },
   });
 
+  const pendingCount = (data?.data ?? []).filter(
+    (r: any) => r.status === 'pending' || r.status === 'pending_dept' || r.status === 'pending_hr',
+  ).length;
+
   return (
     <div>
-      <PageHeader title="My Leave Requests" backTo="/self-service" backLabel="Dashboard" />
-      <div className="px-5 py-4 space-y-4">
-        <div className="flex items-center justify-end">
+      <PageHeader
+        title="My Leave Requests"
+        subtitle={data ? `${data.data.length} total · ${pendingCount} awaiting approval` : undefined}
+        actions={!data || data.data.length > 0 ? (
           <Button
             variant="primary"
             size="sm"
             icon={<Plus size={14} />}
-            onClick={() => setSheetOpen(true)}
+            onClick={() => setModalOpen(true)}
           >
             New request
           </Button>
-        </div>
+        ) : undefined}
+      />
+      <div className="px-5 py-4">
+        {isLoading && !data && <SkeletonTable columns={6} rows={6} />}
 
-        {isLoading && (
-          <div className="space-y-2">
-            {[1, 2, 3].map((i) => <SkeletonBlock key={i} className="h-14 rounded-md" />)}
-          </div>
-        )}
         {isError && (
           <EmptyState
             icon="alert-circle"
             title="Couldn't load leaves"
+            description="An error occurred while loading your requests. Please try again."
             action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
           />
         )}
+
         {data && data.data.length === 0 && (
           <EmptyState
             icon="file-text"
             title="No leave requests yet"
-            description="Tap New Request to file your first leave."
+            description="File your first leave request to see it here."
+            action={
+              <Button variant="primary" icon={<Plus size={14} />} onClick={() => setModalOpen(true)}>
+                New request
+              </Button>
+            }
           />
         )}
+
         {data && data.data.length > 0 && (
-          <ul className="rounded-md border border-default divide-y divide-subtle bg-canvas">
-            {data.data.map((r: any) => (
-              <li key={r.id} className="px-3 py-2.5">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <div className="text-sm font-medium font-mono tabular-nums">
-                      {r.leave_request_no ?? r.id}
-                    </div>
-                    <div className="text-xs text-muted">
-                      {r.start_date} → {r.end_date} · {r.days} day{Number(r.days) !== 1 ? 's' : ''}
-                    </div>
-                    {r.leave_type?.name && (
-                      <div className="text-xs text-text-subtle">{r.leave_type.name}</div>
-                    )}
-                  </div>
-                  <Chip variant={STATUS_CHIP[r.status] ?? 'neutral'}>
-                    {r.status?.replace(/_/g, ' ')}
-                  </Chip>
-                </div>
-              </li>
-            ))}
-          </ul>
+          <DataTable columns={columns} data={data.data} stickyHeader={false} />
         )}
 
-        <BottomSheet
-          isOpen={sheetOpen}
-          onClose={() => { reset(); setSheetOpen(false); }}
+        <Modal
+          isOpen={modalOpen}
+          onClose={() => { reset(); setModalOpen(false); }}
           title="File Leave Request"
         >
-          <form onSubmit={handleSubmit((v) => file.mutate(v))} className="space-y-4">
+          <form onSubmit={handleSubmit((v) => file.mutate(v))} className="space-y-4 py-4">
             {!hasEmployeeLink && (
               <div className="rounded-md border border-default bg-subtle px-3 py-2 text-xs text-muted">
                 Your account is not linked to an employee record. Contact HR to file leave.
@@ -221,24 +258,26 @@ export default function SelfServiceLeavePage() {
 
             {selectedType?.requires_document && (
               <div className="rounded-md border border-warning bg-warning-bg px-3 py-2 text-xs text-warning-fg">
-                ⚠ This leave type requires a supporting document. Submit it to HR separately after filing.
+                This leave type requires a supporting document. Submit it to HR separately after filing.
               </div>
             )}
 
-            <Input
-              label="Start date"
-              type="date"
-              {...register('start_date')}
-              error={errors.start_date?.message}
-              required
-            />
-            <Input
-              label="End date"
-              type="date"
-              {...register('end_date')}
-              error={errors.end_date?.message}
-              required
-            />
+            <div className="grid grid-cols-2 gap-3">
+              <Input
+                label="Start date"
+                type="date"
+                {...register('start_date')}
+                error={errors.start_date?.message}
+                required
+              />
+              <Input
+                label="End date"
+                type="date"
+                {...register('end_date')}
+                error={errors.end_date?.message}
+                required
+              />
+            </div>
             <Textarea
               label="Reason (optional)"
               rows={3}
@@ -249,7 +288,7 @@ export default function SelfServiceLeavePage() {
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() => { reset(); setSheetOpen(false); }}
+                onClick={() => { reset(); setModalOpen(false); }}
                 disabled={file.isPending}
               >
                 Cancel
@@ -264,7 +303,7 @@ export default function SelfServiceLeavePage() {
               </Button>
             </div>
           </form>
-        </BottomSheet>
+        </Modal>
       </div>
     </div>
   );

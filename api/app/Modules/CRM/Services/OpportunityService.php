@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\CRM\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\SearchOperator;
@@ -98,7 +99,7 @@ class OpportunityService
     public function update(Opportunity $opportunity, array $data): Opportunity
     {
         if ($opportunity->stage->isTerminal()) {
-            throw new RuntimeException('Cannot update a won or lost opportunity.');
+            throw new BusinessRuleException('Cannot update a won or lost opportunity.');
         }
         $opportunity->update($data);
         return $this->show($opportunity->fresh());
@@ -110,7 +111,7 @@ class OpportunityService
     public function advanceStage(Opportunity $opportunity): Opportunity
     {
         if ($opportunity->stage->isTerminal()) {
-            throw new RuntimeException('Cannot advance a terminal opportunity stage.');
+            throw new BusinessRuleException('Cannot advance a terminal opportunity stage.');
         }
 
         $order = OpportunityStage::advanceOrder();
@@ -118,7 +119,7 @@ class OpportunityService
         $idx = array_search($current, $order, true);
 
         if ($idx === false || $idx >= count($order) - 1) {
-            throw new RuntimeException("Opportunity is already at the last advanceable stage ({$current->value}). Use win/lose to close it.");
+            throw new BusinessRuleException("Opportunity is already at the last advanceable stage ({$current->value}). Use win/lose to close it.");
         }
 
         $next = $order[$idx + 1];
@@ -131,7 +132,7 @@ class OpportunityService
     public function markWon(Opportunity $opportunity): Opportunity
     {
         if ($opportunity->stage->isTerminal()) {
-            throw new RuntimeException('Opportunity is already closed.');
+            throw new BusinessRuleException('Opportunity is already closed.');
         }
         return DB::transaction(function () use ($opportunity) {
             $opportunity->stage = OpportunityStage::Won;
@@ -145,7 +146,7 @@ class OpportunityService
     public function markLost(Opportunity $opportunity, string $reason): Opportunity
     {
         if ($opportunity->stage->isTerminal()) {
-            throw new RuntimeException('Opportunity is already closed.');
+            throw new BusinessRuleException('Opportunity is already closed.');
         }
         return DB::transaction(function () use ($opportunity, $reason) {
             $opportunity->stage = OpportunityStage::Lost;

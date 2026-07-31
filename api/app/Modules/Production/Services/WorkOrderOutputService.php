@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Production\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\MRP\Models\Mold;
 use App\Modules\MRP\Services\MoldService;
 use App\Modules\Production\Enums\WorkOrderStatus;
@@ -13,7 +14,6 @@ use App\Modules\Production\Models\WorkOrderOutput;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 /**
  * Sprint 6 — Task 55.
@@ -57,14 +57,14 @@ class WorkOrderOutputService
         }
 
         if ($wo->status !== WorkOrderStatus::InProgress) {
-            throw new RuntimeException('Only in-progress work orders can record output.');
+            throw new BusinessRuleException('Only in-progress work orders can record output.');
         }
 
         $good   = (int) ($data['good_count'] ?? 0);
         $reject = (int) ($data['reject_count'] ?? 0);
         $total  = $good + $reject;
         if ($total <= 0) {
-            throw new RuntimeException('At least one of Good count or Reject count must be greater than zero.');
+            throw new BusinessRuleException('At least one of Good count or Reject count must be greater than zero.');
         }
 
         $defects = $data['defects'] ?? [];
@@ -80,11 +80,11 @@ class WorkOrderOutputService
         }
         
         if ($reject > 0 && $defectSum !== $reject) {
-            throw new RuntimeException("The total sum of defects ({$defectSum}) must exactly equal the Reject count ({$reject}).");
+            throw new BusinessRuleException("The total sum of defects ({$defectSum}) must exactly equal the Reject count ({$reject}).");
         }
         
         if (count(array_unique($uniqueDefectTypes)) !== count($uniqueDefectTypes)) {
-            throw new RuntimeException('Duplicate defect types are not allowed.');
+            throw new BusinessRuleException('Duplicate defect types are not allowed.');
         }
 
         $output = DB::transaction(function () use ($wo, $data, $recordedBy, $good, $reject, $total, $defects) {
@@ -92,7 +92,7 @@ class WorkOrderOutputService
             $fresh = WorkOrder::lockForUpdate()->find($wo->id);
 
             if (($fresh->quantity_produced + $total) > $fresh->quantity_target) {
-                throw new RuntimeException("Recording this output would exceed the work order target quantity ({$fresh->quantity_target}).");
+                throw new BusinessRuleException("Recording this output would exceed the work order target quantity ({$fresh->quantity_target}).");
             }
 
             // Generate batch code: {wo}-B{seq}.

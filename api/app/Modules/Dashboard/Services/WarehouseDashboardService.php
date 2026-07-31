@@ -24,21 +24,21 @@ class WarehouseDashboardService
     public function warehouse(User $user): array
     {
         return Cache::remember("dashboard:warehouse:{$user->id}", self::CACHE_TTL, function () {
-            $pendingGrns      = $this->safeCount('goods_receipt_notes', fn ($q) => $q->where('status', 'pending'));
-            $issuesToday      = $this->safeCount('stock_movements', fn ($q) => $q->where('movement_type', 'issue')->whereDate('created_at', today()));
-            $lowStock         = $this->lowStockItemCount();
+            $pendingGrns = $this->safeCount('goods_receipt_notes', fn ($q) => $q->where('status', 'pending'));
+            $issuesToday = $this->safeCount('stock_movements', fn ($q) => $q->where('movement_type', 'issue')->whereDate('created_at', today()));
+            $lowStock = $this->lowStockItemCount();
             $pendingTransfers = $this->safeCount('stock_movements', fn ($q) => $q->where('movement_type', 'transfer')->whereNull('to_location_id'));
 
             return [
                 'kpis' => [
-                    $this->kpi('Pending GRNs',      (string) $pendingGrns,      'count'),
-                    $this->kpi('Issues Today',       (string) $issuesToday,      'count'),
-                    $this->kpi('Low Stock Items',    (string) $lowStock,         'count'),
-                    $this->kpi('Pending Transfers',  (string) $pendingTransfers, 'count'),
+                    $this->kpi('Pending GRNs', (string) $pendingGrns, 'count'),
+                    $this->kpi('Issues Today', (string) $issuesToday, 'count'),
+                    $this->kpi('Low Stock Items', (string) $lowStock, 'count'),
+                    $this->kpi('Pending Transfers', (string) $pendingTransfers, 'count'),
                 ],
                 'panels' => [
-                    'incoming_queue'   => $this->warehouseIncomingQueue(),
-                    'outgoing_queue'   => $this->warehouseOutgoingQueue(),
+                    'incoming_queue' => $this->warehouseIncomingQueue(),
+                    'outgoing_queue' => $this->warehouseOutgoingQueue(),
                     'low_stock_alerts' => $this->warehouseLowStockAlerts(),
                     'zone_utilization' => $this->warehouseZoneUtilization(),
                 ],
@@ -48,7 +48,10 @@ class WarehouseDashboardService
 
     private function lowStockItemCount(): int
     {
-        if (! Schema::hasTable('items') || ! Schema::hasTable('stock_levels')) return 0;
+        if (! Schema::hasTable('items') || ! Schema::hasTable('stock_levels')) {
+            return 0;
+        }
+
         return (int) DB::table('items')
             ->where('is_active', true)
             ->where('reorder_point', '>', 0)
@@ -61,7 +64,9 @@ class WarehouseDashboardService
      */
     private function warehouseIncomingQueue(): array
     {
-        if (! Schema::hasTable('purchase_orders') || ! Schema::hasTable('vendors')) return [];
+        if (! Schema::hasTable('purchase_orders') || ! Schema::hasTable('vendors')) {
+            return [];
+        }
 
         $itemsCountSub = Schema::hasTable('purchase_order_items')
             ? '(SELECT COUNT(*) FROM purchase_order_items poi WHERE poi.purchase_order_id = po.id)'
@@ -78,10 +83,10 @@ class WarehouseDashboardService
             ->limit(8)
             ->get()
             ->map(fn ($r) => [
-                'id'            => app('hashids')->encode((int) $r->id),
-                'po_number'     => $r->po_number,
-                'vendor'        => $r->vendor_name ?? '—',
-                'items_count'   => (int) $r->items_count,
+                'id' => app('hashids')->encode((int) $r->id),
+                'po_number' => $r->po_number,
+                'vendor' => $r->vendor_name ?? '—',
+                'items_count' => (int) $r->items_count,
                 'expected_date' => $r->expected_delivery_date,
             ])
             ->all();
@@ -92,7 +97,10 @@ class WarehouseDashboardService
      */
     private function warehouseOutgoingQueue(): array
     {
-        if (! Schema::hasTable('deliveries') || ! Schema::hasTable('sales_orders') || ! Schema::hasTable('customers')) return [];
+        if (! Schema::hasTable('deliveries') || ! Schema::hasTable('sales_orders') || ! Schema::hasTable('customers')) {
+            return [];
+        }
+
         return DB::table('deliveries as d')
             ->leftJoin('sales_orders as so', 'so.id', '=', 'd.sales_order_id')
             ->leftJoin('customers as c', 'c.id', '=', 'so.customer_id')
@@ -102,9 +110,9 @@ class WarehouseDashboardService
             ->limit(8)
             ->get()
             ->map(fn ($r) => [
-                'id'             => app('hashids')->encode((int) $r->id),
-                'so_number'      => $r->so_number ?? '—',
-                'customer'       => $r->customer_name ?? '—',
+                'id' => app('hashids')->encode((int) $r->id),
+                'so_number' => $r->so_number ?? '—',
+                'customer' => $r->customer_name ?? '—',
                 'scheduled_date' => $r->scheduled_date,
             ])
             ->all();
@@ -115,7 +123,9 @@ class WarehouseDashboardService
      */
     private function warehouseLowStockAlerts(): array
     {
-        if (! Schema::hasTable('items') || ! Schema::hasTable('stock_levels')) return [];
+        if (! Schema::hasTable('items') || ! Schema::hasTable('stock_levels')) {
+            return [];
+        }
 
         $availableSub = '(SELECT COALESCE(SUM(quantity - reserved_quantity), 0) FROM stock_levels WHERE stock_levels.item_id = items.id)';
 
@@ -132,10 +142,23 @@ class WarehouseDashboardService
             );
 
         if (Schema::hasTable('approved_suppliers') && Schema::hasTable('vendors')) {
-            $query->leftJoin('approved_suppliers as ap', 'ap.item_id', '=', 'items.id')
-                  ->leftJoin('vendors as v', 'v.id', '=', 'ap.vendor_id')
-                  ->addSelect('v.id as vendor_id', 'v.name as vendor_name')
-                  ->groupBy('items.id', 'items.code', 'items.name', 'items.reorder_point', 'v.id', 'v.name');
+            // Keep one dashboard row per item. A direct supplier join duplicates
+            // low-stock alerts whenever an item has multiple approved vendors.
+            $query->addSelect([
+                'vendor_id' => DB::table('approved_suppliers as ap')
+                    ->select('ap.vendor_id')
+                    ->whereColumn('ap.item_id', 'items.id')
+                    ->orderByDesc('ap.is_preferred')
+                    ->orderBy('ap.id')
+                    ->limit(1),
+                'vendor_name' => DB::table('approved_suppliers as ap')
+                    ->join('vendors as v', 'v.id', '=', 'ap.vendor_id')
+                    ->select('v.name')
+                    ->whereColumn('ap.item_id', 'items.id')
+                    ->orderByDesc('ap.is_preferred')
+                    ->orderBy('ap.id')
+                    ->limit(1),
+            ]);
         }
 
         return $query
@@ -144,14 +167,16 @@ class WarehouseDashboardService
             ->get()
             ->map(function ($r) {
                 $available = (float) $r->available;
-                $reorder   = (float) $r->reorder_point;
+                $reorder = (float) $r->reorder_point;
+
                 return [
-                    'item_code'     => $r->code,
-                    'item_name'     => $r->name,
+                    'item_id' => app('hashids')->encode((int) $r->id),
+                    'item_code' => $r->code,
+                    'item_name' => $r->name,
                     'current_stock' => number_format($available, 2, '.', ''),
                     'reorder_point' => number_format($reorder, 2, '.', ''),
-                    'shortage'      => number_format(max(0.0, $reorder - $available), 2, '.', ''),
-                    'supplier_id'   => isset($r->vendor_id) && $r->vendor_id ? app('hashids')->encode((int) $r->vendor_id) : null,
+                    'shortage' => number_format(max(0.0, $reorder - $available), 2, '.', ''),
+                    'supplier_id' => isset($r->vendor_id) && $r->vendor_id ? app('hashids')->encode((int) $r->vendor_id) : null,
                     'supplier_name' => $r->vendor_name ?? null,
                 ];
             })
@@ -165,7 +190,9 @@ class WarehouseDashboardService
      */
     private function warehouseZoneUtilization(): array
     {
-        if (! Schema::hasTable('warehouse_locations') || ! Schema::hasTable('warehouse_zones')) return [];
+        if (! Schema::hasTable('warehouse_locations') || ! Schema::hasTable('warehouse_zones')) {
+            return [];
+        }
 
         return DB::table('warehouse_locations as wl')
             ->join('warehouse_zones as wz', 'wz.id', '=', 'wl.zone_id')
@@ -180,10 +207,10 @@ class WarehouseDashboardService
             )
             ->get()
             ->map(fn ($r) => [
-                'zone'    => $r->zone,
-                'name'    => $r->name,
+                'zone' => $r->zone,
+                'name' => $r->name,
                 'occupied' => (int) $r->occupied,
-                'total'   => (int) $r->total,
+                'total' => (int) $r->total,
                 'percent' => (int) round(((int) $r->occupied * 100) / max(1, (int) $r->total)),
             ])
             ->all();

@@ -14,11 +14,12 @@ class EmployeeProperty extends Model
     use HasFactory, HasHashId;
 
     protected $table = 'employee_property';
-    protected $fillable = ['employee_id', 'item_name', 'description', 'quantity', 'date_issued', 'date_returned', 'status'];
+    protected $fillable = ['employee_id', 'item_name', 'description', 'quantity', 'replacement_unit_cost', 'date_issued', 'date_returned', 'status'];
     protected $casts = [
         'date_issued'   => 'date',
         'date_returned' => 'date',
         'quantity'      => 'integer',
+        'replacement_unit_cost' => 'decimal:2',
     ];
 
     public function employee(): BelongsTo

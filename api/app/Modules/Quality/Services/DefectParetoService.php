@@ -17,6 +17,34 @@ use Illuminate\Support\Facades\DB;
  */
 class DefectParetoService
 {
+    /** @return array{from:string,to:string,passed:int,failed:int,total:int,pass_rate:float} */
+    public function inspectionSummary(array $filters): array
+    {
+        $from = isset($filters['from']) ? Carbon::parse($filters['from'])->startOfDay() : now()->subDays(30)->startOfDay();
+        $to = isset($filters['to']) ? Carbon::parse($filters['to'])->endOfDay() : now()->endOfDay();
+
+        $query = DB::table('inspections')
+            ->whereIn('status', ['passed', 'failed'])
+            ->whereBetween('completed_at', [$from, $to]);
+        if (! empty($filters['product_id'])) {
+            $query->where('product_id', (int) $filters['product_id']);
+        }
+        if (! empty($filters['stage'])) {
+            $query->where('stage', (string) $filters['stage']);
+        }
+
+        $row = $query->selectRaw("COUNT(*) AS total, SUM(CASE WHEN status = 'passed' THEN 1 ELSE 0 END) AS passed, SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed")->first();
+        $passed = (int) ($row->passed ?? 0);
+        $failed = (int) ($row->failed ?? 0);
+        $total = (int) ($row->total ?? 0);
+
+        return [
+            'from' => $from->toDateString(), 'to' => $to->toDateString(),
+            'passed' => $passed, 'failed' => $failed, 'total' => $total,
+            'pass_rate' => $total > 0 ? round($passed / $total * 100, 2) : 0.0,
+        ];
+    }
+
     /**
      * @param array{
      *   from?: string|null,

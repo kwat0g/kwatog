@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace App\Modules\Attendance\Controllers;
 
+use App\Common\Support\HashIdFilter;
 use App\Modules\Attendance\Models\OvertimeRequest;
 use App\Modules\Attendance\Requests\ApproveOvertimeRequestRequest;
 use App\Modules\Attendance\Requests\RejectOvertimeRequestRequest;
 use App\Modules\Attendance\Requests\StoreOvertimeRequestRequest;
 use App\Modules\Attendance\Resources\OvertimeRequestResource;
 use App\Modules\Attendance\Services\OvertimeService;
+use App\Modules\HR\Models\Employee;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -26,11 +28,28 @@ class OvertimeController
     public function store(StoreOvertimeRequestRequest $request): JsonResponse
     {
         $ot = $this->service->create($request->validatedData());
+
         return (new OvertimeRequestResource($ot))->response()->setStatusCode(201);
     }
 
-    public function show(OvertimeRequest $overtime): OvertimeRequestResource
+    public function show(OvertimeRequest $overtime, Request $request): OvertimeRequestResource
     {
+        $user = $request->user();
+        $canView = $user?->role?->slug === 'system_admin'
+            || (int) $user?->employee_id === (int) $overtime->employee_id;
+
+        if (! $canView && $user?->hasPermission('attendance.ot.approve') && $user->employee_id) {
+            $ownDepartment = Employee::query()
+                ->whereKey($user->employee_id)
+                ->value('department_id');
+            $recordDepartment = Employee::query()
+                ->whereKey($overtime->employee_id)
+                ->value('department_id');
+            $canView = $ownDepartment && (int) $ownDepartment === (int) $recordDepartment;
+        }
+
+        abort_unless($canView, 403, 'You do not have permission to view this overtime request.');
+
         return new OvertimeRequestResource($overtime->load(['employee', 'approver']));
     }
 
@@ -44,6 +63,7 @@ class OvertimeController
         } catch (\RuntimeException $e) {
             abort(422, $e->getMessage());
         }
+
         return new OvertimeRequestResource($ot);
     }
 
@@ -54,6 +74,7 @@ class OvertimeController
         } catch (\RuntimeException $e) {
             abort(422, $e->getMessage());
         }
+
         return new OvertimeRequestResource($ot);
     }
 
@@ -65,13 +86,13 @@ class OvertimeController
     public function bulkApprove(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'ids'     => ['required', 'array', 'min:1', 'max:100'],
-            'ids.*'   => ['required', 'string'],
+            'ids' => ['required', 'array', 'min:1', 'max:100'],
+            'ids.*' => ['required', 'string'],
             'remarks' => ['nullable', 'string', 'max:500'],
         ]);
 
         $decoded = collect($validated['ids'])
-            ->map(fn (string $hash) => \App\Common\Support\HashIdFilter::decode($hash, OvertimeRequest::class))
+            ->map(fn (string $hash) => HashIdFilter::decode($hash, OvertimeRequest::class))
             ->filter()
             ->values()
             ->all();
@@ -83,10 +104,10 @@ class OvertimeController
         );
 
         return response()->json([
-            'message'        => sprintf('%d approved, %d failed.', count($result['approved']), count($result['failed'])),
+            'message' => sprintf('%d approved, %d failed.', count($result['approved']), count($result['failed'])),
             'approved_count' => count($result['approved']),
-            'failed'         => $result['failed'],
-            'data'           => OvertimeRequestResource::collection($result['approved']),
+            'failed' => $result['failed'],
+            'data' => OvertimeRequestResource::collection($result['approved']),
         ]);
     }
 }

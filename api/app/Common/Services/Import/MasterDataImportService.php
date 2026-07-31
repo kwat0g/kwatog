@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Common\Services\Import;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Models\ImportBatch;
 use App\Common\Models\ImportBatchRecord;
 use App\Modules\Accounting\Imports\AccountImporter;
@@ -143,7 +144,7 @@ class MasterDataImportService
     public function rollback(ImportBatch $batch, User $by): ImportBatch
     {
         if ($batch->status === 'rolled_back') {
-            throw new RuntimeException('Batch already rolled back.');
+            throw new BusinessRuleException('Batch already rolled back.');
         }
 
         DB::transaction(function () use ($batch, $by) {

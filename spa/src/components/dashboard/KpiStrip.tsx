@@ -46,7 +46,7 @@ export function KpiStrip({ codes, className }: KpiStripProps) {
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['kpi', 'scorecard', year, month],
-    queryFn: () => kpiApi.scorecard(year, month).then((r) => r.data.data),
+    queryFn: () => kpiApi.scorecard(year, month),
     staleTime: 5 * 60_000,
     retry: 1,
   });

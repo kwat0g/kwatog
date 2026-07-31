@@ -59,7 +59,7 @@ class UserResource extends JsonResource
 
         return array_values(array_filter(
             $modules,
-            fn (string $m) => (bool) $settings->get("modules.{$m}", true),
+            fn (string $m) => $settings->requiredBool("modules.{$m}"),
         ));
     }
 }

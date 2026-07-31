@@ -27,7 +27,7 @@ export default function PrTemplatesListPage() {
   const qc = useQueryClient();
   const { can } = usePermission();
   const [filters, setFilters] = useState<Record<string, unknown>>({ page: 1, per_page: 25 });
-  const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['purchasing', 'pr-templates', filters],
@@ -36,7 +36,7 @@ export default function PrTemplatesListPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => prTemplatesApi.delete(id),
+    mutationFn: (id: string) => prTemplatesApi.delete(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['purchasing', 'pr-templates'] });
       toast.success('Template deleted.');
@@ -49,7 +49,7 @@ export default function PrTemplatesListPage() {
     mutationFn: (template: PurchaseRequestTemplate) => {
       return purchaseRequestsApi.create({
         template_id: template.id,
-        department_id: template.department?.id ? Number(template.department.id) : undefined,
+        department_id: template.department?.id,
         items: template.items.map((i) => ({
           item_id: i.item_id ?? null,
           description: i.description,

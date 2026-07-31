@@ -16,7 +16,7 @@ import type {
 } from '@/types/b2b';
 import type { ChainStep } from '@/types/chain';
 
-const { client: portalClient, setToken } = createPortalClient();
+const { client: portalClient, setToken } = createPortalClient('ogami_customer_portal_token');
 
 type CustomerLoginResponse = {
   token: string;

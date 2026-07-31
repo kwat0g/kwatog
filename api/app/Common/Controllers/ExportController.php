@@ -133,15 +133,15 @@ class ExportController
     {
         return match ($module) {
             'hr.employees' => 'hr.employees.export',
-            'payroll.register',
+            'payroll.register' => 'payroll.payslip.view_all',
             'payroll.gov.sss_r3',
             'payroll.gov.philhealth_rf1',
             'payroll.gov.pagibig',
-            'payroll.gov.bir_1601c' => 'payroll.view',
+            'payroll.gov.bir_1601c' => 'payroll.statutory.export',
             'inventory.valuation',
             'inventory.stock_card' => 'inventory.view',
             'accounting.ar_aging',
-            'accounting.ap_aging' => 'accounting.view',
+            'accounting.ap_aging' => 'accounting.statements.export',
             default => 'admin.audit_logs.view',
         };
     }

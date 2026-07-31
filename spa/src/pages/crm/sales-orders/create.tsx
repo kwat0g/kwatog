@@ -10,7 +10,7 @@
  * input. Server returns 422 with field-targeted errors when no agreement
  * exists; those land on the offending row.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFieldArray, useForm } from 'react-hook-form';
@@ -28,6 +28,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { customersApi } from '@/api/accounting/customers';
 import { productsApi } from '@/api/crm/products';
 import { salesOrdersApi } from '@/api/crm/salesOrders';
+import { businessPoliciesApi } from '@/api/businessPolicies';
 import type { CreateSalesOrderData } from '@/types/crm';
 import { formatPeso } from '@/lib/formatNumber';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
@@ -61,24 +62,35 @@ export default function CreateSalesOrderPage() {
     queryKey: ['crm', 'products', 'lookup'],
     queryFn: () => productsApi.list({ per_page: 100, is_active: 'true' }),
   });
+  const policies = useQuery({ queryKey: ['business-policies'], queryFn: businessPoliciesApi.get });
 
   const today = new Date().toISOString().slice(0, 10);
 
   const {
-    register, control, handleSubmit, setError, watch,
+    register, control, handleSubmit, setError, setValue, watch,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       customer_id: '',
       date: today,
-      payment_terms_days: '30',
+      payment_terms_days: '',
       delivery_terms: '',
       notes: '',
       items: [{ product_id: '', quantity: '', delivery_date: '' }],
     },
   });
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
+  const selectedCustomerId = watch('customer_id');
+
+  useEffect(() => {
+    const customer = customers.data?.data.find((row) => row.id === selectedCustomerId);
+    if (customer) {
+      setValue('payment_terms_days', String(customer.payment_terms_days));
+    } else if (policies.data) {
+      setValue('payment_terms_days', String(policies.data.customer_payment_terms_days));
+    }
+  }, [customers.data, policies.data, selectedCustomerId, setValue]);
 
   const [submitMode, setSubmitMode] = useState<'draft' | 'confirm'>('draft');
 

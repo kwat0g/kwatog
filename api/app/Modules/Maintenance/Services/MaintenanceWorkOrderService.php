@@ -6,8 +6,10 @@ namespace App\Modules\Maintenance\Services;
 
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\NotificationService;
+use App\Common\Support\HashIdFilter;
 use App\Common\Support\SearchOperator;
 use App\Modules\Auth\Models\User;
+use App\Modules\HR\Models\Employee;
 use App\Modules\Maintenance\Enums\MaintainableType;
 use App\Modules\Maintenance\Enums\MaintenancePriority;
 use App\Modules\Maintenance\Enums\MaintenanceWorkOrderStatus;
@@ -24,7 +26,7 @@ use App\Modules\MRP\Models\MoldHistory;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
+use Illuminate\Validation\ValidationException;
 
 /** Sprint 8 — Task 69. */
 class MaintenanceWorkOrderService
@@ -55,7 +57,9 @@ class MaintenanceWorkOrderService
             }
         }
         if (! empty($filters['assigned_to'])) {
-            $q->where('assigned_to', $filters['assigned_to']);
+            // SPA sends the employee HashID; comparing it raw against a bigint
+            // column raises Postgres 22P02 and 500s the whole list page.
+            $q->where('assigned_to', HashIdFilter::decode($filters['assigned_to'], Employee::class) ?? 0);
         }
         if (! empty($filters['search'])) {
             $term = '%'.trim((string) $filters['search']).'%';
@@ -89,7 +93,11 @@ class MaintenanceWorkOrderService
                 MaintainableType::Machine => Machine::query()->whereKey($maintainableId)->exists(),
                 MaintainableType::Mold    => Mold::query()->whereKey($maintainableId)->exists(),
             };
-            if (! $exists) throw new RuntimeException("Target {$type->value}#{$maintainableId} not found.");
+            if (! $exists) {
+                throw ValidationException::withMessages([
+                    'maintainable_id' => ["Target {$type->value}#{$maintainableId} not found."],
+                ]);
+            }
 
             $wo = MaintenanceWorkOrder::create([
                 'mwo_number'        => $this->sequences->generate('maintenance_wo'),
@@ -117,7 +125,7 @@ class MaintenanceWorkOrderService
 
     public function assign(MaintenanceWorkOrder $wo, int $employeeId, User $by): MaintenanceWorkOrder
     {
-        if ($wo->status->isTerminal()) throw new RuntimeException('WO already closed.');
+        $this->assertNotTerminal($wo);
         return DB::transaction(function () use ($wo, $employeeId, $by) {
             $wo->forceFill([
                 'assigned_to' => $employeeId,
@@ -131,7 +139,7 @@ class MaintenanceWorkOrderService
     public function start(MaintenanceWorkOrder $wo, User $by): MaintenanceWorkOrder
     {
         if ($wo->status === MaintenanceWorkOrderStatus::InProgress) return $this->show($wo);
-        if ($wo->status->isTerminal()) throw new RuntimeException('WO already closed.');
+        $this->assertNotTerminal($wo);
         return DB::transaction(function () use ($wo, $by) {
             $wo->forceFill([
                 'status'     => MaintenanceWorkOrderStatus::InProgress->value,
@@ -169,7 +177,7 @@ class MaintenanceWorkOrderService
      */
     public function complete(MaintenanceWorkOrder $wo, array $data, User $by): MaintenanceWorkOrder
     {
-        if ($wo->status->isTerminal()) throw new RuntimeException('WO already closed.');
+        $this->assertNotTerminal($wo);
         return DB::transaction(function () use ($wo, $data, $by) {
             $cost = (string) SparePartUsage::query()->where('work_order_id', $wo->id)->sum('total_cost');
 
@@ -225,7 +233,7 @@ class MaintenanceWorkOrderService
 
     public function cancel(MaintenanceWorkOrder $wo, ?string $reason, User $by): MaintenanceWorkOrder
     {
-        if ($wo->status->isTerminal()) throw new RuntimeException('WO already closed.');
+        $this->assertNotTerminal($wo);
         return DB::transaction(function () use ($wo, $reason, $by) {
             $wo->forceFill([
                 'status'  => MaintenanceWorkOrderStatus::Cancelled->value,
@@ -257,5 +265,19 @@ class MaintenanceWorkOrderService
             'logged_by'     => $by->id,
             'created_at'    => now(),
         ]);
+    }
+
+    /**
+     * Guard the assign/start/complete/cancel transitions. Every one is reachable
+     * from a live SPA button, so a double-click on an already-closed WO must
+     * surface as a 422 naming the field — not an unhandled 500.
+     */
+    private function assertNotTerminal(MaintenanceWorkOrder $wo): void
+    {
+        if ($wo->status->isTerminal()) {
+            throw ValidationException::withMessages([
+                'status' => ["This work order is already {$wo->status->value} and can no longer be modified."],
+            ]);
+        }
     }
 }

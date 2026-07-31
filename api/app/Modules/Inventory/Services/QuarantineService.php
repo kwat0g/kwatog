@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Support\HashIdFilter;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\MrbStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Enums\WarehouseZoneType;
+use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\MaterialReviewRecord;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\WarehouseLocation;
@@ -39,7 +42,7 @@ class QuarantineService
         private readonly StockMovementService $movements,
     ) {}
 
-    /** @param array{status?:string, item_id?:int, per_page?:int} $filters */
+    /** @param array{status?:string, item_id?:int|string, per_page?:int} $filters */
     public function list(array $filters): LengthAwarePaginator
     {
         $q = MaterialReviewRecord::query()
@@ -53,7 +56,9 @@ class QuarantineService
             $q->where('status', $filters['status']);
         }
         if (! empty($filters['item_id'])) {
-            $q->where('item_id', $filters['item_id']);
+            // MrbController::index() forwards the raw query bag, so the SPA's hash
+            // string would hit a bigint column (Postgres 22P02 → 500).
+            $q->where('item_id', HashIdFilter::decode($filters['item_id'], Item::class) ?? 0);
         }
 
         return $q->orderByDesc('held_at')->orderByDesc('id')
@@ -95,7 +100,7 @@ class QuarantineService
                 : $this->resolveZoneLocation($source, WarehouseZoneType::Quarantine)->id;
 
             if ($quarantineId === $sourceId) {
-                throw new RuntimeException('Source and quarantine locations must differ.');
+                throw new BusinessRuleException('Source and quarantine locations must differ.');
             }
 
             // Validate available stock at the source before moving.
@@ -103,11 +108,11 @@ class QuarantineService
                 ->where('item_id', $itemId)->where('location_id', $sourceId)
                 ->lockForUpdate()->first();
             if (! $level) {
-                throw new RuntimeException("No stock for item {$itemId} at source location {$sourceId}.");
+                throw new BusinessRuleException("No stock for item {$itemId} at source location {$sourceId}.");
             }
             $available = bcsub((string) $level->quantity, (string) $level->reserved_quantity, 3);
             if (bccomp($available, $qty, 3) < 0) {
-                throw new RuntimeException(
+                throw new BusinessRuleException(
                     "Insufficient available stock to hold: needed {$qty}, available {$available}."
                 );
             }
@@ -165,12 +170,12 @@ class QuarantineService
         ?string $notes = null,
     ): MaterialReviewRecord {
         if ($mrb->status !== MrbStatus::Held) {
-            throw new RuntimeException("MRB {$mrb->mrb_number} is not held (status: {$mrb->status->value}).");
+            throw new BusinessRuleException("MRB {$mrb->mrb_number} is not held (status: {$mrb->status->value}).");
         }
 
         $dispo = NcrDisposition::tryFrom($disposition);
         if ($dispo === null) {
-            throw new RuntimeException("Invalid disposition: {$disposition}.");
+            throw new BusinessRuleException("Invalid disposition: {$disposition}.");
         }
 
         return DB::transaction(function () use ($mrb, $dispo, $by, $targetLocationId, $notes) {
@@ -185,12 +190,12 @@ class QuarantineService
                 case NcrDisposition::Rework:
                 case NcrDisposition::UseAsIs:
                     if (! $targetLocationId) {
-                        throw new RuntimeException('A target good location is required for rework/use-as-is release.');
+                        throw new BusinessRuleException('A target good location is required for rework/use-as-is release.');
                     }
                     $target = WarehouseLocation::query()->with('zone')->findOrFail($targetLocationId);
                     $type = $this->zoneType($target);
                     if (in_array($type, [WarehouseZoneType::Quarantine, WarehouseZoneType::Scrap], true)) {
-                        throw new RuntimeException('Release target must be a good location, not a quarantine/scrap zone.');
+                        throw new BusinessRuleException('Release target must be a good location, not a quarantine/scrap zone.');
                     }
                     $movement = $this->movements->move(new StockMovementInput(
                         type: StockMovementType::Transfer,

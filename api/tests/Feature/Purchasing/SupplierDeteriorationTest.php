@@ -87,7 +87,7 @@ class SupplierDeteriorationTest extends TestCase
                 $captured = compact('recipients', 'type', 'data');
             });
 
-        (new AlertOnSupplierDeterioration($notifications))
+        (new AlertOnSupplierDeterioration($notifications, app(\App\Common\Services\SettingsService::class)))
             ->handle(new SupplierPerformanceComputed($current));
 
         $this->assertNotNull($captured, 'NotificationService::send must be called');
@@ -117,7 +117,7 @@ class SupplierDeteriorationTest extends TestCase
         $notifications = Mockery::mock(NotificationService::class);
         $notifications->shouldNotReceive('send');
 
-        (new AlertOnSupplierDeterioration($notifications))
+        (new AlertOnSupplierDeterioration($notifications, app(\App\Common\Services\SettingsService::class)))
             ->handle(new SupplierPerformanceComputed($current));
     }
 
@@ -133,7 +133,7 @@ class SupplierDeteriorationTest extends TestCase
         $notifications = Mockery::mock(NotificationService::class);
         $notifications->shouldNotReceive('send');
 
-        (new AlertOnSupplierDeterioration($notifications))
+        (new AlertOnSupplierDeterioration($notifications, app(\App\Common\Services\SettingsService::class)))
             ->handle(new SupplierPerformanceComputed($current));
     }
 
@@ -155,7 +155,7 @@ class SupplierDeteriorationTest extends TestCase
         $notifications->shouldReceive('send')->andThrow(new \RuntimeException('boom'));
 
         // Must NOT bubble.
-        (new AlertOnSupplierDeterioration($notifications))
+        (new AlertOnSupplierDeterioration($notifications, app(\App\Common\Services\SettingsService::class)))
             ->handle(new SupplierPerformanceComputed($current));
 
         $this->assertTrue(true);

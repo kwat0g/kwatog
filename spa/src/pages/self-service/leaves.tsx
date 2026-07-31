@@ -1,4 +1,4 @@
-// U3 — Re-export leave.tsx under the new "/self-service/leaves" route
-// to align with the bottom-nav slug. Existing /self-service/leave route
-// remains for backward compatibility (registered separately in App.tsx).
+// U3 — "/self-service/leaves" is the canonical plural slug used by the profile
+// dropdown and dashboard widgets. "/self-service/leave" stays registered in
+// selfServiceRoutes.tsx for backward compatibility with older links.
 export { default } from './leave';

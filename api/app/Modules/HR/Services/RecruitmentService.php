@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\NotificationService;
 use App\Modules\Auth\Models\User;
@@ -52,7 +53,7 @@ class RecruitmentService
     public function changePostingStatus(JobPosting $posting, JobPostingStatus $newStatus): void
     {
         if (! $posting->status->canTransitionTo($newStatus)) {
-            throw new \LogicException("Cannot transition posting from {$posting->status->value} to {$newStatus->value}.");
+            throw new BusinessRuleException("Cannot transition posting from {$posting->status->value} to {$newStatus->value}.");
         }
 
         if ($newStatus === JobPostingStatus::Open && ! $posting->posted_at) {
@@ -114,11 +115,11 @@ class RecruitmentService
     {
         $next = $application->stage->next();
         if (! $next) {
-            throw new \LogicException("Cannot advance from terminal stage: {$application->stage->value}");
+            throw new BusinessRuleException("Cannot advance from terminal stage: {$application->stage->value}");
         }
 
         if ($application->stage === ApplicationStage::Screening && ! $interviewData) {
-            throw new \LogicException('Interview data required when advancing to interview stage.');
+            throw new BusinessRuleException('Interview data required when advancing to interview stage.');
         }
 
         DB::transaction(function () use ($application, $next, $interviewData) {
@@ -134,7 +135,7 @@ class RecruitmentService
     public function rejectApplication(JobApplication $application, ?string $reason = null): void
     {
         if ($application->stage->isTerminal()) {
-            throw new \LogicException("Cannot reject from terminal stage: {$application->stage->value}");
+            throw new BusinessRuleException("Cannot reject from terminal stage: {$application->stage->value}");
         }
         $application->rejected_at_stage = $application->stage->value;
         $application->rejection_reason = $reason;
@@ -145,7 +146,7 @@ class RecruitmentService
     public function scheduleInterview(JobApplication $application, array $data): ApplicationInterview
     {
         if ($application->stage !== ApplicationStage::Interview) {
-            throw new \LogicException("Interviews can only be scheduled at the interview stage, current: {$application->stage->value}");
+            throw new BusinessRuleException("Interviews can only be scheduled at the interview stage, current: {$application->stage->value}");
         }
 
         $interview = ApplicationInterview::create($data + [

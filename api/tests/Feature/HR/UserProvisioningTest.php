@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\Feature\HR;
 
-use App\Modules\Auth\Models\Role;
-use App\Modules\Auth\Models\User;
 use App\Modules\Auth\Notifications\PasswordResetNotification;
 use App\Modules\Auth\Notifications\WelcomeNotification;
 use App\Modules\HR\Models\Department;
@@ -14,6 +12,7 @@ use App\Modules\HR\Models\Position;
 use App\Modules\HR\Services\UserProvisioningService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
@@ -35,12 +34,12 @@ class UserProvisioningTest extends TestCase
     private function makeEmployee(string $first = 'Juan', string $last = 'Cruz'): Employee
     {
         $dept = Department::firstOrCreate(['code' => 'PRD'], ['name' => 'Production']);
-        $pos  = Position::firstOrCreate(['title' => 'Operator', 'department_id' => $dept->id]);
+        $pos = Position::firstOrCreate(['title' => 'Operator', 'department_id' => $dept->id]);
 
         return Employee::create([
             'employee_no' => 'OGM-2026-'.str_pad((string) random_int(1, 9999), 4, '0', STR_PAD_LEFT),
-            'first_name'  => $first, 'last_name' => $last,
-            'birth_date'  => '1990-01-01', 'gender' => 'male', 'civil_status' => 'single',
+            'first_name' => $first, 'last_name' => $last,
+            'birth_date' => '1990-01-01', 'gender' => 'male', 'civil_status' => 'single',
             'nationality' => 'Filipino',
             'department_id' => $dept->id, 'position_id' => $pos->id,
             'employment_type' => 'regular', 'pay_type' => 'monthly',
@@ -112,20 +111,20 @@ class UserProvisioningTest extends TestCase
         $user = $svc->provisionForEmployee($employee);
 
         // Insert a fake session row.
-        \DB::table('sessions')->insert([
-            'id'            => 'sess-'.uniqid(),
-            'user_id'       => $user->id,
-            'ip_address'    => '127.0.0.1',
-            'user_agent'    => 'phpunit',
-            'payload'       => '',
+        DB::table('sessions')->insert([
+            'id' => 'sess-'.uniqid(),
+            'user_id' => $user->id,
+            'ip_address' => '127.0.0.1',
+            'user_agent' => 'phpunit',
+            'payload' => '',
             'last_activity' => time(),
         ]);
-        $this->assertSame(1, \DB::table('sessions')->where('user_id', $user->id)->count());
+        $this->assertSame(1, DB::table('sessions')->where('user_id', $user->id)->count());
 
         $svc->deactivateForEmployee($employee->fresh());
 
         $this->assertFalse((bool) $user->fresh()->is_active);
-        $this->assertSame(0, \DB::table('sessions')->where('user_id', $user->id)->count());
+        $this->assertSame(0, DB::table('sessions')->where('user_id', $user->id)->count());
     }
 
     public function test_reset_password_force_change_and_notifies(): void

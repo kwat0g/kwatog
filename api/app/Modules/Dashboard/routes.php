@@ -78,6 +78,7 @@ Route::prefix('dashboard')
     ->group(function (): void {
         Route::get('/widgets',       [DashboardLayoutController::class, 'widgets']);
         Route::get('/layout',        [DashboardLayoutController::class, 'show']);
+        Route::get('/widget-data',   [DashboardLayoutController::class, 'data']);
         Route::put('/layout',        [DashboardLayoutController::class, 'save']);
         Route::post('/layout/reset', [DashboardLayoutController::class, 'reset']);
     });

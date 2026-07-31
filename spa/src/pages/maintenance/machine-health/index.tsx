@@ -37,19 +37,11 @@ const METRIC_UNITS: Record<ConditionMetric, string> = {
   oil_quality: '%',
 };
 
-const THRESHOLDS: Record<ConditionMetric, { max: number }> = {
-  temperature: { max: 85 },
-  vibration: { max: 7.1 },
-  pressure: { max: 12 },
-  current: { max: 150 },
-  oil_quality: { max: 100 },
-};
-
 function HealthGauge({ metric, snapshot }: { metric: ConditionMetric; snapshot: MachineHealthSnapshot | undefined }) {
   const Icon = METRIC_ICONS[metric];
   const value = snapshot?.value ?? 0;
-  const max = THRESHOLDS[metric].max;
-  const pct = Math.min((value / max) * 100, 100);
+  const scale = snapshot?.max_threshold ?? Math.max(value, snapshot?.min_threshold ?? 1) * 1.2;
+  const pct = Math.min((value / scale) * 100, 100);
   const status = snapshot?.status ?? 'ok';
 
   return (
@@ -76,7 +68,8 @@ function HealthGauge({ metric, snapshot }: { metric: ConditionMetric; snapshot: 
         </div>
         <div className="mt-1 flex justify-between text-2xs text-muted">
           <span>0</span>
-          <span>Limit: {max}</span>
+          <span>{snapshot?.min_threshold != null ? `Min: ${snapshot.min_threshold}` : ''}</span>
+          <span>{snapshot?.max_threshold != null ? `Max: ${snapshot.max_threshold}` : ''}</span>
         </div>
       </div>
       {snapshot?.recorded_at && (
@@ -86,11 +79,11 @@ function HealthGauge({ metric, snapshot }: { metric: ConditionMetric; snapshot: 
   );
 }
 
-function TrendChart({ points, metric }: { points: ConditionTrendPoint[]; metric: ConditionMetric }) {
-  const max = THRESHOLDS[metric].max;
+function TrendChart({ points, metric, snapshot }: { points: ConditionTrendPoint[]; metric: ConditionMetric; snapshot?: MachineHealthSnapshot }) {
+  const threshold = snapshot?.max_threshold ?? snapshot?.min_threshold ?? 0;
   const values = points.map((p) => p.value);
   const minVal = Math.min(...values, 0);
-  const maxVal = Math.max(...values, max);
+  const maxVal = Math.max(...values, threshold);
   const range = maxVal - minVal || 1;
 
   return (
@@ -102,7 +95,8 @@ function TrendChart({ points, metric }: { points: ConditionTrendPoint[]; metric:
             <div key={i} className="group relative flex flex-1 flex-col items-center">
               <div
                 className={`w-full rounded-t transition-all ${
-                  p.value > max * 0.9 ? 'bg-danger/60' : p.value > max * 0.7 ? 'bg-warning/60' : 'bg-primary/60'
+                  ((snapshot?.max_threshold != null && p.value > snapshot.max_threshold) || (snapshot?.min_threshold != null && p.value < snapshot.min_threshold))
+                    ? 'bg-danger/60' : 'bg-primary/60'
                 }`}
                 style={{ height: `${Math.max(h, 2)}%` }}
               />
@@ -219,7 +213,7 @@ export default function MachineHealthPage() {
                   {readingsLoading ? (
                     <div className="mt-4 h-32 animate-pulse rounded bg-elevated" />
                   ) : trendPoints.length > 0 ? (
-                    <TrendChart points={trendPoints} metric={metric} />
+                    <TrendChart points={trendPoints} metric={metric} snapshot={healthSnapshot?.find((s) => s.metric === metric)} />
                   ) : (
                     <EmptyState icon="activity" title="No data" description={`No ${metric} readings for this machine.`} className="mt-4" />
                   )}

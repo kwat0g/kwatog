@@ -1,4 +1,4 @@
-export type LoanType = 'company_loan' | 'cash_advance';
+export type LoanType = 'company_loan' | 'cash_advance' | 'sss_loan' | 'pagibig_loan';
 export type LoanStatus = 'pending' | 'active' | 'paid' | 'cancelled' | 'rejected';
 
 export interface LoanPayment {
@@ -48,7 +48,16 @@ export interface CreateLoanData {
 export interface AmortizationItem {
   period: number;
   amount: string;
+  principal: string;
+  interest: string;
   remaining_after: string;
+}
+
+export interface LoanTypeOption {
+  value: LoanType;
+  label: string;
+  interest_rate: string;
+  approval_steps: number;
 }
 
 export interface LoanLimits {

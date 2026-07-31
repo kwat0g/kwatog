@@ -81,7 +81,7 @@ export function Topbar({ user, onLogout, rightExtras }: TopbarProps) {
       >
         <Search size={12} />
         <span className="flex-1 text-left">Search…</span>
-        <kbd className="font-mono text-[10px] text-text-subtle">⌘K</kbd>
+        <kbd className="font-mono text-2xs text-text-subtle">⌘K</kbd>
       </button>
 
       <Tooltip content={resolvedTheme === 'dark' ? 'Light mode' : 'Dark mode'}>

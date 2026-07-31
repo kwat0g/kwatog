@@ -14,6 +14,7 @@ use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\MRP\Models\Bom;
 use App\Modules\MRP\Models\BomItem;
 use App\Modules\MRP\Services\MrpEngineService;
+use App\Common\Services\SettingsService;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use App\Modules\Purchasing\Models\PurchaseRequest;
@@ -296,6 +297,20 @@ class MrpNettingTest extends TestCase
         $prItem = $pr->items()->where('item_id', $this->material->id)->firstOrFail();
         // net = 20 - 8 = 12, stored rounded to 2 decimal places
         $this->assertSame('12.00', $prItem->quantity, 'PR item qty must equal net shortage (12)');
+    }
+
+    public function test_persisted_safety_buffer_controls_material_order_by_date(): void
+    {
+        app(SettingsService::class)->set('mrp.safety_buffer_days', 25, 'mrp');
+        $this->createBom(qtyPerUnit: 2.0);
+        $this->setOnHand(qty: 0.0);
+        $so = $this->createConfirmedSo(lineQty: 10, daysAhead: 30);
+
+        $plan = $this->engine->runForSalesOrder($so);
+        $shortage = collect($plan->diagnostics)->firstWhere('action', 'pr_created');
+
+        $this->assertSame(Carbon::today()->subDays(2)->toDateString(), $shortage['order_by']);
+        $this->assertSame('urgent', $shortage['priority']);
     }
 
     // ════════════════════════════════════════════════════════════════════════

@@ -132,6 +132,7 @@ test.describe('Permission guards — admin surface (only system_admin may access
 
 test.describe('Permission guards — HR boundaries', () => {
   test('hr can view employees, departments, leaves, attendance', async ({ page }) => {
+    test.setTimeout(60_000);
     const bp = new BasePage(page);
     for (const u of ['/hr/employees', '/hr/departments', '/hr/leaves', '/hr/attendance']) {
       await loginAs(page, 'hr', u);
@@ -152,6 +153,10 @@ test.describe('Permission guards — HR boundaries', () => {
   });
 
   test('employee CAN view self-service pages (own leave, payslips, DTR)', async ({ page }) => {
+    // This intentionally performs five full SPA navigations. Firefox can take
+    // more than the default 30s under the four-worker matrix even when every
+    // route has already rendered successfully.
+    test.setTimeout(60_000);
     const bp = new BasePage(page);
     for (const u of ['/self-service/leave', '/self-service/leaves', '/self-service/payslips', '/self-service/dtr', '/self-service/loans']) {
       await loginAs(page, 'employee', u);
@@ -192,6 +197,7 @@ test.describe('Permission guards — Quality vs Production boundary', () => {
   });
 
   test('qc can view quality pages (inspections, ncrs, dashboard)', async ({ page }) => {
+    test.setTimeout(60_000);
     const bp = new BasePage(page);
     for (const u of ['/quality/inspections', '/quality/ncrs', '/quality/dashboard']) {
       await loginAs(page, 'qc', u);
@@ -202,6 +208,7 @@ test.describe('Permission guards — Quality vs Production boundary', () => {
 
 test.describe('Permission guards — Accounting boundaries', () => {
   test('finance can view journal entries, coa, invoices, bills', async ({ page }) => {
+    test.setTimeout(60_000);
     const bp = new BasePage(page);
     for (const u of ['/accounting/journal-entries', '/accounting/coa', '/accounting/invoices', '/accounting/bills']) {
       await loginAs(page, 'finance', u);
@@ -258,6 +265,7 @@ test.describe('Permission guards — Dashboard segregation', () => {
 
 test.describe('Permission guards — department_head boundaries', () => {
   test('depthead can view HR leaves, attendance, self-service', async ({ page }) => {
+    test.setTimeout(60_000);
     const bp = new BasePage(page);
     for (const u of ['/hr/leaves', '/hr/attendance', '/self-service/profile']) {
       await loginAs(page, 'depthead', u);

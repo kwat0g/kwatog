@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -10,6 +10,7 @@ import toast from 'react-hot-toast';
 import { approvedSuppliersApi } from '@/api/purchasing/approved-suppliers';
 import { itemsApi } from '@/api/inventory/items';
 import { vendorsApi } from '@/api/accounting/vendors';
+import { businessPoliciesApi } from '@/api/businessPolicies';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
@@ -192,11 +193,18 @@ function ApprovedSupplierForm({ onClose, onSaved }: { onClose: () => void; onSav
     queryKey: ['accounting', 'vendors', { per_page: 200, is_active: 'true' }],
     queryFn: () => vendorsApi.list({ per_page: 200, is_active: 'true' }),
   });
+  const policies = useQuery({ queryKey: ['business-policies'], queryFn: businessPoliciesApi.get });
 
-  const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const { register, handleSubmit, setError, setValue, formState: { errors, isSubmitting, dirtyFields } } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { is_preferred: false, lead_time_days: 14, last_price: '' },
+    defaultValues: { is_preferred: false, last_price: '' },
   });
+
+  useEffect(() => {
+    if (policies.data && !dirtyFields.lead_time_days) {
+      setValue('lead_time_days', policies.data.mrp_default_lead_time_days);
+    }
+  }, [dirtyFields.lead_time_days, policies.data, setValue]);
 
   const m = useMutation({
     mutationFn: (d: FormValues) => approvedSuppliersApi.create({
@@ -249,7 +257,7 @@ function ApprovedSupplierForm({ onClose, onSaved }: { onClose: () => void; onSav
       </div>
       <div className="flex justify-end gap-2 pt-3 mt-4 border-t border-default">
         <Button type="button" variant="secondary" onClick={onClose} disabled={m.isPending}>Cancel</Button>
-        <Button type="submit" variant="primary" loading={m.isPending} disabled={m.isPending || isSubmitting}>
+        <Button type="submit" variant="primary" loading={m.isPending || policies.isLoading} disabled={m.isPending || isSubmitting || !policies.data}>
           Add
         </Button>
       </div>

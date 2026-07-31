@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Inventory\Models\ItemCategory;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 class ItemCategoryService
 {
@@ -53,10 +53,10 @@ class ItemCategoryService
     public function delete(ItemCategory $cat): void
     {
         if ($cat->children()->exists()) {
-            throw new RuntimeException('Cannot delete a category with sub-categories.');
+            throw new BusinessRuleException('Cannot delete a category with sub-categories.');
         }
         if ($cat->items()->exists()) {
-            throw new RuntimeException('Cannot delete a category with items.');
+            throw new BusinessRuleException('Cannot delete a category with items.');
         }
         $cat->delete();
     }

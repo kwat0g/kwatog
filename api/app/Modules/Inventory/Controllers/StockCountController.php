@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Controllers;
 
+use App\Common\Support\HashIdFilter;
+use App\Modules\Inventory\Models\StockCountItem;
+use App\Modules\Inventory\Models\StockCountSession;
+use App\Modules\Inventory\Models\Warehouse;
+use App\Modules\Inventory\Models\WarehouseZone;
 use App\Modules\Inventory\Resources\StockCountItemResource;
 use App\Modules\Inventory\Resources\StockCountSessionResource;
 use App\Modules\Inventory\Services\StockCountService;
@@ -16,23 +21,46 @@ class StockCountController
 {
     public function __construct(private readonly StockCountService $service) {}
 
+    /**
+     * Route params here are plain `{id}`, not model-bound, so nothing decodes
+     * the hash for us. Type-hinting `int $id` made every hash a TypeError (500);
+     * these resolve the hash the same way route-model binding would, 404ing on
+     * an unknown or malformed one.
+     */
+    private function sessionId(string $id): int
+    {
+        return HashIdFilter::decode($id, StockCountSession::class) ?? abort(404);
+    }
+
+    private function itemId(string $id): int
+    {
+        return HashIdFilter::decode($id, StockCountItem::class) ?? abort(404);
+    }
+
     public function index(): AnonymousResourceCollection
     {
         return StockCountSessionResource::collection($this->service->listSessions());
     }
 
-    public function show(int $id): StockCountSessionResource
+    public function show(string $id): StockCountSessionResource
     {
-        return new StockCountSessionResource($this->service->getSession($id));
+        return new StockCountSessionResource($this->service->getSession($this->sessionId($id)));
     }
 
     public function store(Request $request): JsonResponse
     {
+        // Decoded before validation: `exists:` compares against a bigint column,
+        // so an undecoded hash reaches Postgres as 22P02 — a 500, not a 422.
+        $request->merge([
+            'warehouse_id' => HashIdFilter::decode($request->input('warehouse_id'), Warehouse::class),
+            'zone_id'      => HashIdFilter::decode($request->input('zone_id'), WarehouseZone::class),
+        ]);
+
         $data = $request->validate([
             'title'        => 'required|string|max:200',
             'scope'        => 'required|in:full,warehouse,zone',
-            'warehouse_id' => 'nullable|exists:warehouses,id',
-            'zone_id'      => 'nullable|exists:warehouse_zones,id',
+            'warehouse_id' => 'nullable|integer|exists:warehouses,id',
+            'zone_id'      => 'nullable|integer|exists:warehouse_zones,id',
         ]);
 
         try {
@@ -45,18 +73,24 @@ class StockCountController
             ->response()->setStatusCode(201);
     }
 
-    public function start(int $id, Request $request): StockCountSessionResource
+    public function start(string $id, Request $request): StockCountSessionResource
     {
+        // Resolved outside the try: abort(404) raises NotFoundHttpException, which
+        // extends RuntimeException, so an unknown id would be rewritten as a 422.
+        $sessionId = $this->sessionId($id);
+
         try {
-            $session = $this->service->startSession($id, $request->user());
+            $session = $this->service->startSession($sessionId, $request->user());
         } catch (RuntimeException $e) {
             abort(422, $e->getMessage());
         }
         return new StockCountSessionResource($session);
     }
 
-    public function recordCount(int $id, Request $request): StockCountItemResource
+    public function recordCount(string $id, Request $request): StockCountItemResource
     {
+        $itemId = $this->itemId($id);
+
         $data = $request->validate([
             'counted_quantity' => 'required|numeric|min:0',
             'lot_number'       => 'nullable|string|max:50',
@@ -64,37 +98,43 @@ class StockCountController
         ]);
 
         try {
-            $item = $this->service->recordCount($id, $data, $request->user());
+            $item = $this->service->recordCount($itemId, $data, $request->user());
         } catch (RuntimeException $e) {
             abort(422, $e->getMessage());
         }
         return new StockCountItemResource($item);
     }
 
-    public function approveVariance(int $id, Request $request): StockCountItemResource
+    public function approveVariance(string $id, Request $request): StockCountItemResource
     {
+        $itemId = $this->itemId($id);
+
         try {
-            $item = $this->service->approveVariance($id, $request->user());
+            $item = $this->service->approveVariance($itemId, $request->user());
         } catch (RuntimeException $e) {
             abort(422, $e->getMessage());
         }
         return new StockCountItemResource($item);
     }
 
-    public function complete(int $id, Request $request): StockCountSessionResource
+    public function complete(string $id, Request $request): StockCountSessionResource
     {
+        $sessionId = $this->sessionId($id);
+
         try {
-            $session = $this->service->completeSession($id, $request->user());
+            $session = $this->service->completeSession($sessionId, $request->user());
         } catch (RuntimeException $e) {
             abort(422, $e->getMessage());
         }
         return new StockCountSessionResource($session);
     }
 
-    public function cancel(int $id): JsonResponse
+    public function cancel(string $id): JsonResponse
     {
+        $sessionId = $this->sessionId($id);
+
         try {
-            $this->service->cancelSession($id);
+            $this->service->cancelSession($sessionId);
         } catch (RuntimeException $e) {
             abort(422, $e->getMessage());
         }

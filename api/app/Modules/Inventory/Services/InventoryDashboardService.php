@@ -8,12 +8,11 @@ use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\Item;
-use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\StockMovement;
-use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
-use App\Modules\Purchasing\Models\PurchaseRequest;
+use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Purchasing\Models\PurchaseRequest;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
@@ -72,17 +71,17 @@ class InventoryDashboardService
                     ->orderByDesc('id')->first(['id', 'po_number', 'status']);
 
                 $lowStockAlerts[] = [
-                    'item_id'         => $item->id,
-                    'code'            => $item->code,
-                    'name'            => $item->name,
-                    'available'       => number_format($available, 3, '.', ''),
-                    'reorder_point'   => (string) $item->reorder_point,
-                    'safety_stock'    => (string) $item->safety_stock,
-                    'lead_time_days'  => (int) $item->lead_time_days,
-                    'is_critical'     => (bool) $item->is_critical,
-                    'severity'        => $available <= $safety ? 'critical' : 'low',
-                    'open_pr'         => $openPr ? ['number' => $openPr->pr_number, 'status' => $openPr->status?->value] : null,
-                    'open_po'         => $openPo ? ['number' => $openPo->po_number, 'status' => $openPo->status?->value] : null,
+                    'item_id' => $item->hash_id,
+                    'code' => $item->code,
+                    'name' => $item->name,
+                    'available' => number_format($available, 3, '.', ''),
+                    'reorder_point' => (string) $item->reorder_point,
+                    'safety_stock' => (string) $item->safety_stock,
+                    'lead_time_days' => (int) $item->lead_time_days,
+                    'is_critical' => (bool) $item->is_critical,
+                    'severity' => $available <= $safety ? 'critical' : 'low',
+                    'open_pr' => $openPr ? ['number' => $openPr->pr_number, 'status' => $openPr->status?->value] : null,
+                    'open_po' => $openPo ? ['number' => $openPo->po_number, 'status' => $openPo->status?->value] : null,
                 ];
             }
         }
@@ -91,6 +90,7 @@ class InventoryDashboardService
         usort($lowStockAlerts, function ($a, $b) {
             $da = (float) $a['available'] - (float) $a['safety_stock'];
             $db = (float) $b['available'] - (float) $b['safety_stock'];
+
             return $da <=> $db;
         });
         $lowStockAlerts = array_slice($lowStockAlerts, 0, 10);
@@ -117,23 +117,30 @@ class InventoryDashboardService
             ->limit(10)->get();
 
         return [
-            'total_stock_value'      => number_format($totalStockValue, 2, '.', ''),
-            'items_below_reorder'    => $belowReorder,
-            'items_critical'         => $critical,
-            'pending_grns'           => $pendingGrns,
-            'low_stock_alerts'       => $lowStockAlerts,
-            'recent_movements'       => $recentMovements->map(fn ($m) => [
-                'id'             => $m->hash_id,
-                'created_at'     => $m->created_at?->toIso8601String(),
-                'movement_type'  => $m->movement_type?->value,
-                'item'           => $m->item ? ['code' => $m->item->code, 'name' => $m->item->name] : null,
-                'quantity'       => (string) $m->quantity,
-                'unit_cost'      => (string) $m->unit_cost,
-                'total_cost'     => (string) $m->total_cost,
-                'from_location'  => $m->fromLocation?->code,
-                'to_location'    => $m->toLocation?->code,
+            'total_stock_value' => number_format($totalStockValue, 2, '.', ''),
+            'items_below_reorder' => $belowReorder,
+            'items_critical' => $critical,
+            'pending_grns' => $pendingGrns,
+            'low_stock_alerts' => $lowStockAlerts,
+            'recent_movements' => $recentMovements->map(fn ($m) => [
+                'id' => $m->hash_id,
+                'created_at' => $m->created_at?->toIso8601String(),
+                'movement_type' => $m->movement_type?->value,
+                'item' => $m->item ? ['code' => $m->item->code, 'name' => $m->item->name] : null,
+                'quantity' => (string) $m->quantity,
+                'unit_cost' => (string) $m->unit_cost,
+                'total_cost' => (string) $m->total_cost,
+                'from_location' => $m->fromLocation?->code,
+                'to_location' => $m->toLocation?->code,
             ])->all(),
-            'top_consumed_materials' => $topConsumed,
+            'top_consumed_materials' => $topConsumed->map(fn ($item) => [
+                'id' => app('hashids')->encode((int) $item->id),
+                'code' => $item->code,
+                'name' => $item->name,
+                'unit_of_measure' => $item->unit_of_measure,
+                'qty' => (string) $item->qty,
+                'total_value' => (string) $item->total_value,
+            ])->all(),
         ];
     }
 }

@@ -106,7 +106,7 @@ export function DemandForecastPanel({
       <div className="space-y-3">
         {entries.map(({ product, forecasts: prods }) => {
           const totalQty = prods.reduce((s, f) => s + f.forecasted_quantity, 0);
-          const withActual = prods.filter((f) => f.actual_quantity != null);
+          const withActual = prods.filter((f) => f.actual_quantity != null && f.forecasted_quantity !== 0);
           const avgVariance = withActual.length > 0
             ? withActual.reduce((s, f) => s + ((f.actual_quantity! - f.forecasted_quantity) / f.forecasted_quantity), 0) / withActual.length * 100
             : null;
@@ -115,9 +115,9 @@ export function DemandForecastPanel({
             <div key={product.id} className="border border-default rounded-md p-3">
               <div className="flex items-center justify-between mb-2">
                 <Link
-                  to={`/inventory/items/${product.part_number}`}
+                  to={`/crm/products/${product.id}`}
                   className="text-sm font-medium text-accent hover:underline truncate"
-                  aria-label={`View item ${product.part_number} ${product.name}`}
+                  aria-label={`View product ${product.part_number} ${product.name}`}
                 >
                   {product.part_number}
                 </Link>
@@ -136,7 +136,7 @@ export function DemandForecastPanel({
                   const isOver = hasActual && f.variance != null && f.variance > 0;
                   return (
                     <div
-                      key={`${f.forecast_year}-${f.forecast_month}`}
+                      key={f.id}
                       className="flex-1 relative group"
                       title={`${new Date(f.forecast_year, f.forecast_month - 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}: Forecast ${f.forecasted_quantity}${hasActual ? ` · Actual ${f.actual_quantity} (${f.variance != null ? (f.variance > 0 ? '+' : '') + f.variance.toFixed(0) : '?'})` : ''}`}
                     >

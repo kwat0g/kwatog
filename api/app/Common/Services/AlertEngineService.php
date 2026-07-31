@@ -37,11 +37,7 @@ use Illuminate\Support\Facades\Notification;
  */
 class AlertEngineService
 {
-    private const DEDUP_WINDOW_HOURS = 24;
-
-    private const OEE_THRESHOLD = 0.75;
-
-    private const OEE_DAYS = 3;
+    public function __construct(private readonly SettingsService $settings) {}
 
     /**
      * Idempotent alert creation. Returns the existing record if a recent
@@ -58,7 +54,7 @@ class AlertEngineService
         $query = Alert::query()
             ->where('type', $type->value)
             ->where('is_dismissed', false)
-            ->where('created_at', '>=', now()->subHours(self::DEDUP_WINDOW_HOURS));
+            ->where('created_at', '>=', now()->subHours($this->positiveIntSetting('alerts.dedup_window_hours')));
 
         if ($entity) {
             $query->where('entity_type', $entity::class)
@@ -207,6 +203,11 @@ class AlertEngineService
 
     private function checkProduction(): void
     {
+        $moldWarningRatio = $this->ratioSetting('alerts.mold.warning_ratio');
+        $moldCriticalRatio = $this->ratioSetting('alerts.mold.critical_ratio');
+        if ($moldWarningRatio >= $moldCriticalRatio) {
+            throw new \App\Common\Exceptions\BusinessRuleException('Mold warning ratio must be lower than its critical ratio.');
+        }
         // Machine breakdowns
         Machine::where('status', 'breakdown')->get()->each(function (Machine $m) {
             $this->raise(
@@ -224,12 +225,12 @@ class AlertEngineService
             ->whereNotNull('max_shots_before_maintenance')
             ->where('max_shots_before_maintenance', '>', 0)
             ->get()
-            ->each(function (Mold $mold) {
+            ->each(function (Mold $mold) use ($moldWarningRatio, $moldCriticalRatio) {
                 $max = (int) $mold->max_shots_before_maintenance;
                 $cur = (int) $mold->current_shot_count;
                 $pct = $max > 0 ? ($cur / $max) : 0;
 
-                if ($pct >= 0.95) {
+                if ($pct >= $moldCriticalRatio) {
                     $this->raise(
                         AlertType::MoldShotCritical,
                         AlertSeverity::Critical,
@@ -238,7 +239,7 @@ class AlertEngineService
                         $mold,
                         ['shot_count' => $cur, 'max_shots' => $max, 'percent' => round($pct * 100, 2)],
                     );
-                } elseif ($pct >= 0.80) {
+                } elseif ($pct >= $moldWarningRatio) {
                     $this->raise(
                         AlertType::MoldShotLimit,
                         AlertSeverity::Warning,
@@ -271,7 +272,10 @@ class AlertEngineService
         // OEE below 75% for 3+ consecutive days. Using a simple proxy:
         // for each machine, compute (good_count / max(1, good+reject)) over
         // the last 3 days from work_order_outputs. If < 0.75, raise.
-        $cutoff = now()->subDays(self::OEE_DAYS)->toDateString();
+        $oeeDays = $this->positiveIntSetting('alerts.oee.lookback_days');
+        $minimumOutput = $this->positiveIntSetting('alerts.oee.minimum_output_count');
+        $oeeThreshold = $this->ratioSetting('alerts.oee.quality_rate_threshold');
+        $cutoff = now()->subDays($oeeDays)->toDateString();
         $rows = DB::table('work_order_outputs as wo')
             ->join('work_orders as w', 'w.id', '=', 'wo.work_order_id')
             ->whereNotNull('w.machine_id')
@@ -286,18 +290,18 @@ class AlertEngineService
 
         foreach ($rows as $row) {
             $total = (int) ($row->good + $row->reject);
-            if ($total < 100) {
+            if ($total < $minimumOutput) {
                 continue;
             } // not enough data
             $quality = $row->good / max(1, $total);
-            if ($quality < self::OEE_THRESHOLD) {
+            if ($quality < $oeeThreshold) {
                 $machine = Machine::find($row->machine_id);
                 if ($machine) {
                     $this->raise(
                         AlertType::OeeBelowThreshold,
                         AlertSeverity::Warning,
                         "OEE below threshold: {$machine->machine_code}",
-                        "{$machine->name} quality rate is ".round($quality * 100, 1).'% over the last '.self::OEE_DAYS.' days.',
+                        "{$machine->name} quality rate is ".round($quality * 100, 1)."% over the last {$oeeDays} days.",
                         $machine,
                         ['quality' => round($quality, 4), 'good' => (int) $row->good, 'reject' => (int) $row->reject],
                     );
@@ -311,22 +315,28 @@ class AlertEngineService
     private function checkFinance(): void
     {
         $today = Carbon::today();
+        $warningDays = $this->positiveIntSetting('alerts.ar.warning_overdue_days');
+        $criticalDays = $this->positiveIntSetting('alerts.ar.critical_overdue_days');
+        $apDueSoonDays = $this->nonNegativeIntSetting('alerts.ap.due_soon_days');
+        if ($warningDays >= $criticalDays) {
+            throw new \App\Common\Exceptions\BusinessRuleException('AR warning days must be lower than AR critical days.');
+        }
 
         // AR overdue 30 / 60
         DB::table('invoices')
             ->whereIn('status', ['unpaid', 'partial', 'finalized'])
             ->whereNotNull('due_date')
-            ->where('due_date', '<', $today->copy()->subDays(30))
+            ->where('due_date', '<', $today->copy()->subDays($warningDays))
             ->select('id', 'invoice_number', 'due_date', 'balance', 'customer_id')
             ->get()
-            ->each(function ($row) use ($today) {
+            ->each(function ($row) use ($today, $criticalDays) {
                 $invoice = Invoice::find($row->id);
                 if (! $invoice) {
                     return;
                 }
 
                 $daysOver = $today->diffInDays(Carbon::parse($row->due_date));
-                if ($daysOver >= 60) {
+                if ($daysOver >= $criticalDays) {
                     $this->raise(
                         AlertType::ArOverdue60,
                         AlertSeverity::Critical,
@@ -350,10 +360,10 @@ class AlertEngineService
         // AP due in 3 days
         DB::table('bills')
             ->whereIn('status', ['unpaid', 'partial'])
-            ->whereDate('due_date', $today->copy()->addDays(3))
+            ->whereDate('due_date', $today->copy()->addDays($apDueSoonDays))
             ->select('id', 'bill_number', 'due_date', 'balance', 'vendor_id')
             ->get()
-            ->each(function ($row) {
+            ->each(function ($row) use ($apDueSoonDays) {
                 $bill = Bill::find($row->id);
                 if (! $bill) {
                     return;
@@ -362,7 +372,7 @@ class AlertEngineService
                     AlertType::ApDueSoon,
                     AlertSeverity::Info,
                     "Bill due soon: {$row->bill_number}",
-                    "Bill {$row->bill_number} is due in 3 days ({$row->due_date}). Balance ₱".number_format((float) $row->balance, 2).'.',
+                    "Bill {$row->bill_number} is due in {$apDueSoonDays} days ({$row->due_date}). Balance ₱".number_format((float) $row->balance, 2).'.',
                     $bill,
                     ['due_date' => $row->due_date, 'balance' => (float) $row->balance],
                 );
@@ -373,10 +383,13 @@ class AlertEngineService
 
     private function checkQuality(): void
     {
+        $lookbackHours = $this->positiveIntSetting('alerts.quality.lookback_hours');
+        $minimumOutput = $this->positiveIntSetting('alerts.quality.minimum_output_count');
+        $scrapThreshold = $this->ratioSetting('alerts.quality.scrap_rate_threshold');
         // Daily scrap rate > 5% per product over last 24h
         $rows = DB::table('work_order_outputs as wo')
             ->join('work_orders as w', 'w.id', '=', 'wo.work_order_id')
-            ->where('wo.recorded_at', '>=', now()->subDay())
+            ->where('wo.recorded_at', '>=', now()->subHours($lookbackHours))
             ->groupBy('w.product_id')
             ->select(
                 'w.product_id',
@@ -387,18 +400,18 @@ class AlertEngineService
 
         foreach ($rows as $row) {
             $total = (int) ($row->good + $row->reject);
-            if ($total < 100) {
+            if ($total < $minimumOutput) {
                 continue;
             }
             $scrap = $row->reject / max(1, $total);
-            if ($scrap > 0.05) {
+            if ($scrap > $scrapThreshold) {
                 $product = Product::find($row->product_id);
                 if ($product) {
                     $this->raise(
                         AlertType::QcFailRateHigh,
                         AlertSeverity::Warning,
                         "High scrap rate: {$product->part_number}",
-                        "{$product->name} scrap rate is ".round($scrap * 100, 2)."% over the last 24 hours ({$row->reject} rejected of {$total}).",
+                        "{$product->name} scrap rate is ".round($scrap * 100, 2)."% over the last {$lookbackHours} hours ({$row->reject} rejected of {$total}).",
                         $product,
                         ['scrap_rate' => round($scrap, 4), 'good' => (int) $row->good, 'reject' => (int) $row->reject],
                     );
@@ -439,5 +452,32 @@ class AlertEngineService
         } catch (\Throwable $e) {
             Log::warning('AlertEngine: critical email failed', ['error' => $e->getMessage(), 'alert_id' => $alert->id]);
         }
+    }
+
+    private function positiveIntSetting(string $key): int
+    {
+        $value = $this->settings->get($key);
+        if (! is_numeric($value) || (int) $value <= 0) {
+            throw new \App\Common\Exceptions\BusinessRuleException("Required business setting {$key} is missing or invalid.");
+        }
+        return (int) $value;
+    }
+
+    private function nonNegativeIntSetting(string $key): int
+    {
+        $value = $this->settings->get($key);
+        if (! is_numeric($value) || (int) $value < 0) {
+            throw new \App\Common\Exceptions\BusinessRuleException("Required business setting {$key} is missing or invalid.");
+        }
+        return (int) $value;
+    }
+
+    private function ratioSetting(string $key): float
+    {
+        $value = $this->settings->get($key);
+        if (! is_numeric($value) || (float) $value < 0 || (float) $value > 1) {
+            throw new \App\Common\Exceptions\BusinessRuleException("Required business setting {$key} is missing or invalid.");
+        }
+        return (float) $value;
     }
 }

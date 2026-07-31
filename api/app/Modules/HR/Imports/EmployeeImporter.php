@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Imports;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\Import\EntityImporter;
 use App\Modules\HR\Enums\CivilStatus;
@@ -152,12 +153,12 @@ class EmployeeImporter implements EntityImporter
     {
         $value = trim($value);
         if ($value === '') {
-            throw new RuntimeException("{$field} is required.");
+            throw new BusinessRuleException("{$field} is required.");
         }
         try {
             return Carbon::parse($value)->toDateString();
         } catch (\Throwable) {
-            throw new RuntimeException("Invalid {$field} date '{$value}'.");
+            throw new BusinessRuleException("Invalid {$field} date '{$value}'.");
         }
     }
 }

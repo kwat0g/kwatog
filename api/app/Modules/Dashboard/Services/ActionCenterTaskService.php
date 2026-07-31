@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Dashboard\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Models\Alert;
 use App\Modules\Auth\Models\User;
 use App\Modules\Dashboard\Models\ActionCenterTask;
@@ -17,7 +18,7 @@ class ActionCenterTaskService
     {
         $keys = array_values(array_unique($itemKeys));
         if (count($keys) > 100) {
-            throw new RuntimeException('A bulk action is limited to 100 records.');
+            throw new BusinessRuleException('A bulk action is limited to 100 records.');
         }
 
         $results = DB::transaction(function () use ($keys, $action, $user, $snoozedUntil, $notes): array {
@@ -35,7 +36,7 @@ class ActionCenterTaskService
                     'snooze' => $task->fill(['state' => 'snoozed', 'snoozed_until' => $snoozedUntil]),
                     'resolve' => $task->fill(['state' => 'resolved', 'snoozed_until' => null]),
                     'reopen' => $task->fill(['state' => 'open', 'snoozed_until' => null]),
-                    default => throw new RuntimeException('Unsupported action-center task action.'),
+                    default => throw new BusinessRuleException('Unsupported action-center task action.'),
                 };
                 $task->notes = $notes ?? $task->notes;
                 $task->updated_by = $user->id;

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Common\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Enums\DocumentType;
 use App\Common\Models\Document;
 use App\Modules\Auth\Models\User;
@@ -46,7 +47,7 @@ class DocumentVaultService
         ?bool $confidential = null,
     ): Document {
         if ($bytes === '') {
-            throw new RuntimeException('Refusing to store an empty document.');
+            throw new BusinessRuleException('Refusing to store an empty document.');
         }
 
         $confidential ??= $type->isConfidential();
@@ -62,7 +63,7 @@ class DocumentVaultService
         $path = sprintf('documents/%s/%s', $type->value, $filename);
 
         if (! Storage::disk(self::DISK)->put($path, $bytes)) {
-            throw new RuntimeException('Unable to store document bytes.');
+            throw new BusinessRuleException('Unable to store document bytes.');
         }
 
         try {
@@ -200,8 +201,14 @@ class DocumentVaultService
 
     private function stream(Document $doc, string $disposition): StreamedResponse
     {
-        $bytes = $this->readBytes($doc);
-
+        // A vault row whose blob has been pruned/lost is a missing resource,
+        // not a server fault — let readBytes() keep throwing for the mail
+        // attachment path, but answer HTTP callers with a 404.
+        try {
+            $bytes = $this->readBytes($doc);
+        } catch (RuntimeException) {
+            abort(404, 'This document is no longer available.');
+        }
         $headers = [
             'Content-Type' => $doc->mime_type ?: 'application/pdf',
             'Content-Length' => (string) strlen($bytes),

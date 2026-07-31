@@ -37,6 +37,7 @@ interface OutgoingItem {
 }
 
 interface LowStockItem {
+  item_id: string;
   item_code: string;
   item_name: string;
   current_stock: string;
@@ -156,7 +157,7 @@ function LowStockAlertsPanel({ items }: { items: LowStockItem[] }) {
             <tr key={s.item_code} className={trCls}>
               <Td>
                 <Link
-                  to={`/inventory/items/${s.item_code}`}
+                  to={`/inventory/items/${s.item_id}`}
                   className="text-link hover:underline font-mono text-xs"
                   aria-label={`View item ${s.item_code} - ${s.item_name}`}
                 >

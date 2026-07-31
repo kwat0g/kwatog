@@ -116,12 +116,38 @@ export interface PortalInvoiceDetail extends PortalInvoiceSummary {
     description: string;
     quantity: number;
     unit_price: string;
-    total_price: string;
+    total: string;
+  }>;
+  collections: Array<{
+    id: string;
+    amount: string;
+    collection_date: string | null;
+    payment_method: string;
+  }>;
+}
+
+export interface SupplierBillSummary {
+  id: string;
+  bill_number: string;
+  date: string | null;
+  total_amount: string;
+  balance: string;
+  status: string;
+  due_date: string | null;
+}
+
+export interface SupplierBillDetail extends SupplierBillSummary {
+  items: Array<{
+    id: string;
+    description: string;
+    quantity: string;
+    unit_price: string;
+    total: string;
   }>;
   payments: Array<{
     id: string;
     amount: string;
-    paid_at: string | null;
+    payment_date: string | null;
     payment_method: string;
   }>;
 }
@@ -233,17 +259,26 @@ export interface EightDReportData {
 // ── Statement of Account ─────────────────────────────
 
 export interface StatementOfAccount {
-  customer_name: string | null;
+  customer: { id: string; name: string; code: string };
+  as_of: string;
+  currency: string;
+  opening_balance: string;
+  closing_balance: string;
   total_outstanding: string;
-  aging_buckets: {
+  aging: {
     current: string;
-    d1_30: string;
-    d31_60: string;
-    d61_90: string;
-    d91_plus: string;
+    d30_days: string;
+    d60_days: string;
+    d90_plus: string;
   };
-  open_invoices: PortalInvoiceSummary[];
-  as_of_date: string;
+  transactions: Array<{
+    date: string;
+    type: 'invoice' | 'payment' | string;
+    reference: string;
+    description: string;
+    amount: string;
+    running_balance: string;
+  }>;
 }
 
 // ── Delivery Schedule ────────────────────────────────
@@ -299,7 +334,7 @@ export interface SupplierDashboardData {
   unpaid_invoice_count: number;
   total_unpaid_amount: string;
   recent_pos: PortalPoSummary[];
-  recent_invoices: PortalInvoiceSummary[];
+  recent_invoices: SupplierBillSummary[];
 }
 
 // ── Customer portal dashboard ─────────────────────────

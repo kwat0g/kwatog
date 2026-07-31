@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\BusinessPolicyService;
 use App\Common\Support\SearchOperator;
 
 use App\Modules\Accounting\Enums\InvoiceStatus;
@@ -11,10 +13,11 @@ use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 class CustomerService
 {
+    public function __construct(private readonly BusinessPolicyService $policies) {}
+
     public function list(array $filters): LengthAwarePaginator
     {
         $q = Customer::query();
@@ -49,6 +52,7 @@ class CustomerService
 
     public function create(array $data): Customer
     {
+        $data['payment_terms_days'] ??= $this->policies->customerPaymentTermsDays();
         return DB::transaction(fn () => Customer::create($data));
     }
 
@@ -63,7 +67,7 @@ class CustomerService
     public function delete(Customer $customer): void
     {
         if ($customer->invoices()->exists()) {
-            throw new RuntimeException('Cannot delete a customer with invoices. Deactivate instead.');
+            throw new BusinessRuleException('Cannot delete a customer with invoices. Deactivate instead.');
         }
         $customer->delete();
     }

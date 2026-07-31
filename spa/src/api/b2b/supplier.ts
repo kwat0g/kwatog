@@ -4,8 +4,8 @@ import type {
   SupplierDashboardData,
   PortalPoSummary,
   PortalPoDetail,
-  PortalInvoiceSummary,
-  PortalInvoiceDetail,
+  SupplierBillSummary,
+  SupplierBillDetail,
   PortalDeliverySummary,
   PortalShippingDocument,
   SubmittedBill,
@@ -13,7 +13,7 @@ import type {
   DeliverySchedule,
 } from '@/types/b2b';
 
-const { client: portalClient, setToken } = createPortalClient();
+const { client: portalClient, setToken } = createPortalClient('ogami_supplier_portal_token');
 
 type SupplierLoginResponse = {
   token: string;
@@ -72,12 +72,12 @@ export const supplierPortalApi = {
 
   // ── Invoices ───────────────────────────────────────
   listInvoices: async (params?: { status?: string; page?: number }) => {
-    const { data } = await portalClient.get<{ data: PortalInvoiceSummary[] }>('/b2b/supplier/invoices', { params });
+    const { data } = await portalClient.get<{ data: SupplierBillSummary[] }>('/b2b/supplier/invoices', { params });
     return data.data;
   },
 
   getInvoice: async (id: string) => {
-    const { data } = await portalClient.get<{ data: PortalInvoiceDetail }>(`/b2b/supplier/invoices/${id}`);
+    const { data } = await portalClient.get<{ data: SupplierBillDetail }>(`/b2b/supplier/invoices/${id}`);
     return data.data;
   },
 

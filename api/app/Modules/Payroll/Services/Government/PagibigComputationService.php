@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Payroll\Services\Government;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Payroll\Enums\ContributionAgency;
 use App\Modules\Payroll\Services\GovernmentContributionTableService;
 use Illuminate\Support\Carbon;
@@ -19,9 +20,10 @@ use Illuminate\Support\Carbon;
  */
 class PagibigComputationService
 {
-    private const CEILING = '10000.00';
-
-    public function __construct(private readonly GovernmentContributionTableService $tables) {}
+    public function __construct(
+        private readonly GovernmentContributionTableService $tables,
+        private readonly SettingsService $settings,
+    ) {}
 
     /**
      * @return array{ee: string, er: string}
@@ -34,7 +36,12 @@ class PagibigComputationService
         }
 
         // Cap salary at the project ceiling.
-        $basis = bccomp($salary, self::CEILING, 2) > 0 ? self::CEILING : $salary;
+        $ceilingValue = $this->settings->get('payroll.pagibig.compensation_ceiling');
+        if (! is_numeric($ceilingValue) || (float) $ceilingValue <= 0) {
+            throw new \App\Common\Exceptions\BusinessRuleException('Required payroll setting payroll.pagibig.compensation_ceiling is missing or invalid.');
+        }
+        $ceiling = (string) $ceilingValue;
+        $basis = bccomp($salary, $ceiling, 2) > 0 ? $ceiling : $salary;
 
         $brackets = $this->tables->bracketsEffectiveOn(ContributionAgency::Pagibig, $effectiveDate ?? now());
         foreach ($brackets as $row) {

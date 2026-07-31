@@ -137,7 +137,7 @@ test.describe('Finance Dashboard — Revenue Forecast Panel', () => {
 
   test('shows error state when API fails', async ({ page }) => {
     await setupDashboard(page, API_URL, USERS.finance, {}, { status: 500 });
-    await expect(page.getByText(/Failed to load finance dashboard/)).toBeVisible();
+    await expect(page.getByRole('heading', { name: "Can't load this dashboard" })).toBeVisible();
   });
 
   test('shows loading skeleton during fetch', async ({ page }) => {

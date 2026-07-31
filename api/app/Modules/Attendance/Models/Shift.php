@@ -16,13 +16,14 @@ class Shift extends Model
 
     protected $fillable = [
         'name', 'start_time', 'end_time', 'break_minutes', 'grace_minutes',
-        'is_night_shift', 'is_extended', 'auto_ot_hours', 'is_active',
+        'is_night_shift', 'is_extended', 'auto_ot_hours', 'is_active', 'is_default',
     ];
 
     protected $casts = [
         'is_night_shift' => 'boolean',
         'is_extended'    => 'boolean',
         'is_active'      => 'boolean',
+        'is_default'     => 'boolean',
         'auto_ot_hours'  => 'decimal:1',
         'break_minutes'  => 'integer',
         'grace_minutes'  => 'integer',

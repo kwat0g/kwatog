@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Common\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Response;
-use RuntimeException;
 
 /**
  * Sprint 8 — Task 76. Renders a list of homogenous documents into one PDF.
@@ -46,12 +46,12 @@ class BulkPdfService
     public function render(string $type, iterable $payloads): Response
     {
         if (! isset(self::RENDERERS[$type])) {
-            throw new RuntimeException("Unsupported bulk document type: {$type}");
+            throw new BusinessRuleException("Unsupported bulk document type: {$type}");
         }
         $view = self::RENDERERS[$type];
         $payloadsArr = is_array($payloads) ? $payloads : iterator_to_array($payloads);
         if (! count($payloadsArr)) {
-            throw new RuntimeException('No documents to render.');
+            throw new BusinessRuleException('No documents to render.');
         }
 
         $pdf = Pdf::loadView('pdf._bulk', [

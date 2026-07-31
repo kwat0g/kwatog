@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Controllers;
 
+use App\Modules\HR\Enums\ApplicationStage;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\JobApplication;
-use App\Modules\HR\Enums\ApplicationStage;
 use App\Modules\HR\Requests\SeparateEmployeeRequest;
 use App\Modules\HR\Requests\StoreEmployeeRequest;
 use App\Modules\HR\Requests\UpdateEmployeeRequest;
@@ -31,11 +31,13 @@ class EmployeeController
      *     summary="List employees",
      *     description="Returns a paginated list of employees. Filterable by status, department, and search term.",
      *     security={{"sanctum":{}}},
+     *
      *     @OA\Parameter(name="page", in="query", required=false, @OA\Schema(type="integer")),
      *     @OA\Parameter(name="per_page", in="query", required=false, @OA\Schema(type="integer", default=15)),
      *     @OA\Parameter(name="status", in="query", required=false, @OA\Schema(type="string", enum={"active","on_leave","resigned","terminated"})),
      *     @OA\Parameter(name="department_id", in="query", required=false, @OA\Schema(type="string"), description="Department hash ID"),
      *     @OA\Parameter(name="search", in="query", required=false, @OA\Schema(type="string"), description="Search by name or employee number"),
+     *
      *     @OA\Response(response=200, description="Paginated employee list"),
      *     @OA\Response(response=401, description="Unauthenticated"),
      *     @OA\Response(response=403, description="Unauthorized")
@@ -53,10 +55,13 @@ class EmployeeController
      *     summary="Create a new employee",
      *     description="Creates an employee record with auto-generated employee number (OGM-YYYY-NNNN format).",
      *     security={{"sanctum":{}}},
+     *
      *     @OA\RequestBody(
      *         required=true,
+     *
      *         @OA\JsonContent(
      *             required={"first_name", "last_name", "department_id", "position_id", "date_hired"},
+     *
      *             @OA\Property(property="first_name", type="string", maxLength=100),
      *             @OA\Property(property="last_name", type="string", maxLength=100),
      *             @OA\Property(property="department_id", type="string", description="Department hash ID"),
@@ -66,6 +71,7 @@ class EmployeeController
      *             @OA\Property(property="from_application", type="string", description="Job application hash ID to link (optional)")
      *         )
      *     ),
+     *
      *     @OA\Response(response=201, description="Employee created"),
      *     @OA\Response(response=422, description="Validation error"),
      *     @OA\Response(response=403, description="Unauthorized")
@@ -81,7 +87,7 @@ class EmployeeController
 
         if ($fromApplication) {
             $decoded = app('hashids')->decode($fromApplication);
-            if (!empty($decoded)) {
+            if (! empty($decoded)) {
                 $application = JobApplication::find($decoded[0]);
                 if ($application && $application->stage === ApplicationStage::Hired) {
                     $this->recruitmentService->markConverted($application, $employee);
@@ -99,15 +105,17 @@ class EmployeeController
      *     summary="Show employee detail",
      *     description="Returns full employee details including department, position, and related records.",
      *     security={{"sanctum":{}}},
+     *
      *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="string"), description="Employee hash ID"),
+     *
      *     @OA\Response(response=200, description="Employee detail"),
      *     @OA\Response(response=401, description="Unauthenticated"),
      *     @OA\Response(response=404, description="Employee not found")
      * )
      */
-    public function show(Employee $employee): EmployeeResource
+    public function show(Request $request, Employee $employee): EmployeeResource
     {
-        return new EmployeeResource($this->service->show($employee));
+        return new EmployeeResource($this->service->show($employee, $request->user()));
     }
 
     /**
@@ -116,14 +124,18 @@ class EmployeeController
      *     tags={"Employees"},
      *     summary="Update an employee",
      *     security={{"sanctum":{}}},
+     *
      *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="string"), description="Employee hash ID"),
+     *
      *     @OA\RequestBody(required=true, @OA\JsonContent(
+     *
      *         @OA\Property(property="first_name", type="string", maxLength=100),
      *         @OA\Property(property="last_name", type="string", maxLength=100),
      *         @OA\Property(property="department_id", type="string"),
      *         @OA\Property(property="position_id", type="string"),
      *         @OA\Property(property="basic_monthly_salary", type="string", example="28000.00")
      *     )),
+     *
      *     @OA\Response(response=200, description="Employee updated"),
      *     @OA\Response(response=422, description="Validation error"),
      *     @OA\Response(response=404, description="Employee not found")
@@ -137,6 +149,7 @@ class EmployeeController
     public function destroy(Employee $employee): JsonResponse
     {
         $this->service->delete($employee);
+
         return response()->json(null, 204);
     }
 

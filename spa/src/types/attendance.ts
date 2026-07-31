@@ -10,6 +10,7 @@ export interface Shift {
   is_extended: boolean;
   auto_ot_hours: string | null;
   is_active: boolean;
+  is_default: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -23,6 +24,7 @@ export interface CreateShiftData {
   is_extended?: boolean;
   auto_ot_hours?: number | null;
   is_active?: boolean;
+  is_default?: boolean;
 }
 
 export type UpdateShiftData = Partial<CreateShiftData>;

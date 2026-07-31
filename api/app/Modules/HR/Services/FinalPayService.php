@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Services\JournalEntryService;
@@ -11,6 +13,11 @@ use App\Modules\Auth\Models\User;
 use App\Modules\HR\Enums\PayType;
 use App\Modules\HR\Models\Clearance;
 use App\Modules\HR\Models\Employee;
+use App\Modules\Attendance\Models\Attendance;
+use App\Modules\Payroll\Enums\PayrollPeriodStatus;
+use App\Modules\Payroll\Models\Payroll;
+use App\Modules\Payroll\Models\PayrollPeriod;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -30,6 +37,7 @@ class FinalPayService
 {
     public function __construct(
         private readonly JournalEntryService $journals,
+        private readonly SettingsService $settings,
     ) {}
 
     public function compute(Clearance $clearance): Clearance
@@ -37,11 +45,11 @@ class FinalPayService
         return DB::transaction(function () use ($clearance) {
             $clearance->load('employee');
             $employee = $clearance->employee;
-            if (! $employee) throw new RuntimeException('Clearance has no employee.');
+            if (! $employee) throw new BusinessRuleException('Clearance has no employee.');
 
             $lastSalary = $this->lastSalaryProRated($employee, $clearance->separation_date);
             $leaveValue = $this->unusedConvertibleLeaveValue($employee);
-            $thirteenth = $this->proRatedThirteenthMonth($employee);
+            $thirteenth = $this->proRatedThirteenthMonth($employee, $clearance->separation_date);
             $loanBal    = $this->loanBalances($employee);
             $propertyL  = $this->unreturnedPropertyValue($employee);
             $advance    = $this->openCashAdvance($employee);
@@ -134,22 +142,52 @@ class FinalPayService
 
     /* ─── Component helpers ─── */
 
-    private function lastSalaryProRated(Employee $e, $separationDate): float
+    private function lastSalaryProRated(Employee $e, CarbonInterface $separationDate): float
     {
-        // Bug fix: $e->pay_type is a PayType enum (cast in Employee model), not a raw string.
-        // Comparing === 'monthly' / === 'daily' always returned false, making this method
-        // always return 0.0. Use enum cases instead.
-        if ($e->pay_type === PayType::Monthly && $e->basic_monthly_salary !== null) {
-            // Pro-rate by working days into the half-month period.
-            // Simplification: half a monthly salary if separation falls before the 16th,
-            // a full half otherwise. Real implementation goes through DTRComputationService.
-            return (float) $e->basic_monthly_salary / 2;
+        $period = PayrollPeriod::query()
+            ->where('is_thirteenth_month', false)
+            ->whereDate('period_start', '<=', $separationDate->toDateString())
+            ->whereDate('period_end', '>=', $separationDate->toDateString())
+            ->where('status', '!=', PayrollPeriodStatus::Voided->value)
+            ->orderByDesc('period_start')
+            ->first();
+
+        // A disbursed period has already been paid and must never be included
+        // again in final pay.
+        if (! $period || $period->status === PayrollPeriodStatus::Disbursed) {
+            return 0.0;
         }
-        if ($e->pay_type === PayType::Daily && $e->daily_rate !== null) {
-            // Assume 11 working days unbilled.
-            return (float) $e->daily_rate * 11;
+
+        // Prefer the authoritative result of the payroll engine when the open
+        // period has already been computed for this employee.
+        $payroll = Payroll::query()
+            ->where('payroll_period_id', $period->id)
+            ->where('employee_id', $e->id)
+            ->whereNotNull('computed_at')
+            ->first();
+        if ($payroll) {
+            return max(0.0,
+                (float) $payroll->basic_pay
+                + (float) $payroll->leave_pay
+                - (float) $payroll->tardiness_deduction
+                - (float) $payroll->undertime_deduction
+            );
         }
-        return 0.0;
+
+        // Otherwise calculate only from persisted DTR hours in the real
+        // payroll period. Each row contributes at most one eight-hour day;
+        // half-days contribute 0.5. No synthetic attendance is invented.
+        $dayEquivalents = Attendance::query()
+            ->where('employee_id', $e->id)
+            ->whereBetween('date', [$period->period_start, $separationDate])
+            ->get(['regular_hours'])
+            ->sum(fn (Attendance $attendance): float => min(1.0, max(0.0, (float) $attendance->regular_hours / $this->hoursPerDay())));
+
+        $dailyRate = $e->pay_type === PayType::Daily
+            ? (float) ($e->daily_rate ?? 0)
+            : (float) ($e->basic_monthly_salary ?? 0) / $this->workDaysPerMonth();
+
+        return max(0.0, round($dayEquivalents * $dailyRate, 2));
     }
 
     private function unusedConvertibleLeaveValue(Employee $e): float
@@ -167,24 +205,53 @@ class FinalPayService
             $days = 0.0;
         }
 
-        $rate = (float) ($e->daily_rate ?: ((float) ($e->basic_monthly_salary ?? 0) / 22));
+        $rate = (float) ($e->daily_rate ?: ((float) ($e->basic_monthly_salary ?? 0) / $this->workDaysPerMonth()));
         return max(0.0, $days * $rate);
     }
 
-    private function proRatedThirteenthMonth(Employee $e): float
+    private function workDaysPerMonth(): float
     {
-        try {
-            $row = DB::table('thirteenth_month_accruals')
-                ->where('employee_id', $e->id)
-                ->where('year', (int) now()->format('Y'))
-                ->orderByDesc('id')
-                ->first();
-            if ($row) return (float) $row->accrued_amount;
-        } catch (\Throwable $ex) {
-            // No table yet — fall through.
+        return $this->positivePayrollSetting('payroll.work_days_per_month');
+    }
+
+    private function hoursPerDay(): float
+    {
+        return $this->positivePayrollSetting('payroll.hours_per_day');
+    }
+
+    private function positivePayrollSetting(string $key): float
+    {
+        $value = $this->settings->get($key);
+        if (! is_numeric($value) || (float) $value <= 0) {
+            throw new BusinessRuleException("Required payroll setting {$key} is missing or invalid.");
         }
-        // Conservative fallback: 1/12 of monthly salary (single period).
-        return (float) ($e->basic_monthly_salary ?? 0) / 12;
+        return (float) $value;
+    }
+
+    private function proRatedThirteenthMonth(Employee $e, CarbonInterface $separationDate): float
+    {
+        $year = (int) $separationDate->format('Y');
+        $row = DB::table('thirteenth_month_accruals')
+            ->where('employee_id', $e->id)
+            ->where('year', $year)
+            ->orderByDesc('id')
+            ->first();
+        if ($row) {
+            return (float) $row->accrued_amount;
+        }
+
+        // Rebuild from authoritative computed payroll when an accrual snapshot
+        // has not been generated yet. No salary-based synthetic month is added.
+        $basicEarned = DB::table('payrolls as p')
+            ->join('payroll_periods as pp', 'pp.id', '=', 'p.payroll_period_id')
+            ->where('p.employee_id', $e->id)
+            ->whereYear('pp.period_end', $year)
+            ->whereDate('pp.period_end', '<=', $separationDate->toDateString())
+            ->whereNotIn('pp.status', [PayrollPeriodStatus::Draft->value, PayrollPeriodStatus::Processing->value, PayrollPeriodStatus::Voided->value])
+            ->whereNotNull('p.computed_at')
+            ->sum('p.basic_pay');
+
+        return round((float) $basicEarned / 12, 2);
     }
 
     private function loanBalances(Employee $e): float
@@ -216,13 +283,10 @@ class FinalPayService
     private function unreturnedPropertyValue(Employee $e): float
     {
         try {
-            // employee_property doesn't store cost; we approximate ₱500 per item
-            // as a placeholder until a property cost field is added.
-            $count = (int) DB::table('employee_property')
+            return (float) DB::table('employee_property')
                 ->where('employee_id', $e->id)
                 ->where('status', 'lost')
-                ->count();
-            return $count * 500.0;
+                ->sum(DB::raw('quantity * replacement_unit_cost'));
         } catch (\Throwable $ex) {
             return 0.0;
         }

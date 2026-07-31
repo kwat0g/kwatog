@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Accounting\Models\Budget;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Log;
@@ -99,10 +100,10 @@ class BudgetEnforcementService
     public function acknowledge(Model $document, \App\Modules\Auth\Models\User $user): Model
     {
         if (! in_array($document->budget_warning_level, ['exhausted', 'overdrawn'], true)) {
-            throw new RuntimeException('This transaction does not require Finance acknowledgment.');
+            throw new BusinessRuleException('This transaction does not require Finance acknowledgment.');
         }
         if (! $user->hasPermission('budgeting.approve')) {
-            throw new RuntimeException('Finance authorization is required to acknowledge a budget overrun.');
+            throw new BusinessRuleException('Finance authorization is required to acknowledge a budget overrun.');
         }
 
         $document->forceFill([

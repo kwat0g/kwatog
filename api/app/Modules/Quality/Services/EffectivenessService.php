@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Quality\Services;
 
 use App\Common\Services\NotificationService;
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Quality\Enums\EffectivenessStatus;
 use App\Modules\Quality\Enums\NcrActionType;
@@ -22,11 +23,9 @@ use Illuminate\Support\Facades\DB;
  */
 class EffectivenessService
 {
-    private const CHECK_INTERVAL_DAYS = 30;
-    private const OVERDUE_ESCALATION_DAYS = 14;
-
     public function __construct(
         private readonly NotificationService $notifications,
+        private readonly SettingsService $settings,
     ) {}
 
     /**
@@ -37,7 +36,7 @@ class EffectivenessService
     {
         DB::transaction(function () use ($ncr) {
             $ownerId = $ncr->closed_by;
-            $due = now()->addDays(self::CHECK_INTERVAL_DAYS);
+            $due = now()->addDays($this->positiveIntSetting('quality.effectiveness.check_interval_days'));
 
             $ncr->actions()
                 ->reorder()
@@ -70,7 +69,7 @@ class EffectivenessService
     ): NcrAction {
         return DB::transaction(function () use ($action, $by, $status, $notes) {
             $next = $status === EffectivenessStatus::Ineffective
-                ? now()->addDays(self::CHECK_INTERVAL_DAYS)->toDateString()
+                ? now()->addDays($this->positiveIntSetting('quality.effectiveness.check_interval_days'))->toDateString()
                 : null;
 
             $action->forceFill([
@@ -158,7 +157,8 @@ class EffectivenessService
                 ? $today->diffInDays($action->next_effectiveness_check_at, false)
                 : 0;
 
-            if ($overdueDays <= -self::OVERDUE_ESCALATION_DAYS) {
+            $escalationDays = $this->positiveIntSetting('quality.effectiveness.overdue_escalation_days');
+            if ($overdueDays <= -$escalationDays) {
                 $managers = User::query()
                     ->whereHas('role', fn ($q) => $q->where('slug', 'production_manager'))
                     ->where('is_active', true)
@@ -167,12 +167,21 @@ class EffectivenessService
                     $this->notifications->send($managers, 'effectiveness_overdue', [
                         'ncr_number' => $action->ncr?->ncr_number,
                         'action_id'  => $action->hash_id,
-                        'message'    => "CAPA effectiveness check overdue >14d for {$action->ncr?->ncr_number}.",
+                        'message'    => "CAPA effectiveness check overdue by at least {$escalationDays} days for {$action->ncr?->ncr_number}.",
                     ]);
                 }
             }
         }
 
         return $due->count();
+    }
+
+    private function positiveIntSetting(string $key): int
+    {
+        $value = $this->settings->get($key);
+        if (! is_numeric($value) || (int) $value <= 0) {
+            throw new \App\Common\Exceptions\BusinessRuleException("Required business setting {$key} is missing or invalid.");
+        }
+        return (int) $value;
     }
 }

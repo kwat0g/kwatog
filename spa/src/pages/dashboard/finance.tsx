@@ -357,8 +357,8 @@ function BudgetVsActualPanel({
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => (
-            <tr key={r.category} className={trCls}>
+          {rows.map((r, index) => (
+            <tr key={`${r.category}-${index}`} className={trCls}>
               <Td className="truncate max-w-[160px]">{r.category}</Td>
               <Td align="right" mono>{formatPeso(r.budget)}</Td>
               <Td align="right" mono>{formatPeso(r.actual)}</Td>

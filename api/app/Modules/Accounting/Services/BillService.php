@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\TaxPolicyService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\Money;
 use App\Common\Support\SearchOperator;
@@ -29,9 +31,6 @@ use RuntimeException;
 
 class BillService
 {
-    /** Standard PH VAT rate. */
-    private const VAT_RATE = '0.12';
-
     /** AP control account code. */
     private const AP_CODE = '2010';
 
@@ -42,6 +41,7 @@ class BillService
         private readonly AccountingPeriodService $periods,
         private readonly ThreeWayMatchService $threeWayMatch,
         private readonly BudgetEnforcementService $budget,
+        private readonly TaxPolicyService $taxPolicy,
     ) {}
 
     public function list(array $filters): LengthAwarePaginator
@@ -110,7 +110,7 @@ class BillService
 
             // Build items + totals.
             [$items, $subtotal] = $this->normalizeItems($data['items'] ?? []);
-            $vat = $isVatable ? Money::mul($subtotal, self::VAT_RATE) : Money::zero();
+            $vat = $isVatable ? Money::mul($subtotal, $this->taxPolicy->vatRate()) : Money::zero();
             $total = Money::add($subtotal, $vat);
 
             // Vendor uniqueness on bill_number.
@@ -119,7 +119,7 @@ class BillService
                 ->where('bill_number', $data['bill_number'])
                 ->exists();
             if ($exists) {
-                throw new RuntimeException("Bill number '{$data['bill_number']}' already exists for this vendor.");
+                throw new BusinessRuleException("Bill number '{$data['bill_number']}' already exists for this vendor.");
             }
 
             // Budget enforcement check.
@@ -260,7 +260,7 @@ class BillService
     public function cancel(Bill $bill, User $by): Bill
     {
         if (! Money::isZero((string) $bill->amount_paid)) {
-            throw new RuntimeException('Cannot cancel a bill that has payments.');
+            throw new BusinessRuleException('Cannot cancel a bill that has payments.');
         }
         if ($bill->status === BillStatus::Cancelled) {
             return $bill;
@@ -289,24 +289,24 @@ class BillService
     public function recordPayment(Bill $bill, array $data, User $by): BillPayment
     {
         if ($bill->status === BillStatus::Cancelled) {
-            throw new RuntimeException('Cannot record payment on a cancelled bill.');
+            throw new BusinessRuleException('Cannot record payment on a cancelled bill.');
         }
         if ($bill->status === BillStatus::Paid) {
-            throw new RuntimeException('Bill is already fully paid.');
+            throw new BusinessRuleException('Bill is already fully paid.');
         }
 
         $amount = Money::round2((string) $data['amount']);
         if (Money::lte($amount, '0')) {
-            throw new RuntimeException('Payment amount must be greater than zero.');
+            throw new BusinessRuleException('Payment amount must be greater than zero.');
         }
         if (Money::gt($amount, (string) $bill->balance)) {
-            throw new RuntimeException("Payment {$amount} exceeds outstanding balance ".$bill->balance.'.');
+            throw new BusinessRuleException("Payment {$amount} exceeds outstanding balance ".$bill->balance.'.');
         }
 
         return DB::transaction(function () use ($bill, $data, $amount, $by) {
             $cashAccountId = HashIdFilter::decode($data['cash_account_id'], Account::class);
             if (! $cashAccountId) {
-                throw new RuntimeException('Invalid cash account.');
+                throw new BusinessRuleException('Invalid cash account.');
             }
 
             $payment = BillPayment::create([

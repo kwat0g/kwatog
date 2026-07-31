@@ -15,6 +15,18 @@ import { SelfServiceLeavePage } from '../pages/LeavePages';
 test.describe('Self-service portal — mobile (390px)', () => {
 
   test('self-service landing renders', async ({ page }) => {
+    await page.route('**/api/v1/hr/self-service/home', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+        data: {
+          greeting: 'Good morning', today: '2026-07-30',
+          employee: {
+            id: 'emp_ee', employee_no: 'OGM-2024-0010', first_name: 'Manuel',
+            full_name: 'Manuel Cruz', department: 'Production', position: 'Operator',
+          },
+          todays_shift: null, leave_balances: [], pending_count: 0, latest_payslip: null,
+        },
+      })});
+    });
     await page.route('**/api/v1/dashboards/employee', async (route) => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
         data: { kpis: [], leave_balances: [], panels: { latest_payslip: null, next_holiday: null } },

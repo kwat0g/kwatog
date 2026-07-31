@@ -60,34 +60,36 @@ class CopqWidgetTest extends TestCase
     public function test_copq_widget_returns_current_and_trend(): void
     {
         $user = $this->qcUser();
+        $twoMonthsAgo = now()->startOfMonth()->subMonths(2);
+        $oneMonthAgo = now()->startOfMonth()->subMonth();
 
         // Seed some historical snapshots
         CopqSnapshot::create([
-            'period_year'              => now()->subMonths(2)->year,
-            'period_month'             => now()->subMonths(2)->month,
-            'prevention_cost'          => 0,
-            'appraisal_cost'           => 0,
-            'internal_scrap_cost'      => 1500.00,
-            'internal_rework_cost'     => 800.00,
-            'external_return_cost'     => 200.00,
-            'external_complaint_cost'  => 100.00,
-            'total_cost'               => 2600.00,
-            'breakdown'                => [],
-            'computed_at'              => now()->subMonths(2),
+            'period_year' => $twoMonthsAgo->year,
+            'period_month' => $twoMonthsAgo->month,
+            'prevention_cost' => 0,
+            'appraisal_cost' => 0,
+            'internal_scrap_cost' => 1500.00,
+            'internal_rework_cost' => 800.00,
+            'external_return_cost' => 200.00,
+            'external_complaint_cost' => 100.00,
+            'total_cost' => 2600.00,
+            'breakdown' => [],
+            'computed_at' => $twoMonthsAgo,
         ]);
 
         CopqSnapshot::create([
-            'period_year'              => now()->subMonth()->year,
-            'period_month'             => now()->subMonth()->month,
-            'prevention_cost'          => 0,
-            'appraisal_cost'           => 0,
-            'internal_scrap_cost'      => 1200.00,
-            'internal_rework_cost'     => 600.00,
-            'external_return_cost'     => 150.00,
-            'external_complaint_cost'  => 50.00,
-            'total_cost'               => 2000.00,
-            'breakdown'                => [],
-            'computed_at'              => now()->subMonth(),
+            'period_year' => $oneMonthAgo->year,
+            'period_month' => $oneMonthAgo->month,
+            'prevention_cost' => 0,
+            'appraisal_cost' => 0,
+            'internal_scrap_cost' => 1200.00,
+            'internal_rework_cost' => 600.00,
+            'external_return_cost' => 150.00,
+            'external_complaint_cost' => 50.00,
+            'total_cost' => 2000.00,
+            'breakdown' => [],
+            'computed_at' => $oneMonthAgo,
         ]);
 
         $response = $this->actingAs($user, 'sanctum')
@@ -118,20 +120,21 @@ class CopqWidgetTest extends TestCase
     public function test_copq_widget_limits_months(): void
     {
         $user = $this->qcUser();
+        $tenMonthsAgo = now()->startOfMonth()->subMonths(10);
 
         // Seed a snapshot 10 months ago — should be outside the default 6-month window
         CopqSnapshot::create([
-            'period_year'              => now()->subMonths(10)->year,
-            'period_month'             => now()->subMonths(10)->month,
-            'prevention_cost'          => 0,
-            'appraisal_cost'           => 0,
-            'internal_scrap_cost'      => 999.00,
-            'internal_rework_cost'     => 0,
-            'external_return_cost'     => 0,
-            'external_complaint_cost'  => 0,
-            'total_cost'               => 999.00,
-            'breakdown'                => [],
-            'computed_at'              => now()->subMonths(10),
+            'period_year' => $tenMonthsAgo->year,
+            'period_month' => $tenMonthsAgo->month,
+            'prevention_cost' => 0,
+            'appraisal_cost' => 0,
+            'internal_scrap_cost' => 999.00,
+            'internal_rework_cost' => 0,
+            'external_return_cost' => 0,
+            'external_complaint_cost' => 0,
+            'total_cost' => 999.00,
+            'breakdown' => [],
+            'computed_at' => $tenMonthsAgo,
         ]);
 
         // Default months=6: should NOT include the 10-month-old snapshot

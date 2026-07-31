@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\SearchOperator;
 
 use App\Common\Support\HashIdFilter;
@@ -11,7 +12,6 @@ use App\Modules\Accounting\Enums\AccountType;
 use App\Modules\Accounting\Models\Account;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 class AccountService
 {
@@ -105,7 +105,7 @@ class AccountService
         if (! empty($data['parent_id'])) {
             $parent = Account::findOrFail($data['parent_id']);
             if ($parent->type->value !== $data['type']) {
-                throw new RuntimeException(sprintf(
+                throw new BusinessRuleException(sprintf(
                     "Parent account %s is type '%s', cannot host child of type '%s'.",
                     $parent->code, $parent->type->value, $data['type'],
                 ));
@@ -123,7 +123,7 @@ class AccountService
                 (isset($data['type']) && $data['type'] !== $account->type->value)
                 || (isset($data['normal_balance']) && $data['normal_balance'] !== $account->normal_balance->value)
             )) {
-            throw new RuntimeException('Cannot change type or normal_balance after posted lines exist.');
+            throw new BusinessRuleException('Cannot change type or normal_balance after posted lines exist.');
         }
 
         if (! empty($data['parent_id']) && ! is_numeric($data['parent_id'])) {
@@ -139,7 +139,7 @@ class AccountService
     public function deactivate(Account $account): Account
     {
         if ($account->children()->exists()) {
-            throw new RuntimeException('Cannot deactivate an account that has child accounts.');
+            throw new BusinessRuleException('Cannot deactivate an account that has child accounts.');
         }
 
         return DB::transaction(function () use ($account) {

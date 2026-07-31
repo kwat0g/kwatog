@@ -66,9 +66,9 @@ class AuthService
         if (! Hash::check($password, $user->password)) {
             $user->failed_login_attempts++;
             $crossedThreshold = false;
-            $maxAttempts = (int) $this->settings->get('security.max_login_attempts', 5);
+            $maxAttempts = $this->settings->requiredInt('security.max_login_attempts', 1);
             if ($user->failed_login_attempts >= $maxAttempts) {
-                $lockMinutes = (int) $this->settings->get('security.lockout_minutes', 15);
+                $lockMinutes = $this->settings->requiredInt('security.lockout_minutes', 1);
                 $user->locked_until = now()->addMinutes($lockMinutes);
                 $crossedThreshold = true;
             }
@@ -135,7 +135,7 @@ class AuthService
                 throw ValidationException::withMessages(['current_password' => 'Current password is incorrect.']);
             }
 
-            $historyDepth = (int) $this->settings->get('security.password_history_depth', 3);
+            $historyDepth = $this->settings->requiredInt('security.password_history_depth', 0);
             $recent = $user->passwordHistory()->limit($historyDepth)->pluck('password_hash');
             foreach ($recent as $oldHash) {
                 if (Hash::check($new, $oldHash)) {

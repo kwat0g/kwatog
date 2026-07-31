@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\CRM\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\TaxPolicyService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\SearchOperator;
 use App\Modules\Accounting\Models\Customer;
@@ -19,13 +21,9 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
-use RuntimeException;
 
 class SalesOrderService
 {
-    /** Philippines VAT rate. */
-    private const VAT_RATE = 0.12;
-
     /**
      * C-2 — Allowed SalesOrder status transitions. Each key is a current
      * status; the array is the list of statuses we permit moving INTO.
@@ -47,6 +45,7 @@ class SalesOrderService
     public function __construct(
         private readonly DocumentSequenceService $sequences,
         private readonly PriceAgreementService $prices,
+        private readonly TaxPolicyService $taxPolicy,
     ) {}
 
     /**
@@ -158,6 +157,9 @@ class SalesOrderService
             'mrpPlan:id,mrp_plan_no,version,status,shortages_found,auto_pr_count,draft_wo_count,sales_order_id',
             'workOrders:id,wo_number,product_id,status,quantity_target,quantity_produced,sales_order_id,mrp_plan_id,planned_start',
             'workOrders.product:id,part_number,name',
+            'workOrders.inspections:id,inspection_number,stage,status,entity_type,entity_id,completed_at',
+            'deliveries:id,delivery_number,sales_order_id,status,scheduled_date',
+            'invoices:id,invoice_number,sales_order_id,status,total_amount,balance',
         ]);
     }
 
@@ -203,7 +205,7 @@ class SalesOrderService
                 $subtotal += $lineTotal;
             }
 
-            $vat   = round($subtotal * self::VAT_RATE, 2);
+            $vat   = round($subtotal * (float) $this->taxPolicy->vatRate(), 2);
             $total = round($subtotal + $vat, 2);
 
             $so = SalesOrder::create([
@@ -214,7 +216,8 @@ class SalesOrderService
                 'vat_amount'         => $vat,
                 'total_amount'       => $total,
                 'status'             => SalesOrderStatus::Draft->value,
-                'payment_terms_days' => $data['payment_terms_days'] ?? 30,
+                'payment_terms_days' => $data['payment_terms_days']
+                    ?? (int) Customer::query()->whereKey($customerId)->value('payment_terms_days'),
                 'delivery_terms'     => $data['delivery_terms'] ?? null,
                 'notes'              => $data['notes'] ?? null,
                 'created_by'         => $userId,
@@ -235,7 +238,7 @@ class SalesOrderService
     public function update(SalesOrder $so, array $data): SalesOrder
     {
         if ($so->status !== SalesOrderStatus::Draft) {
-            throw new RuntimeException('Only draft sales orders can be updated.');
+            throw new BusinessRuleException('Only draft sales orders can be updated.');
         }
 
         return DB::transaction(function () use ($so, $data) {
@@ -265,7 +268,7 @@ class SalesOrderService
                 ];
                 $subtotal += $lineTotal;
             }
-            $vat   = round($subtotal * self::VAT_RATE, 2);
+            $vat   = round($subtotal * (float) $this->taxPolicy->vatRate(), 2);
             $total = round($subtotal + $vat, 2);
 
             $so->update([
@@ -298,10 +301,10 @@ class SalesOrderService
         $this->checkCreditLimit($so);
 
         if ($so->status !== SalesOrderStatus::Draft) {
-            throw new RuntimeException('Only draft sales orders can be confirmed.');
+            throw new BusinessRuleException('Only draft sales orders can be confirmed.');
         }
         if ($so->items()->count() === 0) {
-            throw new RuntimeException('Cannot confirm a sales order with no items.');
+            throw new BusinessRuleException('Cannot confirm a sales order with no items.');
         }
         return DB::transaction(function () use ($so) {
             $so->update(['status' => SalesOrderStatus::Confirmed->value]);
@@ -448,7 +451,7 @@ class SalesOrderService
     public function cancel(SalesOrder $so, ?string $reason = null): SalesOrder
     {
         if (! $so->is_cancellable) {
-            throw new RuntimeException('This sales order cannot be cancelled at its current status.');
+            throw new BusinessRuleException('This sales order cannot be cancelled at its current status.');
         }
         return DB::transaction(function () use ($so, $reason) {
             $so->update([
@@ -513,7 +516,7 @@ class SalesOrderService
     public function delete(SalesOrder $so): void
     {
         if ($so->status !== SalesOrderStatus::Draft) {
-            throw new RuntimeException('Only draft sales orders can be deleted.');
+            throw new BusinessRuleException('Only draft sales orders can be deleted.');
         }
         $so->delete();
     }

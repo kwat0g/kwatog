@@ -16,9 +16,11 @@ class StoreOpeningStockRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'location_id'       => ['required'],
+            // Typed so an array payload can't reach OpeningBalanceService's
+            // (string) cast and TypeError into a 500. HashIDs resolved there.
+            'location_id'       => ['required', 'string'],
             'rows'              => ['required', 'array', 'min:1'],
-            'rows.*.item_id'    => ['required'],
+            'rows.*.item_id'    => ['required', 'string'],
             'rows.*.quantity'   => ['required', 'numeric', 'gt:0'],
             'rows.*.unit_cost'  => ['required', 'numeric', 'min:0'],
         ];

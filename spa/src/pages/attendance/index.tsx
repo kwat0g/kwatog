@@ -20,6 +20,7 @@ import type { Attendance } from '@/types/attendance';
 
 export default function AttendancePage() {
   const { can } = usePermission();
+  const canViewDepartments = can('hr.departments.view');
   const navigate = useNavigate();
   const [filters, setFilters] = useState<AttendanceListParams>({
     page: 1, per_page: 25, sort: 'date', direction: 'desc',
@@ -28,6 +29,7 @@ export default function AttendancePage() {
   const { data: depts = [] } = useQuery({
     queryKey: ['hr', 'departments', 'tree'],
     queryFn: () => departmentsApi.tree(),
+    enabled: canViewDepartments,
   });
 
   const { data, isLoading, isError, refetch } = useQuery({
@@ -71,12 +73,12 @@ export default function AttendancePage() {
   ];
 
   const filterConfig: FilterConfig[] = [
-    {
+    ...(canViewDepartments ? [{
       key: 'department_id',
       label: 'Department',
       type: 'select',
       options: [{ value: '', label: 'All' }, ...depts.map((d) => ({ value: d.id, label: d.name }))],
-    },
+    } as FilterConfig] : []),
     {
       key: 'status',
       label: 'Status',
@@ -101,15 +103,21 @@ export default function AttendancePage() {
         subtitle={data ? `${formatInt(data.meta.total)} records` : undefined}
         actions={
           <>
-            <Button variant="secondary" size="sm" icon={<Calendar size={14} />} onClick={() => navigate('/hr/attendance/overtime')}>
-              Overtime
-            </Button>
-            <Button variant="secondary" size="sm" icon={<Clock size={14} />} onClick={() => navigate('/hr/attendance/shifts')}>
-              Shifts
-            </Button>
-            <Button variant="secondary" size="sm" icon={<Sun size={14} />} onClick={() => navigate('/hr/attendance/holidays')}>
-              Holidays
-            </Button>
+            {can('attendance.ot.approve') && (
+              <Button variant="secondary" size="sm" icon={<Calendar size={14} />} onClick={() => navigate('/hr/attendance/overtime')}>
+                Overtime
+              </Button>
+            )}
+            {(can('attendance.edit') || can('attendance.shifts.manage')) && (
+              <Button variant="secondary" size="sm" icon={<Clock size={14} />} onClick={() => navigate('/hr/attendance/shifts')}>
+                Shifts
+              </Button>
+            )}
+            {(can('attendance.edit') || can('attendance.holidays.manage')) && (
+              <Button variant="secondary" size="sm" icon={<Sun size={14} />} onClick={() => navigate('/hr/attendance/holidays')}>
+                Holidays
+              </Button>
+            )}
             {can('attendance.import') && (
               <Button variant="primary" size="sm" icon={<Upload size={14} />} onClick={() => navigate('/hr/attendance/import')}>
                 Import DTR

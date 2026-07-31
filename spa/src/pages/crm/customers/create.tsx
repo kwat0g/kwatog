@@ -1,10 +1,12 @@
+import { useEffect } from 'react';
 import { FormProvider, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { crmCustomersApi } from '@/api/crm/customers';
+import { businessPoliciesApi } from '@/api/businessPolicies';
 import { Button } from '@/components/ui/Button';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { onFormInvalid } from '@/lib/formErrors';
@@ -26,12 +28,16 @@ export default function CrmCustomerCreatePage() {
       email: '',
       phone: '',
       address: '',
-      payment_terms_days: 30,
       is_active: true,
     },
   });
 
-  const { handleSubmit, setError, formState: { isSubmitting } } = methods;
+  const { handleSubmit, setError, setValue, formState: { isSubmitting } } = methods;
+  const { data: policies } = useQuery({ queryKey: ['business-policies'], queryFn: businessPoliciesApi.get });
+
+  useEffect(() => {
+    if (policies) setValue('payment_terms_days', policies.customer_payment_terms_days);
+  }, [policies, setValue]);
 
   const mutation = useMutation({
     mutationFn: (values: FormValues) => {

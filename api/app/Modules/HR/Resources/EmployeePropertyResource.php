@@ -16,6 +16,8 @@ class EmployeePropertyResource extends JsonResource
             'item_name'     => $this->item_name,
             'description'   => $this->description,
             'quantity'      => (int) $this->quantity,
+            'replacement_unit_cost' => (string) $this->replacement_unit_cost,
+            'replacement_total' => number_format((int) $this->quantity * (float) $this->replacement_unit_cost, 2, '.', ''),
             'date_issued'   => optional($this->date_issued)->toDateString(),
             'date_returned' => optional($this->date_returned)->toDateString(),
             'status'        => $this->status,

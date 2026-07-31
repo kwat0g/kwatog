@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\Quality\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\SettingsService;
 use App\Common\Support\HashIdFilter;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Models\Item;
@@ -15,14 +17,13 @@ use App\Modules\Quality\Models\PpapElement;
 use App\Modules\Quality\Models\PpapSubmission;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 class PpapService
 {
-    /** PPAP approval validity window. */
-    private const APPROVAL_VALIDITY_YEARS = 3;
-
-    public function __construct(private readonly DocumentSequenceService $sequences) {}
+    public function __construct(
+        private readonly DocumentSequenceService $sequences,
+        private readonly SettingsService $settings,
+    ) {}
 
     public function list(array $filters): LengthAwarePaginator
     {
@@ -88,7 +89,7 @@ class PpapService
     public function update(PpapSubmission $ppap, array $data): PpapSubmission
     {
         if ($ppap->status->isTerminal() || $ppap->status === PpapStatus::Approved) {
-            throw new RuntimeException('Cannot edit a finalized PPAP submission.');
+            throw new BusinessRuleException('Cannot edit a finalized PPAP submission.');
         }
         $ppap->update(array_filter([
             'ppap_level' => $data['ppap_level'] ?? null,
@@ -102,10 +103,10 @@ class PpapService
     public function submit(PpapSubmission $ppap): PpapSubmission
     {
         if ($ppap->status !== PpapStatus::Draft) {
-            throw new RuntimeException('Only draft PPAP submissions can be submitted.');
+            throw new BusinessRuleException('Only draft PPAP submissions can be submitted.');
         }
         if ($ppap->elements()->count() < 1) {
-            throw new RuntimeException('PPAP submission requires at least one element.');
+            throw new BusinessRuleException('PPAP submission requires at least one element.');
         }
         $ppap->update([
             'status'          => PpapStatus::Submitted->value,
@@ -117,7 +118,7 @@ class PpapService
     public function review(PpapSubmission $ppap, User $by): PpapSubmission
     {
         if (! in_array($ppap->status, [PpapStatus::Submitted, PpapStatus::UnderReview], true)) {
-            throw new RuntimeException('Only submitted PPAP submissions can be reviewed.');
+            throw new BusinessRuleException('Only submitted PPAP submissions can be reviewed.');
         }
         $ppap->update([
             'status'      => PpapStatus::UnderReview->value,
@@ -134,20 +135,20 @@ class PpapService
     public function approve(PpapSubmission $ppap, User $by): PpapSubmission
     {
         if (! in_array($ppap->status, [PpapStatus::Submitted, PpapStatus::UnderReview], true)) {
-            throw new RuntimeException('Only submitted/under-review PPAP submissions can be approved.');
+            throw new BusinessRuleException('Only submitted/under-review PPAP submissions can be approved.');
         }
         $unresolved = $ppap->elements()
             ->whereNotIn('status', [PpapElementStatus::Accepted->value, PpapElementStatus::NotApplicable->value])
             ->count();
         if ($unresolved > 0) {
-            throw new RuntimeException("Cannot approve: {$unresolved} element(s) not yet accepted.");
+            throw new BusinessRuleException("Cannot approve: {$unresolved} element(s) not yet accepted.");
         }
 
         $ppap->update([
             'status'      => PpapStatus::Approved->value,
             'approved_by' => $by->id,
             'approved_at' => now(),
-            'expires_at'  => now()->addYears(self::APPROVAL_VALIDITY_YEARS),
+            'expires_at'  => now()->addYears($this->settings->requiredInt('quality.ppap.approval_validity_years', 1)),
         ]);
         return $this->show($ppap);
     }
@@ -155,7 +156,7 @@ class PpapService
     public function reject(PpapSubmission $ppap, string $reason, User $by): PpapSubmission
     {
         if ($ppap->status->isTerminal()) {
-            throw new RuntimeException('PPAP submission is already finalized.');
+            throw new BusinessRuleException('PPAP submission is already finalized.');
         }
         $ppap->update([
             'status'           => PpapStatus::Rejected->value,

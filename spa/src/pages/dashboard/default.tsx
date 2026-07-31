@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { DashboardShell, PanelRow } from '@/components/dashboard/DashboardShell';
 import { FinanceSection } from '@/components/dashboard/FinanceSection';
-import { getWidgetComponent } from '@/components/dashboard/registry';
+import { LiveDashboardWidget } from '@/components/dashboard/registry';
 import { WidgetErrorBoundary } from '@/components/ui/WidgetErrorBoundary';
 import { dashboardLayoutApi } from '@/api/dashboard-layout';
 import { useAuthStore } from '@/stores/authStore';
@@ -38,6 +38,14 @@ export default function DashboardDefaultPage() {
   const layout = useQuery({
     queryKey: ['dashboard', 'layout'],
     queryFn: () => dashboardLayoutApi.layout(),
+  });
+
+  const widgetKeys = layout.data?.map((widget) => widget.key) ?? [];
+  const widgetData = useQuery({
+    queryKey: ['dashboard', 'widget-data', widgetKeys],
+    queryFn: () => dashboardLayoutApi.data(widgetKeys),
+    enabled: widgetKeys.length > 0,
+    refetchInterval: 60_000,
   });
 
   const reset = useMutation({
@@ -88,21 +96,15 @@ export default function DashboardDefaultPage() {
           ) : (
             <PanelRow cols={3}>
               {widgets.map((item) => {
-                const Component = getWidgetComponent(item.key);
                 return (
                   <div key={item.key} className="min-h-[120px]">
-                    {Component ? (
-                      <WidgetErrorBoundary>
-                        <Component />
-                      </WidgetErrorBoundary>
-                    ) : (
-                      <Panel title={item.name}>
-                        <p className="text-sm text-muted">
-                          Widget <code className="font-mono text-xs">{item.key}</code> is
-                          registered server-side but no SPA component exists yet.
-                        </p>
-                      </Panel>
-                    )}
+                    <WidgetErrorBoundary>
+                      <LiveDashboardWidget
+                        widget={item}
+                        summary={widgetData.data?.[item.key]}
+                        loading={widgetData.isLoading}
+                      />
+                    </WidgetErrorBoundary>
                   </div>
                 );
               })}

@@ -17,8 +17,8 @@ class StoreItemUomConversionRequest extends FormRequest
     {
         return [
             // Accept HashIDs (resolved in controller) or raw integer IDs.
-            'from_uom_id' => ['required'],
-            'to_uom_id'   => ['required'],
+            'from_uom_id' => ['required', 'string'],
+            'to_uom_id'   => ['required', 'string'],
             'factor'      => ['required', 'numeric', 'gt:0'],
         ];
     }

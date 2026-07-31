@@ -149,4 +149,82 @@ class PayrollGlPostingTest extends TestCase
         $this->expectException(\RuntimeException::class);
         app(PayrollGlPostingService::class)->post($period);
     }
+
+    /**
+     * Regression: the entry must balance when employees were LATE.
+     *
+     * Earnings are debited at their full gross while net pay is credited after
+     * the lateness has been withheld, so without a contra-credit for
+     * tardiness/undertime the entry could never balance and post() threw
+     * "unbalanced" every time. The existing happy-path tests all used
+     * tardiness_minutes = 0, so this went unnoticed — in the dev database not a
+     * single one of five finalized periods had ever reached the ledger.
+     */
+    public function test_journal_entry_balances_when_employees_were_late(): void
+    {
+        $settings = app(SettingsService::class);
+        $settings->set('modules.accounting', true, 'modules');
+
+        $roleId = Role::query()->orderBy('id')->value('id');
+        $user = User::create([
+            'name' => 'Tester', 'email' => 't_'.uniqid().'@x.test',
+            'password' => bcrypt('Password1!'), 'role_id' => $roleId,
+        ]);
+
+        $dept = Department::create(['name' => 'Production', 'code' => 'PRD']);
+        $pos  = Position::create(['title' => 'Operator', 'department_id' => $dept->id]);
+        $emp = Employee::create([
+            'employee_no' => 'OGM-2026-0777',
+            'first_name' => 'Late', 'last_name' => 'Riser',
+            'birth_date' => '1990-01-01', 'gender' => 'male', 'civil_status' => 'single',
+            'nationality' => 'Filipino',
+            'street_address' => '123 Main', 'city' => 'Dasmariñas', 'province' => 'Cavite',
+            'mobile_number' => '09171234567', 'email' => 'late@example.com',
+            'emergency_contact_name' => 'Maria', 'emergency_contact_phone' => '09181234567',
+            'department_id' => $dept->id, 'position_id' => $pos->id,
+            'employment_type' => 'regular', 'pay_type' => 'monthly',
+            'date_hired' => '2025-01-01', 'basic_monthly_salary' => '20000.00',
+            'status' => 'active',
+        ]);
+
+        $period = PayrollPeriod::create([
+            'period_start' => '2026-04-01', 'period_end' => '2026-04-15',
+            'payroll_date' => '2026-04-15', 'is_first_half' => true,
+            'is_thirteenth_month' => false, 'created_by' => $user->id,
+        ]);
+        $period->forceFill(['status' => PayrollPeriodStatus::Draft->value])->save();
+
+        // 45 minutes late plus 30 minutes undertime — both reduce gross.
+        \App\Modules\Attendance\Models\Attendance::create([
+            'employee_id' => $emp->id, 'date' => '2026-04-01',
+            'time_in' => '2026-04-01 08:45:00', 'time_out' => '2026-04-01 16:30:00',
+            'regular_hours' => 8, 'overtime_hours' => 0, 'night_diff_hours' => 0,
+            'tardiness_minutes' => 45, 'undertime_minutes' => 30,
+            'is_rest_day' => false, 'day_type_rate' => 1.00, 'status' => 'present',
+        ]);
+
+        $payroll = app(PayrollCalculatorService::class)->computeForEmployee($period, $emp);
+        $this->assertTrue((float) $payroll->tardiness_deduction > 0);
+
+        $period->forceFill(['status' => PayrollPeriodStatus::Approved->value])->save();
+        $period->forceFill(['status' => PayrollPeriodStatus::Finalized->value])->save();
+
+        $entryId = app(PayrollGlPostingService::class)->post($period->fresh());
+
+        $this->assertNotNull($entryId, 'A period with late employees must still post');
+        $entry = DB::table('journal_entries')->where('id', $entryId)->first();
+        $this->assertSame(
+            (string) $entry->total_debit,
+            (string) $entry->total_credit,
+            'Journal entry must balance even when pay was withheld for lateness',
+        );
+
+        // And the line sums must independently agree with the header totals.
+        $lines = DB::table('journal_entry_lines')->where('journal_entry_id', $entryId)->get();
+        $this->assertEqualsWithDelta(
+            (float) $lines->sum('debit'),
+            (float) $lines->sum('credit'),
+            0.01,
+        );
+    }
 }
