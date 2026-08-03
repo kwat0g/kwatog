@@ -420,6 +420,8 @@ export function DataTable<T>({
                     onClick={(e) => {
                       // Skip row click when clicking interactive elements.
                       if ((e.target as HTMLElement).closest('input,button,a,label')) return;
+                      // Skip row click if the user is currently highlighting text.
+                      if (window.getSelection()?.toString().length) return;
                       onRowClick?.(row);
                     }}
                     onContextMenu={
