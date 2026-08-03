@@ -83,12 +83,12 @@ export default function AssetTransfersListPage() {
         <div className="flex items-center gap-1">
           <Button variant="primary" size="sm"
             disabled={approveMutation.isPending || rejectMutation.isPending}
-            onClick={(e: React.MouseEvent) => { e.stopPropagation(); setConfirmApprove(r.id); }}>
+            onClick={() => { setConfirmApprove(r.id); }}>
             Approve
           </Button>
           <Button variant="danger" size="sm"
             disabled={approveMutation.isPending || rejectMutation.isPending}
-            onClick={(e: React.MouseEvent) => { e.stopPropagation(); setConfirmReject(r.id); }}>
+            onClick={() => { setConfirmReject(r.id); }}>
             Reject
           </Button>
         </div>

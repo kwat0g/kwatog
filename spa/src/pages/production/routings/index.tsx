@@ -77,9 +77,7 @@ export default function RoutingsListPage() {
             size="sm"
             variant="ghost"
             icon={<Copy size={14} />}
-            onClick={(e) => {
-              e.stopPropagation();
-              duplicateMut.mutate(r.id);
+            onClick={() => { duplicateMut.mutate(r.id);
             }}
             disabled={duplicateMut.isPending}
             aria-label="Duplicate routing"

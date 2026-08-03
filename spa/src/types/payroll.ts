@@ -54,6 +54,12 @@ export interface PayrollPeriod {
   lifecycle_steps?: Array<{ key: string; label: string; state: 'pending' | 'active' | 'done' }>;
   is_locked: boolean;
   label: string;
+  /** Scope — false when this run is limited to a slice of the workforce. */
+  is_company_wide?: boolean;
+  scope_label?: string | null;
+  scope_employment_types?: string[];
+  scope_pay_types?: string[];
+  scope_departments?: Array<{ id: string; name: string }>;
   is_auto_created: boolean;
   auto_created_at: string | null;
   employee_count: number;
@@ -223,8 +229,34 @@ export interface CreatePayrollPeriodData {
   period_start: string;
   period_end: string;
   payroll_date: string;
-  is_first_half: boolean;
+  /**
+   * Derived server-side from period_start (day 1-15 = first half), NOT chosen.
+   * A period whose label contradicted its dates produced an inverted pay-cycle
+   * key, which let one employee be paid twice in a month and moved government
+   * contributions onto the wrong cutoff. Optional here only for callers that
+   * still send it; the server ignores it for normal cutoffs.
+   */
+  is_first_half?: boolean;
   is_thirteenth_month?: boolean;
+  /**
+   * Scope filters. All optional and ANDed together; omitting every one means
+   * the run pays the whole company (the default and historical behaviour).
+   */
+  scope_employment_types?: string[];
+  scope_pay_types?: string[];
+  /** Department hash ids. */
+  scope_department_ids?: string[];
+  scope_label?: string;
+}
+
+/** Dry-run of a scope: who it would pay, and who is already paid this cutoff. */
+export interface PayrollScopePreview {
+  is_company_wide: boolean;
+  employee_count: number;
+  already_paid_count: number;
+  already_paid_sample: Array<{ employee_no: string; name: string; period: string }>;
+  total_active: number;
+  estimated_gross: string;
 }
 
 export interface CreatePayrollAdjustmentData {

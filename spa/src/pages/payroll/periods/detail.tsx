@@ -297,6 +297,19 @@ export default function PayrollPeriodDetailPage() {
           {period.computer?.name && <> · computed by {period.computer.name}</>}
           {period.approver?.name && <> · approved by {period.approver.name}</>}
           {period.finalizer?.name && <> · finalized by {period.finalizer.name}</>}
+          {/* Scoped runs pay only a slice of the workforce; say so plainly,
+              since two periods can now share the same dates and half. */}
+          {period.is_company_wide === false && (
+            <>
+              {' · '}
+              <span className="text-warning">
+                scoped run
+                {period.scope_departments && period.scope_departments.length > 0 && (
+                  <> · {period.scope_departments.map((d) => d.name).join(', ')}</>
+                )}
+              </span>
+            </>
+          )}
         </>}
                backTo="/payroll/periods" backLabel="Payroll"
         breadcrumbs={[

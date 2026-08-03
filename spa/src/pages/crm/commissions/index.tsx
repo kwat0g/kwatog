@@ -99,7 +99,7 @@ export default function CommissionsListPage() {
             size="sm"
             icon={<Check size={12} />}
             disabled={approveMutation.isPending}
-            onClick={(e) => { e.stopPropagation(); setConfirmApprove(r.id); }}
+            onClick={() => { setConfirmApprove(r.id); }}
           >
             Approve
           </Button>

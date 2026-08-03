@@ -272,7 +272,7 @@ function TreeRow({
         {hasKids ? (
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); onToggle(node.id); }}
+            onClick={() => { onToggle(node.id); }}
             className={cn('w-4 h-4 flex items-center justify-center text-muted shrink-0 rounded cursor-pointer', focusRing)}
             aria-label={`${isOpen ? 'Collapse' : 'Expand'} ${node.name}`}
             aria-expanded={isOpen}

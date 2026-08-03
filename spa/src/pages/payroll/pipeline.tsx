@@ -182,7 +182,7 @@ function PipelineRow({
           <Button
             variant="secondary"
             size="sm"
-            onClick={(e) => { e.stopPropagation(); navigate(`/payroll/periods/${period.id}`); }}
+            onClick={() => { navigate(`/payroll/periods/${period.id}`); }}
           >
             Review
           </Button>
@@ -191,7 +191,7 @@ function PipelineRow({
           <Button
             variant="secondary"
             size="sm"
-            onClick={(e) => { e.stopPropagation(); navigate(`/payroll/periods/${period.id}`); }}
+            onClick={() => { navigate(`/payroll/periods/${period.id}`); }}
           >
             View
           </Button>

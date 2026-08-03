@@ -1,6 +1,6 @@
 import { client } from '../client';
 import type { ApiSuccess, PaginatedResponse, ListParams } from '@/types';
-import type { CreatePayrollPeriodData, DisbursementProof, PayrollPeriod, PayrollPipeline, PayrollVarianceReport, ProofType } from '@/types/payroll';
+import type { CreatePayrollPeriodData, DisbursementProof, PayrollPeriod, PayrollPipeline, PayrollScopePreview, PayrollVarianceReport, ProofType } from '@/types/payroll';
 
 export interface PeriodListParams extends ListParams {
   status?: string;
@@ -24,7 +24,22 @@ export interface BankFileFormatOption {
 }
 
 export const periodsApi = {
-  options: () => client.get<{ data: { statuses: Array<{ value: string; label: string }>; period_types: Array<{ value: string; label: string }>; half_types: Array<{ value: string; label: string }> } }>('/payroll-periods/options').then((r) => r.data.data),
+  options: () =>
+    client
+      .get<{
+        data: {
+          statuses: Array<{ value: string; label: string }>;
+          period_types: Array<{ value: string; label: string }>;
+          half_types: Array<{ value: string; label: string }>;
+          employment_types: Array<{ value: string; label: string }>;
+          pay_types: Array<{ value: string; label: string }>;
+          departments: Array<{ value: string; label: string }>;
+        };
+      }>('/payroll-periods/options')
+      .then((r) => r.data.data),
+  /** Dry-run a scope before creating the period. */
+  scopePreview: (data: Partial<CreatePayrollPeriodData>) =>
+    client.post<{ data: PayrollScopePreview }>('/payroll-periods/scope-preview', data).then((r) => r.data.data),
   list: (params?: PeriodListParams) =>
     client.get<PaginatedResponse<PayrollPeriod>>('/payroll-periods', { params }).then((r) => r.data),
   show: (id: string) =>

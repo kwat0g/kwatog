@@ -71,7 +71,7 @@ export default function AttendanceImportPage() {
               size="sm"
               className="mt-3"
               type="button"
-              onClick={(e) => { e.stopPropagation(); inputRef.current?.click(); }}
+              onClick={() => { inputRef.current?.click(); }}
             >
               Browse files
             </Button>

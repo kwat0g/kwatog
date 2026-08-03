@@ -93,8 +93,8 @@ export default function OvertimeListPage() {
       align: 'right' as const,
       cell: (r: OvertimeRequest) => r.status !== 'pending' ? null : (
         <div className="flex items-center justify-end gap-1">
-          <Button variant="primary" size="sm" onClick={(e) => { e.stopPropagation(); setConfirmApprove(r.id); }} disabled={approveMutation.isPending}>Approve</Button>
-          <Button variant="danger" size="sm" onClick={(e) => { e.stopPropagation(); setReject(r); }}>Reject</Button>
+          <Button variant="primary" size="sm" onClick={() => { setConfirmApprove(r.id); }} disabled={approveMutation.isPending}>Approve</Button>
+          <Button variant="danger" size="sm" onClick={() => { setReject(r); }}>Reject</Button>
         </div>
       ),
     }] : []),

@@ -229,9 +229,7 @@ export default function NotificationsListPage() {
                                 iconOnly
                                 icon={<Eye size={14} />}
                                 aria-label="Mark as read"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  markRead.mutate(n.id);
+                                onClick={() => { markRead.mutate(n.id);
                                 }}
                                 className="ml-auto shrink-0 text-muted hover:text-primary"
                               />

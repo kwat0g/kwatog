@@ -86,14 +86,14 @@ export default function LeavesPage() {
         <div className="flex items-center justify-end gap-1">
           {r.status === 'pending_dept' && can('leave.approve_dept') && (
             <>
-              <Button variant="primary" size="sm" disabled={approveDept.isPending} onClick={(e) => { e.stopPropagation(); setConfirmApproveDept(r.id); }}>Approve</Button>
-              <Button variant="danger" size="sm" onClick={(e) => { e.stopPropagation(); setActionTarget({ req: r, mode: 'reject' }); }}>Reject</Button>
+              <Button variant="primary" size="sm" disabled={approveDept.isPending} onClick={() => { setConfirmApproveDept(r.id); }}>Approve</Button>
+              <Button variant="danger" size="sm" onClick={() => { setActionTarget({ req: r, mode: 'reject' }); }}>Reject</Button>
             </>
           )}
           {r.status === 'pending_hr' && can('leave.approve_hr') && (
             <>
-              <Button variant="primary" size="sm" disabled={approveHR.isPending} onClick={(e) => { e.stopPropagation(); setConfirmApproveHR(r.id); }}>Approve</Button>
-              <Button variant="danger" size="sm" onClick={(e) => { e.stopPropagation(); setActionTarget({ req: r, mode: 'reject' }); }}>Reject</Button>
+              <Button variant="primary" size="sm" disabled={approveHR.isPending} onClick={() => { setConfirmApproveHR(r.id); }}>Approve</Button>
+              <Button variant="danger" size="sm" onClick={() => { setActionTarget({ req: r, mode: 'reject' }); }}>Reject</Button>
             </>
           )}
         </div>

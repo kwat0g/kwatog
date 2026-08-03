@@ -101,7 +101,7 @@ export default function MaintenanceSchedulesListPage() {
             iconOnly
             icon={<Pencil size={14} />}
             aria-label="Edit schedule"
-            onClick={(e) => { e.stopPropagation(); navigate(`/maintenance/schedules/${r.id}/edit`); }}
+            onClick={() => { navigate(`/maintenance/schedules/${r.id}/edit`); }}
             className="text-muted hover:text-primary"
           />
           <Button
@@ -111,7 +111,7 @@ export default function MaintenanceSchedulesListPage() {
             iconOnly
             icon={<Trash2 size={14} />}
             aria-label="Delete schedule"
-            onClick={(e) => { e.stopPropagation(); setDeleteTarget(r.id); }}
+            onClick={() => { setDeleteTarget(r.id); }}
             className="text-muted hover:text-danger"
           />
         </div>

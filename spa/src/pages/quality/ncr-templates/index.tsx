@@ -101,9 +101,7 @@ export default function NcrTemplatesListPage() {
             size="sm"
             variant="ghost"
             icon={<Copy size={13} />}
-            onClick={(e) => {
-              e.stopPropagation();
-              handleUseTemplate(r);
+            onClick={() => { handleUseTemplate(r);
             }}
           >
             Use
@@ -114,18 +112,14 @@ export default function NcrTemplatesListPage() {
                 size="sm"
                 variant="ghost"
                 icon={<Pencil size={13} />}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  navigate(`/quality/ncr-templates/${r.id}/edit`);
+                onClick={() => { navigate(`/quality/ncr-templates/${r.id}/edit`);
                 }}
               />
               <Button
                 size="sm"
                 variant="ghost"
                 icon={<Trash2 size={13} />}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setDeleteId(r.id);
+                onClick={() => { setDeleteId(r.id);
                 }}
               />
             </>
