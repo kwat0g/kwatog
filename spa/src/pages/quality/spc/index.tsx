@@ -63,7 +63,7 @@ export default function SpcChartsListPage() {
       key: 'parameter',
       header: 'Parameter',
       cell: (r) => (
-        <span className="text-accent">
+        <span >
           {r.spec_item?.parameter_name ?? '--'}
           {r.spec_item?.unit_of_measure ? (
             <span className="ml-1 text-muted text-2xs">({r.spec_item.unit_of_measure})</span>

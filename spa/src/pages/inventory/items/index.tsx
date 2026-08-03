@@ -49,7 +49,7 @@ export default function ItemsListPage() {
 
   const columns: Column<Item>[] = [
     { key: 'code', header: 'Code', cell: (r) => (
-      <span className="font-mono text-accent">{r.code}</span>
+      <span className="font-mono">{r.code}</span>
     ) },
     { key: 'name', header: 'Name', cell: (r) => (
       <div>

@@ -47,7 +47,7 @@ export default function ReturnManagementListPage() {
       key: 'rma',
       header: 'RMA #',
       cell: (r) => (
-        <span className="font-mono text-accent">
+        <span className="font-mono">
           {r.rma_number}
         </span>
       ) },

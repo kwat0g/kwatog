@@ -81,7 +81,7 @@ export default function ApprovedSuppliersPage() {
         variant="ghost"
         size="sm"
         iconOnly
-        icon={r.is_preferred ? <Star size={14} fill="currentColor" className="text-accent" /> : <StarOff size={14} />}
+        icon={r.is_preferred ? <Star size={14} fill="currentColor"  /> : <StarOff size={14} />}
         aria-label={r.is_preferred ? 'Unmark preferred' : 'Mark as preferred'}
         onClick={() => togglePreferred.mutate(r)}
         disabled={!canManage || togglePreferred.isPending}

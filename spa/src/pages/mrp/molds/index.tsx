@@ -34,7 +34,7 @@ export default function MoldsListPage() {
     {
       key: 'code', header: 'Code',
       cell: (r) => (
-        <span className="font-mono text-accent">{r.mold_code}</span>
+        <span className="font-mono">{r.mold_code}</span>
       ) },
     { key: 'name', header: 'Name', cell: (r) => r.name },
     {

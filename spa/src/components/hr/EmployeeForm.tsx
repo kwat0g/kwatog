@@ -332,7 +332,7 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isPending, register
           {payType === 'semi_monthly' && (
             <Input
               label="Semi-monthly rate"
-              hint="Amount paid each cutoff (twice a month)"
+              helper="Amount paid each cutoff (twice a month)"
               type="number"
               step="0.01"
               min="0"

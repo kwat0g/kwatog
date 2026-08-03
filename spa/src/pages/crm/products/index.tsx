@@ -45,7 +45,7 @@ export default function ProductsListPage() {
     {
       key: 'part_number', header: 'Part #',
       cell: (r) => (
-        <span className="font-mono text-accent">{r.part_number}</span>
+        <span className="font-mono">{r.part_number}</span>
       ) },
     {
       key: 'name', header: 'Name',

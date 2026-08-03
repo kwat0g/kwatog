@@ -59,7 +59,7 @@ export default function DocumentsListPage() {
       key: 'code',
       header: 'Code',
       cell: (r) => (
-        <span className="font-mono text-accent">
+        <span className="font-mono">
           {r.code}
         </span>
       ) },

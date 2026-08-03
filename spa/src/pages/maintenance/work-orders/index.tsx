@@ -36,7 +36,7 @@ export default function MaintenanceWorkOrdersListPage() {
       key: 'mwo_number',
       header: 'WO',
       cell: (r) => (
-        <span className="font-mono text-accent">
+        <span className="font-mono">
           {r.mwo_number}
         </span>
       ) },

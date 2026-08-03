@@ -75,7 +75,7 @@ export default function MrbListPage() {
       key: 'mrb',
       header: 'MRB #',
       cell: (r) => (
-        <span className="font-mono text-accent">
+        <span className="font-mono">
           {r.mrb_number}
         </span>
       ) },
@@ -123,7 +123,7 @@ export default function MrbListPage() {
       header: 'NCR',
       cell: (r) =>
         r.ncr ? (
-          <span className="font-mono text-accent">
+          <span className="font-mono">
             {r.ncr.ncr_number}
           </span>
         ) : (

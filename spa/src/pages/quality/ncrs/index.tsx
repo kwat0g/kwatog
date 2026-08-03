@@ -54,7 +54,7 @@ export default function NcrsListPage() {
       header: 'NCR',
       cell: (r) => (
         <span className="flex items-center gap-2">
-          <span className="font-mono text-accent">
+          <span className="font-mono">
             {r.ncr_number}
           </span>
           {r.is_auto_generated && (

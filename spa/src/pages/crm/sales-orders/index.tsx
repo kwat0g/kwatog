@@ -43,7 +43,7 @@ export default function SalesOrdersListPage() {
     {
       key: 'so_number', header: 'SO #',
       cell: (r) => (
-        <span className="font-mono text-accent">{r.so_number}</span>
+        <span className="font-mono">{r.so_number}</span>
       ) },
     { key: 'customer', header: 'Customer', cell: (r) => r.customer?.name ?? '—' },
     { key: 'date', header: 'Date', align: 'right', cell: (r) => <NumCell>{r.date}</NumCell> },

@@ -101,7 +101,7 @@ export default function PurchaseRequestsListPage() {
   const columns: Column<PurchaseRequest>[] = [
     { key: 'pr', header: 'PR #', cell: (r) => (
       <div>
-        <span className="font-mono text-accent">{r.pr_number}</span>
+        <span className="font-mono">{r.pr_number}</span>
         {r.is_auto_generated && <Chip variant="warning" className="ml-2">AUTO</Chip>}
         {r.is_urgent && <Chip variant="danger" className="ml-1"><Zap size={10} className="inline mr-0.5" />URGENT</Chip>}
       </div>

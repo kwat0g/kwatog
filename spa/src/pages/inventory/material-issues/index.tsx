@@ -23,7 +23,7 @@ export default function MaterialIssuesListPage() {
 
   const columns: Column<MaterialIssueSlip>[] = [
     { key: 'slip', header: 'Slip', cell: (r) => (
-      <span className="font-mono text-accent">{r.slip_number}</span>
+      <span className="font-mono">{r.slip_number}</span>
     ) },
     { key: 'date', header: 'Issued', cell: (r) => <span className="font-mono">{formatDate(r.issued_date)}</span> },
     { key: 'wo', header: 'Work order', cell: (r) => r.work_order_id ? `WO#${r.work_order_id}` : (r.reference_text ?? '—') },

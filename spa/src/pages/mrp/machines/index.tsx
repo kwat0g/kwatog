@@ -49,7 +49,7 @@ export default function MachinesListPage() {
     {
       key: 'code', header: 'Code',
       cell: (r) => (
-        <span className="font-mono text-accent">{r.machine_code}</span>
+        <span className="font-mono">{r.machine_code}</span>
       ) },
     { key: 'name', header: 'Name', cell: (r) => r.name },
     { key: 'tonnage', header: 'Tonnage', align: 'right', cell: (r) => <NumCell>{r.tonnage ?? '—'}{r.tonnage ? ' T' : ''}</NumCell> },

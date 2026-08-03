@@ -49,7 +49,7 @@ export default function InspectionsListPage() {
       key: 'inspection_number',
       header: 'Inspection',
       cell: (r) => (
-        <span className="font-mono text-accent">
+        <span className="font-mono">
           {r.inspection_number}
         </span>
       ) },

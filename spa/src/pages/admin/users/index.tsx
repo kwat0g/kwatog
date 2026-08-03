@@ -94,7 +94,7 @@ export default function AdminUsersIndexPage() {
       header: 'Name',
       sortable: true,
       cell: (row) => (
-        <span className="font-medium text-primary">
+        <span className="font-medium">
           {row.name}
         </span>
       ) },

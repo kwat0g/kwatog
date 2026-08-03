@@ -266,7 +266,7 @@ export default function PayrollPeriodDetailPage() {
       cell: (r) => r.employee
         ? <StackedCell
             primary={
-              <span className="text-accent">
+              <span >
                 {r.employee.full_name}
               </span>
             }

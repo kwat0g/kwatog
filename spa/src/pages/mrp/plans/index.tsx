@@ -58,12 +58,12 @@ export default function MrpPlansListPage() {
     {
       key: 'no', header: 'Plan #',
       cell: (r) => (
-        <span className="font-mono text-accent">{r.mrp_plan_no}</span>
+        <span className="font-mono">{r.mrp_plan_no}</span>
       ) },
     {
       key: 'so', header: 'Sales order',
       cell: (r) => r.sales_order ? (
-        <span className="font-mono text-accent">
+        <span className="font-mono">
           {r.sales_order.so_number}
         </span>
       ) : '—' },

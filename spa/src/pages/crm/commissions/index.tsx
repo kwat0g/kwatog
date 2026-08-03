@@ -65,7 +65,7 @@ export default function CommissionsListPage() {
     {
       key: 'so_number', header: 'SO #',
       cell: (r) => (
-        <span className="font-mono text-accent">
+        <span className="font-mono">
           {r.sales_order.so_number}
         </span>
       ),

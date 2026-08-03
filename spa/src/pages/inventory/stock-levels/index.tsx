@@ -29,7 +29,7 @@ export default function StockLevelsPage() {
   const columns: Column<StockLevel>[] = [
     { key: 'item', header: 'Item', cell: (r) => (
       <div>
-        <span className="font-mono text-accent">{r.item?.code}</span>
+        <span className="font-mono">{r.item?.code}</span>
         <div className="text-xs text-muted">{r.item?.name}</div>
       </div>
     ) },

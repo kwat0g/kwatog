@@ -27,8 +27,8 @@ export default function BomsListPage() {
     {
       key: 'product', header: 'Product',
       cell: (r) => r.product
-        ? <span className="">
-            <span className="font-mono text-accent">{r.product.part_number}</span>
+        ? <span>
+            <span className="font-mono">{r.product.part_number}</span>
             <span className="ml-2 text-muted">{r.product.name}</span>
           </span>
         : '—' },

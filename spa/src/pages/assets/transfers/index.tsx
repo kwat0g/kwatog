@@ -66,7 +66,7 @@ export default function AssetTransfersListPage() {
   const columns: Column<AssetTransfer>[] = [
     {
       key: 'transfer_number', header: 'Transfer #',
-      cell: (r) => <span className="font-mono text-accent">{r.transfer_number}</span>,
+      cell: (r) => <span className="font-mono">{r.transfer_number}</span>,
     },
     { key: 'asset_code', header: 'Asset Code', cell: (r) => <span className="font-mono">{r.asset.asset_code}</span> },
     { key: 'asset_name', header: 'Asset Name', cell: (r) => <span>{r.asset.name}</span> },

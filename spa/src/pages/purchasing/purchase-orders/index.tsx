@@ -38,7 +38,7 @@ export default function PurchaseOrdersListPage() {
   const columns: Column<PurchaseOrder>[] = [
     { key: 'po', header: 'PO #', cell: (r) => (
       <span className="flex items-center gap-2">
-        <span className="font-mono text-accent">{r.po_number}</span>
+        <span className="font-mono">{r.po_number}</span>
         {r.is_auto_generated && (
           <span title="Auto-generated for critical stock"><Chip variant="info">Auto</Chip></span>
         )}

@@ -13,6 +13,7 @@ import { workOrderStatusVariant as variant } from '@/lib/statusVariants';
 import type { WorkOrder } from '@/types/production';
 
 export default function WorkOrdersListPage() {
+  const navigate = useNavigate();
   const [filters, setFilters] = useState<WorkOrderListParams>({ page: 1, per_page: 25 });
 
   const { data, isLoading, isError, refetch } = useQuery({
@@ -29,7 +30,7 @@ export default function WorkOrdersListPage() {
     {
       key: 'wo', header: 'WO #',
       cell: (r) => (
-        <span className="font-mono text-accent">{r.wo_number}</span>
+        <span className="font-mono">{r.wo_number}</span>
       ) },
     {
       key: 'product', header: 'Product',
@@ -39,7 +40,7 @@ export default function WorkOrdersListPage() {
     {
       key: 'so', header: 'SO',
       cell: (r) => r.sales_order
-        ? <span className="font-mono text-accent">{r.sales_order.so_number}</span>
+        ? <span className="font-mono">{r.sales_order.so_number}</span>
         : <span className="text-muted">—</span> },
     {
       key: 'machine', header: 'Machine',

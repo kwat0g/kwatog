@@ -30,7 +30,7 @@ export default function CrmCustomersListPage() {
       key: 'name',
       header: 'Customer',
       cell: (r) => (
-        <span className="font-medium text-accent">
+        <span className="font-medium">
           {r.name}
         </span>
       ) },
