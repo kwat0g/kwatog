@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate} from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -12,8 +12,7 @@ import {
   Select,
   SkeletonTable,
   Textarea,
-  type FilterConfig,
-} from '@/components/ui';
+  type FilterConfig } from '@/components/ui';
 import { DataTable, type Column } from '@/components/ui/DataTable';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
@@ -23,14 +22,12 @@ import { formatDateTime } from '@/lib/formatDate';
 import type {
   AdminUserListItem,
   AdminUserListFilters,
-  AdminUserStatus,
-} from '@/types/admin';
+  AdminUserStatus } from '@/types/admin';
 
 const statusVariant: Record<AdminUserStatus, 'success' | 'warning' | 'neutral'> = {
   active: 'success',
   locked: 'warning',
-  inactive: 'neutral',
-};
+  inactive: 'neutral' };
 
 interface RoleOption { id: string; name: string }
 
@@ -43,8 +40,7 @@ export default function AdminUsersIndexPage() {
     page: 1,
     per_page: 25,
     sort: 'last_activity',
-    direction: 'desc',
-  });
+    direction: 'desc' });
   const [selectedRows, setSelectedRows] = useState<AdminUserListItem[]>([]);
   const [bulkRoleModalOpen, setBulkRoleModalOpen] = useState(false);
   const [selectedRoleId, setSelectedRoleId] = useState<string>('');
@@ -53,19 +49,16 @@ export default function AdminUsersIndexPage() {
   const usersQuery = useQuery({
     queryKey: ['admin-users', filters],
     queryFn: () => adminUsersApi.list(filters),
-    placeholderData: (previousData) => previousData,
-  });
+    placeholderData: (previousData) => previousData });
 
   const rolesQuery = useQuery<{ data: RoleOption[] }>({
     queryKey: ['admin-roles-list'],
     queryFn: () => client.get('/admin/roles').then((r) => r.data),
-    staleTime: 60_000,
-  });
+    staleTime: 60_000 });
   const { data: userOptions } = useQuery({
     queryKey: ['admin-user-options'],
     queryFn: adminUsersApi.options,
-    staleTime: 5 * 60 * 1000,
-  });
+    staleTime: 5 * 60 * 1000 });
 
   const bulkChangeRole = useMutation({
     mutationFn: ({ userIds, roleId, reason }: { userIds: string[]; roleId: string; reason: string }) =>
@@ -78,24 +71,21 @@ export default function AdminUsersIndexPage() {
       setSelectedRows([]);
       queryClient.invalidateQueries({ queryKey: ['admin-users'] });
     },
-    onError: () => toast.error('Failed to update roles.'),
-  });
+    onError: () => toast.error('Failed to update roles.') });
 
   const filterConfig: FilterConfig[] = [
     {
       key: 'role_id',
       label: 'Role',
       type: 'select',
-      options: (rolesQuery.data?.data ?? []).map((r) => ({ value: r.id, label: r.name })),
-    },
+      options: (rolesQuery.data?.data ?? []).map((r) => ({ value: r.id, label: r.name })) },
     {
       key: 'status',
       label: 'Status',
       type: 'select',
       options: [
         ...(userOptions?.statuses ?? []),
-      ],
-    },
+      ] },
   ];
 
   const columns: Column<AdminUserListItem>[] = [
@@ -104,44 +94,36 @@ export default function AdminUsersIndexPage() {
       header: 'Name',
       sortable: true,
       cell: (row) => (
-        <Link to={`/admin/users/${row.id}`} className="font-medium text-primary hover:underline">
+        <span className="font-medium text-primary">
           {row.name}
-        </Link>
-      ),
-    },
+        </span>
+      ) },
     {
       key: 'email',
       header: 'Email',
       sortable: true,
       cell: (row) => (
         <span className="font-mono tabular-nums text-secondary">{row.email}</span>
-      ),
-    },
+      ) },
     {
       key: 'role',
       header: 'Role',
-      cell: (row) => row.role?.name ?? <span className="text-text-subtle">—</span>,
-    },
+      cell: (row) => row.role?.name ?? <span className="text-text-subtle">—</span> },
     {
       key: 'employee',
       header: 'Linked Employee',
       cell: (row) =>
         row.employee ? (
-          <Link
-            to={`/hr/employees/${row.employee.id}`}
-            className="font-mono tabular-nums text-accent hover:underline"
-          >
+          <span className="font-mono tabular-nums text-accent">
             {row.employee.employee_no}
-          </Link>
+          </span>
         ) : (
           <span className="text-text-subtle">—</span>
-        ),
-    },
+        ) },
     {
       key: 'status',
       header: 'Status',
-      cell: (row) => <Chip variant={statusVariant[row.status]}>{row.status_label ?? row.status}</Chip>,
-    },
+      cell: (row) => <Chip variant={statusVariant[row.status]}>{row.status_label ?? row.status}</Chip> },
     {
       key: 'last_activity',
       header: 'Last Login',
@@ -150,8 +132,7 @@ export default function AdminUsersIndexPage() {
         <span className="font-mono tabular-nums text-secondary">
           {row.last_activity ? formatDateTime(row.last_activity) : 'Never'}
         </span>
-      ),
-    },
+      ) },
   ];
 
   const setFilter = (key: string, value: unknown) =>
@@ -168,8 +149,7 @@ export default function AdminUsersIndexPage() {
     bulkChangeRole.mutate({
       userIds: selectedRows.map((r) => r.id),
       roleId: selectedRoleId,
-      reason: bulkReason,
-    });
+      reason: bulkReason });
   };
 
   const data = usersQuery.data;
@@ -233,6 +213,7 @@ export default function AdminUsersIndexPage() {
 
         {data && data.data.length > 0 && (
           <DataTable
+            onRowClick={(row) => navigate(`/admin/users/${row.id}`)}
             columns={columns}
             data={data.data}
             meta={data.meta}
@@ -250,8 +231,7 @@ export default function AdminUsersIndexPage() {
                       onClick: (rows) => {
                         setSelectedRows(rows);
                         openBulkRoleModal();
-                      },
-                    },
+                      } },
                   ]
                 : undefined
             }

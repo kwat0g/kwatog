@@ -6,7 +6,7 @@
  */
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate} from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import { spcApi, type SpcChartListParams } from '@/api/quality/spc';
 import { Button } from '@/components/ui/Button';
@@ -23,15 +23,13 @@ import type { SpcControlChart, SpcChartStatus, SpcChartType } from '@/types/qual
 const STATUS_CHIP: Record<SpcChartStatus, ChipVariant> = {
   active: 'success',
   monitoring: 'info',
-  suspended: 'neutral',
-};
+  suspended: 'neutral' };
 
 // ─── Chart type display labels ────────────────────
 const CHART_TYPE_CHIP: Record<SpcChartType, ChipVariant> = {
   xbar_r: 'purple',
   imr: 'info',
-  p_chart: 'neutral',
-};
+  p_chart: 'neutral' };
 
 export default function SpcChartsListPage() {
   const navigate = useNavigate();
@@ -41,13 +39,11 @@ export default function SpcChartsListPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['quality', 'spc', 'charts', filters],
     queryFn: () => spcApi.listCharts(filters),
-    placeholderData: (prev) => prev,
-  });
+    placeholderData: (prev) => prev });
   const { data: options } = useQuery({
     queryKey: ['quality', 'spc-options'],
     queryFn: spcApi.options,
-    staleTime: 5 * 60 * 1000,
-  });
+    staleTime: 5 * 60 * 1000 });
   const chartTypeLabel = new Map((options?.chart_types ?? []).map((type) => [type.value, type.label]));
 
   const columns: Column<SpcControlChart>[] = [
@@ -62,20 +58,18 @@ export default function SpcChartsListPage() {
           </span>
         ) : (
           <span className="text-muted">--</span>
-        ),
-    },
+        ) },
     {
       key: 'parameter',
       header: 'Parameter',
       cell: (r) => (
-        <Link to={`/quality/spc/${r.id}`} className="text-accent hover:underline">
+        <span className="text-accent">
           {r.spec_item?.parameter_name ?? '--'}
           {r.spec_item?.unit_of_measure ? (
             <span className="ml-1 text-muted text-2xs">({r.spec_item.unit_of_measure})</span>
           ) : null}
-        </Link>
-      ),
-    },
+        </span>
+      ) },
     {
       key: 'chart_type',
       header: 'Chart Type',
@@ -83,21 +77,18 @@ export default function SpcChartsListPage() {
         <Chip variant={CHART_TYPE_CHIP[r.chart_type]}>
           {chartTypeLabel.get(r.chart_type) ?? r.chart_type}
         </Chip>
-      ),
-    },
+      ) },
     {
       key: 'status',
       header: 'Status',
       cell: (r) => (
         <Chip variant={STATUS_CHIP[r.status]}>{r.status_label ?? r.status}</Chip>
-      ),
-    },
+      ) },
     {
       key: 'subgroup_size',
       header: 'Subgroup',
       align: 'right',
-      cell: (r) => <NumCell>{r.subgroup_size}</NumCell>,
-    },
+      cell: (r) => <NumCell>{r.subgroup_size}</NumCell> },
     {
       key: 'limits',
       header: 'UCL / CL / LCL',
@@ -109,8 +100,7 @@ export default function SpcChartsListPage() {
           </NumCell>
         ) : (
           <span className="text-muted text-xs">not calculated</span>
-        ),
-    },
+        ) },
     {
       key: 'alerts',
       header: 'Alerts',
@@ -122,8 +112,7 @@ export default function SpcChartsListPage() {
         ) : (
           <NumCell className="text-muted">0</NumCell>
         );
-      },
-    },
+      } },
   ];
 
   const filterConfig: FilterConfig[] = [
@@ -134,8 +123,7 @@ export default function SpcChartsListPage() {
       options: [
         { value: '', label: 'All' },
         ...(options?.statuses ?? []),
-      ],
-    },
+      ] },
   ];
 
   return (
@@ -203,6 +191,7 @@ export default function SpcChartsListPage() {
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
           <DataTable
+            onRowClick={(r) => navigate(`/quality/spc/${r.id}`)}
             columns={columns}
             data={data.data}
             meta={data.meta}

@@ -29,7 +29,7 @@ const DEFAULT_BLOCKLIST_PATTERNS: RegExp[] = [
   /pagibig|pag_ibig|pag-ibig/i,
   /bank/i,
   /salary/i,
-  /daily_rate/i,
+  /semi_monthly_rate/i,
   /monthly_rate/i,
   /credit.?card|card.?number|cvv/i,
 ];

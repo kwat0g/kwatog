@@ -1,7 +1,7 @@
 /** Sprint 8 — Task 69. Maintenance work-orders list. */
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate} from 'react-router-dom';
 import { Plus, Smartphone } from 'lucide-react';
 import { workOrdersApi, type WorkOrderListParams } from '@/api/maintenance/workOrders';
 import { Button } from '@/components/ui/Button';
@@ -14,8 +14,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import {
   maintenancePriorityVariant as PRIORITY_CHIP,
-  maintenanceStatusVariant as STATUS_CHIP,
-} from '@/lib/statusVariants';
+  maintenanceStatusVariant as STATUS_CHIP } from '@/lib/statusVariants';
 import type { MaintenanceWorkOrder } from '@/types/maintenance';
 import { formatPeso } from '@/lib/formatNumber';
 
@@ -27,56 +26,47 @@ export default function MaintenanceWorkOrdersListPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['maintenance', 'work-orders', filters],
     queryFn: () => workOrdersApi.list(filters),
-    placeholderData: (prev) => prev,
-  });
+    placeholderData: (prev) => prev });
   const { data: options } = useQuery({
     queryKey: ['maintenance', 'work-order-options'],
-    queryFn: () => workOrdersApi.options(),
-  });
+    queryFn: () => workOrdersApi.options() });
 
   const columns: Column<MaintenanceWorkOrder>[] = [
     {
       key: 'mwo_number',
       header: 'WO',
       cell: (r) => (
-        <Link to={`/maintenance/work-orders/${r.id}`} className="font-mono text-accent hover:underline">
+        <span className="font-mono text-accent">
           {r.mwo_number}
-        </Link>
-      ),
-    },
+        </span>
+      ) },
     {
       key: 'target',
       header: 'Target',
       cell: (r) => r.maintainable
         ? <span><span className="font-mono">{r.maintainable.code ?? '—'}</span><span className="ml-2 text-muted">{r.maintainable.name}</span></span>
-        : <span className="text-muted">—</span>,
-    },
+        : <span className="text-muted">—</span> },
     {
       key: 'type',
       header: 'Type',
-      cell: (r) => <Chip variant={r.type === 'preventive' ? 'info' : 'warning'}>{r.type_label ?? r.type}</Chip>,
-    },
+      cell: (r) => <Chip variant={r.type === 'preventive' ? 'info' : 'warning'}>{r.type_label ?? r.type}</Chip> },
     {
       key: 'priority',
       header: 'Priority',
-      cell: (r) => <Chip variant={PRIORITY_CHIP[r.priority]}>{r.priority_label ?? r.priority}</Chip>,
-    },
+      cell: (r) => <Chip variant={PRIORITY_CHIP[r.priority]}>{r.priority_label ?? r.priority}</Chip> },
     {
       key: 'assignee',
       header: 'Assigned to',
-      cell: (r) => r.assignee?.name ?? <span className="text-muted">—</span>,
-    },
+      cell: (r) => r.assignee?.name ?? <span className="text-muted">—</span> },
     {
       key: 'cost',
       header: 'Cost',
       align: 'right',
-      cell: (r) => <NumCell>{formatPeso(r.cost ?? '0.00')}</NumCell>,
-    },
+      cell: (r) => <NumCell>{formatPeso(r.cost ?? '0.00')}</NumCell> },
     {
       key: 'status',
       header: 'Status',
-      cell: (r) => <Chip variant={STATUS_CHIP[r.status]}>{r.status_label ?? r.status.replace('_', ' ')}</Chip>,
-    },
+      cell: (r) => <Chip variant={STATUS_CHIP[r.status]}>{r.status_label ?? r.status.replace('_', ' ')}</Chip> },
   ];
 
   const filterConfig: FilterConfig[] = [
@@ -85,22 +75,19 @@ export default function MaintenanceWorkOrdersListPage() {
       options: [
         { value: '', label: 'All' },
         ...(options?.statuses ?? []).map((status) => ({ value: status.value, label: status.label })),
-      ],
-    },
+      ] },
     {
       key: 'type', label: 'Type', type: 'select',
       options: [
         { value: '', label: 'All' },
         ...(options?.types ?? []).map((type) => ({ value: type.value, label: type.label })),
-      ],
-    },
+      ] },
     {
       key: 'priority', label: 'Priority', type: 'select',
       options: [
         { value: '', label: 'All' },
         ...(options?.priorities ?? []).map((priority) => ({ value: priority.value, label: priority.label })),
-      ],
-    },
+      ] },
   ];
 
   return (
@@ -144,6 +131,7 @@ export default function MaintenanceWorkOrdersListPage() {
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
           <DataTable
+            onRowClick={(r) => navigate(`/maintenance/work-orders/${r.id}`)}
             columns={columns}
             data={data.data}
             meta={data.meta}

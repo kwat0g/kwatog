@@ -1,7 +1,7 @@
 /** Commission Earnings list page. */
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Check, DollarSign } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { commissionsApi, type CommissionEarningListParams } from '@/api/crm/commissions';
@@ -25,6 +25,7 @@ const STATUS_CHIP: Record<CommissionEarningStatus, 'warning' | 'info' | 'success
 
 export default function CommissionsListPage() {
   const { can } = usePermission();
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const [filters, setFilters] = useState<CommissionEarningListParams>({ page: 1, per_page: 25 });
   const [confirmApprove, setConfirmApprove] = useState<string | null>(null);
@@ -64,9 +65,9 @@ export default function CommissionsListPage() {
     {
       key: 'so_number', header: 'SO #',
       cell: (r) => (
-        <Link to={`/crm/sales-orders/${r.sales_order.id}`} className="font-mono text-accent hover:underline">
+        <span className="font-mono text-accent">
           {r.sales_order.so_number}
-        </Link>
+        </span>
       ),
     },
     {
@@ -166,6 +167,7 @@ export default function CommissionsListPage() {
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
           <DataTable
+            onRowClick={(r) => navigate(`/crm/sales-orders/${r.sales_order.id}`)}
             columns={columns}
             data={data.data}
             meta={data.meta}

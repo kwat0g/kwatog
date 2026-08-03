@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate} from 'react-router-dom';
 import { Plus, ShoppingCart, Zap } from 'lucide-react';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
@@ -22,11 +22,9 @@ import type { PurchaseRequest, PurchaseRequestPriority, PurchaseRequestStatus } 
 
 const statusVariant: Record<PurchaseRequestStatus, 'neutral' | 'warning' | 'info' | 'success' | 'danger'> = {
   draft: 'neutral', pending: 'info', approved: 'success', rejected: 'danger',
-  converted: 'neutral', cancelled: 'neutral',
-};
+  converted: 'neutral', cancelled: 'neutral' };
 const priorityVariant: Record<PurchaseRequestPriority, 'neutral' | 'warning' | 'danger'> = {
-  normal: 'neutral', urgent: 'warning', critical: 'danger',
-};
+  normal: 'neutral', urgent: 'warning', critical: 'danger' };
 
 const errMsg = (e: unknown, fallback: string) =>
   (e instanceof AxiosError ? e.response?.data?.message : undefined) ?? fallback;
@@ -42,12 +40,10 @@ export default function PurchaseRequestsListPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['purchasing', 'purchase-requests', filters],
     queryFn: ({ signal }) => purchaseRequestsApi.list(filters, signal),
-    placeholderData: (prev) => prev,
-  });
+    placeholderData: (prev) => prev });
   const { data: requestOptions } = useQuery({
     queryKey: ['purchasing', 'purchase-request-options'],
-    queryFn: () => purchaseRequestsApi.options(),
-  });
+    queryFn: () => purchaseRequestsApi.options() });
   const statusLabels = new Map((requestOptions?.statuses ?? []).map((option) => [option.value, option.label]));
 
   const bulkApproveMut = useMutation({
@@ -58,19 +54,16 @@ export default function PurchaseRequestsListPage() {
       const skipped = results.filter((r: { status: string }) => r.status === 'skipped').length;
       toast.success(`${approved} approved, ${skipped} skipped`);
     },
-    onError: (e) => toast.error(errMsg(e, 'Failed to bulk approve.')),
-  });
+    onError: (e) => toast.error(errMsg(e, 'Failed to bulk approve.')) });
 
   const convertDetail = useQuery({
     queryKey: ['purchasing', 'purchase-requests', convertTarget?.id, 'conversion'],
     queryFn: () => purchaseRequestsApi.show(convertTarget!.id),
-    enabled: !!convertTarget,
-  });
+    enabled: !!convertTarget });
   const vendors = useQuery({
     queryKey: ['accounting', 'vendors', 'pr-conversion'],
     queryFn: () => vendorsApi.list({ per_page: 200, is_active: 'true' }),
-    enabled: !!convertTarget,
-  });
+    enabled: !!convertTarget });
   const convertMut = useMutation({
     mutationFn: (assignments: Record<string, string>) => purchaseRequestsApi.convert(convertTarget!.id, assignments),
     onSuccess: (orders) => {
@@ -80,8 +73,7 @@ export default function PurchaseRequestsListPage() {
       toast.success(`${orders.length} purchase order${orders.length === 1 ? '' : 's'} created.`);
       navigate(orders.length === 1 ? `/purchasing/purchase-orders/${orders[0].id}` : '/purchasing/purchase-orders');
     },
-    onError: (e) => toast.error(errMsg(e, 'Failed to convert PR.')),
-  });
+    onError: (e) => toast.error(errMsg(e, 'Failed to convert PR.')) });
 
   const openConversion = (request: PurchaseRequest) => {
     setVendorMap({});
@@ -103,14 +95,13 @@ export default function PurchaseRequestsListPage() {
       onClick: (rows) => {
         const ids = rows.map((r) => r.id);
         bulkApproveMut.mutate(ids);
-      },
-    },
+      } },
   ];
 
   const columns: Column<PurchaseRequest>[] = [
     { key: 'pr', header: 'PR #', cell: (r) => (
       <div>
-        <Link to={`/purchasing/purchase-requests/${r.id}`} className="font-mono text-accent">{r.pr_number}</Link>
+        <span className="font-mono text-accent">{r.pr_number}</span>
         {r.is_auto_generated && <Chip variant="warning" className="ml-2">AUTO</Chip>}
         {r.is_urgent && <Chip variant="danger" className="ml-1"><Zap size={10} className="inline mr-0.5" />URGENT</Chip>}
       </div>
@@ -146,8 +137,7 @@ export default function PurchaseRequestsListPage() {
         >
           Convert to PO
         </Button>
-      ) : null,
-    }] : []),
+      ) : null }] : []),
   ];
 
   const filterConfig: FilterConfig[] = [
@@ -183,6 +173,7 @@ export default function PurchaseRequestsListPage() {
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
           <DataTable
+            onRowClick={(r) => navigate(`/purchasing/purchase-requests/${r.id}`)}
             columns={columns}
             data={data.data}
             meta={data.meta}

@@ -8,9 +8,9 @@ export interface SalaryAdjustmentItem {
   status: SalaryAdjustmentStatus;
   status_label?: string;
   from_basic_monthly_salary: string | null;
-  from_daily_rate: string | null;
+  from_semi_monthly_rate: string | null;
   to_basic_monthly_salary: string | null;
-  to_daily_rate: string | null;
+  to_semi_monthly_rate: string | null;
   effective_date: string | null;
   reason: string | null;
   employee: {
@@ -25,7 +25,7 @@ export interface SalaryAdjustmentItem {
 
 export interface RequestSalaryAdjustmentData {
   to_basic_monthly_salary?: string | null;
-  to_daily_rate?: string | null;
+  to_semi_monthly_rate?: string | null;
   effective_date: string;
   reason?: string | null;
 }

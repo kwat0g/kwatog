@@ -40,7 +40,7 @@ export interface CreateEmployeeData {
   date_hired: string;
   date_regularized?: string;
   basic_monthly_salary?: string;
-  daily_rate?: string;
+  semi_monthly_rate?: string;
   bank_name?: string;
   bank_account_no?: string;
 }

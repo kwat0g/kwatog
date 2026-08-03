@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { useNavigate} from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
 import { Play, Loader2, Activity } from 'lucide-react';
@@ -18,10 +18,10 @@ import { formatDateTime } from '@/lib/formatDate';
 import type { MrpPlan, MrpPlanStatus } from '@/types/mrp';
 
 const variant: Record<MrpPlanStatus, 'success' | 'neutral' | 'danger'> = {
-  active: 'success', superseded: 'neutral', cancelled: 'danger',
-};
+  active: 'success', superseded: 'neutral', cancelled: 'danger' };
 
 export default function MrpPlansListPage() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { can } = usePermission();
   const [filters, setFilters] = useState<MrpPlanListParams>({ page: 1, per_page: 25 });
@@ -29,21 +29,18 @@ export default function MrpPlansListPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['mrp', 'plans', filters],
     queryFn: () => mrpPlansApi.list(filters),
-    placeholderData: (prev) => prev,
-  });
+    placeholderData: (prev) => prev });
   const { data: planOptions } = useQuery({
     queryKey: ['mrp', 'plans', 'options'],
     queryFn: mrpPlansApi.options,
-    staleTime: 5 * 60 * 1000,
-  });
+    staleTime: 5 * 60 * 1000 });
   const statusLabels = new Map((planOptions?.statuses ?? []).map((option) => [option.value, option.label]));
 
   const lastRun = useQuery({
     queryKey: ['mrp', 'runs', 'latest'],
     queryFn: () => mrpRunsApi.latest(),
     enabled: can('mrp.runs.view'),
-    staleTime: 30_000,
-  });
+    staleTime: 30_000 });
 
   const triggerRun = useMutation({
     mutationFn: () => mrpRunsApi.trigger(),
@@ -55,32 +52,28 @@ export default function MrpPlansListPage() {
     onError: (e) => {
       const msg = e instanceof AxiosError ? e.response?.data?.message : 'Failed to trigger MRP run';
       toast.error(msg ?? 'Failed to trigger MRP run');
-    },
-  });
+    } });
 
   const columns: Column<MrpPlan>[] = [
     {
       key: 'no', header: 'Plan #',
       cell: (r) => (
-        <Link to={`/mrp/plans/${r.id}`} className="font-mono text-accent hover:underline">{r.mrp_plan_no}</Link>
-      ),
-    },
+        <span className="font-mono text-accent">{r.mrp_plan_no}</span>
+      ) },
     {
       key: 'so', header: 'Sales order',
       cell: (r) => r.sales_order ? (
-        <Link to={`/crm/sales-orders/${r.sales_order.id}`} className="font-mono text-accent hover:underline">
+        <span className="font-mono text-accent">
           {r.sales_order.so_number}
-        </Link>
-      ) : '—',
-    },
+        </span>
+      ) : '—' },
     { key: 'cust', header: 'Customer', cell: (r) => r.sales_order?.customer?.name ?? '—' },
     { key: 'version', header: 'Version', align: 'right', cell: (r) => <NumCell>v{r.version}</NumCell> },
     {
       key: 'shortages', header: 'Shortages', align: 'right',
       cell: (r) => r.shortages_found > 0
         ? <NumCell className="text-warning-fg">{r.shortages_found}</NumCell>
-        : <NumCell>0</NumCell>,
-    },
+        : <NumCell>0</NumCell> },
     { key: 'pr', header: 'Auto PRs', align: 'right', cell: (r) => <NumCell>{r.auto_pr_count}</NumCell> },
     { key: 'wo', header: 'Draft WOs', align: 'right', cell: (r) => <NumCell>{r.draft_wo_count}</NumCell> },
     { key: 'status', header: 'Status', cell: (r) => <Chip variant={variant[r.status]}>{r.status_label ?? statusLabels.get(r.status) ?? r.status}</Chip> },
@@ -159,7 +152,8 @@ export default function MrpPlansListPage() {
       )}
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
-          <DataTable columns={columns} data={data.data} meta={data.meta}
+          <DataTable onRowClick={(r) => navigate(`/mrp/plans/${r.id}`)}
+            columns={columns} data={data.data} meta={data.meta}
             onPageChange={(page) => setFilters((f) => ({ ...f, page }))} />
         </div>
       )}

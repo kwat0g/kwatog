@@ -7,7 +7,7 @@
  */
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate} from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import { inspectionSpecsApi, type InspectionSpecListParams } from '@/api/quality/inspectionSpecs';
 import { Button } from '@/components/ui/Button';
@@ -28,19 +28,17 @@ export default function InspectionSpecsListPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['quality', 'inspection-specs', filters],
     queryFn: () => inspectionSpecsApi.list(filters),
-    placeholderData: (prev) => prev,
-  });
+    placeholderData: (prev) => prev });
 
   const columns: Column<InspectionSpec>[] = [
     {
       key: 'product', header: 'Product',
       cell: (r) => r.product
-        ? <Link to={`/quality/inspection-specs/${r.product.id}`} className="hover:underline">
+        ? <span className="">
             <span className="font-mono text-accent">{r.product.part_number}</span>
             <span className="ml-2 text-muted">{r.product.name}</span>
-          </Link>
-        : <span className="text-muted">—</span>,
-    },
+          </span>
+        : <span className="text-muted">—</span> },
     { key: 'version', header: 'Version', align: 'right',
       cell: (r) => <NumCell>v{r.version}</NumCell> },
     { key: 'item_count', header: 'Parameters', align: 'right',
@@ -93,6 +91,7 @@ export default function InspectionSpecsListPage() {
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
           <DataTable
+            onRowClick={(r) => navigate(`/quality/inspection-specs/${r.product?.id}`)}
             columns={columns}
             data={data.data}
             meta={data.meta}

@@ -86,7 +86,7 @@ export const employeeSchema = z.object({
     (v) => !v || moneyPattern.test(v),
     { message: 'Numbers only, up to 2 decimals' },
   ),
-  daily_rate: z.string().optional().refine(
+  semi_monthly_rate: z.string().optional().refine(
     (v) => !v || moneyPattern.test(v),
     { message: 'Numbers only, up to 2 decimals' },
   ),
@@ -97,14 +97,14 @@ export const employeeSchema = z.object({
   (d) => d.pay_type !== 'monthly' || (!!d.basic_monthly_salary && moneyPattern.test(d.basic_monthly_salary) && Number(d.basic_monthly_salary) > 0),
   { message: 'Enter a valid monthly salary greater than 0', path: ['basic_monthly_salary'] },
 ).refine(
-  (d) => d.pay_type !== 'daily' || (!!d.daily_rate && moneyPattern.test(d.daily_rate) && Number(d.daily_rate) > 0),
-  { message: 'Enter a valid daily rate greater than 0', path: ['daily_rate'] },
+  (d) => d.pay_type !== 'semi_monthly' || (!!d.semi_monthly_rate && moneyPattern.test(d.semi_monthly_rate) && Number(d.semi_monthly_rate) > 0),
+  { message: 'Enter a valid semi-monthly rate greater than 0', path: ['semi_monthly_rate'] },
 ).refine(
   (d) => !d.basic_monthly_salary || Number(d.basic_monthly_salary) <= 9_999_999.99,
   { message: 'Maximum 9,999,999.99', path: ['basic_monthly_salary'] },
 ).refine(
-  (d) => !d.daily_rate || Number(d.daily_rate) <= 99_999.99,
-  { message: 'Maximum 99,999.99', path: ['daily_rate'] },
+  (d) => !d.semi_monthly_rate || Number(d.semi_monthly_rate) <= 9_999_999.99,
+  { message: 'Maximum 9,999,999.99', path: ['semi_monthly_rate'] },
 );
 
 export type EmployeeFormValues = z.infer<typeof employeeSchema>;
@@ -140,7 +140,7 @@ const FIELD_LABELS: Partial<Record<keyof EmployeeFormValues, string>> = {
   date_hired: 'Date hired',
   date_regularized: 'Date regularized',
   basic_monthly_salary: 'Monthly salary',
-  daily_rate: 'Daily rate',
+  semi_monthly_rate: 'Semi-monthly rate',
   bank_name: 'Bank name',
   bank_account_no: 'Account number',
 };
@@ -180,7 +180,7 @@ function defaults(employee?: Employee | null): EmployeeFormValues {
     date_hired: employee?.date_hired ?? '',
     date_regularized: employee?.date_regularized ?? '',
     basic_monthly_salary: employee?.basic_monthly_salary ?? '',
-    daily_rate: employee?.daily_rate ?? '',
+    semi_monthly_rate: employee?.semi_monthly_rate ?? '',
 
     bank_name: employee?.bank_name ?? '',
     bank_account_no: employee?.bank_account_no ?? '',
@@ -329,19 +329,20 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isPending, register
               error={errors.basic_monthly_salary?.message}
             />
           )}
-          {payType === 'daily' && (
+          {payType === 'semi_monthly' && (
             <Input
-              label="Daily rate"
+              label="Semi-monthly rate"
+              hint="Amount paid each cutoff (twice a month)"
               type="number"
               step="0.01"
               min="0"
-              max="99999.99"
+              max="9999999.99"
               prefix="₱"
               className="font-mono tabular-nums text-right"
               placeholder="0.00"
               required
-              {...register('daily_rate')}
-              error={errors.daily_rate?.message}
+              {...register('semi_monthly_rate')}
+              error={errors.semi_monthly_rate?.message}
             />
           )}
         </div>

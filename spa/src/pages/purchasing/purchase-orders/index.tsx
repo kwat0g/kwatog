@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate} from 'react-router-dom';
 import { Plus, Printer } from 'lucide-react';
 import { purchaseOrdersApi } from '@/api/purchasing/purchase-orders';
 import { bulkPrint } from '@/api/print';
@@ -18,8 +18,7 @@ import type { PurchaseOrder, PurchaseOrderStatus } from '@/types/purchasing';
 
 const variant: Record<PurchaseOrderStatus, 'neutral' | 'info' | 'warning' | 'success' | 'danger'> = {
   draft: 'neutral', pending_approval: 'info', approved: 'success', sent: 'info',
-  partially_received: 'warning', received: 'success', closed: 'neutral', cancelled: 'danger',
-};
+  partially_received: 'warning', received: 'success', closed: 'neutral', cancelled: 'danger' };
 
 export default function PurchaseOrdersListPage() {
   const navigate = useNavigate();
@@ -29,19 +28,17 @@ export default function PurchaseOrdersListPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['purchasing', 'purchase-orders', filters],
     queryFn: ({ signal }) => purchaseOrdersApi.list(filters, signal),
-    placeholderData: (prev) => prev,
-  });
+    placeholderData: (prev) => prev });
   const { data: orderOptions } = useQuery({
     queryKey: ['purchasing', 'purchase-orders', 'options'],
     queryFn: purchaseOrdersApi.options,
-    staleTime: 5 * 60 * 1000,
-  });
+    staleTime: 5 * 60 * 1000 });
   const statusLabels = new Map((orderOptions?.statuses ?? []).map((option) => [option.value, option.label]));
 
   const columns: Column<PurchaseOrder>[] = [
     { key: 'po', header: 'PO #', cell: (r) => (
       <span className="flex items-center gap-2">
-        <Link to={`/purchasing/purchase-orders/${r.id}`} className="font-mono text-accent">{r.po_number}</Link>
+        <span className="font-mono text-accent">{r.po_number}</span>
         {r.is_auto_generated && (
           <span title="Auto-generated for critical stock"><Chip variant="info">Auto</Chip></span>
         )}
@@ -95,6 +92,7 @@ export default function PurchaseOrdersListPage() {
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
           <DataTable
+            onRowClick={(r) => navigate(`/purchasing/purchase-orders/${r.id}`)}
             columns={columns}
             data={data.data}
             meta={data.meta}
@@ -104,8 +102,7 @@ export default function PurchaseOrdersListPage() {
               {
                 label: 'Print PDFs',
                 icon: <Printer size={14} />,
-                onClick: (rows: PurchaseOrder[]) => bulkPrint('purchase_order', rows.map((r) => r.id)),
-              } as BulkAction<PurchaseOrder>,
+                onClick: (rows: PurchaseOrder[]) => bulkPrint('purchase_order', rows.map((r) => r.id)) } as BulkAction<PurchaseOrder>,
             ]}
           />
         </div>

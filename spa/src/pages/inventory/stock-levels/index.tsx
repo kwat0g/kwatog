@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { stockLevelsApi } from '@/api/inventory/stock';
 import { itemsApi } from '@/api/inventory/items';
 import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
@@ -12,6 +12,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import type { StockLevel } from '@/types/inventory';
 
 export default function StockLevelsPage() {
+  const navigate = useNavigate();
   const [search] = useSearchParams();
   const itemFilter = search.get('item_id') ?? '';
   const [filters, setFilters] = useState<Record<string, unknown>>({ page: 1, per_page: 50, item_id: itemFilter || undefined });
@@ -19,18 +20,16 @@ export default function StockLevelsPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['inventory', 'stock-levels', filters],
     queryFn: () => stockLevelsApi.list(filters),
-    placeholderData: (prev) => prev,
-  });
+    placeholderData: (prev) => prev });
   const { data: itemOptions } = useQuery({
     queryKey: ['inventory', 'items', 'options'],
     queryFn: itemsApi.options,
-    staleTime: 5 * 60 * 1000,
-  });
+    staleTime: 5 * 60 * 1000 });
 
   const columns: Column<StockLevel>[] = [
     { key: 'item', header: 'Item', cell: (r) => (
       <div>
-        <Link to={`/inventory/items/${r.item?.id}`} className="font-mono text-accent">{r.item?.code}</Link>
+        <span className="font-mono text-accent">{r.item?.code}</span>
         <div className="text-xs text-muted">{r.item?.name}</div>
       </div>
     ) },
@@ -61,7 +60,8 @@ export default function StockLevelsPage() {
       {data && data.data.length === 0 && <EmptyState icon="inbox" title="No stock found" />}
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
-          <DataTable columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters(f => ({ ...f, page }))} />
+          <DataTable onRowClick={(r) => navigate(`/inventory/items/${r.item?.id}`)}
+            columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters(f => ({ ...f, page }))} />
         </div>
       )}
     </div>

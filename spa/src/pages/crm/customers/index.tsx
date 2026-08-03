@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate} from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
 import { crmCustomersApi, type CustomerListParams } from '@/api/crm/customers';
@@ -22,8 +22,7 @@ export default function CrmCustomersListPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['crm', 'customers', filters],
     queryFn: () => crmCustomersApi.list(filters),
-    placeholderData: (prev) => prev,
-  });
+    placeholderData: (prev) => prev });
 
   const columns: Column<Customer>[] = [
     { key: 'code', header: 'Code', cell: (r) => <span className="font-mono text-sm">{r.code ?? '—'}</span> },
@@ -31,36 +30,31 @@ export default function CrmCustomersListPage() {
       key: 'name',
       header: 'Customer',
       cell: (r) => (
-        <Link to={`/crm/customers/${r.id}`} className="font-medium text-accent hover:underline">
+        <span className="font-medium text-accent">
           {r.name}
-        </Link>
-      ),
-    },
+        </span>
+      ) },
     { key: 'contact_person', header: 'Contact', cell: (r) => r.contact_person ?? '—' },
     {
       key: 'email',
       header: 'Email',
       cell: (r) => r.email
         ? <a href={`mailto:${r.email}`} className="text-accent hover:underline">{r.email}</a>
-        : <span className="text-muted">—</span>,
-    },
+        : <span className="text-muted">—</span> },
     {
       key: 'phone',
       header: 'Phone',
-      cell: (r) => <span className="font-mono">{r.phone ?? '—'}</span>,
-    },
+      cell: (r) => <span className="font-mono">{r.phone ?? '—'}</span> },
     {
       key: 'payment_terms_days',
       header: 'Terms',
       align: 'right',
-      cell: (r) => <NumCell>{r.payment_terms_days}d</NumCell>,
-    },
+      cell: (r) => <NumCell>{r.payment_terms_days}d</NumCell> },
     {
       key: 'credit_limit',
       header: 'Credit limit',
       align: 'right',
-      cell: (r) => <NumCell>{r.credit_limit ? formatPeso(r.credit_limit) : '—'}</NumCell>,
-    },
+      cell: (r) => <NumCell>{r.credit_limit ? formatPeso(r.credit_limit) : '—'}</NumCell> },
     {
       key: 'status',
       header: 'Status',
@@ -68,8 +62,7 @@ export default function CrmCustomersListPage() {
         <Chip variant={r.is_active ? 'success' : 'neutral'}>
           {r.is_active ? 'active' : 'inactive'}
         </Chip>
-      ),
-    },
+      ) },
   ];
 
   const filterConfig: FilterConfig[] = [
@@ -81,8 +74,7 @@ export default function CrmCustomersListPage() {
         { value: '', label: 'All' },
         { value: 'true', label: 'Active' },
         { value: 'false', label: 'Inactive' },
-      ],
-    },
+      ] },
   ];
 
   return (
@@ -137,6 +129,7 @@ export default function CrmCustomersListPage() {
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
           <DataTable
+            onRowClick={(r) => navigate(`/crm/customers/${r.id}`)}
             columns={columns}
             data={data.data}
             meta={data.meta}

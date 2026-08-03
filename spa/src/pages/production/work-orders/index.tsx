@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
 import { workOrdersApi, type WorkOrderListParams } from '@/api/production/workOrders';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -19,38 +18,32 @@ export default function WorkOrdersListPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['production', 'work-orders', filters],
     queryFn: () => workOrdersApi.list(filters),
-    placeholderData: (prev) => prev,
-  });
+    placeholderData: (prev) => prev });
   const { data: workOrderOptions } = useQuery({
     queryKey: ['production', 'work-orders', 'options'],
     queryFn: workOrdersApi.options,
-    staleTime: 5 * 60 * 1000,
-  });
+    staleTime: 5 * 60 * 1000 });
   const statusLabels = new Map((workOrderOptions?.statuses ?? []).map((option) => [option.value, option.label]));
 
   const columns: Column<WorkOrder>[] = [
     {
       key: 'wo', header: 'WO #',
       cell: (r) => (
-        <Link to={`/production/work-orders/${r.id}`} className="font-mono text-accent hover:underline">{r.wo_number}</Link>
-      ),
-    },
+        <span className="font-mono text-accent">{r.wo_number}</span>
+      ) },
     {
       key: 'product', header: 'Product',
       cell: (r) => r.product
         ? <div><div className="font-mono text-xs">{r.product.part_number}</div><div className="text-muted text-xs">{r.product.name}</div></div>
-        : '—',
-    },
+        : '—' },
     {
       key: 'so', header: 'SO',
       cell: (r) => r.sales_order
-        ? <Link to={`/crm/sales-orders/${r.sales_order.id}`} className="font-mono text-accent hover:underline">{r.sales_order.so_number}</Link>
-        : <span className="text-muted">—</span>,
-    },
+        ? <span className="font-mono text-accent">{r.sales_order.so_number}</span>
+        : <span className="text-muted">—</span> },
     {
       key: 'machine', header: 'Machine',
-      cell: (r) => r.machine ? <span className="font-mono text-xs">{r.machine.machine_code}</span> : <span className="text-muted">—</span>,
-    },
+      cell: (r) => r.machine ? <span className="font-mono text-xs">{r.machine.machine_code}</span> : <span className="text-muted">—</span> },
     { key: 'qty', header: 'Target', align: 'right', cell: (r) => <NumCell>{formatInt(r.quantity_target)}</NumCell> },
     {
       key: 'progress', header: 'Progress', align: 'right',
@@ -63,8 +56,7 @@ export default function WorkOrdersListPage() {
             <div className="h-1 bg-accent rounded-full" style={{ width: `${Math.min(100, r.progress_percentage)}%` }} aria-hidden />
           </div>
         </div>
-      ),
-    },
+      ) },
     { key: 'planned', header: 'Planned start', align: 'right', cell: (r) => <NumCell>{r.planned_start?.slice(0, 10) ?? '—'}</NumCell> },
     { key: 'status', header: 'Status', cell: (r) => <Chip variant={variant[r.status]}>{statusLabels.get(r.status) ?? r.status_label ?? r.status}</Chip> },
   ];
@@ -95,7 +87,8 @@ export default function WorkOrdersListPage() {
       )}
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
-          <DataTable columns={columns} data={data.data} meta={data.meta}
+          <DataTable onRowClick={(r) => navigate(`/production/work-orders/${r.id}`)}
+            columns={columns} data={data.data} meta={data.meta}
             onPageChange={(page) => setFilters((f) => ({ ...f, page }))} />
         </div>
       )}

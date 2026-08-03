@@ -52,7 +52,7 @@ export type { PaginatedResponse, ApiSuccess };
 // ─── Employee — used by Tasks 14/15 (declared here, populated by Task 14) ──
 export type EmployeeStatus = 'active' | 'on_leave' | 'suspended' | 'resigned' | 'terminated' | 'retired';
 export type EmploymentType = 'regular' | 'probationary' | 'contractual' | 'project_based';
-export type PayType = 'monthly' | 'daily';
+export type PayType = 'monthly' | 'semi_monthly';
 export type Gender = 'male' | 'female';
 export type CivilStatus = 'single' | 'married' | 'widowed' | 'separated' | 'divorced';
 
@@ -150,7 +150,8 @@ export interface Employee {
   date_hired: string;
   date_regularized: string | null;
   basic_monthly_salary: string | null;
-  daily_rate: string | null;
+  /** Rate per semi-monthly cutoff. Set only when pay_type is 'semi_monthly'. */
+  semi_monthly_rate: string | null;
   bank_name: string | null;
   // Sensitive — masked unless authorized
   sss_no: string | null;

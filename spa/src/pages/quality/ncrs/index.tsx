@@ -3,7 +3,7 @@
  */
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate} from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import { ncrsApi, type NcrListParams } from '@/api/quality/ncrs';
 import { Button } from '@/components/ui/Button';
@@ -20,15 +20,13 @@ const STATUS_CHIP: Record<NcrStatus, 'success' | 'danger' | 'warning' | 'neutral
   open: 'warning',
   in_progress: 'info',
   closed: 'success',
-  cancelled: 'neutral',
-};
+  cancelled: 'neutral' };
 
 const SEVERITY_CHIP: Record<NcrSeverity, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
   low: 'neutral',
   medium: 'warning',
   high: 'danger',
-  critical: 'danger',
-};
+  critical: 'danger' };
 
 export default function NcrsListPage() {
   const navigate = useNavigate();
@@ -38,13 +36,11 @@ export default function NcrsListPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['quality', 'ncrs', filters],
     queryFn: () => ncrsApi.list(filters),
-    placeholderData: (prev) => prev,
-  });
+    placeholderData: (prev) => prev });
   const { data: ncrOptions } = useQuery({
     queryKey: ['quality', 'ncr-options'],
     queryFn: ncrsApi.options,
-    staleTime: 5 * 60 * 1000,
-  });
+    staleTime: 5 * 60 * 1000 });
   const labels = new Map([
     ...(ncrOptions?.sources ?? []),
     ...(ncrOptions?.severities ?? []),
@@ -58,17 +54,16 @@ export default function NcrsListPage() {
       header: 'NCR',
       cell: (r) => (
         <span className="flex items-center gap-2">
-          <Link to={`/quality/ncrs/${r.id}`} className="font-mono text-accent hover:underline">
+          <span className="font-mono text-accent">
             {r.ncr_number}
-          </Link>
+          </span>
           {r.is_auto_generated && (
             <span title="Auto-generated from inspection failure">
               <Chip variant="info">Auto</Chip>
             </span>
           )}
         </span>
-      ),
-    },
+      ) },
     {
       key: 'product',
       header: 'Product',
@@ -80,24 +75,20 @@ export default function NcrsListPage() {
           </span>
         ) : (
           <span className="text-muted">—</span>
-        ),
-    },
+        ) },
     {
       key: 'source',
       header: 'Source',
-      cell: (r) => <Chip variant="neutral">{r.source_label ?? labels.get(r.source) ?? r.source}</Chip>,
-    },
+      cell: (r) => <Chip variant="neutral">{r.source_label ?? labels.get(r.source) ?? r.source}</Chip> },
     {
       key: 'severity',
       header: 'Severity',
-      cell: (r) => <Chip variant={SEVERITY_CHIP[r.severity]}>{r.severity_label ?? labels.get(r.severity) ?? r.severity}</Chip>,
-    },
+      cell: (r) => <Chip variant={SEVERITY_CHIP[r.severity]}>{r.severity_label ?? labels.get(r.severity) ?? r.severity}</Chip> },
     {
       key: 'affected_quantity',
       header: 'Qty',
       align: 'right',
-      cell: (r) => <NumCell>{r.affected_quantity}</NumCell>,
-    },
+      cell: (r) => <NumCell>{r.affected_quantity}</NumCell> },
     {
       key: 'disposition',
       header: 'Disposition',
@@ -106,19 +97,16 @@ export default function NcrsListPage() {
           <Chip variant="neutral">{r.disposition_label ?? labels.get(r.disposition) ?? r.disposition}</Chip>
         ) : (
           <span className="text-muted">—</span>
-        ),
-    },
+        ) },
     {
       key: 'status',
       header: 'Status',
-      cell: (r) => <Chip variant={STATUS_CHIP[r.status]}>{r.status_label ?? labels.get(r.status) ?? r.status}</Chip>,
-    },
+      cell: (r) => <Chip variant={STATUS_CHIP[r.status]}>{r.status_label ?? labels.get(r.status) ?? r.status}</Chip> },
     {
       key: 'closed',
       header: 'Closed',
       align: 'right',
-      cell: (r) => <NumCell>{r.closed_at?.slice(0, 10) ?? '—'}</NumCell>,
-    },
+      cell: (r) => <NumCell>{r.closed_at?.slice(0, 10) ?? '—'}</NumCell> },
   ];
 
   const filterConfig: FilterConfig[] = [
@@ -129,8 +117,7 @@ export default function NcrsListPage() {
       options: [
         { value: '', label: 'All' },
         ...(ncrOptions?.statuses ?? []),
-      ],
-    },
+      ] },
     {
       key: 'severity',
       label: 'Severity',
@@ -138,8 +125,7 @@ export default function NcrsListPage() {
       options: [
         { value: '', label: 'All' },
         ...(ncrOptions?.severities ?? []),
-      ],
-    },
+      ] },
     {
       key: 'source',
       label: 'Source',
@@ -147,8 +133,7 @@ export default function NcrsListPage() {
       options: [
         { value: '', label: 'All' },
         ...(ncrOptions?.sources ?? []),
-      ],
-    },
+      ] },
   ];
 
   return (
@@ -198,6 +183,7 @@ export default function NcrsListPage() {
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
           <DataTable
+            onRowClick={(r) => navigate(`/quality/ncrs/${r.id}`)}
             columns={columns}
             data={data.data}
             meta={data.meta}

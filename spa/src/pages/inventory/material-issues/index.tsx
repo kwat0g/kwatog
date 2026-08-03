@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { materialIssuesApi } from '@/api/inventory/material-issues';
 import { Chip } from '@/components/ui/Chip';
 import { DataTable, type Column } from '@/components/ui/DataTable';
@@ -13,6 +13,7 @@ import type { MaterialIssueSlip } from '@/types/inventory';
 import { formatPeso } from '@/lib/formatNumber';
 
 export default function MaterialIssuesListPage() {
+  const navigate = useNavigate();
   const [filters, setFilters] = useState<Record<string, unknown>>({ page: 1, per_page: 25 });
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['inventory', 'material-issues', filters],
@@ -22,7 +23,7 @@ export default function MaterialIssuesListPage() {
 
   const columns: Column<MaterialIssueSlip>[] = [
     { key: 'slip', header: 'Slip', cell: (r) => (
-      <Link to={`/inventory/material-issues/${r.id}`} className="font-mono text-accent">{r.slip_number}</Link>
+      <span className="font-mono text-accent">{r.slip_number}</span>
     ) },
     { key: 'date', header: 'Issued', cell: (r) => <span className="font-mono">{formatDate(r.issued_date)}</span> },
     { key: 'wo', header: 'Work order', cell: (r) => r.work_order_id ? `WO#${r.work_order_id}` : (r.reference_text ?? '—') },
@@ -45,6 +46,7 @@ export default function MaterialIssuesListPage() {
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
           <DataTable
+            onRowClick={(r) => navigate(`/inventory/material-issues/${r.id}`)}
             columns={columns}
             data={data.data}
             meta={data.meta}

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { useNavigate} from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
 import { machinesApi, type MachineListParams } from '@/api/mrp/machines';
@@ -16,10 +16,10 @@ import { usePermission } from '@/hooks/usePermission';
 import type { Machine, MachineStatus } from '@/types/mrp';
 
 const variant: Record<MachineStatus, 'success' | 'info' | 'warning' | 'danger' | 'neutral'> = {
-  running: 'success', idle: 'neutral', maintenance: 'info', breakdown: 'danger', offline: 'neutral',
-};
+  running: 'success', idle: 'neutral', maintenance: 'info', breakdown: 'danger', offline: 'neutral' };
 
 export default function MachinesListPage() {
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const { can } = usePermission();
   const canTransition = can('production.machines.transition');
@@ -28,13 +28,11 @@ export default function MachinesListPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['mrp', 'machines', filters],
     queryFn: () => machinesApi.list(filters),
-    placeholderData: (prev) => prev,
-  });
+    placeholderData: (prev) => prev });
   const { data: machineOptions } = useQuery({
     queryKey: ['mrp', 'machines', 'options'],
     queryFn: machinesApi.options,
-    staleTime: 5 * 60 * 1000,
-  });
+    staleTime: 5 * 60 * 1000 });
   const statusLabels = new Map((machineOptions?.statuses ?? []).map((option) => [option.value, option.label]));
 
   const transition = useMutation({
@@ -45,16 +43,14 @@ export default function MachinesListPage() {
     },
     onError: (e: AxiosError<{ message?: string }>) => {
       toast.error(e.response?.data?.message ?? 'Failed to transition status.');
-    },
-  });
+    } });
 
   const columns: Column<Machine>[] = [
     {
       key: 'code', header: 'Code',
       cell: (r) => (
-        <Link to={`/mrp/machines/${r.id}`} className="font-mono text-accent hover:underline">{r.machine_code}</Link>
-      ),
-    },
+        <span className="font-mono text-accent">{r.machine_code}</span>
+      ) },
     { key: 'name', header: 'Name', cell: (r) => r.name },
     { key: 'tonnage', header: 'Tonnage', align: 'right', cell: (r) => <NumCell>{r.tonnage ?? '—'}{r.tonnage ? ' T' : ''}</NumCell> },
     { key: 'ops', header: 'Operators', align: 'right', cell: (r) => <NumCell>{Number(r.operators_required).toFixed(1)}</NumCell> },
@@ -82,8 +78,7 @@ export default function MachinesListPage() {
             {allowed.map((s) => <option key={s} value={s}>→ {statusLabels.get(s) ?? s}</option>)}
           </Select>
         );
-      },
-    }] : []),
+      } }] : []),
   ];
 
   const filterConfig: FilterConfig[] = [
@@ -112,7 +107,8 @@ export default function MachinesListPage() {
       )}
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
-          <DataTable columns={columns} data={data.data} meta={data.meta}
+          <DataTable onRowClick={(r) => navigate(`/mrp/machines/${r.id}`)}
+            columns={columns} data={data.data} meta={data.meta}
             onPageChange={(page) => setFilters((f) => ({ ...f, page }))} />
         </div>
       )}

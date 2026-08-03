@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { useNavigate} from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -42,11 +42,11 @@ const holdSchema = z.object({
     .refine((v) => Number(v) > 0, 'Must be greater than zero.'),
   quarantine_location_id: z.string().optional().or(z.literal('')),
   ncr_id: z.string().optional().or(z.literal('')),
-  notes: z.string().max(1000).optional().or(z.literal('')),
-});
+  notes: z.string().max(1000).optional().or(z.literal('')) });
 type HoldValues = z.infer<typeof holdSchema>;
 
 export default function MrbListPage() {
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const { can } = usePermission();
   const canManage = can('inventory.mrb.manage');
@@ -63,13 +63,11 @@ export default function MrbListPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['inventory', 'mrb', filters],
     queryFn: () => mrbApi.list(filters),
-    placeholderData: (prev) => prev,
-  });
+    placeholderData: (prev) => prev });
   const { data: options } = useQuery({
     queryKey: ['inventory', 'mrb', 'options'],
     queryFn: () => mrbApi.options(),
-    staleTime: 5 * 60 * 1000,
-  });
+    staleTime: 5 * 60 * 1000 });
   const statusFilters = [{ value: '', label: 'All statuses' }, ...(options?.statuses ?? [])];
 
   const columns: Column<MrbRecord>[] = [
@@ -77,11 +75,10 @@ export default function MrbListPage() {
       key: 'mrb',
       header: 'MRB #',
       cell: (r) => (
-        <Link to={`/inventory/mrb/${r.id}`} className="font-mono text-accent">
+        <span className="font-mono text-accent">
           {r.mrb_number}
-        </Link>
-      ),
-    },
+        </span>
+      ) },
     {
       key: 'item',
       header: 'Item',
@@ -90,8 +87,7 @@ export default function MrbListPage() {
           <div className="font-mono">{r.item?.code ?? '—'}</div>
           <div className="text-muted">{r.item?.name ?? '—'}</div>
         </div>
-      ),
-    },
+      ) },
     {
       key: 'qty',
       header: 'Qty',
@@ -100,13 +96,11 @@ export default function MrbListPage() {
         <span className="font-mono tabular-nums">
           {r.quantity} {r.item?.unit_of_measure ?? ''}
         </span>
-      ),
-    },
+      ) },
     {
       key: 'status',
       header: 'Status',
-      cell: (r) => <Chip variant={mrbStatusVariant(r.status)}>{r.status_label}</Chip>,
-    },
+      cell: (r) => <Chip variant={mrbStatusVariant(r.status)}>{r.status_label}</Chip> },
     {
       key: 'location',
       header: 'Location',
@@ -114,8 +108,7 @@ export default function MrbListPage() {
         <span className="font-mono text-xs">
           {r.source_location?.full_code ?? '—'} → {r.quarantine_location?.full_code ?? '—'}
         </span>
-      ),
-    },
+      ) },
     {
       key: 'held',
       header: 'Held',
@@ -124,20 +117,18 @@ export default function MrbListPage() {
           <div>{r.held_by ?? '—'}</div>
           <div className="text-muted font-mono">{formatDate(r.held_at)}</div>
         </div>
-      ),
-    },
+      ) },
     {
       key: 'ncr',
       header: 'NCR',
       cell: (r) =>
         r.ncr ? (
-          <Link to={`/quality/ncrs/${r.ncr.id}`} className="font-mono text-accent">
+          <span className="font-mono text-accent">
             {r.ncr.ncr_number}
-          </Link>
+          </span>
         ) : (
           <span className="text-muted">—</span>
-        ),
-    },
+        ) },
   ];
 
   return (
@@ -199,7 +190,8 @@ export default function MrbListPage() {
       )}
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
-          <DataTable columns={columns} data={data.data} meta={data.meta} onPageChange={setPage} />
+          <DataTable onRowClick={(r) => navigate(`/inventory/mrb/${r.id}`)}
+            columns={columns} data={data.data} meta={data.meta} onPageChange={setPage} />
         </div>
       )}
 
@@ -220,8 +212,7 @@ export default function MrbListPage() {
 function HoldModal({
   isOpen,
   onClose,
-  onSuccess,
-}: {
+  onSuccess }: {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
@@ -235,22 +226,18 @@ function HoldModal({
         quantity: '',
         quarantine_location_id: '',
         ncr_id: '',
-        notes: '',
-      },
-    });
+        notes: '' } });
 
   const { data: itemsResp } = useQuery({
     queryKey: ['inventory', 'items', 'for-mrb'],
     queryFn: () => itemsApi.list({ per_page: 500, is_active: 'true' }),
-    enabled: isOpen,
-  });
+    enabled: isOpen });
   const itemOpts = itemsResp?.data ?? [];
 
   const { data: warehouses } = useQuery({
     queryKey: ['inventory', 'warehouse', 'tree'],
     queryFn: () => warehouseApi.tree(),
-    enabled: isOpen,
-  });
+    enabled: isOpen });
 
   // All locations (source can be any location holding the stock).
   const allLocations = useMemo(
@@ -260,8 +247,7 @@ function HoldModal({
           (z.locations ?? []).map((l) => ({
             id: l.id,
             label: `${w.code}-${z.code}-${l.code}`,
-            zoneType: z.zone_type,
-          })),
+            zoneType: z.zone_type })),
         ),
       ),
     [warehouses],
@@ -272,8 +258,7 @@ function HoldModal({
   const { data: ncrsResp } = useQuery({
     queryKey: ['quality', 'ncrs', 'for-mrb'],
     queryFn: () => ncrsApi.list({ per_page: 100 }),
-    enabled: isOpen,
-  });
+    enabled: isOpen });
   const ncrOpts = ncrsResp?.data ?? [];
 
   const mutation = useMutation({
@@ -284,15 +269,13 @@ function HoldModal({
         source_location_id: v.source_location_id,
         quarantine_location_id: v.quarantine_location_id || undefined,
         ncr_id: v.ncr_id || undefined,
-        notes: v.notes || undefined,
-      }),
+        notes: v.notes || undefined }),
     onSuccess: (rec) => {
       toast.success(`MRB ${rec.mrb_number} raised — stock moved to quarantine.`);
       reset();
       onSuccess();
     },
-    onError: (e) => applyServerValidationErrors(e, setError, 'Failed to raise MRB hold.'),
-  });
+    onError: (e) => applyServerValidationErrors(e, setError, 'Failed to raise MRB hold.') });
 
   return (
     <Modal

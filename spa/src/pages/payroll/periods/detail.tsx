@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link , useNavigate} from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Play, CheckCircle2, Lock, Download, AlertCircle, Upload, Eye, Trash2, Banknote, Ban, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -48,6 +48,7 @@ const periodStatusVariant = (status: string | null | undefined): ChipVariant => 
 
 export default function PayrollPeriodDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const { can } = usePermission();
   const [activeTab, setActiveTab] = useState<'employees' | 'failures' | 'anomalies' | 'summary' | 'variance'>('employees');
@@ -265,9 +266,9 @@ export default function PayrollPeriodDetailPage() {
       cell: (r) => r.employee
         ? <StackedCell
             primary={
-              <Link to={`/payroll/periods/${period.id}/employee/${r.id}`} className="text-accent hover:underline">
+              <span className="text-accent">
                 {r.employee.full_name}
-              </Link>
+              </span>
             }
             secondary={<span className="font-mono">{r.employee.employee_no}</span>}
           />
@@ -475,7 +476,8 @@ export default function PayrollPeriodDetailPage() {
               )}
               {payrolls && payrolls.data.length > 0 && (
                 <DataTable
-                  columns={columns}
+                  onRowClick={(r) => navigate(`/payroll/periods/${period.id}/employee/${r.id}`)}
+            columns={columns}
                   data={payrolls.data}
                   meta={payrolls.meta}
                 />

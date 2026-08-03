@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate} from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import { bomsApi, type BomListParams } from '@/api/mrp/boms';
 import { Button } from '@/components/ui/Button';
@@ -21,25 +21,22 @@ export default function BomsListPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['mrp', 'boms', filters],
     queryFn: () => bomsApi.list(filters),
-    placeholderData: (prev) => prev,
-  });
+    placeholderData: (prev) => prev });
 
   const columns: Column<Bom>[] = [
     {
       key: 'product', header: 'Product',
       cell: (r) => r.product
-        ? <Link to={`/mrp/boms/${r.id}`} className="hover:underline">
+        ? <span className="">
             <span className="font-mono text-accent">{r.product.part_number}</span>
             <span className="ml-2 text-muted">{r.product.name}</span>
-          </Link>
-        : '—',
-    },
+          </span>
+        : '—' },
     { key: 'version', header: 'Version', align: 'right', cell: (r) => <NumCell>v{r.version}</NumCell> },
     { key: 'lines', header: 'Lines', align: 'right', cell: (r) => <NumCell>{r.item_count}</NumCell> },
     {
       key: 'active', header: 'Status',
-      cell: (r) => r.is_active ? <Chip variant="success">Active</Chip> : <Chip variant="neutral">Archived</Chip>,
-    },
+      cell: (r) => r.is_active ? <Chip variant="success">Active</Chip> : <Chip variant="neutral">Archived</Chip> },
     { key: 'updated', header: 'Updated', align: 'right', cell: (r) => <NumCell>{r.updated_at?.slice(0, 10)}</NumCell> },
   ];
 
@@ -77,6 +74,7 @@ export default function BomsListPage() {
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
           <DataTable
+            onRowClick={(r) => navigate(`/mrp/boms/${r.id}`)}
             columns={columns}
             data={data.data}
             meta={data.meta}

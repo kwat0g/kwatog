@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate} from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import { returnManagementApi } from '@/api/returnManagement';
 import { Button } from '@/components/ui/Button';
@@ -22,13 +22,11 @@ const STATUS_VARIANT: Record<string, ChipVariant> = {
   inspected: 'purple',
   completed: 'success',
   rejected: 'danger',
-  cancelled: 'neutral',
-};
+  cancelled: 'neutral' };
 
 const TYPE_VARIANT: Record<string, ChipVariant> = {
   customer_return: 'info',
-  supplier_return: 'warning',
-};
+  supplier_return: 'warning' };
 
 export default function ReturnManagementListPage() {
   const navigate = useNavigate();
@@ -38,24 +36,21 @@ export default function ReturnManagementListPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['return-requests', filters],
     queryFn: () => returnManagementApi.list(filters as Record<string, string | number | undefined>),
-    placeholderData: (prev) => prev,
-  });
+    placeholderData: (prev) => prev });
   const { data: options } = useQuery({
     queryKey: ['return-management', 'options'],
     queryFn: () => returnManagementApi.options(),
-    staleTime: 300_000,
-  });
+    staleTime: 300_000 });
 
   const columns: Column<ReturnRequest>[] = [
     {
       key: 'rma',
       header: 'RMA #',
       cell: (r) => (
-        <Link to={`/return-management/${r.id}`} className="font-mono text-accent">
+        <span className="font-mono text-accent">
           {r.rma_number}
-        </Link>
-      ),
-    },
+        </span>
+      ) },
     {
       key: 'type',
       header: 'Type',
@@ -63,8 +58,7 @@ export default function ReturnManagementListPage() {
         <Chip variant={TYPE_VARIANT[r.type] ?? 'neutral'}>
           {r.type_label || r.type.replace(/_/g, ' ')}
         </Chip>
-      ),
-    },
+      ) },
     {
       key: 'source',
       header: 'Source',
@@ -72,8 +66,7 @@ export default function ReturnManagementListPage() {
         <span className="text-secondary">
           {r.customer?.name || r.vendor?.name || r.source_label || '—'}
         </span>
-      ),
-    },
+      ) },
     {
       key: 'status',
       header: 'Status',
@@ -81,8 +74,7 @@ export default function ReturnManagementListPage() {
         <Chip variant={STATUS_VARIANT[r.status] ?? 'neutral'}>
           {r.status_label || r.status.replace(/_/g, ' ')}
         </Chip>
-      ),
-    },
+      ) },
     {
       key: 'reason',
       header: 'Reason',
@@ -91,19 +83,16 @@ export default function ReturnManagementListPage() {
         <span className="text-muted truncate block">
           {r.reason_description || r.reason_code || '—'}
         </span>
-      ),
-    },
+      ) },
     {
       key: 'items',
       header: 'Items',
       align: 'right',
-      cell: (r) => <NumCell>{r.item_count}</NumCell>,
-    },
+      cell: (r) => <NumCell>{r.item_count}</NumCell> },
     {
       key: 'date',
       header: 'Date',
-      cell: (r) => <NumCell>{formatDate(r.return_date)}</NumCell>,
-    },
+      cell: (r) => <NumCell>{formatDate(r.return_date)}</NumCell> },
   ];
 
   const filterConfig: FilterConfig[] = [
@@ -111,14 +100,12 @@ export default function ReturnManagementListPage() {
       key: 'type',
       label: 'Type',
       type: 'select',
-      options: [{ value: '', label: 'All types' }, ...(options?.types ?? [])],
-    },
+      options: [{ value: '', label: 'All types' }, ...(options?.types ?? [])] },
     {
       key: 'status',
       label: 'Status',
       type: 'select',
-      options: [{ value: '', label: 'All statuses' }, ...(options?.statuses ?? [])],
-    },
+      options: [{ value: '', label: 'All statuses' }, ...(options?.statuses ?? [])] },
   ];
 
   return (
@@ -170,6 +157,7 @@ export default function ReturnManagementListPage() {
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
           <DataTable
+            onRowClick={(r) => navigate(`/return-management/${r.id}`)}
             columns={columns}
             data={data.data}
             meta={data.meta}

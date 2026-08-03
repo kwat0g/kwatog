@@ -6,7 +6,7 @@
  */
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate} from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import { inspectionsApi, type InspectionListParams } from '@/api/quality/inspections';
 import { Button } from '@/components/ui/Button';
@@ -24,8 +24,7 @@ const STATUS_CHIP: Record<InspectionStatus, 'success' | 'danger' | 'warning' | '
   in_progress: 'info',
   passed: 'success',
   failed: 'danger',
-  cancelled: 'neutral',
-};
+  cancelled: 'neutral' };
 
 export default function InspectionsListPage() {
   const navigate = useNavigate();
@@ -35,13 +34,11 @@ export default function InspectionsListPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['quality', 'inspections', filters],
     queryFn: () => inspectionsApi.list(filters),
-    placeholderData: (prev) => prev,
-  });
+    placeholderData: (prev) => prev });
   const { data: inspectionOptions } = useQuery({
     queryKey: ['quality', 'inspection-options'],
     queryFn: inspectionsApi.options,
-    staleTime: 5 * 60 * 1000,
-  });
+    staleTime: 5 * 60 * 1000 });
   const labels = new Map([
     ...(inspectionOptions?.stages ?? []),
     ...(inspectionOptions?.statuses ?? []),
@@ -52,11 +49,10 @@ export default function InspectionsListPage() {
       key: 'inspection_number',
       header: 'Inspection',
       cell: (r) => (
-        <Link to={`/quality/inspections/${r.id}`} className="font-mono text-accent hover:underline">
+        <span className="font-mono text-accent">
           {r.inspection_number}
-        </Link>
-      ),
-    },
+        </span>
+      ) },
     {
       key: 'product',
       header: 'Product',
@@ -73,8 +69,7 @@ export default function InspectionsListPage() {
           </span>
         ) : (
           <span className="text-muted">—</span>
-        ),
-    },
+        ) },
     {
       key: 'stage',
       header: 'Stage',
@@ -82,8 +77,7 @@ export default function InspectionsListPage() {
         <Chip variant="neutral">
           {labels.get(r.stage) ?? r.stage}
         </Chip>
-      ),
-    },
+      ) },
     {
       key: 'sample',
       header: 'Sample / Batch',
@@ -93,8 +87,7 @@ export default function InspectionsListPage() {
           {r.sample_size} / {r.batch_quantity}
           {r.aql_code ? <span className="ml-2 text-muted">[{r.aql_code}]</span> : null}
         </NumCell>
-      ),
-    },
+      ) },
     {
       key: 'defects',
       header: 'Defects (Ac)',
@@ -103,19 +96,16 @@ export default function InspectionsListPage() {
         <NumCell className={r.defect_count > r.accept_count ? 'text-danger' : ''}>
           {r.defect_count} ({r.accept_count})
         </NumCell>
-      ),
-    },
+      ) },
     {
       key: 'status',
       header: 'Status',
-      cell: (r) => <Chip variant={STATUS_CHIP[r.status]}>{r.status_label ?? labels.get(r.status) ?? r.status}</Chip>,
-    },
+      cell: (r) => <Chip variant={STATUS_CHIP[r.status]}>{r.status_label ?? labels.get(r.status) ?? r.status}</Chip> },
     {
       key: 'completed',
       header: 'Completed',
       align: 'right',
-      cell: (r) => <NumCell>{r.completed_at?.slice(0, 10) ?? '—'}</NumCell>,
-    },
+      cell: (r) => <NumCell>{r.completed_at?.slice(0, 10) ?? '—'}</NumCell> },
   ];
 
   const filterConfig: FilterConfig[] = [
@@ -126,8 +116,7 @@ export default function InspectionsListPage() {
       options: [
         { value: '', label: 'All' },
         ...(inspectionOptions?.stages ?? []),
-      ],
-    },
+      ] },
     {
       key: 'status',
       label: 'Status',
@@ -135,8 +124,7 @@ export default function InspectionsListPage() {
       options: [
         { value: '', label: 'All' },
         ...(inspectionOptions?.statuses ?? []),
-      ],
-    },
+      ] },
   ];
 
   return (
@@ -186,6 +174,7 @@ export default function InspectionsListPage() {
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
           <DataTable
+            onRowClick={(r) => navigate(`/quality/inspections/${r.id}`)}
             columns={columns}
             data={data.data}
             meta={data.meta}

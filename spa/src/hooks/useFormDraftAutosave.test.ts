@@ -22,7 +22,7 @@ describe('stripSensitive', () => {
       pagibig_no: '0000-0000-0000',
       bank_account_no: '0001234567',
       basic_monthly_salary: '486500',
-      daily_rate: '650',
+      semi_monthly_rate: '7150',
       password: 'secret',
       email: 'juan@ogami.ph',
     });
@@ -38,7 +38,7 @@ describe('stripSensitive', () => {
     expect(out).not.toHaveProperty('pagibig_no');
     expect(out).not.toHaveProperty('bank_account_no');
     expect(out).not.toHaveProperty('basic_monthly_salary');
-    expect(out).not.toHaveProperty('daily_rate');
+    expect(out).not.toHaveProperty('semi_monthly_rate');
     expect(out).not.toHaveProperty('password');
   });
 

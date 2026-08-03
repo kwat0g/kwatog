@@ -135,11 +135,11 @@ export default function SalaryAdjustmentsPage() {
                     {formatPeso(row.from_basic_monthly_salary)} → {formatPeso(row.to_basic_monthly_salary)}
                   </span>
                 </div>
-                {(row.from_daily_rate || row.to_daily_rate) && (
+                {(row.from_semi_monthly_rate || row.to_semi_monthly_rate) && (
                   <div className="flex">
                     <span className="text-muted w-40 shrink-0">Daily rate:</span>
                     <span className="font-mono tabular-nums">
-                      {formatPeso(row.from_daily_rate)} → {formatPeso(row.to_daily_rate)}
+                      {formatPeso(row.from_semi_monthly_rate)} → {formatPeso(row.to_semi_monthly_rate)}
                     </span>
                   </div>
                 )}

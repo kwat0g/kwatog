@@ -7,7 +7,7 @@
  */
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate} from 'react-router-dom';
 import { Plus, AlertCircle } from 'lucide-react';
 import { documentsApi, type DocumentListParams } from '@/api/quality/documents';
 import { Button } from '@/components/ui/Button';
@@ -27,8 +27,7 @@ const CATEGORY_CHIP: Record<DocumentCategory, ChipVariant> = {
   work_instruction: 'success',
   form: 'neutral',
   policy: 'warning',
-  specification: 'info',
-};
+  specification: 'info' };
 
 /** Returns true when the document is overdue for review. */
 function isOverdue(doc: ControlledDocument): boolean {
@@ -48,13 +47,11 @@ export default function DocumentsListPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['quality', 'documents', filters],
     queryFn: () => documentsApi.list(filters),
-    placeholderData: (prev) => prev,
-  });
+    placeholderData: (prev) => prev });
   const { data: documentOptions } = useQuery({
     queryKey: ['quality', 'document-options'],
     queryFn: documentsApi.options,
-    staleTime: 5 * 60 * 1000,
-  });
+    staleTime: 5 * 60 * 1000 });
   const categoryLabels = new Map((documentOptions?.categories ?? []).map((option) => [option.value, option.label]));
 
   const columns: Column<ControlledDocument>[] = [
@@ -62,16 +59,14 @@ export default function DocumentsListPage() {
       key: 'code',
       header: 'Code',
       cell: (r) => (
-        <Link to={`/quality/documents/${r.id}`} className="font-mono text-accent hover:underline">
+        <span className="font-mono text-accent">
           {r.code}
-        </Link>
-      ),
-    },
+        </span>
+      ) },
     {
       key: 'title',
       header: 'Title',
-      cell: (r) => <span>{r.title}</span>,
-    },
+      cell: (r) => <span>{r.title}</span> },
     {
       key: 'category',
       header: 'Category',
@@ -79,16 +74,14 @@ export default function DocumentsListPage() {
         <Chip variant={CATEGORY_CHIP[r.category as DocumentCategory] ?? 'neutral'}>
           {categoryLabels.get(r.category) ?? r.category}
         </Chip>
-      ),
-    },
+      ) },
     {
       key: 'revision',
       header: 'Rev',
       align: 'right',
       cell: (r) => (
         <NumCell>{r.current_revision ? r.current_revision.revision_number : '—'}</NumCell>
-      ),
-    },
+      ) },
     {
       key: 'review_status',
       header: 'Review Status',
@@ -105,8 +98,7 @@ export default function DocumentsListPage() {
           );
         }
         return <Chip variant="success">Current</Chip>;
-      },
-    },
+      } },
     {
       key: 'active',
       header: 'Status',
@@ -114,8 +106,7 @@ export default function DocumentsListPage() {
         <Chip variant={r.is_active ? 'success' : 'neutral'}>
           {r.is_active ? 'Active' : 'Inactive'}
         </Chip>
-      ),
-    },
+      ) },
   ];
 
   const filterConfig: FilterConfig[] = [
@@ -126,8 +117,7 @@ export default function DocumentsListPage() {
       options: [
         { value: '', label: 'All' },
         ...(documentOptions?.categories ?? []),
-      ],
-    },
+      ] },
   ];
 
   return (
@@ -177,6 +167,7 @@ export default function DocumentsListPage() {
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
           <DataTable
+            onRowClick={(r) => navigate(`/quality/documents/${r.id}`)}
             columns={columns}
             data={data.data}
             meta={data.meta}

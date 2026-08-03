@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { useNavigate} from 'react-router-dom';
 import { moldsApi, type MoldListParams } from '@/api/mrp/molds';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -13,22 +13,20 @@ import { formatInt } from '@/lib/formatNumber';
 import type { Mold, MoldStatus } from '@/types/mrp';
 
 const variant: Record<MoldStatus, 'success' | 'info' | 'warning' | 'danger' | 'neutral'> = {
-  available: 'success', in_use: 'info', maintenance: 'warning', retired: 'neutral',
-};
+  available: 'success', in_use: 'info', maintenance: 'warning', retired: 'neutral' };
 
 export default function MoldsListPage() {
+  const navigate = useNavigate();
   const [filters, setFilters] = useState<MoldListParams>({ page: 1, per_page: 25 });
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['mrp', 'molds', filters],
     queryFn: () => moldsApi.list(filters),
-    placeholderData: (prev) => prev,
-  });
+    placeholderData: (prev) => prev });
   const { data: moldOptions } = useQuery({
     queryKey: ['mrp', 'molds', 'options'],
     queryFn: moldsApi.options,
-    staleTime: 5 * 60 * 1000,
-  });
+    staleTime: 5 * 60 * 1000 });
   const statusLabels = new Map((moldOptions?.statuses ?? []).map((option) => [option.value, option.label]));
   const warningRatioPct = moldOptions?.warning_ratio_pct;
 
@@ -36,14 +34,12 @@ export default function MoldsListPage() {
     {
       key: 'code', header: 'Code',
       cell: (r) => (
-        <Link to={`/mrp/molds/${r.id}`} className="font-mono text-accent hover:underline">{r.mold_code}</Link>
-      ),
-    },
+        <span className="font-mono text-accent">{r.mold_code}</span>
+      ) },
     { key: 'name', header: 'Name', cell: (r) => r.name },
     {
       key: 'product', header: 'Product',
-      cell: (r) => r.product ? <span><span className="font-mono">{r.product.part_number}</span> · {r.product.name}</span> : '—',
-    },
+      cell: (r) => r.product ? <span><span className="font-mono">{r.product.part_number}</span> · {r.product.name}</span> : '—' },
     { key: 'cavity', header: 'Cavities', align: 'right', cell: (r) => <NumCell>{r.cavity_count}</NumCell> },
     { key: 'rate', header: 'Output / hr', align: 'right', cell: (r) => <NumCell>{formatInt(r.output_rate_per_hour)}</NumCell> },
     {
@@ -64,8 +60,7 @@ export default function MoldsListPage() {
             />
           </div>
         </div>
-      ),
-    },
+      ) },
     { key: 'machines', header: 'Compatible machines', align: 'right', cell: (r) => <NumCell>{r.compatible_machines_count}</NumCell> },
     { key: 'status', header: 'Status', cell: (r) => <Chip variant={variant[r.status]}>{statusLabels.get(r.status) ?? r.status_label}</Chip> },
   ];
@@ -96,7 +91,8 @@ export default function MoldsListPage() {
       {data && data.data.length === 0 && <EmptyState icon="package" title="No molds configured" />}
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
-          <DataTable columns={columns} data={data.data} meta={data.meta}
+          <DataTable onRowClick={(r) => navigate(`/mrp/molds/${r.id}`)}
+            columns={columns} data={data.data} meta={data.meta}
             onPageChange={(page) => setFilters((f) => ({ ...f, page }))} />
         </div>
       )}

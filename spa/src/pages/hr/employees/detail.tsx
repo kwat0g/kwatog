@@ -149,7 +149,7 @@ export default function EmployeeDetailPage() {
                   {employee.pay_type === 'monthly' ? 'Monthly salary' : 'Daily rate'}
                 </dt>
                 <dd className="font-mono tabular-nums">
-                  {formatPeso(employee.pay_type === 'monthly' ? employee.basic_monthly_salary : employee.daily_rate)}
+                  {formatPeso(employee.pay_type === 'monthly' ? employee.basic_monthly_salary : employee.semi_monthly_rate)}
                 </dd>
               </div>
               {employee.user && (
@@ -228,7 +228,7 @@ const HISTORY_FIELD_LABEL: Record<string, string> = {
   employment_type: 'Employment type',
   pay_type: 'Pay type',
   basic_monthly_salary: 'Monthly salary',
-  daily_rate: 'Daily rate',
+  semi_monthly_rate: 'Semi-monthly rate',
   salary: 'Salary',
   date_regularized: 'Regularized on',
   separation_reason: 'Reason',
@@ -237,7 +237,7 @@ const HISTORY_FIELD_LABEL: Record<string, string> = {
 
 function renderHistoryValue(key: string, value: any): ReactNode {
   if (value === null || value === undefined || value === '') return <span className="text-text-subtle">—</span>;
-  if (key === 'basic_monthly_salary' || key === 'daily_rate' || key === 'salary') {
+  if (key === 'basic_monthly_salary' || key === 'semi_monthly_rate' || key === 'salary') {
     return <span className="font-mono tabular-nums">{formatPeso(value)}</span>;
   }
   if (key === 'date_regularized' || key === 'separation_date') {

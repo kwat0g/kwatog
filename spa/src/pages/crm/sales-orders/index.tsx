@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate} from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import { salesOrdersApi, type SalesOrderListParams } from '@/api/crm/salesOrders';
 import { Button } from '@/components/ui/Button';
@@ -21,8 +21,7 @@ const statusVariant: Record<SalesOrderStatus, 'success' | 'info' | 'warning' | '
   partially_delivered: 'warning',
   delivered: 'success',
   invoiced: 'success',
-  cancelled: 'danger',
-};
+  cancelled: 'danger' };
 
 export default function SalesOrdersListPage() {
   const navigate = useNavigate();
@@ -33,33 +32,28 @@ export default function SalesOrdersListPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['crm', 'sales-orders', filters],
     queryFn: () => salesOrdersApi.list(filters),
-    placeholderData: (prev) => prev,
-  });
+    placeholderData: (prev) => prev });
   const { data: salesOrderOptions } = useQuery({
     queryKey: ['crm', 'sales-orders', 'options'],
     queryFn: salesOrdersApi.options,
-    staleTime: 5 * 60 * 1000,
-  });
+    staleTime: 5 * 60 * 1000 });
   const statusLabels = new Map((salesOrderOptions?.statuses ?? []).map((option) => [option.value, option.label]));
 
   const columns: Column<SalesOrder>[] = [
     {
       key: 'so_number', header: 'SO #',
       cell: (r) => (
-        <Link to={`/crm/sales-orders/${r.id}`} className="font-mono text-accent hover:underline">{r.so_number}</Link>
-      ),
-    },
+        <span className="font-mono text-accent">{r.so_number}</span>
+      ) },
     { key: 'customer', header: 'Customer', cell: (r) => r.customer?.name ?? '—' },
     { key: 'date', header: 'Date', align: 'right', cell: (r) => <NumCell>{r.date}</NumCell> },
     { key: 'items', header: 'Lines', align: 'right', cell: (r) => <NumCell>{r.item_count}</NumCell> },
     {
       key: 'total', header: 'Total', align: 'right',
-      cell: (r) => <NumCell>{formatPeso(r.total_amount)}</NumCell>,
-    },
+      cell: (r) => <NumCell>{formatPeso(r.total_amount)}</NumCell> },
     {
       key: 'status', header: 'Status',
-      cell: (r) => <Chip variant={statusVariant[r.status]}>{statusLabels.get(r.status) ?? r.status_label}</Chip>,
-    },
+      cell: (r) => <Chip variant={statusVariant[r.status]}>{statusLabels.get(r.status) ?? r.status_label}</Chip> },
   ];
 
   const filterConfig: FilterConfig[] = [
@@ -106,6 +100,7 @@ export default function SalesOrdersListPage() {
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
           <DataTable
+            onRowClick={(r) => navigate(`/crm/sales-orders/${r.id}`)}
             columns={columns}
             data={data.data}
             meta={data.meta}

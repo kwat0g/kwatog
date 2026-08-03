@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate} from 'react-router-dom';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
@@ -17,8 +17,7 @@ import { usePermission } from '@/hooks/usePermission';
 import type { Item } from '@/types/inventory';
 
 const stockChip = (status: 'ok' | 'low' | 'critical') => ({
-  ok: 'success' as const, low: 'warning' as const, critical: 'danger' as const,
-}[status]);
+  ok: 'success' as const, low: 'warning' as const, critical: 'danger' as const }[status]);
 
 export default function ItemsListPage() {
   const navigate = useNavigate();
@@ -31,13 +30,11 @@ export default function ItemsListPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['inventory', 'items', filters],
     queryFn: () => itemsApi.list(filters),
-    placeholderData: (prev) => prev,
-  });
+    placeholderData: (prev) => prev });
   const { data: itemOptions } = useQuery({
     queryKey: ['inventory', 'items', 'options'],
     queryFn: itemsApi.options,
-    staleTime: 5 * 60 * 1000,
-  });
+    staleTime: 5 * 60 * 1000 });
 
   const del = useMutation({
     mutationFn: (id: string) => itemsApi.delete(id),
@@ -48,12 +45,11 @@ export default function ItemsListPage() {
     },
     onError: (e: AxiosError<{ message?: string }>) => {
       toast.error(e.response?.data?.message ?? 'Failed to delete item. Deactivate instead if it has stock or movements.');
-    },
-  });
+    } });
 
   const columns: Column<Item>[] = [
     { key: 'code', header: 'Code', cell: (r) => (
-      <Link to={`/inventory/items/${r.id}`} className="font-mono text-accent hover:underline">{r.code}</Link>
+      <span className="font-mono text-accent">{r.code}</span>
     ) },
     { key: 'name', header: 'Name', cell: (r) => (
       <div>
@@ -102,8 +98,7 @@ export default function ItemsListPage() {
             className="text-muted hover:text-danger"
           />
         </div>
-      ),
-    }] : []),
+      ) }] : []),
   ];
 
   const filterConfig: FilterConfig[] = [
@@ -157,6 +152,7 @@ export default function ItemsListPage() {
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
           <DataTable
+            onRowClick={(r) => navigate(`/inventory/items/${r.id}`)}
             columns={columns}
             data={data.data}
             meta={data.meta}

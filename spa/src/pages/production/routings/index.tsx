@@ -8,7 +8,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
 import { Copy, Plus } from 'lucide-react';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
@@ -30,8 +29,7 @@ export default function RoutingsListPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['production', 'routings', filters],
     queryFn: () => routingsApi.list(filters),
-    placeholderData: (prev) => prev,
-  });
+    placeholderData: (prev) => prev });
 
   const duplicateMut = useMutation({
     mutationFn: (id: string) => routingsApi.duplicate(id),
@@ -42,41 +40,35 @@ export default function RoutingsListPage() {
     },
     onError: (e: AxiosError<{ message?: string }>) => {
       toast.error(e.response?.data?.message ?? 'Failed to duplicate routing.');
-    },
-  });
+    } });
 
   const columns: Column<ProductRouting>[] = [
     {
       key: 'product', header: 'Product',
       cell: (r) => r.product
         ? (
-          <Link to={`/production/routings/${r.id}`} className="hover:underline">
+          <span className="">
             <div className="font-mono text-xs text-accent">{r.product.part_number}</div>
             <div className="text-muted text-xs">{r.product.name}</div>
-          </Link>
+          </span>
         )
-        : <span className="text-muted">—</span>,
-    },
+        : <span className="text-muted">—</span> },
     {
       key: 'version', header: 'Version', align: 'right',
-      cell: (r) => <NumCell>v{r.version}</NumCell>,
-    },
+      cell: (r) => <NumCell>v{r.version}</NumCell> },
     {
       key: 'status', header: 'Status',
       cell: (r) => (
         <Chip variant={r.is_active ? 'success' : 'neutral'}>
           {r.is_active ? 'Active' : 'Inactive'}
         </Chip>
-      ),
-    },
+      ) },
     {
       key: 'cycle', header: 'Total cycle time', align: 'right',
-      cell: (r) => <NumCell>{Number(r.total_cycle_time).toFixed(1)} min</NumCell>,
-    },
+      cell: (r) => <NumCell>{Number(r.total_cycle_time).toFixed(1)} min</NumCell> },
     {
       key: 'ops', header: 'Operations', align: 'right',
-      cell: (r) => <NumCell>{r.operations?.length ?? 0}</NumCell>,
-    },
+      cell: (r) => <NumCell>{r.operations?.length ?? 0}</NumCell> },
     {
       key: 'actions', header: '',
       cell: (r) => (
@@ -95,8 +87,7 @@ export default function RoutingsListPage() {
             Duplicate
           </Button>
         </div>
-      ),
-    },
+      ) },
   ];
 
   return (
@@ -148,6 +139,7 @@ export default function RoutingsListPage() {
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
           <DataTable
+            onRowClick={(r) => navigate(`/production/routings/${r.id}`)}
             columns={columns}
             data={data.data}
             meta={data.meta}
