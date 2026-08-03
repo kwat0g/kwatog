@@ -1,3 +1,4 @@
+import { cn } from '@/lib/cn';
 /**
  * Sprint 6 — Task 58. Production dashboard.
  * Subscribes to production.dashboard for live invalidation; falls back to
@@ -5,7 +6,7 @@
  */
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Activity } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { useNavigate} from 'react-router-dom';
 import { productionDashboardApi } from '@/api/production/dashboard';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -16,18 +17,19 @@ import { StatCard } from '@/components/ui/StatCard';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { OeeGauge } from '@/components/production/OeeGauge';
 import { BreakdownAlertCard } from '@/components/production/BreakdownAlertCard';
+import { ShopFloorMap } from '@/components/production/ShopFloorMap';
 import { useEcho } from '@/hooks/useEcho';
 import { formatInt } from '@/lib/formatNumber';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 export default function ProductionDashboardPage() {
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['production', 'dashboard'],
     queryFn: () => productionDashboardApi.payload(),
     refetchInterval: 60_000,
-    placeholderData: (prev) => prev,
-  });
+    placeholderData: (prev) => prev });
 
   // Live invalidate on output recorded.
   useEcho('production.dashboard', '.output.recorded', () => {
@@ -109,7 +111,7 @@ export default function ProductionDashboardPage() {
           />
           <StatCard
             label="Avg OEE today"
-            value={`${(k.avg_oee_today * 100).toFixed(1)}%`}
+            value={k.avg_oee_today == null ? '—' : `${(k.avg_oee_today * 100).toFixed(1)}%`}
           />
         </div>
 
@@ -149,13 +151,16 @@ export default function ProductionDashboardPage() {
               ? <div className="text-sm text-muted">All clear.</div>
               : <div className="space-y-1">
                   {data.alerts.map((a, i) => (
-                    <BreakdownAlertCard key={`${a.type}-${i}`} type={a.type} severity={a.severity} message={a.message} link={a.link} />
+                    <BreakdownAlertCard key={`${a.type}-${i}`} type={a.type} typeLabel={a.type_label} severity={a.severity} message={a.message} link={a.link} />
                   ))}
                 </div>}
           </Panel>
         </div>
 
-        {/* Row 3: machine util + defect Pareto */}
+        {/* Row 3: Interactive Shop Floor Map */}
+        <ShopFloorMap machines={data.machine_utilization} />
+
+        {/* Row 4: machine util + defect Pareto */}
         <div className="grid gap-4 lg:grid-cols-2">
           <Panel title="Machine utilization (today)" noPadding>
             <table className={tableCls}>
@@ -168,24 +173,24 @@ export default function ProductionDashboardPage() {
               </thead>
               <tbody>
                 {data.machine_utilization.map((m) => (
-                  <tr key={m.machine_id} className={trCls}>
+                  <tr key={m.machine_id} className={cn(trCls, "cursor-pointer")} onClick={() => navigate(`/mrp/machines/${m.machine_id}`)}>
                     <Td>
-                      <Link to={`/mrp/machines/${m.machine_id}`} className="font-mono text-accent hover:underline">{m.machine_code}</Link>
+                      {m.machine_code}
                       <div className="text-2xs text-muted">{m.name}</div>
                     </Td>
                     <Td>
-                      <Chip variant={m.status === 'running' ? 'success' : m.status === 'breakdown' ? 'danger' : m.status === 'idle' ? 'neutral' : 'info'}>{m.status}</Chip>
+                      <Chip variant={m.status === 'running' ? 'success' : m.status === 'breakdown' ? 'danger' : m.status === 'idle' ? 'neutral' : 'info'}>{m.status_label ?? m.status}</Chip>
                     </Td>
-                    <Td><OeeGauge result={m} compact /></Td>
+                    <Td><OeeGauge result={m} displayPolicy={data.display_policy} compact /></Td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </Panel>
 
-          <Panel title="Defect Pareto (7d)" meta={`top ${data.defect_pareto.length}`}>
+          <Panel title={`Defect Pareto (${data.defect_history_days}d)`} meta={`top ${data.defect_pareto.length}`}>
             {data.defect_pareto.length === 0 ? (
-              <div className="text-sm text-muted">No defects recorded in the last 7 days.</div>
+              <div className="text-sm text-muted">No defects recorded in the selected history window.</div>
             ) : (
               <div className="space-y-2">
                 {data.defect_pareto.map((d) => (

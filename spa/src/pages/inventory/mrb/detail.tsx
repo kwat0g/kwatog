@@ -30,26 +30,17 @@ const mrbStatusVariant = (s: MrbStatus): ChipVariant => {
   return 'info'; // returned
 };
 
-const DISPOSITIONS: Array<{ value: MrbDisposition; label: string }> = [
-  { value: 'scrap',              label: 'Scrap' },
-  { value: 'rework',             label: 'Rework (back to good stock)' },
-  { value: 'use_as_is',          label: 'Use as-is (back to good stock)' },
-  { value: 'return_to_supplier', label: 'Return to supplier' },
-];
-
 // Rework / use-as-is send stock back into good inventory, so a target good
 // location is required by the backend; scrap / return do not use one.
 const requiresTarget = (d: MrbDisposition | '') => d === 'rework' || d === 'use_as_is';
 
 const releaseSchema = z
   .object({
-    disposition: z.enum(['scrap', 'rework', 'use_as_is', 'return_to_supplier'], {
-      errorMap: () => ({ message: 'Disposition is required.' }),
-    }),
+    disposition: z.string().min(1, 'Disposition is required.'),
     target_location_id: z.string().optional().or(z.literal('')),
     notes: z.string().max(1000).optional().or(z.literal('')),
   })
-  .refine((v) => !requiresTarget(v.disposition) || !!v.target_location_id, {
+  .refine((v) => !requiresTarget(v.disposition as MrbDisposition) || !!v.target_location_id, {
     message: 'A target good location is required for rework / use-as-is.',
     path: ['target_location_id'],
   });
@@ -64,6 +55,11 @@ export default function MrbDetailPage() {
     queryKey: ['inventory', 'mrb', id],
     queryFn: () => mrbApi.show(id),
     enabled: !!id,
+  });
+  const { data: mrbOptions } = useQuery({
+    queryKey: ['inventory', 'mrb', 'options'],
+    queryFn: () => mrbApi.options(),
+    staleTime: 300_000,
   });
 
   if (isLoading) return <SkeletonDetail />;
@@ -111,7 +107,7 @@ export default function MrbDetailPage() {
           }
         />
         <StatCard label="Item" value={data.item?.code ?? '—'} helper={data.item?.name ?? undefined} />
-        <StatCard label="Disposition" value={data.disposition ?? '—'} />
+        <StatCard label="Disposition" value={data.disposition_label ?? data.disposition ?? '—'} />
         <StatCard label="Held" value={formatDate(data.held_at)} helper={data.held_by ?? undefined} />
       </div>
 
@@ -154,7 +150,7 @@ export default function MrbDetailPage() {
                 <span className="mt-1 h-2 w-2 rounded-full bg-success-fg shrink-0" />
                 <div>
                   <div className="font-medium text-primary">
-                    Released{data.disposition ? ` — ${data.disposition}` : ''}
+                    Released{data.disposition ? ` — ${data.disposition_label ?? data.disposition}` : ''}
                   </div>
                   <div className="text-muted">
                     {data.released_by ?? '—'} · {formatDateTime(data.released_at)}
@@ -180,6 +176,7 @@ export default function MrbDetailPage() {
       {can('inventory.mrb.manage') && (
         <ReleaseModal
           record={data}
+          dispositions={mrbOptions?.dispositions ?? []}
           isOpen={releaseOpen}
           onClose={() => setReleaseOpen(false)}
         />
@@ -208,10 +205,12 @@ function Field({
 
 function ReleaseModal({
   record,
+  dispositions,
   isOpen,
   onClose,
 }: {
   record: MrbRecord;
+  dispositions: Array<{ value: string; label: string }>;
   isOpen: boolean;
   onClose: () => void;
 }) {
@@ -219,10 +218,10 @@ function ReleaseModal({
   const { register, handleSubmit, reset, watch, setError, formState: { errors, isSubmitting } } =
     useForm<ReleaseValues>({
       resolver: zodResolver(releaseSchema),
-      defaultValues: { disposition: 'rework', target_location_id: '', notes: '' },
+      defaultValues: { disposition: '', target_location_id: '', notes: '' },
     });
   const disposition = watch('disposition');
-  const needsTarget = requiresTarget(disposition);
+  const needsTarget = requiresTarget(disposition as MrbDisposition);
 
   const { data: warehouses } = useQuery({
     queryKey: ['inventory', 'warehouse', 'tree'],
@@ -248,8 +247,8 @@ function ReleaseModal({
   const mutation = useMutation({
     mutationFn: (v: ReleaseValues) =>
       mrbApi.release(record.id, {
-        disposition: v.disposition,
-        target_location_id: requiresTarget(v.disposition)
+        disposition: v.disposition as MrbDisposition,
+        target_location_id: requiresTarget(v.disposition as MrbDisposition)
           ? v.target_location_id || undefined
           : undefined,
         notes: v.notes || undefined,
@@ -288,7 +287,7 @@ function ReleaseModal({
           {...register('disposition')}
           error={errors.disposition?.message}
         >
-          {DISPOSITIONS.map((d) => (
+          {dispositions.map((d) => (
             <option key={d.value} value={d.value}>
               {d.label}
             </option>

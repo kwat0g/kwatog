@@ -42,6 +42,7 @@ export interface Holiday {
   name: string;
   date: string;
   type: 'regular' | 'special_non_working';
+  type_label?: string;
   is_recurring: boolean;
   created_at: string;
   updated_at: string;
@@ -75,6 +76,7 @@ export interface Attendance {
   is_rest_day: boolean;
   day_type_rate: string;
   status: AttendanceStatus;
+  status_label?: string;
   is_manual_entry: boolean;
   remarks: string | null;
 }
@@ -86,6 +88,7 @@ export interface OvertimeRequest {
   hours_requested: string;
   reason: string;
   status: 'pending' | 'approved' | 'rejected';
+  status_label?: string;
   approver: { id: string; name: string } | null;
   rejection_reason: string | null;
   is_auto_detected: boolean;

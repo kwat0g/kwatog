@@ -37,15 +37,7 @@ export function CookieBanner() {
       <div className="flex items-start gap-4">
         <p className="flex-1 text-[13px] leading-relaxed text-landing-text-secondary">
           We use cookies to understand how visitors use our site and to improve
-          your experience. Read our{' '}
-          <a
-            href="#"
-            className="text-landing-accent underline-offset-2 hover:underline"
-            onClick={(e) => e.preventDefault()}
-          >
-            Privacy Policy
-          </a>
-          .
+          your experience.
         </p>
         <button
           type="button"

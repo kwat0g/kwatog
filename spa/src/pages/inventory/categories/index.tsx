@@ -341,7 +341,7 @@ function CategoryForm({ mode, category, options, onClose, onSaved }: CategoryFor
           maxLength={100}
           {...register('name')}
           error={errors.name?.message}
-          placeholder="e.g. Raw Materials"
+          placeholder="Category name"
         />
         <Select label="Parent (optional)" {...register('parent_id')} error={errors.parent_id?.message}>
           <option value="">— Top level —</option>

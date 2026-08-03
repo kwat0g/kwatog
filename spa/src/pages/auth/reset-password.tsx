@@ -11,6 +11,8 @@ import { Panel } from '@/components/ui/Panel';
 import { FormErrorSummary } from '@/components/ui/FormErrorSummary';
 import { PasswordStrength } from '@/components/ui/PasswordStrength';
 import { authApi } from '@/api/auth';
+import { useQuery } from '@tanstack/react-query';
+import { landingApi } from '@/api/landing';
 
 const schema = z
   .object({
@@ -34,6 +36,11 @@ export default function ResetPasswordPage() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token');
   const [done, setDone] = useState(false);
+  const { data: contact } = useQuery({
+    queryKey: ['landing', 'contact'],
+    queryFn: landingApi.contact,
+    staleTime: 300_000,
+  });
 
   useEffect(() => {
     if (!token) {
@@ -94,7 +101,7 @@ export default function ResetPasswordPage() {
           Choose a new password
         </h1>
         <p className="mt-1.5 text-[13px] text-landing-muted">
-          Make it strong — you&apos;ll use it to sign in to the Ogami ERP.
+          Make it strong — you&apos;ll use it to sign in to {contact?.legal_name ?? 'your ERP'}.
         </p>
       </div>
 

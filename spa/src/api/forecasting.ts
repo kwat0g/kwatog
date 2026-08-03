@@ -9,10 +9,13 @@ import type {
   HistoricalDemandPoint,
   ProductAccuracy,
   StockOutResponse,
+  ForecastingSettings,
 } from '@/types/forecasting';
 import type { Product } from '@/types/crm';
 
 export const forecastingApi = {
+  options: () => client.get<{ data: { methods: Array<{ value: 'moving_avg' | 'weighted_avg'; label: string }>; demand_sources: Array<{ value: string; label: string }>; accuracy_policy: { excellent_mape: number; acceptable_mape: number } } }>('/forecasting/demand-forecasts/options').then((r) => r.data.data),
+  settings: () => client.get<{ data: ForecastingSettings }>('/forecasting/settings').then((r) => r.data.data),
   list: (params?: {
     product_id?: string;
     customer_id?: string;

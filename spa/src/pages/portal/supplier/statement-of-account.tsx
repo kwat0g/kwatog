@@ -9,14 +9,6 @@ import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
-const bucketLabels: Record<string, string> = {
-  current: 'Current (Not Due)',
-  d1_30: '1–30 Days',
-  d31_60: '31–60 Days',
-  d61_90: '61–90 Days',
-  d91_plus: '91+ Days',
-};
-
 const bucketColors: Record<string, string> = {
   current: 'text-success',
   d1_30: 'text-warning',
@@ -41,7 +33,8 @@ export default function SupplierStatementOfAccountPage() {
 
   useEffect(() => { fetch(); }, [fetch]);
 
-  const bucketKeys = ['current', 'd1_30', 'd31_60', 'd61_90', 'd91_plus'] as const;
+  const bucketKeys = soa ? soa.aging_bucket_options.map((option) => option.value) : [];
+  const bucketLabels = new Map<string, string>((soa?.aging_bucket_options ?? []).map((option) => [option.value, option.label]));
 
   return (
     <div>
@@ -70,7 +63,7 @@ export default function SupplierStatementOfAccountPage() {
             {/* Summary row */}
             <div className="flex items-baseline gap-2">
               <span className="text-2xl font-medium font-mono tabular-nums">{soa.total_outstanding}</span>
-              <span className="text-xs text-muted">PHP total outstanding</span>
+              <span className="text-xs text-muted">Total outstanding</span>
             </div>
 
             {/* Aging buckets */}
@@ -83,7 +76,7 @@ export default function SupplierStatementOfAccountPage() {
                   : '0.0';
                 return (
                   <Panel key={key} bodyClassName="p-3 space-y-1">
-                    <p className="text-2xs text-muted uppercase tracking-wider">{bucketLabels[key]}</p>
+                    <p className="text-2xs text-muted uppercase tracking-wider">{bucketLabels.get(key) ?? key}</p>
                     <p className={`text-base font-medium font-mono tabular-nums ${bucketColors[key] ?? ''}`}>{amount}</p>
                     <p className="text-2xs text-muted">{pct}% of total</p>
                   </Panel>
@@ -119,13 +112,13 @@ export default function SupplierStatementOfAccountPage() {
                         <Td align="right" mono>{bill.total_amount}</Td>
                         <Td align="right" mono className="font-medium">{bill.balance}</Td>
                         <Td align="center">
-                          <Chip variant={chipVariantForStatus(bill.status)}>{bill.status}</Chip>
+                          <Chip variant={chipVariantForStatus(bill.status)}>{bill.status_label ?? bill.status}</Chip>
                         </Td>
                         <Td align="center">
                           <span className={`text-2xs font-medium ${
                             bucketColors[bill.aging_bucket] ?? 'text-muted'
                           }`}>
-                            {bucketLabels[bill.aging_bucket] ?? bill.aging_bucket}
+                            {bucketLabels.get(bill.aging_bucket) ?? bill.aging_bucket}
                           </span>
                         </Td>
                       </tr>

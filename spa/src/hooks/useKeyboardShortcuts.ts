@@ -111,6 +111,20 @@ export function useKeyboardShortcuts(): KeyboardShortcutsApi {
         return;
       }
 
+      // ─── Focus page search: `/` ──────────────────────────────────────
+      if (e.key === '/' && !mod) {
+        const searchInput = document.querySelector<HTMLInputElement>(
+          'form[role="search"] input, input[type="search"], input[aria-label*="Search"]',
+        );
+        if (searchInput) {
+          e.preventDefault();
+          searchInput.focus();
+          searchInput.select();
+          clearLeader();
+          return;
+        }
+      }
+
       // ─── Two-key sequence: `g <letter>` ──────────────────────────────
       // Pressing `g` starts the leader window. Pressing any nav-target letter
       // within SEQUENCE_TIMEOUT_MS triggers the navigation. Any other key

@@ -93,7 +93,7 @@ export default function PurchaseRequestDetailPage() {
         breadcrumbs={[{ label: 'Purchasing', href: '/purchasing' }, { label: 'Purchase requests', href: '/purchasing/purchase-requests' }, { label: data.pr_number }]}
         actions={
           <div className="flex items-center gap-2">
-            <Chip variant={statusVariant[data.status]}>{data.status}</Chip>
+            <Chip variant={statusVariant[data.status]}>{data.status_label ?? data.status}</Chip>
             {data.is_auto_generated && <Chip variant="warning">AUTO</Chip>}
             {data.is_urgent && <Chip variant="danger"><Zap size={12} className="inline mr-0.5" />URGENT</Chip>}
             {data.status === 'draft' && can('purchasing.pr.create') && (
@@ -138,7 +138,7 @@ export default function PurchaseRequestDetailPage() {
           <Panel title="Header">
             <dl className="grid grid-cols-3 gap-y-3 gap-x-6 text-sm">
               <div><dt className="text-2xs uppercase tracking-wider text-muted">Date</dt><dd className="font-mono">{formatDate(data.date)}</dd></div>
-              <div><dt className="text-2xs uppercase tracking-wider text-muted">Priority</dt><dd className="flex items-center gap-1">{data.priority}{data.is_urgent && <span title={data.urgency_reason ?? ''}><AlertTriangle size={12} className="text-danger" /></span>}</dd></div>
+              <div><dt className="text-2xs uppercase tracking-wider text-muted">Priority</dt><dd className="flex items-center gap-1">{data.priority_label ?? data.priority}{data.is_urgent && <span title={data.urgency_reason ?? ''}><AlertTriangle size={12} className="text-danger" /></span>}</dd></div>
               <div><dt className="text-2xs uppercase tracking-wider text-muted">Department</dt><dd>{data.department?.name ?? '—'}</dd></div>
               <div><dt className="text-2xs uppercase tracking-wider text-muted">Template</dt><dd>{data.template?.name ?? '—'}</dd></div>
               <div><dt className="text-2xs uppercase tracking-wider text-muted">Requester</dt><dd>{data.requester?.name ?? '—'}</dd></div>
@@ -194,7 +194,7 @@ export default function PurchaseRequestDetailPage() {
                                 : po.status === 'cancelled' ? 'danger'
                                 : po.status === 'partially_received' ? 'warning'
                                 : 'info') as 'success' | 'danger' | 'warning' | 'info',
-                        text: po.status.replace('_', ' '),
+                        text: po.status_label ?? po.status.replace('_', ' '),
                       },
                     })),
                   },
@@ -280,4 +280,3 @@ function buildPrChainSteps(pr: PurchaseRequest): ChainStep[] {
   });
   return steps;
 }
-

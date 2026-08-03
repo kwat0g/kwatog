@@ -9,7 +9,7 @@
  *  - PhilHealth: 12 digits   XX-XXXXXXXXX-X
  *  - Pag-IBIG:   12 digits   XXXX-XXXX-XXXX
  *  - TIN:        9 or 12 digits XXX-XXX-XXX(-XXX)
- *  - PH mobile:  11 digits starting with 09 -> 0917 123 4567
+ *  - PH mobile:  11 digits starting with 09 -> 09XX XXX XXXX
  */
 
 export const PH_ID_LENGTHS = {
@@ -60,7 +60,7 @@ export function formatTin(value: string | null | undefined): string {
   return `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6, 9)}-${d.slice(9, 12)}`;
 }
 
-/** PH mobile: 11 digits starting with 09 → 0917 123 4567 */
+/** PH mobile: 11 digits starting with 09 → 09XX XXX XXXX */
 export function formatMobile(value: string | null | undefined): string {
   const d = digitsOnly(value).slice(0, 11);
   if (d.length <= 4) return d;
@@ -123,12 +123,12 @@ export function maxDigitsForKind(kind: PhIdKind): number {
 
 export function placeholderFor(kind: PhIdKind): string {
   switch (kind) {
-    case 'sss':        return '34-5678901-2';
-    case 'philhealth': return '12-345678901-2';
-    case 'pagibig':    return '1234-5678-9012';
-    case 'tin':        return '123-456-789-000';
-    case 'mobile':     return '0917 123 4567';
-    case 'landline':   return '02-1234-5678';
+    case 'sss':        return 'XX-XXXXXXX-X';
+    case 'philhealth': return 'XX-XXXXXXXXX-X';
+    case 'pagibig':    return 'XXXX-XXXX-XXXX';
+    case 'tin':        return 'XXX-XXX-XXX(-XXX)';
+    case 'mobile':     return '09XX XXX XXXX';
+    case 'landline':   return 'XX-XXXX-XXXX';
   }
 }
 
@@ -136,7 +136,7 @@ export function placeholderFor(kind: PhIdKind): string {
  * Mask all but the last `visibleTrailing` digits while preserving the
  * separator pattern of the formatted ID. Used for PII display.
  *
- *   maskFormatted("12-3456789-0", 2) => "**-*******8-0"
+ *   maskFormatted("XX-XXXXXXX-X", 2) preserves separators while masking digits.
  */
 export function maskFormatted(formatted: string, visibleTrailing = 2): string {
   if (!formatted) return formatted;

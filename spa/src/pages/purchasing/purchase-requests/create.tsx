@@ -19,6 +19,8 @@ import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
 import { numberInputProps } from '@/lib/numberInput';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { cn } from '@/lib/cn';
+import type { PurchaseRequestPriority } from '@/types/purchasing';
+import { formatPeso } from '@/lib/formatNumber';
 
 const lineSchema = z.object({
   item_id: z.string().optional().or(z.literal('')),
@@ -30,7 +32,7 @@ const lineSchema = z.object({
 });
 
 const schema = z.object({
-  priority: z.enum(['normal', 'urgent', 'critical']),
+  priority: z.string().min(1, 'Priority is required.'),
   reason: z.string().max(1000).optional().or(z.literal('')),
   items: z.array(lineSchema).min(1, 'Add at least one line.'),
 });
@@ -49,9 +51,9 @@ export default function CreatePurchaseRequestPage() {
   const { register, handleSubmit, setError, control, watch, formState: { errors, isSubmitting } } = useForm<V>({
     resolver: zodResolver(schema),
     defaultValues: {
-      priority: 'normal',
+      priority: '',
       reason: '',
-      items: [{ description: '', quantity: '1', unit: 'pcs', estimated_unit_price: '0', purpose: '', item_id: '' }],
+      items: [{ description: '', quantity: '', unit: '', estimated_unit_price: '', purpose: '', item_id: '' }],
     },
   });
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
@@ -61,7 +63,7 @@ export default function CreatePurchaseRequestPage() {
   const create = useMutation({
     mutationFn: ({ values, submit }: { values: V; submit: boolean }) => purchaseRequestsApi.create({
       reason: values.reason?.trim() || undefined,
-      priority: values.priority,
+      priority: values.priority as PurchaseRequestPriority,
       items: values.items.map((l) => ({
         item_id: l.item_id || null,
         description: l.description.trim(),
@@ -93,6 +95,12 @@ export default function CreatePurchaseRequestPage() {
     }
   };
 
+  const { data: requestOptions } = useQuery({
+    queryKey: ['purchasing', 'purchase-request-options'],
+    queryFn: () => purchaseRequestsApi.options(),
+  });
+  const priorities = requestOptions?.priorities ?? [];
+
   return (
     <div>
       <PageHeader title="New purchase request" backTo="/purchasing/purchase-requests" backLabel="Purchase requests" />
@@ -103,9 +111,8 @@ export default function CreatePurchaseRequestPage() {
         <Panel title="Header">
           <div className="grid grid-cols-3 gap-3">
             <Select label="Priority" required {...register('priority')} error={errors.priority?.message}>
-              <option value="normal">Normal</option>
-              <option value="urgent">Urgent</option>
-              <option value="critical">Critical</option>
+              <option value="">— Select —</option>
+              {priorities.map((priority) => <option key={priority.value} value={priority.value}>{priority.label}</option>)}
             </Select>
             <Textarea
               label="Reason"
@@ -126,7 +133,7 @@ export default function CreatePurchaseRequestPage() {
               variant="secondary"
               size="sm"
               icon={<Plus size={12} />}
-              onClick={() => append({ description: '', quantity: '1', unit: 'pcs', estimated_unit_price: '0', purpose: '', item_id: '' })}
+              onClick={() => append({ description: '', quantity: '', unit: '', estimated_unit_price: '', purpose: '', item_id: '' })}
             >
               Add line
             </Button>
@@ -219,7 +226,7 @@ export default function CreatePurchaseRequestPage() {
               ))}
               <tr className={cn(trCls, 'font-medium')}>
                 <Td align="right" mono className="uppercase text-2xs tracking-wider" colSpan={5}>Estimated total</Td>
-                <Td align="right" mono>₱ {total.toFixed(2)}</Td>
+                <Td align="right" mono>{formatPeso(total)}</Td>
                 <Td />
               </tr>
             </tbody>

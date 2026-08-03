@@ -46,7 +46,7 @@ export function DataTableToolbar<T>({
           </button>
           {visMenuOpen && (
             <div
-              className="absolute right-0 top-8 z-30 w-56 bg-elevated border border-default rounded-md-menu py-2"
+              className="absolute right-0 top-8 z-30 w-56 bg-elevated border border-default rounded-md py-2"
               onMouseLeave={() => setVisMenuOpen(false)}
             >
               <div className="px-2.5 pb-1.5 text-2xs uppercase tracking-wider text-muted font-medium">

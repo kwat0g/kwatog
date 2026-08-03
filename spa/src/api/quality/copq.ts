@@ -48,8 +48,9 @@ export interface CopqByParams {
 }
 
 export const copqApi = {
-  trend: (months = 12) =>
-    client.get<{ data: CopqTrendMonth[] }>('/quality/copq/trend', { params: { months } }).then((r) => r.data.data),
+  policy: () => client.get<{ data: { default_months: number; minimum_months: number; maximum_months: number } }>('/quality/copq/policy').then((r) => r.data.data),
+  trend: (months?: number) =>
+    client.get<{ data: CopqTrendMonth[] }>('/quality/copq/trend', { params: months === undefined ? undefined : { months } }).then((r) => r.data.data),
   summary: () =>
     client.get<{ data: CopqSummary }>('/quality/copq/summary').then((r) => r.data.data),
   byProduct: (params?: CopqByParams) =>

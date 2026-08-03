@@ -13,7 +13,7 @@ export function LinkedRecords({ groups, className }: LinkedRecordsProps) {
     <aside className={cn('flex flex-col gap-3', className)}>
       {groups.map((group) => (
         <section key={group.label}>
-          <div className="text-2xs uppercase tracking-wider text-text-subtle font-medium mb-1.5">
+          <div className="text-2xs uppercase tracking-wider text-subtle font-medium mb-1.5">
             {group.label}
           </div>
           <ul className="flex flex-col gap-1.5">

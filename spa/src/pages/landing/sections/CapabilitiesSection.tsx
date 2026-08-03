@@ -6,8 +6,10 @@
  */
 
 import { cn } from '@/lib/cn';
+import { useQuery } from '@tanstack/react-query';
+import { landingApi } from '@/api/landing';
 import { SectionHeading } from '../components/SectionHeading';
-import { CAPABILITIES } from '../data';
+import { CAPABILITY_ICONS } from '../data';
 import type { Capability } from '../data';
 import { section, container, card, cardGap, headingGap, monoLabel } from '../styles';
 
@@ -40,22 +42,19 @@ function CapabilityCard({ cap, index }: { cap: Capability; index: number }) {
 }
 
 export function CapabilitiesSection() {
+  const { data: content } = useQuery({ queryKey: ['landing', 'content'], queryFn: landingApi.content, staleTime: 300_000 });
+  const capabilities: Capability[] = (content?.capabilities ?? []).map((cap) => ({ ...cap, icon: CAPABILITY_ICONS[cap.icon] ?? CAPABILITY_ICONS.assembly }));
   return (
     <section id="capabilities" className={section('canvas')}>
       <div className={container}>
         <SectionHeading
-          eyebrow="Capabilities"
-          title={
-            <>
-              One partner, from raw resin
-              <br className="hidden sm:block" /> to finished assembly.
-            </>
-          }
-          intro="Every step of the value chain — tooling, moulding, and assembly — under one roof, under your spec."
+          eyebrow={content?.section_copy?.capabilities_eyebrow || 'Capabilities'}
+          title={content?.section_copy?.capabilities_title || 'Precision Manufacturing & Engineering'}
+          intro={content?.section_copy?.capabilities_intro || 'End-to-end injection molding, precision tooling, cleanroom assembly, and metrology inspection for demanding automotive specs.'}
         />
 
         <div className={cn(headingGap, 'grid', cardGap, 'md:grid-cols-2')}>
-          {CAPABILITIES.map((cap, i) => (
+          {capabilities.map((cap, i) => (
             <CapabilityCard key={cap.id} cap={cap} index={i} />
           ))}
         </div>

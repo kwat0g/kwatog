@@ -6,6 +6,7 @@ export type SalaryAdjustmentStatus = 'pending' | 'approved' | 'rejected';
 export interface SalaryAdjustmentItem {
   id: string;
   status: SalaryAdjustmentStatus;
+  status_label?: string;
   from_basic_monthly_salary: string | null;
   from_daily_rate: string | null;
   to_basic_monthly_salary: string | null;
@@ -33,6 +34,7 @@ const unwrap = (r: { data: unknown }) =>
   (r.data as { data?: SalaryAdjustmentItem }).data ?? (r.data as SalaryAdjustmentItem);
 
 export const salaryAdjustmentsApi = {
+  options: () => client.get<{ data: { statuses: Array<{ value: SalaryAdjustmentStatus; label: string }> } }>('/hr/salary-adjustments/options').then((r) => r.data.data),
   list: (params?: { status?: SalaryAdjustmentStatus; page?: number; per_page?: number }) =>
     client
       .get<PaginatedResponse<SalaryAdjustmentItem>>('/hr/salary-adjustments', { params })

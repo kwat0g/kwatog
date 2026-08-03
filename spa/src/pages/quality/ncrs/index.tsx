@@ -24,8 +24,9 @@ const STATUS_CHIP: Record<NcrStatus, 'success' | 'danger' | 'warning' | 'neutral
 };
 
 const SEVERITY_CHIP: Record<NcrSeverity, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
-  minor: 'neutral',
-  major: 'warning',
+  low: 'neutral',
+  medium: 'warning',
+  high: 'danger',
   critical: 'danger',
 };
 
@@ -39,6 +40,17 @@ export default function NcrsListPage() {
     queryFn: () => ncrsApi.list(filters),
     placeholderData: (prev) => prev,
   });
+  const { data: ncrOptions } = useQuery({
+    queryKey: ['quality', 'ncr-options'],
+    queryFn: ncrsApi.options,
+    staleTime: 5 * 60 * 1000,
+  });
+  const labels = new Map([
+    ...(ncrOptions?.sources ?? []),
+    ...(ncrOptions?.severities ?? []),
+    ...(ncrOptions?.statuses ?? []),
+    ...(ncrOptions?.dispositions ?? []),
+  ].map((option) => [option.value, option.label]));
 
   const columns: Column<Ncr>[] = [
     {
@@ -73,12 +85,12 @@ export default function NcrsListPage() {
     {
       key: 'source',
       header: 'Source',
-      cell: (r) => <Chip variant="neutral">{r.source.replace('_', ' ')}</Chip>,
+      cell: (r) => <Chip variant="neutral">{r.source_label ?? labels.get(r.source) ?? r.source}</Chip>,
     },
     {
       key: 'severity',
       header: 'Severity',
-      cell: (r) => <Chip variant={SEVERITY_CHIP[r.severity]}>{r.severity}</Chip>,
+      cell: (r) => <Chip variant={SEVERITY_CHIP[r.severity]}>{r.severity_label ?? labels.get(r.severity) ?? r.severity}</Chip>,
     },
     {
       key: 'affected_quantity',
@@ -91,7 +103,7 @@ export default function NcrsListPage() {
       header: 'Disposition',
       cell: (r) =>
         r.disposition ? (
-          <Chip variant="neutral">{r.disposition.replace('_', ' ')}</Chip>
+          <Chip variant="neutral">{r.disposition_label ?? labels.get(r.disposition) ?? r.disposition}</Chip>
         ) : (
           <span className="text-muted">—</span>
         ),
@@ -99,7 +111,7 @@ export default function NcrsListPage() {
     {
       key: 'status',
       header: 'Status',
-      cell: (r) => <Chip variant={STATUS_CHIP[r.status]}>{r.status.replace('_', ' ')}</Chip>,
+      cell: (r) => <Chip variant={STATUS_CHIP[r.status]}>{r.status_label ?? labels.get(r.status) ?? r.status}</Chip>,
     },
     {
       key: 'closed',
@@ -116,10 +128,7 @@ export default function NcrsListPage() {
       type: 'select',
       options: [
         { value: '', label: 'All' },
-        { value: 'open', label: 'Open' },
-        { value: 'in_progress', label: 'In progress' },
-        { value: 'closed', label: 'Closed' },
-        { value: 'cancelled', label: 'Cancelled' },
+        ...(ncrOptions?.statuses ?? []),
       ],
     },
     {
@@ -128,9 +137,7 @@ export default function NcrsListPage() {
       type: 'select',
       options: [
         { value: '', label: 'All' },
-        { value: 'minor', label: 'Minor' },
-        { value: 'major', label: 'Major' },
-        { value: 'critical', label: 'Critical' },
+        ...(ncrOptions?.severities ?? []),
       ],
     },
     {
@@ -139,8 +146,7 @@ export default function NcrsListPage() {
       type: 'select',
       options: [
         { value: '', label: 'All' },
-        { value: 'inspection_fail', label: 'Inspection fail' },
-        { value: 'customer_complaint', label: 'Customer complaint' },
+        ...(ncrOptions?.sources ?? []),
       ],
     },
   ];

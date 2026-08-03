@@ -5,6 +5,9 @@ export interface DriverDelivery {
   id: string;
   delivery_number: string;
   status: DriverDeliveryStatus;
+  status_label?: string;
+  next_status?: DriverDeliveryStatus | null;
+  next_status_label?: string | null;
   scheduled_date: string | null;
   departed_at: string | null;
   delivered_at: string | null;

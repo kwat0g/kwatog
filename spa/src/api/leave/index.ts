@@ -29,6 +29,7 @@ export interface LeaveListParams extends ListParams {
 }
 
 export const leaveRequestsApi = {
+  options: () => client.get<{ data: { statuses: Array<{ value: string; label: string }>; half_day_periods: Array<{ value: string; label: string }> } }>('/leaves/requests/options').then((r) => r.data.data),
   list: (params?: LeaveListParams) =>
     client.get<PaginatedResponse<LeaveRequest>>('/leaves/requests', { params }).then((r) => r.data),
   show: (id: string) =>

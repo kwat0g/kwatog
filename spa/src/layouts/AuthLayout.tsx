@@ -13,6 +13,7 @@
  */
 
 import { useEffect, useLayoutEffect, useRef, type CSSProperties } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Outlet, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import gsap from 'gsap';
@@ -26,6 +27,7 @@ import '@fontsource-variable/bricolage-grotesque/wght.css';
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { AutoPartShowcase } from '@/pages/landing/components/AutoPartShowcase';
 import { CrosshairCursor } from '@/pages/landing/components/CrosshairCursor';
+import { landingApi } from '@/api/landing';
 
 // Remap the app accent → the landing-page ink for the auth surfaces only
 // (cascades into the shared Button/Input via var(--accent) / var(--ring)).
@@ -46,6 +48,11 @@ const GRID_BG: CSSProperties = {
 };
 
 export function AuthLayout() {
+  const { data: contact } = useQuery({ queryKey: ['landing', 'contact'], queryFn: landingApi.contact, staleTime: 300_000 });
+  const legalName = contact?.legal_name || 'Philippine Ogami Corporation';
+  const locationCountry = contact?.address?.split(',').at(-1)?.trim() || 'Philippines';
+  const address = contact?.address || 'FCIE Dasmariñas, Cavite, Philippines';
+
   // Public/auth pages are light-only. If no authenticated session has set a
   // theme yet, pin light (don't follow system → no dark auth surfaces).
   const initTheme = useThemeStore((s) => s.init);
@@ -142,10 +149,15 @@ export function AuthLayout() {
           to="/"
           className="relative flex items-center gap-3 self-start rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-surface"
         >
-          <BrandLogo alt="Ogami" className="h-10" />
-          <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-landing-muted">
-            Philippines
-          </span>
+          <BrandLogo alt={legalName} className="h-10" />
+          <div className="flex flex-col text-left">
+            <span className="font-display text-sm font-semibold tracking-tight text-landing-text leading-tight">
+              {legalName}
+            </span>
+            <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-landing-muted">
+              Ogami ERP · {locationCountry}
+            </span>
+          </div>
         </Link>
 
         {/* auto-cycling 3D parts tour inside a drawing frame */}
@@ -195,10 +207,10 @@ export function AuthLayout() {
         <div className="relative">
           <p className="font-display text-2xl font-medium leading-tight tracking-tight text-landing-text">
             Precision, molded
-            <br /> in the Philippines.
+            <br /> in {locationCountry}.
           </p>
           <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.18em] text-landing-subtle-text">
-            IATF 16949 · FCIE, Dasmariñas · Cavite
+            {address}
           </p>
         </div>
       </aside>
@@ -206,21 +218,29 @@ export function AuthLayout() {
       {/* ── Form area ─────────────────────────────────────────────── */}
       <main className="relative flex flex-col items-center justify-center px-5 py-12 sm:px-5">
         {/* compact brand for mobile (brand panel hidden) */}
-        <Link to="/" className="mb-10 flex items-center rounded-md lg:hidden">
-          <BrandLogo alt="Ogami" className="h-10" />
+        <Link to="/" className="mb-10 flex items-center gap-3 rounded-md lg:hidden">
+          <BrandLogo alt={legalName} className="h-10" />
+          <div className="flex flex-col text-left">
+            <span className="font-display text-sm font-semibold tracking-tight text-landing-text leading-tight">
+              {legalName}
+            </span>
+            <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-landing-muted">
+              Ogami ERP
+            </span>
+          </div>
         </Link>
 
         <div className="w-full max-w-sm">
           <Outlet />
         </div>
 
-        <Link
-          to="/"
+        <a
+          href={contact?.public_url || '/'}
           className="mt-10 inline-flex items-center gap-1.5 rounded-md font-sans text-[13px] text-landing-muted transition-colors hover:text-landing-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas"
         >
           <ArrowLeft size={14} />
-          Back to ogami.com.ph
-        </Link>
+          Back to {legalName}
+        </a>
       </main>
     </div>
   );

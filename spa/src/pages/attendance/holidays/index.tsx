@@ -30,7 +30,7 @@ import { cn } from '@/lib/cn';
 const schema = z.object({
   name: z.string().min(1).max(100),
   date: z.string().min(1, 'Required'),
-  type: z.enum(['regular', 'special_non_working']),
+  type: z.string().min(1, 'Holiday type is required'),
   is_recurring: z.boolean(),
 });
 type FormValues = z.infer<typeof schema>;
@@ -159,7 +159,7 @@ function ListView({
       header: 'Type',
       cell: (r) => (
         <Chip variant={r.type === 'regular' ? 'warning' : 'info'}>
-          {r.type === 'regular' ? 'Regular' : 'Special non-working'}
+          {r.type_label ?? (r.type === 'regular' ? 'Regular' : 'Special non-working')}
         </Chip>
       ),
     },
@@ -171,7 +171,6 @@ function ListView({
       <DataTable
         columns={columns}
         data={holidays}
-        onRowClick={(row) => setSelectedId(row.id)}
         highlightedRowId={selectedId}
       />
       <Panel title="Details">
@@ -189,7 +188,7 @@ function ListView({
             <div>
               <div className="text-xs uppercase tracking-wider text-muted font-medium mb-1">Type</div>
               <Chip variant={selected.type === 'regular' ? 'warning' : 'info'}>
-                {selected.type === 'regular' ? 'Regular' : 'Special non-working'}
+                {selected.type_label ?? (selected.type === 'regular' ? 'Regular' : 'Special non-working')}
               </Chip>
             </div>
             <div>
@@ -279,6 +278,10 @@ function HolidayFormModal({
   editing, onClose, onSaved,
 }: { editing: Holiday | null; onClose: () => void; onSaved: () => void }) {
   const isEdit = !!editing;
+  const { data: holidayOptions } = useQuery({
+    queryKey: ['attendance', 'holiday-options'],
+    queryFn: () => holidaysApi.options(),
+  });
   const {
     register, handleSubmit, setError,
     formState: { errors, isSubmitting },
@@ -287,13 +290,13 @@ function HolidayFormModal({
     defaultValues: {
       name: editing?.name ?? '',
       date: editing?.date ?? '',
-      type: (editing?.type as FormValues['type']) ?? 'regular',
+      type: (editing?.type as FormValues['type']) ?? '',
       is_recurring: editing?.is_recurring ?? false,
     },
   });
 
   const mutation = useMutation({
-    mutationFn: (d: FormValues) => isEdit ? holidaysApi.update(editing!.id, d) : holidaysApi.create(d),
+    mutationFn: (d: FormValues) => isEdit ? holidaysApi.update(editing!.id, d as Parameters<typeof holidaysApi.update>[1]) : holidaysApi.create(d as Parameters<typeof holidaysApi.create>[0]),
     onSuccess: () => { toast.success(isEdit ? 'Holiday updated.' : 'Holiday created.'); onSaved(); },
     onError: (e: AxiosError<ApiValidationError>) => {
       if (e.response?.status === 422 && e.response.data.errors) {
@@ -311,8 +314,8 @@ function HolidayFormModal({
         <Input label="Name" required {...register('name')} error={errors.name?.message} />
         <Input label="Date" type="date" required {...register('date')} error={errors.date?.message} />
         <Select label="Type" required {...register('type')} error={errors.type?.message}>
-          <option value="regular">Regular holiday</option>
-          <option value="special_non_working">Special non-working</option>
+          <option value="">— Select —</option>
+          {(holidayOptions?.types ?? []).map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
         </Select>
         <div className="pt-1">
           <Switch label="Recurs annually" {...register('is_recurring')} />

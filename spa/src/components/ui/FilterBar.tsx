@@ -105,7 +105,7 @@ export function FilterBar({
           onChange={(e) => setSearchValue(e.target.value)}
           placeholder={searchPlaceholder}
           aria-label={searchPlaceholder}
-          className="flex-1 min-w-0 h-full px-2 text-sm bg-transparent outline-none placeholder:text-text-subtle"
+          className="flex-1 min-w-0 h-full px-2 text-sm bg-transparent outline-none placeholder:text-subtle"
         />
         {searchValue && (
           <button

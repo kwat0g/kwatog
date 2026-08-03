@@ -37,6 +37,12 @@ export default function AttendancePage() {
     queryFn: () => attendancesApi.list(filters),
     placeholderData: (prev) => prev,
   });
+  const { data: attendanceOptions } = useQuery({
+    queryKey: ['attendance', 'attendances', 'options'],
+    queryFn: attendancesApi.options,
+    staleTime: 5 * 60 * 1000,
+  });
+  const statusLabels = new Map((attendanceOptions?.statuses ?? []).map((option) => [option.value, option.label]));
 
   const fmtTime = (iso: string | null) => iso ? formatTime(iso) : '—';
   const minToHm = (m: number) => m === 0 ? '—' : `${Math.floor(m / 60)}h ${m % 60}m`;
@@ -68,7 +74,7 @@ export default function AttendancePage() {
     {
       key: 'status',
       header: 'Status',
-      cell: (r) => <Chip variant={chipVariantForStatus(r.status)}>{r.status.replace('_', ' ')}</Chip>,
+      cell: (r) => <Chip variant={chipVariantForStatus(r.status)}>{r.status_label ?? statusLabels.get(r.status) ?? r.status}</Chip>,
     },
   ];
 
@@ -85,13 +91,7 @@ export default function AttendancePage() {
       type: 'select',
       options: [
         { value: '', label: 'All' },
-        { value: 'present', label: 'Present' },
-        { value: 'absent', label: 'Absent' },
-        { value: 'late', label: 'Late' },
-        { value: 'halfday', label: 'Halfday' },
-        { value: 'on_leave', label: 'On leave' },
-        { value: 'holiday', label: 'Holiday' },
-        { value: 'rest_day', label: 'Rest day' },
+        ...(attendanceOptions?.statuses ?? []),
       ],
     },
   ];

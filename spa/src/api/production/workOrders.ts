@@ -10,6 +10,7 @@ export interface WorkOrderListParams extends ListParams {
 }
 
 export const workOrdersApi = {
+  options: () => client.get<{ data: { statuses: Array<{ value: string; label: string; next_statuses: Array<{ value: string; label: string }> }>; operation_statuses: Array<{ value: string; label: string }> } }>('/production/work-orders/options').then((r) => r.data.data),
   downtimeCategories: () =>
     client.get<ApiSuccess<MachineDowntimeCategoryOption[]>>('/production/downtime-categories').then((r) => r.data.data),
   list: (params?: WorkOrderListParams) =>

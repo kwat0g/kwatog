@@ -76,7 +76,7 @@ export default function JournalEntryDetailPage() {
         title={
           <div className="flex items-center gap-3">
             <span className="font-mono">{je.entry_number}</span>
-            <Chip variant={STATUS_VARIANT[je.status] ?? 'neutral'}>{je.status}</Chip>
+            <Chip variant={STATUS_VARIANT[je.status] ?? 'neutral'}>{je.status_label ?? je.status}</Chip>
           </div>
         }
         backTo="/accounting/journal-entries"

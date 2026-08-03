@@ -27,24 +27,6 @@ const STAGE_CHIP: Record<ApplicationStage, 'neutral' | 'info' | 'warning' | 'suc
   rejected: 'danger',
 };
 
-const STAGE_LABEL: Record<ApplicationStage, string> = {
-  new: 'New',
-  screening: 'Screening',
-  interview: 'Interview',
-  offer: 'Offer',
-  hired: 'Hired',
-  rejected: 'Rejected',
-};
-
-const PIPELINE_STAGES: ApplicationStage[] = ['new', 'screening', 'interview', 'offer', 'hired'];
-
-const NEXT_STAGE_LABEL: Partial<Record<ApplicationStage, string>> = {
-  new: 'Move to Screening',
-  screening: 'Move to Interview',
-  interview: 'Move to Offer',
-  offer: 'Mark as Hired',
-};
-
 export default function ApplicationDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -63,6 +45,11 @@ export default function ApplicationDetailPage() {
     queryKey: ['recruitment-application', id],
     queryFn: () => recruitmentApi.showApplication(id!).then((r) => r.data.data),
     enabled: !!id,
+  });
+  const { data: recruitmentOptions } = useQuery({
+    queryKey: ['recruitment', 'options'],
+    queryFn: () => recruitmentApi.options().then((r) => r.data.data),
+    staleTime: 5 * 60 * 1000,
   });
 
   const advanceMutation = useMutation({
@@ -123,7 +110,10 @@ export default function ApplicationDetailPage() {
   }
 
   const isTerminal = application.stage === 'hired' || application.stage === 'rejected';
-  const currentIdx = PIPELINE_STAGES.indexOf(application.stage as ApplicationStage);
+  const pipelineStages = (recruitmentOptions?.application_stages ?? []).filter((stage) => !stage.is_terminal);
+  const stageLabel = new Map((recruitmentOptions?.application_stages ?? []).map((stage) => [stage.value, stage.label]));
+  const currentIdx = pipelineStages.findIndex((stage) => stage.value === application.stage);
+  const nextStage = recruitmentOptions?.application_stages.find((stage) => stage.value === application.stage)?.next;
 
   return (
     <div>
@@ -131,10 +121,10 @@ export default function ApplicationDetailPage() {
         title={
           <span className="flex items-center gap-2">
             {application.full_name}
-            <Chip variant={STAGE_CHIP[application.stage]}>{STAGE_LABEL[application.stage]}</Chip>
+            <Chip variant={STAGE_CHIP[application.stage]}>{stageLabel.get(application.stage) ?? application.stage}</Chip>
           </span>
         }
-        subtitle={<span className="font-mono">{application.application_number} · {application.job_posting?.title ?? 'Unknown'}</span>}
+        subtitle={<span className="font-mono">{application.application_number} · {application.job_posting?.title ?? '—'}</span>}
         backTo="/hr/recruitment/applications"
         backLabel="Applications"
         breadcrumbs={[
@@ -153,7 +143,7 @@ export default function ApplicationDetailPage() {
                 disabled={advanceMutation.isPending}
                 loading={advanceMutation.isPending}
               >
-                {NEXT_STAGE_LABEL[application.stage] ?? 'Advance'}
+                {nextStage ? `Move to ${stageLabel.get(nextStage) ?? nextStage}` : 'Advance'}
               </Button>
               <Button variant="danger" size="sm" icon={<XCircle size={12} />} onClick={() => setShowRejectDialog(true)}>
                 Reject
@@ -170,11 +160,11 @@ export default function ApplicationDetailPage() {
       {/* Pipeline stepper */}
       <div className="px-5 py-3">
         <div className="flex items-center gap-1">
-          {PIPELINE_STAGES.map((stage, idx) => {
+          {pipelineStages.map((stage, idx) => {
             const isActive = idx === currentIdx;
             const isDone = idx < currentIdx;
             return (
-              <div key={stage} className="flex items-center gap-1">
+              <div key={stage.value} className="flex items-center gap-1">
                 <div
                   className={cn(
                     'rounded-full px-3 py-1 text-xs font-medium transition-colors',
@@ -185,16 +175,16 @@ export default function ApplicationDetailPage() {
                       : 'bg-elevated text-muted',
                   )}
                 >
-                  {STAGE_LABEL[stage]}
+                  {stage.label}
                 </div>
-                {idx < PIPELINE_STAGES.length - 1 && (
+                {idx < pipelineStages.length - 1 && (
                   <div className={cn('h-0.5 w-4', isDone ? 'bg-success/40' : 'bg-border-default')} />
                 )}
               </div>
             );
           })}
           {application.stage === 'rejected' && (
-            <Chip variant="danger" className="ml-2">Rejected at {STAGE_LABEL[application.rejected_at_stage as ApplicationStage] ?? application.rejected_at_stage}</Chip>
+            <Chip variant="danger" className="ml-2">Rejected at {application.rejected_at_stage ? (stageLabel.get(application.rejected_at_stage) ?? application.rejected_at_stage) : 'Unknown stage'}</Chip>
           )}
         </div>
         {!isTerminal && (
@@ -370,7 +360,7 @@ export default function ApplicationDetailPage() {
                     </div>
                     {iv.outcome && (
                       <Chip variant={iv.outcome === 'passed' ? 'success' : iv.outcome === 'failed' ? 'danger' : 'neutral'}>
-                        {iv.outcome}
+                        {iv.outcome_label ?? iv.outcome}
                       </Chip>
                     )}
                   </li>
@@ -432,7 +422,7 @@ export default function ApplicationDetailPage() {
           <Panel title="At a glance">
             <dl className="text-sm space-y-2">
               <DetailItem label="Stage">
-                <Chip variant={STAGE_CHIP[application.stage]}>{STAGE_LABEL[application.stage]}</Chip>
+                <Chip variant={STAGE_CHIP[application.stage]}>{stageLabel.get(application.stage) ?? application.stage}</Chip>
               </DetailItem>
               <DetailItem label="Tracking Code">
                 <span className="font-mono text-xs">{application.tracking_code}</span>

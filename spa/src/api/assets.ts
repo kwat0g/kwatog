@@ -9,6 +9,7 @@ export interface AssetListParams extends ListParams {
 }
 
 export const assetsApi = {
+  options: () => client.get<ApiSuccess<{ categories: Array<{ value: AssetCategory; label: string }>; statuses: Array<{ value: AssetStatus; label: string }> }>>('/assets/options').then(r => r.data.data),
   list: (params?: AssetListParams) =>
     client.get<PaginatedResponse<Asset>>('/assets', { params }).then(r => r.data),
   show: (id: string) =>
@@ -39,6 +40,7 @@ export interface AssetTransferListParams extends ListParams {
 }
 
 export const assetTransfersApi = {
+  options: () => client.get<ApiSuccess<{ statuses: Array<{ value: AssetTransferStatus; label: string }> }>>('/asset-transfers/options').then(r => r.data.data),
   list: (params?: AssetTransferListParams) =>
     client.get<PaginatedResponse<AssetTransfer>>('/asset-transfers', { params }).then(r => r.data),
   show: (id: string) =>

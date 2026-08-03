@@ -36,6 +36,12 @@ export default function AssetTransfersListPage() {
     queryFn: () => assetTransfersApi.list(filters),
     placeholderData: (prev) => prev,
   });
+  const { data: transferOptions } = useQuery({
+    queryKey: ['asset-transfers', 'options'],
+    queryFn: assetTransfersApi.options,
+    staleTime: 5 * 60 * 1000,
+  });
+  const statusLabels = new Map((transferOptions?.statuses ?? []).map((option) => [option.value, option.label]));
 
   const approveMutation = useMutation({
     mutationFn: (id: string) => assetTransfersApi.approve(id),
@@ -68,7 +74,7 @@ export default function AssetTransfersListPage() {
     { key: 'to_department', header: 'To', cell: (r) => <span>{r.to_department.name}</span> },
     {
       key: 'status', header: 'Status',
-      cell: (r) => <Chip variant={STATUS_CHIP[r.status]}>{r.status}</Chip>,
+      cell: (r) => <Chip variant={STATUS_CHIP[r.status]}>{r.status_label ?? statusLabels.get(r.status) ?? r.status}</Chip>,
     },
     { key: 'transfer_date', header: 'Date', cell: (r) => <span>{r.transfer_date}</span> },
     ...(can('assets.transfer.approve') ? [{
@@ -95,10 +101,7 @@ export default function AssetTransfersListPage() {
       key: 'status', label: 'Status', type: 'select',
       options: [
         { value: '', label: 'All' },
-        { value: 'pending', label: 'Pending' },
-        { value: 'approved', label: 'Approved' },
-        { value: 'rejected', label: 'Rejected' },
-        { value: 'completed', label: 'Completed' },
+        ...(transferOptions?.statuses ?? []),
       ],
     },
   ];

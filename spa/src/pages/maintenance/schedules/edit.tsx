@@ -17,7 +17,7 @@ import type { ApiValidationError } from '@/types';
 
 const schema = z.object({
   description: z.string().min(1).max(200),
-  interval_type: z.enum(['hours', 'days', 'shots']),
+  interval_type: z.string().min(1, 'Interval type required'),
   interval_value: z.coerce.number().int().min(1),
   is_active: z.string(),
 });
@@ -27,6 +27,7 @@ export default function EditMaintenanceSchedulePage() {
   const { id = '' } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const { data: options } = useQuery({ queryKey: ['maintenance', 'schedule-options'], queryFn: () => schedulesApi.options() });
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['maintenance', 'schedules', id],
@@ -48,7 +49,7 @@ export default function EditMaintenanceSchedulePage() {
     mutationFn: (values: FormValues) => schedulesApi.update(id, {
       ...values,
       is_active: values.is_active === 'true',
-    }),
+    } as Parameters<typeof schedulesApi.update>[1]),
     onSuccess: (schedule) => {
       qc.invalidateQueries({ queryKey: ['maintenance', 'schedules'] });
       toast.success('Schedule updated.');
@@ -98,9 +99,7 @@ export default function EditMaintenanceSchedulePage() {
           <Input label="Description" {...register('description')} error={errors.description?.message} required />
           <div className="grid grid-cols-2 gap-3 mt-3">
             <Select label="Interval type" {...register('interval_type')} error={errors.interval_type?.message} required>
-              <option value="hours">Hours (engine time)</option>
-              <option value="days">Days (calendar)</option>
-              <option value="shots">Shots (mold only)</option>
+              {(options?.interval_types ?? []).map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
             </Select>
             <Input label="Interval value" type="number" {...register('interval_value')} error={errors.interval_value?.message} required />
           </div>

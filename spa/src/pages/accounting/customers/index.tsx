@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate} from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import { customersApi, type CustomerListParams } from '@/api/accounting/customers';
 import { Button } from '@/components/ui/Button';
@@ -22,11 +22,10 @@ export default function CustomersPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['accounting', 'customers', filters],
     queryFn: () => customersApi.list(filters),
-    placeholderData: (prev) => prev,
-  });
+    placeholderData: (prev) => prev });
 
   const columns: Column<Customer>[] = [
-    { key: 'name', header: 'Customer', cell: (r) => <Link to={`/accounting/customers/${r.id}`} className="text-accent hover:underline font-medium">{r.name}</Link> },
+    { key: 'name', header: 'Customer', cell: (r) => r.name },
     { key: 'contact', header: 'Contact', cell: (r) => r.contact_person ?? '—' },
     { key: 'phone', header: 'Phone', cell: (r) => <span className="font-mono">{r.phone ?? '—'}</span> },
     { key: 'terms', header: 'Terms', align: 'right', cell: (r) => <NumCell>{r.payment_terms_days}d</NumCell> },
@@ -37,8 +36,7 @@ export default function CustomersPage() {
   const filterConfig: FilterConfig[] = [
     {
       key: 'is_active', label: 'Status', type: 'select',
-      options: [{ value: '', label: 'All' }, { value: 'true', label: 'Active' }, { value: 'false', label: 'Inactive' }],
-    },
+      options: [{ value: '', label: 'All' }, { value: 'true', label: 'Active' }, { value: 'false', label: 'Inactive' }] },
   ];
 
   return (
@@ -64,7 +62,8 @@ export default function CustomersPage() {
           action={can('accounting.customers.manage') ? <Button variant="primary" onClick={() => navigate('/accounting/customers/create')}>New customer</Button> : undefined} />
       )}
       {data && data.data.length > 0 && (
-        <div className="px-5 py-4"><DataTable columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters((f) => ({ ...f, page }))} /></div>
+        <div className="px-5 py-4"><DataTable
+            onRowClick={(r) => navigate(`/accounting/customers/${r.id}`)} columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters((f) => ({ ...f, page }))} /></div>
       )}
     </div>
   );

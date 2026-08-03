@@ -10,13 +10,7 @@ import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
-
-const EMPLOYMENT_LABELS: Record<string, string> = {
-  regular: 'Regular',
-  probationary: 'Probationary',
-  contractual: 'Contractual',
-  project_based: 'Project-Based',
-};
+import { landingApi } from '@/api/landing';
 
 function formatSalary(min: string | null, max: string | null) {
   if (!min && !max) return null;
@@ -33,6 +27,13 @@ export default function CareersPage() {
     queryFn: () => publicRecruitmentApi.listPostings({ page }).then((r) => r.data),
     placeholderData: (prev) => prev,
   });
+  const { data: contact } = useQuery({ queryKey: ['landing', 'contact'], queryFn: landingApi.contact, staleTime: 300_000 });
+  const { data: landingContent } = useQuery({ queryKey: ['landing', 'content'], queryFn: landingApi.content, staleTime: 300_000 });
+  const careersIntro = (landingContent?.section_copy?.hero_description ?? '')
+    .replaceAll('{{company}}', contact?.legal_name ?? '—')
+    .replaceAll('{{partners}}', landingContent?.oem_partners?.join(', ') ?? '—')
+    .replaceAll('{{standard}}', landingContent?.quality_policy?.standard ?? '—')
+    .replaceAll('{{address}}', contact?.address ?? '—');
 
   const postings = data?.data ?? [];
   const lastPage = data?.meta?.last_page ?? 1;
@@ -47,7 +48,7 @@ export default function CareersPage() {
             Join Our Team
           </h1>
           <p className="mt-4 text-lg text-secondary">
-            Be part of Philippine Ogami Corporation — a leader in precision plastic injection molding for the automotive industry.
+            {careersIntro || '—'}
           </p>
           <Link
             to="/careers/track"
@@ -105,11 +106,10 @@ export default function CareersPage() {
                     </span>
                     <span className="flex items-center gap-1.5">
                       <Briefcase size={14} />
-                      {EMPLOYMENT_LABELS[posting.employment_type] ?? posting.employment_type}
+                      {posting.employment_type_label ?? posting.employment_type}
                     </span>
                     {posting.salary_range && (
                       <span className="flex items-center gap-1.5">
-                        <span className="font-mono text-xs tabular-nums">₱</span>
                         {formatSalary(posting.salary_range.min, posting.salary_range.max)}
                       </span>
                     )}

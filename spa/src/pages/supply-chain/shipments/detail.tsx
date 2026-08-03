@@ -32,28 +32,6 @@ const STATUS_CHIP: Record<ShipmentStatus, 'success' | 'danger' | 'warning' | 'ne
   cancelled: 'neutral',
 };
 
-const STATUS_ORDER: ShipmentStatus[] = ['ordered', 'shipped', 'in_transit', 'customs', 'cleared', 'received'];
-
-const NEXT_STATUS: Partial<Record<ShipmentStatus, ShipmentStatus>> = {
-  ordered: 'shipped',
-  shipped: 'in_transit',
-  in_transit: 'customs',
-  customs: 'cleared',
-  cleared: 'received',
-};
-
-const DOC_TYPE_LABEL: Record<ShipmentDocumentType, string> = {
-  proforma_invoice: 'Proforma invoice',
-  commercial_invoice: 'Commercial invoice',
-  packing_list: 'Packing list',
-  bill_of_lading: 'Bill of lading',
-  import_entry: 'Import entry',
-  certificate_of_origin: 'Certificate of origin',
-  msds: 'MSDS',
-  boc_release: 'BOC release',
-  insurance_certificate: 'Insurance certificate',
-};
-
 function formatBytes(bytes: number | null): string {
   if (!bytes) return '';
   if (bytes < 1024) return `${bytes} B`;
@@ -80,6 +58,14 @@ export default function ShipmentDetailPage() {
     enabled: Boolean(id),
     placeholderData: (prev) => prev,
   });
+  const { data: shipmentOptions } = useQuery({
+    queryKey: ['supply-chain', 'shipments', 'options'],
+    queryFn: () => shipmentsApi.options(),
+    staleTime: 300_000,
+  });
+  const docTypeLabels = Object.fromEntries((shipmentOptions?.document_types ?? []).map((option) => [option.value, option.label]));
+  const statusOptions = shipmentOptions?.statuses ?? [];
+  const statusLabels = new Map(statusOptions.map((option) => [option.value, option.label]));
 
   const advance = useMutation({
     mutationFn: ({ status, note }: { status: ShipmentStatus; note?: string }) =>
@@ -128,10 +114,11 @@ export default function ShipmentDetailPage() {
     );
   }
 
-  const nextStatus = NEXT_STATUS[data.status];
+  const nextStatus = statusOptions.find((option) => option.value === data.status)?.next_status ?? null;
+  const statusOrder = statusOptions.filter((option) => !option.is_terminal || option.value === 'received').map((option) => option.value);
   const canManage = can('supply_chain.shipments.manage');
   const documents = data.documents ?? [];
-  const currentStep = STATUS_ORDER.indexOf(data.status);
+  const currentStep = statusOrder.indexOf(data.status);
 
   return (
     <div>
@@ -140,7 +127,7 @@ export default function ShipmentDetailPage() {
           <span>
             <span className="font-mono">{data.shipment_number}</span>
             <Chip variant={STATUS_CHIP[data.status]} className="ml-3">
-              {data.status.replace('_', ' ')}
+              {statusLabels.get(data.status) ?? data.status.replace('_', ' ')}
             </Chip>
           </span>
         }
@@ -163,7 +150,7 @@ export default function ShipmentDetailPage() {
                 setStatusNoteOpen(true);
               }}
             >
-              Mark {nextStatus.replace('_', ' ')}
+              Mark {statusLabels.get(nextStatus) ?? nextStatus.replace('_', ' ')}
             </Button>
           ) : undefined
         }
@@ -172,10 +159,10 @@ export default function ShipmentDetailPage() {
       {/* Status timeline */}
       <div className="px-5 py-4 border-b border-default">
         <ol className="flex items-center gap-0">
-          {STATUS_ORDER.map((s, i) => {
+          {statusOrder.map((s, i) => {
             const isDone = i < currentStep;
             const isCurrent = i === currentStep;
-            const isLast = i === STATUS_ORDER.length - 1;
+            const isLast = i === statusOrder.length - 1;
             return (
               <li key={s} className="flex items-center">
                 <div className="flex flex-col items-center">
@@ -197,7 +184,7 @@ export default function ShipmentDetailPage() {
                       isCurrent ? 'text-accent font-medium' : isDone ? 'text-success' : 'text-muted',
                     ].join(' ')}
                   >
-                    {s.replace('_', ' ')}
+                    {statusLabels.get(s) ?? s.replace('_', ' ')}
                   </span>
                 </div>
                 {!isLast && (
@@ -278,7 +265,7 @@ export default function ShipmentDetailPage() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium truncate">{doc.original_filename ?? 'Document'}</span>
-                        <Chip variant="neutral">{DOC_TYPE_LABEL[doc.document_type] ?? doc.document_type}</Chip>
+                        <Chip variant="neutral">{docTypeLabels[doc.document_type] ?? doc.document_type}</Chip>
                       </div>
                       <div className="text-2xs text-muted mt-0.5">
                         {formatBytes(doc.file_size_bytes)}
@@ -324,8 +311,8 @@ export default function ShipmentDetailPage() {
                     value={docType}
                     onChange={(e) => setDocType(e.target.value as ShipmentDocumentType)}
                   >
-                    {(Object.keys(DOC_TYPE_LABEL) as ShipmentDocumentType[]).map((t) => (
-                      <option key={t} value={t}>{DOC_TYPE_LABEL[t]}</option>
+                    {(shipmentOptions?.document_types ?? []).map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
                     ))}
                   </Select>
                   <Input

@@ -13,7 +13,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { formatDateTime } from '@/lib/formatDate';
 
 function parseUserAgent(ua: string | null): string {
-  if (!ua) return 'Unknown';
+  if (!ua) return '—';
   if (ua.length > 60) return ua.slice(0, 57) + '...';
   return ua;
 }
@@ -26,7 +26,7 @@ const columns: Column<ActiveSession>[] = [
       <StackedCell
         primary={
           <span className="flex items-center gap-2">
-            {s.user_name ?? 'Unknown'}
+            {s.user_name ?? '—'}
             {s.is_current && <Chip variant="info">Current</Chip>}
           </span>
         }

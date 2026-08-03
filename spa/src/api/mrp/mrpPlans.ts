@@ -8,6 +8,7 @@ export interface MrpPlanListParams extends ListParams {
 }
 
 export const mrpPlansApi = {
+  options: () => client.get<{ data: { statuses: Array<{ value: string; label: string }> } }>('/mrp/plans/options').then((r) => r.data.data),
   list: (params?: MrpPlanListParams) =>
     client.get<PaginatedResponse<MrpPlan>>('/mrp/plans', { params }).then((r) => r.data),
   show: (id: string) =>

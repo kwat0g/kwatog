@@ -1,7 +1,7 @@
 /** Sprint 7 / ADV7 — Delivery detail with Proof-of-Delivery management. */
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams , useNavigate} from 'react-router-dom';
 import { Truck, Camera, Check, ArrowRight, Tag, Trash2, FileText, Image as ImageIcon, ShieldCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { AxiosError } from 'axios';
@@ -19,7 +19,7 @@ import { Modal } from '@/components/ui/Modal';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { ChainHeader } from '@/components/chain/ChainHeader';
 import { LinkedRecords } from '@/components/chain/LinkedRecords';
-import { buildDeliveryO2cChain } from '@/lib/chains';
+import { buildDeliveryChain } from '@/lib/chains';
 import { usePermission } from '@/hooks/usePermission';
 import { useChainProgress } from '@/hooks/useChainProgress';
 import type { DeliveryStatus, DeliveryProofType } from '@/types/supplyChain';
@@ -43,10 +43,12 @@ const PROOF_TYPE_LABEL: Record<DeliveryProofType, string> = {
   signed_dr: 'Signed DR',
   photo: 'Photo',
   customer_po_confirmation: 'Customer PO confirmation',
+  coc: 'Certificate of Conformity',
   other: 'Other',
 };
 
 export default function DeliveryDetailPage() {
+  const navigate = useNavigate();
   const { id = '' } = useParams<{ id: string }>();
   const qc = useQueryClient();
   const { can } = usePermission();
@@ -211,7 +213,7 @@ export default function DeliveryDetailPage() {
 
       {/* P1 — Order-to-Cash chain anchored on the Delivery record. */}
       <div className="px-5 py-3 border-b border-default">
-        <ChainHeader steps={buildDeliveryO2cChain(data)} />
+        <ChainHeader steps={buildDeliveryChain(data)} />
       </div>
 
       <div className="px-5 grid grid-cols-3 gap-4">
@@ -389,12 +391,10 @@ export default function DeliveryDetailPage() {
                 </thead>
                 <tbody>
                   {data.items.map((i) => (
-                    <tr key={i.id} className={trCls}>
+                    <tr key={i.id} className={cn(trCls, i.inspection && "cursor-pointer")} onClick={() => i.inspection && navigate(`/quality/inspections/${i.inspection.id}`)}>
                       <Td>
                         {i.inspection ? (
-                          <Link to={`/quality/inspections/${i.inspection.id}`} className="font-mono text-accent hover:underline">
-                            {i.inspection.inspection_number}
-                          </Link>
+                          <span className="font-mono">{i.inspection.inspection_number}</span>
                         ) : <span className="text-muted">—</span>}
                       </Td>
                       <Td align="right" mono>{i.quantity}</Td>

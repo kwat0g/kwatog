@@ -51,6 +51,7 @@ export interface PayrollPeriod {
   is_thirteenth_month: boolean;
   status: PayrollPeriodStatus;
   status_label: string;
+  lifecycle_steps?: Array<{ key: string; label: string; state: 'pending' | 'active' | 'done' }>;
   is_locked: boolean;
   label: string;
   is_auto_created: boolean;
@@ -81,8 +82,37 @@ export interface PayrollPeriod {
   computer?: { id: string; name: string } | null;
   approver?: { id: string; name: string } | null;
   finalizer?: { id: string; name: string } | null;
+  /** When the current compute run claimed this period (null when not running). */
+  processing_started_at?: string | null;
+  /**
+   * True when a Processing claim is older than the stale threshold — its worker
+   * is presumed dead (OOM/restart). The next Compute click takes the claim over,
+   * and the hourly payroll:reap-stale-runs sweep releases it either way.
+   */
+  is_compute_stale?: boolean;
+  /** Last progress snapshot of an in-flight run. Null unless Processing. */
+  compute_progress?: PayrollComputeProgress | null;
   created_at: string;
   updated_at: string;
+}
+
+/**
+ * Live compute-run progress. Arrives two ways: pushed over Reverb as
+ * `.payroll.progress` on `payroll.period.{id}`, and cached server-side so a
+ * page loaded mid-run renders a real bar on first paint.
+ */
+export interface PayrollComputeProgress {
+  processed: number;
+  total: number;
+  failures: number;
+  percent: number;
+  updated_at: string;
+}
+
+/** Broadcast payload — same shape plus the period's status at emit time. */
+export interface PayrollProgressEventPayload extends PayrollComputeProgress {
+  period_id: string;
+  status?: PayrollPeriodStatus | null;
 }
 
 /**
@@ -92,6 +122,7 @@ export interface PayrollPeriod {
 export interface DisbursementProof {
   id: string;
   proof_type: ProofType;
+  proof_type_label?: string;
   file_name: string;
   bank_name: string | null;
   transaction_reference: string | null;

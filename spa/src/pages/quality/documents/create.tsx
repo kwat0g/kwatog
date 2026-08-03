@@ -4,8 +4,9 @@
  * Form for registering a new controlled document in the quality system.
  * Fields: code, title, category, description, assignee role, review interval.
  */
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -24,48 +25,38 @@ import type { CreateDocumentData, DocumentCategory } from '@/types/quality/docum
 const schema = z.object({
   code: z.string().min(1, 'Code is required').max(50),
   title: z.string().min(1, 'Title is required').max(255),
-  category: z.enum(['sop', 'work_instruction', 'form', 'policy', 'specification'], {
-    required_error: 'Category is required',
-  }),
+  category: z.string().min(1, 'Category is required'),
   description: z.string().max(2000).optional(),
   assignee_role: z.string().optional(),
-  review_interval_months: z.coerce.number().int().min(1).max(120).optional().or(z.literal('')),
+  review_interval_months: z.coerce.number().int().min(1).optional().or(z.literal('')),
 });
 
 type FormValues = z.infer<typeof schema>;
 
-const SEEDED_ROLES = [
-  { value: 'system_admin', label: 'System Admin' },
-  { value: 'hr_officer', label: 'HR Officer' },
-  { value: 'finance_officer', label: 'Finance Officer' },
-  { value: 'production_manager', label: 'Production Manager' },
-  { value: 'ppc_head', label: 'PPC Head' },
-  { value: 'purchasing_officer', label: 'Purchasing Officer' },
-  { value: 'warehouse_staff', label: 'Warehouse Staff' },
-  { value: 'qc_inspector', label: 'QC Inspector' },
-  { value: 'maintenance_tech', label: 'Maintenance Tech' },
-  { value: 'impex_officer', label: 'ImpEx Officer' },
-  { value: 'department_head', label: 'Department Head' },
-  { value: 'employee', label: 'Employee' },
-  { value: 'driver', label: 'Driver' },
-];
-
 export default function DocumentCreatePage() {
   const navigate = useNavigate();
+  const roles = useQuery({ queryKey: ['quality', 'document-assignee-roles'], queryFn: documentsApi.assigneeRoles });
+  const documentOptions = useQuery({ queryKey: ['quality', 'document-options'], queryFn: documentsApi.options });
 
   const {
-    register, handleSubmit, formState: { errors },
+    register, handleSubmit, watch, setValue, formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       code: '',
       title: '',
-      category: 'sop',
+      category: '',
       description: '',
       assignee_role: '',
-      review_interval_months: 12,
+      review_interval_months: '',
     },
   });
+
+  useEffect(() => {
+    if (!watch('category') && documentOptions.data?.categories?.length) {
+      setValue('category', documentOptions.data.categories[0].value);
+    }
+  }, [documentOptions.data, setValue, watch]);
 
   const submit = useMutation({
     mutationFn: (data: CreateDocumentData) => documentsApi.create(data),
@@ -111,14 +102,14 @@ export default function DocumentCreatePage() {
               <Input
                 label="Code"
                 required
-                placeholder="e.g. SOP-001"
+                placeholder="Document code"
                 {...register('code')}
                 error={errors.code?.message}
               />
               <Input
                 label="Title"
                 required
-                placeholder="e.g. Injection Molding SOP"
+                placeholder="Document title"
                 {...register('title')}
                 error={errors.title?.message}
               />
@@ -128,11 +119,7 @@ export default function DocumentCreatePage() {
                 {...register('category')}
                 error={errors.category?.message}
               >
-                <option value="sop">SOP</option>
-                <option value="work_instruction">Work Instruction</option>
-                <option value="form">Form</option>
-                <option value="policy">Policy</option>
-                <option value="specification">Specification</option>
+                {(documentOptions.data?.categories ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </Select>
               <Select
                 label="Assignee role"
@@ -140,15 +127,15 @@ export default function DocumentCreatePage() {
                 error={errors.assignee_role?.message}
               >
                 <option value="">None</option>
-                {SEEDED_ROLES.map((r) => (
-                  <option key={r.value} value={r.value}>{r.label}</option>
+                {(roles.data ?? []).map((r) => (
+                  <option key={r.slug} value={r.slug}>{r.name}</option>
                 ))}
               </Select>
               <Input
                 label="Review interval (months)"
                 type="number"
                 min={1}
-                max={120}
+                max={documentOptions.data?.max_review_interval_months}
                 placeholder="12"
                 {...register('review_interval_months')}
                 error={errors.review_interval_months?.message}

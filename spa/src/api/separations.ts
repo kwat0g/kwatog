@@ -9,6 +9,7 @@ export interface SeparationListParams extends ListParams {
 }
 
 export const separationsApi = {
+  options: () => client.get<{ data: { statuses: Array<{ value: ClearanceStatus; label: string }>; reasons: Array<{ value: SeparationReason; label: string }> } }>('/hr/clearances/options').then(r => r.data.data),
   list: (params?: SeparationListParams) =>
     client.get<PaginatedResponse<Clearance>>('/hr/clearances', { params }).then(r => r.data),
   show: (id: string) =>

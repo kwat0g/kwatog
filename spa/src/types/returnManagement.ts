@@ -17,6 +17,7 @@ export interface ReturnRequestItem {
   reason?: string;
   condition?: string;
   disposition?: DispositionType;
+  disposition_label?: string;
   disposition_notes?: string;
   ncr?: { id: string; ncr_number: string };
   product?: { id: string; part_number: string; name: string };

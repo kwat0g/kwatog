@@ -16,23 +16,41 @@
  * and restore focus to the toggle on close.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Menu, X, LogIn } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { BrandLogo } from '@/components/brand/BrandLogo';
-import { NAV_LINKS } from '../data';
 import { useMagnetic } from '../hooks/useMagnetic';
+import { landingApi } from '@/api/landing';
 
 export interface LandingNavProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onOpenQuote?: () => void;
 }
 
-export function LandingNav({ open, onOpenChange }: LandingNavProps) {
+const DEFAULT_NAV_LINKS = [
+  { label: 'Capabilities', href: '#capabilities' },
+  { label: '3D Parts', href: '#parts-3d' },
+  { label: 'Process', href: '#process' },
+  { label: 'Quality', href: '#quality' },
+  { label: 'Contact', href: '#contact' },
+];
+
+export function LandingNav({ open, onOpenChange, onOpenQuote }: LandingNavProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const isLanding = location.pathname === '/';
+  const { data: contact } = useQuery({ queryKey: ['landing', 'contact'], queryFn: landingApi.contact, staleTime: 300_000 });
+  const { data: content } = useQuery({ queryKey: ['landing', 'content'], queryFn: landingApi.content, staleTime: 300_000 });
+  const navLinks = useMemo(
+    () => (content?.section_copy?.nav_links?.length ? content.section_copy.nav_links : DEFAULT_NAV_LINKS),
+    [content?.section_copy?.nav_links],
+  );
+  const legalName = contact?.legal_name || 'Philippine Ogami Corporation';
+  const locationCountry = contact?.address?.split(',').at(-1)?.trim() || 'Philippines';
   const [scrolled, setScrolled] = useState(false);
   const [activeHref, setActiveHref] = useState<string>('');
   const toggleRef = useRef<HTMLButtonElement>(null);
@@ -54,7 +72,7 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
   // Active-section tracking via a single IntersectionObserver.
   useEffect(() => {
     if (!isLanding) return;
-    const sectionIds = NAV_LINKS.map((l) => l.href.slice(1));
+    const sectionIds = navLinks.map((l) => l.href.slice(1));
     const elements = sectionIds
       .map((id) => document.getElementById(id))
       .filter((el): el is HTMLElement => el !== null);
@@ -75,7 +93,7 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
 
     elements.forEach((el) => observer.observe(el));
     return () => observer.disconnect();
-  }, [isLanding]);
+  }, [isLanding, navLinks]);
 
   // Lock body scroll while the mobile sheet is open.
   useEffect(() => {
@@ -150,15 +168,20 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
           }}
           className="group flex items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas"
         >
-          <BrandLogo alt="Ogami" className="h-9 transition-transform duration-500 group-hover:scale-105" />
-          <span className="hidden font-mono text-[10px] uppercase tracking-[0.22em] text-landing-muted sm:inline">
-            Philippines
-          </span>
+          <BrandLogo alt={legalName} className="h-9 transition-transform duration-500 group-hover:scale-105" />
+          <div className="flex flex-col text-left">
+            <span className="font-display text-sm font-semibold tracking-tight text-landing-text leading-tight">
+              {legalName}
+            </span>
+            <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-landing-muted">
+              Ogami ERP · {locationCountry}
+            </span>
+          </div>
         </a>
 
         {/* Desktop links */}
         <div className="hidden items-center gap-5 lg:flex">
-          {NAV_LINKS.map((link) => {
+          {navLinks.map((link) => {
             const isActive = isLanding && activeHref === link.href;
             return (
               <a
@@ -228,7 +251,7 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
         )}
       >
         <div className="flex flex-col gap-1 px-5 py-4">
-          {NAV_LINKS.map((link) => (
+          {navLinks.map((link) => (
             <a
               key={link.href}
               href={isLanding ? link.href : '/' + link.href}

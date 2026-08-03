@@ -160,7 +160,7 @@ export default function ComplaintDetailPage() {
   if (data.ncr) {
     linkedGroups.push({ label: 'NCR', items: [
       { id: data.ncr.ncr_number, href: `/quality/ncrs/${data.ncr.id}`,
-        meta: `${data.ncr.severity} · ${data.ncr.status}` },
+        meta: `${data.ncr.severity_label ?? data.ncr.severity} · ${data.ncr.status_label ?? data.ncr.status}` },
     ]});
   }
 
@@ -170,8 +170,8 @@ export default function ComplaintDetailPage() {
         title={
           <span>
             {data.complaint_number}
-            <Chip variant={STATUS_CHIP[data.status]} className="ml-3">{data.status}</Chip>
-            <Chip variant={SEVERITY_CHIP[data.severity]} className="ml-2">{data.severity}</Chip>
+            <Chip variant={STATUS_CHIP[data.status]} className="ml-3">{data.status_label ?? data.status}</Chip>
+            <Chip variant={SEVERITY_CHIP[data.severity]} className="ml-2">{data.severity_label ?? data.severity}</Chip>
           </span>
         }
         subtitle={data.customer ? `Customer: ${data.customer.name}` : undefined}
@@ -266,7 +266,7 @@ export default function ComplaintDetailPage() {
                         {data.ncr.ncr_number}
                       </Link>
                       <span className="ml-3 text-xs text-muted">
-                        {data.ncr.severity} · {data.ncr.status}
+                        {data.ncr.severity_label ?? data.ncr.severity} · {data.ncr.status_label ?? data.ncr.status}
                       </span>
                     </div>
                   </div>
@@ -277,7 +277,7 @@ export default function ComplaintDetailPage() {
               <Panel title="Status">
                 <p className="text-sm text-muted">
                   {isTerminal
-                    ? `Complaint ${data.status} on ${data.closed_at?.slice(0, 10) ?? '—'}.`
+                    ? `Complaint ${data.status_label ?? data.status} on ${data.closed_at?.slice(0, 10) ?? '—'}.`
                     : 'Use the 8D Report tab to drive the corrective action workflow. Resolve once D5 is verified.'}
                 </p>
               </Panel>

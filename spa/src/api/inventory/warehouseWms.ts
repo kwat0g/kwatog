@@ -13,10 +13,11 @@ export const warehouseMapApi = {
   map: () =>
     client.get<{ data: WarehouseMap[] }>('/inventory/warehouse-map').then((r) => r.data.data),
   binDetail: (id: string) =>
-    client.get<{ data: { location: WarehouseMapLocation; stock_levels: Array<{ item_code: string; quantity: string; available: string }>; last_movement: { movement_type: string; created_at: string } | null } }>(`/inventory/warehouse-map/bins/${id}`).then((r) => r.data.data),
+    client.get<{ data: { location: WarehouseMapLocation; stock_levels: Array<{ item_code: string; quantity: string; available: string }>; last_movement: { movement_type: string; movement_type_label?: string; created_at: string } | null } }>(`/inventory/warehouse-map/bins/${id}`).then((r) => r.data.data),
 };
 
 export const stockCountApi = {
+  options: () => client.get<{ data: { scopes: Array<{ value: string; label: string }>; variance_tolerance_pct?: number; default_scope: string } }>('/inventory/stock-counts/options').then((r) => r.data.data),
   list: (params?: { page?: number; per_page?: number }) =>
     client.get<{ data: StockCountSession[] }>('/inventory/stock-counts', { params }).then((r) => r.data.data),
   get: (id: string) =>

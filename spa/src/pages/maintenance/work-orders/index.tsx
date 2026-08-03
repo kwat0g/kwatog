@@ -17,6 +17,7 @@ import {
   maintenanceStatusVariant as STATUS_CHIP,
 } from '@/lib/statusVariants';
 import type { MaintenanceWorkOrder } from '@/types/maintenance';
+import { formatPeso } from '@/lib/formatNumber';
 
 export default function MaintenanceWorkOrdersListPage() {
   const navigate = useNavigate();
@@ -27,6 +28,10 @@ export default function MaintenanceWorkOrdersListPage() {
     queryKey: ['maintenance', 'work-orders', filters],
     queryFn: () => workOrdersApi.list(filters),
     placeholderData: (prev) => prev,
+  });
+  const { data: options } = useQuery({
+    queryKey: ['maintenance', 'work-order-options'],
+    queryFn: () => workOrdersApi.options(),
   });
 
   const columns: Column<MaintenanceWorkOrder>[] = [
@@ -49,12 +54,12 @@ export default function MaintenanceWorkOrdersListPage() {
     {
       key: 'type',
       header: 'Type',
-      cell: (r) => <Chip variant={r.type === 'preventive' ? 'info' : 'warning'}>{r.type}</Chip>,
+      cell: (r) => <Chip variant={r.type === 'preventive' ? 'info' : 'warning'}>{r.type_label ?? r.type}</Chip>,
     },
     {
       key: 'priority',
       header: 'Priority',
-      cell: (r) => <Chip variant={PRIORITY_CHIP[r.priority]}>{r.priority}</Chip>,
+      cell: (r) => <Chip variant={PRIORITY_CHIP[r.priority]}>{r.priority_label ?? r.priority}</Chip>,
     },
     {
       key: 'assignee',
@@ -65,12 +70,12 @@ export default function MaintenanceWorkOrdersListPage() {
       key: 'cost',
       header: 'Cost',
       align: 'right',
-      cell: (r) => <NumCell>₱{r.cost ?? '0.00'}</NumCell>,
+      cell: (r) => <NumCell>{formatPeso(r.cost ?? '0.00')}</NumCell>,
     },
     {
       key: 'status',
       header: 'Status',
-      cell: (r) => <Chip variant={STATUS_CHIP[r.status]}>{r.status.replace('_', ' ')}</Chip>,
+      cell: (r) => <Chip variant={STATUS_CHIP[r.status]}>{r.status_label ?? r.status.replace('_', ' ')}</Chip>,
     },
   ];
 
@@ -79,29 +84,21 @@ export default function MaintenanceWorkOrdersListPage() {
       key: 'status', label: 'Status', type: 'select',
       options: [
         { value: '', label: 'All' },
-        { value: 'open', label: 'Open' },
-        { value: 'assigned', label: 'Assigned' },
-        { value: 'in_progress', label: 'In progress' },
-        { value: 'completed', label: 'Completed' },
-        { value: 'cancelled', label: 'Cancelled' },
+        ...(options?.statuses ?? []).map((status) => ({ value: status.value, label: status.label })),
       ],
     },
     {
       key: 'type', label: 'Type', type: 'select',
       options: [
         { value: '', label: 'All' },
-        { value: 'preventive', label: 'Preventive' },
-        { value: 'corrective', label: 'Corrective' },
+        ...(options?.types ?? []).map((type) => ({ value: type.value, label: type.label })),
       ],
     },
     {
       key: 'priority', label: 'Priority', type: 'select',
       options: [
         { value: '', label: 'All' },
-        { value: 'critical', label: 'Critical' },
-        { value: 'high', label: 'High' },
-        { value: 'medium', label: 'Medium' },
-        { value: 'low', label: 'Low' },
+        ...(options?.priorities ?? []).map((priority) => ({ value: priority.value, label: priority.label })),
       ],
     },
   ];

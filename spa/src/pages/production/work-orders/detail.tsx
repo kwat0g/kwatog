@@ -35,17 +35,7 @@ const OP_STATUS_CHIP: Record<WoOperationStatus, 'success' | 'info' | 'warning' |
   in_progress: 'warning',
   paused: 'danger',
   completed: 'success',
-  skipped: 'neutral',
-};
-
-const OP_STATUS_LABEL: Record<WoOperationStatus, string> = {
-  pending: 'Pending',
-  setup: 'Setup',
-  in_progress: 'In Progress',
-  paused: 'Paused',
-  completed: 'Completed',
-  skipped: 'Skipped',
-};
+  skipped: 'neutral' };
 
 type DetailTab = 'details' | 'operations';
 
@@ -71,35 +61,34 @@ export default function WorkOrderDetailPage() {
   const machineList = useQuery({
     queryKey: ['mrp', 'machines', 'all'],
     queryFn: () => machinesApi.list({ per_page: 100 }),
-    enabled: showConfirmDialog,
-  });
+    enabled: showConfirmDialog });
   const moldList = useQuery({
     queryKey: ['mrp', 'molds', 'all'],
     queryFn: () => moldsApi.list({ per_page: 100 }),
-    enabled: showConfirmDialog,
-  });
+    enabled: showConfirmDialog });
+  const { data: workOrderOptions } = useQuery({
+    queryKey: ['production', 'work-orders', 'options'],
+    queryFn: () => workOrdersApi.options(),
+    staleTime: 5 * 60 * 1000 });
+  const operationStatusLabels = new Map((workOrderOptions?.operation_statuses ?? []).map((status) => [status.value, status.label]));
   const downtimeCategories = useQuery({
     queryKey: ['production', 'downtime-categories'],
     queryFn: workOrdersApi.downtimeCategories,
-    enabled: showPauseDialog,
-  });
+    enabled: showPauseDialog });
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['production', 'work-orders', 'detail', id],
     queryFn: () => workOrdersApi.show(id!),
-    enabled: !!id,
-  });
+    enabled: !!id });
   const chain = useQuery({
     queryKey: ['production', 'work-orders', 'chain', id],
     queryFn: () => workOrdersApi.chain(id!),
-    enabled: !!id,
-  });
+    enabled: !!id });
 
   const operations = useQuery({
     queryKey: ['production', 'work-orders', 'operations', id],
     queryFn: () => woOperationsApi.list(id!),
-    enabled: !!id && tab === 'operations',
-  });
+    enabled: !!id && tab === 'operations' });
 
   // Live updates from output recordings.
   useEcho(`production.wo.${id}`, '.output.recorded', () => {
@@ -136,8 +125,7 @@ export default function WorkOrderDetailPage() {
     },
     onError: (e: AxiosError<{ message?: string }>) => {
       toast.error(e.response?.data?.message ?? 'Action failed.');
-    },
-  });
+    } });
 
   if (isLoading) return <div>      <PageHeader title="Work order" backTo="/production/work-orders" backLabel="Work orders"
         breadcrumbs={[{ label: 'Production', href: '/production' }, { label: 'Work orders', href: '/production/work-orders' }, { label: 'Loading…' }]} /><SkeletonDetail /></div>;
@@ -268,7 +256,7 @@ export default function WorkOrderDetailPage() {
               <dd className="col-span-2"><span className="font-mono">{data.product?.part_number}</span> — {data.product?.name}</dd>
               <dt className="text-muted">Sales order</dt>
               <dd className="col-span-2">{data.sales_order
-                ? <Link to={`/crm/sales-orders/${data.sales_order.id}`} className="font-mono text-accent hover:underline">{data.sales_order.so_number}</Link>
+                ? <span className="font-mono">{data.sales_order.so_number}</span>
                 : <span className="text-muted">—</span>}</dd>
               <dt className="text-muted">Machine</dt>
               <dd className="col-span-2 font-mono">{data.machine?.machine_code ?? '—'}</dd>
@@ -364,40 +352,31 @@ export default function WorkOrderDetailPage() {
                   label: 'Sales Order',
                   items: [{
                     id: data.sales_order.so_number,
-                    href: `/crm/sales-orders/${data.sales_order.id}`,
-                  }],
-                }] : []),
+                    href: `/crm/sales-orders/${data.sales_order.id}` }] }] : []),
                 ...(data.machine || data.mold ? [{
                   label: 'Resources',
                   items: [
                     ...(data.machine ? [{
                       id: data.machine.machine_code,
                       href: `/mrp/machines/${data.machine.id}`,
-                      meta: data.machine.name,
-                    }] : []),
+                      meta: data.machine.name }] : []),
                     ...(data.mold ? [{
                       id: data.mold.mold_code,
                       href: `/mrp/molds/${data.mold.id}`,
-                      meta: data.mold.name,
-                    }] : []),
-                  ],
-                }] : []),
+                      meta: data.mold.name }] : []),
+                  ] }] : []),
                 ...(data.materials && data.materials.length > 0 ? [{
                   label: 'Materials',
                   items: data.materials.map((m) => ({
                     id: m.item?.code ?? '—',
-                    meta: `${Number(m.actual_quantity_issued).toFixed(3)} / ${Number(m.bom_quantity).toFixed(3)} ${m.item?.unit_of_measure ?? ''}`,
-                  })),
-                }] : []),
+                    meta: `${Number(m.actual_quantity_issued).toFixed(3)} / ${Number(m.bom_quantity).toFixed(3)} ${m.item?.unit_of_measure ?? ''}` })) }] : []),
                 ...(data.inspections && data.inspections.length > 0 ? [{
                   label: 'Quality inspections',
                   items: data.inspections.map((inspection) => ({
                     id: inspection.inspection_number,
                     href: `/quality/inspections/${inspection.id}`,
-                    meta: inspection.stage.replace('_', ' '),
-                    chip: { variant: inspection.status === 'passed' ? 'success' as const : inspection.status === 'failed' ? 'danger' as const : inspection.status === 'in_progress' ? 'info' as const : 'neutral' as const, text: inspection.status.replace('_', ' ') },
-                  })),
-                }] : []),
+                    meta: inspection.stage_label ?? inspection.stage.replace('_', ' '),
+                    chip: { variant: inspection.status === 'passed' ? 'success' as const : inspection.status === 'failed' ? 'danger' as const : inspection.status === 'in_progress' ? 'info' as const : 'neutral' as const, text: inspection.status_label ?? inspection.status.replace('_', ' ') } })) }] : []),
               ]}
             />
           </Panel>
@@ -408,18 +387,15 @@ export default function WorkOrderDetailPage() {
                 ...(data.actual_start ? [{
                   dot: 'info' as const,
                   text: <>Production started.</>,
-                  time: data.actual_start.slice(0, 10),
-                }] : []),
+                  time: data.actual_start.slice(0, 10) }] : []),
                 ...(data.actual_end ? [{
                   dot: 'success' as const,
                   text: <>Production completed.</>,
-                  time: data.actual_end.slice(0, 10),
-                }] : []),
+                  time: data.actual_end.slice(0, 10) }] : []),
                 ...(data.pause_reason ? [{
                   dot: 'warning' as const,
                   text: <>Paused: {data.pause_reason}</>,
-                  time: data.updated_at?.slice(0, 10) ?? '',
-                }] : []),
+                  time: data.updated_at?.slice(0, 10) ?? '' }] : []),
               ]}
             />
           </Panel>
@@ -465,7 +441,7 @@ export default function WorkOrderDetailPage() {
                     <Td align="right" mono>{op.sequence}</Td>
                     <Td>{op.operation_name}</Td>
                     <Td>
-                      <Chip variant={OP_STATUS_CHIP[op.status]}>{OP_STATUS_LABEL[op.status]}</Chip>
+                      <Chip variant={OP_STATUS_CHIP[op.status]}>{operationStatusLabels.get(op.status) ?? op.status}</Chip>
                     </Td>
                     <Td>
                       {op.operator

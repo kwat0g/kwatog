@@ -17,10 +17,8 @@ export function Spinner({ size = 'md', className }: SpinnerProps) {
   );
 }
 
+import { SkeletonPage } from './Skeleton';
+
 export function FullPageLoader() {
-  return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-canvas">
-      <Spinner size="lg" className="text-muted" />
-    </div>
-  );
+  return <SkeletonPage />;
 }

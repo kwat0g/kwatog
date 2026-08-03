@@ -69,7 +69,7 @@ export default function EditBomPage() {
             item_id:           m.item?.id ?? '',
             quantity_per_unit: m.quantity_per_unit,
             unit:              m.unit,
-            waste_factor:      m.waste_factor ?? '0',
+            waste_factor:      m.waste_factor ?? '',
             sort_order:        m.sort_order ?? i,
             _existing:         true,
             _item_display:     m.item ? `${m.item.code} — ${m.item.name}` : '',
@@ -256,7 +256,7 @@ export default function EditBomPage() {
               variant="secondary"
               size="sm"
               icon={<Plus size={14} />}
-              onClick={() => append({ item_id: '', quantity_per_unit: '', unit: '', waste_factor: '0', _existing: false, _item_display: '' })}
+              onClick={() => append({ item_id: '', quantity_per_unit: '', unit: '', waste_factor: '', _existing: false, _item_display: '' })}
             >
               Add line
             </Button>

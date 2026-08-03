@@ -11,6 +11,7 @@ export interface ItemListParams extends ListParams {
 }
 
 export const itemsApi = {
+  options: () => client.get<{ data: { item_types: Array<{ value: string; label: string }>; reorder_methods: Array<{ value: string; label: string }>; adjustment_directions: Array<{ value: string; label: string }>; stock_statuses: Array<{ value: string; label: string }> } }>('/inventory/items/options').then((r) => r.data.data),
   list: (params?: ItemListParams) =>
     client.get<PaginatedResponse<Item>>('/inventory/items', { params }).then((r) => r.data),
   show: (id: string) =>
@@ -24,6 +25,7 @@ export const itemsApi = {
 };
 
 export const itemQualityPlansApi = {
+  options: () => client.get<{ data: { sampling_methods: Array<{ value: string; label: string }>; parameter_types: Array<{ value: string; label: string }>; default_aql_level: string } }>('/inventory/quality-plans/options').then((r) => r.data.data),
   list: (itemId: string) =>
     client.get<{ data: ItemQualityPlan[] }>(`/inventory/items/${itemId}/quality-plans`).then((r) => r.data.data),
   createRevision: (itemId: string, data: {

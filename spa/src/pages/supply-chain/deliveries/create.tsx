@@ -15,6 +15,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { LinkButton } from '@/components/ui/LinkButton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { onFormInvalid, applyServerValidationErrors } from '@/lib/formErrors';
+import { formatPeso } from '@/lib/formatNumber';
 
 // ─── Validation ──────────────────────────────────────────────────────────────
 
@@ -71,7 +72,7 @@ export default function CreateDeliveryPage() {
       vehicle_id: '',
       scheduled_date: '',
       notes: '',
-      items: [{ sales_order_item_id: '', quantity: 1, inspection_id: '' }],
+      items: [{ sales_order_item_id: '', quantity: undefined as unknown as number, inspection_id: '' }],
     },
   });
 
@@ -161,8 +162,7 @@ export default function CreateDeliveryPage() {
           {selectedSo && (
             <p className="mt-1.5 text-xs text-muted">
               {selectedSo.item_count} line{selectedSo.item_count === 1 ? '' : 's'} ·{' '}
-              Customer: {selectedSo.customer?.name ?? '—'} · Total: ₱
-              <span className="font-mono tabular-nums">{selectedSo.total_amount}</span>
+              Customer: {selectedSo.customer?.name ?? '—'} · Total: {formatPeso(selectedSo.total_amount)}
             </p>
           )}
         </fieldset>
@@ -283,7 +283,7 @@ export default function CreateDeliveryPage() {
 
           <LinkButton
             onClick={() =>
-              append({ sales_order_item_id: '', quantity: 1, inspection_id: '' })
+              append({ sales_order_item_id: '', quantity: undefined as unknown as number, inspection_id: '' })
             }
             disabled={!selectedSoId}
             icon={<Plus size={14} />}

@@ -1,5 +1,6 @@
+import { cn } from '@/lib/cn';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import { customerPortalApi } from '@/api/b2b/customer';
 import { Chip } from '@/components/ui/Chip';
@@ -13,6 +14,7 @@ import { formatPeso } from '@/lib/formatNumber';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 export default function CustomerDashboardPage() {
+  const navigate = useNavigate();
   const { data: dashboard, isLoading, isError, refetch } = useQuery({
     queryKey: ['portal', 'customer', 'dashboard'],
     queryFn: () => customerPortalApi.dashboard(),
@@ -88,11 +90,11 @@ export default function CustomerDashboardPage() {
                   </thead>
                   <tbody>
                     {dashboard.recent_orders.map((order) => (
-                      <tr key={order.id} className={trCls}>
+                      <tr key={order.id} className={cn(trCls, "cursor-pointer")} onClick={() => navigate(`/portal/customer/orders/${order.id}`)}>
                         <Td>
-                          <Link to={`/portal/customer/orders/${order.id}`} className="font-mono text-accent hover:underline">
+                          
                             {order.so_number}
-                          </Link>
+                          
                         </Td>
                         <Td className="text-muted">{order.date ?? '—'}</Td>
                         <Td align="right" mono>{formatPeso(order.total_amount)}</Td>
@@ -126,11 +128,11 @@ export default function CustomerDashboardPage() {
                   </thead>
                   <tbody>
                     {dashboard.recent_invoices.map((inv) => (
-                      <tr key={inv.id} className={trCls}>
+                      <tr key={inv.id} className={cn(trCls, "cursor-pointer")} onClick={() => navigate(`/portal/customer/invoices/${inv.id}`)}>
                         <Td>
-                          <Link to={`/portal/customer/invoices/${inv.id}`} className="font-mono text-accent hover:underline">
+                          
                             {inv.invoice_number}
-                          </Link>
+                          
                         </Td>
                         <Td className="text-muted">{inv.date ?? '—'}</Td>
                         <Td align="right" mono>{formatPeso(inv.total_amount)}</Td>

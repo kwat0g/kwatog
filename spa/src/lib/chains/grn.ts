@@ -1,8 +1,8 @@
 /**
  * Sprint P1 — centralized chain-step builder for Goods Receipt Notes.
  *
- * Procure-to-Pay chain (GRN scope):
- *   PO → GRN Created → QC → Stock Updated → Bill → Paid
+ * Incoming receipt lifecycle:
+ *   PO → GRN Created → QC → Stock Updated
  */
 import type { ChainStep } from '@/types/chain';
 import type { GoodsReceiptNote } from '@/types/inventory';
@@ -34,7 +34,5 @@ export function buildGrnChain(grn: GoodsReceiptNote): ChainStep[] {
       state: isAccepted ? 'done' : 'pending',
       date: isAccepted && grn.accepted_at ? formatDate(grn.accepted_at) : undefined,
     },
-    { key: 'bill', label: 'Bill', state: 'pending' },
-    { key: 'paid', label: 'Paid', state: 'pending' },
   ];
 }

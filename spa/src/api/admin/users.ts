@@ -11,6 +11,7 @@ import type { ApiSuccess } from '@/types';
 
 /** U2 — Admin user management. */
 export const adminUsersApi = {
+  options: () => client.get<{ data: { statuses: Array<{ value: string; label: string }> } }>('/admin/users/options').then((r) => r.data.data),
   list: (params?: AdminUserListFilters) =>
     client.get<AdminUserListResponse>('/admin/users', { params }).then((r) => r.data),
 

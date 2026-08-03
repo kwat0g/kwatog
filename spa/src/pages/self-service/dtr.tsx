@@ -57,7 +57,8 @@ function monthRange(year: number, month: number): { from: string; to: string } {
   return { from, to };
 }
 
-const columns: Column<AttendanceRow>[] = [
+function attendanceColumns(statusLabels: ReadonlyMap<string, string>): Column<AttendanceRow>[] {
+  return [
   {
     key: 'date',
     header: 'Date',
@@ -91,13 +92,14 @@ const columns: Column<AttendanceRow>[] = [
     cell: (r) =>
       r.status ? (
         <Chip variant={STATUS_VARIANT[r.status] ?? 'neutral'}>
-          {r.status.replace(/_/g, ' ')}
+          {statusLabels.get(r.status) ?? r.status}
         </Chip>
       ) : (
         '—'
       ),
   },
-];
+  ];
+}
 
 export default function SelfServiceDtrPage() {
   const now = new Date();
@@ -133,6 +135,15 @@ export default function SelfServiceDtrPage() {
         .then((r) => r.data),
     placeholderData: (prev) => prev,
   });
+  const { data: attendanceOptions } = useQuery({
+    queryKey: ['self-service', 'dtr', 'options'],
+    queryFn: () => client
+      .get<{ data: { statuses: Array<{ value: string; label: string }> } }>('/attendance/attendances/options')
+      .then((r) => r.data.data),
+    staleTime: 300_000,
+  });
+  const statusLabels = new Map((attendanceOptions?.statuses ?? []).map((status) => [status.value, status.label]));
+  const columns = attendanceColumns(statusLabels);
 
   const rows: AttendanceRow[] = data?.data ?? [];
 

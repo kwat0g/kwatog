@@ -70,15 +70,15 @@ export function numberInputProps(opts: NumberInputOpts = {}) {
 
 // ─── Series X / Task X2 — Currency helpers ──────────────────────────────
 //
-// Display peso amounts with thousands separators while keeping the stored
+// Display currency amounts with thousands separators while keeping the stored
 // (form-state) value as a raw decimal string the API expects.
 //
 // Display:  486500    →  "486,500.00"
 // Display:  486500.5  →  "486,500.50"
 // Parse:    "486,500.00" → "486500.00"
-// Parse:    "₱ 486,500" → "486500"
+// Parse:    a currency-symbol-prefixed amount → raw decimal
 
-const currencyDisplay = new Intl.NumberFormat('en-PH', {
+const currencyDisplay = new Intl.NumberFormat('en', {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
@@ -86,7 +86,7 @@ const currencyDisplay = new Intl.NumberFormat('en-PH', {
 /** Format a raw number/string for display (no currency symbol). */
 export function formatCurrencyDisplay(raw: string | number | null | undefined): string {
   if (raw === null || raw === undefined || raw === '') return '';
-  const n = typeof raw === 'number' ? raw : Number(String(raw).replace(/[,\s₱]/g, ''));
+  const n = typeof raw === 'number' ? raw : Number(String(raw).replace(/[,\s₱$€£¥]/g, ''));
   if (!Number.isFinite(n)) return '';
   return currencyDisplay.format(n);
 }
@@ -97,7 +97,7 @@ export function parseCurrencyInput(input: string): string {
   if (!input) return '';
   // Keep digits, dot, optional leading minus.
   const cleaned = String(input)
-    .replace(/[,\s₱]/g, '')
+    .replace(/[,\s₱$€£¥]/g, '')
     .replace(/[^0-9.-]/g, '');
   if (cleaned === '' || cleaned === '-' || cleaned === '.') return '';
   if (Number.isNaN(Number(cleaned))) return '';

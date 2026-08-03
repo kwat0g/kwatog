@@ -167,7 +167,6 @@ export default function PositionsPage() {
             onSort={(sort, direction) => setFilters((f) => ({ ...f, sort, direction, page: 1 }))}
             currentSort={filters.sort}
             currentDirection={filters.direction}
-            onRowClick={(row) => setSelectedId(row.id)}
             highlightedRowId={selectedId}
           />
           <Panel title="Details">

@@ -37,6 +37,15 @@ export default function InspectionsListPage() {
     queryFn: () => inspectionsApi.list(filters),
     placeholderData: (prev) => prev,
   });
+  const { data: inspectionOptions } = useQuery({
+    queryKey: ['quality', 'inspection-options'],
+    queryFn: inspectionsApi.options,
+    staleTime: 5 * 60 * 1000,
+  });
+  const labels = new Map([
+    ...(inspectionOptions?.stages ?? []),
+    ...(inspectionOptions?.statuses ?? []),
+  ].map((option) => [option.value, option.label]));
 
   const columns: Column<Inspection>[] = [
     {
@@ -71,7 +80,7 @@ export default function InspectionsListPage() {
       header: 'Stage',
       cell: (r) => (
         <Chip variant="neutral">
-          {r.stage === 'in_process' ? 'In-process' : r.stage === 'incoming' ? 'Incoming' : 'Outgoing'}
+          {labels.get(r.stage) ?? r.stage}
         </Chip>
       ),
     },
@@ -99,7 +108,7 @@ export default function InspectionsListPage() {
     {
       key: 'status',
       header: 'Status',
-      cell: (r) => <Chip variant={STATUS_CHIP[r.status]}>{r.status.replace('_', ' ')}</Chip>,
+      cell: (r) => <Chip variant={STATUS_CHIP[r.status]}>{r.status_label ?? labels.get(r.status) ?? r.status}</Chip>,
     },
     {
       key: 'completed',
@@ -116,9 +125,7 @@ export default function InspectionsListPage() {
       type: 'select',
       options: [
         { value: '', label: 'All' },
-        { value: 'incoming', label: 'Incoming' },
-        { value: 'in_process', label: 'In-process' },
-        { value: 'outgoing', label: 'Outgoing' },
+        ...(inspectionOptions?.stages ?? []),
       ],
     },
     {
@@ -127,11 +134,7 @@ export default function InspectionsListPage() {
       type: 'select',
       options: [
         { value: '', label: 'All' },
-        { value: 'draft', label: 'Draft' },
-        { value: 'in_progress', label: 'In progress' },
-        { value: 'passed', label: 'Passed' },
-        { value: 'failed', label: 'Failed' },
-        { value: 'cancelled', label: 'Cancelled' },
+        ...(inspectionOptions?.statuses ?? []),
       ],
     },
   ];

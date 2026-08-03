@@ -16,6 +16,7 @@ import { Pencil } from 'lucide-react';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { formatPeso } from '@/lib/formatNumber';
 
 export default function AssetDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
@@ -23,7 +24,7 @@ export default function AssetDetailPage() {
   const qc = useQueryClient();
   const { can } = usePermission();
   const [disposeOpen, setDisposeOpen] = useState(false);
-  const [disposalAmount, setDisposalAmount] = useState<string>('0.00');
+  const [disposalAmount, setDisposalAmount] = useState<string>('');
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['asset', id],
@@ -36,6 +37,13 @@ export default function AssetDetailPage() {
     enabled: !!id && !!data,
     staleTime: Infinity,
   });
+  const { data: assetOptions } = useQuery({
+    queryKey: ['assets', 'options'],
+    queryFn: assetsApi.options,
+    staleTime: 300_000,
+  });
+  const statusLabel = assetOptions?.statuses.find((option) => option.value === data?.status)?.label;
+  const categoryLabel = assetOptions?.categories.find((option) => option.value === data?.category)?.label;
 
   const dispose = useMutation({
     mutationFn: () => assetsApi.dispose(id, { disposal_amount: disposalAmount }),
@@ -65,7 +73,7 @@ export default function AssetDetailPage() {
         actions={
           <div className="flex gap-1.5 items-center">
             <Chip variant={data.status === 'active' ? 'success' : data.status === 'under_maintenance' ? 'warning' : 'neutral'}>
-              {data.status.replace('_', ' ')}
+              {statusLabel ?? data.status}
             </Chip>
             {can('assets.create') && (
               <Button variant="secondary" size="sm" onClick={() => navigate(`/assets/${id}/edit`)}>
@@ -80,10 +88,10 @@ export default function AssetDetailPage() {
       />
 
       <div className="px-5 pt-3 pb-4 grid grid-cols-4 gap-2">
-        <StatCard label="Acquisition" value={`₱ ${data.acquisition_cost}`} />
-        <StatCard label="Accumulated dep." value={`₱ ${data.accumulated_depreciation}`} />
-        <StatCard label="Book value" value={`₱ ${data.book_value}`} />
-        <StatCard label="Monthly dep." value={`₱ ${data.monthly_depreciation}`} />
+        <StatCard label="Acquisition" value={formatPeso(data.acquisition_cost)} />
+        <StatCard label="Accumulated dep." value={formatPeso(data.accumulated_depreciation)} />
+        <StatCard label="Book value" value={formatPeso(data.book_value)} />
+        <StatCard label="Monthly dep." value={formatPeso(data.monthly_depreciation)} />
       </div>
 
       <div className="px-5 pb-6 grid grid-cols-3 gap-4">
@@ -102,8 +110,8 @@ export default function AssetDetailPage() {
                   {data.depreciations.map((d) => (
                     <tr key={d.id} className={trCls}>
                       <Td mono>{d.period_year}-{String(d.period_month).padStart(2, '0')}</Td>
-                      <Td align="right" mono>₱{d.depreciation_amount}</Td>
-                      <Td align="right" mono>₱{d.accumulated_after}</Td>
+                      <Td align="right" mono>{formatPeso(d.depreciation_amount)}</Td>
+                      <Td align="right" mono>{formatPeso(d.accumulated_after)}</Td>
                     </tr>
                   ))}
                 </tbody>
@@ -116,14 +124,14 @@ export default function AssetDetailPage() {
         <aside className="space-y-4">
           <Panel title="Details">
             <dl className="text-sm divide-y divide-subtle">
-              <Row label="Category">{data.category}</Row>
+              <Row label="Category">{data.category_label ?? categoryLabel ?? data.category}</Row>
               <Row label="Acquired">{data.acquisition_date}</Row>
               <Row label="Useful life">{data.useful_life_years} years</Row>
-              <Row label="Salvage"><span className="font-mono">₱{data.salvage_value}</span></Row>
+              <Row label="Salvage"><span className="font-mono">{formatPeso(data.salvage_value)}</span></Row>
               <Row label="Location">{data.location ?? '—'}</Row>
               <Row label="Department">{data.department?.name ?? '—'}</Row>
               {data.disposed_date && <Row label="Disposed">{data.disposed_date}</Row>}
-              {data.disposal_amount && <Row label="Proceeds"><span className="font-mono">₱{data.disposal_amount}</span></Row>}
+              {data.disposal_amount && <Row label="Proceeds"><span className="font-mono">{formatPeso(data.disposal_amount)}</span></Row>}
             </dl>
           </Panel>
 
@@ -161,7 +169,7 @@ export default function AssetDetailPage() {
           <p className="text-sm text-secondary">
             Disposing posts a journal entry that nets accumulated depreciation against the asset cost and books gain or loss against the proceeds.
           </p>
-          <Input label="Disposal proceeds (₱)" value={disposalAmount}
+        <Input label="Disposal proceeds" value={disposalAmount}
             onChange={(e) => setDisposalAmount(e.target.value)} className="font-mono" />
         </div>
         <div className="flex justify-end gap-2 pt-3 border-t border-default">

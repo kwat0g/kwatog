@@ -1,7 +1,8 @@
-import { forwardRef, type InputHTMLAttributes, type ReactNode } from 'react';
+import { forwardRef, useSyncExternalStore, type InputHTMLAttributes, type ReactNode } from 'react';
 import { Check, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import type { FieldSize } from './Select';
+import { getFunctionalCurrency, subscribeFunctionalCurrency } from '@/lib/runtimeCurrency';
 
 // Matches <Select>'s scale so a field and a dropdown sitting side by side line
 // up. `size` is taken by the native attribute, hence `fieldSize`.
@@ -55,6 +56,11 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     ref,
   ) => {
     const inputId = id ?? `input-${rest.name ?? Math.random().toString(36).slice(2, 8)}`;
+    // Resolve legacy peso markers from the live accounting policy. The
+    // subscription matters on first paint: AppLayout loads policy data
+    // asynchronously, after many forms have already mounted.
+    const currency = useSyncExternalStore(subscribeFunctionalCurrency, getFunctionalCurrency, () => null);
+    const resolvedPrefix = prefix === '₱' ? (currency ?? '') : prefix;
     const isPicker = type && PICKER_TYPES.has(type);
 
     // Inline validation icon (X2). Error always wins.
@@ -83,9 +89,9 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             error ? 'border-danger' : 'border-default',
           )}
         >
-          {prefix && (
+          {resolvedPrefix && (
             <span className="flex items-center px-2 text-xs text-muted bg-elevated border-r border-default">
-              {prefix}
+              {resolvedPrefix}
             </span>
           )}
           <input
@@ -95,7 +101,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             aria-invalid={!!error}
             aria-describedby={error ? `${inputId}-error` : helper ? `${inputId}-helper` : undefined}
             className={cn(
-              'flex-1 min-w-0 bg-transparent placeholder:text-text-subtle outline-none',
+              'flex-1 min-w-0 bg-transparent placeholder:text-subtle outline-none',
               textSize[fieldSize],
               className,
             )}

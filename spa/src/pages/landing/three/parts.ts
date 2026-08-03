@@ -60,11 +60,7 @@ function dome(rimR: number, baseY: number, h: number, steps = 12): Vector2[] {
 export const PARTS: PartDef[] = [
   {
     id: 'wiper-bushing',
-    name: 'Wiper bushing',
-    material: 'POM resin',
-    tolerance: '±0.02 mm',
-    application: 'Steering & wiper linkages',
-    feature: 'Ø 12.0 bore',
+    name: '', material: '', tolerance: '', application: '', feature: '',
     edgeAngle: 16,
     sections: [
       { profile: ring(0.45, 1.45, -1.5, -1.2), explode: -1.5, label: 'Flange' },
@@ -74,11 +70,7 @@ export const PARTS: PartDef[] = [
   },
   {
     id: 'pivot-cap',
-    name: 'Pivot cap',
-    material: 'PA66 resin',
-    tolerance: '±0.03 mm',
-    application: 'Hood & engine covers',
-    feature: 'Domed shell',
+    name: '', material: '', tolerance: '', application: '', feature: '',
     edgeAngle: 22,
     sections: [
       { profile: ring(0.9, 1.12, -1.4, 0.4), explode: -1.5, label: 'Skirt' },
@@ -88,11 +80,7 @@ export const PARTS: PartDef[] = [
   },
   {
     id: 'filler-cap',
-    name: 'Oil filler cap',
-    material: 'PA66 resin',
-    tolerance: '±0.05 mm',
-    application: 'Fuel & fluid systems',
-    feature: 'Sealed deck',
+    name: '', material: '', tolerance: '', application: '', feature: '',
     edgeAngle: 22,
     sections: [
       { profile: ring(0.25, 1.5, -1.6, -1.35), explode: -1.5, label: 'Seal flange' },
@@ -102,11 +90,7 @@ export const PARTS: PartDef[] = [
   },
   {
     id: 'spacer-collar',
-    name: 'Spacer collar',
-    material: 'POM resin',
-    tolerance: '±0.02 mm',
-    application: 'Bearing & shaft assemblies',
-    feature: 'Ø 10.0 bore',
+    name: '', material: '', tolerance: '', application: '', feature: '',
     edgeAngle: 16,
     sections: [
       { profile: ring(0.5, 1.3, -1.0, -0.7), explode: -1.4, label: 'Lower flange' },

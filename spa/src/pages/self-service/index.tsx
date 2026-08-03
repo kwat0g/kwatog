@@ -181,7 +181,7 @@ export default function SelfServiceHomePage() {
           {/* Right rail — 1/3 */}
           <div className="space-y-4">
             <LatestPayslipPanel payslip={latestPayslip} />
-            {leaveBalances.length > 0 && <LeaveBalancesPanel balances={leaveBalances} />}
+            {leaveBalances.length > 0 && <LeaveBalancesPanel balances={leaveBalances} policy={home?.leave_balance_policy} />}
             {nextHoliday?.name && <NextHolidayPanel name={nextHoliday.name} date={nextHoliday.date} />}
           </div>
         </div>
@@ -314,7 +314,9 @@ function LatestPayslipPanel({ payslip }: { payslip: SelfServiceHome['latest_pays
   );
 }
 
-function LeaveBalancesPanel({ balances }: { balances: SelfServiceHome['leave_balances'] }) {
+function LeaveBalancesPanel({ balances, policy }: { balances: SelfServiceHome['leave_balances']; policy?: SelfServiceHome['leave_balance_policy'] }) {
+  const warningRatio = policy?.warning_ratio;
+  const criticalRatio = policy?.critical_ratio;
   return (
     <Panel
       title="Leave balances"
@@ -347,7 +349,9 @@ function LeaveBalancesPanel({ balances }: { balances: SelfServiceHome['leave_bal
               >
                 <div
                   className={`h-full rounded-full transition-[width] duration-500 ${
-                    pct <= 20 ? 'bg-danger' : pct <= 50 ? 'bg-warning' : 'bg-accent'
+                    criticalRatio !== undefined && warningRatio !== undefined
+                      ? (pct <= criticalRatio * 100 ? 'bg-danger' : pct <= warningRatio * 100 ? 'bg-warning' : 'bg-accent')
+                      : 'bg-accent'
                   }`}
                   style={{ width: `${pct}%` }}
                 />

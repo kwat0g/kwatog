@@ -80,7 +80,7 @@ const columns: Column<any>[] = [
     header: 'Status',
     cell: (r) => (
       <Chip variant={STATUS_CHIP[r.status] ?? 'neutral'}>
-        {r.status?.replace(/_/g, ' ')}
+        {r.status_label ?? r.status ?? '—'}
       </Chip>
     ),
   },

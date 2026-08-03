@@ -25,6 +25,7 @@ export interface ReceiveGoodsData {
 }
 
 export const grnApi = {
+  options: () => client.get<{ data: { statuses: Array<{ value: string; label: string }>; default_qc_result: string } }>('/inventory/grn/options').then((r) => r.data.data),
   list: (params?: ListParams & { status?: string; vendor_id?: string; purchase_order_id?: string; from?: string; to?: string }) =>
     client.get<PaginatedResponse<GoodsReceiptNote>>('/inventory/grn', { params }).then((r) => r.data),
   show: (id: string) =>

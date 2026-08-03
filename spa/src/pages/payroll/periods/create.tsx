@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -27,10 +27,15 @@ export default function CreatePayrollPeriodPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [submitting, setSubmitting] = useState(false);
+  const { data: periodOptions } = useQuery({
+    queryKey: ['payroll-periods', 'options'],
+    queryFn: periodsApi.options,
+    staleTime: 300_000,
+  });
 
   const { register, handleSubmit, setError, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { is_first_half: 'true' },
+    defaultValues: { is_first_half: '' },
   });
 
   const mutation = useMutation({
@@ -68,8 +73,10 @@ export default function CreatePayrollPeriodPage() {
             <Input label="Period end"   type="date" required {...register('period_end')}   error={errors.period_end?.message} />
             <Input label="Payroll date" type="date" required {...register('payroll_date')} error={errors.payroll_date?.message} />
             <Select label="Cycle" required {...register('is_first_half')} error={errors.is_first_half?.message}>
-              <option value="true">1st half (gov deductions apply)</option>
-              <option value="false">2nd half</option>
+              <option value="">— Select —</option>
+              {(periodOptions?.half_types ?? []).map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
             </Select>
           </div>
         </fieldset>

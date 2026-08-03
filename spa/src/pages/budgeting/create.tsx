@@ -14,6 +14,7 @@ import toast from 'react-hot-toast';
 import { Plus, Trash2 } from 'lucide-react';
 import type { FiscalYear } from '@/types/budgeting';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { formatCompactCurrency } from '@/lib/formatNumber';
 
 const MONTHS = [
   { key: 'jan', label: 'Jan' }, { key: 'feb', label: 'Feb' }, { key: 'mar', label: 'Mar' },
@@ -51,16 +52,22 @@ export default function BudgetCreatePage() {
     queryKey: ['departments'],
     queryFn: () => departmentsApi.tree(),
   });
+  const { data: budgetOptions } = useQuery({
+    queryKey: ['budgets', 'options'],
+    queryFn: () => budgetingApi.options(),
+    staleTime: 300_000,
+  });
 
   const [fiscalYearId, setFiscalYearId] = useState<number>(0);
   const [departmentId, setDepartmentId] = useState<number | null>(null);
-  const [budgetType, setBudgetType] = useState('operating');
+  const [budgetType, setBudgetType] = useState('');
   const [name, setName] = useState('');
   const [lineItems, setLineItems] = useState<LineItemForm[]>([emptyLineItem()]);
 
   const createMutation = useMutation({
     mutationFn: async () => {
       if (!fiscalYearId) throw new Error('Please select a fiscal year.');
+      if (!budgetType) throw new Error('Please select a budget type.');
       if (!name.trim()) throw new Error('Please enter a budget name.');
       const validItems = lineItems.filter((li) => li.account_id > 0);
       if (validItems.length === 0) throw new Error('Please add at least one line item with an account.');
@@ -124,7 +131,7 @@ export default function BudgetCreatePage() {
               <option value={0}>Select fiscal year...</option>
               {(fiscalYears ?? []).map((fy) => (
                 <option key={fy.id} value={fy.id}>
-                  FY {fy.year} ({fy.status})
+                  FY {fy.year} ({fy.status_label ?? fy.status})
                 </option>
               ))}
             </Select>
@@ -133,15 +140,13 @@ export default function BudgetCreatePage() {
               label="Budget Name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. 2025 Operating Budget"
+              placeholder="Annual operating budget"
               required
             />
 
-            <Select label="Budget Type" value={budgetType} onChange={(e) => setBudgetType(e.target.value)}>
-              <option value="operating">Operating</option>
-              <option value="capital">Capital</option>
-              <option value="project">Project</option>
-              <option value="department">Department</option>
+            <Select label="Budget Type" value={budgetType} onChange={(e) => setBudgetType(e.target.value)} required>
+              <option value="">— Select budget type —</option>
+              {(budgetOptions?.budget_types ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </Select>
 
             <Select label="Department (optional)" value={String(departmentId ?? '')} onChange={(e) => setDepartmentId(e.target.value ? Number(e.target.value) : null)}>
@@ -180,7 +185,7 @@ export default function BudgetCreatePage() {
             </div>
             <div className="flex justify-between py-2 border-t border-default">
               <span className="font-medium">Total Allocated</span>
-              <span className="font-mono tabular-nums font-medium text-lg">₱{(totalAllocated / 1_000_000).toFixed(2)}M</span>
+              <span className="font-mono tabular-nums font-medium text-lg">{formatCompactCurrency(totalAllocated, 1_000_000, 'M')}</span>
             </div>
           </div>
         </Panel>
@@ -235,7 +240,7 @@ export default function BudgetCreatePage() {
                     </Td>
                   ))}
                   <Td align="right" mono className="font-medium">
-                    ₱{(calcAnnual(li) / 1_000).toFixed(0)}K
+                    {formatCompactCurrency(calcAnnual(li), 1_000, 'K')}
                   </Td>
                   <Td>
                     <Button

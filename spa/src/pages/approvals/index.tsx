@@ -18,35 +18,17 @@ import type {
   ApprovalCardActioned,
 } from '@/types/approvals';
 
-const KIND_FILTERS: { key: ApprovalKind | 'all'; label: string }[] = [
-  { key: 'all',     label: 'All' },
-  { key: 'leave',   label: 'Leave' },
-  { key: 'pr',      label: 'Purchase requests' },
-  { key: 'po',      label: 'Purchase orders' },
-  { key: 'loan',    label: 'Loans' },
-  { key: 'payroll', label: 'Payroll' },
-];
-
-const KIND_LABEL: Record<ApprovalKind, string> = {
-  leave:   'Leave',
-  pr:      'PR',
-  po:      'PO',
-  loan:    'Loan',
-  payroll: 'Payroll',
-};
-
-/** Per-step approval SLA (matches the backend's 24h overdue rule). */
-const SLA_HOURS = 24;
-
 /** Hours remaining against the SLA for a card, given the current clock. */
-function hoursRemaining(since: string, now: number): number {
+function hoursRemaining(since: string, now: number, slaHours: number): number {
   const elapsedH = (now - new Date(since).getTime()) / 3_600_000;
-  return SLA_HOURS - elapsedH;
+  return slaHours - elapsedH;
 }
 
-function slaTone(remaining: number): 'danger' | 'warning' | 'info' {
+function slaTone(remaining: number, slaHours: number): 'danger' | 'warning' | 'info' {
   if (remaining <= 0) return 'danger';
-  if (remaining <= 6) return 'warning';
+  // Warn during the final quarter of the configured SLA, rather than using
+  // a fixed number of hours that would be wrong for shorter/longer policies.
+  if (slaHours > 0 && remaining <= slaHours * 0.25) return 'warning';
   return 'info';
 }
 
@@ -81,6 +63,14 @@ export default function ApprovalsBoardPage() {
     placeholderData: (prev) => prev,
     refetchInterval: 30_000, // light polling — websocket upgrade is a future task
   });
+  const { data: options } = useQuery({
+    queryKey: ['approvals', 'options'],
+    queryFn: () => approvalsApi.options(),
+    staleTime: 5 * 60 * 1000,
+  });
+  const kindLabels = new Map((options?.kinds ?? []).map((option) => [option.value, option.label]));
+  const slaHours = options?.overdue_hours;
+  const kindFilters = [{ key: 'all' as const, label: 'All' }, ...(options?.kinds ?? []).map((option) => ({ key: option.value, label: option.label }))];
 
   // Prioritise the inbox: most-overdue (oldest pending) first.
   const myAction = data
@@ -88,7 +78,7 @@ export default function ApprovalsBoardPage() {
         (a, b) => new Date(a.since).getTime() - new Date(b.since).getTime(),
       )
     : [];
-  const overdueCount = myAction.filter((c) => hoursRemaining(c.since, now) <= 0).length;
+  const overdueCount = slaHours == null ? 0 : myAction.filter((c) => hoursRemaining(c.since, now, slaHours) <= 0).length;
 
   return (
     <div>
@@ -108,7 +98,7 @@ export default function ApprovalsBoardPage() {
           label="Approval type"
           value={kind}
           onChange={setKind}
-          options={KIND_FILTERS.map((f) => ({ value: f.key, label: f.label }))}
+          options={kindFilters.map((f) => ({ value: f.key, label: f.label }))}
         />
       </div>
 
@@ -140,7 +130,7 @@ export default function ApprovalsBoardPage() {
               <EmptyColumn message="Nothing waiting on you. Nice." />
             ) : (
               myAction.map((c) => (
-                <ActiveCard key={`${c.type}-${c.id}`} card={c} now={now} showSla onOpen={() => navigate(c.link)} />
+                <ActiveCard key={`${c.type}-${c.id}`} card={c} now={now} slaHours={slaHours} showSla kindLabels={kindLabels} onOpen={() => navigate(c.link)} />
               ))
             )}
           </Column>
@@ -154,7 +144,7 @@ export default function ApprovalsBoardPage() {
               <EmptyColumn message="No pending approvals." />
             ) : (
               data.awaiting_others.map((c) => (
-                <ActiveCard key={`${c.type}-${c.id}`} card={c} now={now} onOpen={() => navigate(c.link)} />
+                <ActiveCard key={`${c.type}-${c.id}`} card={c} now={now} slaHours={slaHours} kindLabels={kindLabels} onOpen={() => navigate(c.link)} />
               ))
             )}
           </Column>
@@ -168,7 +158,7 @@ export default function ApprovalsBoardPage() {
               <EmptyColumn message="No recent approvals." />
             ) : (
               data.approved.map((c) => (
-                <ActionedCard key={`${c.type}-${c.id}`} card={c} onOpen={() => navigate(c.link)} />
+                <ActionedCard key={`${c.type}-${c.id}`} card={c} kindLabels={kindLabels} onOpen={() => navigate(c.link)} />
               ))
             )}
           </Column>
@@ -182,7 +172,7 @@ export default function ApprovalsBoardPage() {
               <EmptyColumn message="No recent rejections." />
             ) : (
               data.rejected.map((c) => (
-                <ActionedCard key={`${c.type}-${c.id}`} card={c} onOpen={() => navigate(c.link)} />
+                <ActionedCard key={`${c.type}-${c.id}`} card={c} kindLabels={kindLabels} onOpen={() => navigate(c.link)} />
               ))
             )}
           </Column>
@@ -225,18 +215,23 @@ function EmptyColumn({ message }: { message: string }) {
 function ActiveCard({
   card,
   now,
+  kindLabels,
+  slaHours,
   showSla = false,
   onOpen,
 }: {
   card: ApprovalCardActive;
   now: number;
+  kindLabels: ReadonlyMap<string, string>;
+  slaHours?: number;
   /** Show the live SLA countdown + consumption bar (inbox column only). */
   showSla?: boolean;
   onOpen: () => void;
 }) {
-  const remaining = hoursRemaining(card.since, now);
-  const tone = slaTone(remaining);
-  const consumedPct = Math.min(100, Math.max(0, ((SLA_HOURS - remaining) / SLA_HOURS) * 100));
+  const remaining = hoursRemaining(card.since, now, slaHours ?? 0);
+  const tone = slaTone(remaining, slaHours ?? 0);
+  const consumedPct = slaHours ? Math.min(100, Math.max(0, ((slaHours - remaining) / slaHours) * 100)) : 0;
+  const hasSla = showSla && slaHours != null;
   const barColor =
     tone === 'danger' ? 'bg-danger' : tone === 'warning' ? 'bg-warning' : 'bg-accent';
 
@@ -248,11 +243,11 @@ function ActiveCard({
     >
       <div className="flex items-center justify-between mb-1">
         <span className="text-2xs uppercase tracking-wider text-muted font-medium">
-          {KIND_LABEL[card.type]}
+          {kindLabels.get(card.type) ?? card.type}
         </span>
-        <Chip variant={showSla ? tone : 'neutral'}>
+        <Chip variant={hasSla ? tone : 'neutral'}>
           <span className="inline-flex items-center gap-1 font-mono tabular-nums">
-            {showSla ? (
+            {hasSla ? (
               <>
                 {remaining <= 0 ? <AlertTriangle size={10} /> : <Clock size={10} />}
                 {formatSla(remaining)}
@@ -275,7 +270,7 @@ function ActiveCard({
           requested by <UserBadge name={card.requester.name} role={card.requester.role} />
         </div>
       )}
-      {showSla && (
+      {hasSla && (
         <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-subtle" aria-hidden="true">
           <div className={cn('h-full rounded-full transition-all', barColor)} style={{ width: `${consumedPct}%` }} />
         </div>
@@ -290,9 +285,11 @@ function ActiveCard({
 
 function ActionedCard({
   card,
+  kindLabels,
   onOpen,
 }: {
   card: ApprovalCardActioned;
+  kindLabels: ReadonlyMap<string, string>;
   onOpen: () => void;
 }) {
   return (
@@ -303,7 +300,7 @@ function ActionedCard({
     >
       <div className="flex items-center justify-between mb-1">
         <span className="text-2xs uppercase tracking-wider text-muted font-medium">
-          {KIND_LABEL[card.type]}
+          {kindLabels.get(card.type) ?? card.type}
         </span>
         <Chip variant={card.action === 'approved' ? 'success' : 'danger'}>
           {card.action}

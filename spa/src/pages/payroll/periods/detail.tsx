@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Play, CheckCircle2, Lock, LockOpen, Download, AlertCircle, Upload, Eye, Trash2, Banknote, Ban, RefreshCw } from 'lucide-react';
+import { Play, CheckCircle2, Lock, Download, AlertCircle, Upload, Eye, Trash2, Banknote, Ban, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { periodsApi } from '@/api/payroll/periods';
 import { downloadAuthenticatedFile } from '@/api/download';
@@ -19,13 +19,15 @@ import { Spinner } from '@/components/ui/Spinner';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { ChainHeader } from '@/components/chain/ChainHeader';
 import { AnomalyReviewPanel } from '@/components/payroll/AnomalyReviewPanel';
+import { PayrollComputeProgressPanel } from '@/components/payroll/PayrollComputeProgressPanel';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { usePermission } from '@/hooks/usePermission';
+import { useEcho } from '@/hooks/useEcho';
 import { formatPeso } from '@/lib/formatNumber';
 import { formatDate, formatRelative } from '@/lib/formatDate';
-import type { DisbursementProof, Payroll, PayrollPeriod } from '@/types/payroll';
+import type { DisbursementProof, Payroll, PayrollPeriod, PayrollProgressEventPayload } from '@/types/payroll';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { Textarea } from '@/components/ui/Textarea';
 import { FileInput } from '@/components/ui/FileInput';
@@ -50,6 +52,7 @@ export default function PayrollPeriodDetailPage() {
   const { can } = usePermission();
   const [activeTab, setActiveTab] = useState<'employees' | 'failures' | 'anomalies' | 'summary' | 'variance'>('employees');
   const [compareToId, setCompareToId] = useState<string>('');
+  const [bankFormat, setBankFormat] = useState<string>('');
 
   const isProcessing = (period?: PayrollPeriod | null) => period?.status === 'processing';
 
@@ -59,6 +62,49 @@ export default function PayrollPeriodDetailPage() {
     enabled: !!id,
     refetchInterval: (q) => isProcessing(q.state.data as PayrollPeriod | undefined) ? 3000 : false,
   });
+
+  // Live compute progress. ProcessPayrollJob broadcasts every 10 employees, so
+  // the bar moves in near real time instead of stepping once per 3s poll. The
+  // poll above stays as the fallback for when Reverb is unreachable, and the
+  // server caches each snapshot so a page opened mid-run paints a real bar
+  // immediately. Patching the cached period in place avoids a refetch per event.
+  useEcho<PayrollProgressEventPayload>(
+    `payroll.period.${id}`,
+    '.payroll.progress',
+    (payload) => {
+      qc.setQueryData(['payroll-period', id], (prev: PayrollPeriod | undefined) => prev && {
+        ...prev,
+        status: payload.status ?? prev.status,
+        compute_progress: {
+          processed: payload.processed,
+          total: payload.total,
+          failures: payload.failures,
+          percent: payload.percent,
+          updated_at: new Date().toISOString(),
+        },
+      });
+
+      // The run just ended — pull the authoritative row (and its totals) and
+      // refresh the employee table, rather than waiting on the next poll.
+      if (payload.status && payload.status !== 'processing') {
+        qc.invalidateQueries({ queryKey: ['payroll-period', id] });
+        qc.invalidateQueries({ queryKey: ['payrolls'] });
+      }
+    },
+  );
+
+  const { data: bankFileOptions } = useQuery({
+    queryKey: ['payroll-bank-file-options'],
+    queryFn: periodsApi.bankFileOptions,
+    enabled: can('payroll.periods.view'),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  useEffect(() => {
+    if (!bankFormat && bankFileOptions?.formats?.length) {
+      setBankFormat(bankFileOptions.default_format || bankFileOptions.formats[0].value);
+    }
+  }, [bankFormat, bankFileOptions]);
 
   const payrollFilters: PayrollListParams = {
     period_id: id, page: 1, per_page: 100,
@@ -153,7 +199,10 @@ export default function PayrollPeriodDetailPage() {
       toast.error(err.response?.data?.message ?? 'Failed to void period.'),
   });
 
-  // Force refetch when computation finishes (status flips back to draft).
+  // Refresh the employee table once a run ends. The terminal status is
+  // Computed (or Draft when the run produced no rows) — never "back to draft"
+  // as this comment used to claim, which is exactly the conflation that made a
+  // finished run look untouched.
   useEffect(() => {
     if (period && period.status !== 'processing') qc.invalidateQueries({ queryKey: ['payrolls', payrollFilters] });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -182,13 +231,7 @@ export default function PayrollPeriodDetailPage() {
   }
 
   const summary = period.summary;
-  const chainSteps = [
-    { key: 'draft',      label: 'Draft',      state: 'done' as const },
-    { key: 'processing', label: 'Computed',   state: (period.status === 'draft' ? 'pending' : period.status === 'processing' ? 'active' : 'done') as 'pending' | 'done' | 'active' },
-    { key: 'approved',   label: 'Approved',   state: (['approved','finalized','disbursed'].includes(period.status) ? 'done' : 'pending') as 'pending' | 'done' | 'active' },
-    { key: 'finalized',  label: 'Finalized',  state: (['finalized','disbursed'].includes(period.status) ? 'done' : 'pending') as 'pending' | 'done' | 'active' },
-    { key: 'disbursed',  label: 'Disbursed',  state: (period.status === 'disbursed' ? 'done' : 'pending') as 'pending' | 'done' | 'active' },
-  ];
+  const chainSteps = period.lifecycle_steps ?? [];
 
   // Compute (first run) and Recompute (replace an existing run) are separate
   // affordances. Recompute is destructive — it rewrites every payroll row, so it
@@ -209,6 +252,11 @@ export default function PayrollPeriodDetailPage() {
   // REC-01 — Void only a finalized (not yet disbursed) period.
   const canVoid = can('payroll.periods.void') && period.status === 'finalized';
   const isProc = period.status === 'processing';
+  // A Processing claim whose worker is presumed dead. The backend lets the next
+  // Compute click take the claim over, so a plain retry is offered to anyone
+  // with compute rights — force-unlock is no longer the only way out.
+  const isStaleRun = isProc && !!period.is_compute_stale;
+  const canRetryStale = isStaleRun && can('payroll.periods.compute') && !period.is_thirteenth_month;
 
   const columns: Column<Payroll>[] = [
     {
@@ -277,26 +325,14 @@ export default function PayrollPeriodDetailPage() {
                 Recompute
               </Button>
             )}
-            {isProc && (
+            {/* Progress, elapsed time and the stale-run recovery controls all
+                live in PayrollComputeProgressPanel below — the header has no
+                room for a bar, and a lone spinner here was the whole reason a
+                running job looked indistinguishable from a hung one. */}
+            {isProc && !isStaleRun && (
               <span className="inline-flex items-center gap-2 text-xs text-muted">
                 <Spinner /> Computing…
               </span>
-            )}
-            {canForceUnlock && (
-              <Button
-                variant="secondary"
-                size="sm"
-                icon={<LockOpen size={14} />}
-                onClick={() => {
-                  const reason = window.prompt('Reason for force-unlock (audit trail):', 'Worker crashed; rerunning compute.');
-                  if (reason === null) return;
-                  forceUnlockMutation.mutate(reason);
-                }}
-                disabled={forceUnlockMutation.isPending}
-                loading={forceUnlockMutation.isPending}
-              >
-                Force unlock
-              </Button>
             )}
             {canApprove && (
               <Button variant="primary" size="sm" icon={<CheckCircle2 size={14} />}
@@ -313,17 +349,31 @@ export default function PayrollPeriodDetailPage() {
               </Button>
             )}
             {canBankFile && (
-              <Button
-                variant="secondary"
-                size="sm"
-                icon={<Download size={14} />}
-                onClick={() => void downloadAuthenticatedFile(periodsApi.bankFileUrl(period.id), {
-                  filename: `payroll-bank-file-${period.id}.csv`,
-                  errorMessage: 'Failed to download the bank file.',
-                })}
-              >
-                Bank file
-              </Button>
+              <span className="inline-flex items-end gap-2">
+                <Select
+                  label="Bank format"
+                  value={bankFormat}
+                  onChange={(e) => setBankFormat(e.target.value)}
+                  className="min-w-[9rem]"
+                >
+                  <option value="" disabled>Select format</option>
+                  {(bankFileOptions?.formats ?? []).map((format) => (
+                    <option key={format.value} value={format.value}>{format.label}</option>
+                  ))}
+                </Select>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<Download size={14} />}
+                  onClick={() => void downloadAuthenticatedFile(periodsApi.bankFileUrl(period.id, bankFormat), {
+                    filename: `payroll-bank-file-${period.id}-${bankFormat || bankFileOptions?.default_format || 'bank'}.csv`,
+                    errorMessage: 'Failed to download the bank file.',
+                  })}
+                  disabled={!bankFormat}
+                >
+                  Bank file
+                </Button>
+              </span>
             )}
             {canUploadProof && (
               <Button variant="secondary" size="sm" icon={<Upload size={14} />}
@@ -353,6 +403,24 @@ export default function PayrollPeriodDetailPage() {
       <div className="px-5 py-4 grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-5">
         {/* Main content */}
         <div>
+          {isProc && (
+            <PayrollComputeProgressPanel
+              progress={period.compute_progress}
+              startedAt={period.processing_started_at}
+              isStale={isStaleRun}
+              canRetry={canRetryStale}
+              onRetry={() => computeMutation.mutate()}
+              retryPending={computeMutation.isPending}
+              canForceUnlock={canForceUnlock}
+              onForceUnlock={() => {
+                const reason = window.prompt('Reason for force-unlock (audit trail):', 'Worker crashed; rerunning compute.');
+                if (reason === null) return;
+                forceUnlockMutation.mutate(reason);
+              }}
+              forceUnlockPending={forceUnlockMutation.isPending}
+            />
+          )}
+
           <div className="grid grid-cols-4 gap-3 mb-5">
             <StatCard label="Employees" value={summary?.employee_count ?? 0} />
             <StatCard label="Total Gross"      value={formatPeso(summary?.total_gross ?? 0)} />
@@ -564,7 +632,7 @@ function VariancePanel({
   currentId: string;
   compareToId: string;
   onCompareToChange: (id: string) => void;
-  periods: Array<{ id: string; label: string; status: string }>;
+  periods: Array<{ id: string; label: string; status: string; status_label?: string }>;
   varianceData: PayrollVarianceReport | null;
   isLoading: boolean;
 }) {
@@ -586,7 +654,7 @@ function VariancePanel({
             <option value="">— Select a period to compare —</option>
             {periods.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.label} ({p.status})
+                {p.label} ({p.status_label ?? p.status})
               </option>
             ))}
           </Select>
@@ -686,13 +754,6 @@ function DisbursementProofCard({ proof, periodId }: { proof: DisbursementProof; 
     onError: () => toast.error('Failed to delete proof.'),
   });
 
-  const proofTypeLabel: Record<string, string> = {
-    deposit_slip: 'Deposit Slip',
-    bank_confirmation: 'Bank Confirmation',
-    transfer_receipt: 'Transfer Receipt',
-    other: 'Other',
-  };
-
   return (
     <div className="flex items-start gap-3 rounded-md border border-default bg-canvas p-3">
       <div className="shrink-0 flex h-10 w-10 items-center justify-center rounded border border-default bg-elevated">
@@ -701,7 +762,7 @@ function DisbursementProofCard({ proof, periodId }: { proof: DisbursementProof; 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium truncate">{proof.file_name}</span>
-          <Chip variant="neutral">{proofTypeLabel[proof.proof_type] ?? proof.proof_type}</Chip>
+          <Chip variant="neutral">{proof.proof_type_label ?? proof.proof_type}</Chip>
         </div>
         <div className="mt-1 text-xs text-muted">
           {proof.bank_name && <span>Bank: {proof.bank_name} · </span>}
@@ -757,13 +818,23 @@ function UploadProofModal({
   open: boolean; onClose: () => void; periodId: string; onSuccess: () => void;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [proofType, setProofType] = useState('deposit_slip');
+  const [proofType, setProofType] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [bankName, setBankName] = useState('');
   const [transactionReference, setTransactionReference] = useState('');
   const [disbursedAmount, setDisbursedAmount] = useState('');
   const [disbursementDate, setDisbursementDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [notes, setNotes] = useState('');
+  const { data: proofOptions } = useQuery({
+    queryKey: ['payroll', 'disbursement-proof-options', periodId],
+    queryFn: () => periodsApi.proofOptions(periodId),
+  });
+
+  useEffect(() => {
+    if (!proofType && proofOptions?.proof_types?.length) {
+      setProofType(proofOptions.proof_types[0].value);
+    }
+  }, [proofOptions, proofType]);
 
   const mutation = useMutation({
     mutationFn: () => {
@@ -789,10 +860,7 @@ function UploadProofModal({
     <Modal isOpen={open} onClose={onClose} size="md" title="Upload Disbursement Proof">
       <div className="space-y-3 py-3">
         <Select label="Proof type" value={proofType} onChange={(e) => setProofType(e.target.value)}>
-          <option value="deposit_slip">Deposit Slip</option>
-          <option value="bank_confirmation">Bank Confirmation</option>
-          <option value="transfer_receipt">Transfer Receipt</option>
-          <option value="other">Other</option>
+          {(proofOptions?.proof_types ?? []).map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
         </Select>
 
         <FileInput
@@ -804,12 +872,12 @@ function UploadProofModal({
         />
 
         <div className="grid grid-cols-2 gap-3">
-          <Input label="Bank name" value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="e.g. BDO Unibank" />
-          <Input label="Transaction ref." value={transactionReference} onChange={(e) => setTransactionReference(e.target.value)} placeholder="e.g. TXN20260415001" />
+          <Input label="Bank name" value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="Enter bank name" />
+          <Input label="Transaction ref." value={transactionReference} onChange={(e) => setTransactionReference(e.target.value)} placeholder="Enter transaction reference" />
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <Input label="Disbursed amount" value={disbursedAmount} onChange={(e) => setDisbursedAmount(e.target.value)} placeholder="e.g. 2847500.00" />
+          <Input label="Disbursed amount" value={disbursedAmount} onChange={(e) => setDisbursedAmount(e.target.value)} placeholder="Enter amount" />
           <Input label="Disbursement date" type="date" value={disbursementDate} onChange={(e) => setDisbursementDate(e.target.value)} />
         </div>
 
@@ -871,7 +939,7 @@ function VoidPeriodModal({
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             rows={3}
-            placeholder="e.g. Backdated OT for E. Cruz was missing; recomputing this half."
+            placeholder="Describe the adjustment"
           />
         </div>
       </div>

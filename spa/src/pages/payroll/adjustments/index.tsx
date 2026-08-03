@@ -45,6 +45,15 @@ export default function PayrollAdjustmentsPage() {
     queryFn: () => adjustmentsApi.list(filters),
     placeholderData: (prev) => prev,
   });
+  const { data: adjustmentOptions } = useQuery({
+    queryKey: ['payroll-adjustments', 'options'],
+    queryFn: adjustmentsApi.options,
+    staleTime: 5 * 60 * 1000,
+  });
+  const labels = new Map([
+    ...(adjustmentOptions?.statuses ?? []),
+    ...(adjustmentOptions?.types ?? []),
+  ].map((option) => [option.value, option.label]));
 
   const approveMutation = useMutation({
     mutationFn: (id: string) => adjustmentsApi.approve(id),
@@ -67,18 +76,14 @@ export default function PayrollAdjustmentsPage() {
       key: 'status', label: 'Status', type: 'select',
       options: [
         { value: '', label: 'All' },
-        { value: 'pending', label: 'Pending' },
-        { value: 'approved', label: 'Approved' },
-        { value: 'applied', label: 'Applied' },
-        { value: 'rejected', label: 'Rejected' },
+        ...(adjustmentOptions?.statuses ?? []),
       ],
     },
     {
       key: 'type', label: 'Type', type: 'select',
       options: [
         { value: '', label: 'All' },
-        { value: 'underpayment', label: 'Underpayment' },
-        { value: 'overpayment',  label: 'Overpayment' },
+        ...(adjustmentOptions?.types ?? []),
       ],
     },
   ];
@@ -93,12 +98,12 @@ export default function PayrollAdjustmentsPage() {
             secondary={<span className="font-mono">{r.employee.employee_no}</span>} />
         : '—',
     },
-    { key: 'type', header: 'Type', cell: (r) => <Chip variant={r.type === 'underpayment' ? 'info' : 'warning'}>{r.type_label}</Chip> },
+    { key: 'type', header: 'Type', cell: (r) => <Chip variant={r.type === 'underpayment' ? 'info' : 'warning'}>{labels.get(r.type) ?? r.type_label}</Chip> },
     { key: 'amount', header: 'Amount', align: 'right', cell: (r) => <NumCell className="font-medium">{formatPeso(r.amount)}</NumCell> },
     { key: 'period', header: 'Period', cell: (r) => r.period?.label ?? '—' },
     { key: 'reason', header: 'Reason', cell: (r) => <span className="text-xs text-muted">{r.reason.slice(0, 80)}{r.reason.length > 80 ? '…' : ''}</span> },
     { key: 'created_at', header: 'Submitted', cell: (r) => <NumCell>{formatDate(r.created_at)}</NumCell> },
-    { key: 'status', header: 'Status', cell: (r) => <Chip variant={statusVariant(r.status)}>{r.status_label}</Chip> },
+    { key: 'status', header: 'Status', cell: (r) => <Chip variant={statusVariant(r.status)}>{labels.get(r.status) ?? r.status_label}</Chip> },
     {
       key: 'actions',
       header: 'Actions',

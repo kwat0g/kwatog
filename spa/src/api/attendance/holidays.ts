@@ -10,6 +10,7 @@ export interface HolidayListParams extends ListParams {
 }
 
 export const holidaysApi = {
+  options: () => client.get<{ data: { types: Array<{ value: string; label: string }> } }>('/attendance/holidays/options').then((r) => r.data.data),
   list: (params?: HolidayListParams) =>
     client.get<PaginatedResponse<Holiday>>('/attendance/holidays', { params }).then((r) => r.data),
   show: (id: string) =>

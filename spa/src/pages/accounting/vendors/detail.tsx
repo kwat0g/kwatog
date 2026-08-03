@@ -37,12 +37,12 @@ export default function VendorDetailPage() {
   if (!vendor) return null;
 
   const billColumns: Column<Bill>[] = [
-    { key: 'bill_number', header: 'Bill no', cell: (r) => <Link to={`/accounting/bills/${r.id}`} className="font-mono text-accent hover:underline">{r.bill_number}</Link> },
+    { key: 'bill_number', header: 'Bill no', cell: (r) => <span className="font-mono">{r.bill_number}</span> },
     { key: 'date',        header: 'Date',     cell: (r) => <NumCell>{formatDate(r.date)}</NumCell> },
     { key: 'due_date',    header: 'Due',      cell: (r) => <NumCell>{formatDate(r.due_date)}</NumCell> },
     { key: 'total',       header: 'Total', align: 'right', cell: (r) => <NumCell>{formatPeso(r.total_amount)}</NumCell> },
     { key: 'balance',     header: 'Balance', align: 'right', cell: (r) => <NumCell className="font-medium">{formatPeso(r.balance)}</NumCell> },
-    { key: 'status',      header: 'Status', cell: (r) => <Chip variant={chipVariantForStatus(r.status)}>{r.status}</Chip> },
+    { key: 'status',      header: 'Status', cell: (r) => <Chip variant={chipVariantForStatus(r.status)}>{r.status_label ?? r.status}</Chip> },
   ];
 
   return (
@@ -95,7 +95,8 @@ export default function VendorDetailPage() {
         </Panel>
         <Panel title="Bills" className="col-span-2">
           {billsData && billsData.data.length > 0
-            ? <DataTable columns={billColumns} data={billsData.data} meta={billsData.meta} />
+            ? <DataTable
+            onRowClick={(r) => navigate(`/accounting/bills/${r.id}`)} columns={billColumns} data={billsData.data} meta={billsData.meta} />
             : <EmptyState icon="inbox" title="No bills yet" />}
         </Panel>
       </div>

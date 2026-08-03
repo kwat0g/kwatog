@@ -35,6 +35,12 @@ export default function SalesOrdersListPage() {
     queryFn: () => salesOrdersApi.list(filters),
     placeholderData: (prev) => prev,
   });
+  const { data: salesOrderOptions } = useQuery({
+    queryKey: ['crm', 'sales-orders', 'options'],
+    queryFn: salesOrdersApi.options,
+    staleTime: 5 * 60 * 1000,
+  });
+  const statusLabels = new Map((salesOrderOptions?.statuses ?? []).map((option) => [option.value, option.label]));
 
   const columns: Column<SalesOrder>[] = [
     {
@@ -52,20 +58,14 @@ export default function SalesOrdersListPage() {
     },
     {
       key: 'status', header: 'Status',
-      cell: (r) => <Chip variant={statusVariant[r.status]}>{r.status_label}</Chip>,
+      cell: (r) => <Chip variant={statusVariant[r.status]}>{statusLabels.get(r.status) ?? r.status_label}</Chip>,
     },
   ];
 
   const filterConfig: FilterConfig[] = [
     { key: 'status', label: 'Status', type: 'select', options: [
       { value: '', label: 'All' },
-      { value: 'draft', label: 'Draft' },
-      { value: 'confirmed', label: 'Confirmed' },
-      { value: 'in_production', label: 'In Production' },
-      { value: 'partially_delivered', label: 'Partially Delivered' },
-      { value: 'delivered', label: 'Delivered' },
-      { value: 'invoiced', label: 'Invoiced' },
-      { value: 'cancelled', label: 'Cancelled' },
+      ...(salesOrderOptions?.statuses ?? []),
     ]},
   ];
 

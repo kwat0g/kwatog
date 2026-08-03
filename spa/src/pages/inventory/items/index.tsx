@@ -33,6 +33,11 @@ export default function ItemsListPage() {
     queryFn: () => itemsApi.list(filters),
     placeholderData: (prev) => prev,
   });
+  const { data: itemOptions } = useQuery({
+    queryKey: ['inventory', 'items', 'options'],
+    queryFn: itemsApi.options,
+    staleTime: 5 * 60 * 1000,
+  });
 
   const del = useMutation({
     mutationFn: (id: string) => itemsApi.delete(id),
@@ -104,16 +109,11 @@ export default function ItemsListPage() {
   const filterConfig: FilterConfig[] = [
     { key: 'item_type', label: 'Type', type: 'select', options: [
       { value: '', label: 'All' },
-      { value: 'raw_material', label: 'Raw material' },
-      { value: 'finished_good', label: 'Finished good' },
-      { value: 'packaging', label: 'Packaging' },
-      { value: 'spare_part', label: 'Spare part' },
+      ...(itemOptions?.item_types ?? []),
     ]},
     { key: 'stock_status', label: 'Stock status', type: 'select', options: [
       { value: '', label: 'All' },
-      { value: 'critical', label: 'Critical' },
-      { value: 'low', label: 'Low' },
-      { value: 'ok', label: 'OK' },
+      ...(itemOptions?.stock_statuses ?? []),
     ]},
     { key: 'is_active', label: 'Active', type: 'select', options: [
       { value: '', label: 'All' }, { value: 'true', label: 'Active' }, { value: 'false', label: 'Inactive' },
@@ -156,7 +156,12 @@ export default function ItemsListPage() {
       )}
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
-          <DataTable columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters((f) => ({ ...f, page }))} />
+          <DataTable
+            columns={columns}
+            data={data.data}
+            meta={data.meta}
+            onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+          />
         </div>
       )}
 

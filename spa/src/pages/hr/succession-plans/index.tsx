@@ -34,13 +34,6 @@ const READINESS_CHIP: Record<SuccessionReadiness, 'success' | 'info' | 'warning'
   development_needed: 'neutral',
 };
 
-const READINESS_LABEL: Record<SuccessionReadiness, string> = {
-  ready_now: 'Ready now',
-  ready_1_year: 'Ready in 1 year',
-  ready_2_years: 'Ready in 2 years',
-  development_needed: 'Development needed',
-};
-
 export default function SuccessionPlansListPage() {
   const navigate = useNavigate();
   const { can } = usePermission();
@@ -51,6 +44,16 @@ export default function SuccessionPlansListPage() {
     queryFn: () => successionPlansApi.list(filters),
     placeholderData: (prev) => prev,
   });
+  const { data: planOptions } = useQuery({
+    queryKey: ['succession-plans', 'options'],
+    queryFn: successionPlansApi.options,
+    staleTime: 5 * 60 * 1000,
+  });
+  const labels = new Map([
+    ...(planOptions?.statuses ?? []),
+    ...(planOptions?.readiness ?? []),
+    ...(planOptions?.priorities ?? []),
+  ].map((option) => [option.value, option.label]));
 
   const columns: Column<SuccessionPlan>[] = [
     {
@@ -74,12 +77,12 @@ export default function SuccessionPlansListPage() {
     {
       key: 'readiness',
       header: 'Readiness',
-      cell: (r) => <Chip variant={READINESS_CHIP[r.readiness]}>{READINESS_LABEL[r.readiness]}</Chip>,
+      cell: (r) => <Chip variant={READINESS_CHIP[r.readiness]}>{r.readiness_label ?? labels.get(r.readiness) ?? r.readiness}</Chip>,
     },
     {
       key: 'priority',
       header: 'Priority',
-      cell: (r) => <Chip variant={PRIORITY_CHIP[r.priority]}>{r.priority}</Chip>,
+      cell: (r) => <Chip variant={PRIORITY_CHIP[r.priority]}>{r.priority_label ?? labels.get(r.priority) ?? r.priority}</Chip>,
     },
     {
       key: 'target_date',
@@ -92,7 +95,7 @@ export default function SuccessionPlansListPage() {
     {
       key: 'status',
       header: 'Status',
-      cell: (r) => <Chip variant={STATUS_CHIP[r.status]}>{r.status}</Chip>,
+      cell: (r) => <Chip variant={STATUS_CHIP[r.status]}>{r.status_label ?? labels.get(r.status) ?? r.status}</Chip>,
     },
     {
       key: 'actions',
@@ -113,9 +116,7 @@ export default function SuccessionPlansListPage() {
       type: 'select',
       options: [
         { value: '', label: 'All' },
-        { value: 'active', label: 'Active' },
-        { value: 'completed', label: 'Completed' },
-        { value: 'cancelled', label: 'Cancelled' },
+        ...(planOptions?.statuses ?? []),
       ],
     },
     {
@@ -124,10 +125,7 @@ export default function SuccessionPlansListPage() {
       type: 'select',
       options: [
         { value: '', label: 'All' },
-        { value: 'critical', label: 'Critical' },
-        { value: 'high', label: 'High' },
-        { value: 'medium', label: 'Medium' },
-        { value: 'low', label: 'Low' },
+        ...(planOptions?.priorities ?? []),
       ],
     },
     {
@@ -136,10 +134,7 @@ export default function SuccessionPlansListPage() {
       type: 'select',
       options: [
         { value: '', label: 'All' },
-        { value: 'ready_now', label: 'Ready now' },
-        { value: 'ready_1_year', label: 'Ready in 1 year' },
-        { value: 'ready_2_years', label: 'Ready in 2 years' },
-        { value: 'development_needed', label: 'Development needed' },
+        ...(planOptions?.readiness ?? []),
       ],
     },
   ];

@@ -108,11 +108,12 @@ export default function TraceabilityPage() {
 /** Renders the unified trace tree, branching on result.type. */
 function TraceTree({ result }: { result: TraceabilityResult }) {
   const typeLabel = useMemo(() => {
+    if (result.type_label) return result.type_label;
     if (result.type === 'batch') return 'Production batch';
     if (result.type === 'lot') return 'Shipment lot';
     if (result.type === 'material_lot') return 'Material lot';
     return 'Result';
-  }, [result.type]);
+  }, [result.type, result.type_label]);
 
   return (
     <div className="space-y-4">
@@ -176,7 +177,7 @@ function BatchView({ result }: { result: TraceabilityResult }) {
               : '—'} />
             <Row label="Machine" value={wo.machine ? `${wo.machine.machine_code} · ${wo.machine.name}` : '—'} />
             <Row label="Mold" value={wo.mold ? `${wo.mold.mold_code} · ${wo.mold.name}` : '—'} />
-            <Row label="Status" value={<Chip variant="neutral">{wo.status}</Chip>} />
+            <Row label="Status" value={<Chip variant="neutral">{wo.status_label ?? wo.status}</Chip>} />
             <Row label="Good qty" value={<span className="font-mono tabular-nums">{wo.quantity_good}</span>} />
             <Row label="Rejected" value={<span className="font-mono tabular-nums">{wo.quantity_rejected}</span>} />
           </dl>
@@ -194,7 +195,7 @@ function BatchView({ result }: { result: TraceabilityResult }) {
                     <Link to={`/quality/inspections/${i.id}`} className="font-mono text-accent hover:underline">
                       {i.inspection_number}
                     </Link>
-                    <span className="text-muted ml-2">{i.stage} · {i.status}</span>
+                    <span className="text-muted ml-2">{i.stage_label ?? i.stage} · {i.status_label ?? i.status}</span>
                   </li>
                 ))}
               </ul>
@@ -302,7 +303,7 @@ function LotView({ result }: { result: TraceabilityResult }) {
                     {delivery.delivery_number}
                   </Link>
                 } />
-                <Row label="Status" value={<Chip variant="neutral">{delivery.status}</Chip>} />
+                <Row label="Status" value={<Chip variant="neutral">{delivery.status_label ?? delivery.status}</Chip>} />
                 <Row label="Delivered" value={delivery.delivered_at?.slice(0, 16).replace('T', ' ') ?? '—'} />
                 <Row label="Confirmed" value={delivery.confirmed_at?.slice(0, 16).replace('T', ' ') ?? '—'} />
               </dl>

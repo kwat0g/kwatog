@@ -23,7 +23,7 @@ const schema = z.object({
   product_id: z.string().optional().or(z.literal('')),
   sales_order_id: z.string().optional().or(z.literal('')),
   received_date: z.string().min(1, 'Received date is required'),
-  severity: z.enum(['low', 'medium', 'high', 'critical']),
+  severity: z.string().min(1, 'Severity is required'),
   description: z.string().min(1, 'Description is required').max(5000),
   affected_quantity: z.coerce.number().int().min(0).default(0),
 });
@@ -41,6 +41,10 @@ export default function CreateComplaintPage() {
     queryKey: ['crm', 'products', { is_active: true, per_page: 200 }],
     queryFn: () => productsApi.list({ is_active: true, per_page: 200 }),
   });
+  const complaintOptions = useQuery({
+    queryKey: ['crm', 'complaints', 'options'],
+    queryFn: () => complaintsApi.options(),
+  });
 
   const {
     register, handleSubmit, setError, formState: { errors },
@@ -51,7 +55,7 @@ export default function CreateComplaintPage() {
       product_id: '',
       sales_order_id: '',
       received_date: new Date().toISOString().slice(0, 10),
-      severity: 'medium',
+      severity: '',
       description: '',
       affected_quantity: 0,
     },
@@ -118,10 +122,8 @@ export default function CreateComplaintPage() {
               <Input label="Received date" type="date" required
                 {...register('received_date')} error={errors.received_date?.message} />
               <Select label="Severity" required {...register('severity')} error={errors.severity?.message}>
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-                <option value="critical">Critical</option>
+                <option value="">— Select —</option>
+                {(complaintOptions.data?.severities ?? []).map((severity) => <option key={severity.value} value={severity.value}>{severity.label}</option>)}
               </Select>
               <Input label="Affected quantity" type="number" min={0}
                 {...register('affected_quantity')} error={errors.affected_quantity?.message} />

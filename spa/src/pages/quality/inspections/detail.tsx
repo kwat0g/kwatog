@@ -14,6 +14,7 @@ import toast from 'react-hot-toast';
 import type { AxiosError } from 'axios';
 import { inspectionsApi } from '@/api/quality/inspections';
 import { analyticsApi, type SpcCapabilityItem } from '@/api/quality/analytics';
+import { spcApi } from '@/api/quality/spc';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { Chip } from '@/components/ui/Chip';
@@ -29,6 +30,7 @@ import { usePermission } from '@/hooks/usePermission';
 import type { InspectionMeasurement, InspectionStatus } from '@/types/quality';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { Input } from '@/components/ui/Input';
+import { SpecToleranceBar } from '@/components/ui/SpecToleranceBar';
 import { cn } from '@/lib/cn';
 
 const STATUS_CHIP: Record<InspectionStatus, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
@@ -62,6 +64,26 @@ export default function InspectionDetailPage() {
     enabled: Boolean(id),
     placeholderData: (prev) => prev,
   });
+  const { data: inspectionOptions } = useQuery({
+    queryKey: ['quality', 'inspections', 'options'],
+    queryFn: inspectionsApi.options,
+    staleTime: 300_000,
+  });
+  const { data: inspectionChain } = useQuery({
+    queryKey: ['quality', 'inspections', id, 'chain'],
+    queryFn: () => inspectionsApi.chain(id),
+    enabled: Boolean(id),
+    staleTime: 30_000,
+  });
+  const { data: spcOptions } = useQuery({
+    queryKey: ['quality', 'spc', 'options'],
+    queryFn: spcApi.options,
+    staleTime: 300_000,
+  });
+  const statusLabel = inspectionOptions?.statuses.find((option) => option.value === data?.status)?.label;
+  const stageLabel = inspectionOptions?.stages.find((option) => option.value === data?.stage)?.label;
+  const measurementResultLabels = new Map((inspectionOptions?.measurement_results ?? []).map((option) => [option.value, option.label]));
+  const cpkThresholds = spcOptions?.capability_thresholds;
 
   const spc = useQuery({
     queryKey: ['quality', 'spc', data?.spec?.id],
@@ -172,16 +194,16 @@ export default function InspectionDetailPage() {
           <span>
             {data.inspection_number}
             <Chip variant={STATUS_CHIP[data.status]} className="ml-3">
-              {data.status.replace('_', ' ')}
+              {data.status_label ?? statusLabel ?? data.status}
             </Chip>
           </span>
         }
         subtitle={
           data.product
-            ? `${data.product.part_number} — ${data.product.name} (${data.stage.replace('_', '-')})`
+            ? `${data.product.part_number} — ${data.product.name} (${stageLabel ?? data.stage})`
             : data.item
-              ? `${data.item.code} — ${data.item.name} (${data.stage.replace('_', '-')})`
-            : data.stage
+              ? `${data.item.code} — ${data.item.name} (${stageLabel ?? data.stage})`
+            : stageLabel ?? data.stage
         }
         breadcrumbs={[{ label: 'Quality', href: '/quality' }, { label: 'Inspections', href: '/quality/inspections' }, { label: data.inspection_number }]}
         actions={
@@ -242,34 +264,9 @@ export default function InspectionDetailPage() {
         }
       />
 
-      {/* Sprint 7 audit fix: chain visualization for inspection (O2C step "QC Outgoing", P2P step "QC Incoming"). */}
-      {data.stage === 'outgoing' && (
+      {inspectionChain && (
         <div className="px-5 py-3 border-b border-default">
-          <ChainHeader
-            steps={[
-              { key: 'order',   label: 'Order',          state: 'done' },
-              { key: 'mrp',     label: 'MRP planned',    state: 'done' },
-              { key: 'wo',      label: 'In production',  state: 'done' },
-              { key: 'qc',      label: 'QC outgoing',    state: data.status === 'passed' ? 'done' : data.status === 'failed' ? 'done' : 'active' },
-              { key: 'deliver', label: 'Delivered',      state: 'pending' },
-              { key: 'invoice', label: 'Invoiced',       state: 'pending' },
-              { key: 'collect', label: 'Collected',      state: 'pending' },
-            ]}
-          />
-        </div>
-      )}
-      {data.stage === 'incoming' && (
-        <div className="px-5 py-3 border-b border-default">
-          <ChainHeader
-            steps={[
-              { key: 'pr',     label: 'PR created',     state: 'done' },
-              { key: 'po',     label: 'PO approved',    state: 'done' },
-              { key: 'grn',    label: 'GRN received',   state: 'done' },
-              { key: 'qc',     label: 'QC incoming',    state: data.status === 'passed' ? 'done' : 'active' },
-              { key: 'bill',   label: 'Bill created',   state: 'pending' },
-              { key: 'pay',    label: 'Payment',        state: 'pending' },
-            ]}
-          />
+          <ChainHeader steps={inspectionChain} />
         </div>
       )}
 
@@ -279,7 +276,7 @@ export default function InspectionDetailPage() {
             <dl className="grid grid-cols-4 gap-x-4 gap-y-3 text-sm">
               <div>
                 <dt className="text-2xs uppercase tracking-wider text-muted">Stage</dt>
-                <dd className="font-mono">{data.stage}</dd>
+                <dd className="font-mono">{data.stage_label ?? data.stage}</dd>
               </div>
               <div>
                 <dt className="text-2xs uppercase tracking-wider text-muted">Batch</dt>
@@ -364,7 +361,7 @@ export default function InspectionDetailPage() {
                           <div className="flex items-center gap-2">
                             <span>{m.parameter_name}</span>
                             {m.is_critical && <Chip variant="danger">Critical</Chip>}
-                            <span className="text-2xs uppercase text-muted">{m.parameter_type}</span>
+                            <span className="text-2xs uppercase text-muted">{m.parameter_type_label ?? m.parameter_type}</span>
                           </div>
                         </Td>
                         <Td align="right" mono>
@@ -375,19 +372,29 @@ export default function InspectionDetailPage() {
                           {m.parameter_type === 'visual' ? (
                             <span className="text-muted text-2xs">N/A</span>
                           ) : (
-                            <Input
-                              fieldSize="sm"
-                              type="number"
-                              step="any"
-                              disabled={isTerminal}
-                              aria-label="Measured value"
-                              containerClassName="inline-flex w-24"
-                              className="text-right font-mono tabular-nums"
-                              value={draft.measured_value}
-                              onChange={(e) =>
-                                updateDraft(m.id, { measured_value: e.target.value })
-                              }
-                            />
+                            <div className="flex flex-col items-end gap-1">
+                              <Input
+                                fieldSize="sm"
+                                type="number"
+                                step="any"
+                                disabled={isTerminal}
+                                aria-label="Measured value"
+                                containerClassName="inline-flex w-24"
+                                className="text-right font-mono tabular-nums"
+                                value={draft.measured_value}
+                                onChange={(e) =>
+                                  updateDraft(m.id, { measured_value: e.target.value })
+                                }
+                              />
+                              <SpecToleranceBar
+                                nominal={m.nominal_value}
+                                min={m.tolerance_min}
+                                max={m.tolerance_max}
+                                value={draft.measured_value}
+                                unit={m.unit_of_measure ?? ''}
+                                className="mt-0.5"
+                              />
+                            </div>
                           )}
                         </Td>
                         <Td align="center">
@@ -406,15 +413,16 @@ export default function InspectionDetailPage() {
                               }
                             >
                               <option value="">—</option>
-                              <option value="pass">Pass</option>
-                              <option value="fail">Fail</option>
+                              {(inspectionOptions?.measurement_results ?? []).map((option) => (
+                                <option key={option.value} value={option.value}>{option.label}</option>
+                              ))}
                             </Select>
                           ) : draft.is_pass === null ? (
                             <span className="text-muted text-2xs">—</span>
                           ) : draft.is_pass ? (
-                            <Chip variant="success">Pass</Chip>
+                            <Chip variant="success">{measurementResultLabels.get('pass') ?? 'Pass'}</Chip>
                           ) : (
-                            <Chip variant="danger">Fail</Chip>
+                            <Chip variant="danger">{measurementResultLabels.get('fail') ?? 'Fail'}</Chip>
                           )}
                         </Td>
                       </tr>
@@ -461,7 +469,7 @@ export default function InspectionDetailPage() {
           )}
 
           {/* SPC Capability indices for this spec */}
-          {data.spec && spc.data && Object.keys(spc.data).length > 0 && (
+          {data.spec && spc.data && cpkThresholds && Object.keys(spc.data).length > 0 && (
             <Panel title="SPC capability indices" meta={`${Object.keys(spc.data).length} dimension${Object.keys(spc.data).length === 1 ? '' : 's'}`}>
               <table className={cn(tableCls, 'mt-2')}>
                 <thead>
@@ -476,8 +484,8 @@ export default function InspectionDetailPage() {
                 </thead>
                 <tbody>
                   {Object.values(spc.data).map((item: SpcCapabilityItem) => {
-                    const variant = item.cpk >= 1.67 ? 'success' : item.cpk >= 1.33 ? 'info' : item.cpk >= 1.0 ? 'warning' : 'danger';
-                    const label = item.cpk >= 1.67 ? 'Excellent' : item.cpk >= 1.33 ? 'Capable' : item.cpk >= 1.0 ? 'Marginal' : 'Not capable';
+                    const variant = item.cpk >= cpkThresholds.launch ? 'success' : item.cpk >= cpkThresholds.ongoing ? 'info' : item.cpk >= cpkThresholds.action ? 'warning' : 'danger';
+                    const label = item.cpk >= cpkThresholds.launch ? 'Excellent' : item.cpk >= cpkThresholds.ongoing ? 'Capable' : item.cpk >= cpkThresholds.action ? 'Marginal' : 'Not capable';
                     return (
                       <tr key={item.parameter_name} className={trCls}>
                         <Td>{item.parameter_name}{item.unit ? ` (${item.unit})` : ''}</Td>
@@ -491,7 +499,9 @@ export default function InspectionDetailPage() {
                   })}
                 </tbody>
               </table>
-              <p className="text-2xs text-muted mt-2">IATF target: Cpk ≥ 1.33 ongoing · ≥ 1.67 new product launch</p>
+              <p className="text-2xs text-muted mt-2">
+                Capability targets: Cpk ≥ {cpkThresholds.ongoing.toFixed(2)} ongoing · ≥ {cpkThresholds.launch.toFixed(2)} new product launch
+              </p>
             </Panel>
           )}
 

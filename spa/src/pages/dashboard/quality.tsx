@@ -26,6 +26,7 @@ interface InspectionItem {
   id: string;
   inspection_number: string;
   stage: string;
+  stage_label?: string;
   product: string;
   batch_no: string | null;
   qty: string;
@@ -42,12 +43,15 @@ interface NcrItem {
   id: string;
   ncr_number: string;
   severity: string;
+  severity_label?: string;
   customer: string;
   defect_code: string;
   status: string;
+  status_label?: string;
 }
 
 interface ChainCoverage {
+  label?: string;
   inspected: number;
   total: number;
   pct: number;
@@ -70,6 +74,13 @@ interface CopqData {
 }
 
 interface QualityDashboardData {
+  display_policy?: {
+    defect_danger_pct: number;
+    defect_warning_pct: number;
+    coverage_success_pct: number;
+    coverage_info_pct: number;
+    coverage_warning_pct: number;
+  };
   kpis: Array<{ label: string; value: string; unit: string }>;
   panels: {
     inspection_queue: InspectionItem[];
@@ -123,7 +134,7 @@ function InspectionQueuePanel({ items }: { items: InspectionItem[] }) {
                   </Link>
                 </Td>
                 <Td>
-                  <Chip variant={stageVariant}>{ins.stage}</Chip>
+                  <Chip variant={stageVariant}>{ins.stage_label ?? ins.stage}</Chip>
                 </Td>
                 <Td className="text-muted text-xs truncate max-w-[120px]">{ins.product}</Td>
                 <Td align="right" mono>{ins.qty}</Td>
@@ -137,7 +148,7 @@ function InspectionQueuePanel({ items }: { items: InspectionItem[] }) {
   );
 }
 
-function DefectParetoPanel({ items }: { items: DefectItem[] }) {
+function DefectParetoPanel({ items, policy }: { items: DefectItem[]; policy?: QualityDashboardData['display_policy'] }) {
   if (items.length === 0) {
     return (
       <Panel title="Defect Pareto">
@@ -171,7 +182,7 @@ function DefectParetoPanel({ items }: { items: DefectItem[] }) {
                 className="h-2 bg-subtle rounded-full overflow-hidden"
               >
                 <div
-                  className={defectBarClass(pct)}
+                  className={defectBarClass(pct, policy)}
                   style={{ width: `${pct}%` }}
                 />
               </div>
@@ -183,9 +194,9 @@ function DefectParetoPanel({ items }: { items: DefectItem[] }) {
   );
 }
 
-function defectBarClass(pct: number): string {
-  if (pct >= 75) return 'h-full bg-danger rounded-full';
-  if (pct >= 50) return 'h-full bg-warning rounded-full';
+function defectBarClass(pct: number, policy?: QualityDashboardData['display_policy']): string {
+  if (policy && pct >= policy.defect_danger_pct) return 'h-full bg-danger rounded-full';
+  if (policy && pct >= policy.defect_warning_pct) return 'h-full bg-warning rounded-full';
   return 'h-full bg-info rounded-full';
 }
 
@@ -224,11 +235,11 @@ function NcrStatusPanel({ items }: { items: NcrItem[] }) {
                   </Link>
                 </Td>
                 <Td>
-                  <Chip variant={severityVariant}>{ncr.severity}</Chip>
+                  <Chip variant={severityVariant}>{ncr.severity_label ?? ncr.severity}</Chip>
                 </Td>
                 <Td className="text-muted text-xs truncate max-w-[120px]">{ncr.customer}</Td>
                 <Td>
-                  <Chip variant={ncr.status === 'open' ? 'danger' : 'warning'}>{ncr.status}</Chip>
+                  <Chip variant={ncr.status === 'open' ? 'danger' : 'warning'}>{ncr.status_label ?? ncr.status}</Chip>
                 </Td>
               </tr>
             );
@@ -239,12 +250,12 @@ function NcrStatusPanel({ items }: { items: NcrItem[] }) {
   );
 }
 
-function QcChainCoveragePanel({ coverage }: { coverage: QualityDashboardData['panels']['qc_chain_coverage'] | undefined }) {
+function QcChainCoveragePanel({ coverage, policy }: { coverage: QualityDashboardData['panels']['qc_chain_coverage'] | undefined; policy?: QualityDashboardData['display_policy'] }) {
   const safe = coverage ?? { incoming: { inspected: 0, total: 0, pct: 0 }, in_process: { inspected: 0, total: 0, pct: 0 }, outgoing: { inspected: 0, total: 0, pct: 0 } };
   const stages = [
-    { key: 'incoming', label: 'Incoming (GRN)', ...safe.incoming },
-    { key: 'in_process', label: 'In-Process (WIP)', ...safe.in_process },
-    { key: 'outgoing', label: 'Outgoing (FGI)', ...safe.outgoing },
+    { key: 'incoming', ...safe.incoming, label: safe.incoming.label ?? 'Incoming' },
+    { key: 'in_process', ...safe.in_process, label: safe.in_process.label ?? 'In-process' },
+    { key: 'outgoing', ...safe.outgoing, label: safe.outgoing.label ?? 'Outgoing' },
   ];
 
   const allZero = stages.every((s) => s.total === 0);
@@ -277,7 +288,7 @@ function QcChainCoveragePanel({ coverage }: { coverage: QualityDashboardData['pa
               className="h-2.5 bg-subtle rounded-full overflow-hidden"
             >
               <div
-                className={coverageBarClass(s.pct)}
+                className={coverageBarClass(s.pct, policy)}
                 style={{ width: `${s.pct}%` }}
               />
             </div>
@@ -288,10 +299,10 @@ function QcChainCoveragePanel({ coverage }: { coverage: QualityDashboardData['pa
   );
 }
 
-function coverageBarClass(pct: number): string {
-  if (pct >= 90) return 'h-full bg-success rounded-full';
-  if (pct >= 75) return 'h-full bg-info rounded-full';
-  if (pct >= 50) return 'h-full bg-warning rounded-full';
+function coverageBarClass(pct: number, policy?: QualityDashboardData['display_policy']): string {
+  if (policy && pct >= policy.coverage_success_pct) return 'h-full bg-success rounded-full';
+  if (policy && pct >= policy.coverage_info_pct) return 'h-full bg-info rounded-full';
+  if (policy && pct >= policy.coverage_warning_pct) return 'h-full bg-warning rounded-full';
   return 'h-full bg-danger rounded-full';
 }
 
@@ -311,7 +322,7 @@ export default function QcDashboard() {
       query={q}
       refreshingQueryKey={['dashboard', 'quality']}
     >
-      {({ kpis, panels }) => {
+      {({ kpis, panels, display_policy }) => {
         const stageCounts: Record<string, number> = {};
         (panels?.inspection_queue ?? []).forEach((ins) => {
           stageCounts[ins.stage] = (stageCounts[ins.stage] || 0) + 1;
@@ -335,8 +346,8 @@ export default function QcDashboard() {
                 <StatCard
                   key={k.label}
                   label={k.label}
-                  value={k.unit === 'PHP' ? `₱ ${k.value}` : k.value}
-                  helper={k.unit !== 'PHP' && k.unit !== 'count' ? k.unit : undefined}
+                  value={/^[A-Z]{3}$/.test(k.unit) ? `${k.unit} ${k.value}` : k.value}
+                  helper={!/^[A-Z]{3}$/.test(k.unit) && k.unit !== 'count' ? k.unit : undefined}
                   linkTo={kpiLink(k.label)}
                 />
               ))}
@@ -348,13 +359,13 @@ export default function QcDashboard() {
             {/* ── Row 2: Inspection Queue + Defect Pareto ── */}
             <PanelRow>
               <InspectionQueuePanel items={panels?.inspection_queue ?? []} />
-              <DefectParetoPanel items={panels?.defect_pareto ?? []} />
+              <DefectParetoPanel items={panels?.defect_pareto ?? []} policy={display_policy} />
             </PanelRow>
 
             {/* ── Row 3: Open NCRs + QC Chain Coverage ── */}
             <PanelRow>
               <NcrStatusPanel items={panels?.ncr_status ?? []} />
-              <QcChainCoveragePanel coverage={panels?.qc_chain_coverage} />
+              <QcChainCoveragePanel coverage={panels?.qc_chain_coverage} policy={display_policy} />
             </PanelRow>
 
             {/* ── Row 4: Charts ── */}
@@ -389,7 +400,7 @@ export default function QcDashboard() {
               data={panels?.defect_rate_forecast}
               isLoading={false}
               isError={false}
-              title="Defect Rate Forecast (6 months)"
+              title={`Defect Rate Forecast (${panels?.defect_rate_forecast?.forecast.length ?? 0} months)`}
               formatValue={(v) => `${v.toFixed(1)}%`}
               unitLabel="%"
             />

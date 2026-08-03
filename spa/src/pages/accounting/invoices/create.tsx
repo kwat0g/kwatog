@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -11,6 +11,7 @@ import { customersApi } from '@/api/accounting/customers';
 import { accountsApi } from '@/api/accounting/accounts';
 import { invoicesApi } from '@/api/accounting/invoices';
 import { businessPoliciesApi } from '@/api/businessPolicies';
+import { uomsApi } from '@/api/inventory/uoms';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -21,7 +22,6 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { formatPeso } from '@/lib/formatNumber';
 import { onFormInvalid } from '@/lib/formErrors';
 import { numberInputProps } from '@/lib/numberInput';
-import { UNIT_OPTIONS } from '@/lib/units';
 import type { ApiValidationError } from '@/types';
 
 const itemSchema = z.object({
@@ -36,7 +36,7 @@ const schema = z.object({
   customer_id: z.string().min(1, 'Customer is required'),
   date:        z.string().min(1, 'Date is required'),
   due_date:    z.string().optional().or(z.literal('')),
-  is_vatable:  z.boolean().default(true),
+  is_vatable:  z.boolean(),
   remarks:     z.string().max(1000).optional().or(z.literal('')),
   items:       z.array(itemSchema).min(1, 'At least one item'),
 });
@@ -57,17 +57,21 @@ export default function CreateInvoicePage() {
     queryFn: () => accountsApi.list({ per_page: 200, type: 'revenue', is_active: true }),
   });
   const { data: policies } = useQuery({ queryKey: ['business-policies'], queryFn: businessPoliciesApi.get });
+  const { data: uoms = [] } = useQuery({ queryKey: ['inventory', 'uoms'], queryFn: uomsApi.list, staleTime: 300_000 });
   const customers = customersResp?.data ?? [];
   const accounts = accountsResp?.data ?? [];
 
-  const { register, control, handleSubmit, watch, setError, formState: { errors, isSubmitting } } = useForm<FormValues>({
+  const { register, control, handleSubmit, watch, setError, setValue, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       customer_id: presetCustomer, date: new Date().toISOString().slice(0, 10),
-      due_date: '', is_vatable: true, remarks: '',
-      items: [{ revenue_account_id: '', description: '', quantity: 1, unit: '', unit_price: 0 }],
+      due_date: '', is_vatable: undefined as unknown as boolean, remarks: '',
+      items: [{ revenue_account_id: '', description: '', quantity: undefined as unknown as number, unit: '', unit_price: undefined as unknown as number }],
     },
   });
+  useEffect(() => {
+    if (policies) setValue('is_vatable', policies.vat_status === 'VAT Registered');
+  }, [policies, setValue]);
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
   const items = watch('items');
   const isVatable = watch('is_vatable');
@@ -154,7 +158,7 @@ export default function CreateInvoicePage() {
                   <div className="col-span-1">
                     <Select {...register(`items.${idx}.unit` as const)}>
                       <option value="">—</option>
-                      {UNIT_OPTIONS.map((u) => <option key={u.value} value={u.value}>{u.value}</option>)}
+                      {uoms.map((uom) => <option key={uom.id} value={uom.code}>{uom.code}</option>)}
                     </Select>
                   </div>
                   <div className="col-span-2"><Input type="number" step="0.01" min="0" className="font-mono tabular-nums text-right" {...numberInputProps()} {...register(`items.${idx}.unit_price` as const)} /></div>
@@ -170,7 +174,7 @@ export default function CreateInvoicePage() {
             })}
           </div>
           <div className="flex items-center justify-between mt-3">
-            <Button type="button" variant="secondary" size="sm" icon={<Plus size={14} />} onClick={() => append({ revenue_account_id: '', description: '', quantity: 1, unit: '', unit_price: 0 })}>
+          <Button type="button" variant="secondary" size="sm" icon={<Plus size={14} />} onClick={() => append({ revenue_account_id: '', description: '', quantity: undefined as unknown as number, unit: '', unit_price: undefined as unknown as number })}>
               Add line
             </Button>
             <div className="text-sm font-mono tabular-nums">

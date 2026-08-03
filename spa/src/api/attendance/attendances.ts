@@ -30,6 +30,7 @@ export interface ImportResult {
 }
 
 export const attendancesApi = {
+  options: () => client.get<{ data: { statuses: Array<{ value: string; label: string }> } }>('/attendance/attendances/options').then((r) => r.data.data),
   list: (params?: AttendanceListParams) =>
     client.get<PaginatedResponse<Attendance>>('/attendance/attendances', { params }).then((r) => r.data),
   show: (id: string) =>

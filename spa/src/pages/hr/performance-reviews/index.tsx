@@ -31,7 +31,7 @@ const STATUS_CHIP: Record<CycleStatus, 'success' | 'warning' | 'neutral'> = {
 
 const cycleSchema = z.object({
   name: z.string().min(1, 'Name is required').max(255),
-  cycle_type: z.enum(['annual', 'semi_annual', 'quarterly', 'probationary'], { required_error: 'Cycle type is required' }),
+  cycle_type: z.string().min(1, 'Cycle type is required'),
   start_date: z.string().min(1, 'Start date is required'),
   end_date: z.string().min(1, 'End date is required'),
 }).refine((d) => !d.start_date || !d.end_date || new Date(d.end_date) >= new Date(d.start_date), {
@@ -53,6 +53,15 @@ export default function PerformanceCyclesPage() {
     queryFn: () => reviewCyclesApi.list(filters),
     placeholderData: (prev) => prev,
   });
+
+  const { data: reviewOptions } = useQuery({
+    queryKey: ['performance-review-options'],
+    queryFn: () => reviewCyclesApi.options(),
+  });
+  const cycleTypes = reviewOptions?.cycle_types ?? [];
+  const cycleStatuses = reviewOptions?.statuses ?? [];
+  const statusLabels = new Map(cycleStatuses.map((option) => [option.value, option.label]));
+  const cycleTypeLabels = new Map(cycleTypes.map((option) => [option.value, option.label]));
 
   const activateMutation = useMutation({
     mutationFn: (id: string) => reviewCyclesApi.activate(id),
@@ -78,9 +87,9 @@ export default function PerformanceCyclesPage() {
     { key: 'name', header: 'Name', cell: (r) => <span className="font-medium">{r.name}</span> },
     {
       key: 'cycle_type', header: 'Type',
-      cell: (r) => <Chip variant="neutral">{r.cycle_type.replace('_', ' ')}</Chip>,
+      cell: (r) => <Chip variant="neutral">{cycleTypeLabels.get(r.cycle_type) ?? r.cycle_type}</Chip>,
     },
-    { key: 'status', header: 'Status', cell: (r) => <Chip variant={STATUS_CHIP[r.status]}>{r.status}</Chip> },
+    { key: 'status', header: 'Status', cell: (r) => <Chip variant={STATUS_CHIP[r.status]}>{r.status_label ?? statusLabels.get(r.status) ?? r.status}</Chip> },
     { key: 'start_date', header: 'Start', cell: (r) => <span className="font-mono tabular-nums text-sm">{r.start_date}</span> },
     { key: 'end_date', header: 'End', cell: (r) => <span className="font-mono tabular-nums text-sm">{r.end_date}</span> },
     {
@@ -109,19 +118,14 @@ export default function PerformanceCyclesPage() {
       key: 'status', label: 'Status', type: 'select',
       options: [
         { value: '', label: 'All' },
-        { value: 'draft', label: 'Draft' },
-        { value: 'active', label: 'Active' },
-        { value: 'closed', label: 'Closed' },
+        ...cycleStatuses,
       ],
     },
     {
       key: 'cycle_type', label: 'Type', type: 'select',
       options: [
         { value: '', label: 'All' },
-        { value: 'annual', label: 'Annual' },
-        { value: 'semi_annual', label: 'Semi-annual' },
-        { value: 'quarterly', label: 'Quarterly' },
-        { value: 'probationary', label: 'Probationary' },
+        ...cycleTypes.map((type) => ({ value: type.value, label: type.label })),
       ],
     },
   ];
@@ -206,11 +210,11 @@ function CreateCycleModal({ isOpen, onClose, onSuccess }: { isOpen: boolean; onC
     formState: { errors, isSubmitting },
   } = useForm<CycleFormValues>({
     resolver: zodResolver(cycleSchema),
-    defaultValues: { name: '', cycle_type: 'annual', start_date: '', end_date: '' },
+    defaultValues: { name: '', cycle_type: '', start_date: '', end_date: '' },
   });
 
   const mutation = useMutation({
-    mutationFn: (d: CycleFormValues) => reviewCyclesApi.create(d),
+    mutationFn: (d: CycleFormValues) => reviewCyclesApi.create(d as Parameters<typeof reviewCyclesApi.create>[0]),
     onSuccess: () => {
       toast.success('Review cycle created.');
       reset();
@@ -230,15 +234,19 @@ function CreateCycleModal({ isOpen, onClose, onSuccess }: { isOpen: boolean; onC
     },
   });
 
+  const { data: reviewOptions } = useQuery({
+    queryKey: ['performance-review-options'],
+    queryFn: () => reviewCyclesApi.options(),
+  });
+  const cycleTypes = reviewOptions?.cycle_types ?? [];
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Create review cycle" size="md">
       <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="space-y-4">
-        <Input label="Cycle name" required {...register('name')} error={errors.name?.message} placeholder="e.g. 2026 Annual Review" />
+        <Input label="Cycle name" required {...register('name')} error={errors.name?.message} placeholder="Annual review cycle" />
         <Select label="Type" required {...register('cycle_type')} error={errors.cycle_type?.message}>
-          <option value="annual">Annual</option>
-          <option value="semi_annual">Semi-annual</option>
-          <option value="quarterly">Quarterly</option>
-          <option value="probationary">Probationary</option>
+          <option value="">Select type</option>
+          {cycleTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
         </Select>
         <div className="grid grid-cols-2 gap-3">
           <Input label="Start date" type="date" required {...register('start_date')} error={errors.start_date?.message} />

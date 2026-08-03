@@ -4,6 +4,7 @@ export interface FiscalYear {
   start_date: string;
   end_date: string;
   status: 'draft' | 'active' | 'closed';
+  status_label?: string;
 }
 
 export interface Budget {
@@ -20,6 +21,7 @@ export interface Budget {
   available: number;
   utilization_pct: number;
   status: 'draft' | 'submitted' | 'approved' | 'active' | 'closed';
+  status_label?: string;
   submitted_by?: { id: string; name: string } | null;
   submitted_at?: string | null;
   approved_by?: { id: string; name: string } | null;
@@ -60,6 +62,7 @@ export interface BudgetTransfer {
   amount: number;
   reason: string;
   status: 'pending' | 'approved' | 'rejected';
+  status_label?: string;
   requested_by?: { id: string; name: string } | null;
   approved_by?: { id: string; name: string } | null;
   approved_at?: string | null;

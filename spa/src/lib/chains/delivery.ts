@@ -62,35 +62,3 @@ export function buildDeliveryChain(delivery: Delivery): ChainStep[] {
     },
   ];
 }
-
-/** Wider Order-to-Cash chain anchored on a Delivery record. */
-export function buildDeliveryO2cChain(delivery: Delivery): ChainStep[] {
-  const status = delivery.status;
-  return [
-    { key: 'order', label: 'Order', state: 'done' },
-    { key: 'mrp', label: 'MRP planned', state: 'done' },
-    { key: 'wo', label: 'In production', state: 'done' },
-    { key: 'qc', label: 'QC outgoing', state: 'done' },
-    {
-      key: 'deliver',
-      label: 'Delivered',
-      state:
-        status === 'confirmed'
-          ? 'done'
-          : status === 'cancelled'
-            ? 'pending'
-            : status === 'delivered'
-              ? 'active'
-              : isAtOrPast(status, 'delivered')
-                ? 'done'
-                : 'active',
-      date: delivery.delivered_at?.slice(0, 10),
-    },
-    {
-      key: 'invoice',
-      label: 'Invoiced',
-      state: delivery.invoice ? (status === 'confirmed' ? 'done' : 'active') : 'pending',
-    },
-    { key: 'collect', label: 'Collected', state: 'pending' },
-  ];
-}

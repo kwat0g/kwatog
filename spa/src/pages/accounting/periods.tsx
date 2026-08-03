@@ -164,7 +164,7 @@ function ReopenModal({
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           rows={3}
-          placeholder="e.g. Backdated supplier invoice received after close."
+          placeholder="Describe the reason"
         />
       </div>
       <div className="flex justify-end gap-2 pt-3 border-t border-default">

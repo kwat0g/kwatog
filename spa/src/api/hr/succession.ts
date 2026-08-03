@@ -15,6 +15,7 @@ export interface SuccessionPlanListParams extends ListParams {
 }
 
 export const successionPlansApi = {
+  options: () => client.get<{ data: { statuses: Array<{ value: string; label: string }>; readiness: Array<{ value: string; label: string }>; priorities: Array<{ value: string; label: string }> } }>('/hr/succession-plans/options').then(r => r.data.data),
   list: (params?: SuccessionPlanListParams) =>
     client.get<PaginatedResponse<SuccessionPlan>>('/hr/succession-plans', { params }).then(r => r.data),
   show: (id: string) =>

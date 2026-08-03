@@ -209,7 +209,7 @@ export default function EditSalesOrderPage() {
               {...register('payment_terms_days')} error={errors.payment_terms_days?.message}
               className="font-mono"
             />
-            <Input label="Delivery terms" {...register('delivery_terms')} error={errors.delivery_terms?.message} placeholder="e.g. FOB Cavite" />
+            <Input label="Delivery terms" {...register('delivery_terms')} error={errors.delivery_terms?.message} placeholder="Enter delivery terms" />
           </div>
         </fieldset>
 

@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Radio } from '@/components/ui/Radio';
 import { Select } from '@/components/ui/Select';
-import { Spinner } from '@/components/ui/Spinner';
+import { SkeletonTable } from '@/components/ui/Skeleton';
 import { Textarea } from '@/components/ui/Textarea';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { CanDo } from '@/components/guards/CanDo';
@@ -101,11 +101,7 @@ export function PermissionOverrides({
         </Chip>
       )}
 
-      {canManage && list.isLoading && (
-        <div className="flex items-center gap-2 py-4 text-muted">
-          <Spinner /> <span className="text-sm">Loading overrides…</span>
-        </div>
-      )}
+      {canManage && list.isLoading && <SkeletonTable columns={4} rows={4} />}
 
       {canManage && list.isError && (
         <EmptyState
@@ -157,7 +153,7 @@ export function PermissionOverrides({
                 </Td>
                 <Td>
                   <Chip variant={o.type === 'grant' ? 'success' : 'danger'}>
-                    {o.type === 'grant' ? 'Granted' : 'Revoked'}
+                    {o.type_label ?? (o.type === 'grant' ? 'Granted' : 'Revoked')}
                   </Chip>
                 </Td>
                 <Td>

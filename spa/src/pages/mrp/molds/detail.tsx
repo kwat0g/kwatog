@@ -11,6 +11,8 @@ import { formatInt } from '@/lib/formatNumber';
 import type { MoldStatus } from '@/types/mrp';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
+import { MoldShotMeter } from '@/components/mrp/MoldShotMeter';
+
 const variant: Record<MoldStatus, 'success' | 'neutral' | 'info' | 'danger' | 'warning'> = {
   available: 'success',
   in_use: 'info',
@@ -47,7 +49,7 @@ export default function MoldDetailPage() {
 
   const m = detail.data;
   const pct = Math.min(100, Math.max(0, m.shot_percentage));
-  const barColor = pct >= 80 ? 'bg-danger' : pct >= 60 ? 'bg-warning' : 'bg-success';
+  const barColor = pct >= 100 ? 'bg-danger' : m.nearing_limit ? 'bg-warning' : 'bg-success';
 
   return (
     <div>
@@ -67,6 +69,15 @@ export default function MoldDetailPage() {
 
       <div className="px-5 py-4 grid grid-cols-3 gap-4">
         <div className="col-span-2 space-y-4">
+          <MoldShotMeter
+            currentShots={m.current_shot_count}
+            maxShots={m.max_shots_before_maintenance}
+            moldCode={m.mold_code}
+            warningRatioPct={90}
+            status={m.status_label}
+            onTriggerPm={() => alert(`Preventive Maintenance order initiated for Mold ${m.mold_code}`)}
+          />
+
           <Panel title="Specifications">
             <dl className="grid grid-cols-3 gap-y-2 gap-x-3 text-sm">
               <dt className="text-muted">Code</dt>

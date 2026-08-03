@@ -33,14 +33,6 @@ const mrbStatusVariant = (s: MrbStatus): ChipVariant => {
   return 'info'; // returned
 };
 
-const STATUS_FILTERS: Array<{ value: string; label: string }> = [
-  { value: '',          label: 'All statuses' },
-  { value: 'held',      label: 'Held' },
-  { value: 'released',  label: 'Released' },
-  { value: 'scrapped',  label: 'Scrapped' },
-  { value: 'returned',  label: 'Returned' },
-];
-
 const holdSchema = z.object({
   item_id: z.string().min(1, 'Item is required.'),
   source_location_id: z.string().min(1, 'Source location is required.'),
@@ -73,6 +65,12 @@ export default function MrbListPage() {
     queryFn: () => mrbApi.list(filters),
     placeholderData: (prev) => prev,
   });
+  const { data: options } = useQuery({
+    queryKey: ['inventory', 'mrb', 'options'],
+    queryFn: () => mrbApi.options(),
+    staleTime: 5 * 60 * 1000,
+  });
+  const statusFilters = [{ value: '', label: 'All statuses' }, ...(options?.statuses ?? [])];
 
   const columns: Column<MrbRecord>[] = [
     {
@@ -165,7 +163,7 @@ export default function MrbListPage() {
             setPage(1);
           }}
         >
-          {STATUS_FILTERS.map((s) => (
+          {statusFilters.map((s) => (
             <option key={s.value} value={s.value}>
               {s.label}
             </option>

@@ -4,7 +4,7 @@
  * GET /mrp/scheduler/snapshot fills the chart; POST /mrp/scheduler/run
  * proposes new schedules and POST /mrp/scheduler/confirm persists them.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AxiosError } from 'axios';
@@ -26,7 +26,7 @@ import { GanttChart } from '@/components/production/GanttChart';
 import { usePermission } from '@/hooks/usePermission';
 import type { SchedulerConflict, SchedulerProposalRow } from '@/types/mrp';
 
-/** ISO date string for today and +14 days — default window */
+/** ISO date string offset from today. */
 function isoDate(offset = 0): string {
   const d = new Date();
   d.setDate(d.getDate() + offset);
@@ -41,8 +41,8 @@ export default function ProductionSchedulePage() {
   const canConfirm = can('production.schedule.confirm');
 
   const [viewMode, setViewMode] = useState<'Day' | 'Week' | 'Month'>('Week');
-  const [dateFrom, setDateFrom] = useState(isoDate(0));
-  const [dateTo, setDateTo] = useState(isoDate(14));
+  const [dateFrom, setDateFrom] = useState<string>();
+  const [dateTo, setDateTo] = useState<string>();
   const [machineFilter, setMachineFilter] = useState<string[]>([]);
   const [latestProposal, setLatestProposal] = useState<SchedulerProposalRow[]>([]);
   const [latestConflicts, setLatestConflicts] = useState<SchedulerConflict[]>([]);
@@ -55,9 +55,23 @@ export default function ProductionSchedulePage() {
   });
   const allMachines = machinesData?.data ?? [];
 
+  const options = useQuery({
+    queryKey: ['mrp', 'scheduler', 'options'],
+    queryFn: () => schedulerApi.options(),
+    staleTime: 300_000,
+  });
+
+  useEffect(() => {
+    if (dateFrom === undefined && options.data) {
+      setDateFrom(isoDate(0));
+      setDateTo(isoDate(options.data.default_horizon_days));
+    }
+  }, [dateFrom, options.data]);
+
   const snapshot = useQuery({
     queryKey: ['mrp', 'scheduler', 'snapshot', dateFrom, dateTo, machineFilter],
     queryFn: () => schedulerApi.snapshot(dateFrom, dateTo),
+    enabled: dateFrom !== undefined && dateTo !== undefined,
     refetchInterval: 60_000,
     placeholderData: (prev) => prev,
   });
@@ -202,6 +216,7 @@ export default function ProductionSchedulePage() {
             <GanttChart
               rows={filteredRows}
               viewMode={viewMode}
+              emptyWindowDays={options.data?.default_horizon_days}
               onBarClick={(woId) => navigate(`/production/work-orders/${woId}`)}
             />
           )}

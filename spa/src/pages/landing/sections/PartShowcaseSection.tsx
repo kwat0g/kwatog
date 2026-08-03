@@ -20,25 +20,26 @@ import { PartShowcase3D } from '../three/PartShowcase3D';
 import { PARTS } from '../three/parts';
 import { reduceMotion } from '../motion';
 import { cn } from '@/lib/cn';
+import { landingApi } from '@/api/landing';
+import { useQuery } from '@tanstack/react-query';
 
 export function PartShowcaseSection() {
   const [partIndex, setPartIndex] = useState(0);
   const [exploded, setExploded] = useState(false);
   const motionOK = useMemo(() => !reduceMotion(), []);
   const part = PARTS[partIndex];
+  const { data: content } = useQuery({ queryKey: ['landing', 'content'], queryFn: landingApi.content, staleTime: 300_000 });
+  const qualityStandard = content?.quality_policy?.standard ?? content?.quality_methods?.[0] ?? '—';
+  const spec = content?.part_specs?.find((candidate) => candidate.id === part.id);
+  const displayPart = spec ? { ...part, ...spec } : part;
 
   return (
     <section id="parts-3d" className="relative bg-landing-canvas px-5 py-24 sm:px-5 sm:py-32">
       <div className="mx-auto max-w-7xl">
         <SectionHeading
-          eyebrow="Inspect the part"
-          title={
-            <>
-              Turn it over.{' '}
-              <span className="text-landing-accent">Take it apart.</span>
-            </>
-          }
-          intro="Every part we mold is a controlled geometry. Spin one, or pull it into an exploded view — the same way our engineers inspect a section before a single shot is run."
+          eyebrow={content?.section_copy?.part_showcase_eyebrow || 'Interactive 3D Catalogue'}
+          title={content?.section_copy?.part_showcase_title || 'Inspect Moulded Components & Specs'}
+          intro={content?.section_copy?.part_showcase_intro || 'Rotate real CAD geometries, inspect material grades, tolerances, and disassemble into exploded engineering views.'}
         />
 
         <div className="mt-16 grid items-stretch gap-5 lg:grid-cols-[0.82fr_1.18fr] lg:gap-12">
@@ -63,7 +64,7 @@ export function PartShowcaseSection() {
                         : 'border-landing-border text-landing-muted hover:border-landing-accent/40 hover:text-landing-text',
                     )}
                   >
-                    {p.name}
+                    {content?.part_specs?.find((candidate) => candidate.id === p.id)?.name || p.name || '—'}
                   </button>
                 );
               })}
@@ -72,10 +73,10 @@ export function PartShowcaseSection() {
             {/* decoding spec readout */}
             <dl className="mt-8 grid grid-cols-2 gap-px overflow-hidden rounded-md border border-landing-border bg-landing-border">
               {[
-                { k: 'Material', v: part.material },
-                { k: 'Tolerance', v: part.tolerance },
-                { k: 'Feature', v: part.feature },
-                { k: 'Application', v: part.application },
+                { k: 'Material', v: displayPart.material || '—' },
+                { k: 'Tolerance', v: displayPart.tolerance || '—' },
+                { k: 'Feature', v: displayPart.feature || '—' },
+                { k: 'Application', v: displayPart.application || '—' },
               ].map((row) => (
                 <div key={row.k} className="bg-landing-surface px-5 py-4">
                   <dt className="font-mono text-[10px] uppercase tracking-[0.16em] text-landing-subtle-text">
@@ -92,7 +93,7 @@ export function PartShowcaseSection() {
             {/* construction (section stack) */}
             <div className="mt-5 flex flex-wrap items-center gap-x-2 gap-y-1.5 font-mono text-[11px] text-landing-muted">
               <span className="text-landing-subtle-text">Construction</span>
-              {part.sections.map((s, i) => (
+              {displayPart.sections.map((s, i) => (
                 <span key={s.label ?? i} className="flex items-center gap-2">
                   {i > 0 && <span className="text-landing-accent/40">+</span>}
                   <span className="text-landing-text-secondary">{s.label}</span>
@@ -171,35 +172,35 @@ export function PartShowcaseSection() {
               {/* ghosted cross-section base (full when no WebGL) */}
               <div className="absolute inset-0 flex items-center justify-center p-12">
                 <ProfileSilhouette
-                  part={part}
+                  part={displayPart}
                   className={motionOK ? 'opacity-[0.28]' : 'opacity-90'}
                 />
               </div>
 
               {/* live 3D model */}
-              {motionOK && <PartShowcase3D part={part} exploded={exploded} />}
+              {motionOK && <PartShowcase3D part={displayPart} exploded={exploded} />}
 
               {/* dimension callouts */}
               <span className="absolute left-5 top-5 font-mono text-[10px] uppercase tracking-[0.16em] text-landing-accent">
                 REV · A
               </span>
               <span className="absolute right-5 top-5 font-mono text-[10px] uppercase tracking-[0.16em] text-landing-accent">
-                {part.tolerance}
+                {displayPart.tolerance || '—'}
               </span>
 
               {/* title block */}
               <figcaption className="absolute inset-x-3 bottom-3 grid grid-cols-3 overflow-hidden rounded-md border border-landing-border bg-landing-canvas/85 font-mono text-[9px] uppercase tracking-[0.12em] text-landing-muted backdrop-blur-sm sm:text-[10px]">
                 <span className="border-r border-landing-border px-3 py-2">
                   <span className="block text-landing-subtle-text">Part</span>
-                  <span className="text-landing-text">{part.name}</span>
+                  <span className="text-landing-text">{displayPart.name || '—'}</span>
                 </span>
                 <span className="border-r border-landing-border px-3 py-2">
                   <span className="block text-landing-subtle-text">Material</span>
-                  <span className="text-landing-text">{part.material}</span>
+                  <span className="text-landing-text">{displayPart.material || '—'}</span>
                 </span>
                 <span className="px-3 py-2">
                   <span className="block text-landing-subtle-text">{exploded ? 'View' : 'Std'}</span>
-                  <span className="text-landing-text">{exploded ? 'Exploded' : 'IATF 16949'}</span>
+                  <span className="text-landing-text">{exploded ? 'Exploded' : qualityStandard}</span>
                 </span>
               </figcaption>
             </figure>

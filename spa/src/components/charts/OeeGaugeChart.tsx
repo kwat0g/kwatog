@@ -5,12 +5,13 @@ interface Props {
   availability: number; // 0–1
   performance: number;  // 0–1
   quality: number;      // 0–1
+  displayPolicy?: { world_class_ratio: number; on_track_ratio: number };
 }
 
-const colorFor = (v: number) =>
-  v >= 0.85 ? 'var(--success, #22c55e)' : v >= 0.70 ? 'var(--warning, #f59e0b)' : 'var(--danger, #ef4444)';
+const colorFor = (v: number, policy?: Props['displayPolicy']) =>
+  policy ? (v >= policy.world_class_ratio ? 'var(--success, #22c55e)' : v >= policy.on_track_ratio ? 'var(--warning, #f59e0b)' : 'var(--danger, #ef4444)') : 'var(--text-muted, #6b7280)';
 
-export function OeeGaugeChart({ oee, availability, performance, quality }: Props) {
+export function OeeGaugeChart({ oee, availability, performance, quality, displayPolicy }: Props) {
   const oeePct = oee * 100;
   return (
     <div className="flex flex-col items-center gap-3">
@@ -24,7 +25,7 @@ export function OeeGaugeChart({ oee, availability, performance, quality }: Props
             outerRadius="100%"
             startAngle={180}
             endAngle={0}
-            data={[{ value: oeePct, fill: colorFor(oee) }]}
+            data={[{ value: oeePct, fill: colorFor(oee, displayPolicy) }]}
           >
             <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
             <RadialBar
@@ -45,19 +46,19 @@ export function OeeGaugeChart({ oee, availability, performance, quality }: Props
       {/* A × P × Q breakdown */}
       <div className="grid grid-cols-3 gap-4 text-center text-sm w-full">
         <div>
-          <div className="font-mono tabular-nums text-base font-medium" style={{ color: colorFor(availability) }}>
+            <div className="font-mono tabular-nums text-base font-medium" style={{ color: colorFor(availability, displayPolicy) }}>
             {(availability * 100).toFixed(1)}%
           </div>
           <div className="text-2xs text-muted mt-0.5">Availability</div>
         </div>
         <div>
-          <div className="font-mono tabular-nums text-base font-medium" style={{ color: colorFor(performance) }}>
+            <div className="font-mono tabular-nums text-base font-medium" style={{ color: colorFor(performance, displayPolicy) }}>
             {(performance * 100).toFixed(1)}%
           </div>
           <div className="text-2xs text-muted mt-0.5">Performance</div>
         </div>
         <div>
-          <div className="font-mono tabular-nums text-base font-medium" style={{ color: colorFor(quality) }}>
+            <div className="font-mono tabular-nums text-base font-medium" style={{ color: colorFor(quality, displayPolicy) }}>
             {(quality * 100).toFixed(1)}%
           </div>
           <div className="text-2xs text-muted mt-0.5">Quality</div>

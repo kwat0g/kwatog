@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate} from 'react-router-dom';
 import { Plus, Printer } from 'lucide-react';
 import { invoicesApi, type InvoiceListParams } from '@/api/accounting/invoices';
 import { bulkPrint } from '@/api/print';
@@ -24,18 +24,22 @@ export default function InvoicesPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['accounting', 'invoices', filters],
     queryFn: () => invoicesApi.list(filters),
-    placeholderData: (prev) => prev,
-  });
+    placeholderData: (prev) => prev });
+  const { data: invoiceOptions } = useQuery({
+    queryKey: ['accounting', 'invoices', 'options'],
+    queryFn: invoicesApi.options,
+    staleTime: 5 * 60 * 1000 });
+  const statusLabels = new Map((invoiceOptions?.statuses ?? []).map((option) => [option.value, option.label]));
 
   const columns: Column<Invoice>[] = [
     { key: 'invoice_number', header: 'Invoice no',
-      cell: (r) => <Link to={`/accounting/invoices/${r.id}`} className="font-mono text-accent hover:underline">{r.invoice_number ?? 'DRAFT'}</Link> },
+      cell: (r) => <span className="font-mono">{r.invoice_number ?? 'DRAFT'}</span> },
     { key: 'customer', header: 'Customer', cell: (r) => r.customer?.name ?? '—' },
     { key: 'date', header: 'Date', cell: (r) => <NumCell>{formatDate(r.date)}</NumCell> },
     { key: 'due_date', header: 'Due', cell: (r) => <NumCell className={r.is_overdue ? 'text-danger-fg' : undefined}>{formatDate(r.due_date)}</NumCell> },
     { key: 'total', header: 'Total', align: 'right', cell: (r) => <NumCell>{formatPeso(r.total_amount)}</NumCell> },
     { key: 'balance', header: 'Balance', align: 'right', cell: (r) => <NumCell className="font-medium">{formatPeso(r.balance)}</NumCell> },
-    { key: 'status', header: 'Status', cell: (r) => <Chip variant={chipVariantForStatus(r.display_status)}>{r.display_status}</Chip> },
+    { key: 'status', header: 'Status', cell: (r) => <Chip variant={chipVariantForStatus(r.display_status)}>{statusLabels.get(r.display_status) ?? r.display_status}</Chip> },
   ];
 
   const filterConfig: FilterConfig[] = [
@@ -43,11 +47,8 @@ export default function InvoicesPage() {
       key: 'status', label: 'Status', type: 'select',
       options: [
         { value: '', label: 'All' },
-        { value: 'draft', label: 'Draft' }, { value: 'finalized', label: 'Finalized' },
-        { value: 'partial', label: 'Partial' }, { value: 'paid', label: 'Paid' },
-        { value: 'cancelled', label: 'Cancelled' },
-      ],
-    },
+        ...(invoiceOptions?.statuses ?? []),
+      ] },
     { key: 'overdue', label: 'Overdue', type: 'select', options: [{ value: '', label: 'All' }, { value: '1', label: 'Overdue only' }] },
   ];
 
@@ -77,6 +78,7 @@ export default function InvoicesPage() {
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
           <DataTable
+            onRowClick={(r) => navigate(`/accounting/invoices/${r.id}`)}
             columns={columns}
             data={data.data}
             meta={data.meta}
@@ -85,8 +87,7 @@ export default function InvoicesPage() {
             bulkActions={[{
               label: 'Print PDFs',
               icon: <Printer size={14} />,
-              onClick: (rows) => bulkPrint('invoice', rows.map((r) => r.id)),
-            } as BulkAction<Invoice>]}
+              onClick: (rows) => bulkPrint('invoice', rows.map((r) => r.id)) } as BulkAction<Invoice>]}
           />
         </div>
       )}

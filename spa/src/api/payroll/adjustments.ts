@@ -9,6 +9,7 @@ export interface AdjustmentListParams extends ListParams {
 }
 
 export const adjustmentsApi = {
+  options: () => client.get<{ data: { statuses: Array<{ value: string; label: string }>; types: Array<{ value: string; label: string }> } }>('/payroll-adjustments/options').then((r) => r.data.data),
   list: (params?: AdjustmentListParams) =>
     client.get<PaginatedResponse<PayrollAdjustment>>('/payroll-adjustments', { params }).then((r) => r.data),
   show: (id: string) =>

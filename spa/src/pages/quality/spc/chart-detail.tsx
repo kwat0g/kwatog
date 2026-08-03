@@ -42,13 +42,6 @@ const STATUS_CHIP: Record<SpcChartStatus, ChipVariant> = {
   suspended: 'neutral',
 };
 
-const RULE_LABELS: Record<string, string> = {
-  rule_1_beyond_3sigma: 'Rule 1: Point beyond 3-sigma',
-  rule_2_two_of_three_beyond_2sigma: 'Rule 2: 2 of 3 beyond 2-sigma',
-  rule_3_four_of_five_beyond_1sigma: 'Rule 3: 4 of 5 beyond 1-sigma',
-  rule_4_eight_same_side: 'Rule 4: 8 consecutive on same side',
-};
-
 // ─── Chart colours — design tokens (Recharts accepts CSS vars in SVG attrs) ──
 const COLORS = {
   cl: 'var(--accent)', // indigo — center line
@@ -65,7 +58,7 @@ const COLORS = {
 interface ChartPoint {
   subgroup: number;
   value: number;
-  range: number;
+  range: number | null;
   hasAlert: boolean;
   alerts: string[];
   sampleValues: number[] | null;
@@ -76,8 +69,12 @@ function parsePoints(dataPoints: SpcDataPoint[]): ChartPoint[] {
     .filter((dp) => dp.subgroup_mean !== null || dp.individual_value !== null)
     .map((dp) => ({
       subgroup: dp.subgroup_number,
-      value: Number(dp.subgroup_mean ?? dp.individual_value ?? 0),
-      range: Number(dp.subgroup_range ?? dp.moving_range ?? 0),
+      value: Number(dp.subgroup_mean ?? dp.individual_value),
+      range: dp.subgroup_range !== null
+        ? Number(dp.subgroup_range)
+        : dp.moving_range !== null
+          ? Number(dp.moving_range)
+          : null,
       hasAlert: (dp.alerts?.length ?? 0) > 0,
       alerts: dp.alerts ?? [],
       sampleValues: dp.sample_values,
@@ -85,7 +82,7 @@ function parsePoints(dataPoints: SpcDataPoint[]): ChartPoint[] {
     .sort((a, b) => a.subgroup - b.subgroup);
 }
 
-function CustomTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: ChartPoint }> }) {
+function CustomTooltip({ active, payload, ruleLabels }: { active?: boolean; payload?: Array<{ payload: ChartPoint }>; ruleLabels: Map<string, string> }) {
   if (!active || !payload?.[0]) return null;
   const pt = payload[0].payload;
   return (
@@ -95,7 +92,7 @@ function CustomTooltip({ active, payload }: { active?: boolean; payload?: Array<
         Mean: {pt.value.toFixed(4)}
       </div>
       <div className="font-mono tabular-nums">
-        Range: {pt.range.toFixed(4)}
+        Range: {pt.range == null ? '—' : pt.range.toFixed(4)}
       </div>
       {pt.sampleValues && (
         <div className="text-muted mt-1">
@@ -106,7 +103,7 @@ function CustomTooltip({ active, payload }: { active?: boolean; payload?: Array<
         <div className="mt-1.5 space-y-0.5">
           {pt.alerts.map((a, i) => (
             <div key={i} className="text-danger">
-              {RULE_LABELS[a] ?? a}
+              {ruleLabels.get(a) ?? a}
             </div>
           ))}
         </div>
@@ -121,7 +118,7 @@ function RangeTooltip({ active, payload }: { active?: boolean; payload?: Array<{
   return (
     <div className="bg-canvas border border-default rounded-md p-3 text-xs">
       <div className="font-medium mb-1">Subgroup #{pt.subgroup}</div>
-      <div className="font-mono tabular-nums">Range: {pt.range.toFixed(4)}</div>
+      <div className="font-mono tabular-nums">Range: {pt.range == null ? '—' : pt.range.toFixed(4)}</div>
     </div>
   );
 }
@@ -266,11 +263,13 @@ function AlertItem({
   onAcknowledge,
   isPending,
   canManage,
+  ruleLabels,
 }: {
   alert: SpcAlert;
   onAcknowledge: (id: string, notes: string) => void;
   isPending: boolean;
   canManage: boolean;
+  ruleLabels: Map<string, string>;
 }) {
   const [notes, setNotes] = useState('');
   return (
@@ -278,8 +277,9 @@ function AlertItem({
       <div className="flex items-start justify-between gap-2">
         <div>
           <div className="text-xs font-medium">
-            {RULE_LABELS[alert.rule_code] ?? alert.rule_code}
+            {ruleLabels.get(alert.rule_code) ?? alert.rule_code}
           </div>
+          <div className="text-2xs text-muted mt-0.5">{alert.severity_label ?? alert.severity}</div>
           {alert.data_point && (
             <div className="text-2xs text-muted mt-0.5">
               Subgroup #{alert.data_point.subgroup_number}
@@ -334,6 +334,14 @@ export default function SpcChartDetailPage() {
     queryFn: () => spcApi.showChart(id),
     enabled: Boolean(id),
   });
+  const { data: options } = useQuery({
+    queryKey: ['quality', 'spc-options'],
+    queryFn: spcApi.options,
+    staleTime: 5 * 60 * 1000,
+  });
+  const ruleLabels = new Map((options?.rules ?? []).map((rule) => [rule.value, rule.label]));
+  const chartTypeLabels = new Map((options?.chart_types ?? []).map((type) => [type.value, type.label]));
+  const statusLabels = new Map((options?.statuses ?? []).map((status) => [status.value, status.label]));
 
   const { data: alertsData } = useQuery({
     queryKey: ['quality', 'spc', 'alerts', id],
@@ -385,7 +393,7 @@ export default function SpcChartDetailPage() {
   const lclR = chart.lcl_range !== null ? Number(chart.lcl_range) : null;
   const clR = chart.center_range !== null ? Number(chart.center_range) : null;
 
-  const chartTypeLabel = chart.chart_type === 'xbar_r' ? 'X-bar' : chart.chart_type === 'imr' ? 'Individual' : 'p';
+  const chartTypeLabel = chartTypeLabels.get(chart.chart_type) ?? chart.chart_type;
   const rangeLabel = chart.chart_type === 'imr' ? 'Moving Range' : 'Range';
 
   const alerts = alertsData?.data ?? [];
@@ -397,7 +405,7 @@ export default function SpcChartDetailPage() {
           <span>
             {chart.spec_item?.parameter_name ?? 'Control Chart'}
             <Chip variant={STATUS_CHIP[chart.status]} className="ml-3">
-              {chart.status}
+              {chart.status_label ?? statusLabels.get(chart.status) ?? chart.status}
             </Chip>
           </span>
         }
@@ -436,7 +444,7 @@ export default function SpcChartDetailPage() {
                 <dt className="text-2xs uppercase tracking-wider text-muted">Type</dt>
                 <dd>
                   <Chip variant="purple">
-                    {chart.chart_type === 'xbar_r' ? 'X-bar / R' : chart.chart_type === 'imr' ? 'I-MR' : 'p-chart'}
+                    {chartTypeLabel}
                   </Chip>
                 </dd>
               </div>
@@ -482,7 +490,7 @@ export default function SpcChartDetailPage() {
                 title={`${chartTypeLabel} Chart`}
                 dataKey="value"
                 height={320}
-                renderTooltip={CustomTooltip}
+                renderTooltip={(props) => <CustomTooltip {...props} ruleLabels={ruleLabels} />}
               />
               <XBarChart
                 points={points}
@@ -552,6 +560,7 @@ export default function SpcChartDetailPage() {
                     alert={alert}
                     canManage={can('quality.spc.manage')}
                     isPending={acknowledge.isPending}
+                    ruleLabels={ruleLabels}
                     onAcknowledge={(alertId, notes) =>
                       acknowledge.mutate({ alertId, notes })
                     }

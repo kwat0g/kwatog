@@ -16,7 +16,14 @@ export interface WorkOrderListParams extends ListParams {
   assigned_to?: number | string;
 }
 
+export interface WorkOrderStatusOption {
+  value: MaintenanceWorkOrderStatus;
+  label: string;
+  is_terminal: boolean;
+}
+
 export const workOrdersApi = {
+  options: () => client.get<{ data: { maintainable_types: Array<{ value: string; label: string }>; types: Array<{ value: string; label: string }>; priorities: Array<{ value: string; label: string }>; statuses: WorkOrderStatusOption[]; default_type: string; default_priority: string } }>('/maintenance/work-orders/options').then(r => r.data.data),
   list: (params?: WorkOrderListParams) =>
     client.get<PaginatedResponse<MaintenanceWorkOrder>>('/maintenance/work-orders', { params }).then(r => r.data),
   show: (id: string) =>

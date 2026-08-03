@@ -97,6 +97,10 @@ export const customerPortalApi = {
   },
 
   // ── Complaints (RMA / Customer Complaints) ─────────
+  complaintOptions: async () => {
+    const { data } = await portalClient.get<{ data: { severities: Array<{ value: string; label: string }> } }>('/b2b/customer/complaints/options');
+    return data.data;
+  },
   listComplaints: async () => {
     const { data } = await portalClient.get<{ data: PortalComplaint[] }>('/b2b/customer/complaints');
     return data.data;

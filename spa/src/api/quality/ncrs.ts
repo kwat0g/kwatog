@@ -21,6 +21,7 @@ export interface NcrListParams extends ListParams {
 }
 
 export const ncrsApi = {
+  options: () => client.get<{ data: { sources: Array<{ value: string; label: string }>; severities: Array<{ value: string; label: string }>; statuses: Array<{ value: string; label: string }>; actions: Array<{ value: string; label: string }>; dispositions: Array<{ value: string; label: string }>; default_disposition: string } }>('/quality/ncrs/options').then((r) => r.data.data),
   list: (params?: NcrListParams) =>
     client.get<PaginatedResponse<Ncr>>('/quality/ncrs', { params }).then((r) => r.data),
   show: (id: string) =>

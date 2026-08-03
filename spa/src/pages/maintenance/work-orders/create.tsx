@@ -1,6 +1,6 @@
 /** Sprint 8 — Task 69. Corrective maintenance WO create form. */
 import { useNavigate } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -16,10 +16,10 @@ import { onFormInvalid } from '@/lib/formErrors';
 import type { ApiValidationError } from '@/types';
 
 const schema = z.object({
-  maintainable_type: z.enum(['machine', 'mold']),
+  maintainable_type: z.string().min(1, 'Target type is required'),
   maintainable_id: z.coerce.number().int().min(1, 'Target ID required'),
-  type: z.enum(['preventive', 'corrective']).default('corrective'),
-  priority: z.enum(['critical', 'high', 'medium', 'low']),
+  type: z.string().min(1, 'Work order type is required'),
+  priority: z.string().min(1, 'Priority is required'),
   description: z.string().min(1, 'Description is required').max(5000),
 });
 type FormValues = z.infer<typeof schema>;
@@ -27,14 +27,15 @@ type FormValues = z.infer<typeof schema>;
 export default function CreateMaintenanceWorkOrderPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const { data: options } = useQuery({ queryKey: ['maintenance', 'work-order-options'], queryFn: () => workOrdersApi.options() });
 
   const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { maintainable_type: 'machine', type: 'corrective', priority: 'medium' },
+    defaultValues: { maintainable_type: '', type: '', priority: '' },
   });
 
   const mutation = useMutation({
-    mutationFn: (data: FormValues) => workOrdersApi.create(data),
+    mutationFn: (data: FormValues) => workOrdersApi.create(data as Parameters<typeof workOrdersApi.create>[0]),
     onSuccess: (wo) => {
       qc.invalidateQueries({ queryKey: ['maintenance', 'work-orders'] });
       toast.success(`Work order ${wo.mwo_number} created.`);
@@ -59,8 +60,8 @@ export default function CreateMaintenanceWorkOrderPage() {
           <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">Target</legend>
           <div className="grid grid-cols-2 gap-3">
             <Select label="Type" {...register('maintainable_type')} error={errors.maintainable_type?.message} required>
-              <option value="machine">Machine</option>
-              <option value="mold">Mold</option>
+              <option value="">— Select —</option>
+              {(options?.maintainable_types ?? []).map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
             </Select>
             <Input label="Target ID" type="number" {...register('maintainable_id')} error={errors.maintainable_id?.message} required />
           </div>
@@ -70,14 +71,12 @@ export default function CreateMaintenanceWorkOrderPage() {
           <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">Work order</legend>
           <div className="grid grid-cols-2 gap-3 mb-3">
             <Select label="Type" {...register('type')} error={errors.type?.message} required>
-              <option value="corrective">Corrective</option>
-              <option value="preventive">Preventive</option>
+              <option value="">— Select —</option>
+              {(options?.types ?? []).map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
             </Select>
             <Select label="Priority" {...register('priority')} error={errors.priority?.message} required>
-              <option value="critical">Critical</option>
-              <option value="high">High</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low</option>
+              <option value="">— Select —</option>
+              {(options?.priorities ?? []).map((priority) => <option key={priority.value} value={priority.value}>{priority.label}</option>)}
             </Select>
           </div>
           <Textarea label="Description" {...register('description')} rows={5} error={errors.description?.message} required />

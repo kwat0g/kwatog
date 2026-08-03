@@ -11,13 +11,14 @@ import { Button } from '@/components/ui/Button';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { alertLink, chainStageLink, kpiLink } from '@/lib/dashboardLinks';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { formatPeso } from '@/lib/formatNumber';
 
 interface ChainStage { key: string; label: string; count: number; percent: number; color?: string }
 interface AlertItem { kind: string; label: string; count: number; severity?: string }
-interface MachineRow { id: string; code: string; name: string; status: string; has_active_wo: boolean }
+interface MachineRow { id: string; code: string; name: string; status: string; status_label?: string; has_active_wo: boolean }
 interface DefectRow { code: string; name: string; count: number }
 interface DeptRow { label: string; count: number }
-interface JeRow { id: string; entry_number: string; date: string; status: string; total_debit: string }
+interface JeRow { id: string; entry_number: string; date: string; status: string; status_label?: string; total_debit: string }
 
 type Role = 'plantManager' | 'hr' | 'ppc' | 'accounting';
 
@@ -63,8 +64,8 @@ export function RoleDashboard({ role }: { role: Role }) {
             <StatCard
               key={k.label}
               label={k.label}
-              value={k.unit === 'PHP' ? `₱ ${k.value}` : k.value}
-              helper={k.unit !== 'PHP' && k.unit !== 'count' ? k.unit : undefined}
+              value={/^[A-Z]{3}$/.test(k.unit) ? `${k.unit} ${k.value}` : k.value}
+              helper={!/^[A-Z]{3}$/.test(k.unit) && k.unit !== 'count' ? k.unit : undefined}
               linkTo={kpiLink(k.label)}
             />
           ))}
@@ -161,7 +162,7 @@ function RolePanels({ envelope }: { envelope: DashboardEnvelope }) {
                 <tr key={m.id} className={trCls}>
                   <Td mono>{m.code}</Td>
                   <Td className="text-muted">{m.name}</Td>
-                  <Td><Chip variant={chipVariantForStatus(m.status)}>{m.status}</Chip></Td>
+                  <Td><Chip variant={chipVariantForStatus(m.status)}>{m.status_label ?? m.status}</Chip></Td>
                   <Td align="right" mono>{m.has_active_wo ? '✓' : '—'}</Td>
                 </tr>
               ))}
@@ -211,8 +212,8 @@ function RolePanels({ envelope }: { envelope: DashboardEnvelope }) {
               <li key={je.id} className="flex items-center justify-between py-1.5 text-sm">
                 <span><span className="font-mono">{je.entry_number}</span> · <span className="text-muted">{je.date}</span></span>
                 <span className="flex items-center gap-2">
-                  <Chip variant={chipVariantForStatus(je.status)}>{je.status}</Chip>
-                  <span className="font-mono tabular-nums">₱{je.total_debit}</span>
+                  <Chip variant={chipVariantForStatus(je.status)}>{je.status_label ?? je.status}</Chip>
+                  <span className="font-mono tabular-nums">{formatPeso(je.total_debit)}</span>
                 </span>
               </li>
             ))}

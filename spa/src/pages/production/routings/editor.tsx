@@ -39,7 +39,7 @@ const operationSchema = z.object({
   machine_id:         z.string().optional().or(z.literal('')),
   mold_id:            z.string().optional().or(z.literal('')),
   setup_time_minutes: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Use a non-negative decimal').optional().or(z.literal('')),
-  cycle_time_minutes: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Use a non-negative decimal').optional().or(z.literal('')),
+  cycle_time_minutes: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Cycle time is required').refine((v) => Number(v) > 0, 'Must be > 0'),
   qc_required:        z.boolean(),
   description:        z.string().max(500).optional().or(z.literal('')),
 });
@@ -90,7 +90,7 @@ export default function RoutingEditorPage() {
       product_id: '',
       notes: '',
       operations: [
-        { sequence: '10', operation_name: '', work_center: '', machine_id: '', mold_id: '', setup_time_minutes: '0', cycle_time_minutes: '0', qc_required: false, description: '' },
+        { sequence: '', operation_name: '', work_center: '', machine_id: '', mold_id: '', setup_time_minutes: '', cycle_time_minutes: '', qc_required: false, description: '' },
       ],
     },
   });
@@ -111,12 +111,12 @@ export default function RoutingEditorPage() {
             work_center:        op.work_center ?? '',
             machine_id:         op.machine?.id ?? '',
             mold_id:            op.mold?.id ?? '',
-            setup_time_minutes: op.setup_time_minutes ?? '0',
-            cycle_time_minutes: op.cycle_time_minutes ?? '0',
+            setup_time_minutes: op.setup_time_minutes ?? '',
+            cycle_time_minutes: op.cycle_time_minutes ?? '',
             qc_required:        op.qc_required,
             description:        op.description ?? '',
           }))
-        : [{ sequence: '10', operation_name: '', work_center: '', machine_id: '', mold_id: '', setup_time_minutes: '0', cycle_time_minutes: '0', qc_required: false, description: '' }],
+        : [{ sequence: '', operation_name: '', work_center: '', machine_id: '', mold_id: '', setup_time_minutes: '', cycle_time_minutes: '', qc_required: false, description: '' }],
     });
   }, [existing.data, reset]);
 
@@ -132,8 +132,8 @@ export default function RoutingEditorPage() {
           work_center:        op.work_center || null,
           machine_id:         op.machine_id || null,
           mold_id:            op.mold_id || null,
-          setup_time_minutes: op.setup_time_minutes || '0',
-          cycle_time_minutes: op.cycle_time_minutes || '0',
+          setup_time_minutes: op.setup_time_minutes || null,
+          cycle_time_minutes: op.cycle_time_minutes,
           qc_required:        op.qc_required,
           description:        op.description || null,
         })),
@@ -283,14 +283,14 @@ export default function RoutingEditorPage() {
                       <Input
                         {...register(`operations.${i}.operation_name` as const)}
                         error={errors.operations?.[i]?.operation_name?.message}
-                        placeholder="e.g. Injection molding"
+                        placeholder="Operation name"
                       />
                     </Td>
                     <Td>
                       <Input
                         {...register(`operations.${i}.work_center` as const)}
                         error={errors.operations?.[i]?.work_center?.message}
-                        placeholder="e.g. Line A"
+                        placeholder="Work center"
                       />
                     </Td>
                     <Td>
@@ -374,8 +374,8 @@ export default function RoutingEditorPage() {
                   work_center: '',
                   machine_id: '',
                   mold_id: '',
-                  setup_time_minutes: '0',
-                  cycle_time_minutes: '0',
+                  setup_time_minutes: '',
+                  cycle_time_minutes: '',
                   qc_required: false,
                   description: '',
                 });

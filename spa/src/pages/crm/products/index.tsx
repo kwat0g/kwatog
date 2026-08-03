@@ -15,6 +15,7 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import type { Product } from '@/types/crm';
+import { formatPeso } from '@/lib/formatNumber';
 
 export default function ProductsListPage() {
   const navigate = useNavigate();
@@ -61,7 +62,7 @@ export default function ProductsListPage() {
     { key: 'uom', header: 'UOM', cell: (r) => r.unit_of_measure },
     {
       key: 'cost', header: 'Std Cost', align: 'right',
-      cell: (r) => <NumCell>₱ {Number(r.standard_cost).toFixed(2)}</NumCell>,
+      cell: (r) => <NumCell>{formatPeso(r.standard_cost)}</NumCell>,
     },
     {
       key: 'has_bom', header: 'BOM',

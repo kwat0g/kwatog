@@ -38,9 +38,13 @@ export default function SupplierPurchaseOrderDetailPage() {
   const [estimatedArrival, setEstimatedArrival] = useState('');
 
   // Shipping doc upload state
-  const [uploadDocType, setUploadDocType] = useState('commercial_invoice');
+  const [uploadDocType, setUploadDocType] = useState('');
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadNotes, setUploadNotes] = useState('');
+  const { data: shippingOptions } = useQuery({
+    queryKey: ['portal', 'supplier', 'shipping-document-options'],
+    queryFn: () => supplierPortalApi.shippingDocumentOptions(),
+  });
 
   // Invoice submission state
   const [billNumber, setBillNumber] = useState('');
@@ -210,10 +214,8 @@ export default function SupplierPurchaseOrderDetailPage() {
               <Panel title="Upload shipping document">
                 <form onSubmit={(e) => { e.preventDefault(); if (uploadFile) uploadDocMut.mutate(); }} className="flex flex-col gap-3">
                   <Select label="Document type" value={uploadDocType} onChange={(e) => setUploadDocType(e.target.value)}>
-                    <option value="commercial_invoice">Commercial invoice</option>
-                    <option value="packing_list">Packing list</option>
-                    <option value="bill_of_lading">Bill of lading</option>
-                    <option value="other">Other</option>
+                    <option value="">— Select —</option>
+                    {(shippingOptions?.document_types ?? []).map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
                   </Select>
                   <FileInput
                     label="File"
@@ -390,7 +392,7 @@ export default function SupplierPurchaseOrderDetailPage() {
                         <Td align="right" mono>{formatPeso(bill.balance)}</Td>
                         <Td className="text-muted">{bill.due_date ?? '—'}</Td>
                         <Td align="right" mono>
-                          <Chip variant={chipVariantForStatus(bill.status)}>{bill.status}</Chip>
+                          <Chip variant={chipVariantForStatus(bill.status)}>{bill.status_label ?? bill.status}</Chip>
                         </Td>
                       </tr>
                     ))}

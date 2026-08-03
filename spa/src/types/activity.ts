@@ -16,6 +16,7 @@ export interface ActivityActor {
 export interface ActivityEvent {
   id: string;
   type: ActivityType | string;
+  type_label?: string;
   action: string;
   actor: ActivityActor | null;
   actor_type: 'user' | 'system';

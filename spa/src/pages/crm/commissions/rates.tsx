@@ -92,7 +92,7 @@ export default function CommissionRatesPage() {
           <fieldset className="mb-6">
             <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">New commission rate</legend>
             <div className="grid grid-cols-3 gap-3">
-              <Input label="Employee ID" {...register('employee_id')} error={errors.employee_id?.message} required placeholder="e.g. yR3kLm" />
+              <Input label="Employee ID" {...register('employee_id')} error={errors.employee_id?.message} required placeholder="Employee ID" />
               <Input label="Rate (decimal)" {...register('rate')} error={errors.rate?.message} required placeholder="0.05" className="font-mono" />
               <Input label="Effective from" type="date" {...register('effective_from')} error={errors.effective_from?.message} required />
             </div>

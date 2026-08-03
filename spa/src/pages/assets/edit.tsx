@@ -21,7 +21,7 @@ import type { ApiValidationError } from '@/types';
 const schema = z.object({
   name: z.string().min(1, 'Name is required').max(200),
   description: z.string().max(5000).optional().or(z.literal('')),
-  category: z.enum(['machine', 'mold', 'vehicle', 'equipment', 'furniture', 'other']),
+  category: z.string().min(1, 'Category is required'),
   department_id: z.coerce.number().int().optional(),
   acquisition_date: z.string().min(1, 'Acquisition date required'),
   acquisition_cost: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Enter amount like 100000.00'),
@@ -47,6 +47,10 @@ export default function EditAssetPage() {
     queryFn: () => departmentsApi.list({ per_page: 200 }),
     staleTime: 300_000,
   });
+  const { data: assetOptions } = useQuery({
+    queryKey: ['assets', 'options'],
+    queryFn: () => assetsApi.options(),
+  });
 
   const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -59,7 +63,7 @@ export default function EditAssetPage() {
           acquisition_date: data.acquisition_date.slice(0, 10),
           acquisition_cost: data.acquisition_cost,
           useful_life_years: data.useful_life_years,
-          salvage_value: data.salvage_value ?? '0',
+          salvage_value: data.salvage_value ?? '',
           location: data.location ?? '',
         }
       : undefined,
@@ -69,8 +73,9 @@ export default function EditAssetPage() {
     mutationFn: (formData: FormValues) =>
       assetsApi.update(id, {
         ...formData,
+        category: formData.category as import('@/types/assets').AssetCategory,
         description: formData.description || undefined,
-        salvage_value: formData.salvage_value || '0',
+        salvage_value: formData.salvage_value || undefined,
         location: formData.location || undefined,
         department_id: formData.department_id || null,
       }),
@@ -119,12 +124,7 @@ export default function EditAssetPage() {
           <Input label="Name" {...register('name')} error={errors.name?.message} required />
           <div className="grid grid-cols-2 gap-3 mt-3">
             <Select label="Category" {...register('category')} error={errors.category?.message} required>
-              <option value="machine">Machine</option>
-              <option value="mold">Mold</option>
-              <option value="vehicle">Vehicle</option>
-              <option value="equipment">Equipment</option>
-              <option value="furniture">Furniture</option>
-              <option value="other">Other</option>
+              {(assetOptions?.categories ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </Select>
             <Select
               label="Department"
@@ -143,7 +143,7 @@ export default function EditAssetPage() {
               label="Location"
               {...register('location')}
               error={errors.location?.message}
-              placeholder="e.g. Production floor"
+              placeholder="Asset location"
             />
           </div>
           <div className="mt-3">
@@ -162,7 +162,7 @@ export default function EditAssetPage() {
               required
             />
             <Input
-              label="Acquisition cost (₱)"
+              label="Acquisition cost"
               {...register('acquisition_cost')}
               error={errors.acquisition_cost?.message}
               className="font-mono"
@@ -179,7 +179,7 @@ export default function EditAssetPage() {
           </div>
           <div className="mt-3 max-w-xs">
             <Input
-              label="Salvage value (₱)"
+              label="Salvage value"
               {...register('salvage_value')}
               error={errors.salvage_value?.message}
               className="font-mono"

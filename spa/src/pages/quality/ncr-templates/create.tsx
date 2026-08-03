@@ -13,7 +13,7 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { Spinner } from '@/components/ui/Spinner';
+import { SkeletonForm } from '@/components/ui/Skeleton';
 import type { AxiosError } from 'axios';
 import type { CreateNcrTemplateData } from '@/types/quality';
 
@@ -34,11 +34,16 @@ export default function NcrTemplateFormPage() {
 
   const [form, setForm] = useState<FormValues>({
     name: '',
-    source: 'inspection_fail',
-    severity: 'minor',
+    source: '',
+    severity: '',
     product_id: '',
     defect_description: '',
     notes: '',
+  });
+
+  const { data: templateOptions } = useQuery({
+    queryKey: ['quality', 'ncr-templates', 'options'],
+    queryFn: () => ncrTemplatesApi.options(),
   });
 
   // Load existing template for edit mode
@@ -97,11 +102,7 @@ export default function NcrTemplateFormPage() {
   };
 
   if (isEdit && loadingExisting) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Spinner size="lg" />
-      </div>
-    );
+    return <SkeletonForm />;
   }
 
   const isPending = createMut.isPending;
@@ -123,7 +124,7 @@ export default function NcrTemplateFormPage() {
                 required
                 value={form.name}
                 onChange={(e) => set('name', e.target.value)}
-                placeholder="e.g. Surface scratch — Injection"
+                placeholder="Defect description"
               />
               <Select
                 label="Source"
@@ -131,8 +132,8 @@ export default function NcrTemplateFormPage() {
                 value={form.source}
                 onChange={(e) => set('source', e.target.value)}
               >
-                <option value="inspection_fail">Inspection fail</option>
-                <option value="customer_complaint">Customer complaint</option>
+                <option value="">— Select —</option>
+                {(templateOptions?.sources ?? []).map((source) => <option key={source.value} value={source.value}>{source.label}</option>)}
               </Select>
               <Select
                 label="Severity"
@@ -140,9 +141,8 @@ export default function NcrTemplateFormPage() {
                 value={form.severity}
                 onChange={(e) => set('severity', e.target.value)}
               >
-                <option value="minor">Minor</option>
-                <option value="major">Major</option>
-                <option value="critical">Critical</option>
+                <option value="">— Select —</option>
+                {(templateOptions?.severities ?? []).map((severity) => <option key={severity.value} value={severity.value}>{severity.label}</option>)}
               </Select>
             </div>
             <div className="mt-3">

@@ -1,7 +1,7 @@
 /** Sprint 8 — Task 71. Separations list. */
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { useNavigate} from 'react-router-dom';
 import { separationsApi, type SeparationListParams } from '@/api/separations';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -11,49 +11,51 @@ import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import type { Clearance, ClearanceStatus } from '@/types/separations';
+import { formatPeso } from '@/lib/formatNumber';
 
 const STATUS_CHIP: Record<ClearanceStatus, 'success' | 'warning' | 'info' | 'neutral'> = {
-  pending: 'warning', in_progress: 'info', completed: 'info', finalized: 'success', cancelled: 'neutral',
-};
+  pending: 'warning', in_progress: 'info', completed: 'info', finalized: 'success', cancelled: 'neutral' };
 
 export default function SeparationsListPage() {
+  const navigate = useNavigate();
   const [filters, setFilters] = useState<SeparationListParams>({ page: 1, per_page: 25 });
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['hr', 'separations', filters],
     queryFn: () => separationsApi.list(filters),
-    placeholderData: (prev) => prev,
-  });
+    placeholderData: (prev) => prev });
+  const { data: separationOptions } = useQuery({
+    queryKey: ['hr', 'clearances', 'options'],
+    queryFn: separationsApi.options,
+    staleTime: 5 * 60 * 1000 });
+  const labels = new Map([
+    ...(separationOptions?.statuses ?? []),
+    ...(separationOptions?.reasons ?? []),
+  ].map((option) => [option.value, option.label]));
 
   const columns: Column<Clearance>[] = [
     {
       key: 'clearance_no', header: 'Clearance',
-      cell: (r) => <Link to={`/hr/separations/${r.id}`} className="font-mono text-accent hover:underline">{r.clearance_no}</Link>,
-    },
+      cell: (r) => <span className="font-mono">{r.clearance_no}</span> },
     {
       key: 'employee', header: 'Employee',
       cell: (r) => r.employee
         ? <div><div className="text-sm">{r.employee.full_name}</div><div className="text-xs text-muted font-mono">{r.employee.employee_no}</div></div>
-        : <span className="text-muted">—</span>,
-    },
+        : <span className="text-muted">—</span> },
     {
       key: 'department', header: 'Department',
-      cell: (r) => r.employee?.department?.name ?? <span className="text-muted">—</span>,
-    },
+      cell: (r) => r.employee?.department?.name ?? <span className="text-muted">—</span> },
     {
       key: 'separation_date', header: 'Separation date', align: 'right',
-      cell: (r) => <NumCell>{r.separation_date ?? '—'}</NumCell>,
-    },
-    { key: 'reason', header: 'Reason', cell: (r) => r.separation_reason.replace('_', ' ') },
+      cell: (r) => <NumCell>{r.separation_date ?? '—'}</NumCell> },
+    { key: 'reason', header: 'Reason', cell: (r) => labels.get(r.separation_reason) ?? r.separation_reason },
     {
       key: 'progress', header: 'Progress', align: 'right',
-      cell: (r) => <NumCell>{r.cleared_count}/{r.items_total} ({r.progress_pct}%)</NumCell>,
-    },
+      cell: (r) => <NumCell>{r.cleared_count}/{r.items_total} ({r.progress_pct}%)</NumCell> },
     {
       key: 'final_pay', header: 'Final pay', align: 'right',
-      cell: (r) => r.final_pay_amount ? <NumCell>₱{r.final_pay_amount}</NumCell> : <span className="text-muted">—</span>,
-    },
-    { key: 'status', header: 'Status', cell: (r) => <Chip variant={STATUS_CHIP[r.status]}>{r.status.replace('_', ' ')}</Chip> },
+      cell: (r) => r.final_pay_amount ? <NumCell>{formatPeso(r.final_pay_amount)}</NumCell> : <span className="text-muted">—</span> },
+    { key: 'status', header: 'Status', cell: (r) => <Chip variant={STATUS_CHIP[r.status]}>{labels.get(r.status) ?? r.status}</Chip> },
   ];
 
   const filterConfig: FilterConfig[] = [
@@ -61,23 +63,14 @@ export default function SeparationsListPage() {
       key: 'status', label: 'Status', type: 'select',
       options: [
         { value: '', label: 'All' },
-        { value: 'pending', label: 'Pending' },
-        { value: 'in_progress', label: 'In progress' },
-        { value: 'completed', label: 'Completed' },
-        { value: 'finalized', label: 'Finalized' },
-        { value: 'cancelled', label: 'Cancelled' },
-      ],
-    },
+        ...(separationOptions?.statuses ?? []),
+      ] },
     {
       key: 'separation_reason', label: 'Reason', type: 'select',
       options: [
         { value: '', label: 'All' },
-        { value: 'resigned', label: 'Resigned' },
-        { value: 'terminated', label: 'Terminated' },
-        { value: 'retired', label: 'Retired' },
-        { value: 'end_of_contract', label: 'End of contract' },
-      ],
-    },
+        ...(separationOptions?.reasons ?? []),
+      ] },
   ];
 
   return (
@@ -99,7 +92,8 @@ export default function SeparationsListPage() {
       )}
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
-          <DataTable columns={columns} data={data.data} meta={data.meta}
+          <DataTable
+            onRowClick={(r) => navigate(`/hr/separations/${r.id}`)} columns={columns} data={data.data} meta={data.meta}
             onPageChange={(page) => setFilters((f) => ({ ...f, page }))} />
         </div>
       )}

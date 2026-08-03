@@ -30,18 +30,19 @@ interface HrDashboardData {
   panels: {
     by_department: Array<{ label: string; count: number }>;
     recent_hires: Array<{ id: string; employee_no: string; name: string; date_hired: string }>;
-    pending_leaves: Array<{ id: string; leave_request_no: string | null; status: string; days: string }>;
+    pending_leaves: Array<{ id: string; leave_request_no: string | null; status: string; status_label?: string; days: string }>;
     attendance_summary: { present: number; late: number; absent: number; on_leave: number };
     probation_alerts: Array<{
       id: string; employee_no: string; name: string; date_hired: string;
       probation_end: string; department: string;
     }>;
+    probation_horizon_days?: number;
     leave_calendar_week: Array<{
       id: string; employee_no: string; name: string;
       start_date: string; end_date: string; days: string;
     }>;
     hr_calendar_events: {
-      holidays: Array<{ name: string; date: string; type: string }>;
+      holidays: Array<{ name: string; date: string; type: string; type_label?: string }>;
       birthdays: Array<{ id: string; name: string; date: string }>;
       birthdays_count: number;
     };
@@ -49,7 +50,7 @@ interface HrDashboardData {
     headcount_forecast: ForecastPanelData;
     // REC-05 — present only for HR users with payroll.view.
     payroll_summary?: {
-      latest_period: { id: string; label: string; status: string; payroll_date: string | null } | null;
+      latest_period: { id: string; label: string; status: string; status_label?: string; payroll_date: string | null } | null;
       employees_on_run: number;
       net_pay_total: string;
       pending_salary_adjustments: number;
@@ -105,7 +106,7 @@ export default function HrDashboard() {
             {/* Row 3 — Department headcount + probation alerts */}
             <PanelRow>
               <DepartmentHeadcountPanel departments={panels.by_department} />
-              <ProbationAlertsPanel alerts={panels.probation_alerts} />
+              <ProbationAlertsPanel alerts={panels.probation_alerts} horizonDays={panels.probation_horizon_days ?? 0} />
             </PanelRow>
 
             {/* Row 4 — Leave calendar this week + calendar events */}
@@ -277,16 +278,18 @@ function DepartmentHeadcountPanel({
 
 function ProbationAlertsPanel({
   alerts,
+  horizonDays,
 }: {
   alerts: HrDashboardData['panels']['probation_alerts'];
+  horizonDays: number;
 }) {
   return (
     <Panel
-      title="Probation Alerts (next 30 days)"
+      title={`Probation Alerts (next ${horizonDays} days)`}
       actions={<Link className="text-xs text-link hover:underline" to="/hr/employees">Employees →</Link>}
     >
       {alerts.length === 0 ? (
-        <EmptyState size="compact" icon="check-circle" title="No probation reviews due" description="No probationary employees end probation in the next 30 days." />
+        <EmptyState size="compact" icon="check-circle" title="No probation reviews due" description={`No probationary employees end probation in the next ${horizonDays} days.`} />
       ) : (
         <div className="space-y-1.5 text-sm">
           {alerts.map((a) => (
@@ -369,7 +372,7 @@ function CalendarEventsPanel({
                   <span>{h.name}</span>
                   <span className="text-xs text-muted font-mono">
                     {h.date}
-                    <Chip variant="neutral" className="ml-1">{h.type}</Chip>
+                    <Chip variant="neutral" className="ml-1">{h.type_label ?? h.type}</Chip>
                   </span>
                 </div>
               ))}
@@ -412,7 +415,7 @@ function RecentHiresPanel({
   return (
     <Panel title="Recent Hires" actions={<Link className="text-xs text-link hover:underline" to="/hr/employees">All employees →</Link>}>
       {hires.length === 0 ? (
-        <EmptyState size="compact" icon="user-x" title="No recent hires" description="Nobody has joined in the last 30 days." />
+        <EmptyState size="compact" icon="user-x" title="No recent hires" description="No recent hires are available." />
       ) : (
         <div className="space-y-1.5 text-sm">
           {hires.map((h) => (
@@ -461,7 +464,7 @@ function PendingLeavesPanel({
                 {l.leave_request_no ?? `#${l.id}`}
               </span>
               <div className="flex items-center gap-2">
-                <Chip variant={statusVariant(l.status)}>{l.status}</Chip>
+                <Chip variant={statusVariant(l.status)}>{l.status_label ?? l.status}</Chip>
                 <span className="font-mono tabular-nums text-xs">{l.days}d</span>
               </div>
             </Link>
@@ -504,7 +507,7 @@ function PayrollSummaryPanel({
           {data.latest_period && (
             <div className="mt-1">
               <Chip variant={PAYROLL_STATUS_CHIP[data.latest_period.status] ?? 'info'}>
-                {data.latest_period.status}
+                {data.latest_period.status_label ?? data.latest_period.status}
               </Chip>
             </div>
           )}

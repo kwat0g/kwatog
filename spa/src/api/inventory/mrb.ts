@@ -3,6 +3,7 @@ import type { ApiSuccess, PaginatedResponse, ListParams } from '@/types';
 import type { MrbRecord, CreateMrbData, ReleaseMrbData } from '@/types/inventory';
 
 export const mrbApi = {
+  options: () => client.get<{ data: { dispositions: Array<{ value: string; label: string }>; statuses: Array<{ value: string; label: string }> } }>('/inventory/mrb/options').then((r) => r.data.data),
   list: (params?: ListParams & { status?: string; item_id?: string }) =>
     client.get<PaginatedResponse<MrbRecord>>('/inventory/mrb', { params }).then((r) => r.data),
   show: (id: string) =>

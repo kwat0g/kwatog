@@ -55,6 +55,12 @@ export default function EmployeesListPage() {
     queryFn: () => departmentsApi.tree(),
     enabled: canViewDepartments,
   });
+  const { data: employeeOptions } = useQuery({
+    queryKey: ['hr', 'employee-options'],
+    queryFn: employeesApi.options,
+    staleTime: 5 * 60 * 1000,
+  });
+  const statusLabel = new Map((employeeOptions?.statuses ?? []).map((status) => [status.value, status.label]));
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['hr', 'employees', filters],
@@ -84,7 +90,7 @@ export default function EmployeesListPage() {
     {
       key: 'pay_type',
       header: 'Pay type',
-      cell: (row) => row.pay_type === 'monthly' ? 'Monthly' : 'Daily',
+      cell: (row) => row.pay_type_label ?? row.pay_type,
     },
     {
       key: 'date_hired',
@@ -98,7 +104,7 @@ export default function EmployeesListPage() {
       header: 'Status',
       cell: (row) => (
         <Chip variant={chipVariantForStatus(row.status)}>
-          {row.status.replace('_', ' ')}
+          {statusLabel.get(row.status) ?? row.status.replace('_', ' ')}
         </Chip>
       ),
     },
@@ -117,12 +123,7 @@ export default function EmployeesListPage() {
       type: 'select',
       options: [
         { value: '', label: 'All statuses' },
-        { value: 'active', label: 'Active' },
-        { value: 'on_leave', label: 'On leave' },
-        { value: 'suspended', label: 'Suspended' },
-        { value: 'resigned', label: 'Resigned' },
-        { value: 'terminated', label: 'Terminated' },
-        { value: 'retired', label: 'Retired' },
+        ...(employeeOptions?.statuses ?? []),
       ],
     },
     {
@@ -131,10 +132,7 @@ export default function EmployeesListPage() {
       type: 'select',
       options: [
         { value: '', label: 'All types' },
-        { value: 'regular', label: 'Regular' },
-        { value: 'probationary', label: 'Probationary' },
-        { value: 'contractual', label: 'Contractual' },
-        { value: 'project_based', label: 'Project-based' },
+        ...(employeeOptions?.employment_types ?? []),
       ],
     },
     {
@@ -143,8 +141,7 @@ export default function EmployeesListPage() {
       type: 'select',
       options: [
         { value: '', label: 'All' },
-        { value: 'monthly', label: 'Monthly' },
-        { value: 'daily', label: 'Daily' },
+        ...(employeeOptions?.pay_types ?? []),
       ],
     },
   ];
@@ -202,7 +199,6 @@ export default function EmployeesListPage() {
           onSort={(sort, direction) => setFilters((f) => ({ ...f, sort, direction, page: 1 }))}
           currentSort={filters.sort}
           currentDirection={filters.direction}
-          onRowClick={(row) => navigate(`/hr/employees/${row.id}`)}
           selectable={can('hr.employees.provision_account')}
           bulkActions={
             can('hr.employees.provision_account')

@@ -11,17 +11,16 @@
  */
 
 import { useLayoutEffect, useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import gsap from 'gsap';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Briefcase } from 'lucide-react';
 import { HeroCanvas } from '../components/HeroCanvas';
 import { PartBlueprint } from '../components/PartBlueprint';
 import { ScrambleText } from '../components/ScrambleText';
-import { COMPANY } from '../data';
+import { landingApi } from '@/api/landing';
 import { reduceMotion } from '../motion';
 import { useMagnetic } from '../hooks/useMagnetic';
-
-const TRUST = ['IATF 16949 Certified', '5 OEM partners', '≤10 PPM defect target'];
 
 export function HeroSection() {
   const rootRef = useRef<HTMLElement>(null);
@@ -30,6 +29,32 @@ export function HeroSection() {
 
   const quoteRef = useMagnetic<HTMLAnchorElement>();
   const exploreRef = useMagnetic<HTMLAnchorElement>();
+  const { data: contact } = useQuery({ queryKey: ['landing', 'contact'], queryFn: landingApi.contact, staleTime: 300_000 });
+  const { data: content } = useQuery({ queryKey: ['landing', 'content'], queryFn: landingApi.content, staleTime: 300_000 });
+
+  const legalName = contact?.legal_name || 'Philippine Ogami Corporation';
+  const address = contact?.address || 'FCIE Dasmariñas, Cavite, Philippines';
+  const trustPoints = content?.trust_points?.length ? content.trust_points : ['IATF 16949 Certified', 'Zero Defect Quality', 'Rapid Precision Tooling'];
+  const partners = content?.oem_partners?.length ? content.oem_partners : ['Toyota', 'Nissan', 'Honda', 'Yamaha'];
+  const qualityStandard = content?.quality_policy?.standard ?? content?.quality_methods?.[0] ?? 'IATF 16949';
+
+  const defaultDesc = '{{company}} delivers IATF 16949 certified plastic injection molding, precision mold making, and automated assembly for Tier-1 automotive partners including {{partners}}.';
+  const heroDescription = (content?.section_copy?.hero_description || defaultDesc)
+    .replaceAll('{{company}}', legalName)
+    .replaceAll('{{partners}}', partners.join(', '))
+    .replaceAll('{{standard}}', qualityStandard)
+    .replaceAll('{{address}}', address);
+
+  const heroPart = content?.part_specs?.find((part) => part.id === 'filler-cap') ?? { name: 'Wiper Filler Cap', material: 'POM Grade A', tolerance: '±0.02mm' };
+  const heroCopy = content?.hero_copy ?? { line_one: 'Precision Injection', line_two: 'Molding & Tooling', line_three: 'For OEM Leaders' };
+  const heroCta = content?.section_copy?.hero_cta ?? {
+    quote_label: 'Request Quote',
+    quote_href: '#contact',
+    explore_label: 'Explore Parts',
+    explore_href: '#parts-3d',
+    careers_label: 'Careers',
+    careers_href: '/careers',
+  };
 
   // Intro timeline
   useLayoutEffect(() => {
@@ -109,18 +134,18 @@ export function HeroSection() {
             className="flex items-center gap-2.5 font-mono text-[11px] uppercase tracking-[0.22em] text-landing-muted"
           >
             <span className="h-1.5 w-1.5 rounded-full bg-landing-accent" />
-            <ScrambleText text={COMPANY.locationLine} trigger="mount" />
+            <ScrambleText text={address} trigger="mount" />
           </p>
 
           <h1 className="mt-6 font-display text-[clamp(2.5rem,6vw,4.75rem)] font-medium leading-[0.98] tracking-[-0.03em] text-landing-text">
             <span data-hero-line className="block overflow-hidden">
-              <span className="block">Precision the</span>
+              <span className="block">{heroCopy?.line_one ?? '—'}</span>
             </span>
             <span data-hero-line className="block overflow-hidden">
-              <span className="block">world trusts,</span>
+              <span className="block">{heroCopy?.line_two ?? '—'}</span>
             </span>
             <span data-hero-line className="block overflow-hidden">
-              <span className="block">made in the Philippines.</span>
+              <span className="block">{heroCopy?.line_three ?? '—'}</span>
             </span>
           </h1>
 
@@ -128,33 +153,31 @@ export function HeroSection() {
             data-hero="sub"
             className="mt-7 max-w-xl font-sans text-[15px] leading-relaxed text-landing-text-secondary sm:text-lg"
           >
-            {COMPANY.legalName} delivers automotive-grade injection-molded parts for
-            Toyota, Nissan, Honda, Suzuki, and Yamaha — engineered to IATF 16949 in
-            Dasmariñas, Cavite.
+            {heroDescription}
           </p>
 
           <div data-hero="cta" className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
             <a
               ref={quoteRef}
-              href="#contact"
+              href={heroCta?.quote_href ?? '#'}
               className="group inline-flex items-center justify-center gap-2 rounded-full bg-landing-accent px-7 py-4 font-sans text-sm font-medium text-landing-accent-fg transition-colors duration-300 hover:bg-landing-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas"
             >
-              Request a quote
+              {heroCta?.quote_label ?? '—'}
               <ArrowRight size={16} className="transition-transform duration-300 group-hover:translate-x-1" />
             </a>
             <a
               ref={exploreRef}
-              href="#capabilities"
+              href={heroCta?.explore_href ?? '#'}
               className="inline-flex items-center justify-center gap-2 rounded-full border border-landing-border-strong px-7 py-4 font-sans text-sm font-medium text-landing-text transition-colors duration-300 hover:border-landing-text hover:bg-landing-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas"
             >
-              Explore capabilities
+              {heroCta?.explore_label ?? '—'}
             </a>
             <Link
-              to="/careers"
+              to={heroCta?.careers_href ?? '/'}
               className="inline-flex items-center justify-center gap-2 rounded-full border border-landing-border-strong px-7 py-4 font-sans text-sm font-medium text-landing-text transition-colors duration-300 hover:border-landing-text hover:bg-landing-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas"
             >
               <Briefcase size={15} />
-              Careers
+              {heroCta?.careers_label ?? '—'}
             </Link>
           </div>
 
@@ -162,7 +185,7 @@ export function HeroSection() {
             data-hero="trust"
             className="mt-12 flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-landing-border pt-6"
           >
-            {TRUST.map((item) => (
+            {trustPoints.map((item) => (
               <li
                 key={item}
                 className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.14em] text-landing-muted"
@@ -221,7 +244,7 @@ export function HeroSection() {
               data-hero-dim
               className="absolute right-5 top-5 font-mono text-[10px] uppercase tracking-[0.16em] text-landing-accent"
             >
-              Ø 42.0 ±0.05
+              {heroPart?.tolerance ?? '—'}
             </span>
 
             {/* title block */}
@@ -231,15 +254,15 @@ export function HeroSection() {
             >
               <span className="border-r border-landing-border px-3 py-2">
                 <span className="block text-landing-subtle-text">Part</span>
-                <span className="text-landing-text">Oil filler cap</span>
+                <span className="text-landing-text">{heroPart?.name ?? '—'}</span>
               </span>
               <span className="border-r border-landing-border px-3 py-2">
                 <span className="block text-landing-subtle-text">Material</span>
-                <span className="text-landing-text">PA66 resin</span>
+                <span className="text-landing-text">{heroPart?.material ?? '—'}</span>
               </span>
               <span className="px-3 py-2">
                 <span className="block text-landing-subtle-text">Std</span>
-                <span className="text-landing-text">IATF 16949</span>
+                <span className="text-landing-text">{qualityStandard}</span>
               </span>
             </figcaption>
           </figure>

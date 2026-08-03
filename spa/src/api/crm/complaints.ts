@@ -20,6 +20,7 @@ export interface EightDPatch {
 }
 
 export const complaintsApi = {
+  options: () => client.get<{ data: { severities: Array<{ value: string; label: string }>; statuses: Array<{ value: string; label: string }> } }>('/crm/complaints/options').then((r) => r.data.data),
   list: (params?: ComplaintListParams) =>
     client.get<PaginatedResponse<CustomerComplaint>>('/crm/complaints', { params }).then((r) => r.data),
   show: (id: string) =>

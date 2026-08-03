@@ -8,6 +8,7 @@ export interface CommissionEarning {
   commission_rate: string;
   commission_amount: string;
   status: CommissionEarningStatus;
+  status_label?: string;
   approved_by: string | null;
   approved_at: string | null;
   paid_at: string | null;

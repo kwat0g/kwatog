@@ -10,6 +10,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import type { PriceAgreement } from '@/types/crm';
+import { formatPeso } from '@/lib/formatNumber';
 
 /**
  * Sprint 6 Task 47 — Price agreements list (read-only for now).
@@ -36,7 +37,7 @@ export default function PriceAgreementsListPage() {
     { key: 'customer', header: 'Customer', cell: (r) => r.customer?.name ?? '—' },
     {
       key: 'price', header: 'Price', align: 'right',
-      cell: (r) => <NumCell>₱ {Number(r.price).toFixed(2)}</NumCell>,
+      cell: (r) => <NumCell>{formatPeso(r.price)}</NumCell>,
     },
     {
       key: 'effective_from', header: 'From', align: 'right',

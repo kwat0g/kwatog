@@ -2,6 +2,9 @@ import { client } from '../client';
 import type { GanttSnapshot, SchedulerRunResult } from '@/types/mrp';
 
 export const schedulerApi = {
+  options: () =>
+    client.get<{ data: { default_horizon_days: number } }>('/mrp/scheduler/options')
+      .then((r) => r.data.data),
   run: (workOrderIds?: string[]) =>
     client.post<{ data: SchedulerRunResult }>('/mrp/scheduler/run', { work_order_ids: workOrderIds })
       .then((r) => r.data.data),

@@ -74,6 +74,7 @@ export interface WorkOrder {
   actual_end: string | null;
   status: WorkOrderStatus;
   status_label: string;
+  next_statuses?: Array<{ value: string; label: string }>;
   pause_reason: string | null;
   priority: number;
   creator?: { id: string; name: string } | null;
@@ -83,7 +84,9 @@ export interface WorkOrder {
     id: string;
     inspection_number: string;
     stage: string;
+    stage_label?: string;
     status: string;
+    status_label?: string;
     completed_at: string | null;
   }>;
   created_at: string;
@@ -143,6 +146,7 @@ export interface MachineOeeRow extends OeeResult {
   name: string;
   tonnage: number | null;
   status: string;
+  status_label?: string;
 }
 
 /**
@@ -150,14 +154,18 @@ export interface MachineOeeRow extends OeeResult {
  * Matches `OeeService::report()` output 1:1.
  */
 export interface OeeReport {
+  benchmark_pct?: number;
+  display_policy?: { world_class_ratio: number; on_track_ratio: number };
   range: { from: string; to: string };
   overall: { availability: number; performance: number; quality: number; oee: number };
   machines: MachineOeeRow[];
-  trend: Array<{ date: string; oee: number }>;
+  trend: Array<{ date: string; oee: number | null }>;
   downtime_breakdown: Array<{ category: string; minutes: number }>;
 }
 
 export interface ProductionDashboardPayload {
+  display_policy?: { world_class_ratio: number; on_track_ratio: number };
+  defect_history_days: number;
   kpis: {
     today_output_total: number;
     today_output_good: number;
@@ -167,11 +175,11 @@ export interface ProductionDashboardPayload {
     machines_running: number;
     machines_idle: number;
     machines_breakdown: number;
-    avg_oee_today: number;
+    avg_oee_today: number | null;
   };
   chain_stage_breakdown: Array<{ label: string; count: number; percent: number; color: string }>;
   machine_utilization: MachineOeeRow[];
-  alerts: Array<{ type: string; severity: string; message: string; link: string }>;
+  alerts: Array<{ type: string; type_label?: string; severity: string; message: string; link: string }>;
   defect_pareto: Array<{ defect_code: string; defect_name: string; count: number; percent: number }>;
   generated_at: string;
 }

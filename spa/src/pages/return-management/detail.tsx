@@ -33,32 +33,6 @@ const STATUS_VARIANT: Record<string, ChipVariant> = {
   cancelled: 'neutral',
 };
 
-const CONDITION_LABELS: Record<string, string> = {
-  new: 'New',
-  used: 'Used',
-  damaged: 'Damaged',
-  defective: 'Defective',
-  obsolete: 'Obsolete',
-};
-
-const REASON_LABELS: Record<string, string> = {
-  defective: 'Defective product',
-  damaged: 'Damaged in transit',
-  wrong_item: 'Wrong item shipped',
-  excess: 'Excess quantity',
-  customer_change: 'Customer changed mind',
-  quality_issue: 'Quality issue',
-  other: 'Other',
-};
-
-const RESOLUTION_LABELS: Record<string, string> = {
-  replace: 'Replace',
-  refund: 'Refund',
-  credit_note: 'Credit Note',
-  scrap: 'Scrap',
-  return_to_vendor: 'Return to Vendor',
-};
-
 /** Design-token dot class for each timeline event. */
 const TIMELINE_DOT: Record<string, string> = {
   created: 'bg-strong',
@@ -88,6 +62,15 @@ export default function ReturnRequestDetailPage() {
     queryFn: () => returnManagementApi.get(id!),
     enabled: !!id,
   });
+  const { data: options } = useQuery({
+    queryKey: ['return-management', 'options'],
+    queryFn: returnManagementApi.options,
+    staleTime: 5 * 60 * 1000,
+  });
+  const reasonLabel = new Map((options?.reasons ?? []).map((option) => [option.value, option.label]));
+  const resolutionLabel = new Map((options?.resolutions ?? []).map((option) => [option.value, option.label]));
+  const conditionLabel = new Map((options?.conditions ?? []).map((option) => [option.value, option.label]));
+  const dispositionLabel = new Map((options?.dispositions ?? []).map((option) => [option.value, option.label]));
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['return-request', id] });
 
@@ -299,14 +282,14 @@ export default function ReturnRequestDetailPage() {
             </div>
             <div>
               <dt className="text-2xs uppercase tracking-wider text-muted">Reason</dt>
-              <dd>{REASON_LABELS[rma.reason_code ?? ''] || rma.reason_code || '—'}</dd>
+              <dd>{reasonLabel.get(rma.reason_code ?? '') || rma.reason_code || '—'}</dd>
               {rma.reason_description && (
                 <dd className="text-muted text-xs mt-0.5">{rma.reason_description}</dd>
               )}
             </div>
             <div>
               <dt className="text-2xs uppercase tracking-wider text-muted">Resolution</dt>
-              <dd>{RESOLUTION_LABELS[rma.resolution ?? ''] || rma.resolution || '—'}</dd>
+              <dd>{resolutionLabel.get(rma.resolution ?? '') || rma.resolution || '—'}</dd>
             </div>
           </dl>
 
@@ -378,11 +361,11 @@ export default function ReturnRequestDetailPage() {
                     <Td align="right" mono>{formatInt(item.quantity)}</Td>
                     <Td align="right" mono>{formatInt(item.returned_quantity)}</Td>
                     <Td align="right" mono>{formatPeso(item.unit_price)}</Td>
-                    <Td>{CONDITION_LABELS[item.condition ?? ''] || item.condition || '—'}</Td>
+                    <Td>{conditionLabel.get(item.condition ?? '') || item.condition || '—'}</Td>
                     <Td>{item.reason || '—'}</Td>
                     <Td>
                       {item.disposition
-                        ? <Chip variant={item.disposition === 'restock' ? 'success' : item.disposition === 'scrap' ? 'danger' : 'warning'}>{item.disposition.replace(/_/g, ' ')}</Chip>
+                        ? <Chip variant={item.disposition === 'restock' ? 'success' : item.disposition === 'scrap' ? 'danger' : 'warning'}>{item.disposition_label ?? dispositionLabel.get(item.disposition) ?? item.disposition}</Chip>
                         : '—'}
                     </Td>
                   </tr>
@@ -432,7 +415,7 @@ export default function ReturnRequestDetailPage() {
           <p className="text-sm text-muted">Select the warehouse location for stock movement:</p>
           <Input
             label="Location ID (optional)"
-            placeholder="e.g. WH-A-01"
+            placeholder="Warehouse location"
             value={locationId}
             onChange={(e) => setLocationId(e.target.value)}
           />

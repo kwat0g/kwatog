@@ -15,5 +15,5 @@ export { buildLeaveChain } from './leave';
 export { buildLoanChain } from './loan';
 export { buildNcrChain } from './ncr';
 export { buildGrnChain } from './grn';
-export { buildDeliveryChain, buildDeliveryO2cChain } from './delivery';
+export { buildDeliveryChain } from './delivery';
 export { buildPurchaseOrderChain } from './purchase-order';

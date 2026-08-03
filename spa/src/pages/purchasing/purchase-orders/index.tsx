@@ -12,7 +12,6 @@ import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
-import { PO_STATUSES } from '@/lib/constants/statuses';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import type { PurchaseOrder, PurchaseOrderStatus } from '@/types/purchasing';
@@ -32,6 +31,12 @@ export default function PurchaseOrdersListPage() {
     queryFn: ({ signal }) => purchaseOrdersApi.list(filters, signal),
     placeholderData: (prev) => prev,
   });
+  const { data: orderOptions } = useQuery({
+    queryKey: ['purchasing', 'purchase-orders', 'options'],
+    queryFn: purchaseOrdersApi.options,
+    staleTime: 5 * 60 * 1000,
+  });
+  const statusLabels = new Map((orderOptions?.statuses ?? []).map((option) => [option.value, option.label]));
 
   const columns: Column<PurchaseOrder>[] = [
     { key: 'po', header: 'PO #', cell: (r) => (
@@ -52,9 +57,9 @@ export default function PurchaseOrdersListPage() {
     { key: 'total', header: 'Total', align: 'right', cell: (r) => <NumCell className="font-medium">{formatPeso(r.total_amount)}</NumCell> },
     { key: 'status', header: 'Status', cell: (r) => (
       <span className="flex items-center gap-1.5">
-        <Chip variant={variant[r.status]}>{r.status.replace(/_/g, ' ')}</Chip>
+        <Chip variant={variant[r.status]}>{statusLabels.get(r.status) ?? r.status.replace(/_/g, ' ')}</Chip>
         {r.has_overdue_approval && (
-          <span title="Approval pending more than 24 hours"><Chip variant="danger">overdue</Chip></span>
+          <span title={`Approval pending beyond ${orderOptions?.approval_sla_hours ?? 'configured'} hours`}><Chip variant="danger">overdue</Chip></span>
         )}
       </span>
     ) },
@@ -64,7 +69,7 @@ export default function PurchaseOrdersListPage() {
   const filterConfig: FilterConfig[] = [
     { key: 'status', label: 'Status', type: 'select', options: [
       { value: '', label: 'All' },
-      ...PO_STATUSES,
+      ...(orderOptions?.statuses ?? []),
     ]},
     { key: 'requires_vp_approval', label: 'VP threshold', type: 'select', options: [
       { value: '', label: 'All' }, { value: 'true', label: 'Yes' }, { value: 'false', label: 'No' },

@@ -9,12 +9,16 @@
 import { useLayoutEffect, useRef } from 'react';
 import gsap from 'gsap';
 import { ArrowRight } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { SectionHeading } from '../components/SectionHeading';
-import { PROCESS_STEPS } from '../data';
+import { PROCESS_ICONS } from '../data';
+import { landingApi } from '@/api/landing';
 import { registerScrollTrigger, reduceMotion } from '../motion';
 import { cn } from '@/lib/cn';
 
 export function ProcessSection() {
+  const { data: content } = useQuery({ queryKey: ['landing', 'content'], queryFn: landingApi.content, staleTime: 300_000 });
+  const processSteps = (content?.process_steps ?? []).map((step) => ({ ...step, icon: PROCESS_ICONS[step.icon] ?? PROCESS_ICONS.layers }));
   const pinRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
@@ -37,7 +41,7 @@ export function ProcessSection() {
       const readout = readoutRef.current;
       if (!inner || !container || !pin) return;
 
-      const total = PROCESS_STEPS.length;
+      const total = processSteps.length;
       const pad = (n: number) => String(n + 1).padStart(2, '0');
 
       // Seed initial state
@@ -95,7 +99,7 @@ export function ProcessSection() {
     });
 
     return () => mm.revert();
-  }, [horizontal]);
+  }, [horizontal, processSteps.length]);
 
   return (
     <section id="process" className="relative bg-landing-surface">
@@ -105,14 +109,9 @@ export function ProcessSection() {
       >
         <div className="px-5 sm:px-5 pt-20 sm:pt-28 lg:pt-0">
           <SectionHeading
-            eyebrow="The Ogami process"
-            title={
-              <>
-                Six controlled steps from{' '}
-                <span className="text-landing-accent">resin to certified part</span>.
-              </>
-            }
-            intro="Quality is not a final gate — it is built into every stage. Here is exactly how a part is made, checked, and released to you."
+            eyebrow={content?.section_copy?.process_eyebrow || 'Manufacturing Journey'}
+            title={content?.section_copy?.process_title || 'From Raw Resin to Certified Shipment'}
+            intro={content?.section_copy?.process_intro || 'Six automated, traceable stages ensuring zero-defect quality and full lot lineage for every component.'}
           />
 
           {/* Progress rail + step readout + scroll hint (desktop) */}
@@ -150,7 +149,7 @@ export function ProcessSection() {
                 'lg:flex-row lg:items-stretch lg:gap-7 lg:pb-0 lg:pr-[12vw]',
             )}
           >
-            {PROCESS_STEPS.map((step) => {
+            {processSteps.map((step) => {
               const Icon = step.icon;
               return (
                 <article

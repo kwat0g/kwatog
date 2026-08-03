@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Download } from 'lucide-react';
 import { statementsApi } from '@/api/accounting/statements';
@@ -12,6 +13,7 @@ import { formatPeso } from '@/lib/formatNumber';
 import { Td, Th, tableCls, theadTrCls, totalsTrCls, trCls } from '@/components/ui/table-cells';
 
 export default function ApAgingPage() {
+  const navigate = useNavigate();
   const [asOf, setAsOf] = useState(new Date().toISOString().slice(0, 10));
 
   const { data, isLoading, isError, refetch } = useQuery({

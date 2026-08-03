@@ -1,5 +1,5 @@
 import { FormEvent, useRef, useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { ScanBarcode, Search } from 'lucide-react';
 import { scannerApi } from '@/api/inventory/scanner';
@@ -17,6 +17,11 @@ export default function WarehouseScannerPage() {
   const [barcode, setBarcode] = useState('');
   const [workflow, setWorkflow] = useState('lookup');
   const [contextId, setContextId] = useState('');
+  const { data: scannerOptions } = useQuery({
+    queryKey: ['inventory', 'scanner', 'options'],
+    queryFn: scannerApi.options,
+    staleTime: 300_000,
+  });
   const scan = useMutation({ mutationFn: () => scannerApi.resolve(barcode, contextId ? { [workflow]: contextId } : {}) });
 
   const submit = (event: FormEvent) => {
@@ -30,7 +35,9 @@ export default function WarehouseScannerPage() {
       <Panel title="Scan context">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <Select label="Workflow" value={workflow} onChange={(event) => { setWorkflow(event.target.value); setContextId(''); }}>
-            <option value="lookup">General lookup</option><option value="grn_id">Receiving / GRN</option><option value="material_issue_id">Picking / issuance</option><option value="stock_count_session_id">Stock count</option><option value="wo_id">Work order issue</option>
+            {(scannerOptions?.contexts ?? []).map((context) => (
+              <option key={context.value} value={context.value}>{context.label}</option>
+            ))}
           </Select>
           {workflow !== 'lookup' && <Input label="Record ID" value={contextId} onChange={(event) => setContextId(event.target.value)} placeholder="Scan or enter the active record ID" />}
         </div>
@@ -41,7 +48,7 @@ export default function WarehouseScannerPage() {
       </form>
       {scan.isError && <EmptyState icon="alert-circle" title="Barcode lookup failed" />}
       {scan.data && <Panel title="Scan result">
-        {scan.data.type === 'unknown' ? <EmptyState icon="search" title="Unrecognized barcode" description="Check the printed code and scan again." /> : <div className="space-y-3"><div className="flex items-center gap-2"><Chip variant="info">{scan.data.type.replaceAll('_', ' ')}</Chip><span className="text-sm font-mono">{String(scan.data.entity?.code ?? scan.data.entity?.grn_number ?? scan.data.entity?.po_number ?? scan.data.entity?.wo_number ?? '')}</span></div><dl className="grid grid-cols-2 gap-2 text-xs">{Object.entries(scan.data.entity ?? {}).filter(([key]) => key !== 'id').map(([key, value]) => <div key={key}><dt className="text-muted">{key.replaceAll('_', ' ')}</dt><dd>{String(value ?? '—')}</dd></div>)}</dl><div className="flex flex-wrap gap-2">{scan.data.suggested_actions.map((action) => <Button key={action.action} variant="secondary" disabled={!action.href} onClick={() => action.href && navigate(action.href)}>{action.label}</Button>)}</div></div>}
+        {scan.data.type === 'unknown' ? <EmptyState icon="search" title="Unrecognized barcode" description="Check the printed code and scan again." /> : <div className="space-y-3"><div className="flex items-center gap-2"><Chip variant="info">{scan.data.type_label ?? scan.data.type.replaceAll('_', ' ')}</Chip><span className="text-sm font-mono">{String(scan.data.entity?.code ?? scan.data.entity?.grn_number ?? scan.data.entity?.po_number ?? scan.data.entity?.wo_number ?? '')}</span></div><dl className="grid grid-cols-2 gap-2 text-xs">{Object.entries(scan.data.entity ?? {}).filter(([key]) => key !== 'id').map(([key, value]) => <div key={key}><dt className="text-muted">{key.replaceAll('_', ' ')}</dt><dd>{String(value ?? '—')}</dd></div>)}</dl><div className="flex flex-wrap gap-2">{scan.data.suggested_actions.map((action) => <Button key={action.action} variant="secondary" disabled={!action.href} onClick={() => action.href && navigate(action.href)}>{action.label}</Button>)}</div></div>}
       </Panel>}
     </div>
   </div>;

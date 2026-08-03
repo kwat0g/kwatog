@@ -138,7 +138,7 @@ export default function TransferOrdersPage() {
                     {t.from_location?.full_code ?? '?'} → {t.to_location?.full_code ?? '?'}
                   </div>
                   <div className="flex items-center gap-1 mt-0.5">
-                    <Chip variant={statusVariant[t.status] || 'neutral'}>{t.status}</Chip>
+                    <Chip variant={statusVariant[t.status] || 'neutral'}>{t.status_label ?? t.status}</Chip>
                     <span className="text-2xs text-muted">{formatDate(t.created_at)}</span>
                   </div>
                 </button>
@@ -149,7 +149,7 @@ export default function TransferOrdersPage() {
             <div className="col-span-9">
               {activeTransfer ? (
                 <Panel
-                  title={`${activeTransfer.transfer_number} — ${activeTransfer.item?.code ?? 'Unknown'}`}
+                  title={`${activeTransfer.transfer_number} — ${activeTransfer.item?.code ?? '—'}`}
                   meta={`${activeTransfer.item?.name ?? ''}`}
                   actions={
                     activeTransfer.status === 'pending' && canManage ? (
@@ -178,7 +178,7 @@ export default function TransferOrdersPage() {
                     <div className="flex gap-4">
                       <span className="text-muted">Item: <span className="font-medium text-primary">{activeTransfer.item?.code} — {activeTransfer.item?.name}</span></span>
                       <span className="text-muted">Quantity: <span className="font-mono font-medium">{Number(activeTransfer.quantity).toFixed(3)}</span></span>
-                      <span className="text-muted">Status: <Chip variant={statusVariant[activeTransfer.status] || 'neutral'}>{activeTransfer.status}</Chip></span>
+                      <span className="text-muted">Status: <Chip variant={statusVariant[activeTransfer.status] || 'neutral'}>{activeTransfer.status_label ?? activeTransfer.status}</Chip></span>
                     </div>
                     {activeTransfer.reason && (
                       <div className="text-muted">Reason: {activeTransfer.reason}</div>

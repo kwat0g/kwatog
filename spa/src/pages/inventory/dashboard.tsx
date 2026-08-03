@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { useNavigate} from 'react-router-dom';
 import { inventoryDashboardApi } from '@/api/inventory/dashboard';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -20,11 +20,11 @@ const movementChip = (t: string): 'success' | 'info' | 'warning' | 'danger' | 'n
 };
 
 export default function InventoryDashboardPage() {
+  const navigate = useNavigate();
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['inventory', 'dashboard'],
     queryFn: () => inventoryDashboardApi.summary(),
-    refetchInterval: 30_000,
-  });
+    refetchInterval: 30_000 });
 
   return (
     <div>
@@ -81,7 +81,7 @@ export default function InventoryDashboardPage() {
                 <ul className="text-xs divide-y divide-subtle">
                   {data.recent_movements.slice(0, 10).map((m) => (
                     <li key={m.id} className="py-1.5 flex items-center gap-2">
-                      <Chip variant={movementChip(m.movement_type)}>{m.movement_type.replace(/_/g, ' ')}</Chip>
+                      <Chip variant={movementChip(m.movement_type)}>{m.movement_type_label ?? m.movement_type.replace(/_/g, ' ')}</Chip>
                       <span className="font-mono">{m.item?.code}</span>
                       <span className="text-muted truncate">{m.item?.name}</span>
                       <span className="ml-auto font-mono tabular-nums">{Number(m.quantity).toFixed(3)}</span>
@@ -90,7 +90,7 @@ export default function InventoryDashboardPage() {
                 </ul>
               </Panel>
             </div>
-            <Panel title="Top consumed materials (30 days)">
+            <Panel title={`Top consumed materials (${data.consumption_history_days} days)`}>
               <table className={tableCls}>
                 <thead>
                   <tr className={theadTrCls}>
@@ -101,11 +101,11 @@ export default function InventoryDashboardPage() {
                 </thead>
                 <tbody>
                   {data.top_consumed_materials.length === 0 && (
-                    <tr><Td className="text-muted" colSpan={3}>No issuance in last 30 days.</Td></tr>
+                    <tr><Td className="text-muted" colSpan={3}>No issuance in the selected history window.</Td></tr>
                   )}
                   {data.top_consumed_materials.map((m) => (
                     <tr key={m.id} className={trCls}>
-                      <Td><Link to={`/inventory/items/${m.id}`} className="font-mono text-accent">{m.code}</Link> {m.name}</Td>
+                      <Td>{m.code} {m.name}</Td>
                       <Td align="right" mono>{Number(m.qty).toFixed(3)} {m.unit_of_measure}</Td>
                       <Td align="right" mono>{formatPeso(m.total_value)}</Td>
                     </tr>

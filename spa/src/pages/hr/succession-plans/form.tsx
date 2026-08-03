@@ -21,8 +21,8 @@ const schema = z.object({
   position_id: z.string().min(1, 'Position is required'),
   incumbent_id: z.string().optional().or(z.literal('')),
   successor_id: z.string().min(1, 'Successor is required'),
-  readiness: z.enum(['ready_now', 'ready_1_year', 'ready_2_years', 'development_needed']),
-  priority: z.enum(['critical', 'high', 'medium', 'low']),
+  readiness: z.string().min(1, 'Readiness is required'),
+  priority: z.string().min(1, 'Priority is required'),
   development_notes: z.string().max(5000).optional().or(z.literal('')),
   target_date: z.string().optional().or(z.literal('')),
 });
@@ -33,6 +33,10 @@ export default function SuccessionPlanFormPage() {
   const isEdit = !!id;
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const { data: planOptions } = useQuery({
+    queryKey: ['succession-plans', 'options'],
+    queryFn: () => successionPlansApi.options(),
+  });
 
   /* ---------- load existing plan for edit ---------- */
   const { data: existing, isLoading: loadingExisting, isError: loadError, refetch } = useQuery({
@@ -45,8 +49,8 @@ export default function SuccessionPlanFormPage() {
   const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      readiness: 'development_needed',
-      priority: 'medium',
+      readiness: '',
+      priority: '',
     },
     values: isEdit && existing
       ? {
@@ -74,8 +78,8 @@ export default function SuccessionPlanFormPage() {
         target_date: formData.target_date || undefined,
       };
       return isEdit
-        ? successionPlansApi.update(id!, payload)
-        : successionPlansApi.create(payload as Required<typeof payload> & { position_id: string; successor_id: string; readiness: FormValues['readiness']; priority: FormValues['priority'] });
+        ? successionPlansApi.update(id!, payload as Parameters<typeof successionPlansApi.update>[1])
+        : successionPlansApi.create(payload as Parameters<typeof successionPlansApi.create>[0]);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['succession-plans'] });
@@ -149,16 +153,12 @@ export default function SuccessionPlanFormPage() {
           <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">Assessment</legend>
           <div className="grid grid-cols-2 gap-3">
             <Select label="Readiness" {...register('readiness')} error={errors.readiness?.message} required>
-              <option value="ready_now">Ready now</option>
-              <option value="ready_1_year">Ready in 1 year</option>
-              <option value="ready_2_years">Ready in 2 years</option>
-              <option value="development_needed">Development needed</option>
+              <option value="">— Select —</option>
+              {(planOptions?.readiness ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </Select>
             <Select label="Priority" {...register('priority')} error={errors.priority?.message} required>
-              <option value="critical">Critical</option>
-              <option value="high">High</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low</option>
+              <option value="">— Select —</option>
+              {(planOptions?.priorities ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </Select>
           </div>
           <div className="mt-3">

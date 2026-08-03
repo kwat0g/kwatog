@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/Input';
 import { Chip } from '@/components/ui/Chip';
 import { Panel } from '@/components/ui/Panel';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { Spinner } from '@/components/ui/Spinner';
+import { SkeletonTable } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 
@@ -82,11 +82,7 @@ export default function PermissionSearchPage() {
           />
         </div>
 
-        {isLoading && (
-          <div className="flex items-center justify-center py-10">
-            <Spinner />
-          </div>
-        )}
+        {isLoading && <SkeletonTable columns={4} rows={6} />}
 
         {isError && (
           <EmptyState icon="alert-circle" title="Failed to load permissions" action={<Button variant="secondary" onClick={refetchAll}>Retry</Button>} />

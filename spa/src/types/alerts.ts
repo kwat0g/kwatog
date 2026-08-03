@@ -21,7 +21,9 @@ export type AlertType =
 export interface Alert {
   id: string;            // hash_id
   type: AlertType;
+  type_label?: string;
   severity: AlertSeverity;
+  severity_label?: string;
   title: string;
   message: string;
   entity_type: string | null;

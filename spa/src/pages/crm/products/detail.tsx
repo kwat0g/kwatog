@@ -9,6 +9,7 @@ import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Panel } from '@/components/ui/Panel';
 import { usePermission } from '@/hooks/usePermission';
+import { formatPeso } from '@/lib/formatNumber';
 
 export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -96,7 +97,7 @@ export default function ProductDetailPage() {
               <dt className="text-muted">UOM</dt>
               <dd className="col-span-2 font-mono">{data.unit_of_measure}</dd>
               <dt className="text-muted">Standard cost</dt>
-              <dd className="col-span-2 font-mono tabular-nums">₱ {Number(data.standard_cost).toFixed(2)}</dd>
+              <dd className="col-span-2 font-mono tabular-nums">{formatPeso(data.standard_cost)}</dd>
               <dt className="text-muted">Description</dt>
               <dd className="col-span-2">{data.description ?? <span className="text-muted">—</span>}</dd>
             </dl>

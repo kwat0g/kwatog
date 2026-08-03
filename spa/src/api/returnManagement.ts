@@ -2,6 +2,14 @@ import { client } from '@/api/client';
 import type { ReturnRequest, ReturnRequestFormData, DispositionPayload } from '@/types/returnManagement';
 
 export const returnManagementApi = {
+  options: () => client.get<{ data: {
+    types: Array<{ value: string; label: string }>;
+    statuses: Array<{ value: string; label: string }>;
+    reasons: Array<{ value: string; label: string }>;
+    resolutions: Array<{ value: string; label: string }>;
+    conditions: Array<{ value: string; label: string }>;
+    dispositions: Array<{ value: string; label: string }>;
+  } }>('/return-management/options').then((r) => r.data.data),
   list: (params?: Record<string, string | number | undefined>) =>
     client.get('/return-management/return-requests', { params }).then((r) => r.data),
 

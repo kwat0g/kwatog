@@ -17,15 +17,22 @@ import type { ContributionAgency, GovernmentTable } from '@/types/payroll';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { Tabs } from '@/components/ui/Tabs';
 
-const AGENCIES: { key: ContributionAgency; label: string; help: string }[] = [
-  { key: 'sss',        label: 'SSS',        help: 'Flat peso amounts per bracket. EE = employee share, ER = employer share.' },
-  { key: 'philhealth', label: 'PhilHealth', help: 'Rate-based premium. Basis = clamp(salary, floor, ceiling) × rate.' },
-  { key: 'pagibig',    label: 'Pag-IBIG',   help: 'Rate-based per bracket. Max basis 10,000 → max EE/ER 200.00 each.' },
-  { key: 'bir',        label: 'BIR Tax',    help: 'Semi-monthly TRAIN brackets. EE column = fixed_tax, ER column = rate_on_excess.' },
-];
+const AGENCY_HELP: Record<string, string> = {
+  sss: 'Flat peso amounts per bracket. EE = employee share, ER = employer share.',
+  philhealth: 'Rate-based premium. Basis = clamp(salary, floor, ceiling) × rate.',
+  pagibig: 'Rate-based per bracket. Max basis 10,000 → max EE/ER 200.00 each.',
+  bir: 'Semi-monthly TRAIN brackets. EE column = fixed_tax, ER column = rate_on_excess.',
+};
 
 export default function AdminGovTablesPage() {
-  const [active, setActive] = useState<ContributionAgency>('sss');
+  const [active, setActive] = useState<ContributionAgency | ''>('');
+  const { data: options } = useQuery({
+    queryKey: ['gov-tables', 'options'],
+    queryFn: () => govTablesApi.options(),
+    staleTime: 5 * 60 * 1000,
+  });
+  const agencies = options?.agencies ?? [];
+  const selectedAgency = active || agencies[0]?.value || '';
 
   return (
     <div>
@@ -38,14 +45,14 @@ export default function AdminGovTablesPage() {
 
       <div className="px-5 pt-3">
         <Tabs
-          items={AGENCIES.map((a) => ({ key: a.key, label: a.label }))}
-          value={active}
-          onChange={setActive}
+          items={agencies.map((a) => ({ key: a.value, label: a.label }))}
+          value={selectedAgency}
+          onChange={(value) => setActive(value as ContributionAgency)}
           label="Contribution agency"
         />
       </div>
 
-      <AgencyTable agency={active} />
+      {selectedAgency && <AgencyTable agency={selectedAgency as ContributionAgency} />}
     </div>
   );
 }
@@ -81,7 +88,7 @@ function AgencyTable({ agency }: { agency: ContributionAgency }) {
     onError: () => toast.error('Failed to activate bracket.'),
   });
 
-  const help = AGENCIES.find((a) => a.key === agency)?.help;
+  const help = AGENCY_HELP[agency];
   const rateLike = agency === 'philhealth' || agency === 'pagibig';
   const isBir = agency === 'bir';
 

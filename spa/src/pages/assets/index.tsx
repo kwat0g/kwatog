@@ -1,7 +1,7 @@
 /** Sprint 8 — Task 70. Assets list. */
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate} from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import { assetsApi, type AssetListParams } from '@/api/assets';
 import { Button } from '@/components/ui/Button';
@@ -13,12 +13,12 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import type { Asset, AssetStatus } from '@/types/assets';
+import { formatPeso } from '@/lib/formatNumber';
 
 const STATUS_CHIP: Record<AssetStatus, 'success' | 'warning' | 'neutral'> = {
   active: 'success',
   under_maintenance: 'warning',
-  disposed: 'neutral',
-};
+  disposed: 'neutral' };
 
 export default function AssetsListPage() {
   const navigate = useNavigate();
@@ -28,20 +28,25 @@ export default function AssetsListPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['assets', filters],
     queryFn: () => assetsApi.list(filters),
-    placeholderData: (prev) => prev,
-  });
+    placeholderData: (prev) => prev });
+  const { data: assetOptions } = useQuery({
+    queryKey: ['assets', 'options'],
+    queryFn: assetsApi.options,
+    staleTime: 5 * 60 * 1000 });
+
+  const categoryLabel = new Map((assetOptions?.categories ?? []).map((option) => [option.value, option.label]));
+  const statusLabel = new Map((assetOptions?.statuses ?? []).map((option) => [option.value, option.label]));
 
   const columns: Column<Asset>[] = [
     {
       key: 'asset_code', header: 'Code',
-      cell: (r) => <Link to={`/assets/${r.id}`} className="font-mono text-accent hover:underline">{r.asset_code}</Link>,
-    },
+      cell: (r) => <span className="font-mono">{r.asset_code}</span> },
     { key: 'name', header: 'Name', cell: (r) => <span>{r.name}</span> },
-    { key: 'category', header: 'Category', cell: (r) => <Chip variant="neutral">{r.category}</Chip> },
-    { key: 'cost',  header: 'Acquisition', align: 'right', cell: (r) => <NumCell>₱{r.acquisition_cost}</NumCell> },
-    { key: 'accum', header: 'Acc. Dep.',   align: 'right', cell: (r) => <NumCell>₱{r.accumulated_depreciation}</NumCell> },
-    { key: 'book',  header: 'Book value',  align: 'right', cell: (r) => <NumCell>₱{r.book_value}</NumCell> },
-    { key: 'status', header: 'Status', cell: (r) => <Chip variant={STATUS_CHIP[r.status]}>{r.status.replace('_', ' ')}</Chip> },
+    { key: 'category', header: 'Category', cell: (r) => <Chip variant="neutral">{categoryLabel.get(r.category) ?? r.category}</Chip> },
+    { key: 'cost',  header: 'Acquisition', align: 'right', cell: (r) => <NumCell>{formatPeso(r.acquisition_cost)}</NumCell> },
+    { key: 'accum', header: 'Acc. Dep.',   align: 'right', cell: (r) => <NumCell>{formatPeso(r.accumulated_depreciation)}</NumCell> },
+    { key: 'book',  header: 'Book value',  align: 'right', cell: (r) => <NumCell>{formatPeso(r.book_value)}</NumCell> },
+    { key: 'status', header: 'Status', cell: (r) => <Chip variant={STATUS_CHIP[r.status]}>{r.status_label ?? statusLabel.get(r.status) ?? r.status}</Chip> },
   ];
 
   const filterConfig: FilterConfig[] = [
@@ -49,23 +54,14 @@ export default function AssetsListPage() {
       key: 'category', label: 'Category', type: 'select',
       options: [
         { value: '', label: 'All' },
-        { value: 'machine', label: 'Machine' },
-        { value: 'mold', label: 'Mold' },
-        { value: 'vehicle', label: 'Vehicle' },
-        { value: 'equipment', label: 'Equipment' },
-        { value: 'furniture', label: 'Furniture' },
-        { value: 'other', label: 'Other' },
-      ],
-    },
+        ...(assetOptions?.categories ?? []),
+      ] },
     {
       key: 'status', label: 'Status', type: 'select',
       options: [
         { value: '', label: 'All' },
-        { value: 'active', label: 'Active' },
-        { value: 'under_maintenance', label: 'Under maintenance' },
-        { value: 'disposed', label: 'Disposed' },
-      ],
-    },
+        ...(assetOptions?.statuses ?? []),
+      ] },
   ];
 
   return (
@@ -101,8 +97,13 @@ export default function AssetsListPage() {
       )}
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
-          <DataTable columns={columns} data={data.data} meta={data.meta}
-            onPageChange={(page) => setFilters((f) => ({ ...f, page }))} />
+          <DataTable
+            onRowClick={(r) => navigate(`/assets/${r.id}`)}
+            columns={columns}
+            data={data.data}
+            meta={data.meta}
+            onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+          />
         </div>
       )}
     </div>

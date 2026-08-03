@@ -6,6 +6,7 @@ export interface LoanPayment {
   amount: string;
   payment_date: string;
   payment_type: string;
+  payment_type_label?: string;
   remarks: string | null;
 }
 
@@ -16,6 +17,7 @@ export interface EmployeeLoan {
   loan_no: string;
   employee: { id: string; employee_no: string; full_name: string } | null;
   loan_type: LoanType;
+  loan_type_label?: string;
   principal: string;
   interest_rate: string;
   monthly_amortization: string;
@@ -28,6 +30,7 @@ export interface EmployeeLoan {
   approval_chain_size: number;
   purpose: string | null;
   status: LoanStatus;
+  status_label?: string;
   has_overdue_approval: boolean;
   approved_at?: string | null;
   is_final_pay_deduction: boolean;
@@ -63,4 +66,5 @@ export interface LoanTypeOption {
 export interface LoanLimits {
   principal_max: string;
   has_active: boolean;
+  max_pay_periods: number;
 }

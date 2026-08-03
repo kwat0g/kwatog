@@ -29,6 +29,12 @@ export default function ShipmentsListPage() {
     queryFn: () => shipmentsApi.list(filters),
     placeholderData: (prev) => prev,
   });
+  const { data: shipmentOptions } = useQuery({
+    queryKey: ['supply-chain', 'shipments', 'options'],
+    queryFn: () => shipmentsApi.options(),
+    staleTime: 300_000,
+  });
+  const statusLabels = new Map((shipmentOptions?.statuses ?? []).map((option) => [option.value, option.label]));
 
   const columns: Column<Shipment>[] = [
     { key: 'shipment_number', header: 'Shipment',
@@ -47,19 +53,11 @@ export default function ShipmentsListPage() {
     { key: 'eta', header: 'ETA', align: 'right',
       cell: (r) => <NumCell>{r.eta ?? '—'}</NumCell> },
     { key: 'status', header: 'Status',
-      cell: (r) => <Chip variant={STATUS_CHIP[r.status]}>{r.status.replace('_', ' ')}</Chip> },
+      cell: (r) => <Chip variant={STATUS_CHIP[r.status]}>{r.status_label ?? statusLabels.get(r.status) ?? r.status}</Chip> },
   ];
 
   const filterConfig: FilterConfig[] = [
-    { key: 'status', label: 'Status', type: 'select', options: [
-      { value: '', label: 'All' },
-      { value: 'ordered', label: 'Ordered' },
-      { value: 'shipped', label: 'Shipped' },
-      { value: 'in_transit', label: 'In transit' },
-      { value: 'customs', label: 'Customs' },
-      { value: 'cleared', label: 'Cleared' },
-      { value: 'received', label: 'Received' },
-    ] },
+    { key: 'status', label: 'Status', type: 'select', options: [{ value: '', label: 'All' }, ...(shipmentOptions?.statuses ?? [])] },
   ];
 
   return (

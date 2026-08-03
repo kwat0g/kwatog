@@ -29,26 +29,18 @@ import { formatDateTime, formatRelative } from '@/lib/formatDate';
 import { focusRingInset } from '@/lib/focus';
 import type { ActionCategory, ActionPriority } from '@/types/actionCenter';
 
-const CATEGORY_META: Record<ActionCategory, { label: string; icon: LucideIcon }> = {
-  approval: { label: 'Approvals', icon: ClipboardCheck },
-  alert: { label: 'Alerts', icon: BellRing },
-  quality: { label: 'Quality', icon: ShieldCheck },
-  maintenance: { label: 'Maintenance', icon: Wrench },
-  production: { label: 'Production', icon: Factory },
-  supply_chain: { label: 'Supply chain', icon: Truck },
+const CATEGORY_ICONS: Record<ActionCategory, LucideIcon> = {
+  approval: ClipboardCheck,
+  alert: BellRing,
+  quality: ShieldCheck,
+  maintenance: Wrench,
+  production: Factory,
+  supply_chain: Truck,
 };
 
 const PRIORITY_VARIANT: Record<ActionPriority, ChipVariant> = {
   critical: 'danger', high: 'warning', medium: 'info', low: 'neutral',
 };
-
-const FILTERS: Array<{ value: ActionCategory | 'all'; label: string }> = [
-  { value: 'all', label: 'All work' },
-  ...Object.entries(CATEGORY_META).map(([value, meta]) => ({
-    value: value as ActionCategory,
-    label: meta.label,
-  })),
-];
 
 export default function ActionCenterPage() {
   const navigate = useNavigate();
@@ -64,6 +56,8 @@ export default function ActionCenterPage() {
     () => filterActionItems(query.data?.items ?? [], category, search),
     [query.data?.items, category, search],
   );
+  const categoryLabels = new Map((query.data?.category_options ?? []).map((option) => [option.value, option.label]));
+  const filters = [{ value: 'all' as const, label: 'All work' }, ...(query.data?.category_options ?? [])];
 
   const summary = query.data?.summary;
 
@@ -109,7 +103,7 @@ export default function ActionCenterPage() {
                   label="Action category"
                   value={category}
                   onChange={setCategory}
-                  options={FILTERS.map((filter) => ({
+                  options={filters.map((filter) => ({
                     value: filter.value,
                     label: filter.label,
                     count: filter.value === 'all' ? summary?.total : summary?.by_category[filter.value],
@@ -137,8 +131,7 @@ export default function ActionCenterPage() {
             ) : (
               <div className="divide-y divide-subtle">
                 {visibleItems.map((item) => {
-                  const meta = CATEGORY_META[item.category];
-                  const Icon = meta.icon;
+                  const Icon = CATEGORY_ICONS[item.category];
                   return (
                     <button
                       type="button"
@@ -157,25 +150,25 @@ export default function ActionCenterPage() {
                       <span className="min-w-0 flex-1">
                         <span className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-medium text-primary">{item.title}</span>
-                          <Chip variant={PRIORITY_VARIANT[item.priority]}>{item.priority}</Chip>
+                          <Chip variant={PRIORITY_VARIANT[item.priority]}>{item.priority_label ?? item.priority}</Chip>
                           {item.is_overdue && <Chip variant="danger">overdue</Chip>}
-                          <Chip variant="neutral">{meta.label}</Chip>
+                          <Chip variant="neutral">{categoryLabels.get(item.category) ?? item.category}</Chip>
                         </span>
                         <span className="block text-xs text-muted mt-1 line-clamp-2">{item.description}</span>
-                        <span className="flex items-center gap-x-3 gap-y-1 flex-wrap mt-1.5 text-2xs text-text-subtle">
+                        <span className="flex items-center gap-x-3 gap-y-1 flex-wrap mt-1.5 text-2xs text-subtle">
                           {item.reference && <span className="font-mono">{item.reference}</span>}
                           <span>{item.status_label}</span>
                           {item.assigned_to
                             ? <span>Assigned: {item.assigned_to.name}</span>
                             : item.owner_label && <span>Source owner: {item.owner_label}</span>}
-                          <span>{item.task_state}</span>
+                          <span>{item.task_state_label ?? item.task_state}</span>
                           {item.created_at && (
                             <span title={formatDateTime(item.created_at)}>{formatRelative(item.created_at)}</span>
                           )}
                           {item.due_at && <span title={formatDateTime(item.due_at)}>Due {formatRelative(item.due_at)}</span>}
                         </span>
                       </span>
-                      <ChevronRight size={14} className="mt-2 shrink-0 text-text-subtle group-hover:text-primary" />
+                      <ChevronRight size={14} className="mt-2 shrink-0 text-subtle group-hover:text-primary" />
                     </button>
                   );
                 })}
@@ -209,7 +202,7 @@ function SummaryCard({
         <Icon size={15} />
       </span>
       <span>
-        <span className="block text-xl font-display font-medium text-primary tabular-nums">{value}</span>
+        <span className="block text-xl font-medium font-mono tabular-nums text-primary">{value}</span>
         <span className="block text-2xs text-muted">{label}</span>
       </span>
     </div>

@@ -9,6 +9,7 @@ export interface DemandForecast {
   forecast_year: number;
   forecast_month: number;
   method: ForecastMethod;
+  method_label?: string;
   forecasted_quantity: number;
   confidence_level: number | null;
   actual_quantity: number | null;
@@ -18,6 +19,16 @@ export interface DemandForecast {
   creator?: { id: string; name: string } | null;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface ForecastingSettings {
+  default_history_months: number;
+  default_horizon_months: number;
+  default_lookback_months: number;
+  minimum_horizon_months: number;
+  maximum_horizon_months: number;
+  minimum_lookback_months: number;
+  maximum_lookback_months: number;
 }
 
 export interface HistoricalDemandPoint {
@@ -48,7 +59,15 @@ export interface StockOutRow {
 
 export interface StockOutResponse {
   data: StockOutRow[];
-  meta: { horizon_days: number; generated_at: string };
+  meta: {
+    horizon_days: number;
+    default_horizon_days: number;
+    minimum_horizon_days: number;
+    maximum_horizon_days: number;
+    demand_history_days: number;
+    generated_at: string;
+    risk_options: Array<{ value: StockOutRisk; label: string }>;
+  };
 }
 
 export interface ForecastAccuracyMonth {

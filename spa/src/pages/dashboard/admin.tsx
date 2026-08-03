@@ -101,7 +101,7 @@ function ActiveSessionsPanel({
       actions={<Link className="text-xs text-link hover:underline" to="/admin/users">Manage users →</Link>}
     >
       {data.sessions.length === 0 ? (
-        <EmptyState size="compact" icon="monitor" title="Nobody signed in" description="No active sessions in the last 30 minutes." />
+        <EmptyState size="compact" icon="monitor" title="Nobody signed in" description={`No active sessions in the last ${data.active_window_minutes ?? 'configured'} minutes.`} />
       ) : (
         <div className="space-y-0">
           {data.sessions.map((s: AdminSession, i: number) => (
@@ -186,14 +186,6 @@ function AccountSecurityPanel({
 
 /* ── Auth Events ─────────────────────────────────────────────────────────── */
 
-const AUTH_STATUS_LABELS: Record<string, string> = {
-  success:                 'Success',
-  failed_credentials:      'Wrong credentials',
-  failed_locked:           'Account locked',
-  failed_inactive:         'Account inactive',
-  failed_password_expired: 'Password expired',
-};
-
 const AUTH_STATUS_VARIANT: Record<string, 'success' | 'danger' | 'warning' | 'neutral'> = {
   success:                 'success',
   failed_credentials:      'danger',
@@ -208,11 +200,13 @@ function AuthEventsPanel({
   data: AdminDashboardData['panels']['auth_events'];
 }) {
   const breakdown = data.breakdown_24h;
+  const windowHours = data.window_hours;
+  const statusLabels = new Map(data.status_options.map((option) => [option.value, option.label]));
   const totalAttempts = Object.values(breakdown).reduce((s, n) => s + n, 0);
 
   return (
     <Panel
-      title="Authentication Events · Last 24h"
+      title={`Authentication Events · Last ${windowHours}h`}
       meta={`${totalAttempts} total attempts`}
       actions={<Link className="text-xs text-link hover:underline" to="/admin/audit-logs">View audit log →</Link>}
     >
@@ -224,7 +218,7 @@ function AuthEventsPanel({
             {Object.entries(breakdown).map(([status, count]) => (
               <div key={status} className="flex items-center justify-between text-sm">
                 <span className="text-muted truncate mr-2">
-                  {AUTH_STATUS_LABELS[status] ?? status}
+                  {statusLabels.get(status) ?? status}
                 </span>
                 <span className={`font-mono tabular-nums font-medium shrink-0 ${
                   status === 'success' ? 'text-success' : 'text-danger'
@@ -234,7 +228,7 @@ function AuthEventsPanel({
               </div>
             ))}
             {Object.keys(breakdown).length === 0 && (
-              <p className="text-sm text-muted">No login attempts in the last 24h.</p>
+              <p className="text-sm text-muted">No login attempts in the last {windowHours}h.</p>
             )}
           </div>
 
@@ -255,7 +249,7 @@ function AuthEventsPanel({
         <div className="lg:col-span-2">
           <div className="text-2xs uppercase tracking-wider text-muted mb-2">Recent failures</div>
           {data.recent_failures.length === 0 ? (
-            <EmptyState size="compact" icon="shield" title="No failed logins" description="No failed sign-in attempts in the last 24h." />
+            <EmptyState size="compact" icon="shield" title="No failed logins" description={`No failed sign-in attempts in the last ${windowHours}h.`} />
           ) : (
             <div className="space-y-0">
               {data.recent_failures.map((f: AdminFailedLogin, i: number) => (
@@ -264,7 +258,7 @@ function AuthEventsPanel({
                   className="flex items-center gap-2 py-1.5 border-b border-subtle last:border-0 text-sm"
                 >
                   <Chip variant={AUTH_STATUS_VARIANT[f.status] ?? 'neutral'} className="shrink-0">
-                    {AUTH_STATUS_LABELS[f.status] ?? f.status}
+                    {statusLabels.get(f.status) ?? f.status}
                   </Chip>
                   <span className="truncate flex-1 text-xs">{f.email}</span>
                   <span className="text-2xs font-mono tabular-nums text-muted shrink-0">{f.ip}</span>
@@ -379,7 +373,7 @@ function OpenAlertsPanel({
               className="flex items-start gap-2 py-2 border-b border-subtle last:border-0"
             >
               <Chip variant={ALERT_VARIANT[alert.severity] ?? 'neutral'} className="shrink-0 mt-0.5">
-                {alert.severity}
+                {alert.severity_label ?? alert.severity}
               </Chip>
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium truncate">{alert.title}</div>

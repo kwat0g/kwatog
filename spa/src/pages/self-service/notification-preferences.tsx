@@ -27,58 +27,6 @@ import { cn } from '@/lib/cn';
 type NotificationTypeDef = { key: string; label: string; description: string };
 type NotificationGroup = { title: string; hint: string; types: NotificationTypeDef[] };
 
-const GROUPS: NotificationGroup[] = [
-  {
-    title: 'Chain 1 · Order to Cash',
-    hint: 'Sales orders through production, delivery, and invoicing',
-    types: [
-      { key: 'chain.so_confirmed',        label: 'Sales order confirmed',     description: 'A sales order has been confirmed by the customer.' },
-      { key: 'production.wo_completed',   label: 'Work order completed',      description: 'A production work order has finished. Outgoing QC is next.' },
-      { key: 'quality.inspection_failed', label: 'QC inspection failed',      description: 'A quality inspection failed. An NCR may be required.' },
-      { key: 'chain.delivery_confirmed',  label: 'Delivery confirmed',        description: 'A delivery has been confirmed and an invoice draft was created.' },
-    ],
-  },
-  {
-    title: 'Chain 2 · Procure to Pay',
-    hint: 'Requests, purchase orders, and goods receipts',
-    types: [
-      { key: 'inventory.grn_received', label: 'Goods receipt created',     description: 'Goods have been received against a purchase order.' },
-      { key: 'inventory.low_stock',    label: 'Low stock alert',           description: 'An item fell below reorder point and an auto-PR was created.' },
-      { key: 'chain.pr_approved',      label: 'Purchase request approved',  description: 'A purchase request has been fully approved.' },
-      { key: 'chain.po_approved',      label: 'Purchase order approved',    description: 'A purchase order has been fully approved and is ready to send.' },
-    ],
-  },
-  {
-    title: 'Chain 3 · Hire to Retire',
-    hint: 'Leave, overtime, loans, and payroll',
-    types: [
-      { key: 'leave.submitted',            label: 'Leave request submitted',    description: 'An employee has submitted a leave request for your approval.' },
-      { key: 'leave.pending_hr',           label: 'Leave pending HR approval',  description: 'A leave request has been approved by the dept head and needs HR sign-off.' },
-      { key: 'leave.approved',             label: 'Leave request approved',     description: 'Your leave request has been approved.' },
-      { key: 'leave.rejected',             label: 'Leave request rejected',     description: 'Your leave request was not approved.' },
-      { key: 'attendance.ot_submitted',    label: 'Overtime request submitted', description: 'An employee has submitted an overtime request for your approval.' },
-      { key: 'attendance.ot_approved',     label: 'Overtime request approved',  description: 'Your overtime request has been approved.' },
-      { key: 'attendance.ot_rejected',     label: 'Overtime request rejected',  description: 'Your overtime request was not approved.' },
-      { key: 'loans.submitted',            label: 'Loan/CA request submitted',  description: 'An employee has submitted a loan or cash advance for Finance approval.' },
-      { key: 'loans.approved',             label: 'Loan/CA approved',           description: 'Your loan or cash advance request has been approved.' },
-      { key: 'loans.rejected',             label: 'Loan/CA rejected',           description: 'Your loan or cash advance request was not approved.' },
-      { key: 'chain.payslip_ready',        label: 'Payslip ready',              description: 'Your payslip is ready to view.' },
-      { key: 'chain.separation_initiated', label: 'Separation initiated',       description: 'An employee separation process has started.' },
-    ],
-  },
-  {
-    title: 'Maintenance & approvals',
-    hint: 'Machine breakdowns and approvals waiting on you',
-    types: [
-      { key: 'maintenance.breakdown',  label: 'Machine breakdown',   description: 'A machine has entered breakdown status and may have paused a work order.' },
-      { key: 'approval_reminder',      label: 'Approval reminder',   description: 'You have a pending approval that has been waiting over 24 hours.' },
-      { key: 'approval_escalation',    label: 'Approval escalation', description: 'An approval you are responsible for has been escalated due to timeout.' },
-    ],
-  },
-];
-
-const ALL_TYPES: NotificationTypeDef[] = GROUPS.flatMap((g) => g.types);
-
 type Channel = 'in_app' | 'email' | 'digest';
 type Pref = { notification_type: string; channel: Channel; enabled: boolean };
 
@@ -107,6 +55,13 @@ export default function NotificationPreferencesPage() {
     queryKey: ['notification-preferences'],
     queryFn: () => client.get<{ data: Pref[] }>('/notification-preferences').then(r => r.data.data),
   });
+  const { data: catalog } = useQuery({
+    queryKey: ['notification-preferences', 'options'],
+    queryFn: () => client.get<{ data: { groups: NotificationGroup[] } }>('/notification-preferences/options').then((r) => r.data.data),
+    staleTime: 5 * 60 * 1000,
+  });
+  const catalogGroups = useMemo(() => catalog?.groups ?? [], [catalog?.groups]);
+  const allTypes = catalogGroups.flatMap((group) => group.types);
 
   const upsert = useMutation({
     mutationFn: (preferences: Pref[]) =>
@@ -132,14 +87,14 @@ export default function NotificationPreferencesPage() {
   /** Flip an entire column in one PUT rather than 23 round-trips. */
   const setColumn = (channel: 'in_app' | 'email', enabled: boolean) => {
     upsert.mutate(
-      ALL_TYPES.map((t) => ({ notification_type: t.key, channel, enabled })),
+      allTypes.map((t) => ({ notification_type: t.key, channel, enabled })),
     );
   };
 
   const groups = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return GROUPS;
-    return GROUPS
+    if (!q) return catalogGroups;
+    return catalogGroups
       .map((g) => ({
         ...g,
         types: g.types.filter(
@@ -147,12 +102,12 @@ export default function NotificationPreferencesPage() {
         ),
       }))
       .filter((g) => g.types.length > 0);
-  }, [search]);
+  }, [catalogGroups, search]);
 
   const matchCount = groups.reduce((n, g) => n + g.types.length, 0);
 
   const enabledCount = (channel: 'in_app' | 'email') =>
-    ALL_TYPES.filter((t) => isEnabled(t.key, channel)).length;
+    allTypes.filter((t) => isEnabled(t.key, channel)).length;
 
   return (
     <div>
@@ -160,7 +115,7 @@ export default function NotificationPreferencesPage() {
         title="Notification Preferences"
         subtitle={
           data
-            ? `${enabledCount('in_app')} in-app · ${enabledCount('email')} email of ${ALL_TYPES.length} types`
+            ? `${enabledCount('in_app')} in-app · ${enabledCount('email')} email of ${allTypes.length} types`
             : 'Choose which events reach you, and where'
         }
         backTo="/self-service/profile"
@@ -211,7 +166,7 @@ export default function NotificationPreferencesPage() {
 
             <Panel
               title="Per-event delivery"
-              meta={search ? `${matchCount} of ${ALL_TYPES.length} shown` : `${ALL_TYPES.length} events`}
+              meta={search ? `${matchCount} of ${allTypes.length} shown` : `${allTypes.length} events`}
               noPadding
               actions={
                 <div className="w-56">

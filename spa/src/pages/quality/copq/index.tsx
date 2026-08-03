@@ -5,7 +5,7 @@
  * line, product cost ranking table, and supplier quality table. Period
  * selector at top (6/12/24 months).
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   BarChart,
@@ -26,22 +26,16 @@ import { Panel } from '@/components/ui/Panel';
 import { StatCard } from '@/components/ui/StatCard';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { formatPeso, formatInt } from '@/lib/formatNumber';
+import { formatPeso, formatInt, formatCompactCurrency } from '@/lib/formatNumber';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 // ─── Helpers ─────────────────────────────────────
 const PESO = (v: number) => formatPeso(v);
 const PESO_SHORT = (v: number) => {
-  if (v >= 1_000_000) return `₱${(v / 1_000_000).toFixed(1)}M`;
-  if (v >= 1_000) return `₱${(v / 1_000).toFixed(1)}K`;
-  return `₱${v.toFixed(0)}`;
+  if (v >= 1_000_000) return formatCompactCurrency(v, 1_000_000, 'M');
+  if (v >= 1_000) return formatCompactCurrency(v, 1_000, 'K');
+  return formatPeso(v, '0');
 };
-
-const PERIOD_OPTIONS = [
-  { value: 6, label: '6 months' },
-  { value: 12, label: '12 months' },
-  { value: 24, label: '24 months' },
-] as const;
 
 // ─── Chart colors (from design system) ──────────
 const COLORS = {
@@ -60,12 +54,20 @@ const TOOLTIP_STYLE = {
 };
 
 export default function CopqAnalyticsPage() {
-  const [months, setMonths] = useState(12);
+  const [months, setMonths] = useState<number | undefined>(undefined);
+  const policyQ = useQuery({
+    queryKey: ['quality', 'copq', 'policy'],
+    queryFn: () => copqApi.policy(),
+  });
+  useEffect(() => {
+    if (months === undefined && policyQ.data) setMonths(policyQ.data.default_months);
+  }, [months, policyQ.data]);
 
   // ─── Queries ─────────────────────────────────────
   const trend = useQuery({
     queryKey: ['quality', 'copq', 'trend', months],
     queryFn: () => copqApi.trend(months),
+    enabled: months !== undefined,
     placeholderData: (prev) => prev,
   });
 
@@ -94,16 +96,16 @@ export default function CopqAnalyticsPage() {
         breadcrumbs={[{ label: 'Quality', href: '/quality' }, { label: 'COPQ' }]}
         actions={
           <div className="flex items-center gap-1">
-            {PERIOD_OPTIONS.map((opt) => (
-              <Button
-                key={opt.value}
-                variant={months === opt.value ? 'primary' : 'secondary'}
-                size="sm"
-                onClick={() => setMonths(opt.value)}
-              >
-                {opt.label}
-              </Button>
-            ))}
+            <label className="text-2xs uppercase tracking-wide text-muted" htmlFor="copq-months">Months</label>
+            <input
+              id="copq-months"
+              type="number"
+              className="w-20 rounded-md border border-default bg-surface px-2 py-1 text-sm"
+              value={months ?? ''}
+              min={policyQ.data?.minimum_months}
+              max={policyQ.data?.maximum_months}
+              onChange={(e) => setMonths(Number(e.target.value) || undefined)}
+            />
           </div>
         }
       />
@@ -112,22 +114,22 @@ export default function CopqAnalyticsPage() {
       <div className="px-5 grid grid-cols-4 gap-4 mb-4">
         <StatCard
           label="This Month"
-          value={summary.isLoading ? '—' : PESO(summary.data?.current_month.total_cost ?? 0)}
-          helper={summary.data?.current_month.period_label ?? 'loading...'}
+          value={summary.isLoading ? '—' : summary.data?.current_month.total_cost != null ? PESO(summary.data.current_month.total_cost) : '—'}
+          helper={summary.data?.current_month.period_label ?? '—'}
         />
         <StatCard
           label="YTD Total"
-          value={summary.isLoading ? '—' : PESO(summary.data?.ytd.total_cost ?? 0)}
+          value={summary.isLoading ? '—' : summary.data?.ytd.total_cost != null ? PESO(summary.data.ytd.total_cost) : '—'}
           helper="year to date"
         />
         <StatCard
           label="Scrap (YTD)"
-          value={summary.isLoading ? '—' : PESO(summary.data?.ytd.internal_scrap_cost ?? 0)}
+          value={summary.isLoading ? '—' : summary.data?.ytd.internal_scrap_cost != null ? PESO(summary.data.ytd.internal_scrap_cost) : '—'}
           helper="internal scrap cost"
         />
         <StatCard
           label="Rework (YTD)"
-          value={summary.isLoading ? '—' : PESO(summary.data?.ytd.internal_rework_cost ?? 0)}
+          value={summary.isLoading ? '—' : summary.data?.ytd.internal_rework_cost != null ? PESO(summary.data.ytd.internal_rework_cost) : '—'}
           helper="internal rework cost"
         />
       </div>

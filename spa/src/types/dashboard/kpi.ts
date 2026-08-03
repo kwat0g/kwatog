@@ -15,6 +15,7 @@ export interface KpiSnapshotSummary {
   previous_value: string | null;
   trend: 'up' | 'down' | 'flat';
   status: 'on_target' | 'warning' | 'off_target';
+  status_label?: string;
   computed_at: string | null;
 }
 
@@ -28,4 +29,5 @@ export interface KpiTrendPoint {
   value: string;
   target: string;
   status: string;
+  status_label?: string;
 }

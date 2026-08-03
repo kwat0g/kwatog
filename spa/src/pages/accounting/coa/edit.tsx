@@ -80,7 +80,7 @@ export default function EditAccountPage() {
           </div>
           <div>
             <p className="text-xs uppercase tracking-wider text-muted font-medium mb-1">Type</p>
-            <p className="text-sm capitalize">{account.type}</p>
+            <p className="text-sm">{account.type_label ?? account.type}</p>
           </div>
         </div>
 

@@ -43,7 +43,7 @@ type WarehouseFormValues = z.infer<typeof warehouseSchema>;
 const zoneSchema = z.object({
   name: z.string().trim().min(2).max(50),
   code: z.string().trim().min(1).max(10).regex(codeRegex, 'Use uppercase letters, digits, hyphens.'),
-  zone_type: z.enum(['raw_materials', 'staging', 'finished_goods', 'spare_parts', 'quarantine', 'scrap']),
+  zone_type: z.string().min(1, 'Zone type is required'),
 });
 type ZoneFormValues = z.infer<typeof zoneSchema>;
 
@@ -54,15 +54,6 @@ const locationSchema = z.object({
   is_active: z.boolean().default(true),
 });
 type LocationFormValues = z.infer<typeof locationSchema>;
-
-const ZONE_TYPES: Array<{ value: ZoneFormValues['zone_type']; label: string }> = [
-  { value: 'raw_materials', label: 'Raw materials' },
-  { value: 'staging', label: 'Staging' },
-  { value: 'finished_goods', label: 'Finished goods' },
-  { value: 'spare_parts', label: 'Spare parts' },
-  { value: 'quarantine', label: 'Quarantine' },
-  { value: 'scrap', label: 'Scrap' },
-];
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Page
@@ -213,7 +204,7 @@ export default function WarehousePage() {
                         >
                           <span className="font-mono text-xs">{z.code}</span>
                           <span className="flex-1 truncate">{z.name}</span>
-                          <Chip variant="neutral">{z.zone_type.replace(/_/g, ' ')}</Chip>
+                          <Chip variant="neutral">{z.zone_type_label ?? z.zone_type}</Chip>
                         </button>
                         {canManage && (
                           <div className="hidden group-hover:flex pr-1 gap-0.5">
@@ -437,7 +428,7 @@ function WarehouseForm({ mode, existing, onClose, onSaved }: {
       <div className="space-y-3">
         <Input label="Name" required maxLength={100} autoFocus {...register('name')} error={errors.name?.message} />
         <Input label="Code" required maxLength={20} {...register('code')} error={errors.code?.message}
-               className="font-mono uppercase" placeholder="WH01" />
+               className="font-mono uppercase" placeholder="Warehouse code" />
         <Input label="Address" maxLength={500} {...register('address')} error={errors.address?.message} />
         <Switch label="Active" {...register('is_active')} />
       </div>
@@ -454,12 +445,17 @@ function WarehouseForm({ mode, existing, onClose, onSaved }: {
 function ZoneForm({ mode, existing, warehouseId, onClose, onSaved }: {
   mode: 'create' | 'edit'; existing: WarehouseZone | null; warehouseId: string; onClose: () => void; onSaved: () => void;
 }) {
+  const { data: warehouseOptions } = useQuery({
+    queryKey: ['inventory', 'warehouse-options'],
+    queryFn: warehouseApi.options,
+    staleTime: 5 * 60 * 1000,
+  });
   const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<ZoneFormValues>({
     resolver: zodResolver(zoneSchema),
     defaultValues: {
       name: existing?.name ?? '',
       code: existing?.code ?? '',
-      zone_type: existing?.zone_type ?? 'raw_materials',
+      zone_type: existing?.zone_type ?? warehouseOptions?.zone_types?.[0]?.value ?? '',
     },
   });
 
@@ -477,9 +473,9 @@ function ZoneForm({ mode, existing, warehouseId, onClose, onSaved }: {
       <div className="space-y-3">
         <Input label="Name" required maxLength={50} autoFocus {...register('name')} error={errors.name?.message} />
         <Input label="Code" required maxLength={10} {...register('code')} error={errors.code?.message}
-               className="font-mono uppercase" placeholder="A1" />
+               className="font-mono uppercase" placeholder="Zone code" />
         <Select label="Type" required {...register('zone_type')} error={errors.zone_type?.message}>
-          {ZONE_TYPES.map((z) => <option key={z.value} value={z.value}>{z.label}</option>)}
+          {(warehouseOptions?.zone_types ?? []).map((z) => <option key={z.value} value={z.value}>{z.label}</option>)}
         </Select>
       </div>
       <div className="flex justify-end gap-2 pt-3 mt-4 border-t border-default">
@@ -520,7 +516,7 @@ function LocationForm({ mode, existing, zoneId, onClose, onSaved }: {
     <form onSubmit={handleSubmit((d) => m.mutate(d), onFormInvalid<LocationFormValues>())} className="py-3">
       <div className="space-y-3">
         <Input label="Code" required maxLength={20} autoFocus {...register('code')} error={errors.code?.message}
-               className="font-mono uppercase" placeholder="A1-01" />
+               className="font-mono uppercase" placeholder="Location code" />
         <div className="grid grid-cols-2 gap-3">
           <Input label="Rack" maxLength={10} {...register('rack')} error={errors.rack?.message} />
           <Input label="Bin" maxLength={10} {...register('bin')} error={errors.bin?.message} />

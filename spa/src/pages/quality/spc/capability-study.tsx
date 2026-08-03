@@ -34,10 +34,10 @@ import type { SpcCapabilityResult, RunCapabilityData } from '@/types/quality/spc
 import type { InspectionSpecItem } from '@/types/quality';
 
 // ─── Cpk rating ────────────────────────────────────
-function cpkRating(cpk: number): { label: string; variant: ChipVariant } {
-  if (cpk >= 1.67) return { label: 'Excellent', variant: 'success' };
-  if (cpk >= 1.33) return { label: 'Capable', variant: 'success' };
-  if (cpk >= 1.0) return { label: 'Marginal', variant: 'warning' };
+function cpkRating(cpk: number, thresholds: { launch: number; ongoing: number; action: number }): { label: string; variant: ChipVariant } {
+  if (cpk >= thresholds.launch) return { label: 'Excellent', variant: 'success' };
+  if (cpk >= thresholds.ongoing) return { label: 'Capable', variant: 'success' };
+  if (cpk >= thresholds.action) return { label: 'Marginal', variant: 'warning' };
   return { label: 'Not capable', variant: 'danger' };
 }
 
@@ -89,6 +89,8 @@ export default function CapabilityStudyPage() {
   const [selectedProductId, setSelectedProductId] = useState('');
   const [selectedSpecItemId, setSelectedSpecItemId] = useState('');
   const [result, setResult] = useState<SpcCapabilityResult | null>(null);
+  const { data: spcOptions } = useQuery({ queryKey: ['quality', 'spc', 'options'], queryFn: spcApi.options, staleTime: 300_000 });
+  const thresholds = spcOptions?.capability_thresholds;
 
   // Fetch products for the dropdown
   const { data: productsData } = useQuery({
@@ -125,7 +127,7 @@ export default function CapabilityStudyPage() {
   });
 
   const bars = useMemo(() => (result ? buildHistogramBars(result) : []), [result]);
-  const cpkInfo = result ? cpkRating(result.cpk) : null;
+  const cpkInfo = result && thresholds ? cpkRating(result.cpk, thresholds) : null;
 
 
   const handleRunStudy = () => {
@@ -209,7 +211,7 @@ export default function CapabilityStudyPage() {
         </Panel>
 
         {/* ─── Results ─── */}
-        {result && (
+        {result && thresholds && (
           <>
             {/* Stats row */}
             <div className="grid grid-cols-5 gap-4">
@@ -330,9 +332,9 @@ export default function CapabilityStudyPage() {
                     <strong>IATF 16949 targets:</strong>
                   </p>
                   <ul className="list-disc list-inside space-y-1">
-                    <li>Cpk &gt;= 1.67 for new product launch</li>
-                    <li>Cpk &gt;= 1.33 for ongoing production</li>
-                    <li>Cpk &lt; 1.0 requires immediate corrective action</li>
+                    <li>Cpk &gt;= {thresholds.launch.toFixed(2)} for new product launch</li>
+                    <li>Cpk &gt;= {thresholds.ongoing.toFixed(2)} for ongoing production</li>
+                    <li>Cpk &lt; {thresholds.action.toFixed(2)} requires immediate corrective action</li>
                   </ul>
                   <p className="mt-2">
                     Cp measures process spread vs spec width (centering ignored).

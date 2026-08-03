@@ -115,7 +115,7 @@ export function NotificationBell() {
 
       {open && (
         <div
-          className="absolute right-0 top-9 w-80 bg-canvas border border-default rounded-md-menu z-50 animate-fade-in overflow-hidden"
+          className="absolute right-0 top-9 w-80 bg-canvas border border-default rounded-md z-50 animate-fade-in overflow-hidden"
           role="menu"
         >
           <div className="px-3 py-2 border-b border-default flex items-center justify-between">

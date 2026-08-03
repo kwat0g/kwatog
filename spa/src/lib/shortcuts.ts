@@ -48,6 +48,7 @@ export const SHORTCUTS: ShortcutEntry[] = [
 
   // Actions — global commands.
   { id: 'action.search',     keys: 'mod+k',       label: 'Open command palette / search', hint: '⌘ K',     group: 'actions', scope: 'global' },
+  { id: 'action.focusSearch',keys: '/',           label: 'Focus page search',             hint: '/',       group: 'actions', scope: 'global' },
   { id: 'action.new',        keys: 'mod+shift+n', label: 'New record on current page',    hint: '⌘ ⇧ N',   group: 'actions', scope: 'global' },
   { id: 'action.export',     keys: 'mod+shift+e', label: 'Export current list',           hint: '⌘ ⇧ E',   group: 'actions', scope: 'global' },
   { id: 'action.print',      keys: 'mod+shift+p', label: 'Print current record',          hint: '⌘ ⇧ P',   group: 'actions', scope: 'global' },

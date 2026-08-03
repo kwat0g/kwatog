@@ -19,14 +19,6 @@ const variant: Record<MachineStatus, 'success' | 'info' | 'warning' | 'danger' |
   running: 'success', idle: 'neutral', maintenance: 'info', breakdown: 'danger', offline: 'neutral',
 };
 
-const ALLOWED: Record<MachineStatus, MachineStatus[]> = {
-  idle:        ['running', 'maintenance', 'breakdown', 'offline'],
-  running:     ['idle', 'breakdown', 'maintenance'],
-  breakdown:   ['maintenance', 'idle'],
-  maintenance: ['idle'],
-  offline:     ['idle'],
-};
-
 export default function MachinesListPage() {
   const qc = useQueryClient();
   const { can } = usePermission();
@@ -38,6 +30,12 @@ export default function MachinesListPage() {
     queryFn: () => machinesApi.list(filters),
     placeholderData: (prev) => prev,
   });
+  const { data: machineOptions } = useQuery({
+    queryKey: ['mrp', 'machines', 'options'],
+    queryFn: machinesApi.options,
+    staleTime: 5 * 60 * 1000,
+  });
+  const statusLabels = new Map((machineOptions?.statuses ?? []).map((option) => [option.value, option.label]));
 
   const transition = useMutation({
     mutationFn: ({ id, to }: { id: string; to: MachineStatus }) => machinesApi.transitionStatus(id, to),
@@ -62,11 +60,11 @@ export default function MachinesListPage() {
     { key: 'ops', header: 'Operators', align: 'right', cell: (r) => <NumCell>{Number(r.operators_required).toFixed(1)}</NumCell> },
     { key: 'hours', header: 'Hrs / day', align: 'right', cell: (r) => <NumCell>{Number(r.available_hours_per_day).toFixed(1)}</NumCell> },
     { key: 'molds', header: 'Compatible molds', align: 'right', cell: (r) => <NumCell>{r.compatible_molds_count}</NumCell> },
-    { key: 'status', header: 'Status', cell: (r) => <Chip variant={variant[r.status]}>{r.status_label}</Chip> },
+    { key: 'status', header: 'Status', cell: (r) => <Chip variant={variant[r.status]}>{statusLabels.get(r.status) ?? r.status_label}</Chip> },
     ...(canTransition ? [{
       key: 'actions', header: '', align: 'right' as const,
       cell: (r: Machine) => {
-        const allowed = ALLOWED[r.status] ?? [];
+        const allowed = (machineOptions?.transitions?.[r.status] ?? []) as MachineStatus[];
         if (allowed.length === 0) return null;
         return (
           <Select
@@ -81,7 +79,7 @@ export default function MachinesListPage() {
             aria-label={`Transition ${r.machine_code}`}
           >
             <option value="">Change status…</option>
-            {allowed.map((s) => <option key={s} value={s}>→ {s}</option>)}
+            {allowed.map((s) => <option key={s} value={s}>→ {statusLabels.get(s) ?? s}</option>)}
           </Select>
         );
       },
@@ -91,9 +89,7 @@ export default function MachinesListPage() {
   const filterConfig: FilterConfig[] = [
     { key: 'status', label: 'Status', type: 'select', options: [
       { value: '', label: 'All' },
-      { value: 'running', label: 'Running' }, { value: 'idle', label: 'Idle' },
-      { value: 'maintenance', label: 'Maintenance' }, { value: 'breakdown', label: 'Breakdown' },
-      { value: 'offline', label: 'Offline' },
+      ...(machineOptions?.statuses ?? []),
     ]},
   ];
 

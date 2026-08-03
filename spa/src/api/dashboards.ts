@@ -42,6 +42,7 @@ export interface AdminAlert {
   id: string;
   type: string;
   severity: 'critical' | 'warning' | 'info';
+  severity_label?: string;
   title: string;
   message: string;
   created_at: string;
@@ -62,6 +63,7 @@ export interface AdminDashboardData {
       sessions: AdminSession[];
       total: number;
       unique_users: number;
+      active_window_minutes?: number;
     };
     account_security: {
       total: number;
@@ -75,7 +77,9 @@ export interface AdminDashboardData {
     auth_events: {
       breakdown_24h: Record<string, number>;
       success_trend_24h: number[];
+      window_hours?: number;
       recent_failures: AdminFailedLogin[];
+      status_options: Array<{ value: string; label: string }>;
     };
     queue_health: {
       pending_jobs: number;

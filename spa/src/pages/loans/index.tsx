@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate} from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import { loansApi, type LoanListParams } from '@/api/loans';
 import { Button } from '@/components/ui/Button';
@@ -23,22 +23,25 @@ export default function LoansPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['loans', filters],
     queryFn: () => loansApi.list(filters),
-    placeholderData: (prev) => prev,
-  });
+    placeholderData: (prev) => prev });
+  const { data: loanOptions } = useQuery({
+    queryKey: ['loan-options'],
+    queryFn: loansApi.options,
+    staleTime: 5 * 60 * 1000 });
 
   const columns: Column<EmployeeLoan>[] = [
-    { key: 'loan_no', header: 'Loan no', cell: (r) => <Link to={`/hr/loans/${r.id}`} className="font-mono text-accent hover:underline">{r.loan_no}</Link> },
+    { key: 'loan_no', header: 'Loan no', cell: (r) => <span className="font-mono">{r.loan_no}</span> },
     { key: 'employee', header: 'Employee', cell: (r) => <StackedCell primary={r.employee?.full_name ?? '—'} secondary={<span className="font-mono">{r.employee?.employee_no}</span>} /> },
-    { key: 'loan_type', header: 'Type', cell: (r) => <Chip variant="neutral">{r.loan_type === 'company_loan' ? 'Company' : 'Cash Advance'}</Chip> },
+    { key: 'loan_type', header: 'Type', cell: (r) => <Chip variant="neutral">{r.loan_type_label ?? r.loan_type}</Chip> },
     { key: 'principal', header: 'Principal', align: 'right', cell: (r) => <NumCell>{formatPeso(r.principal)}</NumCell> },
     { key: 'balance', header: 'Balance', align: 'right', cell: (r) => <NumCell className="font-medium">{formatPeso(r.balance)}</NumCell> },
     { key: 'pay_periods', header: 'Periods', align: 'right', cell: (r) => <NumCell>{r.pay_periods_remaining}/{r.pay_periods_total}</NumCell> },
     { key: 'start_date', header: 'Start', align: 'left', cell: (r) => <NumCell>{r.start_date ? formatDate(r.start_date) : '—'}</NumCell> },
     { key: 'status', header: 'Status', cell: (r) => (
       <span className="flex items-center gap-1.5">
-        <Chip variant={chipVariantForStatus(r.status)}>{r.status}</Chip>
+        <Chip variant={chipVariantForStatus(r.status)}>{r.status_label ?? r.status}</Chip>
         {r.has_overdue_approval && (
-          <span title="Approval pending more than 24 hours"><Chip variant="danger">overdue</Chip></span>
+          <span title={`Approval pending beyond ${loanOptions?.approval_sla_hours ?? 'configured'} hours`}><Chip variant="danger">overdue</Chip></span>
         )}
       </span>
     ) },
@@ -49,21 +52,14 @@ export default function LoansPage() {
       key: 'loan_type', label: 'Type', type: 'select',
       options: [
         { value: '', label: 'All types' },
-        { value: 'company_loan', label: 'Company loan' },
-        { value: 'cash_advance', label: 'Cash advance' },
-      ],
-    },
+        ...(loanOptions?.types ?? []).map((type) => ({ value: type.value, label: type.label })),
+      ] },
     {
       key: 'status', label: 'Status', type: 'select',
       options: [
         { value: '', label: 'All' },
-        { value: 'pending', label: 'Pending' },
-        { value: 'active', label: 'Active' },
-        { value: 'paid', label: 'Paid' },
-        { value: 'cancelled', label: 'Cancelled' },
-        { value: 'rejected', label: 'Rejected' },
-      ],
-    },
+        ...(loanOptions?.statuses ?? []),
+      ] },
   ];
 
   return (
@@ -97,7 +93,8 @@ export default function LoansPage() {
         />
       )}
       {data && data.data.length > 0 && (
-        <div className="px-5 py-4"><DataTable columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters((f) => ({ ...f, page }))} /></div>
+        <div className="px-5 py-4"><DataTable
+            onRowClick={(r) => navigate(`/hr/loans/${r.id}`)} columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters((f) => ({ ...f, page }))} /></div>
       )}
     </div>
   );

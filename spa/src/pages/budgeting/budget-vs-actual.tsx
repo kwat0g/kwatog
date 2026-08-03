@@ -7,7 +7,7 @@ import { Panel } from '@/components/ui/Panel';
 import { StatCard } from '@/components/ui/StatCard';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { cn } from '@/lib/cn';
-import { formatPeso } from '@/lib/formatNumber';
+import { formatPeso, formatCompactCurrency } from '@/lib/formatNumber';
 import type { BudgetVsActual, BudgetVsActualRow } from '@/types/budgeting';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
@@ -79,8 +79,8 @@ export default function BudgetVsActualPage() {
         <>
           {/* Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <StatCard label="Total Budgeted" value={`₱ ${(data.total_budgeted / 1_000_000).toFixed(2)}M`} />
-            <StatCard label="Total Actual" value={`₱ ${(data.total_actual / 1_000_000).toFixed(2)}M`} />
+            <StatCard label="Total Budgeted" value={formatCompactCurrency(data.total_budgeted, 1_000_000, 'M')} />
+            <StatCard label="Total Actual" value={formatCompactCurrency(data.total_actual, 1_000_000, 'M')} />
             <StatCard label="Total Variance" value={`${isFavorable ? '+' : ''}${totalVariancePct.toFixed(1)}%`} />
           </div>
 
@@ -94,7 +94,7 @@ export default function BudgetVsActualPage() {
                     <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'var(--text-muted, #6b7280)' }} />
                     <YAxis
                       tick={{ fontSize: 10, fill: 'var(--text-muted, #6b7280)' }}
-                      tickFormatter={(v: number) => `₱${(v / 1000).toFixed(0)}k`}
+                      tickFormatter={(v: number) => formatCompactCurrency(v, 1_000, 'K')}
                       width={56}
                     />
                     <Tooltip
@@ -134,10 +134,10 @@ export default function BudgetVsActualPage() {
                     return (
                       <tr key={key} className={trCls}>
                         <Td className="font-medium">{key}</Td>
-                        <Td align="right" mono>₱{(group.budgeted / 1_000_000).toFixed(2)}M</Td>
-                        <Td align="right" mono>₱{(group.actual / 1_000_000).toFixed(2)}M</Td>
+                        <Td align="right" mono>{formatCompactCurrency(group.budgeted, 1_000_000, 'M')}</Td>
+                        <Td align="right" mono>{formatCompactCurrency(group.actual, 1_000_000, 'M')}</Td>
                         <Td align="right" mono className={cn(variance < 0 ? 'text-danger-fg' : 'text-success-fg')}>
-                          {variance >= 0 ? '+' : ''}₱{(Math.abs(variance) / 1_000_000).toFixed(2)}M
+                          {variance >= 0 ? '+' : '-'}{formatCompactCurrency(Math.abs(variance), 1_000_000, 'M')}
                         </Td>
                         <Td align="right" mono>
                           <span className={cn(
@@ -179,10 +179,10 @@ export default function BudgetVsActualPage() {
                           <span className="ml-1 text-muted text-xs">{row.account_name}</span>
                         </Td>
                         <Td className="text-secondary">{row.department}</Td>
-                        <Td align="right" mono>₱{(row.budgeted / 1000).toFixed(0)}K</Td>
-                        <Td align="right" mono>₱{(row.actual / 1000).toFixed(0)}K</Td>
+                        <Td align="right" mono>{formatCompactCurrency(row.budgeted, 1_000, 'K')}</Td>
+                        <Td align="right" mono>{formatCompactCurrency(row.actual, 1_000, 'K')}</Td>
                         <Td align="right" mono className={cn(isOver ? 'text-danger-fg' : 'text-success-fg')}>
-                          {row.variance >= 0 ? '+' : ''}{row.variance >= 0 ? '₱' : '-₱'}{(Math.abs(row.variance) / 1000).toFixed(0)}K
+                          {row.variance >= 0 ? '+' : '-'}{formatCompactCurrency(Math.abs(row.variance), 1_000, 'K')}
                         </Td>
                         <Td align="right" mono>
                           <span className={cn(

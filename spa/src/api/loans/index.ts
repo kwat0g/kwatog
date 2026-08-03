@@ -8,7 +8,14 @@ export interface LoanListParams extends ListParams {
   status?: string;
 }
 
+export interface LoanOptions {
+  types: LoanTypeOption[];
+  statuses: Array<{ value: string; label: string }>;
+  approval_sla_hours?: number;
+}
+
 export const loansApi = {
+  options: () => client.get<ApiSuccess<LoanOptions>>('/loans/options').then((r) => r.data.data),
   types: () => client.get<ApiSuccess<LoanTypeOption[]>>('/loans/types').then((r) => r.data.data),
   list: (params?: LoanListParams) =>
     client.get<PaginatedResponse<EmployeeLoan>>('/loans', { params }).then((r) => r.data),

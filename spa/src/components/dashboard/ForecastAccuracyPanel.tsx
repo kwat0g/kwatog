@@ -22,6 +22,11 @@ export function ForecastAccuracyPanel({ year = new Date().getFullYear() }: Props
     staleTime: 5 * 60_000,
     refetchInterval: 10 * 60_000,
   });
+  const policyQuery = useQuery({
+    queryKey: ['forecasting', 'options'],
+    queryFn: () => forecastingApi.options(),
+    staleTime: 300_000,
+  });
 
   const detailsLink = (
     <Link to="/forecasting/accuracy" className="text-xs text-accent hover:underline">
@@ -66,11 +71,13 @@ export function ForecastAccuracyPanel({ year = new Date().getFullYear() }: Props
     );
   }
 
-  const mapeStatus = accuracy.mape === null
+  const excellent = policyQuery.data?.accuracy_policy.excellent_mape;
+  const acceptable = policyQuery.data?.accuracy_policy.acceptable_mape;
+  const mapeStatus = accuracy.mape === null || excellent == null || acceptable == null
     ? 'No score'
-    : accuracy.mape <= 15
+    : accuracy.mape <= excellent
       ? 'Excellent'
-      : accuracy.mape <= 30
+      : accuracy.mape <= acceptable
         ? 'Acceptable'
         : 'Needs review';
 

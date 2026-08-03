@@ -22,6 +22,7 @@ export interface AdminUserListItem {
   name: string;
   email: string;
   status: AdminUserStatus;
+  status_label?: string;
   is_active: boolean;
   is_locked: boolean;
   must_change_password: boolean;
@@ -34,6 +35,7 @@ export interface AdminUserListItem {
 export interface LoginEvent {
   id: string;
   status: string;
+  status_label?: string;
   reason: string | null;
   email_attempted: string | null;
   ip_address: string | null;
@@ -87,6 +89,7 @@ export type PermissionOverrideType = 'grant' | 'revoke';
 export interface UserPermissionOverride {
   id: string;
   type: PermissionOverrideType;
+  type_label?: string;
   permission: {
     id: string;
     slug: string;

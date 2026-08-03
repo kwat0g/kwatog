@@ -41,6 +41,12 @@ export default function PurchaseOrderDetailPage() {
     queryFn: () => purchaseOrdersApi.show(id),
     enabled: !!id,
   });
+  const { data: purchaseOrderOptions } = useQuery({
+    queryKey: ['purchasing', 'purchase-orders', 'options'],
+    queryFn: purchaseOrdersApi.options,
+    staleTime: 300_000,
+  });
+  const statusLabel = purchaseOrderOptions?.statuses.find((option) => option.value === data?.status)?.label;
 
   // Series C — Task C4. Real-time chain progress.
   useChainProgress('purchase_order', id, ['purchasing', 'purchase-orders', id]);
@@ -88,7 +94,7 @@ export default function PurchaseOrderDetailPage() {
         breadcrumbs={[{ label: 'Purchasing', href: '/purchasing' }, { label: 'Purchase orders', href: '/purchasing/purchase-orders' }, { label: data.po_number }]}
         actions={
           <div className="flex items-center gap-2 flex-wrap">
-            <Chip variant={variant[data.status]}>{data.status.replace(/_/g, ' ')}</Chip>
+            <Chip variant={variant[data.status]}>{statusLabel ?? data.status}</Chip>
             {data.requires_vp_approval && <Chip variant="warning">VP req.</Chip>}
             {data.is_auto_generated && (
               <span title="Auto-generated for critical stock"><Chip variant="info">Auto</Chip></span>
@@ -220,7 +226,7 @@ export default function PurchaseOrderDetailPage() {
                         {data.goods_receipt_notes!.map((g) => (
                           <div key={g.id} className="flex items-center justify-between">
                             <Link to={`/inventory/grn/${g.id}`} className="font-mono text-accent hover:underline">{g.grn_number}</Link>
-                            <span className="text-2xs text-muted">{formatDate(g.received_date)} · {g.status.replace(/_/g, ' ')}</span>
+                            <span className="text-2xs text-muted">{formatDate(g.received_date)} · {g.status_label ?? g.status.replace(/_/g, ' ')}</span>
                           </div>
                         ))}
                       </div>
@@ -270,7 +276,7 @@ export default function PurchaseOrderDetailPage() {
                                 variant={b.status === 'paid' ? 'success' : b.status === 'partial' ? 'info' : 'warning'}
                                 className="ml-1.5"
                               >
-                                {b.status}
+                                {b.status_label ?? b.status}
                               </Chip>
                             </span>
                           </li>
@@ -305,7 +311,7 @@ export default function PurchaseOrderDetailPage() {
                                 : g.status === 'pending_qc' ? 'warning'
                                 : g.status === 'rejected' ? 'danger'
                                 : 'info') as 'success' | 'warning' | 'info' | 'danger',
-                        text: g.status.replace(/_/g, ' '),
+                        text: g.status_label ?? g.status.replace(/_/g, ' '),
                       },
                     })),
                   }] : []),
@@ -408,4 +414,3 @@ export default function PurchaseOrderDetailPage() {
     </div>
   );
 }
-

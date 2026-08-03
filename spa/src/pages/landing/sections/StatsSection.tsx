@@ -12,7 +12,9 @@
 import { useLayoutEffect, useRef } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { STATS, type StatItem } from '../data';
+import type { StatItem } from '../data';
+import { useQuery } from '@tanstack/react-query';
+import { landingApi } from '@/api/landing';
 import { registerScrollTrigger, reduceMotion } from '../motion';
 import { section, container } from '../styles';
 
@@ -40,7 +42,12 @@ function Counter({ stat }: { stat: StatItem }) {
     }
 
     registerScrollTrigger();
-    el.textContent = formatValue(0, stat);
+    // Render the authoritative value immediately. The section is populated
+    // asynchronously from the landing endpoint, so ScrollTrigger may be
+    // created after its initial refresh and never receive an `onEnter` event.
+    // Keeping the value visible avoids presenting a misleading zero while the
+    // decorative count-up waits for the section to enter the viewport.
+    el.textContent = formatValue(stat.value, stat);
     if (line) line.style.transform = 'scaleX(0)';
     const obj = { v: 0 };
 
@@ -49,6 +56,7 @@ function Counter({ stat }: { stat: StatItem }) {
       start: 'top 90%',
       once: true,
       onEnter: () => {
+        el.textContent = formatValue(0, stat);
         gsap.to(obj, {
           v: stat.value,
           duration: 1.6,
@@ -101,10 +109,12 @@ function Counter({ stat }: { stat: StatItem }) {
 }
 
 export function StatsSection() {
+  const { data: content } = useQuery({ queryKey: ['landing', 'content'], queryFn: landingApi.content, staleTime: 300_000 });
+  const stats = content?.stats ?? [];
   return (
     <section className={section('surface')}>
       <div className={`${container} grid gap-x-6 gap-y-12 sm:grid-cols-2 lg:grid-cols-4`}>
-        {STATS.map((stat, i) => (
+        {stats.map((stat, i) => (
           <div
             key={stat.id}
             data-reveal

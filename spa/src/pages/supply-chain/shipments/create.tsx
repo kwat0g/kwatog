@@ -23,6 +23,7 @@ const schema = z.object({
   etd: z.string().optional().or(z.literal('')),
   eta: z.string().optional().or(z.literal('')),
   notes: z.string().max(2000).optional().or(z.literal('')),
+  incoterm: z.string().optional().or(z.literal('')),
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -35,6 +36,11 @@ export default function CreateShipmentPage() {
     queryFn: () => purchaseOrdersApi.list({ status: 'sent', per_page: 200 }),
   });
   const poList = posData?.data ?? [];
+  const { data: shipmentOptions } = useQuery({
+    queryKey: ['supply-chain', 'shipments', 'options'],
+    queryFn: () => shipmentsApi.options(),
+    staleTime: 300_000,
+  });
 
   if (posError) {
     toast.error('Failed to load purchase orders');
@@ -51,6 +57,7 @@ export default function CreateShipmentPage() {
       etd: '',
       eta: '',
       notes: '',
+      incoterm: '',
     },
   });
 
@@ -65,6 +72,7 @@ export default function CreateShipmentPage() {
         etd: data.etd || undefined,
         eta: data.eta || undefined,
         notes: data.notes || undefined,
+        incoterm: data.incoterm ? data.incoterm as import('@/types/supplyChain').Incoterm : undefined,
       }),
     onSuccess: (shipment) => {
       qc.invalidateQueries({ queryKey: ['supply-chain', 'shipments'] });
@@ -114,28 +122,32 @@ export default function CreateShipmentPage() {
               label="Carrier"
               {...register('carrier')}
               error={errors.carrier?.message}
-              placeholder="e.g. Evergreen"
+              placeholder="Enter carrier name"
             />
             <Input
               label="Vessel"
               {...register('vessel')}
               error={errors.vessel?.message}
-              placeholder="e.g. EVER GIVEN"
+              placeholder="Enter vessel name"
             />
+            <Select label="Incoterm" {...register('incoterm')} error={errors.incoterm?.message}>
+              <option value="">— Select incoterm —</option>
+              {(shipmentOptions?.incoterms ?? []).map((option) => <option key={option.value} value={option.value}>{option.value} — {option.label}</option>)}
+            </Select>
           </div>
           <div className="grid grid-cols-2 gap-3 mt-3">
             <Input
               label="Container number"
               {...register('container_number')}
               error={errors.container_number?.message}
-              placeholder="e.g. TCKU3456789"
+              placeholder="Container number"
               className="font-mono"
             />
             <Input
               label="Bill of lading number"
               {...register('bl_number')}
               error={errors.bl_number?.message}
-              placeholder="e.g. EVGL0012345"
+              placeholder="Bill of lading number"
               className="font-mono"
             />
           </div>

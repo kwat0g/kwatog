@@ -22,9 +22,12 @@ import type { ApiValidationError } from '@/types';
 
 const lineSchema = z.object({
   account_id: z.string().min(1, 'Account is required'),
-  debit:  z.coerce.number({ invalid_type_error: 'Number' }).min(0, 'Min 0').default(0),
-  credit: z.coerce.number({ invalid_type_error: 'Number' }).min(0, 'Min 0').default(0),
+  debit:  z.preprocess((value) => value === '' || value == null ? undefined : value, z.coerce.number({ invalid_type_error: 'Number' }).min(0, 'Min 0').optional()),
+  credit: z.preprocess((value) => value === '' || value == null ? undefined : value, z.coerce.number({ invalid_type_error: 'Number' }).min(0, 'Min 0').optional()),
   description: z.string().max(200).optional().or(z.literal('')),
+}).refine((line) => (line.debit ?? 0) > 0 || (line.credit ?? 0) > 0, {
+  message: 'Enter a debit or credit amount',
+  path: ['debit'],
 });
 
 const schema = z.object({
@@ -51,8 +54,8 @@ export default function CreateJournalEntryPage() {
       date: new Date().toISOString().slice(0, 10),
       description: '',
       lines: [
-        { account_id: '', debit: 0, credit: 0, description: '' },
-        { account_id: '', debit: 0, credit: 0, description: '' },
+        { account_id: '', debit: undefined, credit: undefined, description: '' },
+        { account_id: '', debit: undefined, credit: undefined, description: '' },
       ],
     },
   });
@@ -166,7 +169,7 @@ export default function CreateJournalEntryPage() {
           </div>
 
           <div className="flex items-center justify-between mt-3">
-            <Button type="button" variant="secondary" size="sm" icon={<Plus size={14} />} onClick={() => append({ account_id: '', debit: 0, credit: 0, description: '' })}>
+            <Button type="button" variant="secondary" size="sm" icon={<Plus size={14} />} onClick={() => append({ account_id: '', debit: undefined, credit: undefined, description: '' })}>
               Add line
             </Button>
             <div className="flex items-center gap-4 text-sm font-mono tabular-nums">

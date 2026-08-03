@@ -1,6 +1,7 @@
-import { lazy } from 'react';
+import { lazy, Suspense } from 'react';
 import { Route, Navigate } from 'react-router-dom';
 import { PermissionGuard } from '@/components/guards/PermissionGuard';
+import { SkeletonDashboard, SkeletonKanban, SkeletonTable } from '@/components/ui/Skeleton';
 
 const DashboardPage = lazy(() => import('@/pages/dashboard'));
 // Task D1 — direct escape hatch to the generic widget-layout home, so users
@@ -42,67 +43,67 @@ export const dashboardRoutes = (
   <>
     {/* Task D1 — `/dashboard` is the role router; `/dashboard/default`
         is the explicit escape hatch to the generic widget-layout page. */}
-    <Route path="/dashboard" element={<DashboardPage />} />
-    <Route path="/dashboard/default" element={<DashboardDefaultPage />} />
+    <Route path="/dashboard" element={<Suspense fallback={<SkeletonDashboard />}><DashboardPage /></Suspense>} />
+    <Route path="/dashboard/default" element={<Suspense fallback={<SkeletonDashboard />}><DashboardDefaultPage /></Suspense>} />
 
     {/* Sprint 8 dashboards */}
     <Route path="/dashboard/plant-manager"
-      element={<PermissionGuard permission="dashboard.plant_manager.view"><PlantManagerDashboardPage /></PermissionGuard>} />
+      element={<PermissionGuard permission="dashboard.plant_manager.view"><Suspense fallback={<SkeletonDashboard />}><PlantManagerDashboardPage /></Suspense></PermissionGuard>} />
     <Route path="/dashboard/hr"
-      element={<PermissionGuard permission="dashboard.hr.view"><HrDashboardPage /></PermissionGuard>} />
+      element={<PermissionGuard permission="dashboard.hr.view"><Suspense fallback={<SkeletonDashboard />}><HrDashboardPage /></Suspense></PermissionGuard>} />
     <Route path="/dashboard/ppc"
-      element={<PermissionGuard permission="dashboard.ppc.view"><PpcDashboardPage /></PermissionGuard>} />
+      element={<PermissionGuard permission="dashboard.ppc.view"><Suspense fallback={<SkeletonDashboard />}><PpcDashboardPage /></Suspense></PermissionGuard>} />
     {/* Task D1 — `/dashboard/finance` is the canonical Finance Officer dashboard.
         `/dashboard/accounting` is kept as a permanent redirect. */}
     <Route path="/dashboard/finance"
-      element={<PermissionGuard permission="dashboard.accounting.view"><FinanceDashboardPage /></PermissionGuard>} />
+      element={<PermissionGuard permission="dashboard.accounting.view"><Suspense fallback={<SkeletonDashboard />}><FinanceDashboardPage /></Suspense></PermissionGuard>} />
     <Route path="/dashboard/accounting"
       element={<Navigate to="/dashboard/finance" replace />} />
     {/* D6, D7, D8 — New role-specific dashboards */}
     <Route path="/dashboard/purchasing"
-      element={<PermissionGuard permission="dashboard.purchasing.view"><PurchasingDashboardPage /></PermissionGuard>} />
+      element={<PermissionGuard permission="dashboard.purchasing.view"><Suspense fallback={<SkeletonDashboard />}><PurchasingDashboardPage /></Suspense></PermissionGuard>} />
     <Route path="/dashboard/warehouse"
-      element={<PermissionGuard permission="dashboard.warehouse.view"><WarehouseDashboardPage /></PermissionGuard>} />
+      element={<PermissionGuard permission="dashboard.warehouse.view"><Suspense fallback={<SkeletonDashboard />}><WarehouseDashboardPage /></Suspense></PermissionGuard>} />
     <Route path="/dashboard/quality"
-      element={<PermissionGuard permission="dashboard.quality.view"><QcDashboardPage /></PermissionGuard>} />
+      element={<PermissionGuard permission="dashboard.quality.view"><Suspense fallback={<SkeletonDashboard />}><QcDashboardPage /></Suspense></PermissionGuard>} />
     <Route path="/dashboard/admin"
-      element={<PermissionGuard permission="dashboard.admin.view"><AdminDashboardPage /></PermissionGuard>} />
+      element={<PermissionGuard permission="dashboard.admin.view"><Suspense fallback={<SkeletonDashboard />}><AdminDashboardPage /></Suspense></PermissionGuard>} />
     {/* Task 15 — KPI Scorecard (any authenticated user) */}
     <Route path="/dashboard/scorecard"
-      element={<ScorecardPage />} />
+      element={<Suspense fallback={<SkeletonDashboard />}><ScorecardPage /></Suspense>} />
 
     {/* Series F / Task F1 — Cross-module calendar */}
     <Route
       path="/calendar"
-      element={<PermissionGuard permission="calendar.view"><CalendarPage /></PermissionGuard>}
+      element={<PermissionGuard permission="calendar.view"><Suspense fallback={<SkeletonTable columns={7} rows={6} />}><CalendarPage /></Suspense></PermissionGuard>}
     />
 
     {/* Series F / Task F2 — Approvals Kanban board */}
     <Route
       path="/approvals"
-      element={<PermissionGuard permission="approvals.board.view"><ApprovalsBoardPage /></PermissionGuard>}
+      element={<PermissionGuard permission="approvals.board.view"><Suspense fallback={<SkeletonKanban />}><ApprovalsBoardPage /></Suspense></PermissionGuard>}
     />
 
     {/* Chain Tracker — cross-module order-to-cash journey view */}
     <Route
       path="/chains"
-      element={<PermissionGuard permission="crm.sales_orders.view"><ChainTrackerPage /></PermissionGuard>}
+      element={<PermissionGuard permission="crm.sales_orders.view"><Suspense fallback={<SkeletonDashboard />}><ChainTrackerPage /></Suspense></PermissionGuard>}
     />
 
     {/* Series F / Task F7 — System activity feed */}
     <Route
       path="/admin/activity"
-      element={<PermissionGuard permission="admin.activity.view"><AdminActivityFeedPage /></PermissionGuard>}
+      element={<PermissionGuard permission="admin.activity.view"><Suspense fallback={<SkeletonTable columns={5} rows={10} />}><AdminActivityFeedPage /></Suspense></PermissionGuard>}
     />
 
     <Route path="/admin/users-roles"
-      element={<PermissionGuard permission="admin.users.manage"><AdminUsersRolesHubPage /></PermissionGuard>} />
+      element={<PermissionGuard permission="admin.users.manage"><Suspense fallback={<SkeletonTable columns={5} rows={8} />}><AdminUsersRolesHubPage /></Suspense></PermissionGuard>} />
 
     {/* Notifications page (Sprint 8 — Task 77) */}
-    <Route path="/notifications" element={<NotificationsListPage />} />
-    <Route path="/action-center" element={<ActionCenterPage />} />
-    <Route path="/exceptions" element={<ExceptionWorkbenchPage />} />
+    <Route path="/notifications" element={<Suspense fallback={<SkeletonTable columns={4} rows={8} />}><NotificationsListPage /></Suspense>} />
+    <Route path="/action-center" element={<Suspense fallback={<SkeletonDashboard />}><ActionCenterPage /></Suspense>} />
+    <Route path="/exceptions" element={<Suspense fallback={<SkeletonTable columns={5} rows={8} />}><ExceptionWorkbenchPage /></Suspense>} />
     <Route path="/admin/operations-health"
-      element={<PermissionGuard permission="dashboard.admin.view"><OperationsHealthPage /></PermissionGuard>} />
+      element={<PermissionGuard permission="dashboard.admin.view"><Suspense fallback={<SkeletonDashboard />}><OperationsHealthPage /></Suspense></PermissionGuard>} />
   </>
 );

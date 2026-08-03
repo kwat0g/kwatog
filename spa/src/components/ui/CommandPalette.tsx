@@ -319,11 +319,11 @@ export function CommandPalette({ open, onClose }: Props) {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search pages, employees, orders, vendors, items, NCRs…"
-            className="flex-1 bg-transparent text-sm outline-none placeholder:text-text-subtle"
+            className="flex-1 bg-transparent text-sm outline-none placeholder:text-subtle"
             aria-label="Search query"
           />
           {loading && <Loader2 size={14} className="text-muted animate-spin" />}
-          <kbd className="font-mono text-2xs text-text-subtle border border-subtle rounded px-1 py-0.5">ESC</kbd>
+          <kbd className="font-mono text-2xs text-subtle border border-subtle rounded px-1 py-0.5">ESC</kbd>
         </div>
 
         <div ref={listRef} className="max-h-[420px] overflow-y-auto">
@@ -354,7 +354,7 @@ export function CommandPalette({ open, onClose }: Props) {
               <div className="px-3 pt-2 pb-1 text-2xs uppercase tracking-wider text-muted font-medium flex items-center gap-2">
                 {section.icon && <section.icon size={11} className="text-muted" />}
                 <span className="flex-1">{section.label}</span>
-                <span className="font-mono text-text-subtle tabular-nums">{section.rows.length}</span>
+                <span className="font-mono text-subtle tabular-nums">{section.rows.length}</span>
                 {section.headerAction && (
                   <LinkButton
                     tone="muted"

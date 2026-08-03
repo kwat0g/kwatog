@@ -163,7 +163,7 @@ function TreeRow({
           )}
           {!node.is_active && <Chip variant="neutral">inactive</Chip>}
         </div>
-        <div className="col-span-2 text-sm text-muted capitalize">{node.type} · {node.normal_balance}</div>
+        <div className="col-span-2 text-sm text-muted">{node.type_label ?? node.type} · {node.normal_balance_label ?? node.normal_balance}</div>
         <div className="col-span-2 text-right font-mono tabular-nums">{formatPeso(node.total_debit, '—')}</div>
         <div className="col-span-2 text-right font-mono tabular-nums font-medium">{formatPeso(node.current_balance, '—')}</div>
       </div>

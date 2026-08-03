@@ -12,6 +12,7 @@ export interface TraceabilityWorkOrderRow {
   actual_start: string | null;
   actual_end: string | null;
   status: string;
+  status_label?: string;
 }
 
 export interface TraceabilityMaterialRef {
@@ -28,7 +29,9 @@ export interface TraceabilityInspection {
   id: string;
   inspection_number: string;
   stage: string;
+  stage_label?: string;
   status: string;
+  status_label?: string;
   completed_at: string | null;
 }
 
@@ -46,6 +49,7 @@ export interface TraceabilityResult {
   found: boolean;
   term: string;
   type: TraceabilityType;
+  type_label?: string | null;
   trace: {
     work_order?: TraceabilityWorkOrderRow;
     lot?: { id: string; lot_number: string; quantity: number; lot_date: string | null;
@@ -73,7 +77,7 @@ export interface TraceabilityResult {
     forward?: {
       inspections?: TraceabilityInspection[];
       lots?: TraceabilityLotRow[];
-      delivery?: { id: string; delivery_number: string; status: string;
+      delivery?: { id: string; delivery_number: string; status: string; status_label?: string;
                    delivered_at: string | null; confirmed_at: string | null } | null;
       customer?: { id: string; name: string | null } | null;
       work_orders?: TraceabilityWorkOrderRow[];

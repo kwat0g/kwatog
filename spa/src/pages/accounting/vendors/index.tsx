@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate} from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import { vendorsApi, type VendorListParams } from '@/api/accounting/vendors';
 import { Button } from '@/components/ui/Button';
@@ -22,11 +22,10 @@ export default function VendorsPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['accounting', 'vendors', filters],
     queryFn: () => vendorsApi.list(filters),
-    placeholderData: (prev) => prev,
-  });
+    placeholderData: (prev) => prev });
 
   const columns: Column<Vendor>[] = [
-    { key: 'name', header: 'Vendor', cell: (r) => <Link to={`/accounting/vendors/${r.id}`} className="text-accent hover:underline font-medium">{r.name}</Link> },
+    { key: 'name', header: 'Vendor', cell: (r) => r.name },
     { key: 'contact', header: 'Contact', cell: (r) => r.contact_person ?? '—' },
     { key: 'phone', header: 'Phone', cell: (r) => <span className="font-mono">{r.phone ?? '—'}</span> },
     { key: 'terms', header: 'Terms', align: 'right', cell: (r) => <NumCell>{r.payment_terms_days}d</NumCell> },
@@ -41,8 +40,7 @@ export default function VendorsPage() {
         { value: '', label: 'All' },
         { value: 'true',  label: 'Active' },
         { value: 'false', label: 'Inactive' },
-      ],
-    },
+      ] },
   ];
 
   return (
@@ -70,7 +68,15 @@ export default function VendorsPage() {
           action={can('accounting.vendors.manage') ? <Button variant="primary" onClick={() => navigate('/accounting/vendors/create')}>New vendor</Button> : undefined} />
       )}
       {data && data.data.length > 0 && (
-        <div className="px-5 py-4"><DataTable columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters((f) => ({ ...f, page }))} /></div>
+        <div className="px-5 py-4">
+          <DataTable
+            onRowClick={(r) => navigate(`/accounting/vendors/${r.id}`)}
+            columns={columns}
+            data={data.data}
+            meta={data.meta}
+            onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+          />
+        </div>
       )}
     </div>
   );

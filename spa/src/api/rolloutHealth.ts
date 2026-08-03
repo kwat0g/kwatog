@@ -2,6 +2,7 @@ import { client } from '@/api/client';
 
 export interface RolloutHealth {
   status: 'healthy' | 'attention';
+  status_label?: string;
   quality_plans: {
     eligible_items: number;
     covered_items: number;

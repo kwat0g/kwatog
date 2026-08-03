@@ -83,7 +83,7 @@ export default function OvertimeListPage() {
     { key: 'reason', header: 'Reason', cell: (r) => <span className="text-muted truncate block max-w-md" title={r.reason}>{r.reason}</span> },
     { key: 'status', header: 'Status', cell: (r) => (
       <div className="flex items-center gap-1.5">
-        <Chip variant={chipVariantForStatus(r.status)}>{r.status}</Chip>
+        <Chip variant={chipVariantForStatus(r.status)}>{r.status_label ?? r.status}</Chip>
         {r.is_auto_detected && <Chip variant="info">Auto</Chip>}
       </div>
     ) },

@@ -21,7 +21,17 @@ export interface ReviewListParams extends ListParams {
   status?: ReviewStatus;
 }
 
+export interface PerformanceReviewOptions {
+  review_statuses: Array<{ value: string; label: string }>;
+  rating_categories: Array<{ value: string; label: string }>;
+  statuses: Array<{ value: string; label: string }>;
+  cycle_types: Array<{ value: string; label: string }>;
+  rating_scale: Array<{ value: string; label: string }>;
+  overall_ratings: Array<{ value: string; label: string }>;
+}
+
 export const reviewCyclesApi = {
+  options: () => client.get<{ data: PerformanceReviewOptions }>('/hr/performance-reviews/options').then(r => r.data.data),
   list: (params?: CycleListParams) =>
     client.get<PaginatedResponse<ReviewCycle>>('/hr/performance-reviews/cycles', { params }).then(r => r.data),
   create: (data: CreateCycleData) =>
@@ -33,6 +43,7 @@ export const reviewCyclesApi = {
 };
 
 export const performanceReviewsApi = {
+  options: () => client.get<{ data: PerformanceReviewOptions }>('/hr/performance-reviews/options').then(r => r.data.data),
   list: (params?: ReviewListParams) =>
     client.get<PaginatedResponse<PerformanceReview>>('/hr/performance-reviews', { params }).then(r => r.data),
   show: (id: string) =>

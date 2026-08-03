@@ -86,14 +86,15 @@ export interface MrpPlan {
   sales_order?: { id: string; so_number: string; customer?: { id: string; name: string } | null };
   version: number;
   status: MrpPlanStatus;
+  status_label?: string;
   total_lines: number;
   shortages_found: number;
   auto_pr_count: number;
   draft_wo_count: number;
   diagnostics: MrpPlanDiagnostic[];
   generator?: { id: string; name: string };
-  work_orders?: Array<{ id: string; wo_number: string; quantity_target: number; status: string; planned_start: string }>;
-  purchase_requests?: Array<{ id: string; pr_number: string; priority: string; status: string; is_auto_generated: boolean; date: string }>;
+  work_orders?: Array<{ id: string; wo_number: string; quantity_target: number; status: string; status_label?: string; planned_start: string }>;
+  purchase_requests?: Array<{ id: string; pr_number: string; priority: string; priority_label?: string; status: string; status_label?: string; is_auto_generated: boolean; date: string }>;
   generated_at: string;
   created_at: string;
   updated_at: string;

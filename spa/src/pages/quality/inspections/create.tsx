@@ -26,7 +26,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import type { CreateInspectionData, InspectionStage, AqlPlan } from '@/types/quality';
 
 const schema = z.object({
-  stage: z.enum(['incoming', 'in_process', 'outgoing']),
+  stage: z.string().min(1, 'Stage is required'),
   product_id: z.string().min(1, 'Product is required'),
   batch_quantity: z.coerce.number().int().min(1, 'Must be at least 1'),
   notes: z.string().max(2000).optional(),
@@ -37,12 +37,19 @@ type FormValues = z.infer<typeof schema>;
 export default function CreateInspectionPage() {
   const navigate = useNavigate();
   const [aqlPlan, setAqlPlan] = useState<AqlPlan | null>(null);
+  const inspectionOptions = useQuery({
+    queryKey: ['quality', 'inspections', 'options'],
+    queryFn: () => inspectionsApi.options(),
+  });
+  const stages = inspectionOptions.data?.stages ?? [];
+  const samplingMethod = inspectionOptions.data?.sampling_methods?.find((method) => method.stage === stage);
 
   const {
     register, handleSubmit, watch, formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { stage: 'outgoing', product_id: '', batch_quantity: 100, notes: '' },
+    // Batch size is transactional input, not a catalog default.
+    defaultValues: { stage: '', product_id: '', notes: '' },
   });
 
   const stage = watch('stage');
@@ -97,9 +104,8 @@ export default function CreateInspectionPage() {
           <Panel title="Inspection details">
             <div className="grid grid-cols-2 gap-3">
               <Select label="Stage" required {...register('stage')} error={errors.stage?.message}>
-                <option value="incoming">Incoming (GRN)</option>
-                <option value="in_process">In-process (Work order)</option>
-                <option value="outgoing">Outgoing (Delivery)</option>
+                <option value="">— Select —</option>
+                {stages.map((stage) => <option key={stage.value} value={stage.value}>{stage.label}</option>)}
               </Select>
               <Select label="Product" required {...register('product_id')} error={errors.product_id?.message}>
                 <option value="">Select…</option>
@@ -123,7 +129,7 @@ export default function CreateInspectionPage() {
         </div>
 
         <div>
-          <Panel title="Sample plan" meta={stage === 'outgoing' ? 'AQL 0.65, Level II' : '100% inspection'}>
+          <Panel title="Sample plan" meta={samplingMethod?.label ?? '—'}>
             {stage === 'outgoing' ? (
               aqlPlan ? (
                 <dl className="space-y-2 text-sm">
@@ -149,7 +155,7 @@ export default function CreateInspectionPage() {
               )
             ) : (
               <p className="text-xs text-muted">
-                Incoming and in-process inspections sample 100% of the batch by default.
+                {samplingMethod?.label ?? 'The selected stage uses the configured sampling method.'}
               </p>
             )}
           </Panel>

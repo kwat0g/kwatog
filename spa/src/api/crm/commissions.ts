@@ -12,6 +12,7 @@ export interface CommissionEarningListParams extends ListParams {
 }
 
 export const commissionsApi = {
+  options: () => client.get<{ data: { statuses: Array<{ value: string; label: string }> } }>('/crm/commissions/options').then((r) => r.data.data),
   list: (params?: CommissionEarningListParams) =>
     client.get<PaginatedResponse<CommissionEarning>>('/crm/commissions', { params }).then((r) => r.data),
   approve: (id: string) =>

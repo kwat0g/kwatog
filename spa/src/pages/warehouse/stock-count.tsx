@@ -36,7 +36,7 @@ const itemStatusVariant: Record<string, 'warning' | 'success' | 'info' | 'neutra
 
 const sessionSchema = z.object({
   title: z.string().trim().min(2, 'Title is required.').max(200),
-  scope: z.enum(['full', 'warehouse', 'zone']),
+  scope: z.string().min(1, 'Scope is required.'),
   warehouse_id: z.string().optional(),
   zone_id: z.string().optional(),
 });
@@ -73,13 +73,18 @@ export default function StockCountPage() {
     queryKey: ['inventory', 'warehouse', 'tree'],
     queryFn: () => warehouseApi.tree(),
   });
+  const { data: stockCountOptions } = useQuery({
+    queryKey: ['warehouse', 'stock-counts', 'options'],
+    queryFn: () => stockCountApi.options(),
+    staleTime: 300_000,
+  });
 
   const inv = () => { qc.invalidateQueries({ queryKey: ['warehouse', 'stock-counts'] }); };
 
   // ── Create session ──
   const createForm = useForm<z.infer<typeof sessionSchema>>({
     resolver: zodResolver(sessionSchema),
-    defaultValues: { scope: 'full' },
+    defaultValues: { scope: '' },
   });
   const watchScope = createForm.watch('scope');
 
@@ -178,7 +183,7 @@ export default function StockCountPage() {
                   <div className="font-mono">{s.session_number}</div>
                   <div className="truncate">{s.title}</div>
                   <div className="flex items-center gap-1 mt-0.5">
-                    <Chip variant={statusVariant[s.status]}>{s.status}</Chip>
+                    <Chip variant={statusVariant[s.status]}>{s.status_label ?? s.status}</Chip>
                     <span className="text-2xs text-muted">{formatDate(s.created_at)}</span>
                   </div>
                 </button>
@@ -211,8 +216,8 @@ export default function StockCountPage() {
                   >
                     <div className="text-xs space-y-1">
                       <div className="flex gap-4">
-                        <span className="text-muted">Scope: <span className="font-medium text-primary">{activeSession.scope}</span></span>
-                        <span className="text-muted">Status: <Chip variant={statusVariant[activeSession.status] || 'neutral'}>{activeSession.status.replace(/_/g, ' ')}</Chip></span>
+                        <span className="text-muted">Scope: <span className="font-medium text-primary">{activeSession.scope_label ?? activeSession.scope}</span></span>
+                        <span className="text-muted">Status: <Chip variant={statusVariant[activeSession.status] || 'neutral'}>{activeSession.status_label ?? activeSession.status.replace(/_/g, ' ')}</Chip></span>
                         {activeSession.warehouse && <span className="text-muted">Warehouse: <span className="font-medium">{activeSession.warehouse.name}</span></span>}
                         {activeSession.zone && <span className="text-muted">Zone: <span className="font-medium">{activeSession.zone.name}</span></span>}
                       </div>
@@ -260,18 +265,18 @@ export default function StockCountPage() {
                               <Td align="right" mono className={Math.abs(Number(item.variance)) > 0.001 ? 'text-warning-fg' : ''}>
                                 {item.counted_quantity !== null ? (Number(item.variance) > 0 ? '+' : '') + Number(item.variance).toFixed(3) : '—'}
                               </Td>
-                              <Td align="right" mono className={Math.abs(Number(item.variance_percent)) > 2 ? 'text-danger-fg' : ''}>
+                              <Td align="right" mono className={stockCountOptions?.variance_tolerance_pct != null && Math.abs(Number(item.variance_percent)) > stockCountOptions.variance_tolerance_pct ? 'text-danger-fg' : ''}>
                                 {item.counted_quantity !== null ? `${Number(item.variance_percent).toFixed(1)}%` : ''}
                               </Td>
-                              <Td><Chip variant={itemStatusVariant[item.status]}>{item.status}</Chip></Td>
+                              <Td><Chip variant={itemStatusVariant[item.status]}>{item.status_label ?? item.status}</Chip></Td>
                               <Td align="right" mono>
                                 {activeSession.status === 'in_progress' && item.status === 'pending' && canManage && (
                                   <Button size="sm" variant="secondary" onClick={() => setCountModalItem(item)}>Count</Button>
                                 )}
-                                {activeSession.status === 'in_progress' && item.status === 'counted' && Math.abs(Number(item.variance_percent)) > 2 && canManage && (
+                                {activeSession.status === 'in_progress' && item.status === 'counted' && stockCountOptions?.variance_tolerance_pct != null && Math.abs(Number(item.variance_percent)) > stockCountOptions.variance_tolerance_pct && canManage && (
                                   <Button size="sm" variant="danger" onClick={() => setApproveTarget(item)}>Approve</Button>
                                 )}
-                                {item.status === 'counted' && Math.abs(Number(item.variance_percent)) <= 2 && (
+                                {item.status === 'counted' && stockCountOptions?.variance_tolerance_pct != null && Math.abs(Number(item.variance_percent)) <= stockCountOptions.variance_tolerance_pct && (
                                   <span className="text-2xs text-muted">Auto</span>
                                 )}
                               </Td>
@@ -295,9 +300,7 @@ export default function StockCountPage() {
         <form onSubmit={createForm.handleSubmit((d) => createSession.mutate(d), onFormInvalid())} className="py-3 space-y-3">
           <Input label="Title" required autoFocus maxLength={200} {...createForm.register('title')} error={createForm.formState.errors.title?.message} />
           <Select label="Scope" required {...createForm.register('scope')}>
-            <option value="full">Full count (all locations)</option>
-            <option value="warehouse">Single warehouse</option>
-            <option value="zone">Single zone</option>
+            {(stockCountOptions?.scopes ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
           </Select>
           {(watchScope !== 'full') && (
             <Select label="Warehouse" required {...createForm.register('warehouse_id')}>

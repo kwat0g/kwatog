@@ -1,6 +1,7 @@
+import { cn } from '@/lib/cn';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, type ReactNode } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -44,8 +45,7 @@ export default function EmployeeDetailPage() {
 
   const { data: employee, isLoading, isError, refetch } = useQuery({
     queryKey: ['hr', 'employee', id],
-    queryFn: () => employeesApi.show(id),
-  });
+    queryFn: () => employeesApi.show(id) });
 
   if (isLoading) return <SkeletonDetail />;
   if (isError || !employee) {
@@ -66,7 +66,7 @@ export default function EmployeeDetailPage() {
           <span className="flex items-center gap-2">
             {employee.full_name}
             <Chip variant={chipVariantForStatus(employee.status)}>
-              {employee.status.replace('_', ' ')}
+              {employee.status_label ?? employee.status}
             </Chip>
           </span>
         }
@@ -142,7 +142,7 @@ export default function EmployeeDetailPage() {
               </div>
               <div>
                 <dt className="text-2xs uppercase tracking-wider text-muted font-medium">Pay type</dt>
-                <dd>{employee.pay_type === 'monthly' ? 'Monthly' : 'Daily'}</dd>
+                <dd>{employee.pay_type_label ?? employee.pay_type}</dd>
               </div>
               <div>
                 <dt className="text-2xs uppercase tracking-wider text-muted font-medium">
@@ -193,8 +193,8 @@ function OverviewTab({ employee }: { employee: any }) {
         <dl className="grid grid-cols-2 gap-4 text-sm">
           <Item label="Full name" value={employee.full_name} />
           <Item label="Birth date" value={formatDate(employee.birth_date)} mono />
-          <Item label="Gender" value={cap(employee.gender)} />
-          <Item label="Civil status" value={cap(employee.civil_status)} />
+          <Item label="Gender" value={employee.gender_label ?? cap(employee.gender)} />
+          <Item label="Civil status" value={employee.civil_status_label ?? cap(employee.civil_status)} />
           <Item label="Nationality" value={employee.nationality} />
         </dl>
       </Panel>
@@ -233,8 +233,7 @@ const HISTORY_FIELD_LABEL: Record<string, string> = {
   date_regularized: 'Regularized on',
   separation_reason: 'Reason',
   separation_date: 'Effective',
-  remarks: 'Remarks',
-};
+  remarks: 'Remarks' };
 
 function renderHistoryValue(key: string, value: any): ReactNode {
   if (value === null || value === undefined || value === '') return <span className="text-text-subtle">—</span>;
@@ -357,8 +356,7 @@ function AttendanceTab({ employeeId }: { employeeId: string }) {
     queryFn: async () => {
       const { attendancesApi } = await import('@/api/attendance/attendances');
       return attendancesApi.list({ employee_id: employeeId, per_page: 14 });
-    },
-  });
+    } });
   if (isLoading) return <SkeletonPanel />;
   if (isError) return <EmptyState icon="alert-circle" title="Failed to load attendance" />;
   const rows = data?.data ?? [];
@@ -386,7 +384,7 @@ function AttendanceTab({ employeeId }: { employeeId: string }) {
               <Td align="right" mono>{r.regular_hours}</Td>
               <Td align="right" mono>{r.overtime_hours}</Td>
               <Td align="right" mono>{r.night_diff_hours}</Td>
-              <Td><Chip variant={chipVariantForStatus(r.status)}>{r.status.replace('_', ' ')}</Chip></Td>
+              <Td><Chip variant={chipVariantForStatus(r.status)}>{r.status_label ?? r.status.replace('_', ' ')}</Chip></Td>
             </tr>
           ))}
         </tbody>
@@ -401,8 +399,7 @@ function LeavesTab({ employeeId }: { employeeId: string }) {
     queryFn: async () => {
       const { leaveRequestsApi } = await import('@/api/leave');
       return leaveRequestsApi.list({ employee_id: employeeId, per_page: 25 });
-    },
-  });
+    } });
   if (isLoading) return <SkeletonPanel />;
   if (isError) return <EmptyState icon="alert-circle" title="Failed to load leaves" />;
   const rows = data?.data ?? [];
@@ -423,12 +420,12 @@ function LeavesTab({ employeeId }: { employeeId: string }) {
           {rows.map((r: any) => (
             <tr key={r.id} className={trCls}>
               <Td>
-                <Link to={`/hr/leaves/${r.id}`} className="font-mono text-accent hover:underline">{r.leave_request_no}</Link>
+                {r.leave_request_no}
               </Td>
               <Td>{r.leave_type?.code}</Td>
               <Td mono>{formatDate(r.start_date)} → {formatDate(r.end_date)}</Td>
               <Td align="right" mono>{r.days}</Td>
-              <Td><Chip variant={chipVariantForStatus(r.status)}>{r.status.replace('_', ' ')}</Chip></Td>
+              <Td><Chip variant={chipVariantForStatus(r.status)}>{r.status_label ?? r.status.replace('_', ' ')}</Chip></Td>
             </tr>
           ))}
         </tbody>
@@ -438,13 +435,13 @@ function LeavesTab({ employeeId }: { employeeId: string }) {
 }
 
 function LoansTab({ employeeId }: { employeeId: string }) {
+  const navigate = useNavigate();
   const { data, isLoading, isError } = useQuery({
     queryKey: ['loans', { employee_id: employeeId }],
     queryFn: async () => {
       const { loansApi } = await import('@/api/loans');
       return loansApi.list({ employee_id: employeeId, per_page: 25 });
-    },
-  });
+    } });
   if (isLoading) return <SkeletonPanel />;
   if (isError) return <EmptyState icon="alert-circle" title="Failed to load loans" />;
   const rows = data?.data ?? [];
@@ -463,14 +460,14 @@ function LoansTab({ employeeId }: { employeeId: string }) {
         </thead>
         <tbody>
           {rows.map((r: any) => (
-            <tr key={r.id} className={trCls}>
+            <tr key={r.id} className={cn(trCls, "cursor-pointer")} onClick={() => navigate(`/hr/loans/${r.id}`)}>
               <Td>
-                <Link to={`/hr/loans/${r.id}`} className="font-mono text-accent hover:underline">{r.loan_no}</Link>
+                {r.loan_no}
               </Td>
-              <Td>{r.loan_type === 'company_loan' ? 'Company' : 'Cash advance'}</Td>
-              <Td align="right" mono>₱ {r.principal}</Td>
-              <Td align="right" mono>₱ {r.balance}</Td>
-              <Td><Chip variant={chipVariantForStatus(r.status)}>{r.status}</Chip></Td>
+              <Td>{r.loan_type_label ?? (r.loan_type === 'company_loan' ? 'Company' : 'Cash advance')}</Td>
+              <Td align="right" mono>{formatPeso(r.principal)}</Td>
+              <Td align="right" mono>{formatPeso(r.balance)}</Td>
+              <Td><Chip variant={chipVariantForStatus(r.status)}>{r.status_label ?? r.status}</Chip></Td>
             </tr>
           ))}
         </tbody>
@@ -524,7 +521,7 @@ function PropertyTab({ employee }: { employee: any }) {
               <Td align="right" mono>{formatPeso(p.replacement_total ?? 0)}</Td>
               <Td mono>{formatDate(p.date_issued)}</Td>
               <Td mono>{p.date_returned ? formatDate(p.date_returned) : '—'}</Td>
-              <Td><Chip variant={chipVariantForStatus(p.status)}>{p.status}</Chip></Td>
+              <Td><Chip variant={chipVariantForStatus(p.status)}>{p.status_label ?? p.status}</Chip></Td>
             </tr>
           ))}
         </tbody>
@@ -545,25 +542,25 @@ function Item({ label, value, mono }: { label: string; value: React.ReactNode; m
 function cap(s?: string | null): string { return s ? s.charAt(0).toUpperCase() + s.slice(1) : ''; }
 
 const separateSchema = z.object({
-  separation_reason: z.enum(['resigned', 'terminated', 'retired', 'end_of_contract']),
+  separation_reason: z.string().min(1, 'Reason is required'),
   separation_date: z.string().min(1, 'Required'),
-  remarks: z.string().max(2000).optional().or(z.literal('')),
-});
+  remarks: z.string().max(2000).optional().or(z.literal('')) });
 
 type SeparateFormValues = z.infer<typeof separateSchema>;
 
 function SeparateModal({
-  employeeId, fullName, onClose, onSeparated,
-}: {
+  employeeId, fullName, onClose, onSeparated }: {
   employeeId: string;
   fullName: string;
   onClose: () => void;
   onSeparated: () => void;
 }) {
+  const { data: employeeOptions } = useQuery({
+    queryKey: ['hr', 'employee-options'],
+    queryFn: () => employeesApi.options() });
   const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<SeparateFormValues>({
     resolver: zodResolver(separateSchema),
-    defaultValues: { separation_reason: 'resigned', separation_date: new Date().toISOString().slice(0, 10) },
-  });
+    defaultValues: { separation_reason: '', separation_date: new Date().toISOString().slice(0, 10) } });
 
   const mutation = useMutation({
     mutationFn: (d: SeparateFormValues) => employeesApi.separate(employeeId, d as SeparateData),
@@ -577,8 +574,7 @@ function SeparateModal({
           setError(f as keyof SeparateFormValues, { type: 'server', message: msgs[0] }),
         );
       } else toast.error('Failed to separate employee.');
-    },
-  });
+    } });
 
   return (
     <Modal isOpen onClose={onClose} title="Separate employee">
@@ -587,10 +583,8 @@ function SeparateModal({
           Marking <span className="font-medium text-primary">{fullName}</span> as separated. This is recorded in their employment history.
         </p>
         <Select label="Reason" required {...register('separation_reason')} error={errors.separation_reason?.message}>
-          <option value="resigned">Resigned</option>
-          <option value="terminated">Terminated</option>
-          <option value="retired">Retired</option>
-          <option value="end_of_contract">End of contract</option>
+          <option value="">— Select —</option>
+          {(employeeOptions?.separation_reasons ?? []).map((reason) => <option key={reason.value} value={reason.value}>{reason.label}</option>)}
         </Select>
         <Input label="Effective date" type="date" required {...register('separation_date')} error={errors.separation_date?.message} />
         <Textarea label="Remarks" {...register('remarks')} error={errors.remarks?.message} rows={3} />

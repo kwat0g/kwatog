@@ -7,6 +7,7 @@ import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { Plus } from 'lucide-react';
 import { currencyApi } from '@/api/accounting/currency';
+import { businessPoliciesApi } from '@/api/businessPolicies';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
@@ -32,6 +33,9 @@ export default function FxRatesPage() {
   const { can } = usePermission();
   const [addOpen, setAddOpen] = useState(false);
   const [page, setPage] = useState(1);
+  const { data: policies } = useQuery({ queryKey: ['business-policies'], queryFn: businessPoliciesApi.get });
+  const functionalCurrency = policies?.functional_currency_code ?? '—';
+  const reportingCurrency = policies?.reporting_currency_code ?? '—';
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['accounting', 'fx-rates', page],
@@ -42,7 +46,7 @@ export default function FxRatesPage() {
   const columns: Column<FxRate>[] = [
     { key: 'currency_code', header: 'Currency', cell: (r) => <span className="font-mono">{r.currency_code}</span> },
     { key: 'rate_date', header: 'Date', cell: (r) => <NumCell>{formatDate(r.rate_date)}</NumCell> },
-    { key: 'rate_to_functional', header: 'Rate (PHP per 1 unit)', align: 'right', cell: (r) => <NumCell className="font-mono tabular-nums">{Number(r.rate_to_functional).toFixed(8)}</NumCell> },
+    { key: 'rate_to_functional', header: `Rate (${functionalCurrency} per 1 unit)`, align: 'right', cell: (r) => <NumCell className="font-mono tabular-nums">{Number(r.rate_to_functional).toFixed(8)}</NumCell> },
     { key: 'source', header: 'Source', cell: (r) => r.source ?? '—' },
   ];
 
@@ -50,7 +54,7 @@ export default function FxRatesPage() {
     <div>
       <PageHeader
         title="FX Rates"
-        subtitle="PHP per 1 unit of the foreign currency (functional currency is PHP)"
+        subtitle={`${functionalCurrency} per 1 unit of the foreign currency (default reporting currency: ${reportingCurrency})`}
         backTo="/accounting/journal-entries"
         backLabel="Accounting"
         actions={can('accounting.currency.manage') ? (
@@ -62,7 +66,7 @@ export default function FxRatesPage() {
       {isError && <EmptyState icon="alert-circle" title="Failed to load FX rates" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />}
       {data && data.data.length === 0 && (
         <EmptyState icon="inbox" title="No FX rates yet"
-          description={can('accounting.currency.manage') ? 'Add a daily rate so the parent-pack statements can translate to JPY.' : 'Nothing here yet.'}
+          description={can('accounting.currency.manage') ? `Add a daily rate so parent-pack statements can translate to ${reportingCurrency}.` : 'Nothing here yet.'}
           action={can('accounting.currency.manage') ? <Button variant="primary" onClick={() => setAddOpen(true)}>Add rate</Button> : undefined} />
       )}
       {data && data.data.length > 0 && (
@@ -76,16 +80,16 @@ export default function FxRatesPage() {
         </div>
       )}
 
-      {addOpen && <AddRateModal onClose={() => setAddOpen(false)} />}
+      {addOpen && <AddRateModal onClose={() => setAddOpen(false)} functionalCurrency={functionalCurrency} reportingCurrency={reportingCurrency} />}
     </div>
   );
 }
 
-function AddRateModal({ onClose }: { onClose: () => void }) {
+function AddRateModal({ onClose, functionalCurrency, reportingCurrency }: { onClose: () => void; functionalCurrency: string; reportingCurrency: string }) {
   const qc = useQueryClient();
   const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { currency_code: 'JPY', rate_date: new Date().toISOString().slice(0, 10), source: 'manual' },
+    defaultValues: { currency_code: reportingCurrency === '—' ? '' : reportingCurrency, rate_date: new Date().toISOString().slice(0, 10), source: '' },
   });
 
   const mutation = useMutation({
@@ -115,9 +119,9 @@ function AddRateModal({ onClose }: { onClose: () => void }) {
       <form onSubmit={handleSubmit((v) => mutation.mutate(v), onFormInvalid<FormValues>())} className="space-y-3">
         <Input label="Currency (ISO 4217)" required maxLength={3} className="font-mono uppercase" {...register('currency_code')} error={errors.currency_code?.message} />
         <Input label="Rate date" type="date" required {...register('rate_date')} error={errors.rate_date?.message} />
-        <Input label="Rate — PHP per 1 unit" type="number" step="0.00000001" min="0" placeholder="0.38000000"
+        <Input label={`Rate — ${functionalCurrency} per 1 unit`} type="number" step="0.00000001" min="0" placeholder="0.00000000"
           className="font-mono tabular-nums" {...register('rate_to_functional')} error={errors.rate_to_functional?.message} />
-        <Input label="Source" placeholder="manual" {...register('source')} error={errors.source?.message} />
+        <Input label="Source" placeholder="Enter rate source" {...register('source')} error={errors.source?.message} />
         <p className="text-2xs text-muted">Re-entering a currency + date overwrites that day’s rate.</p>
         <div className="flex justify-end gap-2 pt-1">
           <Button type="button" variant="secondary" onClick={onClose} disabled={isSubmitting}>Cancel</Button>

@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import { onFormInvalid } from '@/lib/formErrors';
 import { Printer, Coins, Ban, CheckCircle2 } from 'lucide-react';
 import { invoicesApi } from '@/api/accounting/invoices';
+import { accountingOptionsApi } from '@/api/accounting/options';
 import { downloadAuthenticatedFile } from '@/api/download';
 import { accountsApi } from '@/api/accounting/accounts';
 import { Button } from '@/components/ui/Button';
@@ -28,12 +29,13 @@ import { formatPeso } from '@/lib/formatNumber';
 import { formatDate } from '@/lib/formatDate';
 import { numberInputProps } from '@/lib/numberInput';
 import { Td, Th, tableCls, theadTrCls, totalsTrCls, trCls } from '@/components/ui/table-cells';
+import type { PaymentMethod } from '@/types/accounting';
 
 const collectionSchema = z.object({
   cash_account_id:  z.string().min(1, 'Required'),
   collection_date:  z.string().min(1, 'Required'),
   amount:           z.coerce.number().positive('> 0'),
-  payment_method:   z.enum(['cash', 'check', 'bank_transfer', 'online']),
+  payment_method:   z.string().min(1, 'Required'),
   reference_number: z.string().max(50).optional().or(z.literal('')),
 });
 type CollectionFormValues = z.infer<typeof collectionSchema>;
@@ -45,10 +47,6 @@ function buildInvoiceChain(inv: { status: string; amount_paid: string; balance: 
   const fullyPaid = parseFloat(inv.balance) <= 0 && parseFloat(inv.amount_paid) > 0;
   const firstPayDate = inv.payments?.[0]?.collection_date ?? inv.payments?.[0]?.payment_date;
   return [
-    { key: 'so',       label: 'Order Confirmed',  state: 'done', date: inv.date.slice(0, 10) },
-    { key: 'prod',     label: 'In Production',    state: 'done' },
-    { key: 'qc',       label: 'QC Outgoing',      state: 'done' },
-    { key: 'delivery', label: 'Delivered',        state: 'done' },
     { key: 'invoice',  label: 'Invoiced',         state: issued ? 'done' : 'pending', date: inv.date.slice(0, 10) },
     { key: 'collect',  label: 'Collected',        state: fullyPaid ? 'done' : hasPayment ? 'active' : 'pending', date: firstPayDate?.slice(0, 10) },
   ];
@@ -67,6 +65,7 @@ export default function InvoiceDetailPage() {
     queryFn: () => invoicesApi.show(id),
     enabled: !!id,
   });
+  const { data: accountingOptions } = useQuery({ queryKey: ['accounting', 'options'], queryFn: () => accountingOptionsApi.list() });
 
   const { data: cashAccounts } = useQuery({
     queryKey: ['accounting', 'accounts', 'cash'],
@@ -76,7 +75,7 @@ export default function InvoiceDetailPage() {
 
   const { register, handleSubmit, formState: { errors }, reset } = useForm<CollectionFormValues>({
     resolver: zodResolver(collectionSchema),
-    defaultValues: { collection_date: new Date().toISOString().slice(0, 10), payment_method: 'bank_transfer' },
+    defaultValues: { collection_date: new Date().toISOString().slice(0, 10), payment_method: '' },
   });
 
   const finalizeMut = useMutation({
@@ -98,14 +97,14 @@ export default function InvoiceDetailPage() {
   const collectMut = useMutation({
     mutationFn: (d: CollectionFormValues) => invoicesApi.recordCollection(id, {
       cash_account_id: d.cash_account_id, collection_date: d.collection_date,
-      amount: String(d.amount), payment_method: d.payment_method,
+      amount: String(d.amount), payment_method: d.payment_method as PaymentMethod,
       reference_number: d.reference_number || undefined,
     }),
     onSuccess: () => {
       toast.success('Collection recorded.');
       qc.invalidateQueries({ queryKey: ['accounting', 'invoices'] });
       setShowCollect(false);
-      reset({ collection_date: new Date().toISOString().slice(0, 10), payment_method: 'bank_transfer', cash_account_id: '', amount: 0, reference_number: '' });
+      reset({ collection_date: new Date().toISOString().slice(0, 10), payment_method: '', cash_account_id: '', amount: undefined as unknown as number, reference_number: '' });
     },
     onError: (e: Error & { response?: { data?: { message?: string } } }) => toast.error(e.response?.data?.message ?? 'Failed to record collection.'),
   });
@@ -176,7 +175,7 @@ export default function InvoiceDetailPage() {
               <div><dt className="text-2xs uppercase tracking-wider text-muted mb-0.5">VAT</dt><dd>{invoice.is_vatable ? 'Yes' : 'No'}</dd></div>
               {invoice.journal_entry && (
                 <div className="col-span-2"><dt className="text-2xs uppercase tracking-wider text-muted mb-0.5">Journal entry</dt>
-                  <dd><a className="text-accent hover:underline font-mono" href={`/accounting/journal-entries/${invoice.journal_entry.id}`}>{invoice.journal_entry.entry_number}</a> · {invoice.journal_entry.status}</dd>
+                  <dd><a className="text-accent hover:underline font-mono" href={`/accounting/journal-entries/${invoice.journal_entry.id}`}>{invoice.journal_entry.entry_number}</a> · {invoice.journal_entry.status_label ?? invoice.journal_entry.status}</dd>
                 </div>
               )}
             </dl>
@@ -224,7 +223,7 @@ export default function InvoiceDetailPage() {
                     <span>{formatDate(c.collection_date)}</span>
                     <span className="font-medium">{formatPeso(c.amount)}</span>
                   </div>
-                  <div className="text-muted">{c.payment_method}{c.reference_number ? ` · ${c.reference_number}` : ''}</div>
+                  <div className="text-muted">{c.payment_method_label ?? c.payment_method}{c.reference_number ? ` · ${c.reference_number}` : ''}</div>
                 </li>
               ))}
             </ul>
@@ -243,10 +242,7 @@ export default function InvoiceDetailPage() {
             className="font-mono tabular-nums text-right" required prefix="₱" {...numberInputProps()}
             {...register('amount')} error={errors.amount?.message} />
           <Select label="Method" required {...register('payment_method')} error={errors.payment_method?.message}>
-            <option value="cash">Cash</option>
-            <option value="check">Check</option>
-            <option value="bank_transfer">Bank transfer</option>
-            <option value="online">Online</option>
+            {(accountingOptions?.payment_methods ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
           </Select>
           <Input label="Reference no." {...register('reference_number')} />
           <div className="flex justify-end gap-2 pt-2 border-t border-default">

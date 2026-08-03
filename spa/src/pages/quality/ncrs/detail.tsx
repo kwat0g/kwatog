@@ -42,8 +42,9 @@ const STATUS_CHIP: Record<NcrStatus, 'success' | 'danger' | 'warning' | 'neutral
 };
 
 const SEVERITY_CHIP: Record<NcrSeverity, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
-  minor: 'neutral',
-  major: 'warning',
+  low: 'neutral',
+  medium: 'warning',
+  high: 'danger',
   critical: 'danger',
 };
 
@@ -65,6 +66,12 @@ export default function NcrDetailPage() {
     enabled: Boolean(id),
     placeholderData: (prev) => prev,
   });
+  const { data: options } = useQuery({
+    queryKey: ['quality', 'ncrs', 'options'],
+    queryFn: () => ncrsApi.options(),
+  });
+  const labelFor = (items: Array<{ value: string; label: string }> | undefined, value: string | null | undefined) =>
+    (value && items?.find((item) => item.value === value)?.label) ?? value?.replace('_', ' ') ?? '—';
 
   const addAction = useMutation({
     mutationFn: () =>
@@ -147,7 +154,7 @@ export default function NcrDetailPage() {
       items: [{
         id: data.inspection.inspection_number,
         href: `/quality/inspections/${data.inspection.id}`,
-        meta: `${data.inspection.stage} · ${data.inspection.status}`,
+        meta: `${data.inspection.stage_label ?? data.inspection.stage} · ${data.inspection.status_label ?? data.inspection.status}`,
       }],
     });
   }
@@ -157,7 +164,7 @@ export default function NcrDetailPage() {
       items: [{
         id: data.replacement_work_order.wo_number,
         href: `/production/work-orders/${data.replacement_work_order.id}`,
-        meta: `${data.replacement_work_order.quantity_target} pcs · ${data.replacement_work_order.status}`,
+        meta: `${data.replacement_work_order.quantity_target} pcs · ${data.replacement_work_order.status_label ?? data.replacement_work_order.status}`,
       }],
     });
   }
@@ -171,7 +178,7 @@ export default function NcrDetailPage() {
     dot: ACTION_DOT[a.action_type],
     text: (
       <span>
-        <span className="font-medium uppercase text-2xs tracking-wider text-muted">{a.action_type}</span>
+        <span className="font-medium uppercase text-2xs tracking-wider text-muted">{a.action_type_label ?? a.action_type}</span>
         <span className="ml-2">{a.description}</span>
         <span className="ml-2 text-muted">— {a.performer?.name ?? 'system'}</span>
       </span>
@@ -185,8 +192,8 @@ export default function NcrDetailPage() {
         title={
           <span>
             {data.ncr_number}
-            <Chip variant={STATUS_CHIP[data.status]} className="ml-3">{data.status.replace('_', ' ')}</Chip>
-            <Chip variant={SEVERITY_CHIP[data.severity]} className="ml-2">{data.severity}</Chip>
+            <Chip variant={STATUS_CHIP[data.status]} className="ml-3">{labelFor(options?.statuses, data.status)}</Chip>
+            <Chip variant={SEVERITY_CHIP[data.severity]} className="ml-2">{labelFor(options?.severities, data.severity)}</Chip>
             {data.is_auto_generated && (
               <span title="Auto-generated from inspection failure" className="ml-2 inline-block">
                 <Chip variant="info">Auto</Chip>
@@ -194,7 +201,7 @@ export default function NcrDetailPage() {
             )}
           </span>
         }
-        subtitle={data.product ? `${data.product.part_number} — ${data.product.name}` : data.source.replace('_', ' ')}
+        subtitle={data.product ? `${data.product.part_number} — ${data.product.name}` : labelFor(options?.sources, data.source)}
         breadcrumbs={[{ label: 'Quality', href: '/quality' }, { label: 'NCRs', href: '/quality/ncrs' }, { label: data.ncr_number }]}
         actions={
           <div className="flex items-center gap-2">
@@ -224,7 +231,7 @@ export default function NcrDetailPage() {
             <dl className="grid grid-cols-3 gap-x-4 gap-y-3 text-sm">
               <div>
                 <dt className="text-2xs uppercase tracking-wider text-muted">Source</dt>
-                <dd>{data.source.replace('_', ' ')}</dd>
+                <dd>{labelFor(options?.sources, data.source)}</dd>
               </div>
               <div>
                 <dt className="text-2xs uppercase tracking-wider text-muted">Affected qty</dt>
@@ -232,7 +239,7 @@ export default function NcrDetailPage() {
               </div>
               <div>
                 <dt className="text-2xs uppercase tracking-wider text-muted">Disposition</dt>
-                <dd>{data.disposition?.replace('_', ' ') ?? '—'}</dd>
+                <dd>{labelFor(options?.dispositions, data.disposition)}</dd>
               </div>
               <div className="col-span-3">
                 <dt className="text-2xs uppercase tracking-wider text-muted">Defect description</dt>
@@ -262,10 +269,7 @@ export default function NcrDetailPage() {
                   onChange={(e) => setDisposition(e.target.value as NcrDisposition | '')}
                 >
                   <option value="">— Select —</option>
-                  <option value="scrap">Scrap (auto-WO if outgoing)</option>
-                  <option value="rework">Rework</option>
-                  <option value="use_as_is">Use as-is</option>
-                  <option value="return_to_supplier">Return to supplier</option>
+                  {(options?.dispositions ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </Select>
               </div>
               <Textarea
@@ -302,9 +306,7 @@ export default function NcrDetailPage() {
                   value={actionType}
                   onChange={(e) => setActionType(e.target.value as NcrActionType)}
                 >
-                  <option value="containment">Containment</option>
-                  <option value="corrective">Corrective</option>
-                  <option value="preventive">Preventive</option>
+                  {(options?.actions ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </Select>
               </div>
               <Textarea

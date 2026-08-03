@@ -61,6 +61,11 @@ export default function AdminUsersIndexPage() {
     queryFn: () => client.get('/admin/roles').then((r) => r.data),
     staleTime: 60_000,
   });
+  const { data: userOptions } = useQuery({
+    queryKey: ['admin-user-options'],
+    queryFn: adminUsersApi.options,
+    staleTime: 5 * 60 * 1000,
+  });
 
   const bulkChangeRole = useMutation({
     mutationFn: ({ userIds, roleId, reason }: { userIds: string[]; roleId: string; reason: string }) =>
@@ -88,9 +93,7 @@ export default function AdminUsersIndexPage() {
       label: 'Status',
       type: 'select',
       options: [
-        { value: 'active', label: 'Active' },
-        { value: 'inactive', label: 'Inactive' },
-        { value: 'locked', label: 'Locked' },
+        ...(userOptions?.statuses ?? []),
       ],
     },
   ];
@@ -137,7 +140,7 @@ export default function AdminUsersIndexPage() {
     {
       key: 'status',
       header: 'Status',
-      cell: (row) => <Chip variant={statusVariant[row.status]}>{row.status}</Chip>,
+      cell: (row) => <Chip variant={statusVariant[row.status]}>{row.status_label ?? row.status}</Chip>,
     },
     {
       key: 'last_activity',
@@ -237,7 +240,6 @@ export default function AdminUsersIndexPage() {
             onSort={(sort, direction) => setFilters((f) => ({ ...f, sort, direction, page: 1 }))}
             currentSort={filters.sort}
             currentDirection={filters.direction}
-            onRowClick={(row) => navigate(`/admin/users/${row.id}`)}
             selectable={can('admin.users.manage')}
             bulkActions={
               can('admin.users.manage')

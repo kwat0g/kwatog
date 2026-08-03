@@ -34,6 +34,7 @@ export interface SelfServiceHome {
   };
   todays_shift: SelfServiceShift | null;
   leave_balances: SelfServiceLeaveBalance[];
+  leave_balance_policy?: { warning_ratio: number; critical_ratio: number };
   pending_count: number;
   latest_payslip: SelfServicePayslipSummary | null;
 }
@@ -41,18 +42,22 @@ export interface SelfServiceHome {
 export interface SelfServiceLoan {
   id: string;
   loan_type: string | null;
-  principal: string;
-  outstanding_balance: string;
-  monthly_amortization: string;
+  loan_type_label?: string | null;
+  principal: string | null;
+  outstanding_balance: string | null;
+  monthly_amortization: string | null;
   periods: number;
   periods_remaining: number;
   status: string;
-  created_at: string;
+  status_label?: string;
+  created_at: string | null;
 }
 
 export interface SelfServiceLoansResponse {
   active: SelfServiceLoan[];
   history: SelfServiceLoan[];
+  loan_types: Array<{ value: string; label: string; interest_rate: string; approval_steps: number }>;
+  max_pay_periods: number;
 }
 
 export interface SelfServiceProfile {
@@ -62,10 +67,23 @@ export interface SelfServiceProfile {
   first_name: string;
   middle_name: string | null;
   last_name: string;
+  birth_date: string | null;
+  nationality: string | null;
+  gender: string | null;
+  gender_label?: string | null;
+  civil_status: string | null;
+  civil_status_label?: string | null;
   department: string | null;
   position: string | null;
   date_hired: string | null;
+  date_regularized: string | null;
+  expected_regularization_date?: string | null;
   employment_type: string | null;
+  employment_type_label?: string | null;
+  pay_type?: string | null;
+  pay_type_label?: string | null;
+  status?: string | null;
+  status_label?: string | null;
   photo_path: string | null;
   mobile_number: string | null;
   email: string | null;
@@ -83,12 +101,14 @@ export interface SelfServiceProfile {
   philhealth_no_last4: string | null;
   pagibig_no_last4: string | null;
   tin_last4: string | null;
+  profile_completeness?: { percent: number; missing_fields: string[] };
 }
 
 export interface ProfileUpdateRequestRecord {
   id: string;
   // pending_finance: HR approved, awaiting Finance (bank-account changes only).
   status: 'pending' | 'pending_finance' | 'approved' | 'rejected';
+  status_label?: string;
   changes: Record<string, string | null>;
   note: string | null;
   reviewed_at: string | null;
@@ -104,6 +124,7 @@ export interface SelfServiceOvertimeRequest {
   hours_requested: string;
   reason: string | null;
   status: OvertimeStatus | null;
+  status_label?: string | null;
   rejection_reason: string | null;
   approver: string | null;
   created_at: string | null;
@@ -115,6 +136,9 @@ export interface SelfServiceOvertimeResponse {
   todays_shift: SelfServiceShift | null;
   /** Estimated hourly rate for the OT pay preview (display-only). */
   hourly_rate: string | null;
+  minimum_hours: number;
+  maximum_hours: number;
+  premium_multiplier: number;
 }
 
 export interface ApplyOvertimePayload {

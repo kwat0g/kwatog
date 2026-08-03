@@ -11,6 +11,7 @@ export interface BillListParams extends ListParams {
 }
 
 export const billsApi = {
+  options: () => client.get<{ data: { statuses: Array<{ value: string; label: string }> } }>('/bills/options').then((r) => r.data.data),
   list: (params?: BillListParams) =>
     client.get<PaginatedResponse<Bill>>('/bills', { params }).then((r) => r.data),
   show: (id: string) =>

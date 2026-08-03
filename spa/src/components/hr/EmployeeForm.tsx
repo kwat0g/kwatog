@@ -9,6 +9,7 @@ import { MaskedInput } from '@/components/ui/MaskedInput';
 import { useQuery } from '@tanstack/react-query';
 import { departmentsApi } from '@/api/hr/departments';
 import { positionsApi } from '@/api/hr/positions';
+import { employeesApi } from '@/api/hr/employees';
 import { digitsOnly } from '@/lib/phFormat';
 import { onFormInvalid } from '@/lib/formErrors';
 import { actionLabel } from '@/lib/labels';
@@ -47,8 +48,8 @@ export const employeeSchema = z.object({
   last_name: z.string().min(1, 'Required').max(100).regex(namePattern, 'Letters, spaces, ., \', - only'),
   suffix: optString(20),
   birth_date: z.string().min(1, 'Required'),
-  gender: z.enum(['male', 'female']),
-  civil_status: z.enum(['single', 'married', 'widowed', 'separated', 'divorced']),
+  gender: z.string().min(1, 'Gender is required'),
+  civil_status: z.string().min(1, 'Civil status is required'),
   nationality: optString(50),
 
   street_address: z.string().trim().min(1, 'Street address is required').max(200),
@@ -77,8 +78,8 @@ export const employeeSchema = z.object({
 
   department_id: z.string().min(1, 'Required'),
   position_id: z.string().min(1, 'Required'),
-  employment_type: z.enum(['regular', 'probationary', 'contractual', 'project_based']),
-  pay_type: z.enum(['monthly', 'daily']),
+  employment_type: z.string().min(1, 'Employment type is required'),
+  pay_type: z.string().min(1, 'Pay type is required'),
   date_hired: z.string().min(1, 'Required'),
   date_regularized: z.string().optional().or(z.literal('')),
   basic_monthly_salary: z.string().optional().refine(
@@ -151,9 +152,9 @@ function defaults(employee?: Employee | null): EmployeeFormValues {
     last_name: employee?.last_name ?? '',
     suffix: employee?.suffix ?? '',
     birth_date: employee?.birth_date ?? '',
-    gender: (employee?.gender as 'male' | 'female') ?? 'male',
-    civil_status: (employee?.civil_status as EmployeeFormValues['civil_status']) ?? 'single',
-    nationality: employee?.nationality ?? 'Filipino',
+    gender: employee?.gender ?? '',
+    civil_status: employee?.civil_status ?? '',
+    nationality: employee?.nationality ?? '',
 
     street_address: employee?.address.street ?? '',
     barangay: employee?.address.barangay ?? '',
@@ -174,8 +175,8 @@ function defaults(employee?: Employee | null): EmployeeFormValues {
 
     department_id: employee?.department?.id ?? '',
     position_id: employee?.position?.id ?? '',
-    employment_type: (employee?.employment_type as EmployeeFormValues['employment_type']) ?? 'probationary',
-    pay_type: (employee?.pay_type as 'monthly' | 'daily') ?? 'monthly',
+    employment_type: employee?.employment_type ?? '',
+    pay_type: employee?.pay_type ?? '',
     date_hired: employee?.date_hired ?? '',
     date_regularized: employee?.date_regularized ?? '',
     basic_monthly_salary: employee?.basic_monthly_salary ?? '',
@@ -216,6 +217,14 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isPending, register
     queryKey: ['hr', 'departments', 'tree'],
     queryFn: () => departmentsApi.tree(),
   });
+  const { data: employeeOptions } = useQuery({
+    queryKey: ['hr', 'employee-options'],
+    queryFn: () => employeesApi.options(),
+  });
+  const employmentTypes = employeeOptions?.employment_types ?? [];
+  const payTypes = employeeOptions?.pay_types ?? [];
+  const genders = employeeOptions?.genders ?? [];
+  const civilStatuses = employeeOptions?.civil_statuses ?? [];
   const { data: positionsResp } = useQuery({
     queryKey: ['hr', 'positions', 'all', departmentId],
     queryFn: () => positionsApi.list({ department_id: departmentId, per_page: 100 }),
@@ -237,15 +246,12 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isPending, register
           <Input label="Suffix" placeholder="Jr., Sr., III" maxLength={20} {...register('suffix')} error={errors.suffix?.message} />
           <Input label="Birth date" type="date" required max={minBirthStr} min="1900-01-01" {...register('birth_date')} error={errors.birth_date?.message} />
           <Select label="Gender" required {...register('gender')} error={errors.gender?.message}>
-            <option value="male">Male</option>
-            <option value="female">Female</option>
+            <option value="">— Select —</option>
+            {genders.map((gender) => <option key={gender.value} value={gender.value}>{gender.label}</option>)}
           </Select>
           <Select label="Civil status" required {...register('civil_status')} error={errors.civil_status?.message}>
-            <option value="single">Single</option>
-            <option value="married">Married</option>
-            <option value="widowed">Widowed</option>
-            <option value="separated">Separated</option>
-            <option value="divorced">Divorced</option>
+            <option value="">— Select —</option>
+            {civilStatuses.map((status) => <option key={status.value} value={status.value}>{status.label}</option>)}
           </Select>
           <Input label="Nationality" maxLength={50} {...register('nationality')} error={errors.nationality?.message} />
         </div>
@@ -299,14 +305,12 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isPending, register
             {positions.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
           </Select>
           <Select label="Employment type" required {...register('employment_type')} error={errors.employment_type?.message}>
-            <option value="probationary">Probationary</option>
-            <option value="regular">Regular</option>
-            <option value="contractual">Contractual</option>
-            <option value="project_based">Project-based</option>
+            <option value="">— Select —</option>
+            {employmentTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
           </Select>
           <Select label="Pay type" required {...register('pay_type')} error={errors.pay_type?.message}>
-            <option value="monthly">Monthly</option>
-            <option value="daily">Daily</option>
+            <option value="">— Select —</option>
+            {payTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
           </Select>
           <Input label="Date hired" type="date" required max={todayStr} min="1980-01-01" {...register('date_hired')} error={errors.date_hired?.message} />
           <Input label="Date regularized" type="date" max={todayStr} {...register('date_regularized')} error={errors.date_regularized?.message} />
@@ -375,7 +379,7 @@ export function EmployeeForm({ employee, onSubmit, onCancel, isPending, register
       <Section title="Banking">
         <div className="grid grid-cols-2 gap-3">
           <Input label="Bank name" maxLength={100} {...register('bank_name')} error={errors.bank_name?.message} />
-          <Input label="Account number" className="font-mono" maxLength={50} placeholder="1234-5678-9012"
+          <Input label="Account number" className="font-mono" maxLength={50} placeholder="Enter bank account number"
             {...register('bank_account_no')} error={errors.bank_account_no?.message} />
         </div>
       </Section>
@@ -395,7 +399,7 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
     <fieldset>
       <legend className="text-2xs uppercase tracking-wider text-muted font-medium mb-3 flex items-center gap-2">
         <span>{title}</span>
-        {hint && <span className="lowercase text-text-subtle font-normal">· {hint}</span>}
+        {hint && <span className="lowercase text-subtle font-normal">· {hint}</span>}
       </legend>
       {children}
     </fieldset>

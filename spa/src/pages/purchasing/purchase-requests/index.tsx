@@ -16,7 +16,6 @@ import { Select } from '@/components/ui/Select';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
-import { PR_PRIORITIES, PR_STATUSES } from '@/lib/constants/statuses';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 import type { PurchaseRequest, PurchaseRequestPriority, PurchaseRequestStatus } from '@/types/purchasing';
@@ -45,6 +44,11 @@ export default function PurchaseRequestsListPage() {
     queryFn: ({ signal }) => purchaseRequestsApi.list(filters, signal),
     placeholderData: (prev) => prev,
   });
+  const { data: requestOptions } = useQuery({
+    queryKey: ['purchasing', 'purchase-request-options'],
+    queryFn: () => purchaseRequestsApi.options(),
+  });
+  const statusLabels = new Map((requestOptions?.statuses ?? []).map((option) => [option.value, option.label]));
 
   const bulkApproveMut = useMutation({
     mutationFn: (ids: string[]) => purchaseRequestsApi.bulkApprove(ids),
@@ -116,15 +120,15 @@ export default function PurchaseRequestsListPage() {
     { key: 'dept', header: 'Dept', cell: (r) => r.department?.code ?? '—' },
     { key: 'priority', header: 'Priority', cell: (r) => (
       <span className="flex items-center gap-1">
-        <Chip variant={priorityVariant[r.priority]}>{r.priority}</Chip>
+        <Chip variant={priorityVariant[r.priority]}>{r.priority_label ?? r.priority}</Chip>
         {r.is_urgent && <Zap size={12} className="text-danger" />}
       </span>
     ) },
     { key: 'status', header: 'Status', cell: (r) => (
       <span className="flex items-center gap-1.5">
-        <Chip variant={statusVariant[r.status]}>{r.status}</Chip>
+        <Chip variant={statusVariant[r.status]}>{r.status_label ?? statusLabels.get(r.status) ?? r.status}</Chip>
         {r.has_overdue_approval && (
-          <span title="Approval pending more than 24 hours"><Chip variant="danger">overdue</Chip></span>
+          <span title={`Approval pending beyond ${requestOptions?.approval_sla_hours ?? 'configured'} hours`}><Chip variant="danger">overdue</Chip></span>
         )}
       </span>
     ) },
@@ -149,11 +153,11 @@ export default function PurchaseRequestsListPage() {
   const filterConfig: FilterConfig[] = [
     { key: 'status', label: 'Status', type: 'select', options: [
       { value: '', label: 'All' },
-      ...PR_STATUSES,
+      ...(requestOptions?.statuses ?? []),
     ]},
     { key: 'priority', label: 'Priority', type: 'select', options: [
       { value: '', label: 'All' },
-      ...PR_PRIORITIES,
+      ...(requestOptions?.priorities ?? []).map((priority) => ({ value: priority.value, label: priority.label })),
     ]},
     { key: 'is_auto_generated', label: 'Source', type: 'select', options: [
       { value: '', label: 'All' }, { value: 'true', label: 'Auto-generated' }, { value: 'false', label: 'Manual' },

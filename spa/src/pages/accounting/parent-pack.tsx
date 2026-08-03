@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { currencyApi } from '@/api/accounting/currency';
+import { businessPoliciesApi } from '@/api/businessPolicies';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -9,6 +10,7 @@ import { Select } from '@/components/ui/Select';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatDecimal } from '@/lib/formatNumber';
+import { getFunctionalCurrency } from '@/lib/runtimeCurrency';
 import type { TranslatedLine } from '@/types/accounting';
 import { Td, Th, tableCls, theadTrCls, totalsTrCls, trCls } from '@/components/ui/table-cells';
 import { Tabs } from '@/components/ui/Tabs';
@@ -22,12 +24,13 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'trial-balance', label: 'Trial Balance' },
 ];
 
-// Reporting currencies we hold rates for. JPY is the parent default.
-const CURRENCIES = ['JPY', 'USD'];
-
 export default function ParentPackPage() {
   const [tab, setTab] = useState<Tab>('balance-sheet');
-  const [currency, setCurrency] = useState('JPY');
+  const [currency, setCurrency] = useState('');
+  const rates = useQuery({ queryKey: ['accounting', 'fx-rates', 'available'], queryFn: () => currencyApi.listRates({ per_page: 200 }) });
+  const policies = useQuery({ queryKey: ['business-policies'], queryFn: businessPoliciesApi.get });
+  const currencies = Array.from(new Set((rates.data?.data ?? []).map((r) => r.currency_code))).sort();
+  const selectedCurrency = currency || currencies[0] || '';
   const today = new Date().toISOString().slice(0, 10);
   const [asOf, setAsOf] = useState(today);
   const [from, setFrom] = useState(today.slice(0, 8) + '01');
@@ -37,7 +40,7 @@ export default function ParentPackPage() {
     <div>
       <PageHeader
         title="Parent Reporting Pack"
-        subtitle={`PHP books translated to ${currency} (current-rate method) for the Japanese parent`}
+        subtitle={selectedCurrency ? `${policies.data?.functional_currency_code ?? 'Functional'} books translated to ${selectedCurrency} (current-rate method)` : 'Add an FX rate to enable parent reporting'}
         backTo="/accounting/journal-entries"
         backLabel="Journal Entries"
       />
@@ -52,11 +55,11 @@ export default function ParentPackPage() {
             <Select
               fieldSize="sm"
               aria-label="Reporting currency"
-              value={currency}
+              value={selectedCurrency}
               onChange={(e) => setCurrency(e.target.value)}
               containerClassName="w-24"
             >
-              {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              {currencies.map((c) => <option key={c} value={c}>{c}</option>)}
             </Select>
           }
         />
@@ -73,9 +76,9 @@ export default function ParentPackPage() {
         )}
       </div>
 
-      {tab === 'balance-sheet' && <TranslatedBalanceSheet asOf={asOf} currency={currency} />}
-      {tab === 'income-statement' && <TranslatedIncomeStatement from={from} to={to} currency={currency} />}
-      {tab === 'trial-balance' && <TranslatedTrialBalance from={from} to={to} currency={currency} />}
+      {tab === 'balance-sheet' && selectedCurrency && <TranslatedBalanceSheet asOf={asOf} currency={selectedCurrency} highlightCode={policies.data?.translation_adjustment_account_code} />}
+      {tab === 'income-statement' && selectedCurrency && <TranslatedIncomeStatement from={from} to={to} currency={selectedCurrency} />}
+      {tab === 'trial-balance' && selectedCurrency && <TranslatedTrialBalance from={from} to={to} currency={selectedCurrency} />}
     </div>
   );
 }
@@ -105,7 +108,7 @@ function ErrorState({ currency, refetch }: { currency: string; refetch: () => vo
   );
 }
 
-function TranslatedBalanceSheet({ asOf, currency }: { asOf: string; currency: string }) {
+function TranslatedBalanceSheet({ asOf, currency, highlightCode }: { asOf: string; currency: string; highlightCode?: string }) {
   const { data, isLoading, isError, refetch } = useTranslated(
     ['accounting', 'parent-pack', 'bs', asOf, currency],
     () => currencyApi.balanceSheet({ as_of: asOf, currency }),
@@ -121,9 +124,9 @@ function TranslatedBalanceSheet({ asOf, currency }: { asOf: string; currency: st
         <Chip variant={data.balanced ? 'success' : 'danger'}>{data.balanced ? 'Balanced (incl. CTA)' : 'IMBALANCE'}</Chip>
       </div>
       <div className="grid grid-cols-3 gap-4">
-        <TransSection title="Assets" rows={data.assets.accounts} total={data.assets.total} currency={currency} />
-        <TransSection title="Liabilities" rows={data.liabilities.accounts} total={data.liabilities.total} currency={currency} />
-        <TransSection title="Equity (incl. CTA)" rows={data.equity.accounts} total={data.equity.total} currency={currency} highlightCode="3900" />
+        <TransSection title="Assets" rows={data.assets.accounts} total={data.assets.total} currency={currency} baseCurrency={getFunctionalCurrency() ?? undefined} />
+        <TransSection title="Liabilities" rows={data.liabilities.accounts} total={data.liabilities.total} currency={currency} baseCurrency={getFunctionalCurrency() ?? undefined} />
+        <TransSection title="Equity (incl. CTA)" rows={data.equity.accounts} total={data.equity.total} currency={currency} baseCurrency={getFunctionalCurrency() ?? undefined} highlightCode={highlightCode} />
       </div>
       <div className="flex justify-end gap-5 pt-2 border-t border-default text-sm font-mono tabular-nums">
         <div>Total Assets: <span className="font-medium">{currency} {formatDecimal(data.total_assets)}</span></div>
@@ -146,12 +149,12 @@ function TranslatedIncomeStatement({ from, to, currency }: { from: string; to: s
   return (
     <div className="px-5 py-4 space-y-4">
       <RateBadges average={data.average_rate} />
-      <TransSection title="Revenue" rows={s.revenue.accounts} total={s.revenue.total} currency={currency} />
-      <TransSection title="Cost of Goods Sold" rows={s.cogs.accounts} total={s.cogs.total} currency={currency} />
+      <TransSection title="Revenue" rows={s.revenue.accounts} total={s.revenue.total} currency={currency} baseCurrency={getFunctionalCurrency() ?? undefined} />
+      <TransSection title="Cost of Goods Sold" rows={s.cogs.accounts} total={s.cogs.total} currency={currency} baseCurrency={getFunctionalCurrency() ?? undefined} />
       <div className="flex justify-end text-sm font-mono tabular-nums border-t border-subtle pt-1.5">
         Gross Profit: <span className="font-medium ml-2">{currency} {formatDecimal(s.gross_profit)}</span>
       </div>
-      <TransSection title="Operating Expenses" rows={s.operating_expenses.accounts} total={s.operating_expenses.total} currency={currency} />
+      <TransSection title="Operating Expenses" rows={s.operating_expenses.accounts} total={s.operating_expenses.total} currency={currency} baseCurrency={getFunctionalCurrency() ?? undefined} />
       <div className="flex justify-end text-sm font-mono tabular-nums border-t-2 border-t-strong pt-2">
         Net Income: <span className="font-medium ml-2">{currency} {formatDecimal(s.net_income)}</span>
       </div>
@@ -200,11 +203,12 @@ function TranslatedTrialBalance({ from, to, currency }: { from: string; to: stri
   );
 }
 
-function TransSection({ title, rows, total, currency, highlightCode }: {
+function TransSection({ title, rows, total, currency, baseCurrency, highlightCode }: {
   title: string;
   rows: TranslatedLine[];
   total: string;
   currency: string;
+  baseCurrency?: string;
   highlightCode?: string;
 }) {
   return (
@@ -217,7 +221,7 @@ function TransSection({ title, rows, total, currency, highlightCode }: {
             <tr key={r.code ?? r.name} className={cn(trCls, r.code === highlightCode && 'bg-warning-bg')}>
               <Td>
                 {r.code && <span className="font-mono text-muted">{r.code}</span>} {r.name}
-                <span className="block text-2xs text-muted">PHP {formatDecimal(r.amount_php)} @ {Number(r.rate_applied).toFixed(6)}</span>
+                <span className="block text-2xs text-muted">{baseCurrency ?? 'Functional'} {formatDecimal(r.amount_php)} @ {Number(r.rate_applied).toFixed(6)}</span>
               </Td>
               <Td align="right" mono className="align-top">{currency} {formatDecimal(r.amount)}</Td>
             </tr>

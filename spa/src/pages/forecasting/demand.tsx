@@ -28,12 +28,6 @@ import type { ForecastMethod, DemandForecast } from '@/types/forecasting';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { Checkbox } from '@/components/ui/Checkbox';
 
-const METHOD_LABELS: Record<ForecastMethod, string> = {
-  moving_avg: 'Simple moving average',
-  weighted_avg: 'Weighted (recency-biased)',
-  manual: 'Manual',
-};
-
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 export default function DemandForecastingPage() {
@@ -42,9 +36,9 @@ export default function DemandForecastingPage() {
   const canManage = can('forecasting.manage');
   const [productId, setProductId] = useState<string>('');
   const [customerId, setCustomerId] = useState<string>('');
-  const [method, setMethod] = useState<ForecastMethod>('weighted_avg');
-  const [horizon, setHorizon] = useState<number>(3);
-  const [lookback, setLookback] = useState<number>(6);
+  const [method, setMethod] = useState<ForecastMethod | ''>('');
+  const [horizon, setHorizon] = useState<number | undefined>(undefined);
+  const [lookback, setLookback] = useState<number | undefined>(undefined);
   const [manualOpen, setManualOpen] = useState(false);
   const [manualRow, setManualRow] = useState<DemandForecast | null>(null);
   const [manualQty, setManualQty] = useState<string>('');
@@ -59,6 +53,24 @@ export default function DemandForecastingPage() {
     queryKey: ['customers', { per_page: 200 }],
     queryFn: () => customersApi.list({ per_page: 200 }),
   });
+  const settingsQ = useQuery({
+    queryKey: ['forecasting', 'settings'],
+    queryFn: () => forecastingApi.settings(),
+  });
+  const methodsQ = useQuery({
+    queryKey: ['forecasting', 'demand-options'],
+    queryFn: () => forecastingApi.options(),
+    staleTime: 300_000,
+  });
+  const methodLabels = new Map((methodsQ.data?.methods ?? []).map((option) => [option.value, option.label]));
+  useEffect(() => {
+    if (!method && methodsQ.data?.methods[0]) setMethod(methodsQ.data.methods[0].value);
+  }, [method, methodsQ.data]);
+
+  useEffect(() => {
+    if (horizon === undefined && settingsQ.data) setHorizon(settingsQ.data.default_horizon_months);
+    if (lookback === undefined && settingsQ.data) setLookback(settingsQ.data.default_lookback_months);
+  }, [horizon, lookback, settingsQ.data]);
 
   // Default to first active product once loaded.
   useEffect(() => {
@@ -77,9 +89,9 @@ export default function DemandForecastingPage() {
     queryFn: () => forecastingApi.historical({
       product_id: productId,
       customer_id: customerId || undefined,
-      months_back: 12,
+      months_back: settingsQ.data?.default_history_months,
     }),
-    enabled: !!productId,
+    enabled: !!productId && !!settingsQ.data,
   });
 
   const forecastsQ = useQuery({
@@ -107,7 +119,7 @@ export default function DemandForecastingPage() {
     mutationFn: () => forecastingApi.recompute({
       product_id: productId,
       customer_id: customerId || undefined,
-      method: method === 'manual' ? 'weighted_avg' : method,
+      method: method === 'manual' ? 'weighted_avg' : method as 'moving_avg' | 'weighted_avg',
       horizon_months: horizon,
       lookback_months: lookback,
     }),
@@ -201,7 +213,7 @@ export default function DemandForecastingPage() {
             />
             <StatCard
               label="Forecast Bias"
-              value={`${(accuracyQ.data.data.bias ?? 0) > 0 ? '+' : ''}${(accuracyQ.data.data.bias ?? 0).toFixed(1)}%`}
+              value={accuracyQ.data.data.bias == null ? '—' : `${accuracyQ.data.data.bias > 0 ? '+' : ''}${accuracyQ.data.data.bias.toFixed(1)}%`}
               helper="Positive = under-forecast; negative = over-forecast"
             />
             <StatCard
@@ -236,23 +248,23 @@ export default function DemandForecastingPage() {
             <div>
               <label className="text-2xs uppercase tracking-wide text-muted mb-1 block">Method</label>
               <Select value={method} onChange={(e) => setMethod(e.target.value as ForecastMethod)}>
-                <option value="moving_avg">{METHOD_LABELS.moving_avg}</option>
-                <option value="weighted_avg">{METHOD_LABELS.weighted_avg}</option>
+                <option value="">— Select method —</option>
+                {(methodsQ.data?.methods ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </Select>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-2xs uppercase tracking-wide text-muted mb-1 block">Horizon (mo)</label>
                 <Input
-                  type="number" min={1} max={12} value={horizon}
-                  onChange={(e) => setHorizon(Math.max(1, Math.min(12, parseInt(e.target.value) || 3)))}
+                  type="number" min={settingsQ.data?.minimum_horizon_months} max={settingsQ.data?.maximum_horizon_months} value={horizon ?? ''}
+                  onChange={(e) => setHorizon(Math.max(settingsQ.data?.minimum_horizon_months ?? 1, Math.min(settingsQ.data?.maximum_horizon_months ?? Number.MAX_SAFE_INTEGER, parseInt(e.target.value) || settingsQ.data?.default_horizon_months || 1)))}
                 />
               </div>
               <div>
                 <label className="text-2xs uppercase tracking-wide text-muted mb-1 block">Lookback (mo)</label>
                 <Input
-                  type="number" min={3} max={24} value={lookback}
-                  onChange={(e) => setLookback(Math.max(3, Math.min(24, parseInt(e.target.value) || 6)))}
+                  type="number" min={settingsQ.data?.minimum_lookback_months} max={settingsQ.data?.maximum_lookback_months} value={lookback ?? ''}
+                  onChange={(e) => setLookback(Math.max(settingsQ.data?.minimum_lookback_months ?? 1, Math.min(settingsQ.data?.maximum_lookback_months ?? Number.MAX_SAFE_INTEGER, parseInt(e.target.value) || settingsQ.data?.default_lookback_months || 1)))}
                 />
               </div>
             </div>
@@ -356,7 +368,7 @@ export default function DemandForecastingPage() {
                   <tr key={f.id} className={trCls}>
                     <Td>{MONTH_NAMES[f.forecast_month - 1]} {f.forecast_year}</Td>
                     <Td>
-                      <Chip variant="neutral">{METHOD_LABELS[f.method]}</Chip>
+                      <Chip variant="neutral">{f.method_label ?? methodLabels.get(f.method as 'moving_avg' | 'weighted_avg') ?? f.method}</Chip>
                     </Td>
                     <Td align="right" mono>{f.forecasted_quantity.toFixed(2)}</Td>
                     <Td align="right" mono>

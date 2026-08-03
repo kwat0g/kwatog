@@ -11,6 +11,7 @@ export interface Account {
   type: AccountType;
   type_label?: string;
   normal_balance: NormalBalance;
+  normal_balance_label?: string;
   parent_id: string | null;
   parent_code?: string | null;
   is_active: boolean;
@@ -57,6 +58,7 @@ export interface JournalEntry {
   total_debit: string;
   total_credit: string;
   status: JournalEntryStatus;
+  status_label?: string;
   reversed_by_entry_id: string | null;
   reversed_by_number?: string | null;
   posted_at: string | null;
@@ -124,6 +126,7 @@ export interface BillPayment {
   payment_date: string;
   amount: string;
   payment_method: PaymentMethod;
+  payment_method_label?: string;
   reference_number: string | null;
   cash_account?: { id: string; code: string; name: string } | null;
   journal_entry_id: string | null;
@@ -142,13 +145,14 @@ export interface Bill {
   amount_paid: string;
   balance: string;
   status: BillStatus;
+  status_label?: string;
   is_overdue: boolean;
   aging_bucket: string;
   remarks: string | null;
   vendor?: { id: string; name: string } | null;
   items?: BillItem[];
   payments?: BillPayment[];
-  journal_entry?: { id: string; entry_number: string; status: JournalEntryStatus } | null;
+  journal_entry?: { id: string; entry_number: string; status: JournalEntryStatus; status_label?: string } | null;
   // REC-02 — 3-way match linkage (present when the bill is tied to a PO).
   purchase_order?: { id: string; po_number: string } | null;
   has_variances?: boolean;
@@ -200,6 +204,8 @@ export interface Customer {
   credit_limit: string | null;
   credit_used: string | null;
   credit_available: string | null;
+  credit_warning_ratio?: number;
+  credit_warning?: boolean;
   payment_terms_days: number;
   is_active: boolean;
   invoices_count?: number;
@@ -235,6 +241,7 @@ export interface Collection {
   collection_date: string;
   amount: string;
   payment_method: PaymentMethod;
+  payment_method_label?: string;
   reference_number: string | null;
   cash_account?: { id: string; code: string; name: string } | null;
   journal_entry_id: string | null;
@@ -259,7 +266,7 @@ export interface Invoice {
   customer?: { id: string; name: string } | null;
   items?: InvoiceItem[];
   collections?: Collection[];
-  journal_entry?: { id: string; entry_number: string; status: JournalEntryStatus } | null;
+  journal_entry?: { id: string; entry_number: string; status: JournalEntryStatus; status_label?: string } | null;
 }
 
 export interface CreateInvoiceItemData {
@@ -290,7 +297,9 @@ export interface TrialBalanceRow {
   code: string;
   name: string;
   type: AccountType;
+  type_label?: string;
   normal_balance: NormalBalance;
+  normal_balance_label?: string;
   debit_total: string;
   credit_total: string;
   balance: string;
@@ -368,12 +377,15 @@ export interface FinanceDashboardSummary {
   payroll_pipeline?: {
     draft: number; processing: number; approved: number;
     finalized: number; disbursed: number; total: number;
+    stages?: Array<{ value: string; label: string; count: number }>;
   };
   unposted_jes?: { count: number; oldest_date: string | null };
   ap_due_this_week?: {
     count: number; total: string;
     items: Array<{ id: string; bill_number: string; vendor_name: string; due_date: string; balance: string }>;
   };
+  ap_due_horizon_days?: number;
+  payroll_pipeline_history_days?: number;
   budget_vs_actual_top?: Array<{
     category: string; budget: string; actual: string; variance: string; variance_pct: number;
   }> | null;

@@ -1,4 +1,5 @@
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { cn } from '@/lib/cn';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Pencil, Plus } from 'lucide-react';
 import { customersApi } from '@/api/accounting/customers';
@@ -27,26 +28,22 @@ export default function CustomerDetailPage() {
   const { data: customer, isLoading, isError, refetch } = useQuery({
     queryKey: ['accounting', 'customers', id],
     queryFn: () => customersApi.show(id),
-    enabled: !!id,
-  });
+    enabled: !!id });
   const { data: invoicesData } = useQuery({
     queryKey: ['accounting', 'invoices', { customer_id: id }],
     queryFn: () => invoicesApi.list({ customer_id: id, per_page: 50 }),
-    enabled: !!id,
-  });
+    enabled: !!id });
   // Sprint 6 audit §3.3: surface the customer's CRM context on this page so
   // accounting officers can see active price agreements + the SOs running
   // against them without bouncing to /crm.
   const { data: priceAgreements } = useQuery({
     queryKey: ['crm', 'price-agreements', { customer_id: id }],
     queryFn: () => priceAgreementsApi.forCustomer(id),
-    enabled: !!id && can('crm.price_agreements.view'),
-  });
+    enabled: !!id && can('crm.price_agreements.view') });
   const { data: salesOrdersData } = useQuery({
     queryKey: ['crm', 'sales-orders', { customer_id: id }],
     queryFn: () => salesOrdersApi.list({ customer_id: id, per_page: 25 }),
-    enabled: !!id && can('crm.sales_orders.view'),
-  });
+    enabled: !!id && can('crm.sales_orders.view') });
 
   if (isLoading || (!customer && !isError)) return <SkeletonDetail />;
   if (isError) return <EmptyState icon="alert-circle" title="Failed to load customer" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />;
@@ -54,7 +51,7 @@ export default function CustomerDetailPage() {
 
   const invoiceColumns: Column<Invoice>[] = [
     { key: 'invoice_number', header: 'Invoice no',
-      cell: (r) => <Link to={`/accounting/invoices/${r.id}`} className="font-mono text-accent hover:underline">{r.invoice_number ?? 'DRAFT'}</Link> },
+      cell: (r) => <span className="font-mono">{r.invoice_number ?? 'DRAFT'}</span> },
     { key: 'date',     header: 'Date', cell: (r) => <NumCell>{formatDate(r.date)}</NumCell> },
     { key: 'due_date', header: 'Due',  cell: (r) => <NumCell>{formatDate(r.due_date)}</NumCell> },
     { key: 'total',    header: 'Total', align: 'right', cell: (r) => <NumCell>{formatPeso(r.total_amount)}</NumCell> },
@@ -62,7 +59,8 @@ export default function CustomerDetailPage() {
     { key: 'status',   header: 'Status', cell: (r) => <Chip variant={chipVariantForStatus(r.display_status)}>{r.display_status}</Chip> },
   ];
 
-  const overLimit = customer.credit_limit && customer.credit_used && Number(customer.credit_used) > 0.8 * Number(customer.credit_limit);
+  const overLimit = customer.credit_warning ?? false;
+  const warningPct = customer.credit_warning_ratio == null ? null : Math.round(customer.credit_warning_ratio * 100);
 
   return (
     <div>
@@ -98,7 +96,7 @@ export default function CustomerDetailPage() {
         <StatCard label="Credit Used" value={formatPeso(customer.credit_used ?? '0')} />
         <StatCard label="Available"
           value={customer.credit_available !== null ? formatPeso(customer.credit_available ?? '0') : '—'}
-          delta={overLimit ? { value: '> 80% used', direction: 'down' } : undefined} />
+          delta={overLimit && warningPct !== null ? { value: `≥ ${warningPct}% used`, direction: 'down' } : undefined} />
       </div>
 
       <div className="px-5 grid grid-cols-3 gap-4">
@@ -114,7 +112,8 @@ export default function CustomerDetailPage() {
         </Panel>
         <Panel title="Invoices" className="col-span-2">
           {invoicesData && invoicesData.data.length > 0
-            ? <DataTable columns={invoiceColumns} data={invoicesData.data} meta={invoicesData.meta} />
+            ? <DataTable
+            onRowClick={(r) => navigate(`/accounting/invoices/${r.id}`)} columns={invoiceColumns} data={invoicesData.data} meta={invoicesData.meta} />
             : <EmptyState icon="inbox" title="No invoices yet" />}
         </Panel>
       </div>
@@ -140,14 +139,14 @@ export default function CustomerDetailPage() {
                 </thead>
                 <tbody>
                   {priceAgreements.map((pa) => (
-                    <tr key={pa.id} className={trCls}>
+                    <tr key={pa.id} className={cn(trCls, "cursor-pointer")} onClick={() => navigate(`/crm/products/${pa.product?.id}`)}>
                       <Td>
                         {pa.product
-                          ? <Link to={`/crm/products/${pa.product.id}`} className="font-mono text-accent hover:underline">{pa.product.part_number}</Link>
+                          ? <span className="font-mono">{pa.product.part_number}</span>
                           : <span className="text-muted">—</span>}
                         {pa.product && <span className="ml-2 text-muted">{pa.product.name}</span>}
                       </Td>
-                      <Td align="right" mono>₱ {Number(pa.price).toFixed(2)}</Td>
+                      <Td align="right" mono>{formatPeso(pa.price)}</Td>
                       <Td align="right" mono>{pa.effective_from}</Td>
                       <Td align="right" mono>{pa.effective_to}</Td>
                       <Td>
@@ -181,9 +180,9 @@ export default function CustomerDetailPage() {
                 </thead>
                 <tbody>
                   {salesOrdersData.data.map((so) => (
-                    <tr key={so.id} className={trCls}>
+                    <tr key={so.id} className={cn(trCls, "cursor-pointer")} onClick={() => navigate(`/crm/sales-orders/${so.id}`)}>
                       <Td>
-                        <Link to={`/crm/sales-orders/${so.id}`} className="font-mono text-accent hover:underline">{so.so_number}</Link>
+                        {so.so_number}
                       </Td>
                       <Td align="right" mono>{so.date}</Td>
                       <Td align="right" mono>{formatPeso(so.total_amount)}</Td>

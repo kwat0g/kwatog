@@ -21,7 +21,7 @@ import { numberInputProps } from '@/lib/numberInput';
 const schema = z.object({
   item_id:     z.string().min(1, 'Item is required.'),
   location_id: z.string().min(1, 'Location is required.'),
-  direction:   z.enum(['in', 'out']),
+  direction:   z.string().min(1, 'Direction is required.'),
   quantity:    z.string().regex(/^\d+(\.\d{1,3})?$/, 'Up to 3 decimals.').refine(v => Number(v) > 0, 'Must be greater than zero.'),
   unit_cost:   z.string().regex(/^(\d+(\.\d{1,4})?)?$/, 'Up to 4 decimals.').optional().or(z.literal('')),
   reason:      z.string().trim().min(10, 'Reason must be at least 10 characters (audit trail).').max(500),
@@ -37,6 +37,10 @@ export default function CreateStockAdjustmentPage() {
     queryKey: ['inventory', 'items', { per_page: 200, is_active: 'true' }],
     queryFn: () => itemsApi.list({ per_page: 200, is_active: 'true' }),
   });
+  const itemOptions = useQuery({
+    queryKey: ['inventory', 'items', 'options'],
+    queryFn: () => itemsApi.options(),
+  });
   const warehouses = useQuery({
     queryKey: ['inventory', 'warehouse', 'tree'],
     queryFn: () => warehouseApi.tree(),
@@ -44,7 +48,7 @@ export default function CreateStockAdjustmentPage() {
 
   const { register, handleSubmit, setError, watch, formState: { errors, isSubmitting } } = useForm<V>({
     resolver: zodResolver(schema),
-    defaultValues: { direction: 'in', quantity: '0', unit_cost: '' },
+    defaultValues: { direction: '', quantity: '', unit_cost: '' },
   });
   const direction = watch('direction');
 
@@ -52,7 +56,7 @@ export default function CreateStockAdjustmentPage() {
     mutationFn: (d: V) => stockAdjustmentsApi.create({
       item_id: d.item_id,
       location_id: d.location_id,
-      direction: d.direction,
+      direction: d.direction as Parameters<typeof stockAdjustmentsApi.create>[0]['direction'],
       quantity: d.quantity,
       reason: d.reason.trim(),
       unit_cost: d.unit_cost || undefined,
@@ -97,8 +101,8 @@ export default function CreateStockAdjustmentPage() {
               ))}
             </Select>
             <Select label="Direction" required {...register('direction')}>
-              <option value="in">Increase (IN — cycle count over)</option>
-              <option value="out">Decrease (OUT — cycle count short / scrap)</option>
+              <option value="">— Select —</option>
+              {(itemOptions.data?.adjustment_directions ?? []).map((direction) => <option key={direction.value} value={direction.value}>{direction.label}</option>)}
             </Select>
             <Input
               label="Quantity"
@@ -110,7 +114,7 @@ export default function CreateStockAdjustmentPage() {
             />
             {direction === 'in' && (
               <Input
-                label="Unit cost (₱)"
+                label="Unit cost"
                 {...register('unit_cost')}
                 {...numberInputProps()}
                 className="font-mono tabular-nums text-right"
@@ -124,7 +128,7 @@ export default function CreateStockAdjustmentPage() {
               className="col-span-2"
               required
               maxLength={500}
-              placeholder="e.g. Q4 cycle count discrepancy on bin A1-03; recount confirms +5 pcs"
+                    placeholder="Describe the adjustment reason"
               {...register('reason')}
               error={errors.reason?.message}
             />

@@ -1,7 +1,7 @@
 /**
  * Sprint 7 — Task 64 — Quality dashboard.
  *
- * KPIs: pass rate (last 30 days), open NCRs, defect Pareto. Bar chart
+ * KPIs: pass rate (configured quality window), open NCRs, defect Pareto. Bar chart
  * uses indigo bars (matches DESIGN-SYSTEM.md spec) with cumulative %
  * overlay implied by the table. Click a bar to drill into the
  * inspections containing that defect.
@@ -25,20 +25,15 @@ import { focusRingInset } from '@/lib/focus';
 
 export default function QualityDashboardPage() {
   const [selectedDefect, setSelectedDefect] = useState<string | null>(null);
-  const to = new Date();
-  const from = new Date(to);
-  from.setDate(from.getDate() - 30);
-  const period = { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
-
   const pareto = useQuery({
-    queryKey: ['quality', 'pareto', 'last30'],
-    queryFn: () => analyticsApi.defectPareto({ ...period, limit: 10 }),
+    queryKey: ['quality', 'pareto', 'default-window'],
+    queryFn: () => analyticsApi.defectPareto({ limit: 10 }),
   });
 
-  // Pass-rate KPI: aggregate from inspections list (last 30 days).
+  // The API applies the configured quality history window when dates are omitted.
   const passRate = useQuery({
     queryKey: ['quality', 'pass-rate'],
-    queryFn: () => analyticsApi.inspectionSummary(period),
+    queryFn: () => analyticsApi.inspectionSummary(),
   });
 
   const openNcrs = useQuery({
@@ -60,7 +55,7 @@ export default function QualityDashboardPage() {
 
   const drillDown = useQuery({
     queryKey: ['quality', 'pareto', 'drill', selectedDefect],
-    queryFn: () => analyticsApi.paretoDrillDown(selectedDefect ?? ''),
+    queryFn: () => analyticsApi.paretoDrillDown(selectedDefect ?? '', pareto.data ? { from: pareto.data.from, to: pareto.data.to } : undefined),
     enabled: Boolean(selectedDefect),
   });
 
@@ -76,22 +71,22 @@ export default function QualityDashboardPage() {
 
   return (
     <div>
-      <PageHeader title="Quality dashboard" subtitle="Last 30 days" />
+      <PageHeader title="Quality dashboard" subtitle={pareto.data ? `Quality window: ${pareto.data.from} — ${pareto.data.to}` : 'Configured quality history window'} />
 
       <div className="px-5 grid grid-cols-3 gap-4 mb-4">
         <StatCard
           label="Pass rate"
-          value={passRate.isLoading ? '—' : `${passRate.data?.pass_rate.toFixed(1) ?? 0}%`}
-          helper={passRate.data ? `${passRate.data.total} inspections` : 'loading…'}
+          value={passRate.isLoading ? '—' : passRate.data?.pass_rate != null ? `${passRate.data.pass_rate.toFixed(1)}%` : '—'}
+          helper={passRate.data ? `${passRate.data.total} inspections` : '—'}
         />
         <StatCard
           label="Open NCRs"
-          value={openNcrs.isLoading ? '—' : String(openNcrs.data?.meta.total ?? 0)}
+          value={openNcrs.isLoading ? '—' : openNcrs.data?.meta.total != null ? String(openNcrs.data.meta.total) : '—'}
           helper="awaiting disposition"
         />
         <StatCard
           label="Total defects"
-          value={pareto.isLoading ? '—' : String(pareto.data?.total_defects ?? 0)}
+          value={pareto.isLoading ? '—' : pareto.data?.total_defects != null ? String(pareto.data.total_defects) : '—'}
           helper="across top 10 parameters"
         />
       </div>
@@ -107,7 +102,7 @@ export default function QualityDashboardPage() {
             />
           )}
           {pareto.data && pareto.data.rows.length === 0 && (
-            <EmptyState icon="check-circle" title="No defects in the period" description="All inspections passed in the last 30 days." />
+            <EmptyState icon="check-circle" title="No defects in the period" description={pareto.data ? `All inspections passed from ${pareto.data.from} to ${pareto.data.to}.` : 'All inspections passed in the configured quality window.'} />
           )}
           {pareto.data && pareto.data.rows.length > 0 && (
             <div>
@@ -148,8 +143,8 @@ export default function QualityDashboardPage() {
                     <Link to={`/quality/ncrs/${n.id}`} className="block hover:bg-subtle rounded-md -mx-1 px-1">
                       <div className="flex items-center gap-2 mb-0.5">
                         <span className="font-mono text-xs text-accent">{n.ncr_number}</span>
-                        <Chip variant={n.severity === 'critical' ? 'danger' : n.severity === 'major' ? 'warning' : 'info'}>
-                          {n.severity}
+                        <Chip variant={n.severity === 'critical' || n.severity === 'high' ? 'danger' : n.severity === 'medium' ? 'warning' : 'info'}>
+                          {n.severity_label ?? n.severity}
                         </Chip>
                       </div>
                       <div className="text-xs text-muted truncate">{n.defect_description}</div>

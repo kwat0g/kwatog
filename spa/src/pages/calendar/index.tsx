@@ -253,7 +253,7 @@ export default function CalendarPage() {
         {selected && (
           <div className="space-y-3 text-sm">
             <div className="flex items-center gap-2">
-              <Chip variant={selected.color_variant}>{selected.type.replace('_', ' ')}</Chip>
+              <Chip variant={selected.color_variant}>{selected.type_label ?? selected.type.replace('_', ' ')}</Chip>
               <span className="font-medium">{selected.title}</span>
             </div>
             <div className="text-xs text-muted font-mono tabular-nums">

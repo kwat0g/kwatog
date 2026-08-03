@@ -12,6 +12,7 @@ import { StatCard } from '@/components/ui/StatCard';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { formatDate } from '@/lib/formatDate';
+import { formatCompactCurrency } from '@/lib/formatNumber';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/cn';
 import { ArrowLeft, Send, XCircle, CheckCircle } from 'lucide-react';
@@ -39,6 +40,11 @@ export default function BudgetDetailPage() {
     queryKey: ['budget', id],
     queryFn: () => budgetingApi.show(id!),
     enabled: !!id,
+  });
+  const { data: budgetOptions } = useQuery({
+    queryKey: ['budgets', 'options'],
+    queryFn: () => budgetingApi.options(),
+    staleTime: 300_000,
   });
 
   const submitMutation = useMutation({
@@ -84,13 +90,13 @@ export default function BudgetDetailPage() {
         title={budget.name}
         subtitle={
           <div className="flex items-center gap-3 mt-1">
-            <Chip variant={STATUS_VARIANT[budget.status] ?? 'neutral'}>{budget.status}</Chip>
+            <Chip variant={STATUS_VARIANT[budget.status] ?? 'neutral'}>{budget.status_label ?? budget.status}</Chip>
             {budget.department && <span className="text-sm text-muted">{budget.department.name}</span>}
             <Chip variant="neutral">{budget.budget_type}</Chip>
             <span className={cn(
               'text-xs font-medium px-1.5 py-0.5 rounded',
-              budget.utilization_pct >= 95 ? 'text-danger-fg bg-danger-bg' :
-              budget.utilization_pct >= 80 ? 'text-warning-fg bg-warning-bg' : 'text-success-fg bg-success-bg'
+                budget.utilization_pct >= (budgetOptions?.critical_ratio_pct ?? Number.POSITIVE_INFINITY) ? 'text-danger-fg bg-danger-bg' :
+                budget.utilization_pct >= (budgetOptions?.warning_ratio_pct ?? Number.POSITIVE_INFINITY) ? 'text-warning-fg bg-warning-bg' : 'text-success-fg bg-success-bg'
             )}>
               {budget.utilization_pct}% used
             </span>
@@ -123,12 +129,12 @@ export default function BudgetDetailPage() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <StatCard label="Allocated" value={`₱${(budget.total_allocated / 1_000_000).toFixed(2)}M`} />
-        <StatCard label="Spent" value={`₱${(budget.total_spent / 1_000_000).toFixed(2)}M`} />
-        <StatCard label="Committed" value={`₱${(budget.total_committed / 1_000_000).toFixed(2)}M`} />
+        <StatCard label="Allocated" value={formatCompactCurrency(budget.total_allocated, 1_000_000, 'M')} />
+        <StatCard label="Spent" value={formatCompactCurrency(budget.total_spent, 1_000_000, 'M')} />
+        <StatCard label="Committed" value={formatCompactCurrency(budget.total_committed, 1_000_000, 'M')} />
         <StatCard
           label="Available"
-          value={`₱${(budget.available / 1_000_000).toFixed(2)}M`}
+          value={formatCompactCurrency(budget.available, 1_000_000, 'M')}
           className={budget.available < 0 ? 'text-danger' : 'text-success'}
         />
       </div>
@@ -137,7 +143,7 @@ export default function BudgetDetailPage() {
       <div className="space-y-1.5">
         <div className="flex justify-between text-sm">
           <span className="text-secondary">Utilization</span>
-          <span className={cn('font-medium', budget.utilization_pct >= 95 ? 'text-danger' : 'text-success')}>
+          <span className={cn('font-medium', budget.utilization_pct >= (budgetOptions?.critical_ratio_pct ?? Number.POSITIVE_INFINITY) ? 'text-danger' : 'text-success')}>
             {budget.utilization_pct}%
           </span>
         </div>
@@ -145,8 +151,8 @@ export default function BudgetDetailPage() {
           <div
             className={cn(
               'h-full rounded-full transition-all duration-500',
-              budget.utilization_pct >= 95 ? 'bg-danger' :
-              budget.utilization_pct >= 80 ? 'bg-warning' : 'bg-success'
+              budget.utilization_pct >= (budgetOptions?.critical_ratio_pct ?? Number.POSITIVE_INFINITY) ? 'bg-danger' :
+              budget.utilization_pct >= (budgetOptions?.warning_ratio_pct ?? Number.POSITIVE_INFINITY) ? 'bg-warning' : 'bg-success'
             )}
             style={{ width: `${Math.min(budget.utilization_pct, 100)}%` }}
           />
@@ -180,14 +186,14 @@ export default function BudgetDetailPage() {
                       const val = li[m.toLowerCase() as keyof typeof li] as number;
                       return (
                         <Td align="right" mono className="text-xs" key={m}>
-                          {val > 0 ? `₱${(val / 1000).toFixed(0)}K` : '-'}
+                          {val > 0 ? formatCompactCurrency(val, 1_000, 'K') : '-'}
                         </Td>
                       );
                     })}
-                    <Td align="right" mono className="font-medium">₱{(li.annual_total / 1000).toFixed(0)}K</Td>
-                    <Td align="right" mono>₱{(li.actual_total / 1000).toFixed(0)}K</Td>
+                      <Td align="right" mono className="font-medium">{formatCompactCurrency(li.annual_total, 1_000, 'K')}</Td>
+                      <Td align="right" mono>{formatCompactCurrency(li.actual_total, 1_000, 'K')}</Td>
                     <Td align="right" mono className={cn(li.variance < 0 ? 'text-danger' : 'text-success')}>
-                      {li.variance >= 0 ? '+' : ''}{li.variance >= 0 ? '₱' : '-₱'}{(Math.abs(li.variance) / 1000).toFixed(0)}K
+                        {li.variance >= 0 ? '+' : '-'}{formatCompactCurrency(Math.abs(li.variance), 1_000, 'K')}
                     </Td>
                   </tr>
                 ))}

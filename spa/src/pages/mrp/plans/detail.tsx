@@ -61,7 +61,7 @@ export default function MrpPlanDetailPage() {
           <div className="flex items-center gap-3">
             <span className="font-mono">{data.mrp_plan_no}</span>
             <Chip variant={data.status === 'active' ? 'success' : data.status === 'cancelled' ? 'danger' : 'neutral'}>
-              v{data.version} · {data.status}
+              v{data.version} · {data.status_label ?? data.status}
             </Chip>
           </div>
         }
@@ -146,7 +146,7 @@ export default function MrpPlanDetailPage() {
                 <div className="text-2xs uppercase tracking-wider text-muted mb-1">Work orders ({data.draft_wo_count})</div>
                 {data.work_orders?.length ? data.work_orders.map((w) => (
                   <Link key={w.id} to={`/production/work-orders/${w.id}`} className="block font-mono text-xs text-accent hover:underline">
-                    {w.wo_number} <span className="text-muted">({w.status}, qty {w.quantity_target})</span>
+                    {w.wo_number} <span className="text-muted">({w.status_label ?? w.status}, qty {w.quantity_target})</span>
                   </Link>
                 )) : <span className="text-muted">—</span>}
               </div>
@@ -154,7 +154,7 @@ export default function MrpPlanDetailPage() {
                 <div className="text-2xs uppercase tracking-wider text-muted mb-1">Auto PRs ({data.auto_pr_count})</div>
                 {data.purchase_requests?.length ? data.purchase_requests.map((p) => (
                   <Link key={p.id} to={`/purchasing/purchase-requests/${p.id}`} className="block font-mono text-xs text-accent hover:underline">
-                    {p.pr_number} <span className="text-muted">({p.status} · {p.priority})</span>
+                    {p.pr_number} <span className="text-muted">({p.status_label ?? p.status} · {p.priority_label ?? p.priority})</span>
                   </Link>
                 )) : <span className="text-muted">—</span>}
               </div>

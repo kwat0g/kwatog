@@ -70,6 +70,11 @@ export default function AuditLogsPage() {
     queryFn: () => auditLogsApi.list(filters),
     placeholderData: (prev) => prev,
   });
+  const { data: auditOptions } = useQuery({
+    queryKey: ['admin', 'audit-logs', 'options'],
+    queryFn: auditLogsApi.options,
+    staleTime: 5 * 60 * 1000,
+  });
 
   return (
     <div>
@@ -95,11 +100,7 @@ export default function AuditLogsPage() {
             key: 'action',
             label: 'Action',
             type: 'select',
-            options: [
-              { value: 'created', label: 'Created' },
-              { value: 'updated', label: 'Updated' },
-              { value: 'deleted', label: 'Deleted' },
-            ],
+            options: auditOptions?.actions ?? [],
           },
         ]}
         onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}

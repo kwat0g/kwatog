@@ -25,7 +25,7 @@ const itemSchema = z.object({
 });
 
 const schema = z.object({
-  type: z.enum(['customer_return', 'supplier_return']),
+  type: z.string().min(1, 'Select a return type'),
   return_date: z.string().min(1, 'Required'),
   customer_id: z.string().optional(),
   vendor_id: z.string().optional(),
@@ -51,7 +51,7 @@ export default function CreateReturnRequestPage() {
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      type: 'customer_return',
+      type: '',
       return_date: new Date().toISOString().slice(0, 10),
       customer_id: '',
       vendor_id: '',
@@ -75,6 +75,10 @@ export default function CreateReturnRequestPage() {
     queryKey: ['customers'],
     queryFn: () => customersApi.list({ per_page: 500 }),
   });
+  const { data: options } = useQuery({
+    queryKey: ['return-management', 'options'],
+    queryFn: () => returnManagementApi.options(),
+  });
 
   const products = productsData?.data ?? [];
   const customers = customersData?.data ?? [];
@@ -95,7 +99,7 @@ export default function CreateReturnRequestPage() {
           reason: it.reason || undefined,
           condition: it.condition || undefined,
         })),
-      }),
+      } as Parameters<typeof returnManagementApi.create>[0]),
     onSuccess: (rma) => {
       qc.invalidateQueries({ queryKey: ['return-management'] });
       toast.success('Return request created.');
@@ -126,8 +130,8 @@ export default function CreateReturnRequestPage() {
         <Panel title="Type & Source">
           <div className="grid grid-cols-2 gap-3">
             <Select label="Type" required {...register('type')} error={errors.type?.message}>
-              <option value="customer_return">Customer Return</option>
-              <option value="supplier_return">Supplier Return</option>
+              <option value="">— Select type —</option>
+              {(options?.types ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </Select>
             <Input
               label="Return Date"
@@ -175,13 +179,7 @@ export default function CreateReturnRequestPage() {
               error={errors.reason_code?.message}
             >
               <option value="">— Select reason —</option>
-              <option value="defective">Defective product</option>
-              <option value="damaged">Damaged in transit</option>
-              <option value="wrong_item">Wrong item shipped</option>
-              <option value="excess">Excess quantity</option>
-              <option value="customer_change">Customer changed mind</option>
-              <option value="quality_issue">Quality issue</option>
-              <option value="other">Other</option>
+              {(options?.reasons ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </Select>
             <Select
               label="Resolution"
@@ -189,11 +187,7 @@ export default function CreateReturnRequestPage() {
               error={errors.resolution?.message}
             >
               <option value="">— Select resolution —</option>
-              <option value="replace">Replace</option>
-              <option value="refund">Refund</option>
-              <option value="credit_note">Credit Note</option>
-              <option value="scrap">Scrap</option>
-              <option value="return_to_vendor">Return to Vendor</option>
+              {(options?.resolutions ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </Select>
           </div>
           <div className="mt-3">
@@ -226,7 +220,7 @@ export default function CreateReturnRequestPage() {
               size="sm"
               icon={<Plus size={14} />}
               onClick={() =>
-                append({ product_id: '', quantity: 1, unit_price: 0, reason: '', condition: '' })
+                append({ product_id: '', quantity: '' as unknown as number, unit_price: undefined, reason: '', condition: '' })
               }
             >
               Add Item
@@ -288,11 +282,7 @@ export default function CreateReturnRequestPage() {
                   <div className="col-span-2">
                     <Select {...register(`items.${idx}.condition` as const)}>
                       <option value="">—</option>
-                      <option value="new">New</option>
-                      <option value="used">Used</option>
-                      <option value="damaged">Damaged</option>
-                      <option value="defective">Defective</option>
-                      <option value="obsolete">Obsolete</option>
+                      {(options?.conditions ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                     </Select>
                   </div>
                   <div className="col-span-1">

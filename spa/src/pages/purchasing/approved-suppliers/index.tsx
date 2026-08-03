@@ -245,7 +245,7 @@ function ApprovedSupplierForm({ onClose, onSaved }: { onClose: () => void; onSav
             error={errors.lead_time_days?.message}
           />
           <Input
-            label="Last price (₱)"
+            label="Last price"
             {...register('last_price')}
             {...numberInputProps()}
             className="font-mono tabular-nums text-right"

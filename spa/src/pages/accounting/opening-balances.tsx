@@ -20,9 +20,9 @@ import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells
 
 const lineSchema = z.object({
   account_id: z.string().min(1, 'Account is required'),
-  debit:  z.coerce.number({ invalid_type_error: 'Number' }).min(0, 'Min 0').default(0),
-  credit: z.coerce.number({ invalid_type_error: 'Number' }).min(0, 'Min 0').default(0),
-});
+  debit:  z.coerce.number({ invalid_type_error: 'Number' }).min(0, 'Min 0'),
+  credit: z.coerce.number({ invalid_type_error: 'Number' }).min(0, 'Min 0'),
+}).refine((line) => line.debit > 0 || line.credit > 0, { message: 'Enter a debit or credit amount.', path: ['debit'] });
 
 const schema = z.object({
   date:  z.string().min(1, 'Date is required'),
@@ -44,8 +44,8 @@ export default function OpeningBalancesPage() {
     defaultValues: {
       date: new Date().toISOString().slice(0, 10),
       lines: [
-        { account_id: '', debit: 0, credit: 0 },
-        { account_id: '', debit: 0, credit: 0 },
+        { account_id: '', debit: undefined as unknown as number, credit: undefined as unknown as number },
+        { account_id: '', debit: undefined as unknown as number, credit: undefined as unknown as number },
       ],
     },
   });
@@ -63,7 +63,7 @@ export default function OpeningBalancesPage() {
   const payloadLines = () =>
     lines
       .filter((l) => l.account_id)
-      .map((l) => ({ account_id: l.account_id, debit: String(l.debit ?? 0), credit: String(l.credit ?? 0) }));
+      .map((l) => ({ account_id: l.account_id, debit: String(l.debit), credit: String(l.credit) }));
 
   const postMut = useMutation({
     mutationFn: () => openingBalancesApi.postGl(date, payloadLines()),
@@ -148,7 +148,7 @@ export default function OpeningBalancesPage() {
           </div>
 
           <div className="flex items-center justify-between mt-3">
-            <Button type="button" variant="secondary" size="sm" icon={<Plus size={14} />} onClick={() => append({ account_id: '', debit: 0, credit: 0 })}>
+            <Button type="button" variant="secondary" size="sm" icon={<Plus size={14} />} onClick={() => append({ account_id: '', debit: undefined as unknown as number, credit: undefined as unknown as number })}>
               Add line
             </Button>
             <div className="flex items-center gap-4 text-sm font-mono tabular-nums">

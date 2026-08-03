@@ -10,6 +10,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { StatCard } from '@/components/ui/StatCard';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { formatPeso } from '@/lib/formatNumber';
 
 function todayStr(): string {
   const d = new Date();
@@ -25,9 +26,7 @@ function fmtNum(s: string, decimals = 3): string {
   if (Number.isNaN(n)) return s;
   return n.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
-function fmtMoney(s: string): string {
-  return Number(s).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
+function fmtMoney(s: string): string { return formatPeso(s); }
 
 export default function StockCardPage() {
   const { id = '' } = useParams<{ id: string }>();
@@ -105,16 +104,16 @@ export default function StockCardPage() {
             <StatCard
               label="Opening balance"
               value={`${fmtNum(data.opening.balance)} ${data.item.unit_of_measure}`}
-              helper={`₱ ${fmtMoney(data.opening.value)}`}
+              helper={fmtMoney(data.opening.value)}
             />
             <StatCard
               label="Closing balance"
               value={`${fmtNum(data.closing.balance)} ${data.item.unit_of_measure}`}
-              helper={`₱ ${fmtMoney(data.closing.value)}`}
+              helper={fmtMoney(data.closing.value)}
             />
             <StatCard
               label="Weighted avg cost"
-              value={`₱ ${fmtMoney(data.closing.weighted_avg)}`}
+              value={fmtMoney(data.closing.weighted_avg)}
             />
           </div>
           <EmptyState
@@ -132,12 +131,12 @@ export default function StockCardPage() {
             <StatCard
               label="Opening balance"
               value={`${fmtNum(data.opening.balance)} ${data.item.unit_of_measure}`}
-              helper={`₱ ${fmtMoney(data.opening.value)} · avg ₱ ${fmtMoney(data.opening.weighted_avg)}`}
+              helper={`${fmtMoney(data.opening.value)} · avg ${fmtMoney(data.opening.weighted_avg)}`}
             />
             <StatCard
               label="Closing balance"
               value={`${fmtNum(data.closing.balance)} ${data.item.unit_of_measure}`}
-              helper={`₱ ${fmtMoney(data.closing.value)} · avg ₱ ${fmtMoney(data.closing.weighted_avg)}`}
+              helper={`${fmtMoney(data.closing.value)} · avg ${fmtMoney(data.closing.weighted_avg)}`}
             />
             <StatCard
               label="Movements"
@@ -156,7 +155,7 @@ export default function StockCardPage() {
                   <Th>Movement</Th>
                   <Th align="right">In</Th>
                   <Th align="right">Out</Th>
-                  <Th align="right">Unit cost (₱)</Th>
+              <Th align="right">Unit cost</Th>
                   <Th align="right">Balance</Th>
                 </tr>
               </thead>
@@ -175,7 +174,7 @@ export default function StockCardPage() {
                         <span className="text-muted">{row.reference_id ?? '—'}</span>
                       )}
                     </Td>
-                    <Td>{row.movement_type}</Td>
+                    <Td>{row.movement_type_label ?? row.movement_type}</Td>
                     <Td align="right" mono>
                       {Number(row.in) > 0 ? fmtNum(row.in) : '—'}
                     </Td>

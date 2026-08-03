@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
 import { stockLevelsApi } from '@/api/inventory/stock';
+import { itemsApi } from '@/api/inventory/items';
 import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
@@ -19,6 +20,11 @@ export default function StockLevelsPage() {
     queryKey: ['inventory', 'stock-levels', filters],
     queryFn: () => stockLevelsApi.list(filters),
     placeholderData: (prev) => prev,
+  });
+  const { data: itemOptions } = useQuery({
+    queryKey: ['inventory', 'items', 'options'],
+    queryFn: itemsApi.options,
+    staleTime: 5 * 60 * 1000,
   });
 
   const columns: Column<StockLevel>[] = [
@@ -39,10 +45,7 @@ export default function StockLevelsPage() {
   const filterConfig: FilterConfig[] = [
     { key: 'item_type', label: 'Type', type: 'select', options: [
       { value: '', label: 'All' },
-      { value: 'raw_material', label: 'Raw material' },
-      { value: 'packaging', label: 'Packaging' },
-      { value: 'spare_part', label: 'Spare part' },
-      { value: 'finished_good', label: 'Finished good' },
+      ...(itemOptions?.item_types ?? []),
     ]},
   ];
 

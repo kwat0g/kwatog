@@ -1,5 +1,5 @@
 /** ADV8 — Downtime analytics dashboard. */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Activity, Clock, TrendingDown, TrendingUp, Timer, BarChart3 } from 'lucide-react';
 import { downtimeAnalyticsApi } from '@/api/maintenance/downtimeAnalytics';
@@ -9,17 +9,9 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { DataTable, type Column } from '@/components/ui/DataTable';
-import { Select } from '@/components/ui/Select';
 import { Panel } from '@/components/ui/Panel';
 import { DowntimeParetoChart, buildParetoData } from '@/components/charts/DowntimeParetoChart';
 import type { TopMachineDowntime, MachineDowntimeSummary } from '@/types/maintenance';
-
-const DAYS_OPTIONS = [
-  { value: '7', label: 'Last 7 days' },
-  { value: '14', label: 'Last 14 days' },
-  { value: '30', label: 'Last 30 days' },
-  { value: '90', label: 'Last 90 days' },
-];
 
 function DowntimeSummaryPlaceholder() {
   return (
@@ -78,7 +70,14 @@ function StatCard({ label, value, icon: Icon, trend }: { label: string; value: s
 }
 
 export default function DowntimeAnalyticsPage() {
-  const [days, setDays] = useState(30);
+  const [days, setDays] = useState<number | undefined>(undefined);
+  const policyQ = useQuery({
+    queryKey: ['downtime-analytics', 'policy'],
+    queryFn: () => downtimeAnalyticsApi.policy(),
+  });
+  useEffect(() => {
+    if (days === undefined && policyQ.data) setDays(policyQ.data.default_days);
+  }, [days, policyQ.data]);
 
   const { data: summary, isLoading: summaryLoading, isError: summaryError, refetch: summaryRefetch } = useQuery({
     queryKey: ['downtime-analytics', 'summary', days],
@@ -128,7 +127,7 @@ export default function DowntimeAnalyticsPage() {
       header: 'Breakdowns',
       align: 'right',
       cell: (r) => (
-        <Chip variant={r.breakdown_count >= 3 ? 'danger' : r.breakdown_count >= 1 ? 'warning' : 'success'}>
+        <Chip variant={policyQ.data && r.breakdown_count >= policyQ.data.breakdown_critical_count ? 'danger' : policyQ.data && r.breakdown_count >= policyQ.data.breakdown_warning_count ? 'warning' : 'success'}>
           {r.breakdown_count}
         </Chip>
       ),
@@ -145,7 +144,7 @@ export default function DowntimeAnalyticsPage() {
       cell: (r) => {
         const pct = r.summary.availability_pct;
         return (
-          <Chip variant={pct >= 95 ? 'success' : pct >= 85 ? 'warning' : 'danger'}>
+              <Chip variant={policyQ.data?.availability_good_pct != null && pct >= policyQ.data.availability_good_pct ? 'success' : policyQ.data?.availability_warning_pct != null && pct >= policyQ.data.availability_warning_pct ? 'warning' : 'danger'}>
             {pct.toFixed(1)}%
           </Chip>
         );
@@ -180,7 +179,7 @@ export default function DowntimeAnalyticsPage() {
       header: 'Breakdowns',
       align: 'right',
       cell: (r) => (
-        <Chip variant={r.summary.breakdown_count >= 3 ? 'danger' : r.summary.breakdown_count >= 1 ? 'warning' : 'success'}>
+        <Chip variant={policyQ.data && r.summary.breakdown_count >= policyQ.data.breakdown_critical_count ? 'danger' : policyQ.data && r.summary.breakdown_count >= policyQ.data.breakdown_warning_count ? 'warning' : 'success'}>
           {r.summary.breakdown_count}
         </Chip>
       ),
@@ -194,11 +193,15 @@ export default function DowntimeAnalyticsPage() {
         subtitle="MTBF, MTTR, availability, and breakdown trends"
         actions={
           <div className="w-40">
-            <Select value={String(days)} onChange={(e) => setDays(Number(e.target.value))}>
-              {DAYS_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </Select>
+            <input
+              type="number"
+              aria-label="Downtime history in days"
+              value={days ?? ''}
+              min={policyQ.data?.minimum_days}
+              max={policyQ.data?.maximum_days}
+              onChange={(e) => setDays(Number(e.target.value) || undefined)}
+              className="w-24 rounded-md border border-default bg-surface px-2 py-1 text-sm"
+            />
           </div>
         }
       />
@@ -219,25 +222,25 @@ export default function DowntimeAnalyticsPage() {
               label="Total Downtime"
               value={formatMinutes(summary.total_downtime_minutes)}
               icon={Clock}
-              trend={summary.total_downtime_minutes > 480 ? 'up' : 'down'}
+              trend={policyQ.data && summary.total_downtime_minutes > policyQ.data.total_warning_minutes ? 'up' : 'down'}
             />
             <StatCard
               label="MTBF"
-              value={summary.mtbf_hours ? `${summary.mtbf_hours.toFixed(1)}h` : 'N/A'}
+              value={summary.mtbf_hours ? `${summary.mtbf_hours.toFixed(1)}h` : '—'}
               icon={Timer}
-              trend={summary.mtbf_hours && summary.mtbf_hours > 48 ? 'down' : 'up'}
+              trend={policyQ.data && summary.mtbf_hours && summary.mtbf_hours > policyQ.data.mtbf_good_hours ? 'down' : 'up'}
             />
             <StatCard
               label="MTTR"
-              value={summary.mttr_minutes ? formatMinutes(summary.mttr_minutes) : 'N/A'}
+              value={summary.mttr_minutes ? formatMinutes(summary.mttr_minutes) : '—'}
               icon={Activity}
-              trend={summary.mttr_minutes && summary.mttr_minutes < 60 ? 'down' : 'up'}
+              trend={policyQ.data && summary.mttr_minutes && summary.mttr_minutes < policyQ.data.mttr_good_minutes ? 'down' : 'up'}
             />
             <StatCard
               label="Availability"
               value={`${summary.availability_pct.toFixed(1)}%`}
               icon={BarChart3}
-              trend={summary.availability_pct >= 95 ? 'down' : 'up'}
+              trend={policyQ.data?.availability_good_pct != null && summary.availability_pct >= policyQ.data.availability_good_pct ? 'down' : 'up'}
             />
           </>
         ) : null}

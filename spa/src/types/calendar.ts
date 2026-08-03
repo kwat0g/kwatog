@@ -25,6 +25,7 @@ export type CalendarEventVariant =
 export interface CalendarEvent {
   id: string;
   type: CalendarLayer;
+  type_label?: string;
   title: string;
   start: string; // YYYY-MM-DD
   end: string;   // YYYY-MM-DD

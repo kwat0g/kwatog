@@ -24,6 +24,7 @@ export interface AuditLogParams extends ListParams {
 }
 
 export const auditLogsApi = {
+  options: () => client.get<{ data: { actions: Array<{ value: string; label: string }> } }>('/admin/audit-logs/options').then((r) => r.data.data),
   list: (params?: AuditLogParams) =>
     client.get<PaginatedResponse<AuditLogEntry>>('/admin/audit-logs', { params }).then((r) => r.data),
 

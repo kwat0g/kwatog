@@ -60,6 +60,7 @@ interface MachineRow {
   code: string;
   name: string;
   status: string;
+  status_label?: string;
   has_active_wo: boolean;
 }
 
@@ -76,12 +77,13 @@ interface MrpShortage {
   item_code: string;
   item_name: string;
   shortage: string;
-  urgency: string;
+  urgency: string | null;
   pr_status: string | null;
 }
 
 interface WoStatusItem {
   status: string;
+  status_label?: string;
   count: number;
 }
 
@@ -98,6 +100,7 @@ interface PpcDashboardData {
     mrp_shortages: MrpShortage[];
     machine_availability: GanttRow[];
     wo_status_breakdown: WoStatusItem[];
+    gantt_horizon_days?: number;
   };
 }
 
@@ -110,8 +113,8 @@ function KpiRow({ kpis }: { kpis: PpcKpi[] }) {
         <StatCard
           key={k.label}
           label={k.label}
-          value={k.unit === 'PHP' ? `₱ ${k.value}` : k.value}
-          helper={k.unit !== 'PHP' && k.unit !== 'count' ? k.unit : undefined}
+          value={/^[A-Z]{3}$/.test(k.unit) ? `${k.unit} ${k.value}` : k.value}
+          helper={!/^[A-Z]{3}$/.test(k.unit) && k.unit !== 'count' ? k.unit : undefined}
           linkTo={kpiLink(k.label)}
         />
       ))}
@@ -217,7 +220,7 @@ function MachineUtilPanel({ machines }: { machines: MachineRow[] }) {
               <Td mono>{m.code}</Td>
               <Td className="text-muted">{m.name}</Td>
               <Td>
-                <Chip variant={machineStatusVariant(m.status)}>{m.status}</Chip>
+                <Chip variant={machineStatusVariant(m.status)}>{m.status_label ?? m.status}</Chip>
               </Td>
               <Td align="right" mono aria-label={m.has_active_wo ? 'Has active work order' : 'No active work order'}>
                 {m.has_active_wo ? '✓' : '—'}
@@ -273,11 +276,11 @@ function MrpMetaPanel({ lastRun, unplanned }: { lastRun: string; unplanned: numb
   );
 }
 
-function ProductionGanttPanel({ rows }: { rows: ProductionGanttRow[] }) {
+function ProductionGanttPanel({ rows, horizonDays }: { rows: ProductionGanttRow[]; horizonDays: number }) {
   if (rows.length === 0) {
     return (
-      <Panel title="Production Gantt (7-day)">
-        <EmptyState icon="inbox" title="No scheduled work" description="No production scheduled in the next 7 days." />
+      <Panel title={`Production Gantt (${horizonDays}-day)`}>
+        <EmptyState icon="inbox" title="No scheduled work" description={`No production scheduled in the next ${horizonDays} days.`} />
       </Panel>
     );
   }
@@ -286,7 +289,7 @@ function ProductionGanttPanel({ rows }: { rows: ProductionGanttRow[] }) {
   const days = [...new Set(rows.map((r) => r.day))].sort();
 
   return (
-    <Panel title="Production Gantt (7-day)">
+    <Panel title={`Production Gantt (${horizonDays}-day)`}>
       <div className="overflow-x-auto">
         <table className={tableCls}>
           <thead>
@@ -353,7 +356,7 @@ function MrpShortagesPanel({ shortages }: { shortages: MrpShortage[] }) {
               <Td align="right" mono>{s.shortage}</Td>
               <Td>
                 <Chip variant={s.urgency === 'urgent' ? 'danger' : s.urgency === 'high' ? 'warning' : 'neutral'}>
-                  {s.urgency}
+                  {s.urgency ?? '—'}
                 </Chip>
               </Td>
               <Td>
@@ -369,10 +372,10 @@ function MrpShortagesPanel({ shortages }: { shortages: MrpShortage[] }) {
   );
 }
 
-function MachineAvailabilityGrid({ rows }: { rows: GanttRow[] }) {
+function MachineAvailabilityGrid({ rows, horizonDays }: { rows: GanttRow[]; horizonDays: number }) {
   if (rows.length === 0) {
     return (
-      <Panel title="Machine Availability (7-day)">
+      <Panel title={`Machine Availability (${horizonDays}-day)`}>
         <EmptyState icon="cpu" title="No machines" description="No machines configured." />
       </Panel>
     );
@@ -383,7 +386,7 @@ function MachineAvailabilityGrid({ rows }: { rows: GanttRow[] }) {
     .sort(([a], [b]) => a.localeCompare(b)); // [date, label][]
 
   return (
-    <Panel title="Machine Availability (7-day)">
+    <Panel title={`Machine Availability (${horizonDays}-day)`}>
       <div className="overflow-x-auto">
         <table className={tableCls}>
           <thead>
@@ -437,7 +440,7 @@ function WoStatusBreakdownPanel({ items }: { items: WoStatusItem[] }) {
           return (
             <li key={i.status}>
               <div className="flex items-center justify-between text-sm mb-1">
-                <span className="capitalize">{i.status.replace(/_/g, ' ')}</span>
+                <span>{i.status_label ?? i.status.replace(/_/g, ' ')}</span>
                 <span className="font-mono tabular-nums">{i.count}</span>
               </div>
               <div
@@ -445,7 +448,7 @@ function WoStatusBreakdownPanel({ items }: { items: WoStatusItem[] }) {
                 aria-valuenow={pct}
                 aria-valuemin={0}
                 aria-valuemax={100}
-                aria-label={`${i.status}: ${i.count} work orders`}
+                aria-label={`${i.status_label ?? i.status}: ${i.count} work orders`}
                 className="h-2 bg-subtle rounded-full overflow-hidden"
               >
                 <div
@@ -498,7 +501,7 @@ export default function PpcDashboard() {
       {({ kpis, panels }) => {
         const woStatusChartData =
           panels?.wo_status_breakdown?.map((i) => ({
-            name: i.status.replace(/_/g, ' '),
+            name: i.status_label ?? i.status.replace(/_/g, ' '),
             value: i.count,
             color:
               i.status === 'completed' ? 'var(--success)'
@@ -510,8 +513,9 @@ export default function PpcDashboard() {
         (panels?.machine_util ?? []).forEach((m) => {
           machineStatusCounts[m.status] = (machineStatusCounts[m.status] || 0) + 1;
         });
+        const machineStatusLabels = new Map((panels?.machine_util ?? []).map((m) => [m.status, m.status_label ?? m.status]));
         const machineUtilChartData = Object.entries(machineStatusCounts).map(([label, count]) => ({
-          label,
+          label: machineStatusLabels.get(label) ?? label,
           count,
         }));
 
@@ -551,13 +555,13 @@ export default function PpcDashboard() {
                 lastRun={panels?.mrp_last_run ?? '—'}
                 unplanned={panels?.unplanned_wos ?? 0}
               />
-              <ProductionGanttPanel rows={panels?.production_gantt ?? []} />
+              <ProductionGanttPanel rows={panels?.production_gantt ?? []} horizonDays={panels?.gantt_horizon_days ?? 0} />
             </PanelRow>
 
             {/* ── Row 5: D3 — MRP Shortages + Machine Availability ── */}
             <PanelRow>
               <MrpShortagesPanel shortages={panels?.mrp_shortages ?? []} />
-              <MachineAvailabilityGrid rows={panels?.machine_availability ?? []} />
+              <MachineAvailabilityGrid rows={panels?.machine_availability ?? []} horizonDays={panels?.gantt_horizon_days ?? 0} />
             </PanelRow>
 
             {/* ── Row 6: D3 — WO Status Breakdown (full width) ── */}
@@ -593,7 +597,7 @@ export default function PpcDashboard() {
             {/* ── Row 7: Demand Forecast + Stock-out Risk ── */}
             <PanelRow cols={3}>
               <DemandForecastPanel />
-              <StockOutPanel horizonDays={60} />
+              <StockOutPanel />
               <ForecastAccuracyPanel />
             </PanelRow>
 

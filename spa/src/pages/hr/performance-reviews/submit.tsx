@@ -18,32 +18,8 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import type { ApiValidationError } from '@/types';
 import { onFormInvalid } from '@/lib/formErrors';
 
-const RATING_CATEGORIES = [
-  { key: 'job_knowledge', label: 'Job Knowledge' },
-  { key: 'work_quality', label: 'Work Quality' },
-  { key: 'productivity', label: 'Productivity' },
-  { key: 'communication', label: 'Communication' },
-  { key: 'teamwork', label: 'Teamwork' },
-  { key: 'initiative', label: 'Initiative' },
-  { key: 'attendance', label: 'Attendance & Punctuality' },
-];
-
-const OVERALL_RATINGS = [
-  'Outstanding',
-  'Exceeds Expectations',
-  'Meets Expectations',
-  'Needs Improvement',
-  'Unsatisfactory',
-] as const;
-
 const submitSchema = z.object({
-  job_knowledge: z.string().min(1, 'Required'),
-  work_quality: z.string().min(1, 'Required'),
-  productivity: z.string().min(1, 'Required'),
-  communication: z.string().min(1, 'Required'),
-  teamwork: z.string().min(1, 'Required'),
-  initiative: z.string().min(1, 'Required'),
-  attendance: z.string().min(1, 'Required'),
+  ratings: z.record(z.string(), z.string().min(1, 'Required')),
   strengths: z.string().min(1, 'Strengths are required').max(2000),
   improvements: z.string().min(1, 'Areas for improvement are required').max(2000),
   goals: z.string().min(1, 'Goals are required').max(2000),
@@ -62,6 +38,11 @@ export default function SubmitReviewPage() {
     queryFn: () => performanceReviewsApi.show(id!),
     enabled: !!id,
   });
+  const { data: reviewOptions } = useQuery({
+    queryKey: ['performance-reviews', 'options'],
+    queryFn: () => performanceReviewsApi.options(),
+    staleTime: 300_000,
+  });
 
   const {
     register, handleSubmit, setError,
@@ -69,8 +50,7 @@ export default function SubmitReviewPage() {
   } = useForm<FormValues>({
     resolver: zodResolver(submitSchema),
     defaultValues: {
-      job_knowledge: '', work_quality: '', productivity: '',
-      communication: '', teamwork: '', initiative: '', attendance: '',
+      ratings: {},
       strengths: '', improvements: '', goals: '',
       overall_score: '', overall_rating: '',
     },
@@ -78,10 +58,9 @@ export default function SubmitReviewPage() {
 
   const mutation = useMutation({
     mutationFn: (d: FormValues) => {
-      const ratings: Record<string, number> = {};
-      RATING_CATEGORIES.forEach((cat) => {
-        ratings[cat.key] = parseFloat(d[cat.key as keyof FormValues] as string);
-      });
+      const ratings = Object.fromEntries(
+        Object.entries(d.ratings).map(([key, value]) => [key, parseFloat(value)]),
+      );
       return performanceReviewsApi.submit(id!, {
         ratings,
         strengths: d.strengths,
@@ -155,7 +134,7 @@ export default function SubmitReviewPage() {
             </div>
             <div>
               <span className="text-muted">Status:</span>{' '}
-              <span className="capitalize">{review.status.replace('_', ' ')}</span>
+              <span>{review.status_label ?? review.status}</span>
             </div>
           </div>
         </Panel>
@@ -164,20 +143,16 @@ export default function SubmitReviewPage() {
         <Panel title="Category Ratings">
           <p className="text-sm text-muted mb-3">Rate each category from 1 (lowest) to 5 (highest).</p>
           <div className="grid grid-cols-2 gap-3">
-            {RATING_CATEGORIES.map((cat) => (
+            {(reviewOptions?.rating_categories ?? []).map((cat) => (
               <Select
-                key={cat.key}
+                key={cat.value}
                 label={cat.label}
                 required
-                {...register(cat.key as keyof FormValues)}
-                error={errors[cat.key as keyof FormValues]?.message}
+                {...register(`ratings.${cat.value}`)}
+                error={errors.ratings?.[cat.value]?.message}
               >
                 <option value="">-- Select --</option>
-                <option value="1">1 - Unsatisfactory</option>
-                <option value="2">2 - Needs Improvement</option>
-                <option value="3">3 - Meets Expectations</option>
-                <option value="4">4 - Exceeds Expectations</option>
-                <option value="5">5 - Outstanding</option>
+                {(reviewOptions?.rating_scale ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </Select>
             ))}
           </div>
@@ -221,7 +196,7 @@ export default function SubmitReviewPage() {
               required
               {...register('overall_score')}
               error={errors.overall_score?.message}
-              placeholder="e.g. 4.2"
+              placeholder="Enter rating"
             />
             <Select
               label="Overall Rating"
@@ -230,8 +205,8 @@ export default function SubmitReviewPage() {
               error={errors.overall_rating?.message}
             >
               <option value="">-- Select --</option>
-              {OVERALL_RATINGS.map((r) => (
-                <option key={r} value={r}>{r}</option>
+              {(reviewOptions?.overall_ratings ?? []).map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
               ))}
             </Select>
           </div>

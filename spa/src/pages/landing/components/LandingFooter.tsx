@@ -1,37 +1,19 @@
 /**
  * LandingFooter — closing band for the marketing site.
  *
- * Carries the brand, the Cavite address, the section map, careers,
+ * Carries the live brand/address, the section map, careers,
  * certifications, legal links, a newsletter signup, and a single discreet
  * "Staff login" text link for internal users.
  */
 
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { ArrowRight, CheckCircle } from 'lucide-react';
 import { BrandLogo } from '@/components/brand/BrandLogo';
-import { COMPANY, NAV_LINKS } from '../data';
 import { landingApi } from '@/api/landing';
 import { focusRingLanding } from '@/lib/focus';
 import { cn } from '@/lib/cn';
-
-const FOOTER_LINKS = {
-  company: [
-    { label: 'About us', href: '#top' },
-    { label: 'Careers', href: '/careers' },
-    { label: 'News & insights', href: '#' },
-  ],
-  quality: [
-    { label: 'IATF 16949 certificate', href: '#' },
-    { label: 'Quality policy', href: '#' },
-    { label: 'Certificate of Conformance', href: '#' },
-  ],
-  legal: [
-    { label: 'Privacy policy', href: '#' },
-    { label: 'Terms of service', href: '#' },
-    { label: 'Cookie policy', href: '#' },
-  ],
-};
 
 /**
  * Footer links and link-styled buttons share one underline-on-hover treatment.
@@ -46,6 +28,28 @@ const footerLinkCls = cn(
 );
 
 export function LandingFooter() {
+  const { data: contact } = useQuery({ queryKey: ['landing', 'contact'], queryFn: landingApi.contact, staleTime: 300_000 });
+  const { data: content } = useQuery({ queryKey: ['landing', 'content'], queryFn: landingApi.content, staleTime: 300_000 });
+  const navLinks = content?.section_copy?.nav_links?.length ? content.section_copy.nav_links : [
+    { label: 'Capabilities', href: '#capabilities' },
+    { label: '3D Parts', href: '#parts-3d' },
+    { label: 'Process', href: '#process' },
+    { label: 'Quality', href: '#quality' },
+    { label: 'Contact', href: '#contact' },
+  ];
+  const companyLinks = content?.section_copy?.footer_company_links?.length ? content.section_copy.footer_company_links : [
+    { label: 'Careers', href: '/careers' },
+    { label: 'Portal', href: '/portal' },
+  ];
+  const legalName = contact?.legal_name || 'Philippine Ogami Corporation';
+  const locationCountry = contact?.address?.split(',').at(-1)?.trim() || 'Philippines';
+  const salesEmail = contact?.sales_email || 'sales@ogami.ph';
+  const phone = contact?.phone || '+63 (046) 402-1234';
+  const addressLines = contact?.address ? contact.address.split(', ') : ['FCIE Dasmariñas', 'Cavite', 'Philippines'];
+  const footerDesc = content?.section_copy?.footer_description
+    ? content.section_copy.footer_description.replace('{{company}}', legalName)
+    : `${legalName} — IATF 16949 certified plastic injection molding & precision tooling for Tier-1 automotive and electronics manufacturers.`;
+
   const year = new Date().getFullYear();
   const [email, setEmail] = useState('');
   const [newsletterStatus, setNewsletterStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
@@ -69,13 +73,22 @@ export function LandingFooter() {
         <div className="grid gap-12 md:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr_1.2fr]">
           {/* Brand + address */}
           <div data-reveal data-reveal-delay="0.00">
-            <BrandLogo alt="Ogami" className="h-11" />
+            <div className="flex items-center gap-3">
+              <BrandLogo alt={legalName} className="h-10" />
+              <div className="flex flex-col text-left">
+                <span className="font-display text-base font-semibold tracking-tight text-landing-text">
+                  {legalName}
+                </span>
+                <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-landing-muted">
+                  Ogami ERP · IATF 16949
+                </span>
+              </div>
+            </div>
             <p className="mt-4 max-w-xs font-sans text-[13px] leading-relaxed text-landing-muted">
-              {COMPANY.legalName} — precision plastic injection molding, proudly
-              engineered in the Philippines.
+              {footerDesc}
             </p>
             <address className="mt-5 not-italic font-mono text-[11px] leading-relaxed text-landing-subtle-text">
-              {COMPANY.addressLines.map((line) => (
+              {addressLines.map((line) => (
                 <span key={line} className="block">
                   {line}
                 </span>
@@ -89,7 +102,7 @@ export function LandingFooter() {
               Explore
             </h3>
             <ul className="mt-4 space-y-2.5">
-              {NAV_LINKS.map((link) => (
+              {navLinks.map((link) => (
                 <li key={link.href}>
                   <a
                     href={link.href}
@@ -108,7 +121,7 @@ export function LandingFooter() {
               Company
             </h3>
             <ul className="mt-4 space-y-2.5">
-              {FOOTER_LINKS.company.map((link) => (
+              {companyLinks.map((link) => (
                 <li key={link.label}>
                   <a
                     href={link.href}
@@ -128,45 +141,31 @@ export function LandingFooter() {
               Quality
             </h3>
             <ul className="mt-4 space-y-2.5">
-              {FOOTER_LINKS.quality.map((link) =>
-                link.label === 'Quality policy' ? (
-                  <li key={link.label}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        landingApi
-                          .downloadQualityPolicy()
-                          .then((blob) => {
-                            const url = window.URL.createObjectURL(blob);
-                            const a = document.createElement('a');
-                            a.href = url;
-                            a.download = 'ogami-quality-policy.pdf';
-                            document.body.appendChild(a);
-                            a.click();
-                            a.remove();
-                            window.URL.revokeObjectURL(url);
-                          })
-                          .catch(() => {
-                            // Error toast handled by the global axios interceptor.
-                          });
-                      }}
-                      className={cn(footerLinkCls, 'text-[13px]')}
-                    >
-                      {link.label}
-                    </button>
-                  </li>
-                ) : (
-                  <li key={link.label}>
-                    <a
-                      href={link.href}
-                      onClick={(e) => link.href === '#' && e.preventDefault()}
-                      className={cn(footerLinkCls, 'text-[13px]')}
-                    >
-                      {link.label}
-                    </a>
-                  </li>
-                ),
-              )}
+              <li>
+                <button
+                  type="button"
+                  onClick={() => {
+                    landingApi
+                      .downloadQualityPolicy()
+                      .then((blob) => {
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'quality-policy.pdf';
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                        window.URL.revokeObjectURL(url);
+                      })
+                      .catch(() => {
+                        // Error toast handled by the global axios interceptor.
+                      });
+                  }}
+                  className={cn(footerLinkCls, 'text-[13px]')}
+                >
+                  Quality policy
+                </button>
+              </li>
             </ul>
           </nav>
 
@@ -176,7 +175,7 @@ export function LandingFooter() {
               Molding insights
             </h3>
             <p className="mt-4 max-w-xs text-[13px] leading-relaxed text-landing-text-secondary">
-              Quality tips, DFM notes, and Ogami news — sent sparingly.
+              {(content?.section_copy?.newsletter_description ?? '—').replace('{{company}}', contact?.legal_name ?? '—')}
             </p>
             {newsletterStatus === 'success' ? (
               <div className="mt-4 flex items-center gap-2 text-[13px] text-success">
@@ -215,14 +214,14 @@ export function LandingFooter() {
             <ul className="mt-4 space-y-2.5">
               <li>
                 <a
-                  href={`mailto:${COMPANY.email}`}
+                  href={`mailto:${salesEmail}`}
                   className={cn(footerLinkCls, 'text-[13px]')}
                 >
-                  {COMPANY.email}
+                  {salesEmail}
                 </a>
               </li>
               <li className="font-sans text-[13px] text-landing-text-secondary">
-                {COMPANY.phone}
+                {phone}
               </li>
               <li className="pt-2">
                 <Link
@@ -238,23 +237,11 @@ export function LandingFooter() {
 
         <div className="mt-14 flex flex-col items-start justify-between gap-4 border-t border-landing-border pt-6 sm:flex-row sm:items-center">
           <p className="font-mono text-[11px] text-landing-subtle-text">
-            © {year} {COMPANY.legalName}. All rights reserved.
+            © {year} {legalName}. All rights reserved.
           </p>
-          <div className="flex flex-wrap gap-4 sm:gap-4">
-            {FOOTER_LINKS.legal.map((link) => (
-              <a
-                key={link.label}
-                href={link.href}
-                onClick={(e) => e.preventDefault()}
-                className={cn(footerLinkCls, 'text-[12px]')}
-              >
-                {link.label}
-              </a>
-            ))}
-          </div>
           <p className="flex items-center gap-2.5 font-mono text-[11px] uppercase tracking-[0.16em] text-landing-subtle-text">
             <span className="h-1 w-1 rounded-full bg-landing-accent" />
-            Made in the Philippines
+            Made in {locationCountry}
           </p>
         </div>
       </div>

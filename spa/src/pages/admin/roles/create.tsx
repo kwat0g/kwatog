@@ -150,7 +150,7 @@ export default function CreateRolePage() {
           <div className="grid grid-cols-1 gap-3">
             <Input
               label="Role name"
-              placeholder="e.g. Line Supervisor"
+              placeholder="Role name"
               {...register('name')}
               error={errors.name?.message}
               required

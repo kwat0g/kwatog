@@ -31,6 +31,12 @@ export default function MrpPlansListPage() {
     queryFn: () => mrpPlansApi.list(filters),
     placeholderData: (prev) => prev,
   });
+  const { data: planOptions } = useQuery({
+    queryKey: ['mrp', 'plans', 'options'],
+    queryFn: mrpPlansApi.options,
+    staleTime: 5 * 60 * 1000,
+  });
+  const statusLabels = new Map((planOptions?.statuses ?? []).map((option) => [option.value, option.label]));
 
   const lastRun = useQuery({
     queryKey: ['mrp', 'runs', 'latest'],
@@ -77,14 +83,13 @@ export default function MrpPlansListPage() {
     },
     { key: 'pr', header: 'Auto PRs', align: 'right', cell: (r) => <NumCell>{r.auto_pr_count}</NumCell> },
     { key: 'wo', header: 'Draft WOs', align: 'right', cell: (r) => <NumCell>{r.draft_wo_count}</NumCell> },
-    { key: 'status', header: 'Status', cell: (r) => <Chip variant={variant[r.status]}>{r.status}</Chip> },
+    { key: 'status', header: 'Status', cell: (r) => <Chip variant={variant[r.status]}>{r.status_label ?? statusLabels.get(r.status) ?? r.status}</Chip> },
     { key: 'gen', header: 'Generated', align: 'right', cell: (r) => <NumCell>{r.generated_at?.slice(0, 10)}</NumCell> },
   ];
 
   const filterConfig: FilterConfig[] = [
     { key: 'status', label: 'Status', type: 'select', options: [
-      { value: '', label: 'All' }, { value: 'active', label: 'Active' },
-      { value: 'superseded', label: 'Superseded' }, { value: 'cancelled', label: 'Cancelled' },
+      { value: '', label: 'All' }, ...(planOptions?.statuses ?? []),
     ]},
   ];
 
@@ -114,7 +119,7 @@ export default function MrpPlansListPage() {
                 <span className="text-muted">Last MRP run</span>
                 <span className="font-mono tabular-nums text-primary">{formatDateTime(lastRun.data.run_at)}</span>
                 <Chip variant={lastRun.data.triggered_by === 'scheduled' ? 'info' : 'neutral'}>
-                  {lastRun.data.triggered_by}
+                  {lastRun.data.triggered_by_label ?? lastRun.data.triggered_by}
                 </Chip>
                 <Chip
                   variant={
@@ -125,7 +130,7 @@ export default function MrpPlansListPage() {
                         : 'warning'
                   }
                 >
-                  {lastRun.data.status}
+                  {lastRun.data.status_label ?? lastRun.data.status}
                 </Chip>
               </div>
             </div>

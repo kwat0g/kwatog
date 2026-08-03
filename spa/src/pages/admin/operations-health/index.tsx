@@ -25,7 +25,7 @@ export default function OperationsHealthPage() {
     <PageHeader
       title="Operations Health"
       subtitle={`Rollout readiness and workflow telemetry · ${formatDateTime(health.generated_at)}`}
-      actions={<Chip variant={health.status === 'healthy' ? 'success' : 'warning'}>{health.status}</Chip>}
+      actions={<Chip variant={health.status === 'healthy' ? 'success' : 'warning'}>{health.status_label ?? health.status}</Chip>}
       refreshingQueryKey={['rollout-health']}
     />
     <div className="p-5 space-y-4">

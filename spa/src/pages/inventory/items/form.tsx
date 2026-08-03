@@ -16,17 +16,17 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { onFormInvalid } from '@/lib/formErrors';
 import { numberInputProps } from '@/lib/numberInput';
 import type { ApiValidationError } from '@/types';
-import type { CreateItemData } from '@/types/inventory';
+import type { CreateItemData, ItemType, ReorderMethod } from '@/types/inventory';
 
 const schema = z.object({
   code:                   z.string().min(2).max(30).regex(/^[A-Z0-9-]+$/, 'Use uppercase letters, digits, hyphens.'),
   name:                   z.string().min(1).max(200),
   description:            z.string().max(1000).optional().or(z.literal('')),
   category_id:            z.string().min(1, 'Category is required'),
-  item_type:              z.enum(['raw_material', 'finished_good', 'packaging', 'spare_part']),
+  item_type:              z.string().min(1, 'Item type is required.'),
   unit_of_measure:        z.string().min(1).max(20),
   standard_cost:          z.string().regex(/^\d+(\.\d{1,4})?$/, 'Up to 4 decimals'),
-  reorder_method:         z.enum(['fixed_quantity', 'days_of_supply']),
+  reorder_method:         z.string().min(1, 'Reorder method is required.'),
   reorder_point:          z.string().regex(/^\d+(\.\d{1,3})?$/),
   safety_stock:           z.string().regex(/^\d+(\.\d{1,3})?$/),
   minimum_order_quantity: z.string().regex(/^\d+(\.\d{1,3})?$/).optional().or(z.literal('')),
@@ -51,6 +51,10 @@ export default function ItemFormPage({ mode }: { mode: 'create' | 'edit' }) {
     queryKey: ['inventory', 'categories'],
     queryFn: () => itemCategoriesApi.list(),
   });
+  const { data: itemOptions } = useQuery({
+    queryKey: ['inventory', 'items', 'options'],
+    queryFn: () => itemsApi.options(),
+  });
 
   const defaults: FormValues = existing ? {
     code: existing.code, name: existing.name, description: existing.description ?? '',
@@ -63,10 +67,10 @@ export default function ItemFormPage({ mode }: { mode: 'create' | 'edit' }) {
     is_critical: existing.is_critical, is_active: existing.is_active,
   } : {
     code: '', name: '', description: '', category_id: '',
-    item_type: 'raw_material', unit_of_measure: 'kg',
-    standard_cost: '0.0000', reorder_method: 'fixed_quantity',
-    reorder_point: '0.000', safety_stock: '0.000', minimum_order_quantity: '1.000',
-    lead_time_days: 0, is_critical: false, is_active: true,
+    item_type: '', unit_of_measure: '',
+    standard_cost: '', reorder_method: '',
+    reorder_point: '', safety_stock: '', minimum_order_quantity: '',
+    lead_time_days: undefined as unknown as number, is_critical: false, is_active: true,
   };
 
   const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<FormValues>({
@@ -79,6 +83,8 @@ export default function ItemFormPage({ mode }: { mode: 'create' | 'edit' }) {
     mutationFn: (d: FormValues) => {
       const payload: CreateItemData = {
         ...d,
+        item_type: d.item_type as ItemType,
+        reorder_method: d.reorder_method as ReorderMethod,
         description: d.description || undefined,
         minimum_order_quantity: d.minimum_order_quantity || undefined,
       };
@@ -111,7 +117,7 @@ export default function ItemFormPage({ mode }: { mode: 'create' | 'edit' }) {
         <Panel title="Identity">
           <div className="grid grid-cols-2 gap-3">
             <Input label="Code" required {...register('code')} error={errors.code?.message}
-                   placeholder="RM-001" className="font-mono uppercase" />
+                   placeholder="Enter item code" className="font-mono uppercase" />
             <Input label="Name" required {...register('name')} error={errors.name?.message} />
             <Textarea label="Description" rows={2} className="col-span-2" {...register('description')} />
             <Select label="Category" required {...register('category_id')} error={errors.category_id?.message}>
@@ -123,14 +129,11 @@ export default function ItemFormPage({ mode }: { mode: 'create' | 'edit' }) {
               ))}
             </Select>
             <Select label="Item type" required {...register('item_type')} error={errors.item_type?.message}>
-              <option value="raw_material">Raw material</option>
-              <option value="finished_good">Finished good</option>
-              <option value="packaging">Packaging</option>
-              <option value="spare_part">Spare part</option>
+              {(itemOptions?.item_types ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </Select>
             <Input label="Unit of measure" required {...register('unit_of_measure')}
-                   placeholder="kg, pcs, L" error={errors.unit_of_measure?.message} />
-            <Input label="Standard cost (₱)" required {...register('standard_cost')}
+                   placeholder="Enter unit of measure" error={errors.unit_of_measure?.message} />
+            <Input label="Standard cost" required {...register('standard_cost')}
                    {...numberInputProps({ decimal: true })}
                    className="font-mono tabular-nums text-right" error={errors.standard_cost?.message} />
           </div>
@@ -139,8 +142,7 @@ export default function ItemFormPage({ mode }: { mode: 'create' | 'edit' }) {
         <Panel title="Replenishment">
           <div className="grid grid-cols-2 gap-3">
             <Select label="Reorder method" required {...register('reorder_method')} error={errors.reorder_method?.message}>
-              <option value="fixed_quantity">Fixed quantity</option>
-              <option value="days_of_supply">Days of supply</option>
+              {(itemOptions?.reorder_methods ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </Select>
             <Input label="Lead time (days)" required type="number" min={0} max={365}
                    {...register('lead_time_days')} className="font-mono tabular-nums text-right"

@@ -27,20 +27,21 @@ import { Chip, type ChipVariant } from '@/components/ui/Chip';
 import { Modal } from '@/components/ui/Modal';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { focusRingInset } from '@/lib/focus';
-import type { CreateNcrData, NcrTemplate } from '@/types/quality';
+import type { CreateNcrData, NcrTemplate, NcrSeverity, NcrSource } from '@/types/quality';
 import { cn } from '@/lib/cn';
 
 const schema = z.object({
-  source: z.enum(['inspection_fail', 'customer_complaint']),
-  severity: z.enum(['minor', 'major', 'critical']),
+  source: z.string().min(1, 'Source is required'),
+  severity: z.string().min(1, 'Severity is required'),
   product_id: z.string().optional().or(z.literal('')),
   defect_description: z.string().min(1, 'Description is required').max(5000),
   affected_quantity: z.coerce.number().int().min(0).max(1000000).default(0),
 });
 
 const SEVERITY_CHIP: Record<string, ChipVariant> = {
-  minor: 'neutral',
-  major: 'warning',
+  low: 'neutral',
+  medium: 'warning',
+  high: 'danger',
   critical: 'danger',
 };
 
@@ -55,6 +56,10 @@ export default function CreateNcrPage() {
     queryKey: ['crm', 'products', { is_active: true, per_page: 200 }],
     queryFn: () => productsApi.list({ is_active: true, per_page: 200 }),
   });
+  const ncrOptions = useQuery({
+    queryKey: ['quality', 'ncrs', 'options'],
+    queryFn: () => ncrsApi.options(),
+  });
 
   const templates = useQuery({
     queryKey: ['quality', 'ncr-templates', 'active'],
@@ -62,27 +67,30 @@ export default function CreateNcrPage() {
   });
 
   const {
-    register, handleSubmit, formState: { errors }, reset,
+    register, handleSubmit, formState: { errors }, reset, watch, setValue,
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      source: 'customer_complaint',
-      severity: 'minor',
+      source: '',
+      severity: '',
       product_id: '',
       defect_description: '',
       affected_quantity: 0,
     },
   });
 
+  useEffect(() => {
+    if (!watch('source') && ncrOptions.data?.sources?.length) setValue('source', ncrOptions.data.sources[0].value);
+    if (!watch('severity') && ncrOptions.data?.severities?.length) setValue('severity', ncrOptions.data.severities[0].value);
+  }, [ncrOptions.data, setValue, watch]);
+
   // Pre-fill from template when navigated from NCR template list
   useEffect(() => {
     const tpl = (location.state as { template?: NcrTemplate } | null)?.template as NcrTemplate | undefined;
     if (tpl) {
       reset({
-        source: (tpl.source === 'inspection_fail' || tpl.source === 'customer_complaint')
-          ? tpl.source
-          : 'customer_complaint',
-        severity: (['minor', 'major', 'critical'].includes(tpl.severity) ? tpl.severity : 'minor') as FormValues['severity'],
+        source: tpl.source ?? '',
+        severity: tpl.severity,
         product_id: tpl.product?.id ?? '',
         defect_description: tpl.defect_description ?? '',
         affected_quantity: 0,
@@ -95,9 +103,7 @@ export default function CreateNcrPage() {
 
   const applyTemplate = (tpl: NcrTemplate) => {
     reset({
-      source: (tpl.source === 'inspection_fail' || tpl.source === 'customer_complaint')
-        ? tpl.source
-        : 'customer_complaint',
+      source: tpl.source ?? '',
       severity: tpl.severity,
       product_id: tpl.product?.id ?? '',
       defect_description: tpl.defect_description ?? '',
@@ -138,8 +144,8 @@ export default function CreateNcrPage() {
       <form
         onSubmit={handleSubmit((v) =>
           submit.mutate({
-            source: v.source,
-            severity: v.severity,
+            source: v.source as NcrSource,
+            severity: v.severity as NcrSeverity,
             product_id: v.product_id || null,
             defect_description: v.defect_description,
             affected_quantity: Number(v.affected_quantity),
@@ -151,13 +157,10 @@ export default function CreateNcrPage() {
           <Panel title="Classification">
             <div className="grid grid-cols-3 gap-3">
               <Select label="Source" required {...register('source')} error={errors.source?.message}>
-                <option value="customer_complaint">Customer complaint</option>
-                <option value="inspection_fail">Inspection fail</option>
+                {(ncrOptions.data?.sources ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </Select>
               <Select label="Severity" required {...register('severity')} error={errors.severity?.message}>
-                <option value="minor">Minor</option>
-                <option value="major">Major</option>
-                <option value="critical">Critical</option>
+                {(ncrOptions.data?.severities ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </Select>
               <Input
                 label="Affected quantity"
@@ -215,8 +218,8 @@ export default function CreateNcrPage() {
                 >
                   <div className="text-sm font-medium">{tpl.name}</div>
                   <div className="text-xs text-muted mt-0.5 flex items-center gap-2">
-                    <Chip variant="neutral">{tpl.source.replace('_', ' ')}</Chip>
-                    <Chip variant={SEVERITY_CHIP[tpl.severity]}>{tpl.severity}</Chip>
+                    <Chip variant="neutral">{tpl.source_label ?? tpl.source.replace('_', ' ')}</Chip>
+                    <Chip variant={SEVERITY_CHIP[tpl.severity]}>{tpl.severity_label ?? tpl.severity}</Chip>
                     {tpl.product && (
                       <span>
                         {tpl.product.part_number} — {tpl.product.name}

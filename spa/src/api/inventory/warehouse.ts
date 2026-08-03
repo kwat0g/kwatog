@@ -25,6 +25,7 @@ export interface CreateLocationData {
 }
 
 export const warehouseApi = {
+  options: () => client.get<{ data: { zone_types: Array<{ value: string; label: string }> } }>('/inventory/warehouse/options').then((r) => r.data.data),
   tree: () =>
     client.get<{ data: Warehouse[] }>('/inventory/warehouse').then((r) => r.data.data),
   listWarehouses: () =>

@@ -45,13 +45,6 @@ const STATUS_CHIP: Record<string, 'success' | 'warning' | 'info' | 'danger' | 'n
   rejected: 'danger',
 };
 
-const STATUS_LABEL: Record<string, string> = {
-  pending: 'Pending HR',
-  pending_finance: 'Awaiting Finance',
-  approved: 'Approved',
-  rejected: 'Rejected',
-};
-
 const FIELD_LABELS: Record<string, string> = {
   mobile_number: 'Mobile',
   email: 'Email',
@@ -69,7 +62,7 @@ const FIELD_LABELS: Record<string, string> = {
 
 const CONTACT_FIELDS: FieldDef[] = [
   { key: 'mobile_number', label: 'Mobile', placeholder: '09XX-XXX-XXXX', mono: true },
-  { key: 'email', label: 'Email', type: 'email', placeholder: 'you@example.com' },
+  { key: 'email', label: 'Email', type: 'email' },
 ];
 
 const EMERGENCY_FIELDS: FieldDef[] = [
@@ -222,7 +215,7 @@ export default function SelfServiceProfilePage() {
 
             {/* ─── Right rail ─── */}
             <div className="space-y-4">
-              <IdentityPanel profile={profile} email={user?.email ?? null} />
+              <IdentityPanel profile={profile} email={user?.email ?? profile.email} />
               <UpdateRequestsPanel requests={requests ?? []} pendingCount={pendingCount} />
               <PreferencesPanel />
             </div>
@@ -276,6 +269,11 @@ function IdentityPanel({ profile, email }: { profile: SelfServiceProfile; email:
         </div>
       </div>
       <dl className="text-sm space-y-2">
+        {profile.profile_completeness && profile.profile_completeness.percent < 100 && (
+          <div className="mb-3 rounded-md border border-warning bg-warning-bg px-3 py-2 text-xs text-warning-fg">
+            Profile {profile.profile_completeness.percent}% complete. Missing details can be submitted for HR review from the panels below.
+          </div>
+        )}
         <div>
           <dt className="text-2xs uppercase tracking-wider text-muted font-medium">Position</dt>
           <dd className="text-primary">{profile.position ?? '—'}</dd>
@@ -286,12 +284,50 @@ function IdentityPanel({ profile, email }: { profile: SelfServiceProfile; email:
         </div>
         <div>
           <dt className="text-2xs uppercase tracking-wider text-muted font-medium">Employment type</dt>
-          <dd className="text-primary">{profile.employment_type?.replace(/_/g, ' ') ?? '—'}</dd>
+          <dd className="text-primary">{profile.employment_type_label ?? profile.employment_type ?? '—'}</dd>
+        </div>
+        <div>
+          <dt className="text-2xs uppercase tracking-wider text-muted font-medium">Pay type</dt>
+          <dd className="text-primary">{profile.pay_type_label ?? profile.pay_type ?? '—'}</dd>
+        </div>
+        <div>
+          <dt className="text-2xs uppercase tracking-wider text-muted font-medium">Employment status</dt>
+          <dd className="text-primary">{profile.status_label ?? profile.status ?? '—'}</dd>
+        </div>
+        <div>
+          <dt className="text-2xs uppercase tracking-wider text-muted font-medium">Birth date</dt>
+          <dd className="font-mono tabular-nums text-primary">
+            {profile.birth_date ? formatDate(profile.birth_date) : '—'}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-2xs uppercase tracking-wider text-muted font-medium">Nationality</dt>
+          <dd className="text-primary">{profile.nationality ?? '—'}</dd>
+        </div>
+        <div>
+          <dt className="text-2xs uppercase tracking-wider text-muted font-medium">Gender</dt>
+          <dd className="text-primary">{profile.gender_label ?? profile.gender ?? '—'}</dd>
+        </div>
+        <div>
+          <dt className="text-2xs uppercase tracking-wider text-muted font-medium">Civil status</dt>
+          <dd className="text-primary">{profile.civil_status_label ?? profile.civil_status ?? '—'}</dd>
         </div>
         <div>
           <dt className="text-2xs uppercase tracking-wider text-muted font-medium">Date hired</dt>
           <dd className="font-mono tabular-nums text-primary">
             {profile.date_hired ? formatDate(profile.date_hired) : '—'}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-2xs uppercase tracking-wider text-muted font-medium">
+            {profile.date_regularized ? 'Date regularized' : profile.expected_regularization_date ? 'Expected regularization' : 'Date regularized'}
+          </dt>
+          <dd className="font-mono tabular-nums text-primary">
+            {profile.date_regularized
+              ? formatDate(profile.date_regularized)
+              : profile.expected_regularization_date
+                ? formatDate(profile.expected_regularization_date)
+                : '—'}
           </dd>
         </div>
         {email && (
@@ -342,7 +378,7 @@ function UpdateRequestsPanel({
                 </div>
               </div>
               <Chip variant={STATUS_CHIP[r.status] ?? 'neutral'}>
-                {STATUS_LABEL[r.status] ?? r.status}
+                {r.status_label ?? r.status}
               </Chip>
             </li>
           ))}
@@ -597,7 +633,7 @@ function BankPanel({
             label="Bank name"
             value={bank}
             onChange={(e) => setBank(e.target.value)}
-            placeholder="e.g. BDO Unibank"
+            placeholder="Enter bank name"
           />
           <Input
             label="New account number"

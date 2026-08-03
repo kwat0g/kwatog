@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Panel } from '@/components/ui/Panel';
 import { Input } from '@/components/ui/Input';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { formatPeso } from '@/lib/formatNumber';
 
 export default function DepreciationRunsPage() {
   const now = new Date();
@@ -18,7 +19,7 @@ export default function DepreciationRunsPage() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onSuccess: (res: any) => {
       const d = res.data ?? res;
-      toast.success(`Posted ${d.posted_count ?? 0} entries totalling ₱${d.total_amount ?? '0.00'}.`);
+      toast.success(`Posted ${d.posted_count ?? 0} entries totalling ${formatPeso(d.total_amount ?? 0)}.`);
     },
     onError: () => toast.error('Failed to run depreciation.'),
   });

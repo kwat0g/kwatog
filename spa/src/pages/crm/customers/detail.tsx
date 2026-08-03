@@ -101,8 +101,8 @@ export default function CrmCustomerDetailPage() {
         </Link>
       ),
     },
-    { key: 'severity', header: 'Severity', cell: (r) => <Chip variant={r.severity === 'critical' ? 'danger' : r.severity === 'high' ? 'warning' : 'neutral'}>{r.severity}</Chip> },
-    { key: 'status', header: 'Status', cell: (r) => <Chip variant={r.status === 'closed' || r.status === 'resolved' ? 'success' : r.status === 'open' ? 'warning' : 'neutral'}>{r.status}</Chip> },
+    { key: 'severity', header: 'Severity', cell: (r) => <Chip variant={r.severity === 'critical' ? 'danger' : r.severity === 'high' ? 'warning' : 'neutral'}>{r.severity_label ?? r.severity}</Chip> },
+    { key: 'status', header: 'Status', cell: (r) => <Chip variant={r.status === 'closed' || r.status === 'resolved' ? 'success' : r.status === 'open' ? 'warning' : 'neutral'}>{r.status_label ?? r.status}</Chip> },
     { key: 'description', header: 'Description', cell: (r) => <span className="truncate max-w-xs block">{r.description}</span> },
     { key: 'received_date', header: 'Received', align: 'right', cell: (r) => <NumCell>{r.received_date ? formatDate(r.received_date) : '—'}</NumCell> },
   ];
@@ -251,7 +251,6 @@ export default function CrmCustomerDetailPage() {
                   columns={complaintColumns}
                   data={complaintsData.data}
                   meta={complaintsData.meta}
-                  onRowClick={(row) => navigate(`/crm/complaints/${row.id}`)}
                 />
               )}
             </div>

@@ -6,6 +6,7 @@ export interface InspectionSpecItem {
   id: string;
   parameter_name: string;
   parameter_type: InspectionParameterType;
+  parameter_type_label?: string;
   unit_of_measure: string | null;
   nominal_value: string | null;
   tolerance_min: string | null;
@@ -39,6 +40,7 @@ export interface InspectionMeasurement {
   sample_index: number;
   parameter_name: string;
   parameter_type: InspectionParameterType;
+  parameter_type_label?: string;
   unit_of_measure: string | null;
   nominal_value: number | null;
   tolerance_min: number | null;
@@ -53,7 +55,9 @@ export interface Inspection {
   id: string;
   inspection_number: string;
   stage: InspectionStage;
+  stage_label?: string;
   status: InspectionStatus;
+  status_label?: string;
   entity_type: InspectionEntityType | null;
   entity_hash_id: string | null;
   batch_quantity: number;
@@ -102,7 +106,7 @@ export interface AqlPlan {
 // ─── Sprint 7 Task 61 — NCR ────────────────────────────────────────────
 
 export type NcrSource = 'inspection_fail' | 'production' | 'customer_complaint' | 'audit';
-export type NcrSeverity = 'minor' | 'major' | 'critical';
+export type NcrSeverity = 'low' | 'medium' | 'high' | 'critical';
 export type NcrStatus = 'open' | 'in_progress' | 'closed' | 'cancelled';
 export type NcrDisposition = 'scrap' | 'rework' | 'use_as_is' | 'return_to_supplier';
 export type NcrActionType = 'containment' | 'corrective' | 'preventive';
@@ -110,6 +114,7 @@ export type NcrActionType = 'containment' | 'corrective' | 'preventive';
 export interface NcrAction {
   id: string;
   action_type: NcrActionType;
+  action_type_label?: string;
   description: string;
   performed_at: string | null;
   performer?: { id: string; name: string } | null;
@@ -119,9 +124,13 @@ export interface Ncr {
   id: string;
   ncr_number: string;
   source: NcrSource;
+  source_label?: string;
   severity: NcrSeverity;
+  severity_label?: string;
   status: NcrStatus;
+  status_label?: string;
   disposition: NcrDisposition | null;
+  disposition_label?: string;
   defect_description: string;
   affected_quantity: number;
   is_auto_generated: boolean;
@@ -129,11 +138,11 @@ export interface Ncr {
   corrective_action: string | null;
   closed_at: string | null;
   product?: { id: string; part_number: string; name: string } | null;
-  inspection?: { id: string; inspection_number: string; stage: string; status: string } | null;
+  inspection?: { id: string; inspection_number: string; stage: string; stage_label?: string; status: string; status_label?: string } | null;
   creator?: { id: string; name: string } | null;
   assignee?: { id: string; name: string } | null;
   closer?: { id: string; name: string } | null;
-  replacement_work_order?: { id: string; wo_number: string; status: string; quantity_target: number } | null;
+  replacement_work_order?: { id: string; wo_number: string; status: string; status_label?: string; quantity_target: number } | null;
   actions?: NcrAction[];
   created_at: string;
   updated_at: string;
@@ -172,7 +181,9 @@ export interface NcrTemplate {
   id: string;
   name: string;
   source: NcrSource;
+  source_label?: string;
   severity: NcrSeverity;
+  severity_label?: string;
   defect_description: string | null;
   notes: string | null;
   is_active: boolean;

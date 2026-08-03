@@ -1,5 +1,6 @@
+import { cn } from '@/lib/cn';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { AlertTriangle, CalendarClock, ClipboardList } from 'lucide-react';
 import { Panel } from '@/components/ui/Panel';
 import { StatCard } from '@/components/ui/StatCard';
@@ -26,6 +27,7 @@ import { BarComparison } from '@/components/charts';
  * payroll pipeline + unposted JEs ▸ budget-vs-actual ▸ recent JEs.
  */
 export default function FinanceDashboardPage() {
+  const navigate = useNavigate();
   const { can } = usePermission();
 
   const summary = useQuery({
@@ -140,7 +142,7 @@ export default function FinanceDashboardPage() {
                     </thead>
                     <tbody>
                       {data.top_overdue_customers.map((c) => (
-                        <tr key={c.customer_id} className={trCls}>
+                        <tr key={c.customer_id} className={cn(trCls, "cursor-pointer")} onClick={() => navigate("/accounting/trial-balance")}>
                           <Td>{c.customer_name}</Td>
                           <Td align="right" mono>{formatPeso(c.d1_30)}</Td>
                           <Td align="right" mono>{formatPeso(c.d31_60)}</Td>
@@ -164,11 +166,11 @@ export default function FinanceDashboardPage() {
             {can('accounting.statements.view') && (
               <Panel title="Financial Statements">
                 <div className="flex flex-wrap gap-4">
-                  <Link to="/accounting/trial-balance" className="text-sm text-link hover:underline">Trial Balance →</Link>
-                  <Link to="/accounting/income-statement" className="text-sm text-link hover:underline">Income Statement →</Link>
-                  <Link to="/accounting/balance-sheet" className="text-sm text-link hover:underline">Balance Sheet →</Link>
-                  <Link to="/accounting/ar-aging" className="text-sm text-link hover:underline">AR Aging →</Link>
-                  <Link to="/accounting/ap-aging" className="text-sm text-link hover:underline">AP Aging →</Link>
+                  Trial Balance →
+                  Trial Balance →
+                  Trial Balance →
+                  Trial Balance →
+                  Trial Balance →
                 </div>
               </Panel>
             )}

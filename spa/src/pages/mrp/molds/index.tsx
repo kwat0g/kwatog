@@ -24,6 +24,13 @@ export default function MoldsListPage() {
     queryFn: () => moldsApi.list(filters),
     placeholderData: (prev) => prev,
   });
+  const { data: moldOptions } = useQuery({
+    queryKey: ['mrp', 'molds', 'options'],
+    queryFn: moldsApi.options,
+    staleTime: 5 * 60 * 1000,
+  });
+  const statusLabels = new Map((moldOptions?.statuses ?? []).map((option) => [option.value, option.label]));
+  const warningRatioPct = moldOptions?.warning_ratio_pct;
 
   const columns: Column<Mold>[] = [
     {
@@ -50,7 +57,7 @@ export default function MoldsListPage() {
             <div
               className={`h-1 rounded-full ${
                 r.shot_percentage >= 100 ? 'bg-danger' :
-                r.shot_percentage >= 80 ? 'bg-warning' : 'bg-success'
+                r.nearing_limit ? 'bg-warning' : 'bg-success'
               }`}
               style={{ width: `${Math.min(100, r.shot_percentage)}%` }}
               aria-hidden
@@ -60,17 +67,15 @@ export default function MoldsListPage() {
       ),
     },
     { key: 'machines', header: 'Compatible machines', align: 'right', cell: (r) => <NumCell>{r.compatible_machines_count}</NumCell> },
-    { key: 'status', header: 'Status', cell: (r) => <Chip variant={variant[r.status]}>{r.status_label}</Chip> },
+    { key: 'status', header: 'Status', cell: (r) => <Chip variant={variant[r.status]}>{statusLabels.get(r.status) ?? r.status_label}</Chip> },
   ];
 
   const filterConfig: FilterConfig[] = [
     { key: 'status', label: 'Status', type: 'select', options: [
-      { value: '', label: 'All' }, { value: 'available', label: 'Available' },
-      { value: 'in_use', label: 'In use' }, { value: 'maintenance', label: 'Maintenance' },
-      { value: 'retired', label: 'Retired' },
+      { value: '', label: 'All' }, ...(moldOptions?.statuses ?? []),
     ]},
     { key: 'nearing_limit', label: 'Nearing limit', type: 'select', options: [
-      { value: '', label: 'All' }, { value: 'true', label: 'Nearing limit (≥ 80%)' },
+      { value: '', label: 'All' }, { value: 'true', label: warningRatioPct != null ? `Nearing limit (≥ ${warningRatioPct}%)` : 'Nearing limit' },
     ]},
   ];
 

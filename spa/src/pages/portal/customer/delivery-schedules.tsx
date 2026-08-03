@@ -14,6 +14,7 @@ import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { PageHeader } from '@/components/layout/PageHeader';
 import type { DeliveryScheduleLine } from '@/types/b2b';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { CompanyName } from '@/components/brand/CompanyName';
 
 const MONTH_OPTIONS: string[] = [];
 const now = new Date();
@@ -62,7 +63,7 @@ export default function DeliverySchedulesPage() {
     <div>
       <PageHeader
         title="Delivery schedules"
-        subtitle="Monthly delivery requirements you have submitted to Ogami"
+        subtitle={<>Monthly delivery requirements you have submitted to <CompanyName /></>}
         backTo="/portal/customer"
         backLabel="Portal"
         actions={
@@ -169,7 +170,7 @@ export default function DeliverySchedulesPage() {
                   <div key={s.id} className="border border-default rounded-md p-3 hover:bg-subtle/50 transition-colors">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-xs font-medium">{s.month}</span>
-                      <Chip variant={chipVariantForStatus(s.status)}>{s.status}</Chip>
+                      <Chip variant={chipVariantForStatus(s.status)}>{s.status_label ?? s.status}</Chip>
                     </div>
                     <table className={tableCls}>
                       <thead>

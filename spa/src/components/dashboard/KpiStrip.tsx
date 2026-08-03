@@ -83,7 +83,7 @@ export function KpiStrip({ codes, className }: KpiStripProps) {
             className="p-3 bg-surface border border-default rounded-md hover:bg-elevated transition-colors duration-fast flex items-start justify-between gap-2"
           >
             <div className="min-w-0">
-              <div className="text-2xs uppercase tracking-wider text-text-subtle font-display font-medium mb-1 truncate">
+              <div className="text-2xs uppercase tracking-wider text-subtle font-medium mb-1 truncate">
                 {item.definition.name}
               </div>
               <div className="text-lg font-medium font-mono tabular-nums text-primary leading-tight">

@@ -8,6 +8,7 @@ import type {
 } from '@/types/maintenance';
 
 export const downtimeAnalyticsApi = {
+  policy: () => client.get<ApiSuccess<{ default_days: number; minimum_days: number; maximum_days: number; availability_good_pct: number; availability_warning_pct: number; total_warning_minutes: number; mtbf_good_hours: number; mttr_good_minutes: number; breakdown_warning_count: number; breakdown_critical_count: number }>>('/maintenance/downtime-analytics/policy').then(r => r.data.data),
   summary: (params?: { machine_id?: number; days?: number }) =>
     client.get<ApiSuccess<DowntimeSummary>>('/maintenance/downtime-analytics/summary', { params }).then(r => r.data.data),
 

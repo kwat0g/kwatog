@@ -8,7 +8,7 @@ import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
 import { Select } from '@/components/ui/Select';
-import { Spinner } from '@/components/ui/Spinner';
+import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 
 /**
@@ -175,9 +175,7 @@ export default function CompareRolesPage() {
             description="You selected the same role for both sides."
           />
         ) : compare.isLoading ? (
-          <div className="flex items-center justify-center py-10 text-muted">
-            <Spinner /> <span className="ml-2 text-sm">Loading comparison…</span>
-          </div>
+          <SkeletonTable columns={4} rows={8} />
         ) : compare.isError ? (
           <EmptyState
             icon="alert-circle"
@@ -262,6 +260,26 @@ function Stat({
   );
 }
 
+function getActionBadge(slug: string) {
+  const lower = slug.toLowerCase();
+  if (lower.includes('delete') || lower.includes('destroy') || lower.includes('remove')) {
+    return { label: 'DELETE', variant: 'danger' as const };
+  }
+  if (lower.includes('create') || lower.includes('add') || lower.includes('store')) {
+    return { label: 'CREATE', variant: 'info' as const };
+  }
+  if (lower.includes('edit') || lower.includes('update') || lower.includes('modify')) {
+    return { label: 'EDIT', variant: 'warning' as const };
+  }
+  if (lower.includes('view') || lower.includes('read') || lower.includes('index') || lower.includes('show')) {
+    return { label: 'VIEW', variant: 'success' as const };
+  }
+  if (lower.includes('approve') || lower.includes('finalize') || lower.includes('post') || lower.includes('override')) {
+    return { label: 'APPROVE', variant: 'purple' as const };
+  }
+  return { label: 'ACCESS', variant: 'neutral' as const };
+}
+
 function DiffColumn({
   title,
   tone,
@@ -288,17 +306,32 @@ function DiffColumn({
       ) : (
         <div className="flex flex-col gap-3">
           {Object.entries(grouped).map(([module, rows]) => (
-            <div key={module} className="border border-default rounded-md">
-              <div className="px-3 py-1.5 text-2xs uppercase tracking-wider text-muted font-medium border-b border-default">
-                {module} · {rows.length}
+            <div key={module} className="border border-default rounded-md overflow-hidden bg-surface">
+              <div className="px-3 py-1.5 text-2xs uppercase tracking-wider text-muted font-medium border-b border-default bg-subtle/50 flex justify-between items-center">
+                <span>{module}</span>
+                <span className="font-mono text-2xs">{rows.length}</span>
               </div>
               <ul className="divide-y divide-subtle">
-                {rows.map((p) => (
-                  <li key={p.slug} className="px-3 py-1.5">
-                    <div className="text-xs">{p.name}</div>
-                    <div className="text-2xs font-mono text-muted">{p.slug}</div>
-                  </li>
-                ))}
+                {rows.map((p, idx) => {
+                  const badge = getActionBadge(p.slug);
+                  return (
+                    <li
+                      key={p.slug}
+                      className={cn(
+                        'px-3 py-2 flex items-center justify-between gap-2 transition-colors',
+                        idx % 2 === 1 ? 'bg-[var(--bg-zebra-even)] hover:bg-[var(--bg-row-hover)]' : 'bg-[var(--bg-zebra-odd)] hover:bg-[var(--bg-row-hover)]',
+                      )}
+                    >
+                      <div className="min-w-0">
+                        <div className="text-xs font-medium text-primary truncate">{p.name}</div>
+                        <div className="text-2xs font-mono text-muted truncate">{p.slug}</div>
+                      </div>
+                      <Chip variant={badge.variant} className="text-[9px] font-mono font-bold px-1.5 shrink-0">
+                        {badge.label}
+                      </Chip>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           ))}

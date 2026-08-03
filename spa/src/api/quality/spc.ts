@@ -20,6 +20,7 @@ export interface SpcAlertListParams extends ListParams {
 }
 
 export const spcApi = {
+  options: () => client.get<{ data: { statuses: Array<{ value: SpcChartStatus; label: string }>; rules: Array<{ value: string; label: string }>; chart_types: Array<{ value: string; label: string }>; capability_thresholds: { launch: number; ongoing: number; action: number; minimum_samples: number } } }>('/quality/spc/charts/options').then((r) => r.data.data),
   /** List SPC control charts (paginated). */
   listCharts: (params?: SpcChartListParams) =>
     client

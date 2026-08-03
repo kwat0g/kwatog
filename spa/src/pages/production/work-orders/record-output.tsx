@@ -14,6 +14,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { onFormInvalid } from '@/lib/formErrors';
 import { workOrdersApi } from '@/api/production/workOrders';
+import { shiftsApi } from '@/api/attendance/shifts';
 import { client } from '@/api/client';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -50,7 +51,12 @@ export default function RecordOutputPage() {
 
   const defects = useQuery({
     queryKey: ['production', 'defect-types'],
-    queryFn: () => client.get<{ data: DefectType[] }>('/production/defect-types').then((r) => r.data.data).catch(() => [] as DefectType[]),
+    queryFn: () => client.get<{ data: DefectType[] }>('/production/defect-types').then((r) => r.data.data),
+  });
+  const shifts = useQuery({
+    queryKey: ['attendance', 'shifts', 'production-output'],
+    queryFn: () => shiftsApi.list({ per_page: 200 }),
+    staleTime: 300_000,
   });
 
   // Subscribe to live updates so the cumulative panel reflects every recording.
@@ -70,7 +76,7 @@ export default function RecordOutputPage() {
 
   const { register, control, handleSubmit, setError, reset, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { good_count: '0', shift: '', remarks: '', defects: [] },
+    defaultValues: { good_count: '', shift: '', remarks: '', defects: [] },
   });
   const { fields, append, remove } = useFieldArray({ control, name: 'defects' });
 
@@ -96,7 +102,7 @@ export default function RecordOutputPage() {
     },
     onSuccess: (output) => {
       toast.success(`Output ${output.batch_code ?? ''} recorded.`);
-      reset({ good_count: '0', shift: '', remarks: '', defects: [] });
+      reset({ good_count: '', shift: '', remarks: '', defects: [] });
       navigate(`/production/work-orders/${id}`);
     },
     onError: (e: AxiosError<{ message?: string; errors?: Record<string, string[]> }>) => {
@@ -140,9 +146,9 @@ export default function RecordOutputPage() {
                 </div>
                 <Select label="Shift" {...register('shift')}>
                   <option value="">—</option>
-                  <option value="day">Day</option>
-                  <option value="night">Night</option>
-                  <option value="office">Office</option>
+                  {(shifts.data?.data ?? []).map((shift) => (
+                    <option key={shift.id} value={shift.name}>{shift.name}</option>
+                  ))}
                 </Select>
                 <div className="col-span-2">
                   <Textarea label="Remarks" rows={2} {...register('remarks')} error={errors.remarks?.message} />
@@ -153,7 +159,7 @@ export default function RecordOutputPage() {
                 <div className="flex items-center justify-between mb-2">
                   <div className="text-2xs uppercase tracking-wider text-muted font-medium">Defect breakdown</div>
                   <Button type="button" variant="secondary" size="sm" icon={<Plus size={14} />}
-                    onClick={() => append({ defect_type_id: '', count: '1' })}>
+                    onClick={() => append({ defect_type_id: '', count: '' })}>
                     Add defect
                   </Button>
                 </div>

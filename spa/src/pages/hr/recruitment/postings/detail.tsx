@@ -24,13 +24,6 @@ const STATUS_CHIP: Record<JobPostingStatus, 'neutral' | 'success' | 'warning' | 
   filled: 'info',
 };
 
-const STATUS_LABEL: Record<JobPostingStatus, string> = {
-  draft: 'Draft',
-  open: 'Open',
-  closed: 'Closed',
-  filled: 'Filled',
-};
-
 const STAGE_CHIP: Record<ApplicationStage, 'neutral' | 'info' | 'warning' | 'success' | 'danger'> = {
   new: 'neutral',
   screening: 'info',
@@ -38,15 +31,6 @@ const STAGE_CHIP: Record<ApplicationStage, 'neutral' | 'info' | 'warning' | 'suc
   offer: 'info',
   hired: 'success',
   rejected: 'danger',
-};
-
-const STAGE_LABEL: Record<ApplicationStage, string> = {
-  new: 'New',
-  screening: 'Screening',
-  interview: 'Interview',
-  offer: 'Offer',
-  hired: 'Hired',
-  rejected: 'Rejected',
 };
 
 export default function PostingDetailPage() {
@@ -67,6 +51,13 @@ export default function PostingDetailPage() {
     queryFn: () => recruitmentApi.listApplications({ job_posting_id: id }).then((r) => r.data),
     enabled: !!id,
   });
+  const { data: recruitmentOptions } = useQuery({
+    queryKey: ['recruitment', 'options'],
+    queryFn: () => recruitmentApi.options().then((r) => r.data.data),
+    staleTime: 5 * 60 * 1000,
+  });
+  const stageLabel = new Map((recruitmentOptions?.application_stages ?? []).map((stage) => [stage.value, stage.label]));
+  const postingStatusLabel = new Map((recruitmentOptions?.posting_statuses ?? []).map((status) => [status.value, status.label]));
 
   const statusMutation = useMutation({
     mutationFn: (status: string) => recruitmentApi.changePostingStatus(id!, status),
@@ -88,7 +79,7 @@ export default function PostingDetailPage() {
 
   const appColumns: Column<JobApplication>[] = [
     { key: 'full_name', header: 'Applicant', cell: (r) => <span className="font-medium">{r.full_name}</span> },
-    { key: 'stage', header: 'Stage', cell: (r) => <Chip variant={STAGE_CHIP[r.stage]}>{STAGE_LABEL[r.stage]}</Chip> },
+    { key: 'stage', header: 'Stage', cell: (r) => <Chip variant={STAGE_CHIP[r.stage]}>{stageLabel.get(r.stage) ?? r.stage}</Chip> },
     { key: 'applied_at', header: 'Applied', cell: (r) => <span className="font-mono text-xs tabular-nums">{formatDate(r.applied_at)}</span> },
   ];
 
@@ -110,7 +101,7 @@ export default function PostingDetailPage() {
         title={
           <span className="flex items-center gap-2">
             {posting.title}
-            <Chip variant={STATUS_CHIP[posting.status]}>{STATUS_LABEL[posting.status]}</Chip>
+            <Chip variant={STATUS_CHIP[posting.status]}>{posting.status_label ?? postingStatusLabel.get(posting.status) ?? posting.status}</Chip>
           </span>
         }
         subtitle={<span className="font-mono">{posting.posting_number} · {posting.department?.name ?? ''}</span>}
@@ -175,10 +166,10 @@ export default function PostingDetailPage() {
           <Panel title="At a glance">
             <dl className="text-sm space-y-2">
               <DetailItem label="Status">
-                <Chip variant={STATUS_CHIP[posting.status]}>{STATUS_LABEL[posting.status]}</Chip>
+            <Chip variant={STATUS_CHIP[posting.status]}>{posting.status_label ?? postingStatusLabel.get(posting.status) ?? posting.status}</Chip>
               </DetailItem>
               <DetailItem label="Employment">
-                <span className="capitalize">{posting.employment_type?.replace('_', ' ')}</span>
+                <span className="capitalize">{posting.employment_type_label ?? posting.employment_type?.replace('_', ' ') ?? '—'}</span>
               </DetailItem>
               <DetailItem label="Slots">
                 <span className="font-mono tabular-nums">{posting.slots}</span>
@@ -218,7 +209,6 @@ export default function PostingDetailPage() {
             <DataTable
               columns={appColumns}
               data={appsData.data}
-              onRowClick={(row) => navigate(`/hr/recruitment/applications/${row.id}`)}
             />
           ) : (
             <EmptyState

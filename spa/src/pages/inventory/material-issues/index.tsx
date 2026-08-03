@@ -10,6 +10,7 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatDate } from '@/lib/formatDate';
 import type { MaterialIssueSlip } from '@/types/inventory';
+import { formatPeso } from '@/lib/formatNumber';
 
 export default function MaterialIssuesListPage() {
   const [filters, setFilters] = useState<Record<string, unknown>>({ page: 1, per_page: 25 });
@@ -26,9 +27,9 @@ export default function MaterialIssuesListPage() {
     { key: 'date', header: 'Issued', cell: (r) => <span className="font-mono">{formatDate(r.issued_date)}</span> },
     { key: 'wo', header: 'Work order', cell: (r) => r.work_order_id ? `WO#${r.work_order_id}` : (r.reference_text ?? '—') },
     { key: 'status', header: 'Status', cell: (r) => (
-      <Chip variant={r.status === 'issued' ? 'info' : r.status === 'cancelled' ? 'neutral' : 'warning'}>{r.status}</Chip>
+      <Chip variant={r.status === 'issued' ? 'info' : r.status === 'cancelled' ? 'neutral' : 'warning'}>{r.status_label ?? r.status}</Chip>
     ) },
-    { key: 'value', header: 'Value', align: 'right', cell: (r) => <span className="font-mono tabular-nums font-medium">₱ {Number(r.total_value).toFixed(2)}</span> },
+    { key: 'value', header: 'Value', align: 'right', cell: (r) => <span className="font-mono tabular-nums font-medium">{formatPeso(r.total_value)}</span> },
   ];
 
   return (
@@ -43,7 +44,12 @@ export default function MaterialIssuesListPage() {
       )}
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
-          <DataTable columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters(f => ({ ...f, page }))} />
+          <DataTable
+            columns={columns}
+            data={data.data}
+            meta={data.meta}
+            onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+          />
         </div>
       )}
     </div>

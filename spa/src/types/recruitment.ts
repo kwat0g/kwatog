@@ -10,10 +10,12 @@ export interface JobPosting {
   description: string;
   requirements: string;
   employment_type: EmploymentType;
+  employment_type_label?: string | null;
   salary_range_min: string | null;
   salary_range_max: string | null;
   show_salary: boolean;
   status: JobPostingStatus;
+  status_label?: string | null;
   slots: number;
   posted_at: string | null;
   closes_at: string | null;
@@ -32,6 +34,7 @@ export interface PublicJobPosting {
   description: string;
   requirements: string;
   employment_type: EmploymentType;
+  employment_type_label?: string | null;
   salary_range: { min: string; max: string } | null;
   department: { id: string; name: string };
   posted_at: string;
@@ -68,6 +71,7 @@ export interface ApplicationInterview {
   interviewer_name: string;
   notes: string | null;
   outcome: InterviewOutcome | null;
+  outcome_label?: string;
   created_by?: { id: string; name: string };
   created_at: string;
 }
@@ -84,6 +88,7 @@ export interface TrackingInfo {
   position: string;
   applied_at: string;
   status: string;
+  stage_steps: Array<{ value: string; label: string }>;
   interview: { scheduled_at: string; location: string } | null;
 }
 

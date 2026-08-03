@@ -10,6 +10,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { ArrowLeft, Building2 } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { formatCompactCurrency } from '@/lib/formatNumber';
 import type { Budget } from '@/types/budgeting';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
@@ -28,6 +29,11 @@ export default function DepartmentBudgetDetailPage() {
     },
     enabled: !!departmentName,
   });
+  const { data: budgetOptions } = useQuery({
+    queryKey: ['budgets', 'options'],
+    queryFn: () => budgetingApi.options(),
+    staleTime: 300_000,
+  });
 
   if (isLoading) return <SkeletonDetail />;
   if (isError) return <EmptyState icon="alert-circle" title="Failed to load budgets" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />;
@@ -38,8 +44,8 @@ export default function DepartmentBudgetDetailPage() {
   const utilizationPct = totalAllocated > 0 ? (totalSpent / totalAllocated * 100) : 0;
 
   const getBarColor = (pct: number) => {
-    if (pct >= 95) return 'bg-danger';
-    if (pct >= 80) return 'bg-warning';
+    if (pct >= (budgetOptions?.critical_ratio_pct ?? Number.POSITIVE_INFINITY)) return 'bg-danger';
+    if (pct >= (budgetOptions?.warning_ratio_pct ?? Number.POSITIVE_INFINITY)) return 'bg-warning';
     return 'bg-success';
   };
 
@@ -57,9 +63,9 @@ export default function DepartmentBudgetDetailPage() {
       />
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <StatCard label="Total Allocated" value={`₱ ${(totalAllocated / 1_000_000).toFixed(2)}M`} />
-        <StatCard label="Total Spent" value={`₱ ${(totalSpent / 1_000_000).toFixed(2)}M`} />
-        <StatCard label="Available" value={`₱ ${(totalAvailable / 1_000_000).toFixed(2)}M`} />
+        <StatCard label="Total Allocated" value={formatCompactCurrency(totalAllocated, 1_000_000, 'M')} />
+        <StatCard label="Total Spent" value={formatCompactCurrency(totalSpent, 1_000_000, 'M')} />
+        <StatCard label="Available" value={formatCompactCurrency(totalAvailable, 1_000_000, 'M')} />
         <StatCard label="Utilization" value={`${utilizationPct.toFixed(1)}%`} />
       </div>
 
@@ -77,11 +83,11 @@ export default function DepartmentBudgetDetailPage() {
           title={budget.name}
           meta={
             <div className="flex items-center gap-3">
-              <Chip variant={chipVariantForStatus(budget.status)}>{budget.status}</Chip>
+              <Chip variant={chipVariantForStatus(budget.status)}>{budget.status_label ?? budget.status}</Chip>
               <span className={cn(
                 'text-xs font-medium px-1.5 py-0.5 rounded',
-                budget.utilization_pct >= 95 ? 'text-danger-fg bg-danger-bg' :
-                budget.utilization_pct >= 80 ? 'text-warning-fg bg-warning-bg' : 'text-success-fg bg-success-bg'
+                budget.utilization_pct >= (budgetOptions?.critical_ratio_pct ?? Number.POSITIVE_INFINITY) ? 'text-danger-fg bg-danger-bg' :
+                budget.utilization_pct >= (budgetOptions?.warning_ratio_pct ?? Number.POSITIVE_INFINITY) ? 'text-warning-fg bg-warning-bg' : 'text-success-fg bg-success-bg'
               )}>
                 {budget.utilization_pct}% used
               </span>
@@ -113,16 +119,16 @@ export default function DepartmentBudgetDetailPage() {
                         const monthVal = li[m.toLowerCase() as keyof typeof li] as number;
                         return (
                           <Td align="right" mono key={m}>
-                            {monthVal > 0 ? `₱${(monthVal / 1000).toFixed(0)}K` : '-'}
+                            {monthVal > 0 ? formatCompactCurrency(monthVal, 1_000, 'K') : '-'}
                           </Td>
                         );
                       })}
-                      <Td align="right" mono className="font-medium">₱{(li.annual_total / 1000).toFixed(0)}K</Td>
-                      <Td align="right" mono>₱{(li.actual_total / 1000).toFixed(0)}K</Td>
+                      <Td align="right" mono className="font-medium">{formatCompactCurrency(li.annual_total, 1_000, 'K')}</Td>
+                      <Td align="right" mono>{formatCompactCurrency(li.actual_total, 1_000, 'K')}</Td>
                       <Td align="right" mono className={cn(
  li.variance < 0 ? 'text-danger-fg' : 'text-success-fg'
  )}>
-                        {li.variance >= 0 ? '+' : ''}{li.variance >= 0 ? '₱' : '-₱'}{(Math.abs(li.variance) / 1000).toFixed(0)}K
+                        {li.variance >= 0 ? '+' : '-'}{formatCompactCurrency(Math.abs(li.variance), 1_000, 'K')}
                       </Td>
                     </tr>
                   ))}

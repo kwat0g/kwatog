@@ -132,7 +132,6 @@ export default function ShiftsPage() {
             data={data.data}
             meta={data.meta}
             onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
-            onRowClick={(row) => setSelectedId(row.id)}
             highlightedRowId={selectedId}
           />
           <Panel title="Details">
@@ -212,9 +211,9 @@ function ShiftFormModal({ editing, onClose, onSaved }: { editing: Shift | null; 
     resolver: zodResolver(schema),
     defaultValues: {
       name: editing?.name ?? '',
-      start_time: editing?.start_time ?? '08:00',
-      end_time: editing?.end_time ?? '17:00',
-      break_minutes: editing?.break_minutes ?? 60,
+      start_time: editing?.start_time ?? '',
+      end_time: editing?.end_time ?? '',
+      break_minutes: editing?.break_minutes ?? 0,
       is_night_shift: editing?.is_night_shift ?? false,
       is_extended: editing?.is_extended ?? false,
       auto_ot_hours: editing?.auto_ot_hours ?? '',

@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { useNavigate} from 'react-router-dom';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -12,6 +12,7 @@ import { accountsApi } from '@/api/accounting/accounts';
 import { customersApi } from '@/api/accounting/customers';
 import { vendorsApi } from '@/api/accounting/vendors';
 import { businessPoliciesApi } from '@/api/businessPolicies';
+import { accountingOptionsApi } from '@/api/accounting/options';
 import { Button } from '@/components/ui/Button';
 import { Chip, type ChipVariant } from '@/components/ui/Chip';
 import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
@@ -37,21 +38,20 @@ const cnStatusVariant = (s: CreditNoteStatus): ChipVariant =>
 const lineSchema = z.object({
   account_id:  z.string().min(1, 'Account'),
   description: z.string().min(1, 'Required').max(200),
-  amount:      z.coerce.number().positive('> 0'),
-});
+  amount:      z.coerce.number().positive('> 0') });
 const schema = z.object({
-  type:        z.enum(['customer', 'supplier']),
+  type:        z.string().min(1, 'Type required'),
   date:        z.string().min(1, 'Date is required'),
-  is_vatable:  z.boolean().default(true),
+  is_vatable:  z.boolean(),
   customer_id: z.string().optional().or(z.literal('')),
   vendor_id:   z.string().optional().or(z.literal('')),
   reason:      z.string().max(1000).optional().or(z.literal('')),
-  lines:       z.array(lineSchema).min(1, 'At least one line'),
-}).refine((d) => d.type !== 'customer' || !!d.customer_id, { path: ['customer_id'], message: 'Customer required' })
+  lines:       z.array(lineSchema).min(1, 'At least one line') }).refine((d) => d.type !== 'customer' || !!d.customer_id, { path: ['customer_id'], message: 'Customer required' })
   .refine((d) => d.type !== 'supplier' || !!d.vendor_id, { path: ['vendor_id'], message: 'Vendor required' });
 type FormValues = z.infer<typeof schema>;
 
 export default function CreditNotesPage() {
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const { can } = usePermission();
   const [filters, setFilters] = useState<CreditNoteListParams>({ page: 1, per_page: 25 });
@@ -60,11 +60,14 @@ export default function CreditNotesPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['accounting', 'credit-notes', filters],
     queryFn: () => creditNotesApi.list(filters),
-    placeholderData: (prev) => prev,
-  });
+    placeholderData: (prev) => prev });
+  const { data: accountingOptions } = useQuery({
+    queryKey: ['accounting', 'options'],
+    queryFn: () => accountingOptionsApi.list(),
+    staleTime: 300_000 });
 
   const columns: Column<CreditNote>[] = [
-    { key: 'number', header: 'CN no', cell: (r) => <Link to={`/accounting/credit-notes/${r.id}`} className="font-mono text-accent hover:underline">{r.credit_note_number ?? 'DRAFT'}</Link> },
+    { key: 'number', header: 'CN no', cell: (r) => <span className="font-mono">{r.credit_note_number ?? 'DRAFT'}</span> },
     { key: 'type', header: 'Type', cell: (r) => r.type_label },
     { key: 'party', header: 'Party', cell: (r) => r.customer?.name ?? r.vendor?.name ?? '—' },
     { key: 'date', header: 'Date', cell: (r) => <NumCell>{formatDate(r.date)}</NumCell> },
@@ -74,13 +77,8 @@ export default function CreditNotesPage() {
   ];
 
   const filterConfig: FilterConfig[] = [
-    { key: 'type', label: 'Type', type: 'select', options: [
-      { value: '', label: 'All' }, { value: 'customer', label: 'Customer (AR)' }, { value: 'supplier', label: 'Supplier (AP)' },
-    ] },
-    { key: 'status', label: 'Status', type: 'select', options: [
-      { value: '', label: 'All' }, { value: 'draft', label: 'Draft' }, { value: 'finalized', label: 'Finalized' },
-      { value: 'applied', label: 'Applied' }, { value: 'void', label: 'Void' },
-    ] },
+    { key: 'type', label: 'Type', type: 'select', options: [{ value: '', label: 'All' }, ...(accountingOptions?.credit_note_types ?? [])] },
+    { key: 'status', label: 'Status', type: 'select', options: [{ value: '', label: 'All' }, ...(accountingOptions?.credit_note_statuses ?? [])] },
   ];
 
   return (
@@ -104,6 +102,7 @@ export default function CreditNotesPage() {
         {data && data.data.length === 0 && <EmptyState icon="inbox" title="No credit notes yet" />}
         {data && data.data.length > 0 && (
           <DataTable
+            onRowClick={(r) => navigate(`/accounting/credit-notes/${r.id}`)}
             columns={columns}
             data={data.data}
             meta={data.meta}
@@ -118,14 +117,12 @@ export default function CreditNotesPage() {
 }
 
 function CreateCreditNoteModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
-  const { register, control, handleSubmit, watch, setError, formState: { errors } } = useForm<FormValues>({
+  const { register, control, handleSubmit, watch, setError, setValue, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      type: 'customer', date: new Date().toISOString().slice(0, 10), is_vatable: true,
+      type: '', date: new Date().toISOString().slice(0, 10), is_vatable: undefined as unknown as boolean,
       customer_id: '', vendor_id: '', reason: '',
-      lines: [{ account_id: '', description: '', amount: 0 }],
-    },
-  });
+      lines: [{ account_id: '', description: '', amount: undefined as unknown as number }] } });
   const { fields, append, remove } = useFieldArray({ control, name: 'lines' });
   const type = watch('type');
   const lines = watch('lines');
@@ -135,9 +132,13 @@ function CreateCreditNoteModal({ onClose, onCreated }: { onClose: () => void; on
   const { data: customersResp } = useQuery({ queryKey: ['accounting', 'customers', 'all'], queryFn: () => customersApi.list({ per_page: 200 }), enabled: type === 'customer' });
   const { data: vendorsResp } = useQuery({ queryKey: ['accounting', 'vendors', 'all'], queryFn: () => vendorsApi.list({ per_page: 200 }), enabled: type === 'supplier' });
   const { data: policies } = useQuery({ queryKey: ['business-policies'], queryFn: businessPoliciesApi.get });
+  const { data: accountingOptions } = useQuery({ queryKey: ['accounting', 'options'], queryFn: () => accountingOptionsApi.list(), staleTime: 300_000 });
   const accounts = accountsResp?.data ?? [];
   const customers = customersResp?.data ?? [];
   const vendors = vendorsResp?.data ?? [];
+  useEffect(() => {
+    if (policies) setValue('is_vatable', policies.vat_status === 'VAT Registered');
+  }, [policies, setValue]);
 
   const totals = useMemo(() => {
     const sub = lines.reduce((s, l) => s + (Number(l.amount) || 0), 0);
@@ -151,23 +152,21 @@ function CreateCreditNoteModal({ onClose, onCreated }: { onClose: () => void; on
       customer_id: d.type === 'customer' ? d.customer_id || undefined : undefined,
       vendor_id:   d.type === 'supplier' ? d.vendor_id || undefined : undefined,
       reason: d.reason || undefined,
-      lines: d.lines.map((l) => ({ account_id: l.account_id, description: l.description, amount: String(l.amount) })),
-    }),
+      lines: d.lines.map((l) => ({ account_id: l.account_id, description: l.description, amount: String(l.amount) })) } as Parameters<typeof creditNotesApi.create>[0]),
     onSuccess: (cn) => { toast.success(`Credit note drafted (${formatPeso(cn.total_amount)}).`); onCreated(); },
     onError: (e: AxiosError<ApiValidationError>) => {
       if (e.response?.status === 422 && e.response.data?.errors) {
         Object.entries(e.response.data.errors).forEach(([f, msgs]) => setError(f as keyof FormValues, { type: 'server', message: (msgs as string[])[0] }));
       } else toast.error(e.response?.data?.message ?? 'Failed to create credit note.');
-    },
-  });
+    } });
 
   return (
     <Modal isOpen onClose={onClose} title="New credit note" size="xl">
       <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="space-y-4">
         <div className="grid grid-cols-3 gap-3">
           <Select label="Type" required {...register('type')} error={errors.type?.message}>
-            <option value="customer">Customer (AR)</option>
-            <option value="supplier">Supplier (AP)</option>
+            <option value="">— Select type —</option>
+            {(accountingOptions?.credit_note_types ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
           </Select>
           <Input label="Date" type="date" required {...register('date')} error={errors.date?.message} />
           <div className="flex items-end">
@@ -213,7 +212,7 @@ function CreateCreditNoteModal({ onClose, onCreated }: { onClose: () => void; on
         </div>
 
         <div className="flex items-center justify-between">
-          <Button type="button" variant="secondary" size="sm" icon={<Plus size={14} />} onClick={() => append({ account_id: '', description: '', amount: 0 })}>Add line</Button>
+          <Button type="button" variant="secondary" size="sm" icon={<Plus size={14} />} onClick={() => append({ account_id: '', description: '', amount: undefined as unknown as number })}>Add line</Button>
           <div className="text-sm font-mono tabular-nums text-right">
             <div className="text-muted">Subtotal: {formatPeso(totals.sub)}</div>
             <div className="text-muted">VAT: {formatPeso(totals.vat)}</div>

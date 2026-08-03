@@ -1,5 +1,6 @@
+import { cn } from '@/lib/cn';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { useNavigate} from 'react-router-dom';
 import { supplierPortalApi } from '@/api/b2b/supplier';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
@@ -8,18 +9,19 @@ import { Button } from '@/components/ui/Button';
 import { formatPeso } from '@/lib/formatNumber';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { CompanyName } from '@/components/brand/CompanyName';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 export default function SupplierPurchaseOrdersPage() {
+  const navigate = useNavigate();
   const { data: pos, isLoading, isError, refetch } = useQuery({
     queryKey: ['portal', 'supplier', 'pos'],
     queryFn: () => supplierPortalApi.listPos(),
-    placeholderData: (prev) => prev,
-  });
+    placeholderData: (prev) => prev });
 
   return (
     <div>
-      <PageHeader title="Purchase Orders" subtitle="Orders issued to you by Ogami" />
+      <PageHeader title="Purchase Orders" subtitle={<>Orders issued to you by <CompanyName /></>} />
 
       {/* One padded body holds every state, so loading and loaded agree on width. */}
       <div className="px-5 py-4 max-w-5xl">
@@ -48,17 +50,17 @@ export default function SupplierPurchaseOrdersPage() {
                 </thead>
                 <tbody>
                   {pos.map((po) => (
-                    <tr key={po.id} className={trCls}>
+                    <tr key={po.id} className={cn(trCls, "cursor-pointer")} onClick={() => navigate(`/portal/supplier/purchase-orders/${po.id}`)}>
                       <Td>
-                        <Link to={`/portal/supplier/purchase-orders/${po.id}`} className="font-mono text-accent hover:underline font-medium">
+                        
                           {po.po_number}
-                        </Link>
+                        
                       </Td>
                       <Td className="text-muted">{po.date ?? '—'}</Td>
                       <Td align="right" mono>{formatPeso(po.total_amount)}</Td>
                       <Td className="text-muted">{po.expected_delivery_date ?? '—'}</Td>
                       <Td align="right" mono>
-                        <Chip variant={chipVariantForStatus(po.status)}>{po.status.replace(/_/g, ' ')}</Chip>
+                        <Chip variant={chipVariantForStatus(po.status)}>{po.status_label ?? po.status.replace(/_/g, ' ')}</Chip>
                       </Td>
                     </tr>
                   ))}

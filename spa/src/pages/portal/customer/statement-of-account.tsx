@@ -10,13 +10,6 @@ import { Chip } from '@/components/ui/Chip';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
-const BUCKET_LABELS: Record<string, string> = {
-  current: 'Current',
-  d30_days: '1–30 Days',
-  d60_days: '31–60 Days',
-  d90_plus: '61+ Days',
-};
-
 const BUCKET_COLORS: Record<string, string> = {
   current: 'text-success',
   d30_days: 'text-warning',
@@ -62,7 +55,7 @@ export default function StatementOfAccountPage() {
               {Object.entries(soa.aging).map(([key, value]) => (
                 <StatCard
                   key={key}
-                  label={BUCKET_LABELS[key] ?? key}
+                  label={soa.aging_options.find((option) => option.value === key)?.label ?? key}
                   value={formatPeso(value)}
                   className={BUCKET_COLORS[key]}
                 />

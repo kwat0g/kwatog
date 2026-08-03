@@ -51,6 +51,11 @@ export default function AdminActivityFeedPage() {
     placeholderData: (prev) => prev,
     refetchInterval: 60_000, // light polling — websocket upgrade is a future task
   });
+  const { data: activityOptions } = useQuery({
+    queryKey: ['admin', 'activity', 'options'],
+    queryFn: () => activityApi.options(),
+    staleTime: 300_000,
+  });
 
   const update = (patch: Partial<ActivityFeedParams>) =>
     setFilters((f) => ({ ...f, ...patch, page: 1 }));
@@ -87,11 +92,7 @@ export default function AdminActivityFeedPage() {
           onChange={(e: { target: { value: string } }) => update({ type: e.target.value || undefined })}
         >
           <option value="">All types</option>
-          <option value="transaction">Transaction</option>
-          <option value="approval">Approval</option>
-          <option value="automation">Automation</option>
-          <option value="alert">Alert</option>
-          <option value="auth">Auth</option>
+          {(activityOptions?.types ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
         </Select>
         <Select
           label="Severity"
@@ -101,10 +102,7 @@ export default function AdminActivityFeedPage() {
           }
         >
           <option value="">All</option>
-          <option value="info">Info</option>
-          <option value="success">Success</option>
-          <option value="warning">Warning</option>
-          <option value="danger">Danger</option>
+          {(activityOptions?.severities ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
         </Select>
         <Input
           label="From"
@@ -165,7 +163,7 @@ export default function AdminActivityFeedPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
                     <span className="text-xs font-medium text-primary truncate">{e.summary}</span>
-                    <Chip variant={e.severity}>{e.type}</Chip>
+                    <Chip variant={e.severity}>{e.type_label ?? e.type}</Chip>
                   </div>
                   <div className="text-2xs text-muted flex items-center gap-2">
                     {e.actor ? (

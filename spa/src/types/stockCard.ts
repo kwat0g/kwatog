@@ -6,6 +6,7 @@ export interface StockCardRow {
   id: string;
   date: string | null;
   movement_type: string;
+  movement_type_label?: string;
   reference_type: string;
   reference_id: string | null;
   reference_url: string | null;

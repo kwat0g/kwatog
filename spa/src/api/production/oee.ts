@@ -8,6 +8,7 @@ export interface OeeReportParams {
 }
 
 export const oeeApi = {
+  downtimeCategories: () => client.get<{ data: Array<{ value: string; label: string }> }>('/production/downtime-categories').then((r) => r.data.data),
   forMachine: (machineId: string, from?: string, to?: string) =>
     client.get<{ data: OeeResult & { machine_id: string } }>(`/production/oee/machine/${machineId}`, { params: { from, to } })
       .then((r) => r.data.data),

@@ -152,7 +152,6 @@ export default function RoutingsListPage() {
             data={data.data}
             meta={data.meta}
             onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
-            onRowClick={(r) => navigate(`/production/routings/${r.id}`)}
           />
         </div>
       )}

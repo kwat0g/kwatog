@@ -142,11 +142,11 @@ export function AnomalyReviewPanel({ periodId }: Props) {
                   )}
                   {f.is_resolved && f.resolution_remarks && (
                     <p className="text-xs text-muted mt-0.5">
-                      <span className="text-text-subtle">Remarks:</span> {f.resolution_remarks}
+                      <span className="text-subtle">Remarks:</span> {f.resolution_remarks}
                     </p>
                   )}
                   {f.is_resolved && f.resolved_at && (
-                    <p className="text-2xs text-text-subtle font-mono tabular-nums mt-0.5">
+                    <p className="text-2xs text-subtle font-mono tabular-nums mt-0.5">
                       Resolved {formatDateTime(f.resolved_at)}
                       {f.resolved_by ? ` · ${f.resolved_by.name}` : ''}
                     </p>

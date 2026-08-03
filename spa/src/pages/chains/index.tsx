@@ -21,7 +21,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Panel } from '@/components/ui/Panel';
 import { Chip, type ChipVariant } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Spinner } from '@/components/ui/Spinner';
+import { SkeletonBlock, SkeletonDetail } from '@/components/ui/Skeleton';
 import { Input } from '@/components/ui/Input';
 import { LinkButton } from '@/components/ui/LinkButton';
 import { ChainHeader, LinkedRecords, ActivityStream } from '@/components/chain';
@@ -123,9 +123,7 @@ function ChainPicker({ onPick }: { onPick: (id: string) => void }) {
         />
         <div className="mt-3 divide-y divide-subtle border-t border-subtle">
           {results.isLoading ? (
-            <div className="flex items-center gap-2 py-4 text-sm text-muted">
-              <Spinner size="sm" /> Searching…
-            </div>
+            <div className="py-2"><SkeletonBlock className="h-10 w-full" /></div>
           ) : orders.length === 0 ? (
             <div className="py-5">
               <EmptyState
@@ -160,9 +158,7 @@ function ChainPicker({ onPick }: { onPick: (id: string) => void }) {
         meta={bottlenecks.data ? `${bottlenecks.data.total} stuck` : undefined}
       >
         {bottlenecks.isLoading ? (
-          <div className="flex items-center gap-2 py-4 text-sm text-muted">
-            <Spinner size="sm" /> Loading…
-          </div>
+          <SkeletonBlock className="h-24 w-full" />
         ) : bottlenecks.isError ? (
           <div className="py-4">
             <EmptyState icon="alert-circle" title="Couldn’t load bottlenecks" description="Try refreshing." action={
@@ -225,11 +221,7 @@ function ChainDetail({ id, onClear }: { id: string; onClear: () => void }) {
   useChainProgress('sales_order', id, ['chains', 'so', id]);
 
   if (detail.isLoading) {
-    return (
-      <div className="flex items-center justify-center gap-2 py-24 text-sm text-muted">
-        <Spinner /> Loading chain…
-      </div>
-    );
+    return <SkeletonDetail />;
   }
   if (detail.isError || !detail.data) {
     return (
@@ -264,7 +256,7 @@ function ChainDetail({ id, onClear }: { id: string; onClear: () => void }) {
       {/* Chain stepper */}
       <Panel title="Order-to-cash chain">
         {chain.isLoading ? (
-          <div className="flex items-center gap-2 py-4 text-sm text-muted"><Spinner size="sm" /> Loading stages…</div>
+          <SkeletonBlock className="h-10 w-full" />
         ) : chain.data ? (
           <ChainHeader steps={chain.data} className="mt-1" />
         ) : (
@@ -301,7 +293,7 @@ function ChainDetail({ id, onClear }: { id: string; onClear: () => void }) {
                     id: so.mrp_plan.mrp_plan_no,
                     href: `/mrp/plans/${so.mrp_plan.id}`,
                     meta: `v${so.mrp_plan.version} · ${so.mrp_plan.draft_wo_count} WOs · ${so.mrp_plan.shortages_found} shortages`,
-                    chip: { variant: so.mrp_plan.status === 'active' ? 'success' as const : so.mrp_plan.status === 'cancelled' ? 'danger' as const : 'neutral' as const, text: so.mrp_plan.status },
+                    chip: { variant: so.mrp_plan.status === 'active' ? 'success' as const : so.mrp_plan.status === 'cancelled' ? 'danger' as const : 'neutral' as const, text: so.mrp_plan.status_label ?? so.mrp_plan.status },
                   }],
                 }] : []),
                 ...(so.work_orders && so.work_orders.length > 0 ? [{
@@ -310,7 +302,7 @@ function ChainDetail({ id, onClear }: { id: string; onClear: () => void }) {
                     id: wo.wo_number,
                     href: `/production/work-orders/${wo.id}`,
                     meta: `${wo.product?.part_number ?? ''} · ${formatInt(wo.quantity_produced)} / ${formatInt(wo.quantity_target)}`,
-                    chip: { variant: wo.status === 'completed' || wo.status === 'closed' ? 'success' as const : wo.status === 'in_progress' ? 'info' as const : wo.status === 'paused' ? 'warning' as const : wo.status === 'cancelled' ? 'danger' as const : 'neutral' as const, text: wo.status.replace('_', ' ') },
+                    chip: { variant: wo.status === 'completed' || wo.status === 'closed' ? 'success' as const : wo.status === 'in_progress' ? 'info' as const : wo.status === 'paused' ? 'warning' as const : wo.status === 'cancelled' ? 'danger' as const : 'neutral' as const, text: wo.status_label ?? wo.status.replace('_', ' ') },
                   })),
                 }] : []),
                 ...(so.inspections && so.inspections.length > 0 ? [{
@@ -318,7 +310,7 @@ function ChainDetail({ id, onClear }: { id: string; onClear: () => void }) {
                   items: so.inspections.map((inspection) => ({
                     id: inspection.inspection_number,
                     href: `/quality/inspections/${inspection.id}`,
-                    meta: `${inspection.stage.replace('_', ' ')} · ${inspection.status.replace('_', ' ')}`,
+                    meta: `${inspection.stage_label ?? inspection.stage.replace('_', ' ')} · ${inspection.status_label ?? inspection.status.replace('_', ' ')}`,
                   })),
                 }] : []),
                 ...(so.deliveries && so.deliveries.length > 0 ? [{
@@ -326,7 +318,7 @@ function ChainDetail({ id, onClear }: { id: string; onClear: () => void }) {
                   items: so.deliveries.map((delivery) => ({
                     id: delivery.delivery_number,
                     href: `/supply-chain/deliveries/${delivery.id}`,
-                    meta: `${delivery.status.replace('_', ' ')}${delivery.scheduled_date ? ` · ${delivery.scheduled_date}` : ''}`,
+                    meta: `${delivery.status_label ?? delivery.status.replace('_', ' ')}${delivery.scheduled_date ? ` · ${delivery.scheduled_date}` : ''}`,
                   })),
                 }] : []),
                 ...(so.invoices && so.invoices.length > 0 ? [{
@@ -334,7 +326,7 @@ function ChainDetail({ id, onClear }: { id: string; onClear: () => void }) {
                   items: so.invoices.map((invoice) => ({
                     id: invoice.invoice_number,
                     href: `/accounting/invoices/${invoice.id}`,
-                    meta: `${invoice.status.replace('_', ' ')} · ${peso(invoice.total_amount)}`,
+                    meta: `${invoice.status_label ?? invoice.status.replace('_', ' ')} · ${peso(invoice.total_amount)}`,
                   })),
                 }] : []),
               ]}

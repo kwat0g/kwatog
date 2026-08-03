@@ -18,11 +18,9 @@ import { usePermission } from '@/hooks/usePermission';
 import { formatDateTime } from '@/lib/formatDate';
 import { maintenanceStatusVariant as STATUS_CHIP } from '@/lib/statusVariants';
 import type { ChainStep } from '@/types/chain';
-import type { MaintenanceWorkOrderStatus } from '@/types/maintenance';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { Input } from '@/components/ui/Input';
-
-const STATUS_FLOW: MaintenanceWorkOrderStatus[] = ['open', 'assigned', 'in_progress', 'completed'];
+import { formatPeso } from '@/lib/formatNumber';
 
 export default function MaintenanceWorkOrderDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
@@ -36,6 +34,11 @@ export default function MaintenanceWorkOrderDetailPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['maintenance', 'work-order', id],
     queryFn: () => workOrdersApi.show(id),
+  });
+  const { data: options } = useQuery({
+    queryKey: ['maintenance', 'work-order-options'],
+    queryFn: workOrdersApi.options,
+    staleTime: 5 * 60 * 1000,
   });
 
   const startMutation = useMutation({
@@ -63,13 +66,15 @@ export default function MaintenanceWorkOrderDetailPage() {
     return <EmptyState icon="alert-circle" title="Failed to load" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />;
   }
 
-  const chainSteps: ChainStep[] = STATUS_FLOW.map((s) => {
-    const idx = STATUS_FLOW.indexOf(s);
-    const currIdx = STATUS_FLOW.indexOf(data.status);
+  const statusOptions = (options?.statuses ?? []).filter((status) => status.value !== 'cancelled');
+  const statusLabel = new Map(statusOptions.map((status) => [status.value, status.label]));
+  const currentStep = statusOptions.findIndex((status) => status.value === data.status);
+  const chainSteps: ChainStep[] = statusOptions.map((status, idx) => {
+    const s = status.value;
     const state: ChainStep['state'] = data.status === 'cancelled'
       ? (s === 'open' ? 'done' : 'pending')
-      : (idx < currIdx ? 'done' : idx === currIdx ? 'active' : 'pending');
-    return { key: s, label: s.replace('_', ' '), state };
+      : (idx < currentStep ? 'done' : idx === currentStep ? 'active' : 'pending');
+    return { key: s, label: statusLabel.get(s) ?? s.replace('_', ' '), state };
   });
 
   const isActionable = data.status !== 'completed' && data.status !== 'cancelled';
@@ -84,7 +89,7 @@ export default function MaintenanceWorkOrderDetailPage() {
         breadcrumbs={[{ label: 'Maintenance', href: '/maintenance' }, { label: 'Work Orders', href: '/maintenance/work-orders' }, { label: data.mwo_number }]}
         actions={
           <div className="flex gap-1.5">
-            <Chip variant={STATUS_CHIP[data.status]}>{data.status.replace('_', ' ')}</Chip>
+            <Chip variant={STATUS_CHIP[data.status]}>{data.status_label ?? statusLabel.get(data.status) ?? data.status}</Chip>
             {isActionable && data.status !== 'in_progress' && can('maintenance.wo.complete') && (
               <Button variant="secondary" size="sm" onClick={() => setConfirmStart(true)} loading={startMutation.isPending}>
                 Start
@@ -159,8 +164,8 @@ export default function MaintenanceWorkOrderDetailPage() {
                         {sp.item ? <span><span className="font-mono">{sp.item.code}</span><span className="ml-2 text-muted">{sp.item.name}</span></span> : '—'}
                       </Td>
                       <Td align="right" mono>{sp.quantity}</Td>
-                      <Td align="right" mono>₱{sp.unit_cost}</Td>
-                      <Td align="right" mono className="font-medium">₱{sp.total_cost}</Td>
+                      <Td align="right" mono>{formatPeso(sp.unit_cost)}</Td>
+                      <Td align="right" mono className="font-medium">{formatPeso(sp.total_cost)}</Td>
                     </tr>
                   ))}
                 </tbody>
@@ -174,13 +179,13 @@ export default function MaintenanceWorkOrderDetailPage() {
         <aside className="space-y-3">
           <Panel title="Details">
             <dl className="text-sm divide-y divide-subtle">
-              <Detail label="Type">{data.type}</Detail>
-              <Detail label="Priority">{data.priority}</Detail>
+              <Detail label="Type">{data.type_label ?? data.type}</Detail>
+              <Detail label="Priority">{data.priority_label ?? data.priority}</Detail>
               <Detail label="Assignee">{data.assignee?.name ?? '—'}</Detail>
               <Detail label="Started">{data.started_at ? formatDateTime(data.started_at) : '—'}</Detail>
               <Detail label="Completed">{data.completed_at ? formatDateTime(data.completed_at) : '—'}</Detail>
               <Detail label="Downtime"><span className="font-mono tabular-nums">{data.downtime_minutes}</span> min</Detail>
-              <Detail label="Cost"><span className="font-mono tabular-nums">₱{data.cost}</span></Detail>
+              <Detail label="Cost"><span className="font-mono tabular-nums">{formatPeso(data.cost)}</span></Detail>
             </dl>
           </Panel>
         </aside>

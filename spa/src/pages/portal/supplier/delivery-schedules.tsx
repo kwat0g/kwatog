@@ -224,7 +224,7 @@ export default function SupplierDeliverySchedulesPage() {
                     <span className="text-2xs text-muted">
                       {s.purchase_order?.po_number ?? ''}
                     </span>
-                    <Chip variant={chipVariantForStatus(s.status)}>{s.status}</Chip>
+                    <Chip variant={chipVariantForStatus(s.status)}>{s.status_label ?? s.status}</Chip>
                   </div>
                   <p className="text-2xs text-muted">
                     {formatDate(s.created_at)}

@@ -1,11 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Upload, Play, CheckCircle2, AlertCircle, Undo2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
 import {
   importsApi,
-  IMPORT_SCHEMAS,
   type ImportDryRunResult,
   type ImportError,
   type ImportBatch,
@@ -27,7 +26,7 @@ const batchStatusVariant = (s: string): ChipVariant =>
 
 export default function ImportsPage() {
   const qc = useQueryClient();
-  const [entity, setEntity] = useState<string>('coa');
+  const [entity, setEntity] = useState<string>('');
   const [file, setFile] = useState<File | null>(null);
   const [dryRun, setDryRun] = useState<ImportDryRunResult | null>(null);
   const [commitErrors, setCommitErrors] = useState<ImportError[] | null>(null);
@@ -80,8 +79,12 @@ export default function ImportsPage() {
     },
   });
 
-  const entities = entitiesQ.data ?? ['coa', 'items', 'customers', 'vendors'];
-  const schema = IMPORT_SCHEMAS[entity];
+  const entities = useMemo(() => entitiesQ.data?.entities ?? [], [entitiesQ.data?.entities]);
+  const schemas = entitiesQ.data?.schemas ?? {};
+  useEffect(() => {
+    if (!entity && entities.length > 0) setEntity(entities[0]);
+  }, [entity, entities]);
+  const schema = schemas[entity];
   const errorRows = commitErrors ?? dryRun?.errors ?? [];
   const isClean = dryRun !== null && dryRun.errors.length === 0;
 
@@ -224,7 +227,7 @@ export default function ImportsPage() {
                     <tr key={b.id} className={trCls}>
                       <Td mono>{b.entity_type}</Td>
                       <Td className="text-muted truncate max-w-[180px]">{b.filename ?? '—'}</Td>
-                      <Td><Chip variant={batchStatusVariant(b.status)}>{b.status}</Chip></Td>
+                      <Td><Chip variant={batchStatusVariant(b.status)}>{b.status_label ?? b.status}</Chip></Td>
                       <Td align="right" mono>{b.imported_rows}/{b.total_rows}</Td>
                       <Td className="text-muted">{b.created_by ?? '—'}</Td>
                       <Td mono className="text-muted text-xs">{b.created_at ? formatDate(b.created_at) : '—'}</Td>

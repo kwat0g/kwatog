@@ -53,7 +53,7 @@ export default function CustomerInvoiceDetailPage() {
             <Button variant="ghost" size="sm" icon={<FileDown size={14} />} onClick={downloadPdf}>
               PDF
             </Button>
-            <Chip variant={chipVariantForStatus(invoice.status)}>{invoice.status}</Chip>
+            <Chip variant={chipVariantForStatus(invoice.status)}>{invoice.status_label ?? invoice.status}</Chip>
           </div>
         ) : undefined}
       />
@@ -127,7 +127,7 @@ export default function CustomerInvoiceDetailPage() {
                     {invoice.collections.map((p, i) => (
                       <tr key={i} className={trCls}>
                         <Td className="text-muted">{p.collection_date ?? '—'}</Td>
-                        <Td className="capitalize">{p.payment_method}</Td>
+                        <Td className="capitalize">{p.payment_method_label ?? p.payment_method}</Td>
                         <Td align="right" mono>{formatPeso(p.amount)}</Td>
                       </tr>
                     ))}

@@ -11,6 +11,7 @@ export interface JournalEntryListParams extends ListParams {
 }
 
 export const journalEntriesApi = {
+  options: () => client.get<{ data: { statuses: Array<{ value: string; label: string }> } }>('/journal-entries/options').then((r) => r.data.data),
   list: (params?: JournalEntryListParams) =>
     client.get<PaginatedResponse<JournalEntry>>('/journal-entries', { params }).then((r) => r.data),
   show: (id: string) =>

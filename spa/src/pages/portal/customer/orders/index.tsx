@@ -1,5 +1,6 @@
+import { cn } from '@/lib/cn';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { useNavigate} from 'react-router-dom';
 import { customerPortalApi } from '@/api/b2b/customer';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
@@ -9,17 +10,18 @@ import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { formatPeso } from '@/lib/formatNumber';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { CompanyName } from '@/components/brand/CompanyName';
 
 export default function CustomerOrdersPage() {
+  const navigate = useNavigate();
   const { data: orders, isLoading, isError, refetch } = useQuery({
     queryKey: ['portal', 'customer', 'orders'],
     queryFn: () => customerPortalApi.listOrders(),
-    placeholderData: (prev) => prev,
-  });
+    placeholderData: (prev) => prev });
 
   return (
     <div>
-      <PageHeader title="My Orders" subtitle="Sales orders placed with Ogami" />
+      <PageHeader title="My Orders" subtitle={<>Sales orders placed with <CompanyName /></>} />
 
       {/* One padded body holds every state, so loading and loaded agree on width. */}
       <div className="px-5 py-4 max-w-5xl">
@@ -47,16 +49,16 @@ export default function CustomerOrdersPage() {
                 </thead>
                 <tbody>
                   {orders.map((order) => (
-                    <tr key={order.id} className={trCls}>
+                    <tr key={order.id} className={cn(trCls, "cursor-pointer")} onClick={() => navigate(`/portal/customer/orders/${order.id}`)}>
                       <Td>
-                        <Link to={`/portal/customer/orders/${order.id}`} className="font-mono text-accent hover:underline font-medium">
+                        
                           {order.so_number}
-                        </Link>
+                        
                       </Td>
                       <Td className="text-muted">{order.date ?? '—'}</Td>
                       <Td align="right" mono>{formatPeso(order.total_amount)}</Td>
                       <Td align="right" mono>
-                        <Chip variant={chipVariantForStatus(order.status)}>{order.status.replace(/_/g, ' ')}</Chip>
+                        <Chip variant={chipVariantForStatus(order.status)}>{order.status_label ?? order.status.replace(/_/g, ' ')}</Chip>
                       </Td>
                     </tr>
                   ))}

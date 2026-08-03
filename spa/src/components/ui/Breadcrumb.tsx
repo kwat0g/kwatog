@@ -32,13 +32,13 @@ export function Breadcrumb({ segments, className }: BreadcrumbProps) {
   return (
     <nav
       aria-label="Breadcrumb"
-      className={cn('flex items-center gap-1 text-xs text-text-subtle mb-3', className)}
+      className={cn('flex items-center gap-1 text-xs text-subtle mb-3', className)}
     >
       {segments.map((seg, i) => {
         const isLast = i === segments.length - 1;
         return (
           <span key={`${seg.label}-${i}`} className="flex items-center gap-1">
-            {i > 0 && <ChevronRight size={12} className="text-text-subtle/50" aria-hidden />}
+            {i > 0 && <ChevronRight size={12} className="text-subtle/50" aria-hidden />}
             {seg.href && !isLast ? (
               <Link to={seg.href} className="hover:text-accent transition-colors truncate max-w-[200px]">
                 {seg.label}

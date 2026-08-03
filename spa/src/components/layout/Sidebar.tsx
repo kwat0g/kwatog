@@ -56,7 +56,7 @@ import {
   ScanBarcode,
   type LucideIcon,
 } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { cn } from '@/lib/cn';
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { Tooltip } from '@/components/ui/Tooltip';
@@ -367,13 +367,13 @@ export const Sidebar = memo(function Sidebar({ permissions, features, roleSlug }
               <div
                 className={cn(
                   'px-4 mb-1 flex items-center gap-1.5 text-2xs uppercase tracking-widest font-medium',
-                  isActiveSection ? 'text-primary' : 'text-text-subtle',
+                  isActiveSection ? 'text-primary' : 'text-subtle',
                 )}
               >
                 <span
                   className={cn(
                     'inline-block h-1.5 w-1.5 rounded-full',
-                    isActiveSection ? 'bg-accent' : 'bg-text-subtle',
+                    isActiveSection ? 'bg-accent' : 'bg-subtle',
                   )}
                   aria-hidden
                 />
@@ -476,8 +476,17 @@ const NavLink = memo(function NavLink({
 }) {
   const Icon = item.icon;
   const badgeValue = badgeOverride ?? item.badge;
+  const linkRef = useRef<HTMLAnchorElement>(null);
+
+  useEffect(() => {
+    if (active && linkRef.current) {
+      linkRef.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }, [active]);
+
   return (
     <Link
+      ref={linkRef}
       to={item.to}
       aria-label={collapsed ? item.label : undefined}
       className={cn(

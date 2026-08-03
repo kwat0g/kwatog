@@ -12,7 +12,8 @@ import { accountsApi } from '@/api/accounting/accounts';
 import { billsApi } from '@/api/accounting/bills';
 import { purchaseOrdersApi } from '@/api/purchasing/purchase-orders';
 import { businessPoliciesApi } from '@/api/businessPolicies';
-import type { PurchaseOrderStatus, ThreeWayMatchResult } from '@/types/purchasing';
+import { uomsApi } from '@/api/inventory/uoms';
+import type { ThreeWayMatchResult } from '@/types/purchasing';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -23,7 +24,6 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { formatPeso } from '@/lib/formatNumber';
 import { onFormInvalid } from '@/lib/formErrors';
 import { numberInputProps } from '@/lib/numberInput';
-import { UNIT_OPTIONS } from '@/lib/units';
 import type { ApiValidationError } from '@/types';
 
 const itemSchema = z.object({
@@ -44,15 +44,11 @@ const schema = z.object({
   allow_override:    z.boolean().default(false),
   date:        z.string().min(1, 'Date is required'),
   due_date:    z.string().optional().or(z.literal('')),
-  is_vatable:  z.boolean().default(true),
+  is_vatable:  z.boolean(),
   remarks:     z.string().max(1000).optional().or(z.literal('')),
   items:       z.array(itemSchema).min(1, 'At least one item'),
 });
 type FormValues = z.infer<typeof schema>;
-
-// REC-02 — statuses at which a PO can be billed (sent to supplier / receiving
-// in progress / fully received). Draft/pending/cancelled/closed are excluded.
-const BILLABLE_PO_STATUSES: PurchaseOrderStatus[] = ['sent', 'partially_received', 'received'];
 
 export default function CreateBillPage() {
   const navigate = useNavigate();
@@ -68,18 +64,18 @@ export default function CreateBillPage() {
     queryKey: ['accounting', 'accounts', 'expense'],
     queryFn: () => accountsApi.list({ per_page: 200, type: 'expense', is_active: true }),
   });
-  // REC-02 — billable POs for the optional link selector. The API filters
-  // `status` by exact match only, so we fetch broadly and narrow client-side
-  // to the billable statuses.
+  // REC-02 — billable POs for the optional link selector. The API exposes the
+  // authoritative billability rule alongside each purchase order.
   const { data: posResp } = useQuery({
     queryKey: ['purchasing', 'purchase-orders', 'billable'],
     queryFn: () => purchaseOrdersApi.list({ per_page: 200 }),
   });
   const { data: policies } = useQuery({ queryKey: ['business-policies'], queryFn: businessPoliciesApi.get });
+  const { data: uoms = [] } = useQuery({ queryKey: ['inventory', 'uoms'], queryFn: uomsApi.list, staleTime: 300_000 });
   const vendors = useMemo(() => vendorsResp?.data ?? [], [vendorsResp]);
   const accounts = accountsResp?.data ?? [];
   const pos = useMemo(
-    () => (posResp?.data ?? []).filter((po) => BILLABLE_PO_STATUSES.includes(po.status)),
+    () => (posResp?.data ?? []).filter((po) => po.is_billable === true),
     [posResp],
   );
 
@@ -88,10 +84,13 @@ export default function CreateBillPage() {
     defaultValues: {
       bill_number: '', vendor_id: presetVendor, purchase_order_id: '', allow_override: false,
       date: new Date().toISOString().slice(0, 10),
-      due_date: '', is_vatable: true, remarks: '',
-      items: [{ expense_account_id: '', item_id: '', description: '', quantity: 1, unit: '', unit_price: 0 }],
+      due_date: '', is_vatable: undefined as unknown as boolean, remarks: '',
+      items: [{ expense_account_id: '', item_id: '', description: '', quantity: undefined as unknown as number, unit: '', unit_price: undefined as unknown as number }],
     },
   });
+  useEffect(() => {
+    if (policies) setValue('is_vatable', policies.vat_status === 'VAT Registered');
+  }, [policies, setValue]);
   const { fields, append, remove, replace } = useFieldArray({ control, name: 'items' });
   const items = watch('items');
   const isVatable = watch('is_vatable');
@@ -259,7 +258,7 @@ export default function CreateBillPage() {
                   <div className="col-span-1">
                     <Select {...register(`items.${idx}.unit` as const)}>
                       <option value="">—</option>
-                      {UNIT_OPTIONS.map((u) => <option key={u.value} value={u.value}>{u.value}</option>)}
+                      {uoms.map((uom) => <option key={uom.id} value={uom.code}>{uom.code}</option>)}
                     </Select>
                   </div>
                   <div className="col-span-2"><Input type="number" step="0.01" min="0" className="font-mono tabular-nums text-right" {...numberInputProps()} {...register(`items.${idx}.unit_price` as const)} /></div>
@@ -275,7 +274,7 @@ export default function CreateBillPage() {
             })}
           </div>
           <div className="flex items-center justify-between mt-3">
-            <Button type="button" variant="secondary" size="sm" icon={<Plus size={14} />} onClick={() => append({ expense_account_id: '', item_id: '', description: '', quantity: 1, unit: '', unit_price: 0 })}>
+          <Button type="button" variant="secondary" size="sm" icon={<Plus size={14} />} onClick={() => append({ expense_account_id: '', item_id: '', description: '', quantity: undefined as unknown as number, unit: '', unit_price: undefined as unknown as number })}>
               Add line
             </Button>
             <div className="text-sm font-mono tabular-nums">

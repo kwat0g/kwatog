@@ -41,6 +41,15 @@ export default function MaintenanceSchedulesListPage() {
     queryFn: () => schedulesApi.list(filters),
     placeholderData: (prev) => prev,
   });
+  const { data: scheduleOptions } = useQuery({
+    queryKey: ['maintenance', 'schedules', 'options'],
+    queryFn: schedulesApi.options,
+    staleTime: 5 * 60 * 1000,
+  });
+  const labels = new Map([
+    ...(scheduleOptions?.maintainable_types ?? []),
+    ...(scheduleOptions?.interval_types ?? []),
+  ].map((option) => [option.value, option.label]));
 
   const columns: Column<MaintenanceSchedule>[] = [
     {
@@ -51,8 +60,8 @@ export default function MaintenanceSchedulesListPage() {
           <div className="text-sm">{r.description}</div>
           <div className="text-xs text-muted">
             {r.maintainable
-              ? <><span className="font-mono">{r.maintainable.code ?? '—'}</span> · {r.maintainable_type}</>
-              : <span>{r.maintainable_type}</span>}
+              ? <><span className="font-mono">{r.maintainable.code ?? '—'}</span> · {labels.get(r.maintainable_type) ?? r.maintainable_type}</>
+              : <span>{labels.get(r.maintainable_type) ?? r.maintainable_type}</span>}
           </div>
         </div>
       ),
@@ -60,7 +69,7 @@ export default function MaintenanceSchedulesListPage() {
     {
       key: 'interval',
       header: 'Interval',
-      cell: (r) => <span className="font-mono tabular-nums">{r.interval_value} {r.interval_type}</span>,
+      cell: (r) => <span className="font-mono tabular-nums">{r.interval_value} {labels.get(r.interval_type) ?? r.interval_type}</span>,
     },
     {
       key: 'last_performed_at',
@@ -113,15 +122,13 @@ export default function MaintenanceSchedulesListPage() {
   const filterConfig: FilterConfig[] = [
     {
       key: 'maintainable_type', label: 'Target', type: 'select',
-      options: [{ value: '', label: 'All' }, { value: 'machine', label: 'Machine' }, { value: 'mold', label: 'Mold' }],
+      options: [{ value: '', label: 'All' }, ...(scheduleOptions?.maintainable_types ?? [])],
     },
     {
       key: 'interval_type', label: 'Interval', type: 'select',
       options: [
         { value: '', label: 'All' },
-        { value: 'hours', label: 'Hours' },
-        { value: 'days', label: 'Days' },
-        { value: 'shots', label: 'Shots (mold only)' },
+        ...(scheduleOptions?.interval_types ?? []),
       ],
     },
   ];
@@ -162,8 +169,7 @@ export default function MaintenanceSchedulesListPage() {
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
           <DataTable columns={columns} data={data.data} meta={data.meta}
-            onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
-            onRowClick={(r) => navigate(`/maintenance/schedules/${r.id}`)} />
+            onPageChange={(page) => setFilters((f) => ({ ...f, page }))} />
         </div>
       )}
 

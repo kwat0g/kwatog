@@ -6,15 +6,16 @@
  * a customer can trust what ships because it was checked at every stage.
  */
 
-import { ShieldCheck, Download, Award } from 'lucide-react';
+import { ShieldCheck, Download, Award, type LucideIcon } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { SectionHeading } from '../components/SectionHeading';
-import { QUALITY_PILLARS, QUALITY_METHODS } from '../data';
+import { QUALITY_PILLAR_ICONS } from '../data';
 import { landingApi } from '@/api/landing';
 import { focusRingLanding } from '@/lib/focus';
 import { section, container, cardGap } from '../styles';
 import { cn } from '@/lib/cn';
 
-type PillarData = (typeof QUALITY_PILLARS)[number];
+type PillarData = { id: string; title: string; body: string; icon: LucideIcon };
 
 function PillarCell({ pillar, index }: { pillar: PillarData; index: number }) {
   const Icon = pillar.icon;
@@ -41,23 +42,24 @@ function PillarCell({ pillar, index }: { pillar: PillarData; index: number }) {
 }
 
 export function QualitySection() {
+  const { data: content } = useQuery({ queryKey: ['landing', 'content'], queryFn: landingApi.content, staleTime: 300_000 });
+  const qualityMethods = content?.quality_methods?.length ? content.quality_methods : ['IATF 16949', 'CMM Inspection', 'SPC Tracking', 'PPAP Level 3', 'CoC Certified'];
+  const qualityPolicy = content?.quality_policy;
+  const qualityStandard = qualityPolicy?.standard ?? qualityMethods[0];
+  const qualityPillars: PillarData[] = (content?.quality_pillars ?? []).map((pillar) => ({ ...pillar, icon: QUALITY_PILLAR_ICONS[pillar.icon] ?? QUALITY_PILLAR_ICONS.ruler }));
+
   return (
     <section id="quality" className={section('canvas')}>
       <div className={container}>
         <div className="flex flex-col gap-10 lg:flex-row lg:items-end lg:justify-between">
           <SectionHeading
-            eyebrow="Quality · IATF 16949"
-            title={
-              <>
-                Quality you can audit,
-                <br className="hidden sm:block" /> on every shipment.
-              </>
-            }
-            intro="Quality is not a department at Ogami — it is built into the chain. Four checkpoints stand between raw resin and your receiving dock."
+            eyebrow={`Quality · ${qualityStandard}`}
+            title={content?.section_copy?.quality_title || 'Zero-Defect Quality Assurance'}
+            intro={content?.section_copy?.quality_intro || 'Every production lot is measured against tight metrology tolerances with CMM inspection, SPC process tracking, and Certificate of Conformance.'}
           />
 
           <div className="flex flex-wrap gap-2 lg:max-w-xs lg:justify-end">
-            {QUALITY_METHODS.map((m, i) => (
+            {qualityMethods.map((m, i) => (
               <span
                 key={m}
                 data-reveal
@@ -71,7 +73,7 @@ export function QualitySection() {
         </div>
 
         <div className="mt-16 grid gap-px overflow-hidden rounded-md border border-landing-border bg-landing-border sm:grid-cols-2 lg:grid-cols-4">
-          {QUALITY_PILLARS.map((pillar, i) => (
+          {qualityPillars.map((pillar, i) => (
             <PillarCell key={pillar.id} pillar={pillar} index={i} />
           ))}
         </div>
@@ -86,11 +88,10 @@ export function QualitySection() {
             </div>
             <div className="mt-5">
               <h3 className="font-display text-lg font-medium tracking-tight text-landing-text">
-                IATF 16949:2016 Certified
+                {qualityPolicy?.certification_title || 'IATF 16949 & ISO 9001:2015 Certified'}
               </h3>
               <p className="mt-2 text-[13px] leading-relaxed text-landing-text-secondary">
-                Our quality management system is certified for automotive production —
-                audited, maintained, and continuously improved.
+                {qualityPolicy?.certification_body || 'Audited and certified for automotive quality management and injection molded component production.'}
               </p>
               <button
                 type="button"
@@ -126,12 +127,10 @@ export function QualitySection() {
           >
             <ShieldCheck size={22} className="mt-0.5 shrink-0 text-landing-accent" strokeWidth={1.7} />
             <p className="font-sans text-[14px] leading-relaxed text-landing-text-secondary">
-              <span className="font-medium text-landing-text">
-                Every shipment ships with a Certificate of Conformance
-              </span>{' '}
-              built from real inspection data — outgoing parts are sampled at AQL 0.65
-              Level II and measured against your critical-dimension tolerances, with
-              full traceability from resin lot to delivery.
+                <span className="font-medium text-landing-text">
+                  {qualityPolicy?.conformance_title || '100% Quality & Traceability Guarantee:'}
+                </span>{' '}
+                {qualityPolicy?.conformance_body || 'Full dimensional inspection, material melt-flow verification, and lot barcode tracking delivered with every shipment.'}
             </p>
           </div>
         </div>

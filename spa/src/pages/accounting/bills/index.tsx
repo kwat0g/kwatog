@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate} from 'react-router-dom';
 import { Plus, Printer } from 'lucide-react';
 import { billsApi, type BillListParams } from '@/api/accounting/bills';
 import { bulkPrint } from '@/api/print';
@@ -24,17 +24,21 @@ export default function BillsPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['accounting', 'bills', filters],
     queryFn: () => billsApi.list(filters),
-    placeholderData: (prev) => prev,
-  });
+    placeholderData: (prev) => prev });
+  const { data: billOptions } = useQuery({
+    queryKey: ['accounting', 'bills', 'options'],
+    queryFn: billsApi.options,
+    staleTime: 5 * 60 * 1000 });
+  const statusLabels = new Map((billOptions?.statuses ?? []).map((option) => [option.value, option.label]));
 
   const columns: Column<Bill>[] = [
-    { key: 'bill_number', header: 'Bill no', cell: (r) => <Link to={`/accounting/bills/${r.id}`} className="font-mono text-accent hover:underline">{r.bill_number}</Link> },
+    { key: 'bill_number', header: 'Bill no', cell: (r) => <span className="font-mono">{r.bill_number}</span> },
     { key: 'vendor', header: 'Vendor', cell: (r) => r.vendor?.name ?? '—' },
     { key: 'date', header: 'Date', cell: (r) => <NumCell>{formatDate(r.date)}</NumCell> },
     { key: 'due_date', header: 'Due', cell: (r) => <NumCell className={r.is_overdue ? 'text-danger-fg' : undefined}>{formatDate(r.due_date)}</NumCell> },
     { key: 'total', header: 'Total', align: 'right', cell: (r) => <NumCell>{formatPeso(r.total_amount)}</NumCell> },
     { key: 'balance', header: 'Balance', align: 'right', cell: (r) => <NumCell className="font-medium">{formatPeso(r.balance)}</NumCell> },
-    { key: 'status', header: 'Status', cell: (r) => <Chip variant={chipVariantForStatus(r.status)}>{r.status}</Chip> },
+    { key: 'status', header: 'Status', cell: (r) => <Chip variant={chipVariantForStatus(r.status)}>{r.status_label ?? statusLabels.get(r.status) ?? r.status}</Chip> },
   ];
 
   const filterConfig: FilterConfig[] = [
@@ -42,14 +46,11 @@ export default function BillsPage() {
       key: 'status', label: 'Status', type: 'select',
       options: [
         { value: '', label: 'All' },
-        { value: 'unpaid', label: 'Unpaid' }, { value: 'partial', label: 'Partial' },
-        { value: 'paid', label: 'Paid' }, { value: 'cancelled', label: 'Cancelled' },
-      ],
-    },
+        ...(billOptions?.statuses ?? []),
+      ] },
     {
       key: 'overdue', label: 'Overdue', type: 'select',
-      options: [{ value: '', label: 'All' }, { value: '1', label: 'Overdue only' }],
-    },
+      options: [{ value: '', label: 'All' }, { value: '1', label: 'Overdue only' }] },
   ];
 
   return (
@@ -78,6 +79,7 @@ export default function BillsPage() {
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
           <DataTable
+            onRowClick={(r) => navigate(`/accounting/bills/${r.id}`)}
             columns={columns}
             data={data.data}
             meta={data.meta}
@@ -86,8 +88,7 @@ export default function BillsPage() {
             bulkActions={[{
               label: 'Print PDFs',
               icon: <Printer size={14} />,
-              onClick: (rows) => bulkPrint('bill', rows.map((r) => r.id)),
-            } as BulkAction<Bill>]}
+              onClick: (rows) => bulkPrint('bill', rows.map((r) => r.id)) } as BulkAction<Bill>]}
           />
         </div>
       )}

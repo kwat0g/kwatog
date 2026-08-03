@@ -22,17 +22,6 @@ const STAGE_CHIP: Record<ApplicationStage, 'neutral' | 'info' | 'warning' | 'suc
   rejected: 'danger',
 };
 
-const STAGE_LABEL: Record<ApplicationStage, string> = {
-  new: 'New',
-  screening: 'Screening',
-  interview: 'Interview',
-  offer: 'Offer',
-  hired: 'Hired',
-  rejected: 'Rejected',
-};
-
-const PIPELINE_STAGES: ApplicationStage[] = ['new', 'screening', 'interview', 'offer', 'hired'];
-
 export default function RecruitmentDashboard() {
   const navigate = useNavigate();
   const { can } = usePermission();
@@ -47,10 +36,17 @@ export default function RecruitmentDashboard() {
     queryKey: ['recruitment-applications', { per_page: 10 }],
     queryFn: () => recruitmentApi.listApplications({ per_page: 10 }).then((r) => r.data),
   });
+  const { data: recruitmentOptions } = useQuery({
+    queryKey: ['recruitment', 'options'],
+    queryFn: () => recruitmentApi.options().then((r) => r.data.data),
+    staleTime: 5 * 60 * 1000,
+  });
 
   const openPostings = postingsData?.data ?? [];
   const applications = applicationsData?.data ?? [];
   const totalApps = applicationsData?.meta?.total ?? 0;
+  const stageLabel = new Map((recruitmentOptions?.application_stages ?? []).map((stage) => [stage.value, stage.label]));
+  const pipelineStages = (recruitmentOptions?.application_stages ?? []).filter((stage) => !stage.is_terminal);
 
   const stageCounts = applications.reduce<Record<string, number>>((acc, app: JobApplication) => {
     acc[app.stage] = (acc[app.stage] ?? 0) + 1;
@@ -71,7 +67,7 @@ export default function RecruitmentDashboard() {
   const appColumns: Column<JobApplication>[] = [
     { key: 'full_name', header: 'Applicant', cell: (r) => <span className="font-medium">{r.full_name}</span> },
     { key: 'position', header: 'Position', cell: (r) => r.job_posting?.title ?? '—' },
-    { key: 'stage', header: 'Stage', cell: (r) => <Chip variant={STAGE_CHIP[r.stage]}>{STAGE_LABEL[r.stage]}</Chip> },
+    { key: 'stage', header: 'Stage', cell: (r) => <Chip variant={STAGE_CHIP[r.stage]}>{stageLabel.get(r.stage) ?? r.stage}</Chip> },
     { key: 'applied_at', header: 'Applied', cell: (r) => <span className="font-mono text-xs tabular-nums">{formatDate(r.applied_at)}</span> },
   ];
 
@@ -105,10 +101,10 @@ export default function RecruitmentDashboard() {
           <p className="text-2xs text-muted font-medium uppercase tracking-wider">Total Applications</p>
         </div>
         <div className="h-8 w-px bg-border-default" />
-        {PIPELINE_STAGES.map((stage) => (
-          <div key={stage}>
-            <p className="text-lg font-medium font-mono tabular-nums">{stageCounts[stage] ?? 0}</p>
-            <p className="text-2xs text-muted font-medium uppercase tracking-wider">{STAGE_LABEL[stage]}</p>
+        {pipelineStages.map((stage) => (
+          <div key={stage.value}>
+            <p className="text-lg font-medium font-mono tabular-nums">{stageCounts[stage.value] ?? 0}</p>
+            <p className="text-2xs text-muted font-medium uppercase tracking-wider">{stage.label}</p>
           </div>
         ))}
       </div>
@@ -139,23 +135,22 @@ export default function RecruitmentDashboard() {
             <DataTable
               columns={postingColumns}
               data={openPostings}
-              onRowClick={(row) => navigate(`/hr/recruitment/postings/${row.id}`)}
             />
           )}
         </Panel>
 
         <Panel title="Application Pipeline">
           <ul className="space-y-2">
-            {PIPELINE_STAGES.map((stage) => {
-              const count = stageCounts[stage] ?? 0;
+            {pipelineStages.map((stage) => {
+              const count = stageCounts[stage.value] ?? 0;
               return (
-                <li key={stage}>
+                <li key={stage.value}>
                   <Link
-                    to={`/hr/recruitment/applications?stage=${stage}`}
+                    to={`/hr/recruitment/applications?stage=${stage.value}`}
                     className="flex items-center justify-between rounded-md px-3 py-2 transition-colors hover:bg-elevated group"
                   >
                     <div className="flex items-center gap-2">
-                      <Chip variant={STAGE_CHIP[stage]}>{STAGE_LABEL[stage]}</Chip>
+                      <Chip variant={STAGE_CHIP[stage.value as ApplicationStage]}>{stage.label}</Chip>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="font-mono tabular-nums text-sm font-medium">{count}</span>
@@ -190,7 +185,6 @@ export default function RecruitmentDashboard() {
             <DataTable
               columns={appColumns}
               data={applications}
-              onRowClick={(row) => navigate(`/hr/recruitment/applications/${row.id}`)}
             />
           )}
         </Panel>

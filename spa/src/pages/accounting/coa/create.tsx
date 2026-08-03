@@ -6,6 +6,7 @@ import { z } from 'zod';
 import toast from 'react-hot-toast';
 import type { AxiosError } from 'axios';
 import { accountsApi } from '@/api/accounting/accounts';
+import { accountingOptionsApi } from '@/api/accounting/options';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -18,17 +19,12 @@ import type { AccountType } from '@/types/accounting';
 const schema = z.object({
   code:           z.string().min(1, 'Code required').max(20),
   name:           z.string().min(1, 'Name required').max(100),
-  type:           z.enum(['asset', 'liability', 'equity', 'revenue', 'expense']),
-  normal_balance: z.enum(['debit', 'credit']).optional(),
+  type:           z.string().min(1, 'Type required'),
+  normal_balance: z.string().optional(),
   parent_id:      z.string().optional().or(z.literal('')),
   description:    z.string().max(500).optional().or(z.literal('')),
 });
 type FormValues = z.infer<typeof schema>;
-
-const TYPE_DEFAULTS: Record<AccountType, 'debit' | 'credit'> = {
-  asset: 'debit', expense: 'debit',
-  liability: 'credit', equity: 'credit', revenue: 'credit',
-};
 
 export default function CreateAccountPage() {
   const navigate = useNavigate();
@@ -39,18 +35,23 @@ export default function CreateAccountPage() {
     queryFn: () => accountsApi.list({ per_page: 200 }),
     staleTime: 60_000,
   });
+  const { data: options } = useQuery({
+    queryKey: ['accounting', 'options'],
+    queryFn: () => accountingOptionsApi.list(),
+    staleTime: 300_000,
+  });
 
   const { register, handleSubmit, setValue, setError, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { type: 'asset', normal_balance: 'debit' },
+    defaultValues: { type: '', normal_balance: '' },
   });
 
   const mutation = useMutation({
     mutationFn: (data: FormValues) => accountsApi.create({
       code: data.code,
       name: data.name,
-      type: data.type,
-      normal_balance: data.normal_balance || TYPE_DEFAULTS[data.type as AccountType],
+      type: data.type as AccountType,
+      normal_balance: (data.normal_balance || options?.account_types.find((t) => t.value === data.type)?.default_normal_balance) as 'debit' | 'credit' | undefined,
       parent_id: data.parent_id || null,
       description: data.description || undefined,
     }),
@@ -79,25 +80,22 @@ export default function CreateAccountPage() {
 
         <div className="grid grid-cols-2 gap-3">
           <Input label="Account code" {...register('code')} error={errors.code?.message} required
-            placeholder="e.g. 1010" className="font-mono" />
+            placeholder="Account code" className="font-mono" />
           <Select label="Type" {...register('type', {
-            onChange: (e) => setValue('normal_balance', TYPE_DEFAULTS[e.target.value as AccountType]),
+            onChange: (e) => setValue('normal_balance', options?.account_types.find((t) => t.value === e.target.value)?.default_normal_balance || ''),
           })} error={errors.type?.message} required>
-            <option value="asset">Asset</option>
-            <option value="liability">Liability</option>
-            <option value="equity">Equity</option>
-            <option value="revenue">Revenue</option>
-            <option value="expense">Expense</option>
+            <option value="">Select type</option>
+            {(options?.account_types ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
           </Select>
         </div>
 
-        <Input label="Account name" {...register('name')} error={errors.name?.message} required
-          placeholder="e.g. Cash on Hand" />
+          <Input label="Account name" {...register('name')} error={errors.name?.message} required
+            placeholder="Account name" />
 
         <div className="grid grid-cols-2 gap-3">
           <Select label="Normal balance" {...register('normal_balance')} error={errors.normal_balance?.message}>
-            <option value="debit">Debit</option>
-            <option value="credit">Credit</option>
+            <option value="">Select balance</option>
+            {(options?.normal_balances ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
           </Select>
           <Select label="Parent account (optional)" {...register('parent_id')} error={errors.parent_id?.message}>
             <option value="">— None (top-level) —</option>

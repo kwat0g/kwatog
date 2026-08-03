@@ -86,10 +86,10 @@ export default function RecordOutput() {
           <div className="flex items-center justify-between">
             <span className="font-mono tabular-nums text-sm font-medium">{workOrder.wo_number}</span>
             <Chip variant={workOrderStatusVariant[workOrder.status]}>
-              {workOrder.status.replace(/_/g, ' ')}
+              {workOrder.status_label ?? workOrder.status.replace(/_/g, ' ')}
             </Chip>
           </div>
-          <div className="mt-1 text-sm font-medium">{workOrder.product?.name ?? 'Unknown'}</div>
+          <div className="mt-1 text-sm font-medium">{workOrder.product?.name ?? '—'}</div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-xs text-muted">Progress:</span>
             <span className="font-mono tabular-nums text-lg font-medium">

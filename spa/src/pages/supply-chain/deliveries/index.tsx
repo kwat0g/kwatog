@@ -1,7 +1,7 @@
 /** Sprint 7 — Task 67 — Deliveries list (outbound). */
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate} from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import { deliveriesApi, type DeliveryListParams } from '@/api/supply-chain';
 import { Button } from '@/components/ui/Button';
@@ -22,12 +22,16 @@ export default function DeliveriesListPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['supply-chain', 'deliveries', filters],
     queryFn: () => deliveriesApi.list(filters),
-    placeholderData: (prev) => prev,
-  });
+    placeholderData: (prev) => prev });
+  const { data: options } = useQuery({
+    queryKey: ['supply-chain', 'delivery-options'],
+    queryFn: deliveriesApi.options,
+    staleTime: 5 * 60 * 1000 });
+  const statusLabel = new Map((options?.statuses ?? []).map((status) => [status.value, status.label]));
 
   const columns: Column<Delivery>[] = [
     { key: 'delivery_number', header: 'Delivery',
-      cell: (r) => <Link to={`/supply-chain/deliveries/${r.id}`} className="font-mono text-accent hover:underline">{r.delivery_number}</Link> },
+      cell: (r) => <span className="font-mono">{r.delivery_number}</span> },
     { key: 'so', header: 'Sales Order',
       cell: (r) => r.sales_order ? <span className="font-mono">{r.sales_order.so_number}</span> : <span className="text-muted">—</span> },
     { key: 'vehicle', header: 'Vehicle', cell: (r) => r.vehicle ? `${r.vehicle.name} (${r.vehicle.plate_number})` : '—' },
@@ -35,17 +39,13 @@ export default function DeliveriesListPage() {
     { key: 'scheduled', header: 'Scheduled', align: 'right',
       cell: (r) => <NumCell>{r.scheduled_date ?? '—'}</NumCell> },
     { key: 'status', header: 'Status',
-      cell: (r) => <Chip variant={deliveryStatusVariant[r.status]}>{r.status.replace('_', ' ')}</Chip> },
+      cell: (r) => <Chip variant={deliveryStatusVariant[r.status]}>{statusLabel.get(r.status) ?? r.status_label ?? r.status}</Chip> },
   ];
 
   const filterConfig: FilterConfig[] = [
     { key: 'status', label: 'Status', type: 'select', options: [
       { value: '', label: 'All' },
-      { value: 'scheduled', label: 'Scheduled' },
-      { value: 'loading', label: 'Loading' },
-      { value: 'in_transit', label: 'In transit' },
-      { value: 'delivered', label: 'Delivered' },
-      { value: 'confirmed', label: 'Confirmed' },
+      ...(options?.statuses ?? []),
     ] },
   ];
 
@@ -82,7 +82,8 @@ export default function DeliveriesListPage() {
       )}
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
-          <DataTable columns={columns} data={data.data} meta={data.meta}
+          <DataTable
+            onRowClick={(r) => navigate(`/supply-chain/deliveries/${r.id}`)} columns={columns} data={data.data} meta={data.meta}
             onPageChange={(page) => setFilters((f) => ({ ...f, page }))} />
         </div>
       )}

@@ -22,6 +22,13 @@ export default function ItemDetailPage() {
     queryFn: () => itemsApi.show(id),
     enabled: !!id,
   });
+  const { data: itemOptions } = useQuery({
+    queryKey: ['inventory', 'items', 'options'],
+    queryFn: itemsApi.options,
+    staleTime: 300_000,
+  });
+  const reorderMethodLabel = itemOptions?.reorder_methods.find((option) => option.value === data?.reorder_method)?.label;
+  const stockStatusLabel = itemOptions?.stock_statuses.find((option) => option.value === data?.stock_status)?.label;
 
   if (isLoading) return <SkeletonTable rows={6} columns={4} />;
   if (isError || !data) return (
@@ -37,7 +44,7 @@ export default function ItemDetailPage() {
         breadcrumbs={[{ label: 'Inventory', href: '/inventory' }, { label: 'Items', href: '/inventory/items' }, { label: data.code }]}
         actions={
           <div className="flex items-center gap-2">
-            <Chip variant={stockChipVariant[data.stock_status]}>{data.stock_status}</Chip>
+            <Chip variant={stockChipVariant[data.stock_status]}>{stockStatusLabel ?? data.stock_status}</Chip>
             {data.is_critical && <Chip variant="danger">Critical</Chip>}
             {!data.is_active && <Chip variant="neutral">Inactive</Chip>}
             <Chip variant={data.quality_plan_ready ? 'success' : 'warning'}>
@@ -57,14 +64,14 @@ export default function ItemDetailPage() {
           <StatCard label="On hand" value={Number(data.on_hand_quantity).toFixed(3)} helper={data.unit_of_measure} />
           <StatCard label="Reserved" value={Number(data.reserved_quantity).toFixed(3)} helper={data.unit_of_measure} />
           <StatCard label="Available" value={Number(data.available_quantity).toFixed(3)} helper={data.unit_of_measure} />
-          <StatCard label="Standard cost" value={Number(data.standard_cost).toFixed(4)} helper="₱" />
+          <StatCard label="Standard cost" value={Number(data.standard_cost).toFixed(4)} />
         </div>
         <Panel title="Specifications">
           <dl className="grid grid-cols-3 gap-y-3 gap-x-6 text-sm">
             <div><dt className="text-2xs uppercase tracking-wider text-muted">Category</dt><dd>{data.category?.name ?? '—'}</dd></div>
             <div><dt className="text-2xs uppercase tracking-wider text-muted">Item type</dt><dd>{data.item_type_label}</dd></div>
             <div><dt className="text-2xs uppercase tracking-wider text-muted">Unit of measure</dt><dd>{data.unit_of_measure}</dd></div>
-            <div><dt className="text-2xs uppercase tracking-wider text-muted">Reorder method</dt><dd>{data.reorder_method.replace('_', ' ')}</dd></div>
+            <div><dt className="text-2xs uppercase tracking-wider text-muted">Reorder method</dt><dd>{reorderMethodLabel ?? data.reorder_method}</dd></div>
             <div><dt className="text-2xs uppercase tracking-wider text-muted">Reorder point</dt><dd className="font-mono tabular-nums">{Number(data.reorder_point).toFixed(3)}</dd></div>
             <div><dt className="text-2xs uppercase tracking-wider text-muted">Safety stock</dt><dd className="font-mono tabular-nums">{Number(data.safety_stock).toFixed(3)}</dd></div>
             <div><dt className="text-2xs uppercase tracking-wider text-muted">MOQ</dt><dd className="font-mono tabular-nums">{Number(data.minimum_order_quantity).toFixed(3)}</dd></div>

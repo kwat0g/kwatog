@@ -19,6 +19,7 @@ import { StockOutPanel } from '@/components/dashboard/StockOutPanel';
 import { DemandForecastPanel } from '@/components/dashboard/DemandForecastPanel';
 import { DonutBreakdown, BarComparison } from '@/components/charts';
 import { KpiStrip } from '@/components/dashboard/KpiStrip';
+import { formatPeso } from '@/lib/formatNumber';
 
 /* ───────────────────────── Typed interface ───────────────────────── */
 
@@ -29,17 +30,20 @@ interface PrActionItem {
   items_count: number;
   estimated_total: string;
   urgency: string;
+  urgency_label?: string;
   days_waiting: number;
 }
 
 interface PoPipelineItem {
   status: string;
+  status_label?: string;
   count: number;
 }
 
 interface SupplierScoreItem {
   name: string;
   overall_score: string;
+  tier?: string | null;
 }
 
 interface UpcomingDelivery {
@@ -49,6 +53,7 @@ interface UpcomingDelivery {
   items_count: number;
   expected_date: string | null;
   status: string;
+  status_label?: string;
 }
 
 interface PurchasingDashboardData {
@@ -58,6 +63,7 @@ interface PurchasingDashboardData {
     po_pipeline: PoPipelineItem[];
     supplier_performance: SupplierScoreItem[];
     upcoming_deliveries: UpcomingDelivery[];
+    delivery_horizon_days?: number;
   };
 }
 
@@ -99,10 +105,10 @@ function PrActionQueuePanel({ items }: { items: PrActionItem[] }) {
               </Td>
               <Td className="text-muted text-xs">{pr.department}</Td>
               <Td align="right" mono>{pr.items_count}</Td>
-              <Td align="right" mono>₱{pr.estimated_total}</Td>
+              <Td align="right" mono>{formatPeso(pr.estimated_total)}</Td>
               <Td>
                 <Chip variant={pr.urgency === 'urgent' ? 'danger' : pr.urgency === 'high' ? 'warning' : 'neutral'}>
-                  {pr.urgency}
+                  {pr.urgency_label ?? pr.urgency}
                 </Chip>
               </Td>
               <Td align="right" mono className="text-muted">{pr.days_waiting}d</Td>
@@ -133,7 +139,7 @@ function PoPipelinePanel({ items }: { items: PoPipelineItem[] }) {
           return (
             <li key={i.status}>
               <div className="flex items-center justify-between text-sm mb-1">
-                <span className="capitalize">{i.status.replace(/_/g, ' ')}</span>
+                <span>{i.status_label ?? i.status.replace(/_/g, ' ')}</span>
                 <span className="font-mono tabular-nums">{i.count}</span>
               </div>
               <div
@@ -179,7 +185,7 @@ function SupplierPerformancePanel({ items }: { items: SupplierScoreItem[] }) {
         {items.map((s) => (
           <li key={s.name} className="flex items-center justify-between py-2 text-sm">
             <span className="truncate">{s.name}</span>
-            <Chip variant={parseFloat(s.overall_score) >= 95 ? 'success' : parseFloat(s.overall_score) >= 85 ? 'info' : parseFloat(s.overall_score) >= 80 ? 'warning' : 'danger'}>
+            <Chip variant={s.tier === 'A' ? 'success' : s.tier === 'B' ? 'info' : s.tier === 'C' ? 'warning' : 'danger'}>
               <span className="font-mono tabular-nums">{s.overall_score}</span>
             </Chip>
           </li>
@@ -189,17 +195,17 @@ function SupplierPerformancePanel({ items }: { items: SupplierScoreItem[] }) {
   );
 }
 
-function UpcomingDeliveriesPanel({ items }: { items: UpcomingDelivery[] }) {
+function UpcomingDeliveriesPanel({ items, horizonDays }: { items: UpcomingDelivery[]; horizonDays: number }) {
   if (items.length === 0) {
     return (
-      <Panel title="Upcoming Deliveries (7 days)">
-        <EmptyState icon="truck" title="None scheduled" description="No deliveries expected in the next 7 days." />
+      <Panel title={`Upcoming Deliveries (${horizonDays} days)`}>
+        <EmptyState icon="truck" title="None scheduled" description={`No deliveries expected in the next ${horizonDays} days.`} />
       </Panel>
     );
   }
 
   return (
-    <Panel title="Upcoming Deliveries (7 days)" meta={items.length.toString()} noPadding bodyClassName="px-1.5 pb-2">
+    <Panel title={`Upcoming Deliveries (${horizonDays} days)`} meta={items.length.toString()} noPadding bodyClassName="px-1.5 pb-2">
       <table className={tableCls}>
         <thead>
           <tr className={theadTrCls}>
@@ -225,7 +231,7 @@ function UpcomingDeliveriesPanel({ items }: { items: UpcomingDelivery[] }) {
               <Td align="right" mono>{d.expected_date ?? '—'}</Td>
               <Td>
                 <Chip variant={d.status === 'sent' ? 'info' : d.status === 'approved' ? 'warning' : 'neutral'}>
-                  {d.status}
+                  {d.status_label ?? d.status.replace(/_/g, ' ')}
                 </Chip>
               </Td>
             </tr>
@@ -255,7 +261,7 @@ export default function PurchasingDashboard() {
       {({ kpis, panels }) => {
         const poStatusChartData =
           panels?.po_pipeline?.map((i) => ({
-            name: i.status.replace(/_/g, ' '),
+            name: i.status_label ?? i.status.replace(/_/g, ' '),
             value: i.count,
             color:
               i.status === 'received' || i.status === 'closed'
@@ -281,8 +287,8 @@ export default function PurchasingDashboard() {
                 <StatCard
                   key={k.label}
                   label={k.label}
-                  value={k.unit === 'PHP' ? `₱ ${k.value}` : k.value}
-                  helper={k.unit !== 'PHP' && k.unit !== 'count' ? k.unit : undefined}
+                  value={/^[A-Z]{3}$/.test(k.unit) ? `${k.unit} ${k.value}` : k.value}
+                  helper={!/^[A-Z]{3}$/.test(k.unit) && k.unit !== 'count' ? k.unit : undefined}
                   linkTo={kpiLink(k.label)}
                 />
               ))}
@@ -300,7 +306,7 @@ export default function PurchasingDashboard() {
             {/* ── Row 3: Supplier Performance + Upcoming Deliveries ── */}
             <PanelRow>
               <SupplierPerformancePanel items={panels?.supplier_performance ?? []} />
-              <UpcomingDeliveriesPanel items={panels?.upcoming_deliveries ?? []} />
+              <UpcomingDeliveriesPanel items={panels?.upcoming_deliveries ?? []} horizonDays={panels?.delivery_horizon_days ?? 0} />
             </PanelRow>
 
             {/* ── Row 4: Charts ── */}
@@ -332,7 +338,7 @@ export default function PurchasingDashboard() {
 
             {/* ── Row 5: Forecasting ── */}
             <PanelRow>
-              <StockOutPanel horizonDays={30} hideWhenEmpty />
+              <StockOutPanel hideWhenEmpty />
               <DemandForecastPanel hideWhenEmpty />
             </PanelRow>
           </>

@@ -15,6 +15,7 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import type { CommissionEarning, CommissionEarningStatus } from '@/types/commissions';
+import { formatPeso } from '@/lib/formatNumber';
 
 const STATUS_CHIP: Record<CommissionEarningStatus, 'warning' | 'info' | 'success'> = {
   pending: 'warning',
@@ -33,6 +34,12 @@ export default function CommissionsListPage() {
     queryFn: () => commissionsApi.list(filters),
     placeholderData: (prev) => prev,
   });
+  const { data: options } = useQuery({
+    queryKey: ['crm', 'commission-options'],
+    queryFn: commissionsApi.options,
+    staleTime: 5 * 60 * 1000,
+  });
+  const statusLabel = new Map((options?.statuses ?? []).map((status) => [status.value, status.label]));
 
   const approveMutation = useMutation({
     mutationFn: (id: string) => commissionsApi.approve(id),
@@ -68,7 +75,7 @@ export default function CommissionsListPage() {
     },
     {
       key: 'order_total', header: 'Order Total', align: 'right',
-      cell: (r) => <NumCell>₱{r.order_total}</NumCell>,
+      cell: (r) => <NumCell>{formatPeso(r.order_total)}</NumCell>,
     },
     {
       key: 'commission_rate', header: 'Rate', align: 'right',
@@ -76,11 +83,11 @@ export default function CommissionsListPage() {
     },
     {
       key: 'commission_amount', header: 'Commission', align: 'right',
-      cell: (r) => <NumCell>₱{r.commission_amount}</NumCell>,
+      cell: (r) => <NumCell>{formatPeso(r.commission_amount)}</NumCell>,
     },
     {
       key: 'status', header: 'Status',
-      cell: (r) => <Chip variant={STATUS_CHIP[r.status]}>{r.status}</Chip>,
+      cell: (r) => <Chip variant={STATUS_CHIP[r.status]}>{r.status_label ?? statusLabel.get(r.status) ?? r.status}</Chip>,
     },
     {
       key: 'actions', header: '', align: 'right',
@@ -122,9 +129,7 @@ export default function CommissionsListPage() {
       key: 'status', label: 'Status', type: 'select',
       options: [
         { value: '', label: 'All' },
-        { value: 'pending', label: 'Pending' },
-        { value: 'approved', label: 'Approved' },
-        { value: 'paid', label: 'Paid' },
+        ...(options?.statuses ?? []),
       ],
     },
   ];

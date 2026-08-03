@@ -34,6 +34,11 @@ export default function LeaveDetailPage() {
     queryKey: ['leaves', 'request', id],
     queryFn: () => leaveRequestsApi.show(id),
   });
+  const { data: leaveOptions } = useQuery({
+    queryKey: ['leaves', 'options'],
+    queryFn: leaveRequestsApi.options,
+    staleTime: 300_000,
+  });
 
   const detailKey = ['leaves', 'request', id];
 
@@ -71,6 +76,7 @@ export default function LeaveDetailPage() {
 
   const isOwner = user?.employee?.id === req.employee?.id;
   const canCancel = isOwner && ['pending_dept', 'pending_hr', 'approved'].includes(req.status);
+  const statusLabel = new Map((leaveOptions?.statuses ?? []).map((option) => [option.value, option.label]));
 
   return (
     <div>
@@ -78,7 +84,7 @@ export default function LeaveDetailPage() {
         title={
           <span className="flex items-center gap-2">
             <span className="font-mono">{req.leave_request_no}</span>
-            <Chip variant={chipVariantForStatus(req.status)}>{req.status.replace('_', ' ')}</Chip>
+            <Chip variant={chipVariantForStatus(req.status)}>{statusLabel.get(req.status) ?? req.status.replace('_', ' ')}</Chip>
           </span>
         }
         subtitle={`${req.employee?.full_name} · ${req.leave_type?.code}`}
@@ -200,5 +206,4 @@ function Item({ label, value, sub, mono }: { label: string; value: React.ReactNo
     </div>
   );
 }
-
 

@@ -227,7 +227,7 @@ export default function SalesOrderDetailPage() {
                   <Td colSpan={2} />
                 </tr>
                 <tr className={cn(trCls, 'bg-subtle')}>
-                  <Td align="right" mono className="text-muted text-2xs uppercase" colSpan={4}>VAT (12%)</Td>
+                  <Td align="right" mono className="text-muted text-2xs uppercase" colSpan={4}>VAT</Td>
                   <Td align="right" mono>{formatPeso(data.vat_amount)}</Td>
                   <Td colSpan={2} />
                 </tr>
@@ -254,7 +254,7 @@ export default function SalesOrderDetailPage() {
                     id: data.mrp_plan.mrp_plan_no,
                     href: `/mrp/plans/${data.mrp_plan.id}`,
                     meta: `v${data.mrp_plan.version} · ${data.mrp_plan.draft_wo_count} WOs · ${data.mrp_plan.shortages_found} shortages`,
-                    chip: { variant: data.mrp_plan.status === 'active' ? 'success' as const : data.mrp_plan.status === 'cancelled' ? 'danger' as const : 'neutral' as const, text: data.mrp_plan.status },
+                    chip: { variant: data.mrp_plan.status === 'active' ? 'success' as const : data.mrp_plan.status === 'cancelled' ? 'danger' as const : 'neutral' as const, text: data.mrp_plan.status_label ?? data.mrp_plan.status },
                   }],
                 }] : []),
                 ...(data.work_orders && data.work_orders.length > 0 ? [{
@@ -263,7 +263,7 @@ export default function SalesOrderDetailPage() {
                     id: wo.wo_number,
                     href: `/production/work-orders/${wo.id}`,
                     meta: `${wo.product?.part_number ?? ''} · ${formatInt(wo.quantity_produced)} / ${formatInt(wo.quantity_target)}`,
-                    chip: { variant: wo.status === 'completed' || wo.status === 'closed' ? 'success' as const : wo.status === 'in_progress' ? 'info' as const : wo.status === 'paused' ? 'warning' as const : wo.status === 'cancelled' ? 'danger' as const : 'neutral' as const, text: wo.status.replace('_', ' ') },
+                    chip: { variant: wo.status === 'completed' || wo.status === 'closed' ? 'success' as const : wo.status === 'in_progress' ? 'info' as const : wo.status === 'paused' ? 'warning' as const : wo.status === 'cancelled' ? 'danger' as const : 'neutral' as const, text: wo.status_label ?? wo.status.replace('_', ' ') },
                   })),
                 }] : []),
                 ...(data.inspections && data.inspections.length > 0 ? [{
@@ -271,8 +271,8 @@ export default function SalesOrderDetailPage() {
                   items: data.inspections.map((inspection) => ({
                     id: inspection.inspection_number,
                     href: `/quality/inspections/${inspection.id}`,
-                    meta: inspection.stage.replace('_', ' '),
-                    chip: { variant: inspection.status === 'passed' ? 'success' as const : inspection.status === 'failed' ? 'danger' as const : inspection.status === 'in_progress' ? 'info' as const : 'neutral' as const, text: inspection.status.replace('_', ' ') },
+                    meta: inspection.stage_label ?? inspection.stage.replace('_', ' '),
+                    chip: { variant: inspection.status === 'passed' ? 'success' as const : inspection.status === 'failed' ? 'danger' as const : inspection.status === 'in_progress' ? 'info' as const : 'neutral' as const, text: inspection.status_label ?? inspection.status.replace('_', ' ') },
                   })),
                 }] : []),
                 ...(data.deliveries && data.deliveries.length > 0 ? [{
@@ -281,7 +281,7 @@ export default function SalesOrderDetailPage() {
                     id: delivery.delivery_number,
                     href: `/supply-chain/deliveries/${delivery.id}`,
                     meta: delivery.scheduled_date ?? undefined,
-                    chip: { variant: delivery.status === 'confirmed' || delivery.status === 'delivered' ? 'success' as const : delivery.status === 'in_transit' ? 'info' as const : delivery.status === 'cancelled' ? 'danger' as const : 'neutral' as const, text: delivery.status.replace('_', ' ') },
+                    chip: { variant: delivery.status === 'confirmed' || delivery.status === 'delivered' ? 'success' as const : delivery.status === 'in_transit' ? 'info' as const : delivery.status === 'cancelled' ? 'danger' as const : 'neutral' as const, text: delivery.status_label ?? delivery.status.replace('_', ' ') },
                   })),
                 }] : []),
                 ...(data.invoices && data.invoices.length > 0 ? [{
@@ -290,7 +290,7 @@ export default function SalesOrderDetailPage() {
                     id: invoice.invoice_number,
                     href: `/accounting/invoices/${invoice.id}`,
                     meta: `${formatPeso(invoice.total_amount)} · balance ${formatPeso(invoice.balance)}`,
-                    chip: { variant: invoice.status === 'paid' ? 'success' as const : invoice.status === 'overdue' ? 'danger' as const : invoice.status === 'partial' ? 'warning' as const : 'neutral' as const, text: invoice.status.replace('_', ' ') },
+                    chip: { variant: invoice.status === 'paid' ? 'success' as const : invoice.status === 'overdue' ? 'danger' as const : invoice.status === 'partial' ? 'warning' as const : 'neutral' as const, text: invoice.status_label ?? invoice.status.replace('_', ' ') },
                   })),
                 }] : []),
               ]}

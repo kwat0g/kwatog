@@ -140,8 +140,13 @@ export interface Employee {
   address: EmployeeAddress;
   contact: EmployeeContact;
   status: EmployeeStatus;
+  status_label?: string;
   employment_type: EmploymentType;
+  employment_type_label?: string;
   pay_type: PayType;
+  pay_type_label?: string;
+  gender_label?: string;
+  civil_status_label?: string;
   date_hired: string;
   date_regularized: string | null;
   basic_monthly_salary: string | null;
@@ -195,4 +200,5 @@ export interface TrainingMatrixData {
   skills: TrainingMatrixSkill[];
   rows: TrainingMatrixRow[];
   summary: TrainingMatrixSummary;
+  status_options: Array<{ value: TrainingMatrixCellStatus; label: string }>;
 }

@@ -56,14 +56,18 @@ export function ScrambleText({
       intervalRef.current = setInterval(() => {
         frame += 1;
         const settled = Math.floor((frame / total) * text.length);
-        let out = '';
+        let html = '';
         for (let i = 0; i < text.length; i += 1) {
           const ch = text[i];
-          if (ch === ' ') out += ' ';
-          else if (i < settled) out += ch;
-          else out += GLYPHS[Math.floor(Math.random() * GLYPHS.length)];
+          if (ch === ' ') html += ' ';
+          else if (i < settled) {
+            html += `<span>${ch}</span>`;
+          } else {
+            const glyph = GLYPHS[Math.floor(Math.random() * GLYPHS.length)];
+            html += `<span class="text-landing-accent font-semibold opacity-90">${glyph}</span>`;
+          }
         }
-        overlay.textContent = out;
+        overlay.innerHTML = html;
         if (frame >= total) {
           overlay.textContent = text;
           if (intervalRef.current) clearInterval(intervalRef.current);

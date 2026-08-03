@@ -29,6 +29,7 @@ export interface PortalPoSummary {
   date: string | null;
   total_amount: string;
   status: string;
+  status_label?: string;
   expected_delivery_date: string | null;
   sent_to_supplier_at: string | null;
 }
@@ -57,6 +58,7 @@ export interface PortalPoDetail extends PortalPoSummary {
     paid_amount: string;
     balance: string;
     status: string;
+    status_label?: string;
     due_date: string | null;
   }>;
 }
@@ -88,6 +90,7 @@ export interface PortalSoDetail extends PortalSoSummary {
     id: string;
     wo_number: string;
     status: string;
+    status_label?: string;
     quantity_target: number;
     quantity_produced: number;
     planned_start: string | null;
@@ -107,6 +110,7 @@ export interface PortalInvoiceSummary {
   total_amount: string;
   balance: string;
   status: string;
+  status_label?: string;
   due_date: string | null;
 }
 
@@ -123,6 +127,7 @@ export interface PortalInvoiceDetail extends PortalInvoiceSummary {
     amount: string;
     collection_date: string | null;
     payment_method: string;
+    payment_method_label?: string;
   }>;
 }
 
@@ -133,6 +138,7 @@ export interface SupplierBillSummary {
   total_amount: string;
   balance: string;
   status: string;
+  status_label?: string;
   due_date: string | null;
 }
 
@@ -149,6 +155,7 @@ export interface SupplierBillDetail extends SupplierBillSummary {
     amount: string;
     payment_date: string | null;
     payment_method: string;
+    payment_method_label?: string;
   }>;
 }
 
@@ -157,6 +164,7 @@ export interface PortalDeliverySummary {
   delivery_number: string;
   delivered_at: string | null;
   status: string;
+  status_label?: string;
   scheduled_date?: string | null;
   sales_order?: { id: string; so_number: string } | null;
 }
@@ -227,7 +235,9 @@ export interface PortalComplaint {
   id: string;
   complaint_number: string;
   severity: string;
+  severity_label?: string;
   status: string;
+  status_label?: string;
   description: string;
   affected_quantity: number;
   received_date: string | null;
@@ -240,7 +250,9 @@ export interface PortalComplaint {
 export interface EightDReportData {
   complaint_number: string;
   complaint_status: string;
+  complaint_status_label?: string;
   severity: string;
+  severity_label?: string;
   description: string;
   report: {
     id: string;
@@ -271,6 +283,7 @@ export interface StatementOfAccount {
     d60_days: string;
     d90_plus: string;
   };
+  aging_options: Array<{ value: keyof StatementOfAccount['aging']; label: string }>;
   transactions: Array<{
     date: string;
     type: 'invoice' | 'payment' | string;
@@ -293,6 +306,7 @@ export interface DeliverySchedule {
   id: string;
   month: string;
   status: string;
+  status_label?: string;
   lines: DeliveryScheduleLine[];
   purchase_order?: { id: string; po_number: string } | null;
   created_at: string;
@@ -311,6 +325,7 @@ export interface VendorStatementOfAccount {
     d61_90: string;
     d91_plus: string;
   };
+  aging_bucket_options: Array<{ value: keyof VendorStatementOfAccount['aging_buckets']; label: string }>;
   open_bills: Array<{
     id: string;
     bill_number: string;
@@ -319,6 +334,7 @@ export interface VendorStatementOfAccount {
     total_amount: string;
     balance: string;
     status: string;
+    status_label?: string;
     is_overdue: boolean;
     aging_bucket: string;
     purchase_order?: { id: string; po_number: string } | null;

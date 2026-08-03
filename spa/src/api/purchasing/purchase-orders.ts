@@ -3,6 +3,7 @@ import type { PaginatedResponse, ListParams } from '@/types';
 import type { PurchaseOrder, CreatePurchaseOrderData, ThreeWayMatchResult, ProcurementChainOverview } from '@/types/purchasing';
 
 export const purchaseOrdersApi = {
+  options: () => client.get<{ statuses: Array<{ value: string; label: string }>; approval_sla_hours?: number }>('/purchasing/purchase-orders/options').then((r) => r.data),
   list: (params?: ListParams & { status?: string; vendor_id?: string; requires_vp_approval?: boolean | string; from?: string; to?: string }, signal?: AbortSignal) =>
     client.get<PaginatedResponse<PurchaseOrder>>('/purchasing/purchase-orders', { params, signal }).then((r) => r.data),
   show: (id: string) =>

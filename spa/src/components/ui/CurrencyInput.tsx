@@ -43,6 +43,7 @@ export const CurrencyInput = forwardRef<HTMLInputElement, CurrencyInputProps>(
       setFocused(true);
       // While editing, show the cleaned value (no commas) so cursor math stays sane.
       setDisplay(parseCurrencyInput(display) || '');
+      e.target.select();
       onFocus?.(e);
     };
 

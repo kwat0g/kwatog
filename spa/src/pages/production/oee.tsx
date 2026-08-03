@@ -5,7 +5,7 @@
  * single machine), showing:
  *   - 4 KPI cards: Overall OEE, Availability, Performance, Quality
  *   - Per-machine table embedding the existing OeeGauge for each row
- *   - Daily OEE trend (recharts LineChart) with a 75% benchmark line
+ *   - Daily OEE trend (recharts LineChart) with a configured benchmark line
  *   - Downtime breakdown by category (planned, breakdown, etc.)
  *
  * Default window is the current month. Quick presets cover today / week /
@@ -14,7 +14,7 @@
  */
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { useNavigate} from 'react-router-dom';
 import {
   CartesianGrid,
   Line,
@@ -23,8 +23,7 @@ import {
   ResponsiveContainer,
   Tooltip as RTooltip,
   XAxis,
-  YAxis,
-} from 'recharts';
+  YAxis } from 'recharts';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -76,21 +75,12 @@ function presetWindow(p: Preset): Window {
   }
 }
 
-const DOWNTIME_LABELS: Record<string, string> = {
-  breakdown: 'Breakdown',
-  changeover: 'Changeover',
-  material_shortage: 'Material shortage',
-  no_order: 'No order',
-  planned_maintenance: 'Planned maintenance',
-};
-
 const DOWNTIME_COLORS: Record<string, string> = {
   breakdown: 'bg-danger',
   changeover: 'bg-warning',
   material_shortage: 'bg-warning',
   no_order: 'bg-strong',
-  planned_maintenance: 'bg-info',
-};
+  planned_maintenance: 'bg-info' };
 
 function pct(v: number): string {
   return `${(v * 100).toFixed(1)}%`;
@@ -121,6 +111,7 @@ const machineStatusVariant = (status: string): 'success' | 'info' | 'warning' | 
 };
 
 export default function OeeReportPage() {
+  const navigate = useNavigate();
   const [preset, setPreset] = useState<Preset>('month');
   const [custom, setCustom] = useState<Window>(() => presetWindow('month'));
 
@@ -129,8 +120,12 @@ export default function OeeReportPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['production', 'oee', 'report', window],
     queryFn: () => oeeApi.report(window),
-    placeholderData: (prev) => prev,
-  });
+    placeholderData: (prev) => prev });
+  const { data: downtimeCategories = [] } = useQuery({
+    queryKey: ['production', 'downtime-categories'],
+    queryFn: oeeApi.downtimeCategories,
+    staleTime: 5 * 60 * 1000 });
+  const downtimeLabels = new Map(downtimeCategories.map((category) => [category.value, category.label]));
 
   return (
     <div>
@@ -211,7 +206,7 @@ export default function OeeReportPage() {
               <StatCard
                 label="Overall OEE"
                 value={pct(data.overall.oee)}
-                helper={data.overall.oee >= 0.85 ? 'World-class' : data.overall.oee >= 0.6 ? 'On track' : 'Below benchmark'}
+                helper={data.display_policy && data.overall.oee >= data.display_policy.world_class_ratio ? 'World-class' : data.display_policy && data.overall.oee >= data.display_policy.on_track_ratio ? 'On track' : 'Below benchmark'}
               />
               <StatCard label="Availability" value={pct(data.overall.availability)} />
               <StatCard label="Performance" value={pct(data.overall.performance)} />
@@ -223,6 +218,7 @@ export default function OeeReportPage() {
                 availability={data.overall.availability}
                 performance={data.overall.performance}
                 quality={data.overall.quality}
+                displayPolicy={data.display_policy}
               />
             </Panel>
           </div>
@@ -231,13 +227,13 @@ export default function OeeReportPage() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             {/* Trend chart */}
             <div className="lg:col-span-2">
-              <Panel title="OEE trend" meta="benchmark 75%">
+              <Panel title="OEE trend" meta={data.benchmark_pct != null ? `benchmark ${data.benchmark_pct}%` : undefined}>
                 {data.trend.length === 0 ? (
                   <p className="text-sm text-muted">Window too large — trend down-sampling not yet implemented for &gt; 92 days.</p>
                 ) : (
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={data.trend.map((t) => ({ date: t.date, oee: t.oee * 100 }))}
+                      <LineChart data={data.trend.map((t) => ({ date: t.date, oee: t.oee == null ? null : t.oee * 100 }))}
                         margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
                         <XAxis
@@ -255,11 +251,10 @@ export default function OeeReportPage() {
                             background: 'var(--bg-elevated)',
                             border: '1px solid var(--border-default)',
                             borderRadius: 6,
-                            fontSize: 12,
-                          }}
+                            fontSize: 12 }}
                           formatter={(v: number) => [`${v.toFixed(1)}%`, 'OEE']}
                         />
-                        <ReferenceLine y={75} stroke="var(--success)" strokeDasharray="4 4" />
+                        {data.benchmark_pct != null && <ReferenceLine y={data.benchmark_pct} stroke="var(--success)" strokeDasharray="4 4" />}
                         <Line
                           type="monotone"
                           dataKey="oee"
@@ -288,7 +283,7 @@ export default function OeeReportPage() {
                       return (
                         <li key={d.category}>
                           <div className="flex items-center justify-between text-sm mb-1">
-                            <span>{DOWNTIME_LABELS[d.category] ?? d.category}</span>
+                            <span>{downtimeLabels.get(d.category) ?? d.category}</span>
                             <span className="font-mono tabular-nums text-muted">{fmtMinutes(d.minutes)}</span>
                           </div>
                           <div className="h-1 bg-subtle rounded-full overflow-hidden">
@@ -329,11 +324,11 @@ export default function OeeReportPage() {
                 </thead>
                 <tbody>
                   {data.machines.map((m: MachineOeeRow) => (
-                    <tr key={m.machine_id} className={cn(trCls, 'align-top')}>
+                    <tr key={m.machine_id} className={cn(cn(trCls, 'align-top'), "cursor-pointer")} onClick={() => navigate(`/mrp/machines/${m.machine_id}`)}>
                       <Td mono>
-                        <Link to={`/mrp/machines/${m.machine_id}`} className="text-accent hover:underline">
+                        
                           {m.machine_code}
-                        </Link>
+                        
                       </Td>
                       <Td>
                         <div>{m.name}</div>
@@ -342,10 +337,10 @@ export default function OeeReportPage() {
                         )}
                       </Td>
                       <Td>
-                        <Chip variant={machineStatusVariant(m.status)}>{m.status}</Chip>
+                        <Chip variant={machineStatusVariant(m.status)}>{m.status_label ?? m.status}</Chip>
                       </Td>
                       <Td className="min-w-[280px]">
-                        <OeeGauge result={m} compact />
+                        <OeeGauge result={m} displayPolicy={data.display_policy} compact />
                       </Td>
                       <Td align="right" mono>
                         {fmtMinutes(m.diagnostics.run_time)}

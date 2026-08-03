@@ -62,7 +62,7 @@ function TransferFormModal({ open, onClose }: { open: boolean; onClose: () => vo
           {...register('from_budget_line_id')}
           error={errors.from_budget_line_id?.message}
           required
-          placeholder="e.g. yR3kLm"
+          placeholder="Source budget ID"
           helper="Enter the budget line item ID (visible in budget detail)"
         />
         <Input
@@ -71,10 +71,10 @@ function TransferFormModal({ open, onClose }: { open: boolean; onClose: () => vo
           {...register('to_budget_line_id')}
           error={errors.to_budget_line_id?.message}
           required
-          placeholder="e.g. xP4mBn"
+          placeholder="Destination budget ID"
         />
         <Input
-          label="Amount (₱)"
+          label="Amount"
           type="number"
           step="0.01"
           min="0.01"
@@ -155,7 +155,7 @@ export default function BudgetTransfersPage() {
     },
     {
       key: 'status', header: 'Status',
-      cell: (r) => <Chip variant={statusVariant(r.status)}>{r.status}</Chip>,
+      cell: (r) => <Chip variant={statusVariant(r.status)}>{r.status_label ?? r.status}</Chip>,
     },
     {
       key: 'reason', header: 'Reason',

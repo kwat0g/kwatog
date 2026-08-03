@@ -21,15 +21,17 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ] as const;
 
-function coverageColor(pct: number): string {
-  if (pct > 80) return 'bg-success-bg border-success';
-  if (pct >= 60) return 'bg-warning-bg border-warning';
+function coverageColor(pct: number, successPct?: number, warningPct?: number): string {
+  if (successPct === undefined || warningPct === undefined) return 'bg-canvas border-default';
+  if (pct > successPct) return 'bg-success-bg border-success';
+  if (pct >= warningPct) return 'bg-warning-bg border-warning';
   return 'bg-danger-bg border-danger';
 }
 
-function coverageTextColor(pct: number): string {
-  if (pct > 80) return 'text-success';
-  if (pct >= 60) return 'text-warning';
+function coverageTextColor(pct: number, successPct?: number, warningPct?: number): string {
+  if (successPct === undefined || warningPct === undefined) return 'text-muted';
+  if (pct > successPct) return 'text-success';
+  if (pct >= warningPct) return 'text-warning';
   return 'text-danger';
 }
 
@@ -71,6 +73,8 @@ export default function LeaveCalendarPage() {
     const padding: (LeaveCalendarDay | null)[] = Array(firstDow).fill(null);
     return [...padding, ...data.days];
   }, [data]);
+  const successPct = data?.coverage_policy?.success_pct;
+  const warningPct = data?.coverage_policy?.warning_pct;
 
   return (
     <div>
@@ -162,7 +166,7 @@ export default function LeaveCalendarPage() {
                       <div className="max-w-[200px] text-left whitespace-normal">
                         {cell.employees_on_leave.map((e, j) => (
                           <div key={j} className="truncate">
-                            {e.employee_name} ({e.leave_type}) - {e.status.replace(/_/g, ' ')}
+                            {e.employee_name} ({e.leave_type}) - {e.status_label ?? e.status.replace(/_/g, ' ')}
                           </div>
                         ))}
                       </div>
@@ -183,7 +187,7 @@ export default function LeaveCalendarPage() {
                         ? 'ring-2 ring-accent'
                         : '',
                       cell.approved_count > 0 || cell.pending_count > 0
-                        ? coverageColor(cell.coverage_pct)
+                        ? coverageColor(cell.coverage_pct, successPct, warningPct)
                         : 'bg-canvas border-default',
                     )}
                   >
@@ -192,7 +196,7 @@ export default function LeaveCalendarPage() {
                         {new Date(cell.date + 'T00:00:00').getDate()}
                       </span>
                       {(cell.approved_count > 0 || cell.pending_count > 0) && (
-                        <span className={cn('text-2xs font-mono tabular-nums font-medium', coverageTextColor(cell.coverage_pct))}>
+                        <span className={cn('text-2xs font-mono tabular-nums font-medium', coverageTextColor(cell.coverage_pct, successPct, warningPct))}>
                           {cell.coverage_pct}%
                         </span>
                       )}
@@ -217,15 +221,15 @@ export default function LeaveCalendarPage() {
           <div className="flex items-center gap-4 mt-4 text-xs text-muted">
             <div className="flex items-center gap-1.5">
               <span className="w-3 h-3 rounded-sm bg-success-bg border border-success" />
-              &gt;80% present
+              &gt;{successPct ?? '—'}% present
             </div>
             <div className="flex items-center gap-1.5">
               <span className="w-3 h-3 rounded-sm bg-warning-bg border border-warning" />
-              60-80% present
+              {warningPct ?? '—'}-{successPct ?? '—'}% present
             </div>
             <div className="flex items-center gap-1.5">
               <span className="w-3 h-3 rounded-sm bg-danger-bg border border-danger" />
-              &lt;60% present
+              &lt;{warningPct ?? '—'}% present
             </div>
           </div>
         </div>
@@ -250,7 +254,7 @@ export default function LeaveCalendarPage() {
                         ? 'bg-success-bg text-success'
                         : 'bg-warning-bg text-warning',
                     )}>
-                      {emp.status.replace(/_/g, ' ')}
+                      {emp.status_label ?? emp.status.replace(/_/g, ' ')}
                     </span>
                   </div>
                 </div>

@@ -9,6 +9,7 @@ export interface MoldListParams extends ListParams {
 }
 
 export const moldsApi = {
+  options: () => client.get<{ data: { statuses: Array<{ value: string; label: string }>; warning_ratio_pct?: number } }>('/mrp/molds/options').then((r) => r.data.data),
   list: (params?: MoldListParams) =>
     client.get<PaginatedResponse<Mold>>('/mrp/molds', { params }).then((r) => r.data),
   show: (id: string) =>

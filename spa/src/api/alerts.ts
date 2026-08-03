@@ -4,7 +4,7 @@
  * Endpoints exposed by [`AlertController`](api/app/Common/Controllers/AlertController.php:1).
  */
 import { client } from './client';
-import type { Alert, AlertListParams, AlertUnreadCount } from '@/types/alerts';
+import type { Alert, AlertListParams, AlertUnreadCount, AlertSeverity } from '@/types/alerts';
 
 interface PaginatedAlerts {
   data: Alert[];
@@ -12,6 +12,8 @@ interface PaginatedAlerts {
 }
 
 export const alertsApi = {
+  options: () =>
+    client.get<{ data: { types: Array<{ value: string; label: string }>; severities: Array<{ value: AlertSeverity; label: string }> } }>('/alerts/options').then(r => r.data.data),
   list: (params?: AlertListParams) =>
     client.get<PaginatedAlerts>('/alerts', { params }).then(r => r.data),
 

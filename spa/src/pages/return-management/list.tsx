@@ -40,6 +40,11 @@ export default function ReturnManagementListPage() {
     queryFn: () => returnManagementApi.list(filters as Record<string, string | number | undefined>),
     placeholderData: (prev) => prev,
   });
+  const { data: options } = useQuery({
+    queryKey: ['return-management', 'options'],
+    queryFn: () => returnManagementApi.options(),
+    staleTime: 300_000,
+  });
 
   const columns: Column<ReturnRequest>[] = [
     {
@@ -106,27 +111,13 @@ export default function ReturnManagementListPage() {
       key: 'type',
       label: 'Type',
       type: 'select',
-      options: [
-        { value: '', label: 'All types' },
-        { value: 'customer_return', label: 'Customer return' },
-        { value: 'supplier_return', label: 'Supplier return' },
-      ],
+      options: [{ value: '', label: 'All types' }, ...(options?.types ?? [])],
     },
     {
       key: 'status',
       label: 'Status',
       type: 'select',
-      options: [
-        { value: '', label: 'All statuses' },
-        { value: 'draft', label: 'Draft' },
-        { value: 'pending_approval', label: 'Pending approval' },
-        { value: 'approved', label: 'Approved' },
-        { value: 'received', label: 'Received' },
-        { value: 'inspected', label: 'Inspected' },
-        { value: 'completed', label: 'Completed' },
-        { value: 'rejected', label: 'Rejected' },
-        { value: 'cancelled', label: 'Cancelled' },
-      ],
+      options: [{ value: '', label: 'All statuses' }, ...(options?.statuses ?? [])],
     },
   ];
 

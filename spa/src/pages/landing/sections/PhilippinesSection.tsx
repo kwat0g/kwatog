@@ -2,34 +2,25 @@
  * PhilippinesSection — Filipino identity, carried by words and place.
  *
  * Per the monochrome direction, national identity is textual and grounded:
- * world-class precision engineered by Filipino hands in Dasmariñas, Cavite —
+ * locally engineered precision manufacturing section —
  * no flag, no sun. The visual is a quiet location plate: a blueprint grid, a
  * datum mark at the plant's coordinates, and a precise address readout.
  */
 
 import { useLayoutEffect, useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import gsap from 'gsap';
 import { MapPin } from 'lucide-react';
 import { DatumMark } from '../components/DatumMark';
-import { COMPANY } from '../data';
+import { landingApi } from '@/api/landing';
 import { registerScrollTrigger, reduceMotion } from '../motion';
 
-const POINTS = [
-  {
-    k: '200+',
-    label: 'Skilled Filipino engineers, operators, and quality inspectors',
-  },
-  {
-    k: 'FCIE',
-    label: 'First Cavite Industrial Estate — Dasmariñas, Cavite',
-  },
-  {
-    k: '100%',
-    label: 'Global automotive standards, delivered locally',
-  },
-];
-
 export function PhilippinesSection() {
+  const { data: contact } = useQuery({ queryKey: ['landing', 'contact'], queryFn: landingApi.contact, staleTime: 300_000 });
+  const { data: content } = useQuery({ queryKey: ['landing', 'content'], queryFn: landingApi.content, staleTime: 300_000 });
+  const points = content?.philippines_points ?? [];
+  const copy = content?.philippines_copy;
+  const copyBody = (copy?.body ?? '').replace('{{company}}', contact?.legal_name ?? '—');
   const figureRef = useRef<HTMLElement>(null);
   const reticleRef = useRef<SVGCircleElement>(null);
   const hLineRef = useRef<HTMLDivElement>(null);
@@ -129,7 +120,7 @@ export function PhilippinesSection() {
           <div data-reveal className="flex items-center gap-3">
             <span className="h-0.5 w-8 bg-landing-accent" />
             <span className="font-mono text-[11px] uppercase tracking-[0.24em] text-landing-accent">
-              Filipino-made
+              {copy?.eyebrow ?? '—'}
             </span>
           </div>
 
@@ -138,8 +129,7 @@ export function PhilippinesSection() {
             data-reveal-delay="0.05"
             className="mt-5 font-display text-[clamp(2.1rem,4.8vw,3.75rem)] font-medium leading-[1.04] tracking-[-0.02em] text-landing-text"
           >
-            World-class precision,
-            <br className="hidden sm:block" /> proudly made at home.
+            {copy?.title ?? '—'}
           </h2>
 
           <p
@@ -147,22 +137,19 @@ export function PhilippinesSection() {
             data-reveal-delay="0.1"
             className="mt-5 max-w-xl font-sans text-[15px] leading-relaxed text-landing-text-secondary sm:text-base"
           >
-            {COMPANY.legalName} proves that the precision the world&apos;s automakers
-            demand can be engineered right here in Cavite. Every part is shaped by
-            skilled Filipino hands, held to the same standard trusted on assembly
-            lines across the globe.
+            {copyBody || '—'}
           </p>
 
           <dl className="mt-10 space-y-5">
-            {POINTS.map((p, i) => (
+            {points.map((p, i) => (
               <div
-                key={p.k}
+                key={`${p.value}-${p.label}`}
                 data-reveal
                 data-reveal-delay={(0.12 + i * 0.06).toFixed(2)}
                 className="flex items-baseline gap-5 border-t border-landing-border pt-5"
               >
                 <dt className="w-20 shrink-0 font-display text-2xl font-medium tracking-tight text-landing-accent">
-                  {p.k}
+                  {p.value}
                 </dt>
                 <dd className="font-sans text-[14px] leading-relaxed text-landing-text-secondary">
                   {p.label}
@@ -236,22 +223,22 @@ export function PhilippinesSection() {
             <div className="absolute left-1/2 top-[calc(50%+76px)] -translate-x-1/2 whitespace-nowrap text-center">
               <span className="flex items-center justify-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.16em] text-landing-text">
                 <MapPin size={13} className="text-landing-accent" />
-                Dasmariñas, Cavite
+                {contact?.address ?? '—'}
               </span>
             </div>
 
             {/* coordinate readouts */}
             <span className="absolute left-5 top-5 font-mono text-[10px] uppercase tracking-[0.18em] text-landing-muted">
-              14.3294° N
+                {typeof contact?.latitude === 'number' ? `${Math.abs(contact.latitude).toFixed(4)}° ${contact.latitude >= 0 ? 'N' : 'S'}` : '—'}
             </span>
             <span className="absolute right-5 top-5 font-mono text-[10px] uppercase tracking-[0.18em] text-landing-muted">
-              120.9367° E
+                {typeof contact?.longitude === 'number' ? `${Math.abs(contact.longitude).toFixed(4)}° ${contact.longitude >= 0 ? 'E' : 'W'}` : '—'}
             </span>
             <span className="absolute bottom-5 left-5 font-mono text-[10px] uppercase tracking-[0.18em] text-landing-subtle-text">
               Datum · plant origin
             </span>
             <span className="absolute bottom-5 right-5 font-mono text-[10px] uppercase tracking-[0.18em] text-landing-subtle-text">
-              Republic of the Philippines
+              {contact?.address?.split(',').at(-1)?.trim() ?? '—'}
             </span>
           </figure>
         </div>

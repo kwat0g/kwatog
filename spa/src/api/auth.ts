@@ -40,6 +40,7 @@ export interface ChangePasswordPayload {
   new_password: string;
   new_password_confirmation: string;
 }
+export interface PasswordPolicy { minimum_length: number; requires_uppercase: boolean; requires_lowercase: boolean; requires_digit: boolean; requires_special: boolean }
 
 export interface PreferencesPayload {
   theme_mode?: 'light' | 'dark' | 'system';
@@ -61,6 +62,7 @@ export const authApi = {
   me: async (): Promise<AuthUser> => {
     return (await client.get<AuthUser>('/auth/user')).data;
   },
+  passwordPolicy: async (): Promise<PasswordPolicy> => (await client.get<PasswordPolicy>('/auth/password-policy')).data,
 
   changePassword: async (payload: ChangePasswordPayload) => {
     const { data } = await client.post<{ message: string }>('/auth/change-password', payload);

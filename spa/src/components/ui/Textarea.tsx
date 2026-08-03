@@ -67,7 +67,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           className={cn(
             'min-h-[72px] px-3 py-2 rounded-md border bg-canvas text-sm resize-y',
             'focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent',
-            'placeholder:text-text-subtle',
+            'placeholder:text-subtle',
             error ? 'border-danger' : 'border-default',
             className,
           )}

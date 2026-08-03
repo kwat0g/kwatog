@@ -30,14 +30,6 @@ const CATEGORY_CHIP: Record<DocumentCategory, ChipVariant> = {
   specification: 'info',
 };
 
-const CATEGORY_LABELS: Record<DocumentCategory, string> = {
-  sop: 'SOP',
-  work_instruction: 'Work Instruction',
-  form: 'Form',
-  policy: 'Policy',
-  specification: 'Specification',
-};
-
 /** Returns true when the document is overdue for review. */
 function isOverdue(doc: ControlledDocument): boolean {
   if (!doc.review_interval_months || !doc.is_active) return false;
@@ -58,6 +50,12 @@ export default function DocumentsListPage() {
     queryFn: () => documentsApi.list(filters),
     placeholderData: (prev) => prev,
   });
+  const { data: documentOptions } = useQuery({
+    queryKey: ['quality', 'document-options'],
+    queryFn: documentsApi.options,
+    staleTime: 5 * 60 * 1000,
+  });
+  const categoryLabels = new Map((documentOptions?.categories ?? []).map((option) => [option.value, option.label]));
 
   const columns: Column<ControlledDocument>[] = [
     {
@@ -79,7 +77,7 @@ export default function DocumentsListPage() {
       header: 'Category',
       cell: (r) => (
         <Chip variant={CATEGORY_CHIP[r.category as DocumentCategory] ?? 'neutral'}>
-          {CATEGORY_LABELS[r.category as DocumentCategory] ?? r.category}
+          {categoryLabels.get(r.category) ?? r.category}
         </Chip>
       ),
     },
@@ -127,11 +125,7 @@ export default function DocumentsListPage() {
       type: 'select',
       options: [
         { value: '', label: 'All' },
-        { value: 'sop', label: 'SOP' },
-        { value: 'work_instruction', label: 'Work Instruction' },
-        { value: 'form', label: 'Form' },
-        { value: 'policy', label: 'Policy' },
-        { value: 'specification', label: 'Specification' },
+        ...(documentOptions?.categories ?? []),
       ],
     },
   ];

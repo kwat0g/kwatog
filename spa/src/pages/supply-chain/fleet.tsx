@@ -22,16 +22,23 @@ export default function FleetPage() {
     queryFn: () => vehiclesApi.list({ per_page: 100 }),
     placeholderData: (prev) => prev,
   });
+  const { data: vehicleOptions } = useQuery({
+    queryKey: ['supply-chain', 'vehicles', 'options'],
+    queryFn: () => vehiclesApi.options(),
+    staleTime: 300_000,
+  });
+  const statusLabels = Object.fromEntries((vehicleOptions?.statuses ?? []).map((option) => [option.value, option.label]));
+  const typeLabels = Object.fromEntries((vehicleOptions?.types ?? []).map((option) => [option.value, option.label]));
 
   const columns: Column<Vehicle>[] = [
     { key: 'plate', header: 'Plate',
       cell: (r) => <span className="font-mono">{r.plate_number}</span> },
     { key: 'name', header: 'Name', cell: (r) => r.name },
-    { key: 'type', header: 'Type', cell: (r) => <Chip variant="neutral">{r.vehicle_type}</Chip> },
+    { key: 'type', header: 'Type', cell: (r) => <Chip variant="neutral">{typeLabels[r.vehicle_type] ?? r.vehicle_type}</Chip> },
     { key: 'capacity', header: 'Capacity (kg)', align: 'right',
       cell: (r) => <NumCell>{r.capacity_kg ?? '—'}</NumCell> },
     { key: 'status', header: 'Status',
-      cell: (r) => <Chip variant={STATUS_CHIP[r.status] ?? 'neutral'}>{r.status.replace('_', ' ')}</Chip> },
+      cell: (r) => <Chip variant={STATUS_CHIP[r.status] ?? 'neutral'}>{statusLabels[r.status] ?? r.status}</Chip> },
   ];
 
   return (

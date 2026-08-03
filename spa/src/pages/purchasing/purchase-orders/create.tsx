@@ -21,7 +21,7 @@ import { Switch } from '@/components/ui/Switch';
 import { Textarea } from '@/components/ui/Textarea';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { applyServerValidationErrors, onFormInvalid } from '@/lib/formErrors';
-import { formatInt } from '@/lib/formatNumber';
+import { formatPeso } from '@/lib/formatNumber';
 import { numberInputProps } from '@/lib/numberInput';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { cn } from '@/lib/cn';
@@ -38,7 +38,7 @@ const schema = z.object({
   vendor_id: z.string().min(1, 'Vendor is required.'),
   date: z.string().min(1, 'Date is required.'),
   expected_delivery_date: z.string().optional().or(z.literal('')),
-  is_vatable: z.boolean().default(true),
+  is_vatable: z.boolean(),
   remarks: z.string().max(1000).optional().or(z.literal('')),
   items: z.array(lineSchema).min(1, 'Add at least one line.'),
 }).refine((d) => !d.expected_delivery_date || d.expected_delivery_date >= d.date, {
@@ -71,18 +71,22 @@ export default function CreatePurchaseOrderPage() {
     queryFn: () => purchaseRequestsApi.show(prId!),
     enabled: !!prId,
   });
+  const vatStatus = policies.data?.vat_status;
 
-  const { register, handleSubmit, setError, control, watch, reset, formState: { errors, isSubmitting } } = useForm<V>({
+  const { register, handleSubmit, setError, setValue, control, watch, reset, formState: { errors, isSubmitting } } = useForm<V>({
     resolver: zodResolver(schema),
     defaultValues: {
       vendor_id: '',
       date: new Date().toISOString().slice(0, 10),
       expected_delivery_date: '',
-      is_vatable: true,
+      is_vatable: undefined as unknown as boolean,
       remarks: '',
-      items: [{ item_id: '', description: '', quantity: '1', unit: 'pcs', unit_price: '0' }],
+      items: [{ item_id: '', description: '', quantity: '', unit: '', unit_price: '' }],
     },
   });
+  useEffect(() => {
+    if (vatStatus) setValue('is_vatable', vatStatus === 'VAT Registered');
+  }, [vatStatus, setValue]);
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
 
   // Pre-fill from PR.
@@ -92,18 +96,18 @@ export default function CreatePurchaseOrderPage() {
         vendor_id: '',
         date: new Date().toISOString().slice(0, 10),
         expected_delivery_date: '',
-        is_vatable: true,
+        is_vatable: vatStatus === 'VAT Registered',
         remarks: `Auto-generated from PR ${pr.pr_number}`,
         items: pr.items.map((i) => ({
           item_id: i.item?.id ?? '',
           description: i.description,
           quantity: i.quantity,
-          unit: i.unit ?? 'pcs',
-          unit_price: i.estimated_unit_price ?? '0',
+          unit: i.unit ?? i.item?.unit_of_measure ?? '',
+          unit_price: i.estimated_unit_price ?? '',
         })),
       });
     }
-  }, [pr, reset]);
+  }, [pr, reset, vatStatus]);
 
   const watchedItems = watch('items');
   const isVatable = watch('is_vatable');
@@ -181,7 +185,7 @@ export default function CreatePurchaseOrderPage() {
               size="sm"
               variant="secondary"
               icon={<Plus size={12} />}
-              onClick={() => append({ item_id: '', description: '', quantity: '1', unit: 'pcs', unit_price: '0' })}
+          onClick={() => append({ item_id: '', description: '', quantity: '', unit: '', unit_price: '' })}
             >
               Add line
             </Button>
@@ -272,19 +276,19 @@ export default function CreatePurchaseOrderPage() {
               ))}
               <tr className={trCls}>
                 <Td align="right" mono className="text-muted" colSpan={5}>Subtotal</Td>
-                <Td align="right" mono>₱ {subtotal.toFixed(2)}</Td>
+                <Td align="right" mono>{formatPeso(subtotal)}</Td>
                 <Td />
               </tr>
               {isVatable && (
                 <tr className={trCls}>
                   <Td align="right" mono className="text-muted" colSpan={5}>VAT ({vatRateLabel})</Td>
-                  <Td align="right" mono>₱ {vat.toFixed(2)}</Td>
+                  <Td align="right" mono>{formatPeso(vat)}</Td>
                   <Td />
                 </tr>
               )}
               <tr className={cn(trCls, 'font-medium')}>
                 <Td align="right" mono className="uppercase text-2xs tracking-wider" colSpan={5}>Total</Td>
-                <Td align="right" mono>₱ {total.toFixed(2)}</Td>
+                <Td align="right" mono>{formatPeso(total)}</Td>
                 <Td />
               </tr>
             </tbody>
@@ -304,10 +308,10 @@ export default function CreatePurchaseOrderPage() {
         description={
           pendingValues ? (
             <>
-              Total <span className="font-mono font-medium text-primary">₱ {total.toFixed(2)}</span>.
+              Total <span className="font-mono font-medium text-primary">{formatPeso(total)}</span>.
               {requiresVp && (
                 <span className="block mt-1 text-warning-fg">
-                  Total ≥ ₱ {formatInt(policies.data?.purchase_order_vp_threshold ?? 0)} — VP approval will be required before send.
+                  Total ≥ {formatPeso(policies.data?.purchase_order_vp_threshold ?? 0)} — VP approval will be required before send.
                 </span>
               )}
             </>

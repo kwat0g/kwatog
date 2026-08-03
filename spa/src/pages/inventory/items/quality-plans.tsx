@@ -25,8 +25,8 @@ type DraftParameter = QualityPlanParameter & {
   tolerance_max: number | null;
 };
 
-const blankParameter = (): DraftParameter => ({
-  parameter_name: '', parameter_type: 'visual', unit_of_measure: '',
+const blankParameter = (parameterType = ''): DraftParameter => ({
+  parameter_name: '', parameter_type: parameterType as QualityPlanParameter['parameter_type'], unit_of_measure: '',
   nominal_value: null, tolerance_min: null, tolerance_max: null, is_critical: false, notes: '',
 });
 
@@ -36,27 +36,30 @@ export default function ItemQualityPlansPage() {
   const { can } = usePermission();
   const canManage = can('quality.specs.manage');
   const [vendorId, setVendorId] = useState('');
-  const [sampling, setSampling] = useState<'aql' | 'fixed' | 'full'>('aql');
-  const [fixedSize, setFixedSize] = useState('5');
+  const [sampling, setSampling] = useState<string>('');
+  const [fixedSize, setFixedSize] = useState('');
   const [notes, setNotes] = useState('');
   const [parameters, setParameters] = useState<DraftParameter[]>([blankParameter()]);
 
   const item = useQuery({ queryKey: ['inventory', 'items', id], queryFn: () => itemsApi.show(id), enabled: !!id });
   const plans = useQuery({ queryKey: ['inventory', 'quality-plans', id], queryFn: () => itemQualityPlansApi.list(id), enabled: !!id });
   const vendors = useQuery({ queryKey: ['vendors', 'quality-plan-picker'], queryFn: () => vendorsApi.list({ per_page: 100, is_active: true }) });
+  const planOptions = useQuery({ queryKey: ['inventory', 'quality-plans', 'options'], queryFn: () => itemQualityPlansApi.options() });
+  const samplingOptions = planOptions.data?.sampling_methods ?? [];
+  const parameterOptions = planOptions.data?.parameter_types ?? [];
 
   const save = useMutation({
     mutationFn: () => itemQualityPlansApi.createRevision(id, {
       vendor_id: vendorId || null,
-      sampling_method: sampling,
+      sampling_method: sampling as Parameters<typeof itemQualityPlansApi.createRevision>[1]['sampling_method'],
       fixed_sample_size: sampling === 'fixed' ? Number(fixedSize) : null,
-      aql_level: sampling === 'aql' ? 'general_ii' : null,
+      aql_level: sampling === 'aql' ? (planOptions.data?.default_aql_level || null) : null,
       notes: notes || null,
       parameters,
     }),
     onSuccess: () => {
       toast.success('Quality-plan revision published.');
-      setNotes(''); setParameters([blankParameter()]);
+      setNotes(''); setParameters([blankParameter(parameterOptions[0]?.value ?? '')]);
       queryClient.invalidateQueries({ queryKey: ['inventory', 'quality-plans', id] });
       queryClient.invalidateQueries({ queryKey: ['inventory', 'items', id] });
     },
@@ -90,7 +93,8 @@ export default function ItemQualityPlansPage() {
                 {(vendors.data?.data ?? []).map((vendor) => <option key={vendor.id} value={vendor.id}>{vendor.name}</option>)}
               </Select>
               <Select label="Sampling" value={sampling} onChange={(event) => setSampling(event.target.value as typeof sampling)}>
-                <option value="aql">AQL General II</option><option value="fixed">Fixed sample</option><option value="full">100% inspection</option>
+                <option value="">— Select —</option>
+                {samplingOptions.map((method) => <option key={method.value} value={method.value}>{method.label}</option>)}
               </Select>
               {sampling === 'fixed' && <Input label="Sample size" type="number" min={1} max={1000} value={fixedSize} onChange={(event) => setFixedSize(event.target.value)} />}
             </div>
@@ -101,7 +105,7 @@ export default function ItemQualityPlansPage() {
                 <div key={index} className="rounded-md border border-subtle p-3 grid grid-cols-2 md:grid-cols-6 gap-2">
                   <Input containerClassName="col-span-2" placeholder="Parameter name" value={parameter.parameter_name} onChange={(e) => updateParameter(index, { parameter_name: e.target.value })} />
                   <Select value={parameter.parameter_type} onChange={(e) => updateParameter(index, { parameter_type: e.target.value as DraftParameter['parameter_type'] })}>
-                    <option value="visual">Visual</option><option value="dimensional">Dimensional</option><option value="functional">Functional</option>
+                    {parameterOptions.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
                   </Select>
                   <Input placeholder="Unit" value={parameter.unit_of_measure ?? ''} onChange={(e) => updateParameter(index, { unit_of_measure: e.target.value })} />
                   <Input type="number" step="any" placeholder="Min" value={parameter.tolerance_min ?? ''} onChange={(e) => updateParameter(index, { tolerance_min: e.target.value === '' ? null : Number(e.target.value) })} />

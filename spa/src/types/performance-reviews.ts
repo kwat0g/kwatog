@@ -7,6 +7,7 @@ export interface ReviewCycle {
   name: string;
   cycle_type: CycleType;
   status: CycleStatus;
+  status_label?: string;
   start_date: string;
   end_date: string;
   created_at: string;
@@ -18,8 +19,10 @@ export interface PerformanceReview {
   employee: { id: string; first_name: string; last_name: string };
   reviewer: { id: string; first_name: string; last_name: string };
   status: ReviewStatus;
+  status_label?: string;
   overall_score: string | null;
   overall_rating: string | null;
+  overall_rating_label?: string | null;
   submitted_at: string | null;
   acknowledged_at: string | null;
 }

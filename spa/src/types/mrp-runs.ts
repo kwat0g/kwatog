@@ -9,6 +9,7 @@ export interface MrpRun {
   id: string;            // hash_id
   run_at: string;
   triggered_by: MrpRunTrigger;
+  triggered_by_label?: string;
   triggered_by_user: { id: string; name: string } | null;
   sales_orders_evaluated: number;
   shortages_found: number;
@@ -17,6 +18,7 @@ export interface MrpRun {
   plans_generated: number;
   duration_ms: number | null;
   status: MrpRunStatus;
+  status_label?: string;
   error_message: string | null;
   summary: Record<string, unknown>;
   created_at: string;

@@ -27,7 +27,7 @@ const schema = z.object({
   position_id: z.string().optional(),
   description: z.string().min(1, 'Description is required'),
   requirements: z.string().min(1, 'At least one requirement is needed'),
-  employment_type: z.enum(['regular', 'probationary', 'contractual', 'project_based']),
+  employment_type: z.string().min(1, 'Employment type is required'),
   salary_range_min: z.string().optional(),
   salary_range_max: z.string().optional(),
   show_salary: z.boolean().optional(),
@@ -53,8 +53,8 @@ export default function PostingCreatePage() {
   } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
-      employment_type: 'regular',
-      slots: 1,
+      employment_type: '',
+      slots: undefined as unknown as number,
       show_salary: false,
       requirements: '',
     },
@@ -66,6 +66,12 @@ export default function PostingCreatePage() {
     queryKey: ['departments'],
     queryFn: () => departmentsApi.list().then((r) => r.data ?? []),
   });
+
+  const { data: optionsResponse } = useQuery({
+    queryKey: ['recruitment-options'],
+    queryFn: () => recruitmentApi.options().then((r) => r.data.data),
+  });
+  const employmentTypes = optionsResponse?.employment_types ?? [];
 
   const { data: positionsData } = useQuery({
     queryKey: ['positions', departmentId],
@@ -102,7 +108,7 @@ export default function PostingCreatePage() {
   };
 
   const mutation = useMutation({
-    mutationFn: (data: FormData) => recruitmentApi.createPosting(data),
+    mutationFn: (data: FormData) => recruitmentApi.createPosting(data as Parameters<typeof recruitmentApi.createPosting>[0]),
     onSuccess: (res: { data: { data: { id: string } } }) => {
       toast.success('Job posting created.');
       queryClient.invalidateQueries({ queryKey: ['recruitment-postings'] });
@@ -137,7 +143,7 @@ export default function PostingCreatePage() {
       <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormData>())} className="max-w-5xl mx-auto px-5 py-4 space-y-4">
         <Panel title="Job Details">
           <div className="space-y-4">
-            <Input label="Job Title" required {...register('title')} placeholder="e.g. Injection Molding Operator" error={errors.title?.message} />
+            <Input label="Job Title" required {...register('title')} placeholder="Position title" error={errors.title?.message} />
 
             <div className="grid gap-4 grid-cols-2 lg:grid-cols-3">
               <Select label="Department" required {...register('department_id')} error={errors.department_id?.message}>
@@ -155,10 +161,8 @@ export default function PostingCreatePage() {
               </Select>
 
               <Select label="Employment Type" required {...register('employment_type')}>
-                <option value="regular">Regular</option>
-                <option value="probationary">Probationary</option>
-                <option value="contractual">Contractual</option>
-                <option value="project_based">Project-Based</option>
+                <option value="">Select employment type</option>
+                {employmentTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
               </Select>
             </div>
 

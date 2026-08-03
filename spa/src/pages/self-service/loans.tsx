@@ -1,5 +1,5 @@
 /** U3 — Self-service > Loans. Lists active + history; lets employee apply. */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -17,40 +17,41 @@ import type { SelfServiceLoan, SelfServiceLoansResponse } from '@/types/self-ser
 import { tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { formatDate } from '@/lib/formatDate';
 import { cn } from '@/lib/cn';
+import { formatPeso } from '@/lib/formatNumber';
 
 const schema = z.object({
   loan_type: z.string().min(1, 'Required'),
   amount: z.coerce.number().positive('Must be > 0'),
-  periods: z.coerce.number().int().min(1).max(24),
+  periods: z.coerce.number().int().min(1),
   reason: z.string().max(500).optional().or(z.literal('')),
 });
 
 type FormValues = z.infer<typeof schema>;
 
-function loanColumns(active: boolean): Column<SelfServiceLoan>[] {
+function loanColumns(active: boolean, loanTypeLabels: ReadonlyMap<string, string>): Column<SelfServiceLoan>[] {
   return [
     {
       key: 'loan_type',
       header: 'Type',
-      cell: (l) => <span className="font-medium">{l.loan_type ?? 'Loan'}</span>,
+      cell: (l) => <span className="font-medium">{l.loan_type_label ?? (l.loan_type ? loanTypeLabels.get(l.loan_type) ?? l.loan_type : 'Loan')}</span>,
     },
     {
       key: 'principal',
       header: 'Principal',
       align: 'right',
-      cell: (l) => <NumCell>₱ {l.principal}</NumCell>,
+      cell: (l) => <NumCell>{formatPeso(l.principal)}</NumCell>,
     },
     {
       key: 'outstanding_balance',
       header: 'Outstanding',
       align: 'right',
-      cell: (l) => <NumCell className="font-medium">₱ {l.outstanding_balance}</NumCell>,
+      cell: (l) => <NumCell className="font-medium">{formatPeso(l.outstanding_balance)}</NumCell>,
     },
     {
       key: 'monthly_amortization',
       header: 'Amortization',
       align: 'right',
-      cell: (l) => <NumCell>₱ {l.monthly_amortization}</NumCell>,
+      cell: (l) => <NumCell>{formatPeso(l.monthly_amortization)}</NumCell>,
     },
     {
       key: 'progress',
@@ -82,7 +83,7 @@ function loanColumns(active: boolean): Column<SelfServiceLoan>[] {
               : 'success'
           }
         >
-          {l.status.replace(/_/g, ' ')}
+          {l.status_label ?? l.status}
         </Chip>
       ),
     },
@@ -115,6 +116,7 @@ export default function SelfServiceLoansPage() {
   });
 
   const totalCount = (data?.active.length ?? 0) + (data?.history.length ?? 0);
+  const loanTypeLabels = new Map((data?.loan_types ?? []).map((type) => [type.value, type.label]));
 
   return (
     <div>
@@ -161,7 +163,7 @@ export default function SelfServiceLoansPage() {
             <h2 className="text-2xs uppercase tracking-wider text-muted font-medium mb-2">
               Active · {data.active.length}
             </h2>
-            <DataTable columns={loanColumns(true)} data={data.active} stickyHeader={false} />
+            <DataTable columns={loanColumns(true, loanTypeLabels)} data={data.active} stickyHeader={false} />
           </section>
         )}
 
@@ -170,7 +172,7 @@ export default function SelfServiceLoansPage() {
             <h2 className="text-2xs uppercase tracking-wider text-muted font-medium mb-2">
               History · {data.history.length}
             </h2>
-            <DataTable columns={loanColumns(false)} data={data.history} stickyHeader={false} />
+            <DataTable columns={loanColumns(false, loanTypeLabels)} data={data.history} stickyHeader={false} />
           </section>
         )}
 
@@ -179,6 +181,8 @@ export default function SelfServiceLoansPage() {
           onClose={() => setShowApply(false)}
           onSubmit={(v) => apply.mutate(v)}
           pending={apply.isPending}
+          loanTypes={data?.loan_types ?? []}
+          maxPayPeriods={data?.max_pay_periods}
         />
       </div>
     </div>
@@ -190,11 +194,15 @@ function ApplyLoanModal({
   onClose,
   onSubmit,
   pending,
+  loanTypes,
+  maxPayPeriods,
 }: {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (v: FormValues) => void;
   pending: boolean;
+  loanTypes: Array<{ value: string; label: string }>;
+  maxPayPeriods?: number;
 }) {
   const {
     register,
@@ -204,8 +212,16 @@ function ApplyLoanModal({
     watch,
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { loan_type: 'company_loan', amount: 0, periods: 6, reason: '' },
+    // The permitted period count is returned by the live loan-limits query;
+    // require the employee to choose it rather than using a stale default.
+    defaultValues: { loan_type: '', amount: undefined as unknown as number, reason: '' },
   });
+
+  useEffect(() => {
+    if (loanTypes.length > 0 && !watch('loan_type')) {
+      reset((current) => ({ ...current, loan_type: loanTypes[0].value }));
+    }
+  }, [loanTypes, reset, watch]);
 
   const watchedAmount = watch('amount');
   const watchedPeriods = watch('periods');
@@ -241,8 +257,7 @@ function ApplyLoanModal({
           error={errors.loan_type?.message}
           required
         >
-          <option value="company_loan">Company Loan</option>
-          <option value="cash_advance">Cash Advance</option>
+          {loanTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
         </Select>
         <div className="grid grid-cols-2 gap-3">
           <Input
@@ -258,6 +273,7 @@ function ApplyLoanModal({
           <Input
             label="Periods (months)"
             type="number"
+            max={maxPayPeriods}
             {...register('periods')}
             error={errors.periods?.message}
             required
@@ -271,7 +287,7 @@ function ApplyLoanModal({
               {previewLoading && <span className="font-mono tabular-nums">…</span>}
               {!previewLoading && preview && (
                 <span className="font-mono tabular-nums font-medium text-primary">
-                  ₱{preview.monthly_amortization}
+                  {formatPeso(preview.monthly_amortization)}
                 </span>
               )}
             </div>
@@ -289,8 +305,8 @@ function ApplyLoanModal({
                     {preview.schedule.slice(0, 24).map((row) => (
                       <tr key={row.period} className={trCls}>
                         <Td>{row.period}</Td>
-                        <Td align="right" mono>₱{row.amount}</Td>
-                        <Td align="right" mono className="text-muted">₱{row.running_balance}</Td>
+                        <Td align="right" mono>{formatPeso(row.amount)}</Td>
+                        <Td align="right" mono className="text-muted">{formatPeso(row.running_balance)}</Td>
                       </tr>
                     ))}
                   </tbody>

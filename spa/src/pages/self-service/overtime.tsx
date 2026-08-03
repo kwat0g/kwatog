@@ -38,8 +38,6 @@ const STATUS_CHIP: Record<OvertimeStatus, 'success' | 'warning' | 'danger'> = {
   rejected: 'danger',
 };
 
-const HOUR_OPTIONS = [1, 1.5, 2, 3, 4];
-const OT_PREMIUM = 1.25;
 
 function todayIso(): string {
   // Local YYYY-MM-DD (avoids UTC off-by-one from toISOString()).
@@ -85,7 +83,7 @@ function requestColumns(onCancel?: (id: string) => void): Column<SelfServiceOver
       header: 'Status',
       cell: (r) => (
         <Chip variant={r.status ? STATUS_CHIP[r.status] : 'neutral'}>
-          {r.status === 'pending' ? 'Pending approval' : r.status ?? '—'}
+          {r.status_label ?? r.status ?? '—'}
         </Chip>
       ),
     },
@@ -202,16 +200,19 @@ export default function SelfServiceOvertimePage() {
           </section>
         )}
 
-        <ApplyOvertimeModal
+        {data && <ApplyOvertimeModal
           isOpen={modalOpen}
           onClose={() => setModalOpen(false)}
           shift={data?.todays_shift ?? null}
           hourlyRate={data?.hourly_rate ?? null}
+          minimumHours={data.minimum_hours}
+          maximumHours={data.maximum_hours}
+          premiumMultiplier={data.premium_multiplier}
           onApplied={() => {
             queryClient.invalidateQueries({ queryKey: ['self-service', 'overtime'] });
             setModalOpen(false);
           }}
-        />
+        />}
 
         <ConfirmDialog
           isOpen={confirmCancel !== null}
@@ -234,31 +235,37 @@ function ApplyOvertimeModal({
   onClose,
   shift,
   hourlyRate,
+  minimumHours,
+  maximumHours,
+  premiumMultiplier,
   onApplied,
 }: {
   isOpen: boolean;
   onClose: () => void;
   shift: { name: string; time_in: string; time_out: string } | null;
   hourlyRate: string | null;
+  minimumHours: number;
+  maximumHours: number;
+  premiumMultiplier: number;
   onApplied: () => void;
 }) {
   const [date, setDate] = useState(todayIso());
-  const [hours, setHours] = useState<number>(2);
+  const [hours, setHours] = useState<number>(minimumHours);
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const estimate = useMemo(() => {
     const rate = Number(hourlyRate ?? 0);
     if (!rate) return null;
-    return rate * hours * OT_PREMIUM;
-  }, [hourlyRate, hours]);
+    return rate * hours * premiumMultiplier;
+  }, [hourlyRate, hours, premiumMultiplier]);
 
   const mutation = useMutation({
     mutationFn: (payload: ApplyOvertimePayload) => selfServiceApi.applyOvertime(payload),
     onSuccess: () => {
       toast.success('Overtime request submitted for approval.');
       setReason('');
-      setHours(2);
+      setHours(minimumHours);
       setDate(todayIso());
       onApplied();
     },
@@ -294,7 +301,7 @@ function ApplyOvertimeModal({
           <div>
             <label className="text-xs text-muted font-medium">Hours</label>
             <div className="flex flex-wrap gap-1.5 mt-1">
-              {HOUR_OPTIONS.map((h) => (
+              {Array.from({ length: Math.max(0, Math.floor((maximumHours - minimumHours) / 0.5) + 1) }, (_, i) => minimumHours + i * 0.5).map((h) => (
                 <button
                   key={h}
                   type="button"
@@ -312,7 +319,7 @@ function ApplyOvertimeModal({
                 </button>
               ))}
             </div>
-            <p className="text-2xs text-muted mt-1">Maximum 4 hours per day.</p>
+            <p className="text-2xs text-muted mt-1">Maximum {maximumHours} hours per day.</p>
           </div>
         </div>
 
@@ -341,7 +348,7 @@ function ApplyOvertimeModal({
             <div className="flex justify-between">
               <span className="text-muted">Estimated pay</span>
               <span className="font-mono tabular-nums text-primary">
-                {formatPeso(hourlyRate ?? 0)}/hr × {hours.toFixed(1)} × {OT_PREMIUM} ={' '}
+                {formatPeso(hourlyRate)}/hr × {hours.toFixed(1)} × {premiumMultiplier} ={' '}
                 <span className="font-medium">{formatPeso(estimate)}</span>
               </span>
             </div>

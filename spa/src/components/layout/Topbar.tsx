@@ -15,6 +15,8 @@ import { BrandLogo } from '@/components/brand/BrandLogo';
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { useTheme } from '@/hooks/useTheme';
 import { focusRing } from '@/lib/focus';
+import { useQuery } from '@tanstack/react-query';
+import { landingApi } from '@/api/landing';
 
 interface TopbarProps {
   user?: { name: string; email: string } | null;
@@ -29,6 +31,11 @@ export function Topbar({ user, onLogout, rightExtras }: TopbarProps) {
   const mobileOpen = useSidebarStore((s) => s.mobileOpen);
   const { resolvedTheme, toggle } = useTheme();
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const { data: contact } = useQuery({
+    queryKey: ['landing', 'contact'],
+    queryFn: landingApi.contact,
+    staleTime: 300_000,
+  });
 
   const handleMenuClick = () => {
     if (window.innerWidth < 768) {
@@ -64,7 +71,7 @@ export function Topbar({ user, onLogout, rightExtras }: TopbarProps) {
 
       <Link to="/dashboard" className="flex items-center gap-2 shrink-0">
         <BrandLogo invertOnDark alt="" className="h-7" />
-        <span className="text-sm font-display font-medium text-primary hidden sm:inline">Ogami ERP</span>
+        <span className="text-sm font-medium text-primary hidden sm:inline">{contact?.legal_name ?? '—'}</span>
       </Link>
 
       <div className="hidden md:flex h-full items-center pl-3 ml-1 border-l border-default">
@@ -81,7 +88,7 @@ export function Topbar({ user, onLogout, rightExtras }: TopbarProps) {
       >
         <Search size={12} />
         <span className="flex-1 text-left">Search…</span>
-        <kbd className="font-mono text-2xs text-text-subtle">⌘K</kbd>
+        <kbd className="font-mono text-2xs text-subtle">⌘K</kbd>
       </button>
 
       <Tooltip content={resolvedTheme === 'dark' ? 'Light mode' : 'Dark mode'}>

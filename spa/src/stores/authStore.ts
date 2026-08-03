@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { authApi, type AuthUser, type LoginPayload } from '@/api/auth';
 import { queryClient } from '@/lib/queryClient';
 import { useThemeStore } from './themeStore';
+import { setFunctionalCurrency } from '@/lib/runtimeCurrency';
 
 interface AuthState {
   user: AuthUser | null;
@@ -29,6 +30,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const user = await authApi.me();
       get().applyUser(user);
     } catch {
+      setFunctionalCurrency(null);
       set({ user: null, permissions: new Set(), features: new Set(), isAuthenticated: false });
     } finally {
       set({ isLoading: false });
@@ -49,6 +51,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       await authApi.logout();
     } finally {
+      setFunctionalCurrency(null);
       set({ user: null, permissions: new Set(), features: new Set(), isAuthenticated: false });
       // Wipe all cached query data so the next user on this terminal can
       // never see the previous user's lists (payroll, employees, etc.).

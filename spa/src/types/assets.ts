@@ -7,6 +7,7 @@ export interface Asset {
   name: string;
   description: string | null;
   category: AssetCategory;
+  category_label?: string;
   department?: { id: string; name: string; code: string } | null;
   acquisition_date: string;
   acquisition_cost: string;
@@ -16,6 +17,7 @@ export interface Asset {
   monthly_depreciation: string;
   book_value: string;
   status: AssetStatus;
+  status_label?: string;
   disposed_date: string | null;
   disposal_amount: string | null;
   location: string | null;
@@ -63,6 +65,7 @@ export interface AssetTransfer {
   reason: string | null;
   transfer_date: string;
   status: AssetTransferStatus;
+  status_label?: string;
   requested_by: string;
   approved_by: string | null;
   approved_at: string | null;

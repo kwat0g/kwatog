@@ -39,7 +39,7 @@ export default function PrTemplateFormPage() {
   const [notes, setNotes] = useState('');
   const [departmentId, setDepartmentId] = useState('');
   const [lines, setLines] = useState<LineRow[]>([
-    { key: nextKey++, item_id: '', description: '', quantity: '1', unit: '', estimated_unit_price: '' },
+    { key: nextKey++, item_id: '', description: '', quantity: '', unit: '', estimated_unit_price: '' },
   ]);
 
   // Load existing template for edit mode
@@ -103,7 +103,7 @@ export default function PrTemplateFormPage() {
     onError: (e) => toast.error(errMsg(e, 'Failed to save template.')),
   });
 
-  const addLine = () => setLines((prev) => [...prev, { key: nextKey++, item_id: '', description: '', quantity: '1', unit: '', estimated_unit_price: '' }]);
+  const addLine = () => setLines((prev) => [...prev, { key: nextKey++, item_id: '', description: '', quantity: '', unit: '', estimated_unit_price: '' }]);
   const removeLine = (key: number) => setLines((prev) => prev.filter((l) => l.key !== key));
   const updateLine = (key: number, field: keyof LineRow, value: string) =>
     setLines((prev) => prev.map((l) => (l.key === key ? { ...l, [field]: value } : l)));
@@ -126,7 +126,7 @@ export default function PrTemplateFormPage() {
       <div className="px-5 py-4 max-w-3xl space-y-4">
         <Panel title="Template details">
           <div className="space-y-3">
-            <Input label="Template name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Monthly office supplies" required />
+            <Input label="Template name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Template name" required />
             <div className="grid grid-cols-2 gap-3">
               <Select label="Department" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
                 <option value="">All departments</option>

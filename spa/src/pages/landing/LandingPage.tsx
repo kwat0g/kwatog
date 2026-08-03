@@ -1,5 +1,5 @@
 /**
- * LandingPage — public, customer-facing marketing site for Philippine Ogami
+ * LandingPage — public, customer-facing marketing site.
  * Corporation. Light, monochrome canvas with a single warm-graphite accent, mirroring
  * the ERP design system; theme-independent, built to win trust and quotes.
  *
@@ -9,6 +9,7 @@
  */
 
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useQuery } from '@tanstack/react-query';
 
 // Self-hosted display face (Fontsource → same-origin → CSP-safe).
 import '@fontsource-variable/bricolage-grotesque/wght.css';
@@ -18,6 +19,7 @@ import { LandingFooter } from './components/LandingFooter';
 import { CookieBanner } from './components/CookieBanner';
 import { BackToTop } from './components/BackToTop';
 import { FloatingQuoteButton } from './components/FloatingQuoteButton';
+import { QuoteModal } from './components/QuoteModal';
 import { CrosshairCursor } from './components/CrosshairCursor';
 import { ScrollProgress } from './components/ScrollProgress';
 import { HeroSection } from './sections/HeroSection';
@@ -30,7 +32,7 @@ import { QualitySection } from './sections/QualitySection';
 import { PhilippinesSection } from './sections/PhilippinesSection';
 import { ContactSection } from './sections/ContactSection';
 import { useLandingMotion } from './motion';
-import { COMPANY } from './data';
+import { landingApi } from '@/api/landing';
 
 /**
  * Spread `inert` (+ aria-hidden) onto a wrapper when `active`, so background
@@ -59,15 +61,41 @@ const WARM_ACCENT: CSSProperties = {
 export default function LandingPage() {
   const rootRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [quoteOpen, setQuoteOpen] = useState(false);
+  const { data: contact } = useQuery({ queryKey: ['landing', 'contact'], queryFn: landingApi.contact, staleTime: 300_000 });
+  const { data: content } = useQuery({ queryKey: ['landing', 'content'], queryFn: landingApi.content, staleTime: 300_000 });
   useLandingMotion(rootRef);
 
   useEffect(() => {
     const prev = document.title;
-    document.title = `${COMPANY.legalName} — Precision Plastic Injection Molding`;
+    const company = contact?.legal_name || 'Philippine Ogami Corporation';
+    const suffix = content?.section_copy?.page_title_suffix || 'Precision Injection Molding & ERP';
+    document.title = `${company} — ${suffix}`;
     return () => {
       document.title = prev;
     };
-  }, []);
+  }, [contact?.legal_name, content?.section_copy?.page_title_suffix]);
+
+  useEffect(() => {
+    const meta = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    if (!meta) return;
+    const previous = meta.content;
+    const company = contact?.legal_name || 'Philippine Ogami Corporation';
+    const partners = content?.oem_partners?.length ? content.oem_partners.join(', ') : 'Toyota, Nissan, Honda, Yamaha';
+    const standard = content?.quality_policy?.standard || 'IATF 16949';
+    const address = contact?.address || 'FCIE Dasmariñas, Cavite, Philippines';
+    const defaultDesc = '{{company}} delivers IATF 16949 certified plastic injection molding, precision mold making, and automated assembly for Tier-1 automotive partners.';
+
+    const description = (content?.section_copy?.hero_description || defaultDesc)
+      ?.replaceAll('{{company}}', company)
+      ?.replaceAll('{{partners}}', partners)
+      ?.replaceAll('{{standard}}', standard)
+      ?.replaceAll('{{address}}', address);
+    if (description) meta.content = description;
+    return () => {
+      meta.content = previous;
+    };
+  }, [contact?.address, contact?.legal_name, content]);
 
   return (
     <div
@@ -79,17 +107,17 @@ export default function LandingPage() {
       <ScrollProgress />
       <CrosshairCursor scopeRef={rootRef} />
       <a
-        href="#capabilities"
+        href={content?.section_copy?.nav_links?.[0]?.href ?? '#'}
         className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[60] focus:rounded-md focus:bg-landing-accent focus:px-4 focus:py-2 focus:font-sans focus:text-sm focus:font-medium focus:text-landing-accent-fg"
       >
         Skip to content
       </a>
 
-      <LandingNav open={menuOpen} onOpenChange={setMenuOpen} />
+      <LandingNav open={menuOpen} onOpenChange={setMenuOpen} onOpenQuote={() => setQuoteOpen(true)} />
 
       {/* While the mobile menu is open, hide page content from AT + pointer.
           `inert` is set via a ref-free attribute prop (cast) for RB18 typings. */}
-      <main {...inertWhen(menuOpen)}>
+      <main {...inertWhen(menuOpen || quoteOpen)}>
         <HeroSection />
         <MarqueeSection />
         <CapabilitiesSection />
@@ -101,13 +129,14 @@ export default function LandingPage() {
         <ContactSection />
       </main>
 
-      <div {...inertWhen(menuOpen)}>
+      <div {...inertWhen(menuOpen || quoteOpen)}>
         <LandingFooter />
       </div>
 
       <CookieBanner />
       <BackToTop />
-      <FloatingQuoteButton />
+      <FloatingQuoteButton onOpenQuote={() => setQuoteOpen(true)} />
+      <QuoteModal open={quoteOpen} onClose={() => setQuoteOpen(false)} />
     </div>
   );
 }

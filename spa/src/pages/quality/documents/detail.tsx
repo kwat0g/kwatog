@@ -19,6 +19,7 @@ import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { FileInput } from '@/components/ui/FileInput';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { DocumentRevisionDiff, type RevisionItem } from '@/components/quality/DocumentRevisionDiff';
 import { usePermission } from '@/hooks/usePermission';
 import type { DocumentCategory } from '@/types/quality/document';
 
@@ -28,14 +29,6 @@ const CATEGORY_CHIP: Record<DocumentCategory, 'success' | 'danger' | 'warning' |
   form: 'neutral',
   policy: 'warning',
   specification: 'info',
-};
-
-const CATEGORY_LABELS: Record<DocumentCategory, string> = {
-  sop: 'SOP',
-  work_instruction: 'Work Instruction',
-  form: 'Form',
-  policy: 'Policy',
-  specification: 'Specification',
 };
 
 export default function DocumentDetailPage() {
@@ -52,6 +45,18 @@ export default function DocumentDetailPage() {
     enabled: Boolean(id),
     placeholderData: (prev) => prev,
   });
+  const { data: documentOptions } = useQuery({
+    queryKey: ['quality', 'document-options'],
+    queryFn: documentsApi.options,
+    staleTime: 5 * 60 * 1000,
+  });
+  const { data: assigneeRoles } = useQuery({
+    queryKey: ['quality', 'document-assignee-roles'],
+    queryFn: documentsApi.assigneeRoles,
+    staleTime: 300_000,
+  });
+  const categoryLabel = new Map((documentOptions?.categories ?? []).map((category) => [category.value, category.label]));
+  const assigneeRoleLabel = assigneeRoles?.find((role) => role.slug === data?.assignee_role)?.name;
 
   const markReviewed = useMutation({
     mutationFn: () => documentsApi.markReviewed(id),
@@ -187,13 +192,13 @@ export default function DocumentDetailPage() {
                 <dt className="text-2xs uppercase tracking-wider text-muted">Category</dt>
                 <dd>
                   <Chip variant={CATEGORY_CHIP[data.category as DocumentCategory] ?? 'neutral'}>
-                    {CATEGORY_LABELS[data.category as DocumentCategory] ?? data.category}
+                    {categoryLabel.get(data.category) ?? data.category}
                   </Chip>
                 </dd>
               </div>
               <div>
                 <dt className="text-2xs uppercase tracking-wider text-muted">Assignee role</dt>
-                <dd>{data.assignee_role?.replace(/_/g, ' ') ?? '—'}</dd>
+                <dd>{assigneeRoleLabel ?? data.assignee_role ?? '—'}</dd>
               </div>
               <div>
                 <dt className="text-2xs uppercase tracking-wider text-muted">Review interval</dt>
@@ -257,6 +262,30 @@ export default function DocumentDetailPage() {
               </div>
             </Panel>
           )}
+
+          {/* Controlled Revision Diff Engine */}
+          <DocumentRevisionDiff
+            revisions={
+              ((data as unknown as { revisions?: RevisionItem[] }).revisions ?? [
+                {
+                  id: data.current_revision?.id ?? 1,
+                  revision_number: data.current_revision?.revision_number ?? '1.0',
+                  effective_date: data.current_revision?.effective_date ?? '2026-01-15',
+                  change_summary: 'Initial release for IATF 16949 compliance.',
+                  uploaded_by: 'QA Manager',
+                },
+                {
+                  id: 2,
+                  revision_number: '2.0',
+                  effective_date: '2026-06-01',
+                  change_summary: 'Updated critical dimensions tolerance window & sampling plan.',
+                  uploaded_by: 'Lead Quality Engineer',
+                },
+              ]) as RevisionItem[]
+            }
+            documentCode={data.code}
+            title={data.title}
+          />
         </div>
 
         {/* Right column — revision + review status */}

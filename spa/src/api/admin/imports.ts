@@ -23,11 +23,22 @@ export interface ImportBatch {
   entity_type: string;
   filename: string | null;
   status: 'committed' | 'rolled_back';
+  status_label?: string;
   total_rows: number;
   imported_rows: number;
   created_by: string | null;
   created_at: string | null;
   rolled_back_at: string | null;
+}
+
+export interface ImportSchema {
+  required: string[];
+  optional: string[];
+}
+
+export interface ImportOptions {
+  entities: string[];
+  schemas: Record<string, ImportSchema>;
 }
 
 /**
@@ -36,7 +47,7 @@ export interface ImportBatch {
  */
 export const importsApi = {
   entities: () =>
-    client.get<{ data: string[] }>('/imports').then((r) => r.data.data),
+    client.get<{ data: ImportOptions }>('/imports').then((r) => r.data.data),
 
   dryRun: (entity: string, file: File) => {
     const fd = new FormData();
@@ -59,28 +70,4 @@ export const importsApi = {
 
   rollback: (batchId: string) =>
     client.post<{ message: string }>(`/imports/batches/${batchId}/rollback`).then((r) => r.data),
-};
-
-/** Fixed per-entity column hints (backend confirms actual headers on dry-run). */
-export const IMPORT_SCHEMAS: Record<string, { required: string[]; optional: string[] }> = {
-  coa: {
-    required: ['code', 'name', 'type', 'normal_balance'],
-    optional: ['description', 'parent_code'],
-  },
-  items: {
-    required: ['code', 'name', 'item_type', 'unit_of_measure', 'category'],
-    optional: ['standard_cost', 'description', 'reorder_point', 'lead_time_days'],
-  },
-  customers: {
-    required: ['name'],
-    optional: ['code', 'contact_person', 'email', 'phone', 'address', 'tin', 'credit_limit', 'payment_terms_days'],
-  },
-  vendors: {
-    required: ['name'],
-    optional: ['contact_person', 'email', 'phone', 'address', 'tin', 'payment_terms_days'],
-  },
-  employees: {
-    required: ['first_name', 'last_name', 'birth_date', 'gender', 'civil_status', 'department', 'position', 'employment_type', 'pay_type', 'date_hired'],
-    optional: ['employee_no', 'middle_name', 'suffix', 'mobile_number', 'email', 'street_address', 'city', 'province', 'basic_monthly_salary', 'daily_rate', 'sss_no', 'philhealth_no', 'pagibig_no', 'tin', 'bank_name', 'bank_account_no', 'date_regularized'],
-  },
 };

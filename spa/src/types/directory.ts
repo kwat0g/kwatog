@@ -12,6 +12,7 @@ export interface DirectoryEmployee {
   mobile_number: string | null; // masked
   email: string | null;
   status: string | null;
+  status_label?: string | null;
   position: { id: string; title: string } | null;
   department: { id: string; name: string; code: string } | null;
 }

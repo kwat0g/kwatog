@@ -8,7 +8,7 @@
  * Follows the same pattern as ChainBottleneckWidget.
  */
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { forecastingApi } from '@/api/forecasting';
 import type { StockOutRisk } from '@/types/forecasting';
 import { Panel } from '@/components/ui/Panel';
@@ -23,7 +23,7 @@ interface Props {
   maxRows?: number;
   /** Optional title override. */
   title?: string;
-  /** Horizon days to query. Default 30. */
+  /** Horizon days to query. When omitted, use the configured API default. */
   horizonDays?: number;
   /** Hide entirely when no items are at risk. */
   hideWhenEmpty?: boolean;
@@ -37,20 +37,13 @@ const RISK_VARIANT: Record<StockOutRisk, ChipVariant> = {
   ok:       'success',
 };
 
-const RISK_LABEL: Record<StockOutRisk, string> = {
-  critical: 'Critical',
-  high:     'High',
-  medium:   'Medium',
-  low:      'Low',
-  ok:       'OK',
-};
-
 export function StockOutPanel({
   maxRows = 8,
   title = 'Stock-out Risk',
-  horizonDays = 30,
+  horizonDays,
   hideWhenEmpty = false,
 }: Props) {
+  const navigate = useNavigate();
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['forecasting', 'stock-out', horizonDays],
     queryFn: () => forecastingApi.stockOut({ horizon_days: horizonDays }),
@@ -83,6 +76,7 @@ export function StockOutPanel({
   const atRisk = (data?.data ?? [])
     .filter((r) => r.risk !== 'ok')
     .slice(0, maxRows);
+  const effectiveHorizon = data?.meta.horizon_days ?? horizonDays;
 
   if (atRisk.length === 0) {
     if (hideWhenEmpty) return null;
@@ -91,7 +85,7 @@ export function StockOutPanel({
         <EmptyState
           icon="check-circle"
           title="Stock levels OK"
-          description={`No items projected to run out within ${horizonDays} days.`}
+          description={`No items projected to run out within ${effectiveHorizon ?? 'the configured'} days.`}
         />
       </Panel>
     );
@@ -102,7 +96,7 @@ export function StockOutPanel({
   return (
     <Panel
       title={title}
-      meta={`${totalAtRisk} at risk · ${horizonDays}d horizon`}
+      meta={`${totalAtRisk} at risk · ${effectiveHorizon ?? 'configured'}d horizon`}
       bodyClassName="p-0"
     >
       <div className="overflow-x-auto">
@@ -135,7 +129,7 @@ export function StockOutPanel({
                 <Td align="right" mono className="text-xs">{r.daily_demand}</Td>
                 <Td align="right" mono className="text-xs">
                   {r.days_until_stockout != null ? (
-                    <span className={r.days_until_stockout <= 3 ? 'text-danger' : r.days_until_stockout <= 7 ? 'text-warning' : ''}>
+                    <span className={r.risk === 'critical' ? 'text-danger' : r.risk === 'high' || r.risk === 'medium' ? 'text-warning' : ''}>
                       {r.days_until_stockout}
                     </span>
                   ) : (
@@ -144,7 +138,7 @@ export function StockOutPanel({
                 </Td>
                 <Td align="right" mono>
                   <Chip variant={RISK_VARIANT[r.risk]}>
-                    {RISK_LABEL[r.risk]}
+                    {(data?.meta.risk_options ?? []).find((option) => option.value === r.risk)?.label ?? r.risk}
                   </Chip>
                 </Td>
               </tr>

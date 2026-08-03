@@ -28,7 +28,7 @@ const schema = z.object({
   position_id: z.string().optional(),
   description: z.string().min(1, 'Description is required'),
   requirements: z.string().min(1, 'At least one requirement is needed'),
-  employment_type: z.enum(['regular', 'probationary', 'contractual', 'project_based']),
+  employment_type: z.string().min(1, 'Employment type is required'),
   salary_range_min: z.string().optional(),
   salary_range_max: z.string().optional(),
   show_salary: z.boolean().optional(),
@@ -51,6 +51,12 @@ export default function PostingEditPage() {
     queryFn: () => recruitmentApi.showPosting(id!).then((r) => r.data.data),
     enabled: !!id,
   });
+
+  const { data: optionsResponse } = useQuery({
+    queryKey: ['recruitment-options'],
+    queryFn: () => recruitmentApi.options().then((r) => r.data.data),
+  });
+  const employmentTypes = optionsResponse?.employment_types ?? [];
 
   const {
     register,
@@ -137,7 +143,7 @@ export default function PostingEditPage() {
   };
 
   const mutation = useMutation({
-    mutationFn: (data: FormData) => recruitmentApi.updatePosting(id!, data),
+    mutationFn: (data: FormData) => recruitmentApi.updatePosting(id!, data as Parameters<typeof recruitmentApi.updatePosting>[1]),
     onSuccess: () => {
       toast.success('Posting updated.');
       queryClient.invalidateQueries({ queryKey: ['recruitment-posting', id] });
@@ -193,10 +199,8 @@ export default function PostingEditPage() {
               </Select>
 
               <Select label="Employment Type" required {...register('employment_type')}>
-                <option value="regular">Regular</option>
-                <option value="probationary">Probationary</option>
-                <option value="contractual">Contractual</option>
-                <option value="project_based">Project-Based</option>
+                <option value="">Select employment type</option>
+                {employmentTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
               </Select>
             </div>
 

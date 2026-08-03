@@ -40,6 +40,7 @@ export interface CreateTransferData {
 }
 
 export const budgetingApi = {
+  options: () => client.get<{ data: { budget_types: Array<{ value: string; label: string }>; statuses: Array<{ value: string; label: string }>; warning_ratio_pct: number; critical_ratio_pct: number; exhausted_ratio_pct: number } }>('/budgets/options').then((r) => r.data.data),
   // Fiscal Years
   fiscalYears: () =>
     client.get<{ data: FiscalYear[] }>('/budgets/fiscal-years').then((r) => r.data.data),

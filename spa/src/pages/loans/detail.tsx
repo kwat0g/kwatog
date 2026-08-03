@@ -69,10 +69,10 @@ export default function LoanDetailPage() {
         title={
           <span className="flex items-center gap-2">
             <span className="font-mono">{loan.loan_no}</span>
-            <Chip variant={chipVariantForStatus(loan.status)}>{loan.status}</Chip>
+            <Chip variant={chipVariantForStatus(loan.status)}>{loan.status_label ?? loan.status}</Chip>
           </span>
         }
-        subtitle={`${loan.employee?.full_name} · ${loan.loan_type === 'company_loan' ? 'Company loan' : 'Cash advance'}`}
+        subtitle={`${loan.employee?.full_name} · ${loan.loan_type_label ?? loan.loan_type}`}
         backTo="/hr/loans"
         backLabel="Loans"
         breadcrumbs={[
@@ -152,7 +152,7 @@ export default function LoanDetailPage() {
                     <tr key={p.id} className={trCls}>
                       <Td mono>{formatDate(p.payment_date)}</Td>
                       <Td align="right" mono className="font-medium">{formatPeso(p.amount)}</Td>
-                      <Td>{p.payment_type.replace('_', ' ')}</Td>
+                      <Td>{p.payment_type_label ?? p.payment_type}</Td>
                       <Td className="text-muted">{p.remarks ?? '—'}</Td>
                     </tr>
                   ))}
@@ -175,7 +175,7 @@ export default function LoanDetailPage() {
                     : 'Dept Head → Accounting → VP'}
                 </p>
                 <p className="text-xs text-muted mt-2">
-                  Status: <Chip variant={chipVariantForStatus(loan.status)}>{loan.status}</Chip>
+                  Status: <Chip variant={chipVariantForStatus(loan.status)}>{loan.status_label ?? loan.status}</Chip>
                 </p>
               </>
             )}

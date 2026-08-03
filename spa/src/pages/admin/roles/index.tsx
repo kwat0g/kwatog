@@ -285,7 +285,6 @@ export default function RolesIndexPage() {
             onSort={(sort, direction) => setFilters((f) => ({ ...f, sort, direction, page: 1 }))}
             currentSort={filters.sort}
             currentDirection={filters.direction}
-            onRowClick={(row) => navigate(`/admin/roles/${row.id}/permissions`)}
             getRowId={(row) => row.id}
           />
         )}

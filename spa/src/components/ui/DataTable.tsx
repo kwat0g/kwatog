@@ -57,6 +57,8 @@ export interface DataTableProps<T> {
   onDensityChange?: (density: TableDensity) => void;
   /** Stable identifier per row for selection state. Defaults to `(row as any).id`. */
   getRowId?: (row: T) => string;
+  /** Enable alternating zebra striping for rows. Default true. */
+  striped?: boolean;
   /** Persistently highlight a single row (used for list + detail-panel layouts). */
   highlightedRowId?: string | null;
   className?: string;
@@ -85,9 +87,9 @@ export interface DataTableProps<T> {
 // ─── Density mapping ───────────────────────────────────────────
 
 const rowHeight: Record<TableDensity, string> = {
-  compact: 'h-7',
-  default: 'h-8',
-  spacious: 'h-10',
+  compact: 'h-8 py-1',
+  default: 'h-11 py-2',
+  spacious: 'h-14 py-3',
 };
 
 const alignClass: Record<ColumnAlign, string> = {
@@ -112,6 +114,7 @@ export function DataTable<T>({
   density: densityProp,
   onDensityChange,
   getRowId,
+  striped = true,
   highlightedRowId,
   className,
   tableKey,
@@ -155,8 +158,14 @@ export function DataTable<T>({
     if (tableKey) setStoreHidden(tableKey, Array.from(next));
   };
 
-  const idOf = useMemo(
-    () => getRowId ?? ((row: T) => String((row as { id?: string }).id ?? '')),
+  const idOf = useCallback(
+    (row: T, index?: number) => {
+      if (getRowId) return getRowId(row);
+      const r = row as { id?: unknown; slug?: unknown; key?: unknown; code?: unknown };
+      const val = r.id ?? r.slug ?? r.key ?? r.code;
+      if (val !== undefined && val !== null && String(val) !== '') return String(val);
+      return index !== undefined ? `row-${index}` : '';
+    },
     [getRowId],
   );
 
@@ -245,7 +254,6 @@ export function DataTable<T>({
   const tbodyRef = useRef<HTMLTableSectionElement>(null);
 
   const onRowKeyDown = useCallback((e: KeyboardEvent<HTMLTableSectionElement>) => {
-    if (!onRowClick) return;
     const target = e.target as HTMLElement;
     if (target.tagName !== 'TR') return;
 
@@ -259,11 +267,22 @@ export function DataTable<T>({
       if (next >= 0 && next < arr.length) arr[next].focus();
     }
 
-    if (e.key === 'Enter') {
+    if (e.key === ' ' && selectable) {
+      e.preventDefault();
+      const checkbox = target.querySelector<HTMLInputElement>('input[type="checkbox"]');
+      if (checkbox) checkbox.click();
+    }
+
+    if (e.key === 'Escape' && selected.size > 0) {
+      e.preventDefault();
+      setSelected(new Set());
+    }
+
+    if (e.key === 'Enter' && onRowClick) {
       e.preventDefault();
       target.click();
     }
-  }, [onRowClick]);
+  }, [onRowClick, selectable, selected.size]);
 
   return (
     <div className={cn('flex flex-col', className)}>
@@ -309,19 +328,14 @@ export function DataTable<T>({
         toggleColumnVisibility={toggleColumnVisibility}
       />
 
-      <div
-        className={cn(
-          'border border-default rounded-md',
-          stickyHeader ? 'overflow-auto max-h-[calc(100vh-260px)]' : 'overflow-hidden',
-        )}
-      >
+      <div className="overflow-x-auto rounded-md border border-default">
         <table className="w-full border-collapse text-sm">
-          <thead className={cn(stickyHeader && 'sticky top-0 z-10')}>
-            <tr className="border-b border-default bg-canvas">
+          <thead className={cn(stickyHeader && 'sticky top-0 z-10 bg-[var(--bg-thead)]')}>
+            <tr className="border-b border-default bg-[var(--bg-thead)]">
               {selectable && (
                 <th scope="col"
                   className={cn(
-                    'px-2.5 w-8 bg-canvas text-left text-2xs uppercase tracking-wider text-muted font-medium',
+                    'px-3 w-8 text-left text-2xs uppercase tracking-wider text-muted font-semibold bg-[var(--bg-thead)]',
                     rowHeight.default,
                     stickyHeader && 'sticky top-0 z-20',
                   )}>
@@ -335,7 +349,7 @@ export function DataTable<T>({
               {renderExpanded && (
                 <th scope="col"
                   className={cn(
-                    'px-1 w-7 bg-canvas text-left text-2xs uppercase tracking-wider text-muted font-medium',
+                    'px-1.5 w-7 text-left text-2xs uppercase tracking-wider text-muted font-semibold bg-[var(--bg-thead)]',
                     rowHeight.default,
                     stickyHeader && 'sticky top-0 z-20',
                   )}
@@ -349,7 +363,7 @@ export function DataTable<T>({
                     scope="col"
                     style={isPinned ? { left: pinnedOffsets[col.key] } : undefined}
                     className={cn(
-                        'px-2.5 text-2xs uppercase tracking-wider text-muted font-medium select-none bg-canvas',
+                        'px-3.5 text-2xs uppercase tracking-wider text-muted font-semibold select-none bg-[var(--bg-thead)]',
                         rowHeight.default,
                         alignClass[col.align ?? 'left'],
                         col.sortable && onSort && 'cursor-pointer hover:text-primary transition-colors duration-fast',
@@ -359,7 +373,7 @@ export function DataTable<T>({
                       )}
                     onClick={() => handleHeaderClick(col)}
                   >
-                    <span className="inline-flex items-center">
+                    <span className="inline-flex items-center gap-1">
                       {col.header}
                       {sortIndicator(col)}
                     </span>
@@ -372,20 +386,35 @@ export function DataTable<T>({
             ref={tbodyRef}
             onKeyDown={onRowKeyDown}
           >
-            {data.map((row, i) => {
-              const rid = idOf(row);
-              const isSelected = selected.has(rid);
-              const isExpanded = expanded.has(rid);
+            {data.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={totalCols}
+                  className="px-4 py-8 text-center text-muted text-xs bg-canvas"
+                >
+                  No matching records found.
+                </td>
+              </tr>
+            ) : (
+              data.map((row, i) => {
+              const rid = idOf(row, i);
+              const isSelected = rid ? selected.has(rid) : false;
+              const isExpanded = rid ? expanded.has(rid) : false;
               return (
-                <Fragment key={rid || i}>
+                <Fragment key={rid}>
                   <tr
-                    tabIndex={onRowClick ? 0 : undefined}
+                    tabIndex={onRowClick || selectable ? 0 : undefined}
                     className={cn(
-                      'border-b border-subtle transition-colors duration-fast',
-                      onRowClick && 'cursor-pointer hover:bg-subtle active:bg-elevated',
-                      onRowClick && 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset',
-                      isSelected && 'bg-info-bg',
-                      highlightedRowId && rid === highlightedRowId && 'bg-elevated',
+                      'border-b border-subtle/60 transition-all duration-fast relative',
+                      (onRowClick || selectable) && 'cursor-pointer active:bg-elevated',
+                      (onRowClick || selectable) && 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset',
+                      isSelected
+                        ? 'bg-landing-accent/20 hover:bg-landing-accent/30 outline outline-2 outline-landing-accent -outline-offset-2 z-10 shadow-xs'
+                        : highlightedRowId && rid === highlightedRowId
+                        ? 'bg-[var(--bg-row-hover)] outline outline-2 outline-landing-accent/60 -outline-offset-2 z-10'
+                        : striped && i % 2 === 1
+                        ? 'bg-[var(--bg-zebra-even)] hover:bg-[var(--bg-row-hover)]'
+                        : 'bg-[var(--bg-zebra-odd)] hover:bg-[var(--bg-row-hover)]',
                       rowHeight[density],
                     )}
                     onClick={(e) => {
@@ -405,7 +434,7 @@ export function DataTable<T>({
                     }
                   >
                     {selectable && (
-                      <td className="px-2.5 align-middle bg-canvas">
+                      <td className="px-3 py-2.5 align-middle">
                         <Checkbox
                           checked={isSelected}
                           onChange={() => toggleOne(rid)}
@@ -414,7 +443,7 @@ export function DataTable<T>({
                       </td>
                     )}
                     {renderExpanded && (
-                      <td className="px-1 w-7 align-middle bg-canvas">
+                      <td className="px-1.5 w-7 align-middle">
                         <button
                           type="button"
                           aria-label={isExpanded ? 'Collapse row' : 'Expand row'}
@@ -438,7 +467,7 @@ export function DataTable<T>({
                           key={col.key}
                           style={isPinned ? { left: pinnedOffsets[col.key] } : undefined}
                           className={cn(
-                            'px-2.5 align-middle bg-canvas',
+                            'px-3.5 py-2.5 align-middle',
                             alignClass[col.align ?? 'left'],
                             isPinned && pinnedTDClass,
                             isPinned && 'border-r border-default',
@@ -459,7 +488,7 @@ export function DataTable<T>({
                   )}
                 </Fragment>
               );
-            })}
+            }))}
           </tbody>
         </table>
       </div>

@@ -36,6 +36,12 @@ export default function LeavesPage() {
     queryFn: () => leaveRequestsApi.list(filters),
     placeholderData: (prev) => prev,
   });
+  const { data: leaveOptions } = useQuery({
+    queryKey: ['leaves', 'requests', 'options'],
+    queryFn: leaveRequestsApi.options,
+    staleTime: 5 * 60 * 1000,
+  });
+  const statusLabels = new Map((leaveOptions?.statuses ?? []).map((option) => [option.value, option.label]));
 
   const approveDept = useMutation({
     mutationFn: (id: string) => leaveRequestsApi.approveDept(id),
@@ -66,12 +72,12 @@ export default function LeavesPage() {
   };
 
   const columns: Column<LeaveRequest>[] = [
-    { key: 'leave_request_no', header: 'No', cell: (r) => <Link to={`/hr/leaves/${r.id}`} className="font-mono text-accent hover:underline">{r.leave_request_no}</Link> },
+    { key: 'leave_request_no', header: 'No', cell: (r) => <span className="font-mono">{r.leave_request_no}</span> },
     { key: 'employee', header: 'Employee', cell: (r) => <StackedCell primary={r.employee?.full_name ?? '—'} secondary={<span className="font-mono">{r.employee?.employee_no}</span>} /> },
     { key: 'type', header: 'Type', cell: (r) => r.leave_type?.code ?? '—' },
     { key: 'dates', header: 'Dates', cell: (r) => <NumCell>{formatDate(r.start_date)} → {formatDate(r.end_date)}</NumCell> },
     { key: 'days', header: 'Days', align: 'right', cell: (r) => <NumCell>{r.days}</NumCell> },
-    { key: 'status', header: 'Status', cell: (r) => <Chip variant={chipVariantForStatus(r.status)}>{r.status.replace('_', ' ')}</Chip> },
+    { key: 'status', header: 'Status', cell: (r) => <Chip variant={chipVariantForStatus(r.status)}>{statusLabels.get(r.status) ?? r.status.replace('_', ' ')}</Chip> },
     {
       key: 'actions',
       header: '',
@@ -100,11 +106,7 @@ export default function LeavesPage() {
       key: 'status', label: 'Status', type: 'select',
       options: [
         { value: '', label: 'All' },
-        { value: 'pending_dept', label: 'Pending dept head' },
-        { value: 'pending_hr', label: 'Pending HR' },
-        { value: 'approved', label: 'Approved' },
-        { value: 'rejected', label: 'Rejected' },
-        { value: 'cancelled', label: 'Cancelled' },
+        ...(leaveOptions?.statuses ?? []),
       ],
     },
   ];
@@ -150,7 +152,8 @@ export default function LeavesPage() {
       )}
 
       {data && all.length > 0 && view === 'list' && (
-        <div className="px-5 py-4"><DataTable columns={columns} data={all} meta={data.meta} onPageChange={(page) => setFilters((f) => ({ ...f, page }))} /></div>
+        <div className="px-5 py-4"><DataTable
+            onRowClick={(r) => navigate(`/hr/leaves/${r.id}`)} columns={columns} data={all} meta={data.meta} onPageChange={(page) => setFilters((f) => ({ ...f, page }))} /></div>
       )}
 
       {data && all.length > 0 && view === 'kanban' && (

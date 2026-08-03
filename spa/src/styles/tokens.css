@@ -51,6 +51,12 @@
   --bg-elevated: #f4f4f5;
   --bg-subtle: #f4f4f5;
 
+  /* ─── Table Zebra & Header Colors ─── */
+  --bg-zebra-odd: #ffffff;
+  --bg-zebra-even: #f1f3f5;
+  --bg-row-hover: #e4e7eb;
+  --bg-thead: #e9ecef;
+
   /* ─── Borders ─── */
   --border-subtle: #f4f4f5;
   --border-default: #e4e4e7;
@@ -155,6 +161,12 @@
   --bg-surface: #111111;
   --bg-elevated: #1a1a1a;
   --bg-subtle: #1a1a1a;
+
+  /* ─── Table Zebra & Header Colors (Dark) ─── */
+  --bg-zebra-odd: #121212;
+  --bg-zebra-even: #1e1e24;
+  --bg-row-hover: #282834;
+  --bg-thead: #18181f;
 
   --border-subtle: #1a1a1a;
   --border-default: #27272a;

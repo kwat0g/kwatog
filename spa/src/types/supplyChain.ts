@@ -7,6 +7,8 @@ export type ShipmentDocumentType =
   | 'proforma_invoice' | 'commercial_invoice' | 'packing_list' | 'bill_of_lading'
   | 'import_entry' | 'certificate_of_origin' | 'msds' | 'boc_release' | 'insurance_certificate';
 
+export type Incoterm = 'EXW' | 'FCA' | 'FAS' | 'FOB' | 'CFR' | 'CIF' | 'CPT' | 'CIP' | 'DAP' | 'DPU' | 'DDP';
+
 export interface ShipmentDocument {
   id: string;
   document_type: ShipmentDocumentType;
@@ -23,6 +25,7 @@ export interface Shipment {
   id: string;
   shipment_number: string;
   status: ShipmentStatus;
+  status_label?: string;
   carrier: string | null;
   vessel: string | null;
   container_number: string | null;
@@ -44,7 +47,7 @@ export type DeliveryStatus =
 
 /** ADV7 — Proof type for delivery proof files. */
 export type DeliveryProofType =
-  | 'signed_dr' | 'photo' | 'customer_po_confirmation' | 'other';
+  | 'signed_dr' | 'photo' | 'customer_po_confirmation' | 'coc' | 'other';
 
 export interface DeliveryProof {
   id: string;
@@ -63,6 +66,7 @@ export interface Delivery {
   id: string;
   delivery_number: string;
   status: DeliveryStatus;
+  status_label?: string;
   scheduled_date: string | null;
   departed_at: string | null;
   delivered_at: string | null;
@@ -79,11 +83,11 @@ export interface Delivery {
   sales_order?: { id: string; so_number: string } | null;
   vehicle?: { id: string; plate_number: string; name: string } | null;
   driver?: { id: string; name: string } | null;
-  invoice?: { id: string; invoice_number: string; total_amount: string; status: string } | null;
+  invoice?: { id: string; invoice_number: string; total_amount: string; status: string; status_label?: string } | null;
   items?: Array<{
     id: string;
     sales_order_item_id: string | null;
-    inspection: { id: string; inspection_number: string; status: string } | null;
+    inspection: { id: string; inspection_number: string; status: string; status_label?: string } | null;
     quantity: number;
     unit_price: string;
   }>;

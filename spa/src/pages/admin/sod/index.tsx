@@ -70,7 +70,7 @@ export default function SodMatrixPage() {
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
                     {row.violations.map((v) => (
                       <Chip key={v.code} variant={SEVERITY_CHIP[v.severity]}>
-                        {v.name}
+                        {v.name} · {v.severity_label ?? v.severity}
                       </Chip>
                     ))}
                   </div>
@@ -121,7 +121,7 @@ export default function SodMatrixPage() {
                       <Td mono className="text-xs">{rule.permission_a.slug}</Td>
                       <Td mono className="text-xs">{rule.permission_b.slug}</Td>
                       <Td>
-                        <Chip variant={SEVERITY_CHIP[rule.severity]}>{rule.severity}</Chip>
+                        <Chip variant={SEVERITY_CHIP[rule.severity]}>{rule.severity_label ?? rule.severity}</Chip>
                       </Td>
                     </tr>
                   ))}

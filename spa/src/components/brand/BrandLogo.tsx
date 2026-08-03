@@ -18,7 +18,7 @@ interface BrandLogoProps {
   alt?: string;
 }
 
-export function BrandLogo({ className, invertOnDark = false, alt = 'Ogami' }: BrandLogoProps) {
+export function BrandLogo({ className, invertOnDark = false, alt = 'Company' }: BrandLogoProps) {
   return (
     <img
       src={logoUrl}

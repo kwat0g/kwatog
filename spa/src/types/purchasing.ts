@@ -38,7 +38,9 @@ export interface PurchaseRequest {
   date: string;
   reason: string | null;
   priority: PurchaseRequestPriority;
+  priority_label?: string;
   status: PurchaseRequestStatus;
+  status_label?: string;
   is_auto_generated: boolean;
   auto_generated_reason: string | null;
   is_urgent: boolean;
@@ -57,7 +59,7 @@ export interface PurchaseRequest {
   items?: PurchaseRequestItem[];
   approval_records?: ApprovalRecord[];
   purchase_orders?: Array<{
-    id: string; po_number: string; status: PurchaseOrderStatus;
+    id: string; po_number: string; status: PurchaseOrderStatus; status_label?: string;
     vendor: { id: string; name: string } | null;
     total_amount: string;
   }>;
@@ -121,6 +123,7 @@ export interface PurchaseOrder {
   total_amount: string;
   is_vatable: boolean;
   status: PurchaseOrderStatus;
+  is_billable?: boolean;
   requires_vp_approval: boolean;
   is_auto_generated: boolean;
   has_overdue_approval: boolean;
@@ -135,8 +138,8 @@ export interface PurchaseOrder {
   vendor: { id: string; name: string; contact_person: string | null; email: string | null } | null;
   purchase_request: { id: string; pr_number: string } | null;
   items?: PurchaseOrderItem[];
-  goods_receipt_notes?: Array<{ id: string; grn_number: string; received_date: string; status: string }>;
-  bills?: Array<{ id: string; bill_number: string; total_amount: string; balance: string; status: string }>;
+  goods_receipt_notes?: Array<{ id: string; grn_number: string; received_date: string; status: string; status_label?: string }>;
+  bills?: Array<{ id: string; bill_number: string; total_amount: string; balance: string; status: string; status_label?: string }>;
   approval_records?: ApprovalRecord[];
   creator?: { id: string; name: string } | null;
   approver?: { id: string; name: string } | null;
@@ -214,6 +217,7 @@ export interface ThreeWayMatchResult {
     price_variance_pct: number;
     // H-6 added 'grn_short' to flag a bill line that exceeds accepted GRN qty.
     status: 'matched' | 'qty_variance' | 'price_variance' | 'both' | 'grn_short';
+    status_label?: string;
     severity: 'ok' | 'block';
     // H-6 — present from the API when the GRN gate fired.
     grn_status?: 'ok' | 'short';

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -17,7 +17,7 @@ import type { ApiValidationError } from '@/types';
 
 const schema = z.object({
   original_payroll_id: z.string().min(1, 'Source payroll is required'),
-  type:                z.enum(['underpayment', 'overpayment']),
+  type:                z.string().min(1, 'Adjustment type is required'),
   amount:              z.string().min(1, 'Amount is required'),
   reason:              z.string().min(5, 'Reason is required (min 5 chars)').max(1000),
 });
@@ -29,17 +29,21 @@ export default function CreatePayrollAdjustmentPage() {
   const qc = useQueryClient();
   const location = useLocation() as { state?: { original_payroll_id?: string; employee?: { full_name?: string; employee_no?: string } } };
   const [submitting, setSubmitting] = useState(false);
+  const { data: adjustmentOptions } = useQuery({
+    queryKey: ['payroll-adjustments', 'options'],
+    queryFn: () => adjustmentsApi.options(),
+  });
 
   const { register, handleSubmit, setError, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       original_payroll_id: location.state?.original_payroll_id ?? '',
-      type: 'underpayment',
+      type: '',
     },
   });
 
   const mutation = useMutation({
-    mutationFn: (data: FormValues) => adjustmentsApi.create(data),
+    mutationFn: (data: FormValues) => adjustmentsApi.create(data as Parameters<typeof adjustmentsApi.create>[0]),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['payroll-adjustments'] });
       toast.success('Adjustment submitted for approval.');
@@ -84,8 +88,8 @@ export default function CreatePayrollAdjustmentPage() {
               className="font-mono"
             />
             <Select label="Type" required {...register('type')} error={errors.type?.message}>
-              <option value="underpayment">Underpayment refund</option>
-              <option value="overpayment">Overpayment recovery</option>
+              <option value="">— Select —</option>
+              {(adjustmentOptions?.types ?? []).map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
             </Select>
             <Input
               label="Amount"

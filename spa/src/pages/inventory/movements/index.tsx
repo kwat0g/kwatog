@@ -31,10 +31,16 @@ export default function StockMovementsPage() {
     queryFn: () => stockMovementsApi.list(filters),
     placeholderData: (prev) => prev,
   });
+  const { data: movementOptions } = useQuery({
+    queryKey: ['inventory', 'movements', 'options'],
+    queryFn: stockMovementsApi.options,
+    staleTime: 5 * 60 * 1000,
+  });
+  const labels = new Map((movementOptions?.movement_types ?? []).map((option) => [option.value, option.label]));
 
   const columns: Column<StockMovement>[] = [
     { key: 'created_at', header: 'When', cell: (r) => <span className="font-mono">{formatDateTime(r.created_at)}</span> },
-    { key: 'type', header: 'Type', cell: (r) => <Chip variant={chip(r.movement_type)}>{r.movement_type.replace(/_/g, ' ')}</Chip> },
+    { key: 'type', header: 'Type', cell: (r) => <Chip variant={chip(r.movement_type)}>{r.movement_type_label ?? labels.get(r.movement_type) ?? r.movement_type.replace(/_/g, ' ')}</Chip> },
     { key: 'item', header: 'Item', cell: (r) => (
       <div>
         <span className="font-mono">{r.item?.code}</span>
@@ -52,13 +58,7 @@ export default function StockMovementsPage() {
   const filterConfig: FilterConfig[] = [
     { key: 'movement_type', label: 'Type', type: 'select', options: [
       { value: '', label: 'All' },
-      { value: 'grn_receipt', label: 'GRN receipt' },
-      { value: 'material_issue', label: 'Material issue' },
-      { value: 'transfer', label: 'Transfer' },
-      { value: 'adjustment_in', label: 'Adjust IN' },
-      { value: 'adjustment_out', label: 'Adjust OUT' },
-      { value: 'scrap', label: 'Scrap' },
-      { value: 'return_to_vendor', label: 'Return' },
+      ...(movementOptions?.movement_types ?? []),
     ]},
   ];
 

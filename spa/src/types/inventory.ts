@@ -140,6 +140,7 @@ export interface StockMovement {
   id: string;
   created_at: string;
   movement_type: StockMovementType;
+  movement_type_label?: string;
   item: { id: string; code: string; name: string } | null;
   from_location: { id: string; code: string } | null;
   to_location:   { id: string; code: string } | null;
@@ -168,6 +169,7 @@ export interface GoodsReceiptNote {
   grn_number: string;
   received_date: string;
   status: GrnStatus;
+  status_label?: string;
   rejected_reason: string | null;
   remarks: string | null;
   accepted_at: string | null;
@@ -209,6 +211,7 @@ export interface MaterialIssueSlip {
   work_order_id: number | null;
   issued_date: string;
   status: MaterialIssueStatus;
+  status_label?: string;
   total_value: string;
   reference_text: string | null;
   remarks: string | null;
@@ -235,6 +238,7 @@ export interface MrbRecord {
   status: MrbStatus;
   status_label: string;
   disposition: string | null;
+  disposition_label?: string | null;
   quantity: string;
   item: { id: string; code: string; name: string; unit_of_measure: string } | null;
   ncr: { id: string; ncr_number: string } | null;
@@ -269,6 +273,7 @@ export interface ReleaseMrbData {
 }
 
 export interface InventoryDashboard {
+  consumption_history_days: number;
   total_stock_value: string;
   items_below_reorder: number;
   items_critical: number;
@@ -283,8 +288,8 @@ export interface InventoryDashboard {
     lead_time_days: number;
     is_critical: boolean;
     severity: 'low' | 'critical';
-    open_pr: { number: string; status: string } | null;
-    open_po: { number: string; status: string } | null;
+    open_pr: { number: string; status: string; status_label?: string } | null;
+    open_po: { number: string; status: string; status_label?: string } | null;
   }>;
   recent_movements: StockMovement[];
   top_consumed_materials: Array<{

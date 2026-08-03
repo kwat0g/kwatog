@@ -124,6 +124,10 @@ export const supplierPortalApi = {
   },
 
   // ── Shipping Documents ──────────────────────────────
+  shippingDocumentOptions: async () => {
+    const { data } = await portalClient.get<{ data: { document_types: Array<{ value: string; label: string }> } }>('/b2b/supplier/purchase-orders/shipping-documents/options');
+    return data.data;
+  },
   listShippingDocuments: async (poId: string) => {
     const { data } = await portalClient.get<{ data: PortalShippingDocument[] }>(`/b2b/supplier/purchase-orders/${poId}/shipping-documents`);
     return data.data;

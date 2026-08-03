@@ -75,6 +75,7 @@ export interface SalesOrder {
   total_amount: string;
   status: SalesOrderStatus;
   status_label: string;
+  next_statuses?: Array<{ value: string; label: string }>;
   payment_terms_days: number;
   // Sprint 6 audit §3.2: linked chain context populated on the detail
   // payload only (whenLoaded on the resource).
@@ -83,6 +84,7 @@ export interface SalesOrder {
     mrp_plan_no: string;
     version: number;
     status: string;
+    status_label?: string;
     shortages_found: number;
     auto_pr_count: number;
     draft_wo_count: number;
@@ -91,19 +93,20 @@ export interface SalesOrder {
     id: string;
     wo_number: string;
     status: string;
+    status_label?: string;
     quantity_target: number;
     quantity_produced: number;
     planned_start: string | null;
     product: { id: string; part_number: string; name: string } | null;
   }>;
   inspections?: Array<{
-    id: string; inspection_number: string; stage: string; status: string; completed_at: string | null;
+    id: string; inspection_number: string; stage: string; stage_label?: string; status: string; status_label?: string; completed_at: string | null;
   }>;
   deliveries?: Array<{
-    id: string; delivery_number: string; status: string; scheduled_date: string | null;
+    id: string; delivery_number: string; status: string; status_label?: string; scheduled_date: string | null;
   }>;
   invoices?: Array<{
-    id: string; invoice_number: string; status: string; total_amount: string; balance: string;
+    id: string; invoice_number: string; status: string; status_label?: string; total_amount: string; balance: string;
   }>;
   delivery_terms: string | null;
   notes: string | null;
@@ -163,7 +166,9 @@ export interface CustomerComplaint {
   id: string;
   complaint_number: string;
   severity: ComplaintSeverity;
+  severity_label?: string;
   status: ComplaintStatus;
+  status_label?: string;
   description: string;
   affected_quantity: number;
   received_date: string | null;
@@ -172,7 +177,7 @@ export interface CustomerComplaint {
   customer?: { id: string; name: string } | null;
   product?: { id: string; part_number: string; name: string } | null;
   sales_order?: { id: string; so_number: string } | null;
-  ncr?: { id: string; ncr_number: string; status: string; severity: string } | null;
+  ncr?: { id: string; ncr_number: string; status: string; status_label?: string; severity: string; severity_label?: string } | null;
   creator?: { id: string; name: string } | null;
   assignee?: { id: string; name: string } | null;
   eight_d_report?: EightDReport | null;

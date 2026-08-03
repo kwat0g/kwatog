@@ -14,6 +14,7 @@ export interface ScheduleListParams extends ListParams {
 }
 
 export const schedulesApi = {
+  options: () => client.get<{ data: { maintainable_types: Array<{ value: string; label: string }>; interval_types: Array<{ value: string; label: string }> } }>('/maintenance/schedules/options').then(r => r.data.data),
   list: (params?: ScheduleListParams) =>
     client.get<PaginatedResponse<MaintenanceSchedule>>('/maintenance/schedules', { params }).then(r => r.data),
   show: (id: string) =>

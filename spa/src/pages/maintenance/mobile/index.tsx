@@ -52,7 +52,7 @@ export default function MobileMaintenanceList() {
       />
 
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-display font-medium text-primary">Work orders</h1>
+        <h1 className="text-lg font-medium text-primary">Work orders</h1>
         <Button
           variant="ghost"
           size="lg"
@@ -113,15 +113,15 @@ export default function MobileMaintenanceList() {
             <span className="font-mono tabular-nums text-sm font-medium">{wo.mwo_number}</span>
             <Chip variant={maintenancePriorityVariant[wo.priority]} className="gap-1">
               {wo.priority === 'critical' && <AlertTriangle className="w-3 h-3" aria-hidden />}
-              {wo.priority}
+              {wo.priority_label ?? wo.priority}
             </Chip>
           </div>
 
-          <div className="mt-1.5 text-sm font-medium">{wo.maintainable?.name ?? 'Unknown target'}</div>
+          <div className="mt-1.5 text-sm font-medium">{wo.maintainable?.name ?? '—'}</div>
           <div className="mt-0.5 flex items-center gap-2 text-xs text-muted">
-            <span className="capitalize">{wo.type}</span>
+            <span>{wo.type_label ?? wo.type}</span>
             <span aria-hidden>&middot;</span>
-            <Chip variant={maintenanceStatusVariant[wo.status]}>{wo.status.replace(/_/g, ' ')}</Chip>
+            <Chip variant={maintenanceStatusVariant[wo.status]}>{wo.status_label ?? wo.status}</Chip>
           </div>
 
           <div className="mt-3 flex items-center justify-between text-xs text-muted">

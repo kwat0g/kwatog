@@ -27,12 +27,6 @@ const STATUS_CHIP: Record<SpcChartStatus, ChipVariant> = {
 };
 
 // ─── Chart type display labels ────────────────────
-const CHART_TYPE_LABEL: Record<SpcChartType, string> = {
-  xbar_r: 'X-bar / R',
-  imr: 'I-MR',
-  p_chart: 'p-chart',
-};
-
 const CHART_TYPE_CHIP: Record<SpcChartType, ChipVariant> = {
   xbar_r: 'purple',
   imr: 'info',
@@ -49,6 +43,12 @@ export default function SpcChartsListPage() {
     queryFn: () => spcApi.listCharts(filters),
     placeholderData: (prev) => prev,
   });
+  const { data: options } = useQuery({
+    queryKey: ['quality', 'spc-options'],
+    queryFn: spcApi.options,
+    staleTime: 5 * 60 * 1000,
+  });
+  const chartTypeLabel = new Map((options?.chart_types ?? []).map((type) => [type.value, type.label]));
 
   const columns: Column<SpcControlChart>[] = [
     {
@@ -81,7 +81,7 @@ export default function SpcChartsListPage() {
       header: 'Chart Type',
       cell: (r) => (
         <Chip variant={CHART_TYPE_CHIP[r.chart_type]}>
-          {CHART_TYPE_LABEL[r.chart_type]}
+          {chartTypeLabel.get(r.chart_type) ?? r.chart_type}
         </Chip>
       ),
     },
@@ -89,7 +89,7 @@ export default function SpcChartsListPage() {
       key: 'status',
       header: 'Status',
       cell: (r) => (
-        <Chip variant={STATUS_CHIP[r.status]}>{r.status}</Chip>
+        <Chip variant={STATUS_CHIP[r.status]}>{r.status_label ?? r.status}</Chip>
       ),
     },
     {
@@ -133,9 +133,7 @@ export default function SpcChartsListPage() {
       type: 'select',
       options: [
         { value: '', label: 'All' },
-        { value: 'active', label: 'Active' },
-        { value: 'monitoring', label: 'Monitoring' },
-        { value: 'suspended', label: 'Suspended' },
+        ...(options?.statuses ?? []),
       ],
     },
   ];
@@ -209,7 +207,6 @@ export default function SpcChartsListPage() {
             data={data.data}
             meta={data.meta}
             onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
-            onRowClick={(row) => navigate(`/quality/spc/${row.id}`)}
           />
         </div>
       )}

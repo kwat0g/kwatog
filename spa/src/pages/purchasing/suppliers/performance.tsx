@@ -19,12 +19,12 @@ function fmtDays(v: string | null): string {
   const n = Number(v);
   return `${n >= 0 ? '+' : ''}${n.toFixed(1)} days`;
 }
-function scoreVariant(score: number | null): ChipVariant {
-  if (score === null) return 'neutral';
-  if (score >= 95) return 'success';
-  if (score >= 85) return 'info';
-  if (score >= 80) return 'warning';
-  return 'danger';
+function scoreVariant(tier: string | null | undefined): ChipVariant {
+  if (tier === 'A') return 'success';
+  if (tier === 'B') return 'info';
+  if (tier === 'C') return 'warning';
+  if (tier === 'D') return 'danger';
+  return 'neutral';
 }
 function monthLabel(year: number, month: number): string {
   return new Date(year, month - 1, 1).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
@@ -37,7 +37,7 @@ export default function SupplierPerformancePage() {
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['purchasing', 'supplier-performance', id],
-    queryFn: () => supplierPerformanceApi.show(id, 6),
+    queryFn: () => supplierPerformanceApi.show(id),
     placeholderData: (prev) => prev,
   });
 
@@ -157,36 +157,38 @@ export default function SupplierPerformancePage() {
         <StatCard
           label="On-time delivery"
           value={fmtPct(latest?.on_time_delivery_rate ?? null)}
-          helper="Target ≥ 95%"
+          helper={`Target ≥ ${data.policy.on_time_target}%`}
         />
         <StatCard
           label="Quality pass"
           value={fmtPct(latest?.quality_pass_rate ?? null)}
-          helper="Target ≥ 98%"
+          helper={`Target ≥ ${data.policy.quality_target}%`}
         />
         <StatCard
           label="Price variance"
           value={fmtPct(latest?.price_variance_pct ?? null)}
-          helper="Target ≤ 5%"
+          helper={`Target ≤ ${data.policy.price_variance_target}%`}
         />
         <StatCard
           label="Lead time variance"
           value={fmtDays(latest?.lead_time_variance_days ?? null)}
-          helper="Target ≤ 2 days"
+          helper={`Target ≤ ${data.policy.lead_time_variance_target} days`}
         />
       </div>
 
       {/* Score chip */}
       {score !== null && (
         <div className="px-5 pb-4">
-          <Chip variant={scoreVariant(score)}>
-            {score >= 95
+          <Chip variant={scoreVariant(latest?.tier)}>
+            {latest?.tier === 'A'
               ? 'Excellent supplier'
-              : score >= 85
+              : latest?.tier === 'B'
                 ? 'Good standing'
-                : score >= 80
+                : latest?.tier === 'C'
                   ? 'Needs attention'
-                  : 'Underperforming — review required'}
+                  : latest?.tier === 'D'
+                    ? 'Underperforming — review required'
+                    : 'No tier assigned'}
           </Chip>
         </div>
       )}
@@ -229,7 +231,7 @@ export default function SupplierPerformancePage() {
               {data.trend.map((p) => {
                 const v = p.overall_score === null ? 0 : Number(p.overall_score);
                 const heightPct = maxTrendScore > 0 ? (v / maxTrendScore) * 100 : 0;
-                const variant = scoreVariant(v);
+                const variant = scoreVariant(p.tier);
                 return (
                   <div
                     key={`${p.period_year}-${p.period_month}`}

@@ -64,7 +64,7 @@ export default function TrialBalancePage() {
                   <tr key={a.code} className={trCls}>
                     <Td mono className="text-muted">{a.code}</Td>
                     <Td>{a.name}</Td>
-                    <Td className="text-xs text-muted uppercase tracking-wider">{a.type}</Td>
+                    <Td className="text-xs text-muted">{a.type_label ?? a.type}</Td>
                     <Td align="right" mono>{Number(a.debit_total)  > 0 ? formatPeso(a.debit_total)  : ''}</Td>
                     <Td align="right" mono>{Number(a.credit_total) > 0 ? formatPeso(a.credit_total) : ''}</Td>
                   </tr>

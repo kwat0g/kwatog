@@ -1,7 +1,7 @@
 import { useEffect, type ReactNode } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
-import { FullPageLoader } from '@/components/ui/Spinner';
+import { SkeletonLoginPage } from '@/components/ui/Skeleton';
 
 interface GuestGuardProps {
   children: ReactNode;
@@ -23,7 +23,7 @@ export function GuestGuard({ children }: GuestGuardProps) {
     }
   }, [isAuthenticated, user, isLoading, bootstrap]);
 
-  if (isLoading) return <FullPageLoader />;
+  if (isLoading) return <SkeletonLoginPage />;
 
   if (isAuthenticated) {
     return <Navigate to={user?.must_change_password ? '/change-password' : '/dashboard'} replace />;

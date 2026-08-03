@@ -1,8 +1,9 @@
-import { lazy } from 'react';
+import { lazy, Suspense } from 'react';
 import { Route } from 'react-router-dom';
 import { AuthGuard } from '@/components/guards/AuthGuard';
 import { GuestGuard } from '@/components/guards/GuestGuard';
 import { AuthLayout } from '@/layouts/AuthLayout';
+import { SkeletonForm } from '@/components/ui/Skeleton';
 
 const LoginPage = lazy(() => import('@/pages/auth/login'));
 const ChangePasswordPage = lazy(() => import('@/pages/auth/change-password'));
@@ -19,7 +20,14 @@ export const authRoutes = (
         </GuestGuard>
       }
     >
-      <Route path="/login" element={<LoginPage />} />
+      <Route
+        path="/login"
+        element={
+          <Suspense fallback={<SkeletonForm />}>
+            <LoginPage />
+          </Suspense>
+        }
+      />
     </Route>
 
     {/* Password recovery remains available without a session. */}

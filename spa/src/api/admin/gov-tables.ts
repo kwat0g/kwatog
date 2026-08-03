@@ -12,6 +12,7 @@ export interface UpdateGovTableData {
 }
 
 export const govTablesApi = {
+  options: () => client.get<{ data: { agencies: Array<{ value: ContributionAgency; label: string }> } }>('/admin/gov-tables/options').then((r) => r.data.data),
   /**
    * Government tables aren't paginated server-side (small fixed data set per
    * agency) but we still expect the standard PaginatedResponse envelope from

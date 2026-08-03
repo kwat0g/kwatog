@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import { onFormInvalid } from '@/lib/formErrors';
 import { Printer, Receipt, Ban } from 'lucide-react';
 import { billsApi } from '@/api/accounting/bills';
+import { accountingOptionsApi } from '@/api/accounting/options';
 import { downloadAuthenticatedFile } from '@/api/download';
 import { accountsApi } from '@/api/accounting/accounts';
 import { threeWayMatchApi } from '@/api/purchasing/purchase-orders';
@@ -30,24 +31,21 @@ import { formatDate } from '@/lib/formatDate';
 import { numberInputProps } from '@/lib/numberInput';
 import { Td, Th, tableCls, theadTrCls, totalsTrCls, trCls } from '@/components/ui/table-cells';
 import { cn } from '@/lib/cn';
+import type { PaymentMethod } from '@/types/accounting';
 
 const paymentSchema = z.object({
   cash_account_id:  z.string().min(1, 'Required'),
   payment_date:     z.string().min(1, 'Required'),
   amount:           z.coerce.number().positive('> 0'),
-  payment_method:   z.enum(['cash', 'check', 'bank_transfer', 'online']),
+  payment_method:   z.string().min(1, 'Required'),
   reference_number: z.string().max(50).optional().or(z.literal('')),
 });
 type PaymentFormValues = z.infer<typeof paymentSchema>;
 
-// REC-02 — 3-way match per-line status → chip variant/label.
+// REC-02 — 3-way match per-line status → visual chip variant.
 type MatchLineStatus = 'matched' | 'qty_variance' | 'price_variance' | 'both' | 'grn_short';
-const MATCH_LINE_CHIP: Record<MatchLineStatus, { variant: ChipVariant; label: string }> = {
-  matched:        { variant: 'success', label: 'Matched' },
-  qty_variance:   { variant: 'warning', label: 'Qty variance' },
-  price_variance: { variant: 'warning', label: 'Price variance' },
-  both:           { variant: 'warning', label: 'Qty + price' },
-  grn_short:      { variant: 'danger',  label: 'GRN short' },
+const MATCH_LINE_VARIANT: Record<MatchLineStatus, ChipVariant> = {
+  matched: 'success', qty_variance: 'warning', price_variance: 'warning', both: 'warning', grn_short: 'danger',
 };
 
 function buildBillChain(bill: { status: string; amount_paid: string; balance: string; date: string; payments?: Array<{ payment_date: string }> }): ChainStep[] {
@@ -56,9 +54,6 @@ function buildBillChain(bill: { status: string; amount_paid: string; balance: st
   const hasPayment = (bill.payments?.length ?? 0) > 0;
   const fullyPaid = parseFloat(bill.balance) <= 0 && parseFloat(bill.amount_paid) > 0;
   return [
-    { key: 'pr',      label: 'PR Created',     state: 'done', date: bill.date.slice(0, 10) },
-    { key: 'po',      label: 'PO Approved',    state: 'done' },
-    { key: 'grn',     label: 'GRN Received',   state: 'done' },
     { key: 'bill',    label: 'Bill Created',   state: billCreated ? 'done' : isCancelled ? 'pending' : 'active', date: bill.date.slice(0, 10) },
     { key: 'pay',     label: 'Payment Made',   state: fullyPaid ? 'done' : hasPayment ? 'active' : 'pending', date: bill.payments?.[0]?.payment_date.slice(0, 10) },
     { key: 'closed',  label: 'Settled',        state: fullyPaid ? 'done' : 'pending' },
@@ -77,6 +72,7 @@ export default function BillDetailPage() {
     queryFn: () => billsApi.show(id),
     enabled: !!id,
   });
+  const { data: accountingOptions } = useQuery({ queryKey: ['accounting', 'options'], queryFn: () => accountingOptionsApi.list() });
 
   const { data: cashAccounts } = useQuery({
     queryKey: ['accounting', 'accounts', 'cash'],
@@ -94,7 +90,7 @@ export default function BillDetailPage() {
 
   const { register, handleSubmit, formState: { errors }, reset } = useForm<PaymentFormValues>({
     resolver: zodResolver(paymentSchema),
-    defaultValues: { payment_date: new Date().toISOString().slice(0, 10), payment_method: 'bank_transfer' },
+    defaultValues: { payment_date: new Date().toISOString().slice(0, 10), payment_method: '' },
   });
 
   const cancelMut = useMutation({
@@ -110,14 +106,14 @@ export default function BillDetailPage() {
       cash_account_id: d.cash_account_id,
       payment_date:    d.payment_date,
       amount:          String(d.amount),
-      payment_method:  d.payment_method,
+      payment_method:  d.payment_method as PaymentMethod,
       reference_number: d.reference_number || undefined,
     }),
     onSuccess: () => {
       toast.success('Payment recorded.');
       qc.invalidateQueries({ queryKey: ['accounting', 'bills'] });
       setShowPay(false);
-      reset({ payment_date: new Date().toISOString().slice(0, 10), payment_method: 'bank_transfer', cash_account_id: '', amount: 0, reference_number: '' });
+      reset({ payment_date: new Date().toISOString().slice(0, 10), payment_method: '', cash_account_id: '', amount: undefined as unknown as number, reference_number: '' });
     },
     onError: (e: Error & { response?: { data?: { message?: string } } }) => toast.error(e.response?.data?.message ?? 'Failed to record payment.'),
   });
@@ -135,7 +131,7 @@ export default function BillDetailPage() {
         title={
           <div className="flex items-center gap-3">
             <span className="font-mono">{bill.bill_number}</span>
-            <Chip variant={chipVariantForStatus(bill.status)}>{bill.status}</Chip>
+            <Chip variant={chipVariantForStatus(bill.status)}>{bill.status_label ?? bill.status}</Chip>
             {bill.is_overdue && <Chip variant="danger">overdue</Chip>}
             {hasMatch && (
               bill.has_variances
@@ -198,7 +194,7 @@ export default function BillDetailPage() {
               )}
               {bill.journal_entry && (
                 <div className="col-span-2"><dt className="text-2xs uppercase tracking-wider text-muted mb-0.5">Journal entry</dt>
-                  <dd><a className="text-accent hover:underline font-mono" href={`/accounting/journal-entries/${bill.journal_entry.id}`}>{bill.journal_entry.entry_number}</a> · {bill.journal_entry.status}</dd>
+                  <dd><a className="text-accent hover:underline font-mono" href={`/accounting/journal-entries/${bill.journal_entry.id}`}>{bill.journal_entry.entry_number}</a> · {bill.journal_entry.status_label ?? bill.journal_entry.status}</dd>
                 </div>
               )}
             </dl>
@@ -248,7 +244,7 @@ export default function BillDetailPage() {
                     <span>{formatDate(p.payment_date)}</span>
                     <span className="font-medium">{formatPeso(p.amount)}</span>
                   </div>
-                  <div className="text-muted">{p.payment_method}{p.reference_number ? ` · ${p.reference_number}` : ''}</div>
+                  <div className="text-muted">{p.payment_method_label ?? p.payment_method}{p.reference_number ? ` · ${p.reference_number}` : ''}</div>
                 </li>
               ))}
             </ul>
@@ -280,7 +276,7 @@ export default function BillDetailPage() {
                 </thead>
                 <tbody>
                   {match.lines.map((l, idx) => {
-                    const chip = MATCH_LINE_CHIP[l.status];
+                    const chip = MATCH_LINE_VARIANT[l.status];
                     const isBlock = l.severity === 'block';
                     return (
                       <tr key={`${l.item_id}-${idx}`} className={cn(trCls, isBlock && 'bg-danger-bg/30')}>
@@ -296,7 +292,7 @@ export default function BillDetailPage() {
                         <Td align="right" mono>{l.quantity_variance_pct.toFixed(2)}%</Td>
                         <Td align="right" mono>{l.price_variance_pct.toFixed(2)}%</Td>
                         <Td>
-                          <Chip variant={isBlock ? 'danger' : chip.variant}>{chip.label}</Chip>
+                          <Chip variant={isBlock ? 'danger' : chip}>{l.status_label ?? l.status}</Chip>
                         </Td>
                       </tr>
                     );
@@ -319,10 +315,7 @@ export default function BillDetailPage() {
             className="font-mono tabular-nums text-right" required prefix="₱" {...numberInputProps()}
             {...register('amount')} error={errors.amount?.message} />
           <Select label="Method" required {...register('payment_method')} error={errors.payment_method?.message}>
-            <option value="cash">Cash</option>
-            <option value="check">Check</option>
-            <option value="bank_transfer">Bank transfer</option>
-            <option value="online">Online</option>
+            {(accountingOptions?.payment_methods ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
           </Select>
           <Input label="Reference no." {...register('reference_number')} />
           <div className="flex justify-end gap-2 pt-2 border-t border-default">

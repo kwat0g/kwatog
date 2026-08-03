@@ -93,7 +93,7 @@ export function LiveDashboardWidget({
             {formatValue(summary)}
           </div>
           {summary.helper && <p className="text-xs text-muted">{summary.helper}</p>}
-          <p className="text-2xs text-text-subtle">Updated {new Date(summary.updated_at).toLocaleTimeString()}</p>
+          <p className="text-2xs text-subtle">Updated {new Date(summary.updated_at).toLocaleTimeString()}</p>
         </div>
       )}
     </Panel>

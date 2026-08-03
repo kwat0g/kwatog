@@ -9,6 +9,7 @@ import type {
 } from '@/types/maintenance';
 
 export const conditionReadingsApi = {
+  options: () => client.get<{ data: { metrics: Array<{ value: string; label: string; unit: string }>; sources: Array<{ value: string; label: string }>; default_source: string } }>('/maintenance/condition-readings/options').then(r => r.data.data),
   list: (params?: { machine_id: string; metric?: string; page?: number; per_page?: number }) =>
     client.get<PaginatedResponse<MachineConditionReading>>('/maintenance/condition-readings', { params }).then(r => r.data),
 

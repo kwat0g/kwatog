@@ -3,6 +3,7 @@ import type { ApiSuccess, PaginatedResponse, ListParams } from '@/types';
 import type { NcrTemplate, CreateNcrTemplateData } from '@/types/quality';
 
 export const ncrTemplatesApi = {
+  options: () => client.get<{ data: { sources: Array<{ value: string; label: string }>; severities: Array<{ value: string; label: string }> } }>('/quality/ncr-templates/options').then((r) => r.data.data),
   list: (params?: ListParams) =>
     client.get<PaginatedResponse<NcrTemplate>>('/quality/ncr-templates', { params }).then((r) => r.data),
 

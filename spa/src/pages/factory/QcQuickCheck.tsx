@@ -23,7 +23,7 @@ export default function QcQuickCheck() {
   // Form state
   const [selectedWoId, setSelectedWoId] = useState('');
   const [sampleSize, setSampleSize] = useState('');
-  const [defectsFound, setDefectsFound] = useState('0');
+  const [defectsFound, setDefectsFound] = useState('');
   const [notes, setNotes] = useState('');
   const [showFailPrompt, setShowFailPrompt] = useState(false);
   const [defectDescription, setDefectDescription] = useState('');
@@ -35,13 +35,22 @@ export default function QcQuickCheck() {
 
   const mutation = useMutation({
     mutationFn: (result: 'passed' | 'failed') => {
-      const parsedSampleSize = parseInt(sampleSize, 10) || 1;
-      const parsedDefects = parseInt(defectsFound, 10) || 0;
+      if (!selectedWo?.product?.id || selectedWo.quantity_target == null || selectedWo.quantity_target <= 0) {
+        throw new Error('The selected work order has no authoritative product or target quantity.');
+      }
+      const parsedSampleSize = parseInt(sampleSize, 10);
+      if (!Number.isInteger(parsedSampleSize) || parsedSampleSize <= 0) {
+        throw new Error('Sample size must be a positive integer.');
+      }
+      const parsedDefects = parseInt(defectsFound, 10);
+      if (!Number.isInteger(parsedDefects) || parsedDefects < 0) {
+        throw new Error('Defects found must be a non-negative integer.');
+      }
 
       return factoryApi.quickQcCheck({
         stage: 'in_process',
-        product_id: selectedWo?.product?.id ?? '',
-        batch_quantity: selectedWo?.quantity_target ?? 0,
+          product_id: selectedWo.product.id,
+          batch_quantity: selectedWo.quantity_target,
         entity_type: 'work_order',
         entity_id: selectedWoId,
         notes: [
@@ -59,7 +68,7 @@ export default function QcQuickCheck() {
       }
       // Reset form
       setSampleSize('');
-      setDefectsFound('0');
+      setDefectsFound('');
       setNotes('');
       setDefectDescription('');
       setShowFailPrompt(false);
@@ -70,7 +79,7 @@ export default function QcQuickCheck() {
     },
   });
 
-  const canSubmit = selectedWoId && (parseInt(sampleSize, 10) || 0) > 0;
+  const canSubmit = selectedWoId && (parseInt(sampleSize, 10) || 0) > 0 && /^(0|[1-9]\d*)$/.test(defectsFound);
 
   function handlePass() {
     if (!canSubmit) return;
@@ -108,7 +117,7 @@ export default function QcQuickCheck() {
             <option value="">Select a work order…</option>
             {orders.map(wo => (
               <option key={wo.id} value={wo.id}>
-                {wo.wo_number} — {wo.product?.name ?? 'Unknown'}
+                {wo.wo_number} — {wo.product?.name ?? '—'}
               </option>
             ))}
           </Select>
@@ -118,7 +127,7 @@ export default function QcQuickCheck() {
           <div className="text-xs text-muted bg-subtle rounded-md p-2">
             <span className="font-medium text-secondary">{selectedWo.product?.part_number}</span>
             {' '}&middot;{' '}
-            Machine: {selectedWo.machine?.name ?? 'N/A'}
+            Machine: {selectedWo.machine?.name ?? '—'}
             {' '}&middot;{' '}
             Target: <span className="font-mono tabular-nums">{selectedWo.quantity_target}</span>
           </div>
@@ -133,7 +142,7 @@ export default function QcQuickCheck() {
           min="1"
           value={sampleSize}
           onChange={e => setSampleSize(e.target.value)}
-          placeholder="e.g. 5"
+          placeholder="Enter measured value"
           className="text-center font-mono tabular-nums"
         />
 

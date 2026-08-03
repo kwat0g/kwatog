@@ -5,7 +5,7 @@
  * current month plus a stacked bar chart showing monthly COPQ trend from
  * copq_snapshots.
  *
- * Data source: GET /api/v1/dashboards/copq-widget?months=6
+ * Data source: GET /api/v1/dashboards/copq-widget (configured history window)
  */
 import { useQuery } from '@tanstack/react-query';
 import { client } from '@/api/client';
@@ -30,6 +30,7 @@ interface CopqCurrent {
     returns: number;
     complaints: number;
     return_cost: number;
+    complaint_cost: number;
   };
   total: number;
   period_label: string;
@@ -39,8 +40,8 @@ interface CopqTrendItem {
   month: string;
   scrap_cost: number;
   rework_cost: number;
-  warranty_cost: number;
-  inspection_cost: number;
+  return_cost: number;
+  complaint_cost: number;
   total: number;
 }
 
@@ -52,9 +53,9 @@ interface CopqWidgetData {
 
 /* ─── API ─── */
 
-function fetchCopqWidget(months = 6) {
+function fetchCopqWidget() {
   return client
-    .get<{ data: CopqWidgetData }>('/dashboards/copq-widget', { params: { months } })
+    .get<{ data: CopqWidgetData }>('/dashboards/copq-widget')
     .then((r) => r.data.data);
 }
 
@@ -63,14 +64,14 @@ function fetchCopqWidget(months = 6) {
 const TREND_BARS = [
   { dataKey: 'scrap_cost', color: 'var(--danger)', label: 'Scrap' },
   { dataKey: 'rework_cost', color: 'var(--warning)', label: 'Rework' },
-  { dataKey: 'warranty_cost', color: 'var(--info)', label: 'Returns' },
-  { dataKey: 'inspection_cost', color: 'var(--purple, #8b5cf6)', label: 'Complaints' },
+  { dataKey: 'return_cost', color: 'var(--info)', label: 'Returns' },
+  { dataKey: 'complaint_cost', color: 'var(--purple, #8b5cf6)', label: 'Complaints' },
 ];
 
 export function CopqWidget() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['copq-widget'],
-    queryFn: () => fetchCopqWidget(6),
+    queryFn: fetchCopqWidget,
     refetchInterval: 120_000,
   });
 
@@ -111,7 +112,7 @@ export function CopqWidget() {
   const { current, trend, period } = data;
   const scrapCost = current.internal_failure.scrap_cost;
   const reworkCost = current.internal_failure.rework_cost;
-  const returnCost = current.external_failure.return_cost;
+  const externalCost = current.external_failure.return_cost + current.external_failure.complaint_cost;
   const totalInternal = scrapCost + reworkCost;
 
   return (
@@ -130,9 +131,9 @@ export function CopqWidget() {
             helper={`${current.internal_failure.rework_units} units reworked`}
           />
           <StatCard
-            label="Return Cost"
-            value={formatPeso(returnCost)}
-            helper={`${current.external_failure.returns} returns completed`}
+            label="External Cost"
+            value={formatPeso(externalCost)}
+            helper={`${current.external_failure.returns} returns · ${current.external_failure.complaints} complaints`}
           />
           <StatCard
             label="Total COPQ"
@@ -146,7 +147,7 @@ export function CopqWidget() {
         {trend.length > 0 ? (
           <div>
             <div className="text-xs text-muted uppercase tracking-wider font-medium mb-2">
-              Monthly COPQ Trend (Last 6 Months)
+              Monthly COPQ Trend ({trend.length} periods)
             </div>
             <BarComparison
               data={trend as unknown as Record<string, unknown>[]}

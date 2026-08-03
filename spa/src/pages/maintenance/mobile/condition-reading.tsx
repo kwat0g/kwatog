@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { conditionReadingsApi } from '@/api/maintenance/conditionReadings';
 import { machinesApi } from '@/api/mrp/machines';
@@ -9,16 +9,8 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
-import type { ConditionMetric, ConditionReadingResult, MachineHealthSnapshot } from '@/types/maintenance';
+import type { ConditionMetric, ConditionReadingResult, ConditionSource, MachineHealthSnapshot } from '@/types/maintenance';
 import type { Machine } from '@/types/mrp';
-
-const METRICS: { value: ConditionMetric; label: string; unit: string; placeholder: string }[] = [
-  { value: 'temperature', label: 'Temperature', unit: 'celsius', placeholder: 'e.g. 55.0' },
-  { value: 'vibration',   label: 'Vibration',   unit: 'mm/s',    placeholder: 'e.g. 4.2' },
-  { value: 'pressure',    label: 'Pressure',    unit: 'bar',     placeholder: 'e.g. 8.0' },
-  { value: 'current',     label: 'Current',     unit: 'amp',     placeholder: 'e.g. 120' },
-  { value: 'oil_quality', label: 'Oil quality',  unit: 'percent', placeholder: 'e.g. 85' },
-];
 
 export default function MobileConditionReading() {
   const queryClient = useQueryClient();
@@ -31,9 +23,18 @@ export default function MobileConditionReading() {
 
   const machines = (machinesData?.data ?? []) as Machine[];
 
+  const { data: metricOptions } = useQuery({
+    queryKey: ['maintenance', 'condition-readings', 'options'],
+    queryFn: () => conditionReadingsApi.options(),
+    staleTime: 5 * 60 * 1000,
+  });
+  const metrics = useMemo(() => (metricOptions?.metrics ?? []) as Array<{ value: ConditionMetric; label: string; unit: string }>, [metricOptions?.metrics]);
+  const sources = useMemo(() => metricOptions?.sources ?? [], [metricOptions?.sources]);
+
   // ── Form state ─────────────────────────────────────────
   const [machineId, setMachineId] = useState('');
-  const [metric, setMetric] = useState<ConditionMetric>('temperature');
+  const [metric, setMetric] = useState<ConditionMetric | ''>('');
+  const [source, setSource] = useState<ConditionSource | ''>('');
   const [value, setValue] = useState('');
   const [notes, setNotes] = useState('');
   const [lastResult, setLastResult] = useState<ConditionReadingResult | null>(null);
@@ -50,9 +51,9 @@ export default function MobileConditionReading() {
     mutationFn: () =>
       conditionReadingsApi.record({
         machine_id: machineId,
-        metric,
+        metric: metric as ConditionMetric,
         value: parseFloat(value),
-        source: 'manual',
+        source: source as ConditionSource,
         notes: notes.trim() || undefined,
       }),
     onSuccess: (result) => {
@@ -70,8 +71,16 @@ export default function MobileConditionReading() {
     onError: () => toast.error('Failed to record reading.'),
   });
 
-  const canSubmit = machineId && metric && parseFloat(value) >= 0 && !isNaN(parseFloat(value));
-  const selectedMetricInfo = METRICS.find(m => m.value === metric);
+  const canSubmit = machineId && metric && source && parseFloat(value) >= 0 && !isNaN(parseFloat(value));
+  const selectedMetricInfo = metrics.find(m => m.value === metric);
+  useEffect(() => {
+    if (!metric && metrics.length > 0) setMetric(metrics[0].value);
+  }, [metric, metrics]);
+  useEffect(() => {
+    if (!sources.some((option) => option.value === source) && sources.length > 0) {
+      setSource(sources[0].value as ConditionSource);
+    }
+  }, [source, sources]);
 
   return (
     <div className="space-y-4">
@@ -119,10 +128,22 @@ export default function MobileConditionReading() {
           value={metric}
           onChange={e => setMetric(e.target.value as ConditionMetric)}
         >
-          {METRICS.map(m => (
+          {metrics.map(m => (
             <option key={m.value} value={m.value}>
               {m.label} ({m.unit})
             </option>
+          ))}
+        </Select>
+
+        <Select
+          id="source_select"
+          label="Source"
+          fieldSize="lg"
+          value={source}
+          onChange={e => setSource(e.target.value as ConditionSource)}
+        >
+          {sources.map((option) => (
+            <option key={option.value} value={option.value}>{option.label}</option>
           ))}
         </Select>
 
@@ -136,7 +157,7 @@ export default function MobileConditionReading() {
           step="0.001"
           value={value}
           onChange={e => setValue(e.target.value)}
-          placeholder={selectedMetricInfo?.placeholder}
+          placeholder="Enter reading"
           className="text-center font-mono tabular-nums"
         />
 
@@ -220,7 +241,7 @@ export default function MobileConditionReading() {
                           : 'bg-success'
                     }`}
                   />
-                  <span className="capitalize font-medium">{snap.metric.replace(/_/g, ' ')}</span>
+                  <span className="font-medium">{metrics.find((metricOption) => metricOption.value === snap.metric)?.label ?? snap.metric}</span>
                 </div>
                 <div className="font-mono tabular-nums text-xs">
                   {snap.value !== null ? `${snap.value} ${snap.unit}` : '—'}

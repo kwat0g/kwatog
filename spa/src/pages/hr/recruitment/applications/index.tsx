@@ -22,25 +22,6 @@ const STAGE_CHIP: Record<ApplicationStage, 'neutral' | 'info' | 'warning' | 'suc
   rejected: 'danger',
 };
 
-const STAGE_LABEL: Record<ApplicationStage, string> = {
-  new: 'New',
-  screening: 'Screening',
-  interview: 'Interview',
-  offer: 'Offer',
-  hired: 'Hired',
-  rejected: 'Rejected',
-};
-
-const STAGE_TABS: { label: string; value: string }[] = [
-  { label: 'All', value: '' },
-  { label: 'New', value: 'new' },
-  { label: 'Screening', value: 'screening' },
-  { label: 'Interview', value: 'interview' },
-  { label: 'Offer', value: 'offer' },
-  { label: 'Hired', value: 'hired' },
-  { label: 'Rejected', value: 'rejected' },
-];
-
 interface AppFilters {
   [key: string]: unknown;
   page: number;
@@ -66,6 +47,14 @@ export default function ApplicationsListPage() {
         .then((r) => r.data),
     placeholderData: (prev) => prev,
   });
+  const { data: recruitmentOptions } = useQuery({
+    queryKey: ['recruitment', 'options'],
+    queryFn: () => recruitmentApi.options().then((r) => r.data.data),
+    staleTime: 5 * 60 * 1000,
+  });
+  const stageOptions = recruitmentOptions?.application_stages ?? [];
+  const stageLabel = new Map(stageOptions.map((stage) => [stage.value, stage.label]));
+  const stageTabs = [{ label: 'All', value: '' }, ...stageOptions.map((stage) => ({ label: stage.label, value: stage.value }))];
 
   const columns: Column<JobApplication>[] = [
     {
@@ -87,7 +76,7 @@ export default function ApplicationsListPage() {
     {
       key: 'stage',
       header: 'Stage',
-      cell: (r) => <Chip variant={STAGE_CHIP[r.stage]}>{STAGE_LABEL[r.stage]}</Chip>,
+      cell: (r) => <Chip variant={STAGE_CHIP[r.stage]}>{stageLabel.get(r.stage) ?? r.stage}</Chip>,
     },
     {
       key: 'applied_at',
@@ -116,7 +105,7 @@ export default function ApplicationsListPage() {
         label="Application stage"
         value={stageFilter}
         onChange={(value) => { setStageFilter(value); setFilters((f) => ({ ...f, page: 1 })); }}
-        items={STAGE_TABS.map((tab) => ({ key: tab.value, label: tab.label }))}
+        items={stageTabs.map((tab) => ({ key: tab.value, label: tab.label }))}
       />
 
       <FilterBar
@@ -151,7 +140,6 @@ export default function ApplicationsListPage() {
           <DataTable
             columns={columns}
             data={data.data}
-            onRowClick={(row) => navigate(`/hr/recruitment/applications/${row.id}`)}
             meta={data.meta}
             onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
             onSort={(sort, direction) => setFilters((f) => ({ ...f, sort, direction, page: 1 }))}

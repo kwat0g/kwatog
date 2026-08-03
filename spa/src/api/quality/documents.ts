@@ -8,7 +8,11 @@ export interface DocumentListParams extends ListParams {
   is_active?: boolean;
 }
 
+export interface DocumentAssigneeRole { slug: string; name: string }
+
 export const documentsApi = {
+  options: () => client.get<{ data: { categories: Array<{ value: string; label: string }>; max_review_interval_months: number } }>('/quality/documents/options').then((r) => r.data.data),
+  assigneeRoles: () => client.get<{ data: DocumentAssigneeRole[] }>('/quality/documents/assignee-roles').then((r) => r.data.data),
   list: (params?: DocumentListParams) =>
     client.get<PaginatedResponse<ControlledDocument>>('/quality/documents', { params }).then((r) => r.data),
 

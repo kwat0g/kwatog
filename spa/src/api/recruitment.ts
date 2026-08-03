@@ -10,7 +10,14 @@ import type {
 
 const BASE = '/hr/recruitment';
 
+export interface RecruitmentOptions {
+  employment_types: Array<{ value: string; label: string }>;
+  application_stages: Array<{ value: string; label: string; is_terminal: boolean; next: string | null }>;
+  posting_statuses: Array<{ value: string; label: string }>;
+}
+
 export const recruitmentApi = {
+  options: () => client.get<{ data: RecruitmentOptions }>(`${BASE}/postings/options`),
   listPostings: (params?: Record<string, unknown>) =>
     client.get<PaginatedResponse<JobPosting>>(`${BASE}/postings`, { params }),
   showPosting: (id: string) =>

@@ -5,15 +5,15 @@
  * inline quote request form so visitors can send RFQs without leaving the page.
  */
 
-import { useState } from 'react';
+import { useState, type DragEvent } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { ArrowRight, Mail, Phone, CheckCircle, Upload, FileText } from 'lucide-react';
+import { ArrowRight, Mail, Phone, CheckCircle, Upload, FileText, Trash2 } from 'lucide-react';
 import { AxiosError } from 'axios';
 import { DatumMark } from '../components/DatumMark';
 import { ScrambleText } from '../components/ScrambleText';
-import { COMPANY } from '../data';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
@@ -21,6 +21,15 @@ import { FormErrorSummary } from '@/components/ui/FormErrorSummary';
 import { landingApi } from '@/api/landing';
 import { cn } from '@/lib/cn';
 import { useMagnetic } from '../hooks/useMagnetic';
+
+function formatBytes(bytes: number, decimals = 1) {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+}
 
 const quoteSchema = z.object({
   full_name: z.string().min(1, 'Full name is required'),
@@ -33,9 +42,40 @@ const quoteSchema = z.object({
 type QuoteForm = z.infer<typeof quoteSchema>;
 
 export function ContactSection() {
+  const { data: contact } = useQuery({ queryKey: ['landing', 'contact'], queryFn: landingApi.contact, staleTime: 300_000 });
+  const { data: content } = useQuery({ queryKey: ['landing', 'content'], queryFn: landingApi.content, staleTime: 300_000 });
+  const salesEmail = contact?.sales_email || 'sales@ogami.ph';
+  const phone = contact?.phone || '+63 (046) 402-1234';
+  const address = contact?.address || 'FCIE Dasmariñas, Cavite, Philippines';
+  const quoteLabel = content?.section_copy?.hero_cta?.quote_label || 'Request Quote';
+  const sectionCopy = content?.section_copy;
+  const contactTitle = sectionCopy?.contact_title || 'Start Your Next Precision Part';
+  const contactIntro = sectionCopy?.contact_intro || 'Send your 2D/3D CAD drawing or spec sheet for immediate DFM feedback, tooling quotation, and volume production lead times.';
   const [drawing, setDrawing] = useState<File | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const submitRef = useMagnetic<HTMLButtonElement>({ strength: 0.22, duration: 0.55 });
+
+  const handleDragOver = (e: DragEvent<HTMLLabelElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: DragEvent<HTMLLabelElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: DragEvent<HTMLLabelElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      setDrawing(e.dataTransfer.files[0]);
+    }
+  };
 
   const {
     register,
@@ -123,16 +163,14 @@ export function ContactSection() {
                 data-reveal-delay="0.05"
                 className="mt-5 font-display text-[clamp(2.25rem,5.5vw,4rem)] font-medium leading-[1.02] tracking-[-0.025em] text-landing-text"
               >
-                Have a part in mind? Let&apos;s mold it.
+                {contactTitle}
               </h2>
               <p
                 data-reveal
                 data-reveal-delay="0.1"
                 className="mt-5 font-sans text-[15px] leading-relaxed text-landing-text-secondary sm:text-lg"
               >
-                Send us your drawing or your challenge. Our engineers will come back
-                with tooling, tolerance, and timeline — and a clear path to your first
-                certified shipment.
+                {contactIntro}
               </p>
 
               <div
@@ -141,18 +179,18 @@ export function ContactSection() {
                 className="mt-12 flex flex-col gap-4 border-t border-landing-border pt-8 sm:flex-row sm:gap-10"
               >
                 <a
-                  href={`mailto:${COMPANY.email}`}
+                  href={`mailto:${salesEmail}`}
                   className="flex items-center gap-2.5 font-mono text-[12px] text-landing-text-secondary transition-colors hover:text-landing-accent"
                 >
                   <Mail size={15} className="text-landing-accent" />
-                  {COMPANY.email}
+                  {salesEmail}
                 </a>
                 <span className="flex items-center gap-2.5 font-mono text-[12px] text-landing-text-secondary">
                   <Phone size={15} className="text-landing-accent" />
-                  {COMPANY.phone}
+                  {phone}
                 </span>
                 <span className="font-mono text-[12px] text-landing-subtle-text">
-                  {COMPANY.locationLine}
+                  {address}
                 </span>
               </div>
             </div>
@@ -171,11 +209,10 @@ export function ContactSection() {
                     strokeWidth={1.5}
                   />
                   <h3 className="mt-4 font-display text-xl font-medium text-landing-text">
-                    Request received
+                    {sectionCopy?.contact_success_title ?? '—'}
                   </h3>
                   <p className="mt-2 text-[13px] text-landing-text-secondary">
-                    Thank you. Our engineers will review your part and reply within
-                    1–2 business days.
+                    {sectionCopy?.contact_success_body ?? '—'}
                   </p>
                   <Button
                     type="button"
@@ -227,9 +264,16 @@ export function ContactSection() {
 
                   <label
                     htmlFor="drawing-upload"
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
                     className={cn(
-                      'group flex cursor-pointer flex-col items-center justify-center gap-2 rounded-md border border-dashed border-landing-border bg-landing-elevated px-4 py-5 transition-colors hover:border-landing-accent/40',
-                      drawing && 'border-solid border-landing-accent/40',
+                      'group relative flex cursor-pointer flex-col items-center justify-center gap-2 rounded-md border border-dashed px-4 py-4 transition-all',
+                      isDragging
+                        ? 'border-landing-accent bg-landing-accent/10 ring-2 ring-landing-accent/30'
+                        : drawing
+                        ? 'border-solid border-landing-accent/50 bg-landing-elevated'
+                        : 'border-landing-border bg-landing-elevated hover:border-landing-accent/40',
                     )}
                   >
                     <input
@@ -240,24 +284,46 @@ export function ContactSection() {
                       onChange={(e) => setDrawing(e.target.files?.[0] ?? null)}
                     />
                     {drawing ? (
-                      <>
-                        <FileText size={20} className="text-landing-accent" />
-                        <span className="text-[13px] font-medium text-landing-text">
-                          {drawing.name}
-                        </span>
-                        <span className="text-[11px] text-landing-muted">
-                          Click to replace
-                        </span>
-                      </>
+                      <div className="flex w-full items-center justify-between gap-3">
+                        <div className="flex items-center gap-2.5 overflow-hidden">
+                          <FileText size={20} className="shrink-0 text-landing-accent" />
+                          <div className="min-w-0 text-left">
+                            <p className="truncate text-xs font-medium text-landing-text">
+                              {drawing.name}
+                            </p>
+                            <p className="text-[10px] text-landing-muted">
+                              {formatBytes(drawing.size)}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          aria-label="Remove drawing"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setDrawing(null);
+                          }}
+                          className="shrink-0 rounded p-1 text-landing-muted transition-colors hover:bg-landing-canvas hover:text-danger"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     ) : (
                       <>
                         <Upload size={20} className="text-landing-muted transition-colors group-hover:text-landing-accent" />
-                        <span className="text-[13px] font-medium text-landing-text">
-                          Attach drawing or spec
-                        </span>
-                        <span className="text-[11px] text-landing-muted">
-                          PDF, STEP, IGES, DWG, DXF, or image
-                        </span>
+                        <div className="text-center">
+                          <p className="text-xs font-medium text-landing-text">
+                            Drag CAD drawing or click to browse
+                          </p>
+                          <div className="mt-1.5 flex flex-wrap justify-center gap-1">
+                            {['.STEP', '.IGES', '.DWG', '.DXF', '.PDF'].map((ext) => (
+                              <span key={ext} className="rounded bg-landing-surface px-1.5 py-0.5 font-mono text-[9px] text-landing-muted border border-landing-border">
+                                {ext}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
                       </>
                     )}
                   </label>
@@ -271,13 +337,13 @@ export function ContactSection() {
                     disabled={isSubmitting}
                     className="mt-2 w-full"
                   >
-                    Request a quote
+                    {quoteLabel}
                     <ArrowRight size={16} />
                   </Button>
                   <p className="text-center text-[11px] text-landing-muted">
                     Prefer email?{' '}
                     <a
-                      href={`mailto:${COMPANY.email}?subject=Quote%20request`}
+                      href={contact?.sales_email ? `mailto:${contact.sales_email}?subject=Quote%20request` : undefined}
                       className="underline-offset-2 transition-colors hover:text-landing-text hover:underline"
                     >
                       Talk to our team

@@ -43,6 +43,12 @@ export default function PayrollPeriodsPage() {
     queryFn: () => periodsApi.list(filters),
     placeholderData: (prev) => prev,
   });
+  const { data: periodOptions } = useQuery({
+    queryKey: ['payroll-periods', 'options'],
+    queryFn: periodsApi.options,
+    staleTime: 5 * 60 * 1000,
+  });
+  const statusLabels = new Map((periodOptions?.statuses ?? []).map((option) => [option.value, option.label]));
 
   const columns: Column<PayrollPeriod>[] = [
     {
@@ -92,7 +98,7 @@ export default function PayrollPeriodsPage() {
       key: 'status',
       header: 'Status',
       cell: (r) => (
-        <Chip variant={periodStatusVariant(r.status)}>{r.status_label}</Chip>
+        <Chip variant={periodStatusVariant(r.status)}>{statusLabels.get(r.status) ?? r.status_label}</Chip>
       ),
     },
   ];
@@ -102,19 +108,14 @@ export default function PayrollPeriodsPage() {
       key: 'status', label: 'Status', type: 'select',
       options: [
         { value: '', label: 'All' },
-        { value: 'draft', label: 'Draft' },
-        { value: 'processing', label: 'Processing' },
-        { value: 'computed', label: 'Computed' },
-        { value: 'approved', label: 'Approved' },
-        { value: 'finalized', label: 'Finalized' },
+        ...(periodOptions?.statuses ?? []),
       ],
     },
     {
       key: 'is_thirteenth_month', label: 'Type', type: 'select',
       options: [
         { value: '', label: 'All types' },
-        { value: 'false', label: 'Regular' },
-        { value: 'true', label: '13th Month' },
+        ...(periodOptions?.period_types ?? []),
       ],
     },
   ];
@@ -212,7 +213,6 @@ export default function PayrollPeriodsPage() {
             data={data.data}
             meta={data.meta}
             onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
-            onRowClick={(r) => navigate(`/payroll/periods/${r.id}`)}
           />
         </div>
       )}
@@ -251,7 +251,7 @@ function ThirteenthMonthModal({
           label="Year"
           value={year}
           onChange={(e) => setYear(e.target.value)}
-          placeholder="2026"
+          placeholder="YYYY"
         />
         <Input
           label="Payroll date (optional)"

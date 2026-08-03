@@ -43,6 +43,11 @@ export default function SalaryAdjustmentsPage() {
     queryFn: () => salaryAdjustmentsApi.list({ status }),
     placeholderData: (prev) => prev,
   });
+  const { data: adjustmentOptions } = useQuery({
+    queryKey: ['hr', 'salary-adjustments', 'options'],
+    queryFn: salaryAdjustmentsApi.options,
+    staleTime: 5 * 60 * 1000,
+  });
 
   const act = useMutation({
     mutationFn: (args: { id: string; action: 'approve' | 'reject' }) =>
@@ -61,9 +66,7 @@ export default function SalaryAdjustmentsPage() {
       label: 'Status',
       type: 'select',
       options: [
-        { value: 'pending', label: 'Pending' },
-        { value: 'approved', label: 'Approved' },
-        { value: 'rejected', label: 'Rejected' },
+        ...(adjustmentOptions?.statuses ?? []),
       ],
     },
   ];
@@ -116,7 +119,7 @@ export default function SalaryAdjustmentsPage() {
                     </Link>
                   )}
                   <span className="font-mono tabular-nums text-muted text-xs">{row.employee?.employee_no}</span>
-                  <Chip variant={STATUS_CHIP[row.status]}>{row.status}</Chip>
+                  <Chip variant={STATUS_CHIP[row.status]}>{row.status_label ?? row.status}</Chip>
                 </div>
                 <div className="text-xs text-muted">
                   <span className="font-mono tabular-nums">

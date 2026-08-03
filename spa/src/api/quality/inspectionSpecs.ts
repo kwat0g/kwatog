@@ -23,6 +23,7 @@ export interface SpcResult {
 }
 
 export const inspectionSpecsApi = {
+  options: () => client.get<{ data: { parameter_types: Array<{ value: string; label: string }> } }>('/quality/inspection-specs/options').then((r) => r.data.data),
   list: (params?: InspectionSpecListParams) =>
     client.get<PaginatedResponse<InspectionSpec>>('/quality/inspection-specs', { params }).then((r) => r.data),
   show: (id: string) =>

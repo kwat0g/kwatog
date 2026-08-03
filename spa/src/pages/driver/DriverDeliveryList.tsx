@@ -20,7 +20,7 @@ export default function DriverDeliveryList() {
 
   return (
     <div className="space-y-3">
-      <h1 className="text-lg font-display font-medium text-primary">Today's deliveries</h1>
+      <h1 className="text-lg font-medium text-primary">Today's deliveries</h1>
 
       {isLoading && <TouchCardSkeleton count={3} label="Loading deliveries" cardClassName="h-24" />}
 
@@ -53,7 +53,7 @@ export default function DriverDeliveryList() {
         >
           <div className="flex items-baseline justify-between gap-2">
             <div className="font-mono tabular-nums text-sm text-primary">{d.delivery_number}</div>
-            <Chip variant={deliveryStatusVariant[d.status]}>{d.status.replace(/_/g, ' ')}</Chip>
+            <Chip variant={deliveryStatusVariant[d.status]}>{d.status_label ?? d.status.replace(/_/g, ' ')}</Chip>
           </div>
           <div className="mt-1 text-sm text-primary">{d.sales_order?.customer?.name ?? '—'}</div>
           <div className="mt-1 text-xs text-muted">

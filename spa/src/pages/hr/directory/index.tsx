@@ -135,7 +135,7 @@ export default function EmployeeDirectoryPage() {
                         <div className="mt-1.5 flex items-center gap-1.5">
                           {e.status && (
                             <Chip variant={chipVariantForStatus(e.status)}>
-                              {e.status.replace('_', ' ')}
+                              {e.status_label ?? e.status}
                             </Chip>
                           )}
                           <span className="text-2xs font-mono tabular-nums text-muted">{e.employee_no}</span>
@@ -185,7 +185,7 @@ export default function EmployeeDirectoryPage() {
                     <Td>
                       {e.status && (
                         <Chip variant={chipVariantForStatus(e.status)}>
-                          {e.status.replace('_', ' ')}
+                          {e.status_label ?? e.status}
                         </Chip>
                       )}
                     </Td>
@@ -254,7 +254,7 @@ function OrgDeptCard({
             </div>
             {e.status && (
               <Chip variant={chipVariantForStatus(e.status)}>
-                {e.status.replace('_', ' ')}
+                {e.status_label ?? e.status}
               </Chip>
             )}
           </li>

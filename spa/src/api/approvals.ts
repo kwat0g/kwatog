@@ -2,6 +2,7 @@ import { client } from './client';
 import type {
   ApprovalBoardParams,
   ApprovalBoardResponse,
+  ApprovalKind,
 } from '@/types/approvals';
 
 /**
@@ -12,6 +13,7 @@ import type {
  * triggered by navigating to the source record.
  */
 export const approvalsApi = {
+  options: () => client.get<{ data: { kinds: Array<{ value: ApprovalKind; label: string }>; overdue_hours: number } }>('/approvals/options').then((r) => r.data.data),
   board: (params?: ApprovalBoardParams) =>
     client
       .get<ApprovalBoardResponse>('/approvals/board', {

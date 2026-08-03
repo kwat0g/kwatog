@@ -56,6 +56,9 @@ interface ZoneItem {
 interface WarehouseDashboardData {
   kpis: Array<{ label: string; value: string; unit: string }>;
   panels: {
+    delivery_horizon_days?: number;
+    zone_utilization_warning_pct?: number;
+    zone_utilization_critical_pct?: number;
     incoming_queue: IncomingItem[];
     outgoing_queue: OutgoingItem[];
     low_stock_alerts: LowStockItem[];
@@ -65,17 +68,17 @@ interface WarehouseDashboardData {
 
 /* ───────────────────────── Sub-panel components ───────────────────────── */
 
-function IncomingQueuePanel({ items }: { items: IncomingItem[] }) {
+function IncomingQueuePanel({ items, horizonDays }: { items: IncomingItem[]; horizonDays: number }) {
   if (items.length === 0) {
     return (
-      <Panel title="Incoming (Next 7 Days)">
-        <EmptyState icon="truck" title="No incoming deliveries" description="No deliveries expected in the next 7 days." />
+      <Panel title={`Incoming (Next ${horizonDays} Days)`}>
+        <EmptyState icon="truck" title="No incoming deliveries" description={`No deliveries expected in the next ${horizonDays} days.`} />
       </Panel>
     );
   }
 
   return (
-    <Panel title="Incoming (Next 7 Days)" meta={items.length.toString()}>
+    <Panel title={`Incoming (Next ${horizonDays} Days)`} meta={items.length.toString()}>
       <ul className="divide-y divide-subtle">
         {items.map((d) => (
           <li key={d.id} className="flex items-center justify-between py-2 text-sm">
@@ -176,7 +179,7 @@ function LowStockAlertsPanel({ items }: { items: LowStockItem[] }) {
   );
 }
 
-function ZoneUtilizationPanel({ items }: { items: ZoneItem[] }) {
+function ZoneUtilizationPanel({ items, warningPct, criticalPct }: { items: ZoneItem[]; warningPct?: number; criticalPct?: number }) {
   if (items.length === 0) {
     return (
       <Panel title="Zone Utilisation">
@@ -203,7 +206,7 @@ function ZoneUtilizationPanel({ items }: { items: ZoneItem[] }) {
               className="h-2 bg-subtle rounded-full overflow-hidden"
             >
               <div
-                className={zonePctClass(z.percent)}
+                className={zonePctClass(z.percent, warningPct, criticalPct)}
                 style={{ width: `${z.percent}%` }}
               />
             </div>
@@ -214,9 +217,9 @@ function ZoneUtilizationPanel({ items }: { items: ZoneItem[] }) {
   );
 }
 
-function zonePctClass(pct: number): string {
-  if (pct >= 90) return 'h-full bg-danger rounded-full';
-  if (pct >= 75) return 'h-full bg-warning rounded-full';
+function zonePctClass(pct: number, warningPct?: number, criticalPct?: number): string {
+  if (criticalPct != null && pct >= criticalPct) return 'h-full bg-danger rounded-full';
+  if (warningPct != null && pct >= warningPct) return 'h-full bg-warning rounded-full';
   return 'h-full bg-success rounded-full';
 }
 
@@ -242,7 +245,7 @@ export default function WarehouseDashboard() {
           panels?.zone_utilization?.map((z) => ({
             name: z.name,
             value: z.percent,
-            color: z.percent >= 90 ? 'var(--danger)' : z.percent >= 75 ? 'var(--warning)' : 'var(--success)',
+            color: z.percent >= (panels?.zone_utilization_critical_pct ?? Number.POSITIVE_INFINITY) ? 'var(--danger)' : z.percent >= (panels?.zone_utilization_warning_pct ?? Number.POSITIVE_INFINITY) ? 'var(--warning)' : 'var(--success)',
           })) ?? [];
 
         return (
@@ -253,8 +256,8 @@ export default function WarehouseDashboard() {
                 <StatCard
                   key={k.label}
                   label={k.label}
-                  value={k.unit === 'PHP' ? `₱ ${k.value}` : k.value}
-                  helper={k.unit !== 'PHP' && k.unit !== 'count' ? k.unit : undefined}
+                  value={/^[A-Z]{3}$/.test(k.unit) ? `${k.unit} ${k.value}` : k.value}
+                  helper={!/^[A-Z]{3}$/.test(k.unit) && k.unit !== 'count' ? k.unit : undefined}
                   linkTo={kpiLink(k.label)}
                 />
               ))}
@@ -265,14 +268,14 @@ export default function WarehouseDashboard() {
 
             {/* ── Row 2: Incoming + Outgoing queue ── */}
             <PanelRow>
-              <IncomingQueuePanel items={panels?.incoming_queue ?? []} />
+              <IncomingQueuePanel items={panels?.incoming_queue ?? []} horizonDays={panels?.delivery_horizon_days ?? 0} />
               <OutgoingQueuePanel items={panels?.outgoing_queue ?? []} />
             </PanelRow>
 
             {/* ── Row 3: Low Stock Alerts + Zone Utilisation ── */}
             <PanelRow>
               <LowStockAlertsPanel items={panels?.low_stock_alerts ?? []} />
-              <ZoneUtilizationPanel items={panels?.zone_utilization ?? []} />
+              <ZoneUtilizationPanel items={panels?.zone_utilization ?? []} warningPct={panels?.zone_utilization_warning_pct} criticalPct={panels?.zone_utilization_critical_pct} />
             </PanelRow>
 
             {/* ── Row 4: Zone capacity chart ── */}
@@ -291,7 +294,7 @@ export default function WarehouseDashboard() {
             </Panel>
 
             {/* ── Row 5: Stock-out forecast ── */}
-            {can('forecasting.view') && <StockOutPanel horizonDays={30} hideWhenEmpty />}
+            {can('forecasting.view') && <StockOutPanel hideWhenEmpty />}
           </>
         );
       }}

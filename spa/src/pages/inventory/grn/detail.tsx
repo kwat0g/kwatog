@@ -31,6 +31,11 @@ export default function GrnDetailPage() {
     queryFn: () => grnApi.show(id),
     enabled: !!id,
   });
+  const { data: grnOptions } = useQuery({
+    queryKey: ['inventory', 'grn', 'options'],
+    queryFn: grnApi.options,
+    staleTime: 300_000,
+  });
 
   const accept = useMutation({
     mutationFn: () => grnApi.accept(id),
@@ -68,7 +73,7 @@ export default function GrnDetailPage() {
         breadcrumbs={[{ label: 'Inventory', href: '/inventory' }, { label: 'GRNs', href: '/inventory/grn' }, { label: data.grn_number }]}
         actions={
           <div className="flex items-center gap-2">
-            <Chip variant={variant}>{data.status.replace(/_/g, ' ')}</Chip>
+            <Chip variant={variant}>{grnOptions?.statuses.find((option) => option.value === data.status)?.label ?? data.status}</Chip>
             {data.status === 'pending_qc' && can('inventory.grn.create') && (
               <>
                 <Button variant="secondary" size="sm" icon={<XCircle size={14} />} onClick={() => setRejectOpen(true)}>Reject</Button>

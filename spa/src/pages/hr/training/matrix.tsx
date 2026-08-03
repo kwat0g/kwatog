@@ -21,19 +21,13 @@ const STATUS_COLORS: Record<TrainingMatrixCellStatus, string> = {
   gap:     'bg-subtle border-default',
 };
 
-const STATUS_LABELS: Record<TrainingMatrixCellStatus, string> = {
-  trained: 'Trained',
-  expired: 'Expired',
-  gap:     'Gap',
-};
-
 function levelLabel(level: string | null): string {
   if (!level) return '';
   return level.charAt(0).toUpperCase() + level.slice(1);
 }
 
-function cellTooltipContent(cell: TrainingMatrixCell, skillName: string): string {
-  const parts = [skillName, STATUS_LABELS[cell.status]];
+function cellTooltipContent(cell: TrainingMatrixCell, skillName: string, statusLabels: Map<string, string>): string {
+  const parts = [skillName, statusLabels.get(cell.status) ?? cell.status];
   if (cell.level) parts.push(`Level: ${levelLabel(cell.level)}`);
   if (cell.expiry_date) parts.push(`Expires: ${cell.expiry_date}`);
   return parts.join(' · ');
@@ -56,6 +50,7 @@ export default function TrainingMatrixPage() {
     ),
   });
   const skills = data?.skills;
+  const statusLabels = new Map((data?.status_options ?? []).map((option) => [option.value, option.label]));
 
   // Group skills by category for header display
   const skillCategories = useMemo(() => {
@@ -217,14 +212,14 @@ export default function TrainingMatrixPage() {
                     <Td align="center" className="border-b border-subtle" key={data.skills[idx].id}>
                       <Tooltip
                         side="bottom"
-                        content={cellTooltipContent(cell, data.skills[idx].name)}
+                        content={cellTooltipContent(cell, data.skills[idx].name, statusLabels)}
                       >
                         <span
                           className={cn(
                             'inline-block w-full h-7 rounded border cursor-default transition-colors',
                             STATUS_COLORS[cell.status],
                           )}
-                          aria-label={`${data.skills[idx].name}: ${STATUS_LABELS[cell.status]}`}
+                          aria-label={`${data.skills[idx].name}: ${statusLabels.get(cell.status) ?? cell.status}`}
                         >
                           {cell.level && (
                             <span className="text-2xs font-mono leading-7 text-primary/70">

@@ -21,14 +21,6 @@ const STATUS_COLORS: Record<string, string> = {
   blocked: 'bg-danger/10 text-danger-fg border border-danger/20 line-through',
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  empty:   'Empty',
-  ok:      'Stocked',
-  low:     'Low',
-  full:    'Full',
-  blocked: 'Blocked',
-};
-
 export default function WarehouseMapPage() {
   usePermission();
   const [activeWh, setActiveWh] = useState<string | null>(null);
@@ -155,7 +147,7 @@ const [selectedBin, setSelectedBin] = useState<{ id: string; detail: any } | nul
                           selectedBin.detail.stock_status === 'full' ? 'info' :
                           selectedBin.detail.stock_status === 'blocked' ? 'danger' : 'neutral'
                         }>
-                          {STATUS_LABELS[selectedBin.detail.stock_status]}
+                          {selectedBin.detail.stock_status_label ?? selectedBin.detail.stock_status}
                         </Chip>
                       </StatusRow>
                       <StatusRow label="Code">{selectedBin.detail.code}</StatusRow>
@@ -193,7 +185,7 @@ const [selectedBin, setSelectedBin] = useState<{ id: string; detail: any } | nul
                           )}
                           {binDetail.data.last_movement && (
                             <div className="text-2xs text-muted pt-1">
-                              Last: {binDetail.data.last_movement.movement_type.replace(/_/g, ' ')}
+                              Last: {binDetail.data.last_movement.movement_type_label ?? binDetail.data.last_movement.movement_type.replace(/_/g, ' ')}
                               {' · '}{formatDate(binDetail.data.last_movement.created_at)}
                             </div>
                           )}

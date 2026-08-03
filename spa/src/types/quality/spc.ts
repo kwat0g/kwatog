@@ -12,6 +12,7 @@ export interface SpcControlChart {
   id: string;
   chart_type: SpcChartType;
   status: SpcChartStatus;
+  status_label?: string;
   subgroup_size: number;
   center_line: string | null;
   ucl: string | null;
@@ -55,6 +56,7 @@ export interface SpcAlert {
   id: string;
   rule_code: SpcAlertRule;
   severity: string;
+  severity_label?: string;
   notes: string | null;
   acknowledged_at: string | null;
   resolved_at: string | null;

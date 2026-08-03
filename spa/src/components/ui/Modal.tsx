@@ -40,6 +40,7 @@ function useFocusTrap(
   useEffect(() => {
     if (!isOpen || !containerRef.current) return;
 
+    const previousElement = document.activeElement as HTMLElement | null;
     const container = containerRef.current;
 
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -79,7 +80,10 @@ function useFocusTrap(
     });
 
     document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      previousElement?.focus?.();
+    };
   }, [isOpen, containerRef]);
 }
 
@@ -151,7 +155,7 @@ export function Modal({
       <div
         ref={dialogRef}
         className={cn(
-          'relative w-full bg-canvas border border-default rounded-md-menu animate-slide-up',
+          'relative w-full bg-canvas border border-default rounded-md animate-slide-up',
           sizes[size],
           className,
         )}

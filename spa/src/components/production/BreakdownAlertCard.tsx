@@ -7,6 +7,7 @@ import type { ReactNode } from 'react';
 
 interface Props {
   type: string;
+  typeLabel?: string;
   severity: string;
   message: ReactNode;
   link: string;
@@ -19,7 +20,7 @@ const dotClass: Record<string, string> = {
   info: 'bg-accent',
 };
 
-export function BreakdownAlertCard({ type, severity, message, link, time }: Props) {
+export function BreakdownAlertCard({ type, typeLabel, severity, message, link, time }: Props) {
   return (
     <Link
       to={link}
@@ -29,7 +30,7 @@ export function BreakdownAlertCard({ type, severity, message, link, time }: Prop
       <div className="flex-1 min-w-0">
         <div className="text-xs text-primary truncate">{message}</div>
         <div className="text-2xs font-mono text-muted">
-          {type}{time ? ` · ${time}` : ''}
+          {typeLabel ?? type}{time ? ` · ${time}` : ''}
         </div>
       </div>
     </Link>

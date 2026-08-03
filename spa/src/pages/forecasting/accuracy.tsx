@@ -49,6 +49,13 @@ export default function ForecastAccuracyPage() {
     queryKey: ['forecasting/accuracy/products', year],
     queryFn: () => forecastingApi.accuracyByProduct(year),
   });
+  const optionsQ = useQuery({
+    queryKey: ['forecasting', 'options'],
+    queryFn: () => forecastingApi.options(),
+    staleTime: 300_000,
+  });
+  const excellentMape = optionsQ.data?.accuracy_policy.excellent_mape;
+  const acceptableMape = optionsQ.data?.accuracy_policy.acceptable_mape;
 
   const yearOptions = Array.from({ length: 5 }, (_, i) => currentYear - i);
 
@@ -136,7 +143,7 @@ export default function ForecastAccuracyPage() {
               label="MAPE"
               value={mapeValue !== null && mapeValue !== undefined ? `${mapeValue.toFixed(1)}%` : '--'}
               helper={mapeValue !== null && mapeValue !== undefined
-                ? (mapeValue <= 15 ? 'Excellent accuracy' : mapeValue <= 30 ? 'Acceptable' : 'Needs improvement')
+                ? (excellentMape != null && mapeValue <= excellentMape ? 'Excellent accuracy' : acceptableMape != null && mapeValue <= acceptableMape ? 'Acceptable' : 'Needs improvement')
                 : 'No data'}
             />
             <StatCard
@@ -256,7 +263,7 @@ export default function ForecastAccuracyPage() {
                       <Td mono className="text-xs">{p.part_number}</Td>
                       <Td className="text-primary">{p.name}</Td>
                       <Td align="right" mono>
-                        <span className={p.mape <= 15 ? 'text-success' : p.mape <= 30 ? 'text-warning' : 'text-danger'}>
+                        <span className={excellentMape != null && p.mape <= excellentMape ? 'text-success' : acceptableMape != null && p.mape <= acceptableMape ? 'text-warning' : 'text-danger'}>
                           {p.mape.toFixed(1)}%
                         </span>
                       </Td>

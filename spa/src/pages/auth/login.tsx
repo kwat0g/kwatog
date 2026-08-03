@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -17,6 +18,7 @@ import { FormErrorSummary } from '@/components/ui/FormErrorSummary';
 import { actionLabel } from '@/lib/labels';
 import { useMagnetic } from '@/pages/landing/hooks/useMagnetic';
 import { reduceMotion } from '@/pages/landing/motion';
+import { landingApi } from '@/api/landing';
 
 const schema = z.object({
   email: z.string().min(1, 'Email is required').email('Invalid email'),
@@ -35,7 +37,23 @@ function formatCooldown(seconds: number): string {
   return `${seconds}s`;
 }
 
+/** Prefer the server's live lock/rate-limit duration over client guesses. */
+function retryAfterSeconds(err: AxiosError<{ message?: string }>): number {
+  const header = err.response?.headers?.['retry-after'];
+  const headerSeconds = Number(Array.isArray(header) ? header[0] : header);
+  if (Number.isFinite(headerSeconds) && headerSeconds > 0) return Math.ceil(headerSeconds);
+
+  const message = err.response?.data?.message ?? '';
+  const match = message.match(/(?:in|after)\s+(\d+)\s*(seconds?|minutes?)/i);
+  if (!match) return 0;
+  const amount = Number(match[1]);
+  return match[2].toLowerCase().startsWith('minute') ? amount * 60 : amount;
+}
+
 export default function LoginPage() {
+  const { data: contact } = useQuery({ queryKey: ['landing', 'contact'], queryFn: landingApi.contact, staleTime: 300_000 });
+  const legalName = contact?.legal_name || 'Philippine Ogami Corporation';
+  const companyEmail = contact?.company_email || 'it-support@ogami.ph';
   const navigate = useNavigate();
   const location = useLocation();
   const login = useAuthStore((s) => s.login);
@@ -133,10 +151,10 @@ export default function LoginPage() {
         });
       } else if (status === 423) {
         toast.error(body?.message ?? 'Account locked. Try again later.');
-        setCooldown(900); // 15-minute lockout per backend policy
+        setCooldown(retryAfterSeconds(axe));
       } else if (status === 429) {
         toast.error('Too many attempts. Please wait a moment.');
-        setCooldown(60); // 1-minute rate-limit cooldown
+        setCooldown(retryAfterSeconds(axe));
       } else if (!axe.response) {
         toast.error('Network error. Please check your connection.');
       } else {
@@ -159,15 +177,21 @@ export default function LoginPage() {
       <Panel>
         {/* Header block */}
         <div className="mb-6" data-entrance="header">
-          <p className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.2em] text-landing-muted">
-            <Lock size={12} className="text-landing-accent" />
-            Secure sign-in
-          </p>
+          <div className="flex items-center justify-between">
+            <p className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.2em] text-landing-muted">
+              <Lock size={12} className="text-landing-accent" />
+              Secure sign-in
+            </p>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-landing-border bg-landing-surface px-2.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.16em] text-landing-muted">
+              <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
+              System Active
+            </span>
+          </div>
           <h1 className="mt-3 font-display text-2xl font-medium tracking-tight text-landing-text">
             Welcome back
           </h1>
           <p className="mt-1.5 text-[13px] text-landing-muted">
-            Sign in with your work email to access the Ogami ERP.
+            Sign in with your work email to access {legalName} (Ogami ERP).
           </p>
         </div>
 
@@ -266,7 +290,7 @@ export default function LoginPage() {
                 <span className="text-landing-muted">
                   Need access now?{' '}
                   <a
-                    href="mailto:it@ogami.com.ph?subject=Account%20locked"
+                    href={`mailto:${companyEmail}?subject=Account%20locked`}
                     className="underline-offset-2 hover:text-landing-text hover:underline"
                   >
                     Contact IT

@@ -183,7 +183,7 @@ export default function CreateSalesOrderPage() {
             <Input
               label="Delivery terms"
               {...register('delivery_terms')} error={errors.delivery_terms?.message}
-              placeholder="e.g. FOB Cavite"
+              placeholder="Enter delivery terms"
             />
           </div>
         </fieldset>

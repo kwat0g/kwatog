@@ -11,6 +11,7 @@ export interface InvoiceListParams extends ListParams {
 }
 
 export const invoicesApi = {
+  options: () => client.get<{ data: { statuses: Array<{ value: string; label: string }> } }>('/invoices/options').then((r) => r.data.data),
   list: (params?: InvoiceListParams) =>
     client.get<PaginatedResponse<Invoice>>('/invoices', { params }).then((r) => r.data),
   show: (id: string) =>

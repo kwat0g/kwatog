@@ -18,7 +18,13 @@ export interface UploadProofData {
   notes?: string;
 }
 
+export interface BankFileFormatOption {
+  value: string;
+  label: string;
+}
+
 export const periodsApi = {
+  options: () => client.get<{ data: { statuses: Array<{ value: string; label: string }>; period_types: Array<{ value: string; label: string }>; half_types: Array<{ value: string; label: string }> } }>('/payroll-periods/options').then((r) => r.data.data),
   list: (params?: PeriodListParams) =>
     client.get<PaginatedResponse<PayrollPeriod>>('/payroll-periods', { params }).then((r) => r.data),
   show: (id: string) =>
@@ -42,13 +48,18 @@ export const periodsApi = {
     client
       .post<ApiSuccess<PayrollPeriod>>(`/payroll-periods/${id}/void`, { reason })
       .then((r) => r.data.data),
-  bankFileUrl: (id: string) => `/api/v1/payroll-periods/${id}/bank-file`,
+  bankFileOptions: () =>
+    client.get<{ data: { formats: BankFileFormatOption[]; default_format: string } }>('/payroll-periods/bank-file/options').then((r) => r.data.data),
+  bankFileUrl: (id: string, format?: string) =>
+    `/api/v1/payroll-periods/${id}/bank-file${format ? `?format=${encodeURIComponent(format)}` : ''}`,
   runThirteenthMonth: (year: number, payroll_date?: string) =>
     client
       .post<ApiSuccess<PayrollPeriod>>('/payroll-periods/thirteenth-month', { year, payroll_date })
       .then((r) => r.data.data),
 
   // ADV1 — Disbursement proof CRUD
+  proofOptions: (periodId: string) =>
+    client.get<{ data: { proof_types: Array<{ value: ProofType; label: string }> } }>(`/payroll-periods/${periodId}/disbursement-proofs/options`).then((r) => r.data.data),
   listProofs: (periodId: string) =>
     client
       .get<{ data: DisbursementProof[] }>(`/payroll-periods/${periodId}/disbursement-proofs`)

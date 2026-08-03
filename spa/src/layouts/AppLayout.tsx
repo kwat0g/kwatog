@@ -1,4 +1,5 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Outlet, useNavigate } from 'react-router-dom';
 import { CircleHelp } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -19,6 +20,8 @@ const KeyboardShortcutHelp = lazy(() =>
 import { RouteTransition } from '@/components/ui/RouteTransition';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { Button } from '@/components/ui/Button';
+import { businessPoliciesApi } from '@/api/businessPolicies';
+import { setFunctionalCurrency } from '@/lib/runtimeCurrency';
 
 // Inner component so the keyboard-shortcut hook lives inside the
 // PageActionsProvider (otherwise the dispatcher context is null).
@@ -29,6 +32,11 @@ function AppLayoutInner() {
   const features = useAuthStore((s) => s.features);
   const logout = useAuthStore((s) => s.logout);
   const { helpOpen, setHelpOpen } = useKeyboardShortcuts();
+  const { data: businessPolicies } = useQuery({ queryKey: ['business-policies'], queryFn: businessPoliciesApi.get });
+
+  useEffect(() => {
+    setFunctionalCurrency(businessPolicies?.functional_currency_code);
+  }, [businessPolicies?.functional_currency_code]);
 
   // Listen for real-time permission and module toggle changes
   usePermissionSync();

@@ -69,6 +69,7 @@ export interface LeaveCalendarDay {
   employees_on_leave: Array<{
     employee_name: string;
     status: string;
+    status_label?: string;
     leave_type: string;
   }>;
 }
@@ -77,6 +78,7 @@ export interface LeaveCalendarData {
   year: number;
   month: number;
   headcount: number;
+  coverage_policy?: { success_pct: number; warning_pct: number };
   days: LeaveCalendarDay[];
 }
 

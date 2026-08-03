@@ -13,6 +13,7 @@ export interface SodConflictRule {
   code: string;
   name: string;
   severity: SodSeverity;
+  severity_label?: string;
   rationale: string | null;
   active: boolean;
   permission_a: SodPermissionRef;
@@ -21,7 +22,7 @@ export interface SodConflictRule {
 
 export interface SodViolation {
   user: { id: string; name: string; email: string; role: string | null };
-  violations: { code: string; name: string; severity: SodSeverity }[];
+  violations: { code: string; name: string; severity: SodSeverity; severity_label?: string }[];
 }
 
 export const sodApi = {

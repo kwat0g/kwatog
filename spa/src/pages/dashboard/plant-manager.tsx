@@ -36,7 +36,7 @@ interface PlantManagerData {
   panels: {
     chain_stages: Array<{ key: string; label: string; color: string; count: number; percent: number }>;
     alerts: Array<{ kind: string; severity: string; label: string; ref: string | null; ref_id: string | null }>;
-    machine_util: Array<{ id: string; code: string; name: string; status: string; has_active_wo: boolean }>;
+    machine_util: Array<{ id: string; code: string; name: string; status: string; status_label?: string; has_active_wo: boolean }>;
     defect_pareto: Array<{ code: string; name: string; count: number }>;
     financial_snapshot: {
       cash_balance: string;
@@ -112,7 +112,7 @@ export default function PlantManagerDashboard() {
                   key={kpi.label}
                   label={kpi.label}
                   value={`${kpi.value}${kpi.unit === 'pct' ? '%' : ''}`}
-                  helper={kpi.unit === 'PHP' ? 'PHP' : kpi.unit === 'pct' ? 'yield' : kpi.unit}
+                  helper={/^[A-Z]{3}$/.test(kpi.unit) ? kpi.unit : kpi.unit === 'pct' ? 'yield' : kpi.unit}
                 />
               ))}
             </KpiGrid>
@@ -167,7 +167,7 @@ export default function PlantManagerDashboard() {
             {/* Row 5: Forecasting */}
             {can('forecasting.view') && (
               <PanelRow cols={3}>
-                <StockOutPanel title="Stock-out Risk Forecast" horizonDays={30} />
+                <StockOutPanel title="Stock-out Risk Forecast" />
                 <DemandForecastPanel />
                 <ForecastAccuracyPanel />
               </PanelRow>
@@ -242,7 +242,7 @@ function MachineUtilPanel({ machines }: { machines: PlantManagerData['panels']['
             >
               <div className="text-xs font-medium truncate">{m.code}</div>
               <div className="flex items-center gap-1 mt-1">
-                <Chip variant={statusVariant(m.status)}>{m.status}</Chip>
+                <Chip variant={statusVariant(m.status)}>{m.status_label ?? m.status}</Chip>
                 {m.has_active_wo && <span className="text-2xs text-muted">running</span>}
               </div>
             </Link>
@@ -362,4 +362,3 @@ function FinancialSnapshotPanel({
     </Panel>
   );
 }
-

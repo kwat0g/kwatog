@@ -34,7 +34,7 @@ export function CustomerForm() {
               required
               {...register('name')}
               error={errors.name?.message as string}
-              placeholder="Toyota Motor Philippines"
+              placeholder="Enter customer name"
             />
           </div>
           <Input
@@ -42,27 +42,26 @@ export function CustomerForm() {
             required
             {...register('code')}
             error={errors.code?.message as string}
-            placeholder="TMP-001"
+              placeholder="Enter customer code"
             className="font-mono"
           />
           <Input
             label="Contact person"
             {...register('contact_person')}
             error={errors.contact_person?.message as string}
-            placeholder="Tanaka Hiroshi"
+              placeholder="Enter contact name"
           />
           <Input
             label="Phone"
             {...register('phone')}
             error={errors.phone?.message as string}
-            placeholder="+63 2 8888 0000"
+              placeholder="Enter phone number"
           />
           <Input
             label="Email"
             type="email"
             {...register('email')}
             error={errors.email?.message as string}
-            placeholder="purchasing@example.com"
           />
           <Input
             label="Payment terms (days)"
@@ -80,7 +79,7 @@ export function CustomerForm() {
               rows={2}
               {...register('address')}
               error={errors.address?.message as string}
-              placeholder="Macapagal Blvd, Pasay City, Metro Manila"
+              placeholder="Enter customer address"
             />
           </div>
           <Input

@@ -36,7 +36,7 @@ export default function ActiveOrders() {
   return (
     <div className="space-y-3 touch-manipulation">
       <div className="flex items-center justify-between">
-        <h1 className="text-lg font-display font-medium text-primary">Active work orders</h1>
+        <h1 className="text-lg font-medium text-primary">Active work orders</h1>
         {refresh}
       </div>
 
@@ -82,12 +82,12 @@ export default function ActiveOrders() {
         >
           <div className="flex items-center justify-between gap-2">
             <span className="font-mono tabular-nums text-sm font-medium">{wo.wo_number}</span>
-            <Chip variant={workOrderStatusVariant[wo.status]}>{wo.status.replace(/_/g, ' ')}</Chip>
+            <Chip variant={workOrderStatusVariant[wo.status]}>{wo.status_label ?? wo.status.replace(/_/g, ' ')}</Chip>
           </div>
 
-          <div className="mt-1.5 text-sm font-medium">{wo.product?.name ?? 'Unknown product'}</div>
+          <div className="mt-1.5 text-sm font-medium">{wo.product?.name ?? '—'}</div>
           <div className="mt-0.5 text-xs text-muted">
-            {wo.machine?.name ?? 'No machine'} {wo.machine?.machine_code ? `(${wo.machine.machine_code})` : ''}
+            {wo.machine?.name ?? '—'} {wo.machine?.machine_code ? `(${wo.machine.machine_code})` : ''}
           </div>
 
           <div className="mt-3">

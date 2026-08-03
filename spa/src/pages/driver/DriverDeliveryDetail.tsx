@@ -10,18 +10,6 @@ import { TouchCardSkeleton } from '@/components/layout/TouchShell';
 import { focusRing } from '@/lib/focus';
 import { cn } from '@/lib/cn';
 
-const NEXT: Partial<Record<DriverDeliveryStatus, DriverDeliveryStatus>> = {
-  scheduled: 'loading',
-  loading: 'in_transit',
-  in_transit: 'delivered',
-};
-
-const ACTION_LABEL: Partial<Record<DriverDeliveryStatus, string>> = {
-  scheduled: 'Mark Loading',
-  loading: 'Mark In Transit',
-  in_transit: 'Mark Delivered',
-};
-
 /** Extract a useful message from an axios error, preferring 422 field errors. */
 function describeAxiosError(err: unknown, fallback: string): string {
   if (isAxiosError(err) && err.response) {
@@ -54,7 +42,7 @@ export default function DriverDeliveryDetail() {
     mutationFn: (next: DriverDeliveryStatus) => driverApi.updateStatus(id, next),
     onSuccess: (fresh) => {
       qc.invalidateQueries({ queryKey: ['driver'] });
-      toast.success(`Status: ${fresh.status.replace(/_/g, ' ')}`);
+      toast.success(`Status: ${fresh.status_label ?? fresh.status.replace(/_/g, ' ')}`);
     },
     onError: (err) => toast.error(describeAxiosError(err, 'Could not update status.')),
   });
@@ -89,8 +77,8 @@ export default function DriverDeliveryDetail() {
     );
   }
 
-  const next = NEXT[data.status];
-  const label = ACTION_LABEL[data.status];
+  const next = data.next_status ?? undefined;
+  const label = data.next_status_label ? `Mark ${data.next_status_label}` : undefined;
 
   return (
     <div className="space-y-4">
@@ -118,7 +106,7 @@ export default function DriverDeliveryDetail() {
           </div>
           <div>
             <span className="text-muted">Status:</span>{' '}
-            <strong>{data.status.replace(/_/g, ' ')}</strong>
+            <strong>{data.status_label ?? data.status.replace(/_/g, ' ')}</strong>
           </div>
         </div>
       </div>

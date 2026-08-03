@@ -15,13 +15,6 @@ import { Textarea } from '@/components/ui/Textarea';
 import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 
-const EMPLOYMENT_LABELS: Record<string, string> = {
-  regular: 'Regular',
-  probationary: 'Probationary',
-  contractual: 'Contractual',
-  project_based: 'Project-Based',
-};
-
 const applySchema = z.object({
   first_name: z.string().min(1, 'First name is required').max(100),
   last_name: z.string().min(1, 'Last name is required').max(100),
@@ -118,7 +111,7 @@ export default function JobPostingDetailPage() {
                 <MapPin size={14} /> {posting.department.name}
               </span>
               <span className="flex items-center gap-1.5">
-                <Briefcase size={14} /> {EMPLOYMENT_LABELS[posting.employment_type] ?? posting.employment_type}
+                <Briefcase size={14} /> {posting.employment_type_label ?? posting.employment_type}
               </span>
               {posting.salary_range && (
                 <span className="font-mono text-xs tabular-nums">

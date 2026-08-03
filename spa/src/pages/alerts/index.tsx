@@ -18,21 +18,6 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDateTime } from '@/lib/formatDate';
 
-const TYPE_LABEL: Record<AlertType, string> = {
-  stock_critical:      'Stock critical',
-  stock_low:           'Stock low',
-  no_supplier:         'No supplier',
-  machine_breakdown:   'Machine breakdown',
-  mold_shot_limit:     'Mold approaching limit',
-  mold_shot_critical:  'Mold critical limit',
-  wo_overdue:          'Work order overdue',
-  oee_below_threshold: 'OEE below threshold',
-  ar_overdue_30:       'AR overdue 30+ days',
-  ar_overdue_60:       'AR overdue 60+ days',
-  ap_due_soon:         'AP due soon',
-  qc_fail_rate_high:   'QC fail rate high',
-};
-
 const TYPE_ICON: Record<AlertType, typeof AlertCircle> = {
   stock_critical:      Boxes,
   stock_low:           Boxes,
@@ -54,12 +39,6 @@ const severityVariant = (s: AlertSeverity): 'danger' | 'warning' | 'info' =>
 const severityIcon = (s: AlertSeverity) =>
   s === 'critical' ? AlertTriangle : s === 'warning' ? AlertCircle : Info;
 
-const SEVERITIES: { value: AlertSeverity; label: string }[] = [
-  { value: 'critical', label: 'Critical' },
-  { value: 'warning',  label: 'Warning'  },
-  { value: 'info',     label: 'Info'     },
-];
-
 export default function AlertsListPage() {
   const queryClient = useQueryClient();
   const { can } = usePermission();
@@ -72,6 +51,13 @@ export default function AlertsListPage() {
     queryFn: () => alertsApi.list(filters),
     placeholderData: (prev) => prev,
   });
+  const { data: options } = useQuery({
+    queryKey: ['alerts', 'options'],
+    queryFn: () => alertsApi.options(),
+    staleTime: 5 * 60 * 1000,
+  });
+  const severities = options?.severities ?? [];
+  const typeLabels = new Map((options?.types ?? []).map((type) => [type.value, type.label]));
 
   const dismiss = useMutation({
     mutationFn: (id: string) => alertsApi.dismiss(id),
@@ -109,7 +95,7 @@ export default function AlertsListPage() {
       />
 
       <div className="px-5 pb-3 flex items-center gap-2 flex-wrap">
-        {SEVERITIES.map((s) => {
+        {severities.map((s) => {
           const active = (filters.severity ?? []).includes(s.value);
           return (
             <ToggleChip key={s.value} active={active} onClick={() => toggleSeverity(s.value)}>
@@ -186,7 +172,7 @@ export default function AlertsListPage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-sm font-medium text-primary">{a.title}</span>
-                            <Chip variant="neutral">{TYPE_LABEL[a.type] ?? a.type}</Chip>
+                        <Chip variant="neutral">{a.type_label ?? typeLabels.get(a.type) ?? a.type}</Chip>
                             {!a.is_read && !a.is_dismissed && (
                               <Chip variant="info">new</Chip>
                             )}

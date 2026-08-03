@@ -1,7 +1,11 @@
 import { Link, useLocation } from 'react-router-dom';
 import type { ReactNode } from 'react';
+import { useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { focusRingInset } from '@/lib/focus';
 import { cn } from '@/lib/cn';
+import { businessPoliciesApi } from '@/api/businessPolicies';
+import { setFunctionalCurrency } from '@/lib/runtimeCurrency';
 import {
   LayoutDashboard,
   FileText,
@@ -106,6 +110,11 @@ function PortalSidebar({ type, nav, pathname, onLogout }: {
 export default function PortalLayout({ type, user, onLogout, title, subtitle, children }: PortalLayoutProps) {
   const location = useLocation();
   const nav = type === 'supplier' ? SUPPLIER_NAV : CUSTOMER_NAV;
+  const { data: businessPolicies } = useQuery({ queryKey: ['business-policies'], queryFn: businessPoliciesApi.get });
+
+  useEffect(() => {
+    setFunctionalCurrency(businessPolicies?.functional_currency_code);
+  }, [businessPolicies?.functional_currency_code]);
 
   return (
     <div className="min-h-screen bg-canvas flex">

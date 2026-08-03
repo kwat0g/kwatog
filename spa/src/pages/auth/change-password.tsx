@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -20,10 +21,7 @@ const schema = z
     current_password: z.string().min(1, 'Current password is required'),
     new_password: z
       .string()
-      .min(8, 'Password must be at least 8 characters')
-      .regex(/[A-Z]/, 'Password must contain an uppercase letter')
-      .regex(/[0-9]/, 'Password must contain a digit')
-      .regex(/[^A-Za-z0-9]/, 'Password must contain a special character'),
+      .min(1, 'New password is required'),
     new_password_confirmation: z.string().min(1, 'Confirm your new password'),
   })
   .refine((data) => data.new_password === data.new_password_confirmation, {
@@ -33,19 +31,13 @@ const schema = z
 
 type ChangePasswordForm = z.infer<typeof schema>;
 
-const POLICY = [
-  { test: (v: string) => v.length >= 8, label: 'At least 8 characters' },
-  { test: (v: string) => /[A-Z]/.test(v), label: 'An uppercase letter' },
-  { test: (v: string) => /[0-9]/.test(v), label: 'A digit' },
-  { test: (v: string) => /[^A-Za-z0-9]/.test(v), label: 'A special character' },
-];
-
 export default function ChangePasswordPage() {
   const navigate = useNavigate();
   const refresh = useAuthStore((s) => s.refresh);
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const { data: policy } = useQuery({ queryKey: ['auth', 'password-policy'], queryFn: authApi.passwordPolicy });
 
   const {
     register,
@@ -163,17 +155,21 @@ export default function ChangePasswordPage() {
         />
 
         <ul className="mt-1 space-y-0.5 text-xs">
-          {POLICY.map((p) => {
-            const passed = p.test(newPassword);
+          {[
+            { passed: newPassword.length >= (policy?.minimum_length ?? Number.MAX_SAFE_INTEGER), label: policy ? `At least ${policy.minimum_length} characters` : 'Loading password policy…' },
+            ...(policy?.requires_uppercase ? [{ passed: /[A-Z]/.test(newPassword), label: 'An uppercase letter' }] : []),
+            ...(policy?.requires_digit ? [{ passed: /[0-9]/.test(newPassword), label: 'A digit' }] : []),
+            ...(policy?.requires_special ? [{ passed: /[^A-Za-z0-9]/.test(newPassword), label: 'A special character' }] : []),
+          ].map((p) => {
             return (
               <li
                 key={p.label}
                 className={cn(
                   'flex items-center gap-1.5 transition-colors',
-                  passed ? 'text-success' : 'text-muted',
+                  p.passed ? 'text-success' : 'text-muted',
                 )}
               >
-                {passed ? <Check size={12} /> : <X size={12} />}
+                {p.passed ? <Check size={12} /> : <X size={12} />}
                 {p.label}
               </li>
             );

@@ -31,13 +31,14 @@ import { SkeletonForm } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { productsApi } from '@/api/crm/products';
 import { inspectionSpecsApi, type SpcResult } from '@/api/quality/inspectionSpecs';
+import { spcApi } from '@/api/quality/spc';
 import type { UpsertInspectionSpecData } from '@/types/quality';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { Checkbox } from '@/components/ui/Checkbox';
 
 const itemSchema = z.object({
   parameter_name:  z.string().min(1, 'Parameter name is required').max(150),
-  parameter_type:  z.enum(['dimensional', 'visual', 'functional']),
+  parameter_type:  z.string().min(1, 'Parameter type is required'),
   unit_of_measure: z.string().max(20).optional().or(z.literal('')),
   nominal_value:   z.string().regex(/^-?\d+(\.\d{1,4})?$/, 'Use a decimal with up to 4 places').optional().or(z.literal('')),
   tolerance_min:   z.string().regex(/^-?\d+(\.\d{1,4})?$/, 'Use a decimal with up to 4 places').optional().or(z.literal('')),
@@ -66,6 +67,12 @@ export default function InspectionSpecEditorPage() {
     queryKey: ['crm', 'products', 'lookup'],
     queryFn: () => productsApi.list({ per_page: 100, is_active: 'true' }),
   });
+  const parameterOptions = useQuery({
+    queryKey: ['quality', 'inspection-specs', 'options'],
+    queryFn: () => inspectionSpecsApi.options(),
+  });
+  const parameterTypes = parameterOptions.data?.parameter_types ?? [];
+  const defaultParameterType = parameterTypes[0]?.value ?? '';
   const existing = useQuery({
     queryKey: ['quality', 'inspection-specs', 'for-product', productId],
     queryFn: () => inspectionSpecsApi.forProduct(productId),
@@ -78,6 +85,12 @@ export default function InspectionSpecEditorPage() {
     queryFn: () => inspectionSpecsApi.spc(specId),
     enabled: !!specId,
   });
+  const { data: spcOptions } = useQuery({
+    queryKey: ['quality', 'spc', 'options'],
+    queryFn: spcApi.options,
+    staleTime: 300_000,
+  });
+  const cpkThresholds = spcOptions?.capability_thresholds;
 
   const {
     register, control, handleSubmit, reset, setError,
@@ -87,7 +100,7 @@ export default function InspectionSpecEditorPage() {
     defaultValues: {
       product_id: productId,
       notes: '',
-      items: [{ parameter_name: '', parameter_type: 'dimensional', unit_of_measure: '', nominal_value: '', tolerance_min: '', tolerance_max: '', is_critical: false, notes: '' }],
+      items: [{ parameter_name: '', parameter_type: defaultParameterType, unit_of_measure: '', nominal_value: '', tolerance_min: '', tolerance_max: '', is_critical: false, notes: '' }],
     },
   });
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
@@ -115,10 +128,10 @@ export default function InspectionSpecEditorPage() {
       reset({
         product_id: productId,
         notes: '',
-        items: [{ parameter_name: '', parameter_type: 'dimensional', unit_of_measure: '', nominal_value: '', tolerance_min: '', tolerance_max: '', is_critical: false, notes: '' }],
+        items: [{ parameter_name: '', parameter_type: defaultParameterType, unit_of_measure: '', nominal_value: '', tolerance_min: '', tolerance_max: '', is_critical: false, notes: '' }],
       });
     }
-  }, [productId, existing.data, reset]);
+  }, [productId, existing.data, reset, defaultParameterType]);
 
   const upsert = useMutation({
     mutationFn: (values: FormValues) => {
@@ -127,7 +140,7 @@ export default function InspectionSpecEditorPage() {
         notes: values.notes || undefined,
         items: values.items.map((row, i) => ({
           parameter_name:  row.parameter_name,
-          parameter_type:  row.parameter_type,
+          parameter_type:  row.parameter_type as UpsertInspectionSpecData['items'][number]['parameter_type'],
           unit_of_measure: row.unit_of_measure || undefined,
           nominal_value:   row.nominal_value || undefined,
           tolerance_min:   row.tolerance_min || undefined,
@@ -267,7 +280,7 @@ export default function InspectionSpecEditorPage() {
                       <Input
                         {...register(`items.${i}.parameter_name` as const)}
                         error={errors.items?.[i]?.parameter_name?.message}
-                        placeholder="e.g. Shaft OD"
+                        placeholder="Measurement name"
                       />
                     </Td>
                     <Td>
@@ -275,9 +288,7 @@ export default function InspectionSpecEditorPage() {
                         {...register(`items.${i}.parameter_type` as const)}
                         error={errors.items?.[i]?.parameter_type?.message}
                       >
-                        <option value="dimensional">Dimensional</option>
-                        <option value="visual">Visual</option>
-                        <option value="functional">Functional</option>
+                        {parameterTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
                       </Select>
                     </Td>
                     <Td>
@@ -343,7 +354,7 @@ export default function InspectionSpecEditorPage() {
               variant="secondary"
               size="sm"
               icon={<Plus size={14} />}
-              onClick={() => append({ parameter_name: '', parameter_type: 'dimensional', unit_of_measure: '', nominal_value: '', tolerance_min: '', tolerance_max: '', is_critical: false, notes: '' })}
+              onClick={() => append({ parameter_name: '', parameter_type: defaultParameterType, unit_of_measure: '', nominal_value: '', tolerance_min: '', tolerance_max: '', is_critical: false, notes: '' })}
             >
               Add parameter
             </Button>
@@ -352,7 +363,7 @@ export default function InspectionSpecEditorPage() {
           {errors.items?.message && <p className="mt-2 text-xs text-danger">{errors.items.message as string}</p>}
         </fieldset>
 
-        {spcData.data && Object.keys(spcData.data.data).length > 0 && (
+        {spcData.data && cpkThresholds && Object.keys(spcData.data.data).length > 0 && (
           <div className="mb-8">
             <h3 className="text-xs uppercase tracking-wider text-muted font-medium mb-4">
               Process Capability (SPC)
@@ -372,8 +383,8 @@ export default function InspectionSpecEditorPage() {
                 <tbody>
                   {Object.entries(spcData.data.data).map(([id, s]) => {
                     const item = s as SpcResult;
-                    const cpColor = item.cp >= 1.33 ? 'text-success' : item.cp >= 1.0 ? 'text-warning' : 'text-danger';
-                    const cpkColor = item.cpk >= 1.33 ? 'text-success' : item.cpk >= 1.0 ? 'text-warning' : 'text-danger';
+                    const cpColor = item.cp >= cpkThresholds.ongoing ? 'text-success' : item.cp >= cpkThresholds.action ? 'text-warning' : 'text-danger';
+                    const cpkColor = item.cpk >= cpkThresholds.ongoing ? 'text-success' : item.cpk >= cpkThresholds.action ? 'text-warning' : 'text-danger';
                     return (
                       <tr key={id} className={trCls}>
                         <Td>
@@ -402,7 +413,7 @@ export default function InspectionSpecEditorPage() {
               </table>
             </div>
             <p className="mt-2 text-2xs text-muted">
-              Cp / Cpk ≥ 1.33 = capable · 1.0–1.33 = marginal · &lt;1.0 = not capable · Minimum 5 measurements required per parameter
+              Cp / Cpk ≥ {cpkThresholds.ongoing.toFixed(2)} = capable · {cpkThresholds.action.toFixed(1)}–{cpkThresholds.ongoing.toFixed(2)} = marginal · &lt;{cpkThresholds.action.toFixed(1)} = not capable · Minimum {cpkThresholds.minimum_samples} measurements required per parameter
             </p>
           </div>
         )}

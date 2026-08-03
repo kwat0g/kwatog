@@ -33,7 +33,7 @@ export default function CustomerOrderDetailPage() {
         subtitle={order?.date ?? undefined}
         backTo="/portal/customer/orders"
         backLabel="Orders"
-        actions={order ? <Chip variant={chipVariantForStatus(order.status)}>{order.status.replace(/_/g, ' ')}</Chip> : undefined}
+        actions={order ? <Chip variant={chipVariantForStatus(order.status)}>{order.status_label ?? order.status.replace(/_/g, ' ')}</Chip> : undefined}
       />
 
       {/* One padded body holds every state, so loading and loaded agree on width. */}
@@ -112,7 +112,7 @@ export default function CustomerOrderDetailPage() {
                         <Td align="right" mono>{wo.quantity_produced}</Td>
                         <Td className="text-muted">{wo.planned_start ?? '—'}</Td>
                         <Td align="right" mono>
-                          <Chip variant={chipVariantForStatus(wo.status)}>{wo.status}</Chip>
+                          <Chip variant={chipVariantForStatus(wo.status)}>{wo.status_label ?? wo.status}</Chip>
                         </Td>
                       </tr>
                     ))}

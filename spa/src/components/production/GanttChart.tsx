@@ -21,6 +21,7 @@ type ViewMode = 'Day' | 'Week' | 'Month';
 interface Props {
   rows: GanttRow[];
   viewMode?: ViewMode;
+  emptyWindowDays?: number;
   onBarClick?: (woId: string) => void;
 }
 
@@ -59,17 +60,17 @@ function barClass(woStatus: string | null): string {
   }
 }
 
-export function GanttChart({ rows, viewMode = 'Week', onBarClick }: Props) {
+export function GanttChart({ rows, viewMode = 'Week', emptyWindowDays = 14, onBarClick }: Props) {
   /**
    * Compute the visible window from the data: earliest start to latest end.
-   * If data is empty, fall back to "today + 14 days" so the chart still
+   * If data is empty, fall back to the server-configured horizon so the chart still
    * lays out a header instead of collapsing.
    */
   const { startDay, days } = useMemo(() => {
     const allBars = rows.flatMap((r) => r.bars);
     if (allBars.length === 0) {
       const today = dayKey(new Date().toISOString());
-      return { startDay: today, days: 14 };
+      return { startDay: today, days: Math.max(1, emptyWindowDays) };
     }
     const starts = allBars.map((b) => dayKey(b.start));
     const ends = allBars.map((b) => dayKey(b.end));
@@ -79,7 +80,7 @@ export function GanttChart({ rows, viewMode = 'Week', onBarClick }: Props) {
     const start = min - DAY_MS;
     const span = Math.max(7, Math.round((max - start) / DAY_MS) + 2);
     return { startDay: start, days: span };
-  }, [rows]);
+  }, [rows, emptyWindowDays]);
 
   /** Column width in px — tighter for Month, wider for Day. */
   const colW = viewMode === 'Day' ? 56 : viewMode === 'Month' ? 18 : 28;

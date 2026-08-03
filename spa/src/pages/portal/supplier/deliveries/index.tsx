@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
+import { CompanyName } from '@/components/brand/CompanyName';
 
 export default function SupplierDeliveriesPage() {
   const { data: deliveries, isLoading, isError, refetch } = useQuery({
@@ -17,7 +18,7 @@ export default function SupplierDeliveriesPage() {
 
   return (
     <div>
-      <PageHeader title="Deliveries" subtitle="Shipments you have sent to Ogami" />
+      <PageHeader title="Deliveries" subtitle={<>Shipments you have sent to <CompanyName /></>} />
 
       {/* One padded body holds every state, so loading and loaded agree on width. */}
       <div className="px-5 py-4 max-w-5xl">
@@ -48,14 +49,14 @@ export default function SupplierDeliveriesPage() {
                       <Td mono>{d.delivery_number}</Td>
                       <Td className="text-muted">{d.delivered_at ?? '—'}</Td>
                       <Td align="right" mono>
-                        <Chip variant={chipVariantForStatus(d.status)}>{d.status}</Chip>
+                        <Chip variant={chipVariantForStatus(d.status)}>{d.status_label ?? d.status.replace(/_/g, ' ')}</Chip>
                       </Td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             ) : (
-              <EmptyState icon="truck" title="No deliveries" description="Deliveries you send to Ogami will appear here." />
+              <EmptyState icon="truck" title="No deliveries" description="No delivery records are available." />
             )}
           </Panel>
         )}

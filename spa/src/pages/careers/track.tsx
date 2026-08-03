@@ -10,27 +10,6 @@ import { Input } from '@/components/ui/Input';
 import type { TrackingInfo } from '@/types/recruitment';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
 
-const STAGE_STEPS = [
-  'Application Received',
-  'Under Review',
-  'Interview Stage',
-  'Offer Extended',
-  'Hired',
-];
-
-function stageIndex(status: string): number {
-  const map: Record<string, number> = {
-    'Application Received': 0,
-    'Under Review': 1,
-    'Interview Stage': 2,
-    'Interview Scheduled': 2,
-    'Offer Extended': 3,
-    'Hired': 4,
-    'Not Selected': -1,
-  };
-  return map[status] ?? 0;
-}
-
 export default function ApplicationTrackPage() {
   const [code, setCode] = useState('');
   const [info, setInfo] = useState<TrackingInfo | null>(null);
@@ -57,7 +36,11 @@ export default function ApplicationTrackPage() {
     }
   };
 
-  const currentStep = info ? stageIndex(info.status) : -1;
+  const currentStep = info
+    ? (info.status === 'Not Selected'
+      ? -1
+      : info.stage_steps.findIndex((step) => step.label === info.status || (info.status === 'Interview Scheduled' && step.value === 'interview')))
+    : -1;
   const isRejected = info?.status === 'Not Selected';
 
   return (
@@ -114,11 +97,11 @@ export default function ApplicationTrackPage() {
               </div>
             ) : (
               <div className="space-y-0">
-                {STAGE_STEPS.map((step, idx) => {
+                {info.stage_steps.map((step, idx) => {
                   const isActive = idx === currentStep;
                   const isDone = idx < currentStep;
                   return (
-                    <div key={step} className="flex items-start gap-3 py-2">
+                    <div key={step.value} className="flex items-start gap-3 py-2">
                       <div className="flex flex-col items-center">
                         <div
                           className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium ${
@@ -131,7 +114,7 @@ export default function ApplicationTrackPage() {
                         >
                           {isDone ? <CheckCircle size={14} /> : idx + 1}
                         </div>
-                        {idx < STAGE_STEPS.length - 1 && (
+                        {idx < info.stage_steps.length - 1 && (
                           <div className={`h-6 w-0.5 ${isDone ? 'bg-success' : 'bg-elevated'}`} />
                         )}
                       </div>
@@ -140,7 +123,7 @@ export default function ApplicationTrackPage() {
                           isActive ? 'font-medium text-primary' : isDone ? 'text-secondary' : 'text-muted'
                         }`}
                       >
-                        {step}
+                        {step.label}
                         {isActive && (
                           <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-elevated px-2 py-0.5 text-xs text-secondary">
                             <Clock size={10} /> Current

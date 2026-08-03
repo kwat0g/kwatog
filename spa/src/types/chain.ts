@@ -5,6 +5,11 @@ export interface ChainStep {
   label: string;
   date?: string | null;
   state: ChainStepState;
+  href?: string;
+  onClick?: (step: ChainStep) => void;
+  description?: string;
+  is_overdue?: boolean;
+  sla_label?: string;
 }
 
 export type StageColor = 'success' | 'info' | 'warning' | 'danger' | 'neutral';

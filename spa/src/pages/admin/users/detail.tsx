@@ -268,7 +268,7 @@ export default function AdminUserDetailPage() {
                     </Td>
                     <Td>
                       <Chip variant={evt.status === 'success' ? 'success' : 'danger'}>
-                        {evt.status}
+                        {evt.status_label ?? evt.status}
                       </Chip>
                     </Td>
                     <Td mono>{evt.ip_address ?? '—'}</Td>

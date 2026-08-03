@@ -38,6 +38,12 @@ export default function PerformanceReviewsPage() {
     queryFn: () => reviewCyclesApi.list({ per_page: 50 }),
   });
   const cycles = cyclesResp?.data ?? [];
+  const { data: options } = useQuery({
+    queryKey: ['performance-review-options'],
+    queryFn: performanceReviewsApi.options,
+    staleTime: 5 * 60 * 1000,
+  });
+  const statusLabel = new Map((options?.review_statuses ?? []).map((status) => [status.value, status.label]));
 
   const acknowledgeMutation = useMutation({
     mutationFn: (id: string) => performanceReviewsApi.acknowledge(id),
@@ -63,7 +69,7 @@ export default function PerformanceReviewsPage() {
     },
     {
       key: 'status', header: 'Status',
-      cell: (r) => <Chip variant={STATUS_CHIP[r.status]}>{r.status.replace('_', ' ')}</Chip>,
+      cell: (r) => <Chip variant={STATUS_CHIP[r.status]}>{statusLabel.get(r.status) ?? r.status.replace('_', ' ')}</Chip>,
     },
     {
       key: 'overall_score', header: 'Score', align: 'right',
@@ -74,7 +80,7 @@ export default function PerformanceReviewsPage() {
     {
       key: 'overall_rating', header: 'Rating',
       cell: (r) => r.overall_rating
-        ? <Chip variant="info">{r.overall_rating}</Chip>
+        ? <Chip variant="info">{r.overall_rating_label ?? r.overall_rating}</Chip>
         : <span className="text-muted">--</span>,
     },
     {
@@ -106,10 +112,7 @@ export default function PerformanceReviewsPage() {
       key: 'status', label: 'Status', type: 'select',
       options: [
         { value: '', label: 'All' },
-        { value: 'pending', label: 'Pending' },
-        { value: 'in_progress', label: 'In progress' },
-        { value: 'submitted', label: 'Submitted' },
-        { value: 'acknowledged', label: 'Acknowledged' },
+        ...(options?.review_statuses ?? []),
       ],
     },
     {

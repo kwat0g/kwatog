@@ -200,10 +200,10 @@ function KpiCard({ item }: { item: KpiScorecardItem }) {
           <div className="flex items-center gap-1.5 mb-2">
             <span
               className={`inline-block h-2 w-2 rounded-full shrink-0 ${STATUS_DOT[status] ?? 'bg-strong'}`}
-              title={status.replace(/_/g, ' ')}
-              aria-label={`Status: ${status.replace(/_/g, ' ')}`}
+              title={snapshot?.status_label ?? status.replace(/_/g, ' ')}
+              aria-label={`Status: ${snapshot?.status_label ?? status.replace(/_/g, ' ')}`}
             />
-            <span className="text-2xs uppercase tracking-wider text-text-subtle font-display font-medium truncate">
+            <span className="text-2xs uppercase tracking-wider text-subtle font-medium truncate">
               {def.name}
             </span>
           </div>

@@ -1,5 +1,6 @@
+import { cn } from '@/lib/cn';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { financeDashboardApi } from '@/api/accounting/dashboard';
 import { Panel } from '@/components/ui/Panel';
 import { StatCard } from '@/components/ui/StatCard';
@@ -16,6 +17,7 @@ import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells
  * Drops into pages/dashboard/index.tsx for any user with `accounting.dashboard.view`.
  */
 export function FinanceSection() {
+  const navigate = useNavigate();
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['accounting', 'dashboard', 'summary'],
     queryFn: () => financeDashboardApi.summary(),
@@ -66,7 +68,7 @@ export function FinanceSection() {
           </div>
         </Panel>
 
-        <Panel title="Recent Journal Entries" meta="last 10">
+        <Panel title="Recent Journal Entries" meta={`last ${data.recent_journal_entries.length}`}>
           {data.recent_journal_entries.length === 0 ? (
             <p className="text-sm text-muted">No entries yet.</p>
           ) : (
@@ -102,8 +104,8 @@ export function FinanceSection() {
             </thead>
             <tbody>
               {data.top_overdue_customers.map((c) => (
-                <tr key={c.customer_id} className={trCls}>
-                  <Td><Link to={`/accounting/customers/${c.customer_id}`} className="text-accent hover:underline">{c.customer_name}</Link></Td>
+                <tr key={c.customer_id} className={cn(trCls, "cursor-pointer")} onClick={() => navigate(`/accounting/customers/${c.customer_id}`)}>
+                  <Td>{c.customer_name}</Td>
                   <Td align="right" mono>{formatPeso(c.d1_30)}</Td>
                   <Td align="right" mono>{formatPeso(c.d31_60)}</Td>
                   <Td align="right" mono>{formatPeso(c.d61_90)}</Td>

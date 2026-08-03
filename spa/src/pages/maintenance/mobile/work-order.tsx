@@ -129,9 +129,10 @@ export default function MobileWorkOrderDetail() {
     );
   }
 
-  const isTerminal = wo.status === 'completed' || wo.status === 'cancelled';
-  const canStart = wo.status === 'open' || wo.status === 'assigned';
-  const canComplete = wo.status === 'in_progress';
+  const actions = wo.available_actions ?? [];
+  const isTerminal = actions.length === 0;
+  const canStart = actions.includes('start');
+  const canComplete = actions.includes('complete');
 
   return (
     <div className="space-y-4">
@@ -150,15 +151,15 @@ export default function MobileWorkOrderDetail() {
           <span className="font-mono tabular-nums text-sm font-medium">{wo.mwo_number}</span>
           <Chip variant={maintenancePriorityVariant[wo.priority]} className="gap-1">
             {wo.priority === 'critical' && <AlertTriangle className="w-3 h-3" aria-hidden />}
-            {wo.priority}
+            {wo.priority_label ?? wo.priority}
           </Chip>
         </div>
 
-        <div className="mt-2 text-sm font-medium">{wo.maintainable?.name ?? 'Unknown target'}</div>
+        <div className="mt-2 text-sm font-medium">{wo.maintainable?.name ?? '—'}</div>
         <div className="text-xs text-muted mt-0.5">
           {wo.maintainable?.code ? `(${wo.maintainable.code})` : ''} &middot;{' '}
-          <span className="capitalize">{wo.type}</span> &middot;{' '}
-          <span className="capitalize">{wo.status.replace(/_/g, ' ')}</span>
+          <span>{wo.type_label ?? wo.type}</span> &middot;{' '}
+          <span>{wo.status_label ?? wo.status}</span>
         </div>
 
         {wo.description && (
@@ -214,7 +215,7 @@ export default function MobileWorkOrderDetail() {
                   className="flex items-center justify-between p-2 rounded bg-surface text-sm"
                 >
                   <div>
-                    <div className="font-medium">{sp.item?.name ?? 'Unknown'}</div>
+                    <div className="font-medium">{sp.item?.name ?? '—'}</div>
                     <div className="text-xs text-muted">
                       {sp.item?.code} &middot; Qty: <span className="font-mono tabular-nums">{sp.quantity}</span>
                     </div>
@@ -248,7 +249,7 @@ export default function MobileWorkOrderDetail() {
                 className="flex items-center justify-between p-2 rounded bg-surface text-sm"
               >
                 <div>
-                  <div className="font-medium">{sp.item?.name ?? 'Unknown'}</div>
+                    <div className="font-medium">{sp.item?.name ?? '—'}</div>
                   <div className="text-xs text-muted">
                     Qty: <span className="font-mono tabular-nums">{sp.quantity}</span>
                   </div>

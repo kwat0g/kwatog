@@ -16,14 +16,20 @@ import { formatDateTime } from '@/lib/formatDate';
 import type { EightDReportData } from '@/types/b2b';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { LinkButton } from '@/components/ui/LinkButton';
+import { CompanyName } from '@/components/brand/CompanyName';
 
 export default function CustomerComplaintsPage() {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
-  const [severity, setSeverity] = useState('minor');
+  const [severity, setSeverity] = useState('');
   const [description, setDescription] = useState('');
-  const [affectedQty, setAffectedQty] = useState('0');
+  const [affectedQty, setAffectedQty] = useState('');
   const [viewing8d, setViewing8d] = useState<EightDReportData | null>(null);
+
+  const { data: complaintOptions } = useQuery({
+    queryKey: ['portal', 'customer', 'complaint-options'],
+    queryFn: () => customerPortalApi.complaintOptions(),
+  });
 
   const { data: complaints, isLoading, isError, refetch } = useQuery({
     queryKey: ['portal', 'customer', 'complaints'],
@@ -35,14 +41,14 @@ export default function CustomerComplaintsPage() {
     mutationFn: () => customerPortalApi.createComplaint({
       severity,
       description,
-      affected_quantity: parseInt(affectedQty, 10) || 0,
+      affected_quantity: parseInt(affectedQty, 10),
     }),
     onSuccess: (res) => {
       toast.success(res.message ?? 'Complaint submitted.');
       setShowForm(false);
       setDescription('');
-      setSeverity('minor');
-      setAffectedQty('0');
+      setSeverity('');
+      setAffectedQty('');
       queryClient.invalidateQueries({ queryKey: ['portal', 'customer', 'complaints'] });
     },
     onError: () => toast.error('Failed to submit complaint.'),
@@ -61,7 +67,7 @@ export default function CustomerComplaintsPage() {
     <div>
       <PageHeader
         title="Complaints"
-        subtitle="Quality issues you have reported to Ogami"
+        subtitle={<>Quality issues you have reported to <CompanyName /></>}
         actions={
           <Button variant="primary" size="sm" icon={showForm ? <X size={14} /> : <Plus size={14} />} onClick={() => setShowForm(!showForm)}>
             {showForm ? 'Cancel' : 'New complaint'}
@@ -86,9 +92,8 @@ export default function CustomerComplaintsPage() {
           <Panel title="Submit a complaint">
             <form onSubmit={(e) => { e.preventDefault(); createMut.mutate(); }} className="flex flex-col gap-3">
               <Select label="Severity" value={severity} onChange={(e) => setSeverity(e.target.value)}>
-                <option value="minor">Minor</option>
-                <option value="major">Major</option>
-                <option value="critical">Critical</option>
+                <option value="">— Select —</option>
+                {(complaintOptions?.severities ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </Select>
               <Textarea
                 label="Description"
@@ -101,7 +106,8 @@ export default function CustomerComplaintsPage() {
               <Input
                 label="Affected quantity"
                 type="number"
-                min={0}
+                min={1}
+                required
                 value={affectedQty}
                 onChange={(e) => setAffectedQty(e.target.value)}
                 className="font-mono tabular-nums"
@@ -134,8 +140,8 @@ export default function CustomerComplaintsPage() {
                     <tr key={c.id} className={trCls}>
                       <Td mono className="text-muted">{c.complaint_number}</Td>
                       <Td>
-                        <Chip variant={c.severity === 'critical' ? 'danger' : c.severity === 'major' ? 'warning' : 'neutral'}>
-                          {c.severity}
+                        <Chip variant={c.severity === 'critical' ? 'danger' : ['high', 'medium'].includes(c.severity) ? 'warning' : 'neutral'}>
+                          {c.severity_label ?? c.severity}
                         </Chip>
                       </Td>
                       <Td className="max-w-xs truncate">{c.description}</Td>
@@ -143,7 +149,7 @@ export default function CustomerComplaintsPage() {
                       <Td className="text-muted">{c.received_date ?? '—'}</Td>
                       <Td align="right" mono>
                         <Chip variant={c.status === 'closed' ? 'success' : c.status === 'resolved' ? 'info' : 'warning'}>
-                          {c.status}
+                          {c.status_label ?? c.status}
                         </Chip>
                       </Td>
                       <Td align="right" mono>
@@ -177,7 +183,7 @@ export default function CustomerComplaintsPage() {
               <div>
                 <h3 className="text-sm font-medium">8D Report &mdash; {viewing8d.complaint_number}</h3>
                 <p className="text-2xs text-muted mt-0.5">
-                  {viewing8d.severity} &middot; {viewing8d.complaint_status}
+                  {viewing8d.severity_label ?? viewing8d.severity} &middot; {viewing8d.complaint_status_label ?? viewing8d.complaint_status}
                 </p>
               </div>
               <Button

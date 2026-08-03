@@ -21,42 +21,26 @@ const METRIC_ICONS: Record<ConditionMetric, typeof Activity> = {
   oil_quality: Droplets,
 };
 
-const METRIC_LABELS: Record<ConditionMetric, string> = {
-  temperature: 'Temperature',
-  vibration: 'Vibration',
-  pressure: 'Hydraulic Pressure',
-  current: 'Current Draw',
-  oil_quality: 'Oil Quality',
-};
-
-const METRIC_UNITS: Record<ConditionMetric, string> = {
-  temperature: '°C',
-  vibration: 'mm/s',
-  pressure: 'bar',
-  current: 'A',
-  oil_quality: '%',
-};
-
-function HealthGauge({ metric, snapshot }: { metric: ConditionMetric; snapshot: MachineHealthSnapshot | undefined }) {
+function HealthGauge({ metric, snapshot, metricLabels, metricUnits }: { metric: ConditionMetric; snapshot: MachineHealthSnapshot | undefined; metricLabels: Map<string, string>; metricUnits: Map<string, string> }) {
   const Icon = METRIC_ICONS[metric];
-  const value = snapshot?.value ?? 0;
-  const scale = snapshot?.max_threshold ?? Math.max(value, snapshot?.min_threshold ?? 1) * 1.2;
-  const pct = Math.min((value / scale) * 100, 100);
-  const status = snapshot?.status ?? 'ok';
+  const value = snapshot?.value;
+  const scale = snapshot?.max_threshold ?? Math.max(value ?? 0, snapshot?.min_threshold ?? 1) * 1.2;
+  const pct = value == null ? 0 : Math.min((value / scale) * 100, 100);
+  const status = snapshot?.status;
 
   return (
     <Panel className="p-4">
       <div className="flex items-center gap-2">
         <Icon size={16} className="text-primary" />
-        <span className="text-sm font-medium">{METRIC_LABELS[metric]}</span>
-        <Chip variant={status === 'critical' ? 'danger' : status === 'warning' ? 'warning' : 'success'} className="ml-auto text-2xs">
-          {status}
+        <span className="text-sm font-medium">{metricLabels.get(metric) ?? metric}</span>
+        <Chip variant={status === 'critical' ? 'danger' : status === 'warning' ? 'warning' : status ? 'success' : 'neutral'} className="ml-auto text-2xs">
+          {status ?? 'No reading'}
         </Chip>
       </div>
       <div className="mt-3">
         <div className="flex items-baseline gap-1">
-          <span className="text-2xl font-medium tabular-nums">{snapshot?.value?.toFixed(2) ?? '—'}</span>
-          <span className="text-sm text-muted">{METRIC_UNITS[metric]}</span>
+          <span className="text-2xl font-medium tabular-nums">{value?.toFixed(2) ?? '—'}</span>
+          <span className="text-sm text-muted">{metricUnits.get(metric) ?? snapshot?.unit ?? ''}</span>
         </div>
         <div className="mt-2 h-2 overflow-hidden rounded bg-elevated">
           <div
@@ -79,7 +63,7 @@ function HealthGauge({ metric, snapshot }: { metric: ConditionMetric; snapshot: 
   );
 }
 
-function TrendChart({ points, metric, snapshot }: { points: ConditionTrendPoint[]; metric: ConditionMetric; snapshot?: MachineHealthSnapshot }) {
+function TrendChart({ points, metric, snapshot, metricUnits }: { points: ConditionTrendPoint[]; metric: ConditionMetric; snapshot?: MachineHealthSnapshot; metricUnits: Map<string, string> }) {
   const threshold = snapshot?.max_threshold ?? snapshot?.min_threshold ?? 0;
   const values = points.map((p) => p.value);
   const minVal = Math.min(...values, 0);
@@ -101,7 +85,7 @@ function TrendChart({ points, metric, snapshot }: { points: ConditionTrendPoint[
                 style={{ height: `${Math.max(h, 2)}%` }}
               />
               <div className="absolute -top-6 left-1/2 hidden -translate-x-1/2 rounded bg-canvas px-2 py-0.5 text-2xs border border-default group-hover:block whitespace-nowrap">
-                {p.value.toFixed(2)} {METRIC_UNITS[metric]}
+                {p.value.toFixed(2)} {metricUnits.get(metric) ?? snapshot?.unit ?? ''}
               </div>
             </div>
           );
@@ -123,6 +107,11 @@ export default function MachineHealthPage() {
     queryFn: () => machinesApi.list({ per_page: 500 }),
     placeholderData: (prev) => prev,
   });
+  const { data: metricOptions } = useQuery({
+    queryKey: ['maintenance', 'condition-metric-options'],
+    queryFn: conditionReadingsApi.options,
+    staleTime: 5 * 60 * 1000,
+  });
 
   const machineId = selectedMachine ?? undefined;
 
@@ -143,7 +132,9 @@ export default function MachineHealthPage() {
     ...(machines?.data.map((m) => ({ value: String(m.id), label: `${m.machine_code} — ${m.name}` })) ?? []),
   ];
 
-  const metrics: ConditionMetric[] = ['temperature', 'vibration', 'pressure', 'current', 'oil_quality'];
+  const metrics = (metricOptions?.metrics ?? []).map((metric) => metric.value as ConditionMetric);
+  const metricLabels = new Map((metricOptions?.metrics ?? []).map((metric) => [metric.value, metric.label]));
+  const metricUnits = new Map((metricOptions?.metrics ?? []).map((metric) => [metric.value, metric.unit]));
 
   return (
     <div>
@@ -186,6 +177,8 @@ export default function MachineHealthPage() {
                   <HealthGauge
                     key={metric}
                     metric={metric}
+                    metricLabels={metricLabels}
+                    metricUnits={metricUnits}
                     snapshot={healthSnapshot?.find((s) => s.metric === metric)}
                   />
                 ))}
@@ -207,13 +200,13 @@ export default function MachineHealthPage() {
                       const Icon = METRIC_ICONS[metric];
                       return <Icon size={16} className="text-primary" />;
                     })()}
-                    <span className="text-sm font-medium">{METRIC_LABELS[metric]} trend</span>
-                    <span className="ml-auto text-2xs text-muted">Last 30 readings</span>
+                    <span className="text-sm font-medium">{metricLabels.get(metric) ?? metric} trend</span>
+                    <span className="ml-auto text-2xs text-muted">{trendPoints.length} readings shown</span>
                   </div>
                   {readingsLoading ? (
                     <div className="mt-4 h-32 animate-pulse rounded bg-elevated" />
                   ) : trendPoints.length > 0 ? (
-                    <TrendChart points={trendPoints} metric={metric} snapshot={healthSnapshot?.find((s) => s.metric === metric)} />
+                    <TrendChart points={trendPoints} metric={metric} metricUnits={metricUnits} snapshot={healthSnapshot?.find((s) => s.metric === metric)} />
                   ) : (
                     <EmptyState icon="activity" title="No data" description={`No ${metric} readings for this machine.`} className="mt-4" />
                   )}

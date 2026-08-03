@@ -31,6 +31,10 @@ function startOfThisMonth(): string {
  * a meaningful drill-down (so the card stays non-clickable).
  */
 export function kpiLink(label: string): string | undefined {
+  if (label.startsWith('Molds ≥ ')) {
+    return `/mrp/molds?nearing_limit=1`;
+  }
+
   switch (label) {
     // ─── Plant Manager ────────────────────────────────────
     case 'Revenue · Week':
@@ -59,8 +63,6 @@ export function kpiLink(label: string): string | undefined {
       return `/inventory/items?below_reorder=1`;
     case 'Active Breakdowns':
       return `/maintenance/work-orders?status=in_progress`;
-    case 'Molds ≥ 80%':
-      return `/mrp/molds?nearing_limit=1`;
 
     // ─── Accounting ────────────────────────────────────────
     case 'Cash Balance':
@@ -90,7 +92,7 @@ export function kpiLink(label: string): string | undefined {
     case 'Overdue Deliveries':
       return `/purchasing/purchase-orders?overdue=1`;
     case 'Suppliers Due Review':
-      return `/purchasing/suppliers?below_score=80`;
+      return `/purchasing/suppliers`;
 
     // ─── Warehouse (D7) ────────────────────────────────────
     case 'Pending GRNs':

@@ -1,5 +1,6 @@
 import { client } from '../client';
 import type { ApiSuccess, PaginatedResponse, ListParams } from '@/types';
+import type { ChainStep } from '@/types/chain';
 import type {
   Inspection,
   CreateInspectionData,
@@ -19,10 +20,13 @@ export interface InspectionListParams extends ListParams {
 }
 
 export const inspectionsApi = {
+  options: () => client.get<{ data: { stages: Array<{ value: string; label: string }>; statuses: Array<{ value: string; label: string }>; entity_types: Array<{ value: string; label: string }>; measurement_results: Array<{ value: string; label: string }>; sampling_methods: Array<{ stage: string; value: string; label: string }> } }>('/quality/inspections/options').then((r) => r.data.data),
   list: (params?: InspectionListParams) =>
     client.get<PaginatedResponse<Inspection>>('/quality/inspections', { params }).then((r) => r.data),
   show: (id: string) =>
     client.get<ApiSuccess<Inspection>>(`/quality/inspections/${id}`).then((r) => r.data.data),
+  chain: (id: string) =>
+    client.get<{ data: ChainStep[] }>(`/quality/inspections/${id}/chain`).then((r) => r.data.data),
   create: (data: CreateInspectionData) =>
     client.post<ApiSuccess<Inspection>>('/quality/inspections', data).then((r) => r.data.data),
   recordMeasurements: (id: string, data: RecordMeasurementsData) =>

@@ -1,7 +1,7 @@
 /** Sprint 7 — Task 68 — Customer complaints list. */
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate} from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import { complaintsApi, type ComplaintListParams } from '@/api/crm/complaints';
 import { Button } from '@/components/ui/Button';
@@ -15,11 +15,9 @@ import { usePermission } from '@/hooks/usePermission';
 import type { CustomerComplaint, ComplaintSeverity, ComplaintStatus } from '@/types/crm';
 
 const STATUS_CHIP: Record<ComplaintStatus, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
-  open: 'warning', investigating: 'info', resolved: 'info', closed: 'success', cancelled: 'neutral',
-};
+  open: 'warning', investigating: 'info', resolved: 'info', closed: 'success', cancelled: 'neutral' };
 const SEVERITY_CHIP: Record<ComplaintSeverity, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
-  low: 'neutral', medium: 'info', high: 'warning', critical: 'danger',
-};
+  low: 'neutral', medium: 'info', high: 'warning', critical: 'danger' };
 
 export default function ComplaintsListPage() {
   const navigate = useNavigate();
@@ -29,41 +27,42 @@ export default function ComplaintsListPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['crm', 'complaints', filters],
     queryFn: () => complaintsApi.list(filters),
-    placeholderData: (prev) => prev,
-  });
+    placeholderData: (prev) => prev });
+  const { data: complaintOptions } = useQuery({
+    queryKey: ['crm', 'complaints', 'options'],
+    queryFn: complaintsApi.options,
+    staleTime: 5 * 60 * 1000 });
+  const labels = new Map([
+    ...(complaintOptions?.statuses ?? []),
+    ...(complaintOptions?.severities ?? []),
+  ].map((option) => [option.value, option.label]));
 
   const columns: Column<CustomerComplaint>[] = [
     { key: 'complaint_number', header: 'Complaint',
-      cell: (r) => <Link to={`/crm/complaints/${r.id}`} className="font-mono text-accent hover:underline">{r.complaint_number}</Link> },
+      cell: (r) => <span className="font-mono">{r.complaint_number}</span> },
     { key: 'customer', header: 'Customer', cell: (r) => r.customer?.name ?? '—' },
     { key: 'product', header: 'Product',
       cell: (r) => r.product ? (
         <span><span className="font-mono">{r.product.part_number}</span><span className="ml-2 text-muted">{r.product.name}</span></span>
       ) : <span className="text-muted">—</span> },
     { key: 'severity', header: 'Severity',
-      cell: (r) => <Chip variant={SEVERITY_CHIP[r.severity]}>{r.severity}</Chip> },
+      cell: (r) => <Chip variant={SEVERITY_CHIP[r.severity]}>{r.severity_label ?? labels.get(r.severity) ?? r.severity}</Chip> },
     { key: 'qty', header: 'Qty', align: 'right',
       cell: (r) => <NumCell>{r.affected_quantity}</NumCell> },
     { key: 'received', header: 'Received', align: 'right',
       cell: (r) => <NumCell>{r.received_date ?? '—'}</NumCell> },
     { key: 'status', header: 'Status',
-      cell: (r) => <Chip variant={STATUS_CHIP[r.status]}>{r.status}</Chip> },
+      cell: (r) => <Chip variant={STATUS_CHIP[r.status]}>{r.status_label ?? labels.get(r.status) ?? r.status}</Chip> },
   ];
 
   const filterConfig: FilterConfig[] = [
     { key: 'status', label: 'Status', type: 'select', options: [
       { value: '', label: 'All' },
-      { value: 'open', label: 'Open' },
-      { value: 'investigating', label: 'Investigating' },
-      { value: 'resolved', label: 'Resolved' },
-      { value: 'closed', label: 'Closed' },
+      ...(complaintOptions?.statuses ?? []),
     ]},
     { key: 'severity', label: 'Severity', type: 'select', options: [
       { value: '', label: 'All' },
-      { value: 'low', label: 'Low' },
-      { value: 'medium', label: 'Medium' },
-      { value: 'high', label: 'High' },
-      { value: 'critical', label: 'Critical' },
+      ...(complaintOptions?.severities ?? []),
     ]},
   ];
 
@@ -97,7 +96,8 @@ export default function ComplaintsListPage() {
       )}
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
-          <DataTable columns={columns} data={data.data} meta={data.meta}
+          <DataTable
+            onRowClick={(r) => navigate(`/crm/complaints/${r.id}`)} columns={columns} data={data.data} meta={data.meta}
             onPageChange={(page) => setFilters((f) => ({ ...f, page }))} />
         </div>
       )}

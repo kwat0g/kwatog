@@ -38,6 +38,13 @@ export default function NcrTemplatesListPage() {
     queryFn: () => ncrTemplatesApi.list({ per_page: 100 }),
     placeholderData: (prev) => prev,
   });
+  const { data: templateOptions } = useQuery({
+    queryKey: ['quality', 'ncr-templates', 'options'],
+    queryFn: ncrTemplatesApi.options,
+    staleTime: 300_000,
+  });
+  const sourceLabels = new Map((templateOptions?.sources ?? []).map((option) => [option.value, option.label]));
+  const severityLabels = new Map((templateOptions?.severities ?? []).map((option) => [option.value, option.label]));
 
   const deleteMut = useMutation({
     mutationFn: (id: string) => ncrTemplatesApi.destroy(id),
@@ -72,12 +79,12 @@ export default function NcrTemplatesListPage() {
     {
       key: 'source',
       header: 'Source',
-      cell: (r) => <Chip variant="neutral">{r.source.replace('_', ' ')}</Chip>,
+      cell: (r) => <Chip variant="neutral">{r.source_label ?? sourceLabels.get(r.source) ?? r.source}</Chip>,
     },
     {
       key: 'severity',
       header: 'Severity',
-      cell: (r) => <Chip variant={SEVERITY_CHIP[r.severity]}>{r.severity}</Chip>,
+      cell: (r) => <Chip variant={SEVERITY_CHIP[r.severity]}>{r.severity_label ?? severityLabels.get(r.severity) ?? r.severity}</Chip>,
     },
     {
       key: 'is_active',

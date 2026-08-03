@@ -21,6 +21,12 @@ export default function WorkOrdersListPage() {
     queryFn: () => workOrdersApi.list(filters),
     placeholderData: (prev) => prev,
   });
+  const { data: workOrderOptions } = useQuery({
+    queryKey: ['production', 'work-orders', 'options'],
+    queryFn: workOrdersApi.options,
+    staleTime: 5 * 60 * 1000,
+  });
+  const statusLabels = new Map((workOrderOptions?.statuses ?? []).map((option) => [option.value, option.label]));
 
   const columns: Column<WorkOrder>[] = [
     {
@@ -60,16 +66,13 @@ export default function WorkOrdersListPage() {
       ),
     },
     { key: 'planned', header: 'Planned start', align: 'right', cell: (r) => <NumCell>{r.planned_start?.slice(0, 10) ?? '—'}</NumCell> },
-    { key: 'status', header: 'Status', cell: (r) => <Chip variant={variant[r.status]}>{r.status_label}</Chip> },
+    { key: 'status', header: 'Status', cell: (r) => <Chip variant={variant[r.status]}>{statusLabels.get(r.status) ?? r.status_label ?? r.status}</Chip> },
   ];
 
   const filterConfig: FilterConfig[] = [
     { key: 'status', label: 'Status', type: 'select', options: [
       { value: '', label: 'All' },
-      { value: 'planned', label: 'Planned' }, { value: 'confirmed', label: 'Confirmed' },
-      { value: 'in_progress', label: 'In progress' }, { value: 'paused', label: 'Paused' },
-      { value: 'completed', label: 'Completed' }, { value: 'closed', label: 'Closed' },
-      { value: 'cancelled', label: 'Cancelled' },
+      ...(workOrderOptions?.statuses ?? []),
     ]},
   ];
 

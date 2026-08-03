@@ -15,6 +15,7 @@ export interface WarehouseMapLocation {
   current_quantity: string;
   current_lot_number: string | null;
   stock_status: BinStockStatus;
+  stock_status_label?: string;
   stock_quantity: string;
   last_movement_at: string | null;
 }
@@ -61,6 +62,7 @@ export interface StockCountItem {
   variance_percent: string;
   lot_number: string | null;
   status: StockCountItemStatus;
+  status_label?: string;
   counted_by: { id: string; name: string } | null;
   counted_at: string | null;
   notes: string | null;
@@ -71,9 +73,11 @@ export interface StockCountSession {
   session_number: string;
   title: string;
   scope: string;
+  scope_label?: string;
   warehouse: { id: string; name: string; code: string } | null;
   zone: { id: string; name: string; code: string } | null;
   status: StockCountStatus;
+  status_label?: string;
   total_locations: number;
   counted_locations: number;
   variance_count: number;
@@ -114,6 +118,7 @@ export interface TransferOrder {
   quantity: string;
   reason: string | null;
   status: TransferOrderStatus;
+  status_label?: string;
   created_by: { id: string; name: string } | null;
   transferred_by: { id: string; name: string } | null;
   transferred_at: string | null;

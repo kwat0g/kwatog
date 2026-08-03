@@ -61,7 +61,7 @@ export default function CreateBomPage() {
     resolver: zodResolver(schema),
     defaultValues: {
       product_id: '',
-      items: [{ item_id: '', quantity_per_unit: '', unit: '', waste_factor: '0' }],
+      items: [{ item_id: '', quantity_per_unit: '', unit: '', waste_factor: '' }],
     },
   });
   const { fields, append, remove } = useFieldArray({ control, name: 'items' });
@@ -208,7 +208,7 @@ export default function CreateBomPage() {
               variant="secondary"
               size="sm"
               icon={<Plus size={14} />}
-              onClick={() => append({ item_id: '', quantity_per_unit: '', unit: '', waste_factor: '0' })}
+              onClick={() => append({ item_id: '', quantity_per_unit: '', unit: '', waste_factor: '' })}
             >
               Add line
             </Button>

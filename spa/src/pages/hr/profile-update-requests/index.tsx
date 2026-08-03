@@ -42,13 +42,6 @@ const STATUS_CHIP: Record<ProfileUpdateRequestStatus, 'warning' | 'info' | 'succ
   rejected: 'danger',
 };
 
-const STATUS_LABEL: Record<ProfileUpdateRequestStatus, string> = {
-  pending: 'pending HR',
-  pending_finance: 'awaiting Finance',
-  approved: 'approved',
-  rejected: 'rejected',
-};
-
 /**
  * U3 (HR side) — review queue for employee-initiated profile changes.
  * Shows pending requests by default; HR can approve or reject inline.
@@ -68,6 +61,12 @@ export default function ProfileUpdateRequestsPage() {
     queryFn: () => profileUpdateRequestsApi.list({ status }),
     placeholderData: (prev) => prev,
   });
+  const { data: options } = useQuery({
+    queryKey: ['hr', 'profile-update-request-options'],
+    queryFn: profileUpdateRequestsApi.options,
+    staleTime: 5 * 60 * 1000,
+  });
+  const statusLabels = new Map((options?.statuses ?? []).map((statusOption) => [statusOption.value, statusOption.label]));
 
   const review = useMutation({
     mutationFn: (args: { id: string; action: 'approve' | 'reject'; stage: 'hr' | 'finance' }) =>
@@ -88,10 +87,7 @@ export default function ProfileUpdateRequestsPage() {
       label: 'Status',
       type: 'select',
       options: [
-        { value: 'pending', label: 'Pending HR' },
-        { value: 'pending_finance', label: 'Awaiting Finance' },
-        { value: 'approved', label: 'Approved' },
-        { value: 'rejected', label: 'Rejected' },
+        ...(options?.statuses ?? []),
       ],
     },
   ];
@@ -152,7 +148,7 @@ export default function ProfileUpdateRequestsPage() {
                   <span className="font-mono tabular-nums text-muted text-xs">
                     {row.employee?.employee_no}
                   </span>
-                  <Chip variant={STATUS_CHIP[row.status]}>{STATUS_LABEL[row.status]}</Chip>
+                  <Chip variant={STATUS_CHIP[row.status]}>{statusLabels.get(row.status) ?? row.status}</Chip>
                   {row.requires_finance && (
                     <Chip variant="purple">Bank · dual approval</Chip>
                   )}

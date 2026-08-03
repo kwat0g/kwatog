@@ -19,6 +19,8 @@ import { ProfileSilhouette } from './ProfileSilhouette';
 import { ScrambleText } from './ScrambleText';
 import { reduceMotion } from '../motion';
 import { cn } from '@/lib/cn';
+import { useQuery } from '@tanstack/react-query';
+import { landingApi } from '@/api/landing';
 
 // Per-part timeline (ms): dwell assembled → hold exploded → reassemble → next.
 const DWELL = 2600;
@@ -64,6 +66,9 @@ export function AutoPartShowcase({ className }: AutoPartShowcaseProps) {
       window.matchMedia('(min-width: 1024px)').matches,
   ).current;
   const part = PARTS[index];
+  const { data: content } = useQuery({ queryKey: ['landing', 'content'], queryFn: landingApi.content, staleTime: 300_000 });
+  const liveSpec = content?.part_specs?.find((candidate) => candidate.id === part.id);
+  const displayPart = liveSpec ? { ...part, ...liveSpec } : part;
 
   // Drive the per-part timeline; re-runs whenever `index` changes.
   useEffect(() => {
@@ -93,18 +98,18 @@ export function AutoPartShowcase({ className }: AutoPartShowcaseProps) {
 
       {/* ghosted cross-section base */}
       <div className="absolute inset-0 flex items-center justify-center p-5">
-        <ProfileSilhouette part={part} className={motionOK ? 'opacity-[0.28]' : 'opacity-90'} />
+        <ProfileSilhouette part={displayPart} className={motionOK ? 'opacity-[0.28]' : 'opacity-90'} />
       </div>
 
       {/* live 3D model */}
-      {motionOK && <PartShowcase3D part={part} exploded={exploded} />}
+      {motionOK && <PartShowcase3D part={displayPart} exploded={exploded} />}
 
       {/* corner callouts */}
       <span className="absolute left-5 top-5 z-20 font-mono text-[10px] uppercase tracking-[0.16em] text-landing-accent">
         REV · A
       </span>
       <span className="absolute right-5 top-5 z-20 font-mono text-[10px] uppercase tracking-[0.16em] text-landing-accent">
-        <ScrambleText key={`tol-${part.id}`} text={part.tolerance} trigger="mount" />
+        <ScrambleText key={`tol-${part.id}`} text={displayPart.tolerance || '—'} trigger="mount" />
       </span>
 
       {/* progress dots — also let a visitor step through by hand */}
@@ -113,7 +118,7 @@ export function AutoPartShowcase({ className }: AutoPartShowcaseProps) {
           <button
             key={p.id}
             type="button"
-            aria-label={`Show ${p.name}`}
+            aria-label={`Show ${content?.part_specs?.find((candidate) => candidate.id === p.id)?.name || p.id}`}
             aria-current={i === index}
             onClick={() => setIndex(i)}
             className={cn(
@@ -130,13 +135,13 @@ export function AutoPartShowcase({ className }: AutoPartShowcaseProps) {
         <span className="border-r border-landing-border px-3 py-2">
           <span className="block text-landing-subtle-text">Part</span>
           <span className="block truncate text-landing-text">
-            <ScrambleText key={`name-${part.id}`} text={part.name} trigger="mount" />
+            <ScrambleText key={`name-${part.id}`} text={displayPart.name || '—'} trigger="mount" />
           </span>
         </span>
         <span className="border-r border-landing-border px-3 py-2">
           <span className="block text-landing-subtle-text">Material</span>
           <span className="block truncate text-landing-text">
-            <ScrambleText key={`mat-${part.id}`} text={part.material} trigger="mount" />
+            <ScrambleText key={`mat-${part.id}`} text={displayPart.material || '—'} trigger="mount" />
           </span>
         </span>
         <span className="px-3 py-2">

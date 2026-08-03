@@ -45,7 +45,7 @@ export default function MaterialIssueDetailPage() {
           { label: 'Material Issues', href: '/inventory/material-issues' },
           { label: data.slip_number },
         ]}
-        actions={<Chip variant={statusVariant(data.status)}>{data.status}</Chip>}
+        actions={<Chip variant={statusVariant(data.status)}>{data.status_label ?? data.status}</Chip>}
       />
 
       <div className="px-5 pt-3 pb-4 grid grid-cols-4 gap-2">

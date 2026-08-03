@@ -10,13 +10,26 @@
  */
 
 import { useLayoutEffect, useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import gsap from 'gsap';
-import { OEM_PARTNERS } from '../data';
+import { landingApi } from '@/api/landing';
 import { reduceMotion } from '../motion';
 
+const EMPTY_PARTNERS: string[] = [];
+
 export function MarqueeSection() {
+  const { data: content } = useQuery({ queryKey: ['landing', 'content'], queryFn: landingApi.content, staleTime: 300_000 });
+  const partners = content?.oem_partners ?? EMPTY_PARTNERS;
+  const trustPoints = content?.trust_points ?? [];
+  const trustHeading = content?.section_copy?.trust_heading ?? '—';
+  const stats = content?.stats ?? [];
+  const statValue = (id: string) => {
+    const stat = stats.find((item) => item.id === id);
+    if (!stat) return '';
+    return `${'prefix' in stat && stat.prefix ? stat.prefix : ''}${stat.value.toLocaleString()}${'suffix' in stat && stat.suffix ? stat.suffix : ''}`;
+  };
   // Two copies back-to-back so the -50% translate loops seamlessly.
-  const row = [...OEM_PARTNERS, ...OEM_PARTNERS];
+  const row = [...partners, ...partners];
   const ulRef = useRef<HTMLUListElement>(null);
 
   useLayoutEffect(() => {
@@ -71,7 +84,7 @@ export function MarqueeSection() {
       tween.kill();
       gsap.set(ul, { clearProps: 'x,xPercent' });
     };
-  }, []);
+  }, [partners]);
 
   return (
     <section
@@ -82,7 +95,7 @@ export function MarqueeSection() {
         data-reveal
         className="mb-7 px-5 text-center font-mono text-[11px] uppercase tracking-[0.28em] text-landing-subtle-text sm:px-5"
       >
-        Trusted by the world&apos;s leading automakers
+        {trustHeading}
       </p>
 
       <div
@@ -95,7 +108,7 @@ export function MarqueeSection() {
           {row.map((name, i) => (
             <li
               key={`${name}-${i}`}
-              aria-hidden={i >= OEM_PARTNERS.length}
+              aria-hidden={i >= partners.length}
               className="select-none font-display text-3xl font-medium tracking-tight text-landing-muted transition-colors duration-300 hover:text-landing-text sm:text-4xl"
             >
               {name}
@@ -108,13 +121,15 @@ export function MarqueeSection() {
         data-reveal
         className="mt-8 px-5 text-center font-mono text-[11px] uppercase tracking-[0.18em] text-landing-subtle-text sm:px-5"
       >
-        5 global OEMs
+        {statValue('employees') || '—'} active employees
         <span className="mx-2.5 text-landing-accent/50">·</span>
-        200+ engineers
+        {statValue('customers') || '—'} active customers
         <span className="mx-2.5 text-landing-accent/50">·</span>
-        IATF 16949
-        <span className="mx-2.5 text-landing-accent/50">·</span>
-        ≤10 PPM target
+        {statValue('products') || '—'} active products
+        {trustPoints.length > 0 && <>
+          <span className="mx-2.5 text-landing-accent/50">·</span>
+          {trustPoints[0]}
+        </>}
       </p>
     </section>
   );

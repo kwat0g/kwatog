@@ -48,8 +48,8 @@ export function ProductForm({ initial, mode }: Props) {
       part_number:     initial?.part_number ?? '',
       name:            initial?.name ?? '',
       description:     initial?.description ?? '',
-      unit_of_measure: initial?.unit_of_measure ?? 'pcs',
-      standard_cost:   initial?.standard_cost ?? '0.00',
+      unit_of_measure: initial?.unit_of_measure ?? '',
+      standard_cost:   initial?.standard_cost ?? '',
       is_active:       initial?.is_active ?? true,
     },
   });
@@ -110,7 +110,7 @@ export function ProductForm({ initial, mode }: Props) {
             required
             {...register('part_number')}
             error={errors.part_number?.message}
-            placeholder="e.g. WB-001"
+            placeholder="Enter part number"
             className="font-mono"
           />
           <Input
@@ -118,7 +118,7 @@ export function ProductForm({ initial, mode }: Props) {
             required
             {...register('unit_of_measure')}
             error={errors.unit_of_measure?.message}
-            placeholder="pcs"
+            placeholder="Enter UOM code"
           />
           <div className="col-span-2">
             <Input
@@ -126,7 +126,7 @@ export function ProductForm({ initial, mode }: Props) {
               required
               {...register('name')}
               error={errors.name?.message}
-              placeholder="Wiper Bushing (Standard)"
+            placeholder="Enter product name"
             />
           </div>
           <div className="col-span-2">

@@ -17,6 +17,7 @@ import { ChainHeader } from '@/components/chain/ChainHeader';
 import { usePermission } from '@/hooks/usePermission';
 import type { ChainStep } from '@/types/chain';
 import type { ClearanceStatus } from '@/types/separations';
+import { formatPeso } from '@/lib/formatNumber';
 
 const STATUS_CHIP: Record<ClearanceStatus, 'success' | 'warning' | 'info' | 'neutral'> = {
   pending: 'warning', in_progress: 'info', completed: 'info', finalized: 'success', cancelled: 'neutral',
@@ -32,6 +33,13 @@ export default function SeparationDetailPage() {
     queryKey: ['clearance', id],
     queryFn: () => separationsApi.show(id),
   });
+  const { data: separationOptions } = useQuery({
+    queryKey: ['hr', 'clearances', 'options'],
+    queryFn: separationsApi.options,
+    staleTime: 300_000,
+  });
+  const statusLabel = separationOptions?.statuses.find((option) => option.value === data?.status)?.label;
+  const reasonLabel = separationOptions?.reasons.find((option) => option.value === data?.separation_reason)?.label;
 
   const sign = useMutation({
     mutationFn: (item_key: string) => separationsApi.signItem(id, item_key),
@@ -83,7 +91,7 @@ export default function SeparationDetailPage() {
         ]}
         actions={
           <div className="flex gap-1.5 items-center">
-            <Chip variant={STATUS_CHIP[data.status]}>{data.status.replace('_', ' ')}</Chip>
+            <Chip variant={STATUS_CHIP[data.status]}>{statusLabel ?? data.status}</Chip>
             {allItemsCleared && !data.final_pay_computed && can('hr.separation.finalize') && (
               <Button variant="primary" size="sm" onClick={() => compute.mutate()} loading={compute.isPending}>
                 Compute final pay
@@ -102,8 +110,8 @@ export default function SeparationDetailPage() {
       <div className="px-5 pb-4 grid grid-cols-4 gap-2">
         <StatCard label="Progress" value={`${data.progress_pct}%`} />
         <StatCard label="Cleared" value={`${data.cleared_count} / ${data.items_total}`} />
-        <StatCard label="Reason" value={data.separation_reason.replace('_', ' ')} />
-        <StatCard label="Final pay" value={data.final_pay_amount ? `₱ ${data.final_pay_amount}` : '—'} />
+        <StatCard label="Reason" value={reasonLabel ?? data.separation_reason} />
+        <StatCard label="Final pay" value={data.final_pay_amount ? formatPeso(data.final_pay_amount) : '—'} />
       </div>
 
       <div className="px-5 pb-6 grid grid-cols-3 gap-4">
@@ -142,7 +150,7 @@ export default function SeparationDetailPage() {
                 {breakdownEntries.map(([k, v]) => (
                   <div key={k} className="flex justify-between py-1.5">
                     <span className="text-xs uppercase tracking-wider text-muted">{k.replace(/_/g, ' ')}</span>
-                    <span className="font-mono tabular-nums">₱{v}</span>
+                    <span className="font-mono tabular-nums">{formatPeso(v)}</span>
                   </div>
                 ))}
               </dl>

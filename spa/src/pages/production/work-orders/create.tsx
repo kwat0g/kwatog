@@ -6,6 +6,7 @@
  * sample run, internal R&D, or rework). Status starts as 'planned'; the
  * full lifecycle (confirm/start/pause/etc.) lives on the detail page.
  */
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -22,6 +23,7 @@ import { productsApi } from '@/api/crm/products';
 import { machinesApi } from '@/api/mrp/machines';
 import { moldsApi } from '@/api/mrp/molds';
 import { workOrdersApi } from '@/api/production/workOrders';
+import { businessPoliciesApi } from '@/api/businessPolicies';
 import type { CreateWorkOrderData } from '@/types/production';
 
 const schema = z.object({
@@ -55,11 +57,12 @@ export default function CreateWorkOrderPage() {
     queryKey: ['mrp', 'molds', 'lookup'],
     queryFn: () => moldsApi.list({ per_page: 100 }),
   });
+  const { data: policies } = useQuery({ queryKey: ['business-policies'], queryFn: businessPoliciesApi.get });
 
   const today = new Date().toISOString().slice(0, 16);
 
   const {
-    register, handleSubmit, setError,
+    register, handleSubmit, setError, setValue,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -70,9 +73,12 @@ export default function CreateWorkOrderPage() {
       planned_end: today,
       machine_id: '',
       mold_id: '',
-      priority: '50',
+      priority: '',
     },
   });
+  useEffect(() => {
+    if (policies) setValue('priority', String(policies.mrp_work_order_normal_priority));
+  }, [policies, setValue]);
 
   const create = useMutation({
     mutationFn: (values: FormValues) => {
@@ -124,7 +130,7 @@ export default function CreateWorkOrderPage() {
             <Input
               label="Quantity target" type="number" min={1} required
               {...register('quantity_target')} error={errors.quantity_target?.message}
-              placeholder="e.g. 1000"
+              placeholder="Target quantity"
               className="font-mono text-right"
             />
           </div>

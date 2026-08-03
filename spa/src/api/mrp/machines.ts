@@ -7,6 +7,7 @@ export interface MachineListParams extends ListParams {
 }
 
 export const machinesApi = {
+  options: () => client.get<{ data: { statuses: Array<{ value: string; label: string }>; transitions: Record<string, string[]> } }>('/mrp/machines/options').then((r) => r.data.data),
   list: (params?: MachineListParams) =>
     client.get<PaginatedResponse<Machine>>('/mrp/machines', { params }).then((r) => r.data),
   show: (id: string) =>

@@ -57,9 +57,13 @@ export interface MaintenanceWorkOrder {
     interval_value: number;
   } | null;
   type: MaintenanceWorkOrderType;
+  type_label?: string;
   priority: MaintenancePriority;
+  priority_label?: string;
   description: string;
   status: MaintenanceWorkOrderStatus;
+  status_label?: string;
+  available_actions?: Array<'start' | 'complete' | 'cancel'>;
   started_at: string | null;
   completed_at: string | null;
   downtime_minutes: number;
@@ -105,6 +109,7 @@ export interface MachineConditionReading {
   unit: string;
   recorded_at: string | null;
   source: ConditionSource;
+  source_label?: string;
   notes: string | null;
   created_at: string | null;
 }

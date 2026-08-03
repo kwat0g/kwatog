@@ -1,3 +1,4 @@
+import { cn } from '@/lib/cn';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * S1 — Admin Users & Roles Hub
@@ -7,7 +8,7 @@
  * accessible via deep links from the tab content.
  */
 import { useSearchParams } from 'react-router-dom';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { adminUsersApi } from '@/api/admin/users';
 import { rolesApi } from '@/api/admin/roles';
@@ -29,6 +30,7 @@ const TABS: Tab[] = [
 ];
 
 export default function AdminUsersRolesHubPage() {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const activeTab = searchParams.get('tab') ?? 'users';
 
@@ -49,6 +51,7 @@ export default function AdminUsersRolesHubPage() {
 /* ─── Users Tab ───────────────────────────────────────── */
 
 function UsersTab() {
+  const navigate = useNavigate();
   const { data, isLoading, isError } = useQuery({
     queryKey: ['admin-hub', 'users'],
     queryFn: () => adminUsersApi.list({ per_page: 10 }),
@@ -76,11 +79,11 @@ function UsersTab() {
             </thead>
             <tbody>
               {data.data.map((u: any) => (
-                <tr key={u.id} className={trCls}>
+                <tr key={u.id} className={cn(trCls, "cursor-pointer")} onClick={() => navigate(`/admin/users/${u.id}`)}>
                   <Td>
-                    <Link to={`/admin/users/${u.id}`} className="text-accent hover:underline font-medium">
+                    
                       {u.name}
-                    </Link>
+                    
                   </Td>
                   <Td className="text-secondary">{u.email}</Td>
                   <Td>{u.role?.name ?? <span className="text-text-subtle">—</span>}</Td>
@@ -107,6 +110,7 @@ function UsersTab() {
 /* ─── Roles Tab ───────────────────────────────────────── */
 
 function RolesTab() {
+  const navigate = useNavigate();
   const { data, isLoading, isError } = useQuery({
     queryKey: ['admin-hub', 'roles'],
     queryFn: () => rolesApi.list({ per_page: 20 }),
@@ -134,11 +138,11 @@ function RolesTab() {
             </thead>
             <tbody>
               {data.data.map((r: any) => (
-                <tr key={r.id} className={trCls}>
+                <tr key={r.id} className={cn(trCls, "cursor-pointer")} onClick={() => navigate(`/admin/roles/${r.id}/permissions`)}>
                   <Td>
-                    <Link to={`/admin/roles/${r.id}/permissions`} className="text-accent hover:underline font-medium">
+                    
                       {r.name}
-                    </Link>
+                    
                   </Td>
                   <Td mono className="text-secondary">{r.slug}</Td>
                   <Td mono>{r.permissions_count ?? '—'}</Td>

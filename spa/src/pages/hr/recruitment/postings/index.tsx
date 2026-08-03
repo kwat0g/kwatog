@@ -22,21 +22,6 @@ const STATUS_CHIP: Record<JobPostingStatus, 'neutral' | 'success' | 'warning' | 
   filled: 'info',
 };
 
-const STATUS_LABEL: Record<JobPostingStatus, string> = {
-  draft: 'Draft',
-  open: 'Open',
-  closed: 'Closed',
-  filled: 'Filled',
-};
-
-const STATUS_TABS: { label: string; value: string }[] = [
-  { label: 'All', value: '' },
-  { label: 'Draft', value: 'draft' },
-  { label: 'Open', value: 'open' },
-  { label: 'Closed', value: 'closed' },
-  { label: 'Filled', value: 'filled' },
-];
-
 interface PostingFilters {
   [key: string]: unknown;
   page: number;
@@ -63,6 +48,13 @@ export default function PostingsListPage() {
         .then((r) => r.data),
     placeholderData: (prev) => prev,
   });
+  const { data: recruitmentOptions } = useQuery({
+    queryKey: ['recruitment', 'options'],
+    queryFn: () => recruitmentApi.options().then((r) => r.data.data),
+    staleTime: 5 * 60 * 1000,
+  });
+  const statusLabel = new Map((recruitmentOptions?.posting_statuses ?? []).map((status) => [status.value, status.label]));
+  const statusTabs = [{ label: 'All', value: '' }, ...(recruitmentOptions?.posting_statuses ?? [])];
 
   const columns: Column<JobPosting>[] = [
     {
@@ -84,7 +76,7 @@ export default function PostingsListPage() {
     {
       key: 'status',
       header: 'Status',
-      cell: (r) => <Chip variant={STATUS_CHIP[r.status]}>{STATUS_LABEL[r.status]}</Chip>,
+      cell: (r) => <Chip variant={STATUS_CHIP[r.status]}>{r.status_label ?? statusLabel.get(r.status) ?? r.status}</Chip>,
     },
     {
       key: 'slots',
@@ -136,7 +128,7 @@ export default function PostingsListPage() {
         label="Posting status"
         value={statusFilter}
         onChange={(value) => { setStatusFilter(value); setFilters((f) => ({ ...f, page: 1 })); }}
-        items={STATUS_TABS.map((tab) => ({ key: tab.value, label: tab.label }))}
+        items={statusTabs.map((tab) => ({ key: tab.value, label: tab.label }))}
       />
 
       <FilterBar
@@ -174,7 +166,6 @@ export default function PostingsListPage() {
           <DataTable
             columns={columns}
             data={data.data}
-            onRowClick={(row) => navigate(`/hr/recruitment/postings/${row.id}`)}
             meta={data.meta}
             onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
             onSort={(sort, direction) => setFilters((f) => ({ ...f, sort, direction, page: 1 }))}

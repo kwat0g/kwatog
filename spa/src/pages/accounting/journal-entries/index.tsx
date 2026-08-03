@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate} from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import { journalEntriesApi, type JournalEntryListParams } from '@/api/accounting/journal-entries';
 import { Button } from '@/components/ui/Button';
@@ -18,8 +18,7 @@ import type { JournalEntry } from '@/types/accounting';
 const STATUS_VARIANT: Record<string, ChipVariant> = {
   draft: 'warning',
   posted: 'success',
-  reversed: 'neutral',
-};
+  reversed: 'neutral' };
 
 export default function JournalEntriesPage() {
   const navigate = useNavigate();
@@ -29,16 +28,20 @@ export default function JournalEntriesPage() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['accounting', 'journal-entries', filters],
     queryFn: () => journalEntriesApi.list(filters),
-    placeholderData: (prev) => prev,
-  });
+    placeholderData: (prev) => prev });
+  const { data: options } = useQuery({
+    queryKey: ['accounting', 'journal-entry-options'],
+    queryFn: journalEntriesApi.options,
+    staleTime: 5 * 60 * 1000 });
+  const statusLabel = new Map((options?.statuses ?? []).map((status) => [status.value, status.label]));
 
   const columns: Column<JournalEntry>[] = [
-    { key: 'entry_number', header: 'Entry no', cell: (r) => <Link to={`/accounting/journal-entries/${r.id}`} className="font-mono text-accent hover:underline">{r.entry_number}</Link> },
+    { key: 'entry_number', header: 'Entry no', cell: (r) => <span className="font-mono">{r.entry_number}</span> },
     { key: 'date', header: 'Date', cell: (r) => <NumCell>{formatDate(r.date)}</NumCell> },
     { key: 'description', header: 'Description', cell: (r) => <span className="truncate inline-block max-w-md">{r.description}</span> },
     { key: 'reference', header: 'Reference', cell: (r) => <span className="text-xs text-muted">{r.reference_label ?? '—'}</span> },
     { key: 'total_debit', header: 'Total', align: 'right', cell: (r) => <NumCell className="font-medium">{formatPeso(r.total_debit)}</NumCell> },
-    { key: 'status', header: 'Status', cell: (r) => <Chip variant={STATUS_VARIANT[r.status] ?? 'neutral'}>{r.status}</Chip> },
+    { key: 'status', header: 'Status', cell: (r) => <Chip variant={STATUS_VARIANT[r.status] ?? 'neutral'}>{statusLabel.get(r.status) ?? r.status}</Chip> },
   ];
 
   const filterConfig: FilterConfig[] = [
@@ -46,11 +49,8 @@ export default function JournalEntriesPage() {
       key: 'status', label: 'Status', type: 'select',
       options: [
         { value: '', label: 'All' },
-        { value: 'draft', label: 'Draft' },
-        { value: 'posted', label: 'Posted' },
-        { value: 'reversed', label: 'Reversed' },
-      ],
-    },
+        ...(options?.statuses ?? []),
+      ] },
   ];
 
   return (
@@ -92,7 +92,8 @@ export default function JournalEntriesPage() {
         />
       )}
       {data && data.data.length > 0 && (
-        <div className="px-5 py-4"><DataTable columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters((f) => ({ ...f, page }))} /></div>
+        <div className="px-5 py-4"><DataTable
+            onRowClick={(r) => navigate(`/accounting/journal-entries/${r.id}`)} columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters((f) => ({ ...f, page }))} /></div>
       )}
     </div>
   );

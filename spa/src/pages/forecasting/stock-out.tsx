@@ -5,13 +5,12 @@
  * chosen horizon, sorted by risk. Operators can jump to "Create PR" for the
  * worst items.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Panel } from '@/components/ui/Panel';
 import { Button } from '@/components/ui/Button';
-import { Select } from '@/components/ui/Select';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { Chip } from '@/components/ui/Chip';
@@ -28,27 +27,26 @@ const RISK_VARIANT: Record<StockOutRisk, 'danger' | 'warning' | 'info' | 'neutra
   ok:       'neutral',
 };
 
-const RISK_LABEL: Record<StockOutRisk, string> = {
-  critical: 'Critical',
-  high:     'High',
-  medium:   'Medium',
-  low:      'Low',
-  ok:       'OK',
-};
-
-const SOURCE_LABEL: Record<string, string> = {
-  forecast:   'Forecast',
-  historical: 'Last 30d avg',
-  none:       'No demand',
-};
-
 export default function StockOutProjectionPage() {
-  const [horizon, setHorizon] = useState<number>(60);
+  const [horizon, setHorizon] = useState<number | undefined>(undefined);
 
   const q = useQuery({
     queryKey: ['forecasting/stock-out', horizon],
     queryFn: () => forecastingApi.stockOut({ horizon_days: horizon }),
   });
+  const optionsQuery = useQuery({
+    queryKey: ['forecasting', 'options'],
+    queryFn: () => forecastingApi.options(),
+    staleTime: 5 * 60 * 1000,
+  });
+  const sourceLabels = new Map((optionsQuery.data?.demand_sources ?? []).map((source) => [source.value, source.label]));
+  const riskLabels = new Map((q.data?.meta.risk_options ?? []).map((risk) => [risk.value, risk.label]));
+
+  useEffect(() => {
+    if (horizon === undefined && q.data?.meta.default_horizon_days !== undefined) {
+      setHorizon(q.data.meta.default_horizon_days);
+    }
+  }, [horizon, q.data?.meta.default_horizon_days]);
 
   if (q.isError) return <EmptyState icon="alert-circle" title="Failed to load projections" action={<Button variant="secondary" onClick={() => q.refetch()}>Retry</Button>} />;
 
@@ -56,29 +54,29 @@ export default function StockOutProjectionPage() {
   const generatedAt = q.data?.meta.generated_at;
 
   // Counts per risk for the summary strip.
-  const counts = rows.reduce<Record<StockOutRisk, number>>(
+  const counts = rows.reduce<Record<string, number>>(
     (acc, r) => ({ ...acc, [r.risk]: (acc[r.risk] ?? 0) + 1 }),
-    { critical: 0, high: 0, medium: 0, low: 0, ok: 0 },
+    {},
   );
+  const riskOptions = q.data?.meta.risk_options ?? [];
 
   return (
     <>
       <PageHeader
         title="Stock-Out Projection"
-        subtitle="Project days-until-stockout per item, using next-month forecast or last 30 days of consumption."
+        subtitle={`Project days-until-stockout per item, using next-month forecast or the last ${q.data?.meta.demand_history_days ?? 'configured'} days of consumption.`}
         actions={
           <div className="flex items-center gap-2">
             <label className="text-2xs uppercase tracking-wide text-muted">Horizon</label>
-            <Select
-              value={horizon}
-              onChange={(e) => setHorizon(parseInt(e.target.value) || 60)}
+            <input
+              type="number"
+              value={horizon ?? ''}
+              min={q.data?.meta.minimum_horizon_days}
+              max={q.data?.meta.maximum_horizon_days}
+              onChange={(e) => setHorizon(parseInt(e.target.value, 10) || undefined)}
               className="w-32"
-            >
-              <option value={30}>30 days</option>
-              <option value={60}>60 days</option>
-              <option value={90}>90 days</option>
-              <option value={180}>180 days</option>
-            </Select>
+              aria-label="Projection horizon in days"
+            />
           </div>
         }
       />
@@ -86,19 +84,22 @@ export default function StockOutProjectionPage() {
       <div className="p-5 space-y-4">
         {/* Risk summary strip */}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-          {(['critical', 'high', 'medium', 'low', 'ok'] as StockOutRisk[]).map((risk) => (
+          {riskOptions.map((option) => {
+            const risk = option.value as StockOutRisk;
+            return (
             <Panel key={risk} noPadding>
               <div className="p-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-2xs uppercase tracking-wide text-muted">{RISK_LABEL[risk]}</span>
-                  <Chip variant={RISK_VARIANT[risk]}>{counts[risk]}</Chip>
+                  <span className="text-2xs uppercase tracking-wide text-muted">{riskLabels.get(risk) ?? risk}</span>
+                  <Chip variant={RISK_VARIANT[risk] ?? 'neutral'}>{counts[risk] ?? 0}</Chip>
                 </div>
                 <div className="text-xl font-medium text-primary mt-1 tabular-nums">
-                  {counts[risk]}
+                  {counts[risk] ?? 0}
                 </div>
               </div>
             </Panel>
-          ))}
+            );
+          })}
         </div>
 
         <Panel
@@ -143,7 +144,7 @@ export default function StockOutProjectionPage() {
                       </Td>
                       <Td align="right" mono className="text-muted">{r.safety_stock.toFixed(2)}</Td>
                       <Td align="right" mono>{r.daily_demand.toFixed(2)}</Td>
-                      <Td className="text-2xs text-muted">{SOURCE_LABEL[r.demand_source] ?? r.demand_source}</Td>
+              <Td className="text-2xs text-muted">{sourceLabels.get(r.demand_source) ?? r.demand_source}</Td>
                       <Td align="right" mono>
                         {r.days_until_stockout === null ? '—' : (
                           <span className={r.days_until_stockout <= r.lead_time_days ? 'text-danger font-medium' : ''}>
@@ -158,7 +159,7 @@ export default function StockOutProjectionPage() {
                         {r.suggested_qty !== null ? r.suggested_qty.toFixed(2) : '—'}
                       </Td>
                       <Td>
-                        <Chip variant={RISK_VARIANT[r.risk]}>{RISK_LABEL[r.risk]}</Chip>
+                <Chip variant={RISK_VARIANT[r.risk]}>{riskLabels.get(r.risk) ?? r.risk}</Chip>
                       </Td>
                       <Td align="right" mono>
                         <Link to="/purchasing/purchase-requests/create">
