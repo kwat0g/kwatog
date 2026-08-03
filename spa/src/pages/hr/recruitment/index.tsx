@@ -133,7 +133,8 @@ export default function RecruitmentDashboard() {
             />
           ) : (
             <DataTable
-              columns={postingColumns}
+              onRowClick={(row) => navigate(`/hr/recruitment/postings/${row.id}`)}
+            columns={postingColumns}
               data={openPostings}
             />
           )}
@@ -183,7 +184,8 @@ export default function RecruitmentDashboard() {
             />
           ) : (
             <DataTable
-              columns={appColumns}
+              onRowClick={(row) => navigate(`/hr/recruitment/applications/${row.id}`)}
+            columns={appColumns}
               data={applications}
             />
           )}

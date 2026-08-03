@@ -207,7 +207,8 @@ export default function PostingDetailPage() {
         >
           {appsData?.data?.length ? (
             <DataTable
-              columns={appColumns}
+              onRowClick={(row) => navigate(`/hr/recruitment/applications/${row.id}`)}
+            columns={appColumns}
               data={appsData.data}
             />
           ) : (

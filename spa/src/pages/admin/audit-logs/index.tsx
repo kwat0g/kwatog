@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { Download } from 'lucide-react';
 import { auditLogsApi, type AuditLogEntry, type AuditLogParams } from '@/api/admin/audit-logs';
 import { downloadAuthenticatedFile } from '@/api/download';
@@ -63,6 +64,7 @@ const columns: Column<AuditLogEntry>[] = [
 ];
 
 export default function AuditLogsPage() {
+  const navigate = useNavigate();
   const [filters, setFilters] = useState<AuditLogParams>({ page: 1, per_page: 25 });
 
   const { data, isLoading, isError } = useQuery({
@@ -136,6 +138,7 @@ export default function AuditLogsPage() {
             meta={data.meta}
             onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
             getRowId={(row) => String(row.id)}
+            onRowClick={(r) => navigate(`/admin/audit-logs/${r.id}`)}
           />
         )}
       </div>
