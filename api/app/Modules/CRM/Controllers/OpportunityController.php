@@ -5,21 +5,37 @@ declare(strict_types=1);
 namespace App\Modules\CRM\Controllers;
 
 use App\Modules\CRM\Models\Opportunity;
+use App\Modules\CRM\Requests\StoreOpportunityRequest;
+use App\Modules\CRM\Requests\UpdateOpportunityRequest;
 use App\Modules\CRM\Resources\OpportunityResource;
 use App\Modules\CRM\Resources\QuoteResource;
 use App\Modules\CRM\Services\OpportunityService;
 use App\Modules\CRM\Services\QuoteService;
+use App\Modules\CRM\Enums\OpportunityStage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use RuntimeException;
+use Illuminate\Validation\Rule;
+use App\Common\Services\SettingsService;
 
 class OpportunityController
 {
     public function __construct(
         private readonly OpportunityService $service,
         private readonly QuoteService $quoteService,
+        private readonly SettingsService $settings,
     ) {}
+
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'initial_probability' => $this->settings->requiredInt('crm.opportunity.initial_probability', 0, 100),
+            'stages' => array_map(static fn (OpportunityStage $stage): array => [
+                'value' => $stage->value, 'label' => $stage->label(),
+            ], OpportunityStage::cases()),
+        ]]);
+    }
 
     public function index(Request $request): AnonymousResourceCollection
     {
@@ -31,38 +47,16 @@ class OpportunityController
         return new OpportunityResource($this->service->show($opportunity));
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(StoreOpportunityRequest $request): JsonResponse
     {
-        $data = $request->validate([
-            'customer_id'         => ['required', 'integer', 'exists:customers,id'],
-            'lead_id'             => ['nullable', 'integer', 'exists:leads,id'],
-            'title'               => ['required', 'string', 'max:255'],
-            'stage'               => ['nullable', 'string', 'in:prospecting,needs_analysis,proposal,negotiation,won,lost'],
-            'probability'         => ['nullable', 'integer', 'min:0', 'max:100'],
-            'estimated_value'     => ['nullable', 'numeric', 'min:0'],
-            'expected_close_date' => ['nullable', 'date'],
-            'assigned_to'         => ['nullable', 'integer', 'exists:users,id'],
-            'notes'               => ['nullable', 'string'],
-        ]);
-
-        $opportunity = $this->service->create($data);
+        $opportunity = $this->service->create($request->validated());
         return (new OpportunityResource($opportunity))->response()->setStatusCode(201);
     }
 
-    public function update(Request $request, Opportunity $opportunity): OpportunityResource|JsonResponse
+    public function update(UpdateOpportunityRequest $request, Opportunity $opportunity): OpportunityResource|JsonResponse
     {
-        $data = $request->validate([
-            'customer_id'         => ['sometimes', 'integer', 'exists:customers,id'],
-            'title'               => ['sometimes', 'string', 'max:255'],
-            'probability'         => ['nullable', 'integer', 'min:0', 'max:100'],
-            'estimated_value'     => ['nullable', 'numeric', 'min:0'],
-            'expected_close_date' => ['nullable', 'date'],
-            'assigned_to'         => ['nullable', 'integer', 'exists:users,id'],
-            'notes'               => ['nullable', 'string'],
-        ]);
-
         try {
-            $opportunity = $this->service->update($opportunity, $data);
+            $opportunity = $this->service->update($opportunity, $request->validated());
         } catch (RuntimeException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }

@@ -5,14 +5,18 @@ declare(strict_types=1);
 namespace App\Modules\CRM\Controllers;
 
 use App\Modules\CRM\Models\Lead;
+use App\Modules\CRM\Requests\StoreLeadRequest;
+use App\Modules\CRM\Requests\UpdateLeadRequest;
 use App\Modules\CRM\Resources\LeadResource;
 use App\Modules\CRM\Resources\OpportunityResource;
 use App\Modules\CRM\Services\LeadService;
 use App\Modules\CRM\Services\OpportunityService;
+use App\Modules\CRM\Enums\LeadSource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use RuntimeException;
+use Illuminate\Validation\Rule;
 
 class LeadController
 {
@@ -31,40 +35,16 @@ class LeadController
         return new LeadResource($this->service->show($lead));
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(StoreLeadRequest $request): JsonResponse
     {
-        $data = $request->validate([
-            'company_name'    => ['required', 'string', 'max:255'],
-            'contact_person'  => ['required', 'string', 'max:255'],
-            'email'           => ['nullable', 'email', 'max:255'],
-            'phone'           => ['nullable', 'string', 'max:50'],
-            'source'          => ['required', 'string', 'in:referral,website,trade_show,cold_call,existing_customer,other'],
-            'estimated_value' => ['nullable', 'numeric', 'min:0'],
-            'notes'           => ['nullable', 'string'],
-            'assigned_to'     => ['nullable', 'integer', 'exists:users,id'],
-            'customer_id'     => ['nullable', 'integer', 'exists:customers,id'],
-        ]);
-
-        $lead = $this->service->create($data);
+        $lead = $this->service->create($request->validated());
         return (new LeadResource($lead))->response()->setStatusCode(201);
     }
 
-    public function update(Request $request, Lead $lead): LeadResource|JsonResponse
+    public function update(UpdateLeadRequest $request, Lead $lead): LeadResource|JsonResponse
     {
-        $data = $request->validate([
-            'company_name'    => ['sometimes', 'string', 'max:255'],
-            'contact_person'  => ['sometimes', 'string', 'max:255'],
-            'email'           => ['nullable', 'email', 'max:255'],
-            'phone'           => ['nullable', 'string', 'max:50'],
-            'source'          => ['sometimes', 'string', 'in:referral,website,trade_show,cold_call,existing_customer,other'],
-            'estimated_value' => ['nullable', 'numeric', 'min:0'],
-            'notes'           => ['nullable', 'string'],
-            'assigned_to'     => ['nullable', 'integer', 'exists:users,id'],
-            'customer_id'     => ['nullable', 'integer', 'exists:customers,id'],
-        ]);
-
         try {
-            $lead = $this->service->update($lead, $data);
+            $lead = $this->service->update($lead, $request->validated());
         } catch (RuntimeException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
