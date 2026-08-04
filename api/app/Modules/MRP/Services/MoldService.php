@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\MRP\Services;
 
+use App\Common\Services\SettingsService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\SearchOperator;
 use App\Modules\CRM\Models\Product;
@@ -17,6 +18,8 @@ use Illuminate\Support\Facades\DB;
 
 class MoldService
 {
+    public function __construct(private readonly SettingsService $settings) {}
+
     public function list(array $filters): LengthAwarePaginator
     {
         $q = Mold::query()
@@ -31,7 +34,8 @@ class MoldService
             $q->where('status', $filters['status']);
         }
         if (isset($filters['nearing_limit']) && filter_var($filters['nearing_limit'], FILTER_VALIDATE_BOOLEAN)) {
-            $q->whereRaw('current_shot_count >= max_shots_before_maintenance * 0.80');
+            $ratio = $this->settings->requiredFloat('alerts.mold.warning_ratio', 0, 1);
+            $q->whereRaw('current_shot_count >= max_shots_before_maintenance * ?', [$ratio]);
         }
         if (! empty($filters['search'])) {
             $term = $filters['search'];
@@ -64,7 +68,7 @@ class MoldService
                 'event_date'          => now()->toDateString(),
                 'shot_count_at_event' => 0,
             ]);
-            return $mold->fresh();
+            return $mold->fresh()->load('product:id,part_number,name,unit_of_measure');
         });
     }
 
@@ -72,7 +76,7 @@ class MoldService
     {
         return DB::transaction(function () use ($m, $data) {
             $m->update($data);
-            return $m->fresh();
+            return $m->fresh()->load('product:id,part_number,name,unit_of_measure');
         });
     }
 
@@ -128,10 +132,11 @@ class MoldService
         [$row, $beforePct] = $fresh;
         $afterPct = $row->shot_percentage;
 
-        // Crossing 80% threshold (forward-only). Use after-commit hook so
+        // Crossing the configured warning threshold (forward-only). Use after-commit hook so
         // listeners and broadcasters see the persisted row.
         DB::afterCommit(function () use ($row, $beforePct, $afterPct) {
-            if ($beforePct < 80.0 && $afterPct >= 80.0) {
+            $warningRatio = $this->settings->requiredFloat('alerts.mold.warning_ratio', 0, 1) * 100;
+            if ($beforePct < $warningRatio && $afterPct >= $warningRatio) {
                 event(new \App\Modules\MRP\Events\MoldShotLimitNearing($row));
             }
             if ($row->current_shot_count >= $row->max_shots_before_maintenance) {

@@ -27,6 +27,12 @@ class MachineService
         'offline'     => ['idle'],
     ];
 
+    /** @return array<string, list<string>> */
+    public static function allowedTransitions(): array
+    {
+        return self::ALLOWED;
+    }
+
     public function list(array $filters): LengthAwarePaginator
     {
         $q = Machine::query()->withCount('compatibleMolds');
@@ -53,7 +59,12 @@ class MachineService
 
     public function create(array $data): Machine
     {
-        return DB::transaction(fn () => Machine::create($data));
+        return DB::transaction(function () use ($data) {
+            // fresh() so column defaults (status idle, machine_type, ...) are
+            // present on the returned instance — create() alone leaves the
+            // in-memory model without them.
+            return Machine::create($data)->fresh();
+        });
     }
 
     public function update(Machine $m, array $data): Machine
@@ -72,7 +83,7 @@ class MachineService
     public function transitionStatus(Machine $m, MachineStatus $to, ?string $reason = null): Machine
     {
         $from = $m->status?->value ?? 'idle';
-        $allowed = self::ALLOWED[$from] ?? [];
+        $allowed = self::allowedTransitions()[$from] ?? [];
         if (! in_array($to->value, $allowed, true)) {
             throw new IllegalStatusTransitionException($from, $to->value);
         }

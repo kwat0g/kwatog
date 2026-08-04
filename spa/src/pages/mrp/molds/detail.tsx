@@ -1,5 +1,6 @@
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import { Pencil } from 'lucide-react';
 import { moldsApi } from '@/api/mrp/molds';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -7,6 +8,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { usePermission } from '@/hooks/usePermission';
 import { formatInt } from '@/lib/formatNumber';
 import type { MoldStatus } from '@/types/mrp';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
@@ -14,158 +16,167 @@ import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells
 import { MoldShotMeter } from '@/components/mrp/MoldShotMeter';
 
 const variant: Record<MoldStatus, 'success' | 'neutral' | 'info' | 'danger' | 'warning'> = {
-  available: 'success',
-  in_use: 'info',
-  maintenance: 'warning',
-  retired: 'neutral',
+ available: 'success',
+ in_use: 'info',
+ maintenance: 'warning',
+ retired: 'neutral',
 };
 
 export default function MoldDetailPage() {
-  const { id } = useParams<{ id: string }>();
-  const detail = useQuery({
-    queryKey: ['mrp', 'molds', 'detail', id],
-    queryFn: () => moldsApi.show(id!),
-    enabled: !!id,
-  });
-  const history = useQuery({
-    queryKey: ['mrp', 'molds', 'history', id],
-    queryFn: () => moldsApi.history(id!),
-    enabled: !!id,
-  });
+ const { id } = useParams<{ id: string }>();
+ const navigate = useNavigate();
+ const { can } = usePermission();
+ const canManage = can('production.molds.manage');
+ const detail = useQuery({
+ queryKey: ['mrp', 'molds', 'detail', id],
+ queryFn: () => moldsApi.show(id!),
+ enabled: !!id,
+ });
+ const history = useQuery({
+ queryKey: ['mrp', 'molds', 'history', id],
+ queryFn: () => moldsApi.history(id!),
+ enabled: !!id,
+ });
 
-  if (detail.isLoading) return <div><PageHeader title="Mold" backTo="/mrp/molds" backLabel="Molds"
-    breadcrumbs={[{ label: 'MRP', href: '/mrp' }, { label: 'Molds', href: '/mrp/molds' }, { label: 'Loading…' }]} /><SkeletonDetail /></div>;
-  if (detail.isError || !detail.data) return (
-    <div>
-      <PageHeader title="Mold" backTo="/mrp/molds" backLabel="Molds"
-        breadcrumbs={[{ label: 'MRP', href: '/mrp' }, { label: 'Molds', href: '/mrp/molds' }, { label: 'Error' }]} />
-      <EmptyState
-        icon="alert-circle"
-        title="Failed to load mold"
-        action={<Button variant="secondary" onClick={() => detail.refetch()}>Retry</Button>}
-      />
-    </div>
-  );
+ if (detail.isLoading) return <div><PageHeader title="Mold" backTo="/mrp/molds" backLabel="Molds"
+ breadcrumbs={[{ label: 'MRP', href: '/mrp' }, { label: 'Molds', href: '/mrp/molds' }, { label: 'Loading…' }]} /><SkeletonDetail /></div>;
+ if (detail.isError || !detail.data) return (
+ <div>
+ <PageHeader title="Mold" backTo="/mrp/molds" backLabel="Molds"
+ breadcrumbs={[{ label: 'MRP', href: '/mrp' }, { label: 'Molds', href: '/mrp/molds' }, { label: 'Error' }]} />
+ <EmptyState
+ icon="alert-circle"
+ title="Failed to load mold"
+ action={<Button variant="secondary" onClick={() => detail.refetch()}>Retry</Button>}
+ />
+ </div>
+ );
 
-  const m = detail.data;
-  const pct = Math.min(100, Math.max(0, m.shot_percentage));
-  const barColor = pct >= 100 ? 'bg-danger' : m.nearing_limit ? 'bg-warning' : 'bg-success';
+ const m = detail.data;
+ const pct = Math.min(100, Math.max(0, m.shot_percentage));
+ const barColor = pct >= 100 ? 'bg-danger' : m.nearing_limit ? 'bg-warning' : 'bg-success';
 
-  return (
-    <div>
-      <PageHeader
-        title={
-          <div className="flex items-center gap-3">
-            <span className="font-mono">{m.mold_code}</span>
-            <span>{m.name}</span>
-            <Chip variant={variant[m.status]}>{m.status_label}</Chip>
-            {m.nearing_limit && <Chip variant="warning">Near shot limit</Chip>}
-          </div>
-        }
-        backTo="/mrp/molds"
-        backLabel="Molds"
-        breadcrumbs={[{ label: 'MRP', href: '/mrp' }, { label: 'Molds', href: '/mrp/molds' }, { label: m.mold_code }]}
-      />
+ return (
+ <div>
+ <PageHeader
+ title={
+ <div className="flex items-center gap-3">
+ <span className="font-mono">{m.mold_code}</span>
+ <span>{m.name}</span>
+ <Chip variant={variant[m.status]}>{m.status_label}</Chip>
+ {m.nearing_limit && <Chip variant="warning">Near shot limit</Chip>}
+ </div>
+ }
+ backTo="/mrp/molds"
+ backLabel="Molds"
+ breadcrumbs={[{ label: 'MRP', href: '/mrp' }, { label: 'Molds', href: '/mrp/molds' }, { label: m.mold_code }]}
+ actions={canManage ? (
+ <Button variant="secondary" size="sm" icon={<Pencil size={14} />}
+ onClick={() => navigate(`/mrp/molds/${m.id}/edit`)}>
+ Edit
+ </Button>
+ ) : null}
+ />
 
-      <div className="px-5 py-4 grid grid-cols-3 gap-4">
-        <div className="col-span-2 space-y-4">
-          <MoldShotMeter
-            currentShots={m.current_shot_count}
-            maxShots={m.max_shots_before_maintenance}
-            moldCode={m.mold_code}
-            warningRatioPct={90}
-            status={m.status_label}
-            onTriggerPm={() => alert(`Preventive Maintenance order initiated for Mold ${m.mold_code}`)}
-          />
+ <div className="px-5 py-4 grid grid-cols-3 gap-4">
+ <div className="col-span-2 space-y-4">
+ <MoldShotMeter
+ currentShots={m.current_shot_count}
+ maxShots={m.max_shots_before_maintenance}
+ moldCode={m.mold_code}
+ warningRatioPct={90}
+ status={m.status_label}
+ onTriggerPm={() => alert(`Preventive Maintenance order initiated for Mold ${m.mold_code}`)}
+ />
 
-          <Panel title="Specifications">
-            <dl className="grid grid-cols-3 gap-y-2 gap-x-3 text-sm">
-              <dt className="text-muted">Code</dt>
-              <dd className="col-span-2 font-mono">{m.mold_code}</dd>
-              <dt className="text-muted">Product</dt>
-              <dd className="col-span-2">
-                {m.product
-                  ? <Link to={`/crm/products/${m.product.id}`} className="font-mono text-accent hover:underline">{m.product.part_number}</Link>
-                  : <span className="text-muted">—</span>}
-                {m.product && <span className="text-muted ml-2">{m.product.name}</span>}
-              </dd>
-              <dt className="text-muted">Cavity count</dt>
-              <dd className="col-span-2 font-mono tabular-nums">{m.cavity_count}</dd>
-              <dt className="text-muted">Cycle time</dt>
-              <dd className="col-span-2 font-mono tabular-nums">{m.cycle_time_seconds}s</dd>
-              <dt className="text-muted">Output / hr</dt>
-              <dd className="col-span-2 font-mono tabular-nums">{formatInt(m.output_rate_per_hour)}</dd>
-              <dt className="text-muted">Setup time</dt>
-              <dd className="col-span-2 font-mono tabular-nums">{m.setup_time_minutes} min</dd>
-              <dt className="text-muted">Location</dt>
-              <dd className="col-span-2">{m.location ?? '—'}</dd>
-            </dl>
-          </Panel>
+ <Panel title="Specifications">
+ <dl className="grid grid-cols-3 gap-y-2 gap-x-3 text-sm">
+ <dt className="text-muted">Code</dt>
+ <dd className="col-span-2 font-mono">{m.mold_code}</dd>
+ <dt className="text-muted">Product</dt>
+ <dd className="col-span-2">
+ {m.product
+ ? <Link to={`/crm/products/${m.product.id}`} className="font-mono text-accent hover:underline">{m.product.part_number}</Link>
+ : <span className="text-muted">—</span>}
+ {m.product && <span className="text-muted ml-2">{m.product.name}</span>}
+ </dd>
+ <dt className="text-muted">Cavity count</dt>
+ <dd className="col-span-2 font-mono tabular-nums">{m.cavity_count}</dd>
+ <dt className="text-muted">Cycle time</dt>
+ <dd className="col-span-2 font-mono tabular-nums">{m.cycle_time_seconds}s</dd>
+ <dt className="text-muted">Output / hr</dt>
+ <dd className="col-span-2 font-mono tabular-nums">{formatInt(m.output_rate_per_hour)}</dd>
+ <dt className="text-muted">Setup time</dt>
+ <dd className="col-span-2 font-mono tabular-nums">{m.setup_time_minutes} min</dd>
+ <dt className="text-muted">Location</dt>
+ <dd className="col-span-2">{m.location ?? '—'}</dd>
+ </dl>
+ </Panel>
 
-          <Panel title="Compatible machines" meta={`${m.compatible_machines?.length ?? 0} machines`}>
-            {(m.compatible_machines?.length ?? 0) === 0 ? (
-              <div className="text-sm text-muted py-2">No machine compatibility configured.</div>
-            ) : (
-              <ul className="text-sm space-y-1">
-                {m.compatible_machines!.map((machine) => (
-                  <li key={machine.id} className="flex items-center gap-2">
-                    <Link to={`/mrp/machines/${machine.id}`} className="font-mono text-accent hover:underline">{machine.machine_code}</Link>
-                    <span className="text-muted">{machine.name}</span>
-                    {machine.tonnage && <span className="text-muted text-xs">· {machine.tonnage} T</span>}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Panel>
+ <Panel title="Compatible machines" meta={`${m.compatible_machines?.length ?? 0} machines`}>
+ {(m.compatible_machines?.length ?? 0) === 0 ? (
+ <div className="text-sm text-muted py-2">No machine compatibility configured.</div>
+ ) : (
+ <ul className="text-sm space-y-1">
+ {m.compatible_machines!.map((machine) => (
+ <li key={machine.id} className="flex items-center gap-2">
+ <Link to={`/mrp/machines/${machine.id}`} className="font-mono text-accent hover:underline">{machine.machine_code}</Link>
+ <span className="text-muted">{machine.name}</span>
+ {machine.tonnage && <span className="text-muted text-xs">· {machine.tonnage} T</span>}
+ </li>
+ ))}
+ </ul>
+ )}
+ </Panel>
 
-          <Panel title="History" meta={`${history.data?.length ?? 0} events`} noPadding>
-            {history.isLoading ? (
-              <div className="px-3 py-3 text-sm text-muted">Loading history…</div>
-            ) : (history.data?.length ?? 0) === 0 ? (
-              <div className="px-3 py-3 text-sm text-muted">No history events recorded.</div>
-            ) : (
-              <table className={tableCls}>
-                <thead>
-                  <tr className={theadTrCls}>
-                    <Th>Date</Th>
-                    <Th>Event</Th>
-                    <Th>Description</Th>
-                    <Th align="right">Shot count</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {history.data!.map((h) => (
-                    <tr key={h.id} className={trCls}>
-                      <Td mono>{h.event_date}</Td>
-                      <Td mono>{h.event_type}</Td>
-                      <Td className="text-muted">{h.description ?? '—'}</Td>
-                      <Td align="right" mono>{formatInt(h.shot_count_at_event)}</Td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </Panel>
-        </div>
+ <Panel title="History" meta={`${history.data?.length ?? 0} events`} noPadding>
+ {history.isLoading ? (
+ <div className="px-3 py-3 text-sm text-muted">Loading history…</div>
+ ) : (history.data?.length ?? 0) === 0 ? (
+ <div className="px-3 py-3 text-sm text-muted">No history events recorded.</div>
+ ) : (
+ <table className={tableCls}>
+ <thead>
+ <tr className={theadTrCls}>
+ <Th>Date</Th>
+ <Th>Event</Th>
+ <Th>Description</Th>
+ <Th align="right">Shot count</Th>
+ </tr>
+ </thead>
+ <tbody>
+ {history.data!.map((h) => (
+ <tr key={h.id} className={trCls}>
+ <Td mono>{h.event_date}</Td>
+ <Td mono>{h.event_type}</Td>
+ <Td className="text-muted">{h.description ?? '—'}</Td>
+ <Td align="right" mono>{formatInt(h.shot_count_at_event)}</Td>
+ </tr>
+ ))}
+ </tbody>
+ </table>
+ )}
+ </Panel>
+ </div>
 
-        <div className="space-y-4">
-          <Panel title="Shot count">
-            <div className="space-y-3">
-              <div className="text-2xl font-medium font-mono tabular-nums">
-                {formatInt(m.current_shot_count)}
-                <span className="text-sm text-muted"> / {formatInt(m.max_shots_before_maintenance)}</span>
-              </div>
-              <div className="h-1.5 w-full bg-subtle rounded-full overflow-hidden">
-                <div className={`h-full ${barColor}`} style={{ width: `${pct}%` }} />
-              </div>
-              <div className="text-xs font-mono tabular-nums text-muted">{pct.toFixed(1)}% of cycle limit</div>
-              <div className="text-xs font-mono tabular-nums text-muted pt-2 border-t border-subtle">
-                Lifetime: {formatInt(m.lifetime_total_shots)} / {formatInt(m.lifetime_max_shots)}
-              </div>
-            </div>
-          </Panel>
-        </div>
-      </div>
-    </div>
-  );
+ <div className="space-y-4">
+ <Panel title="Shot count">
+ <div className="space-y-3">
+ <div className="text-2xl font-medium font-mono tabular-nums">
+ {formatInt(m.current_shot_count)}
+ <span className="text-sm text-muted"> / {formatInt(m.max_shots_before_maintenance)}</span>
+ </div>
+ <div className="h-1.5 w-full bg-subtle rounded-full overflow-hidden">
+ <div className={`h-full ${barColor}`} style={{ width: `${pct}%` }} />
+ </div>
+ <div className="text-xs font-mono tabular-nums text-muted">{pct.toFixed(1)}% of cycle limit</div>
+ <div className="text-xs font-mono tabular-nums text-muted pt-2 border-t border-subtle">
+ Lifetime: {formatInt(m.lifetime_total_shots)} / {formatInt(m.lifetime_max_shots)}
+ </div>
+ </div>
+ </Panel>
+ </div>
+ </div>
+ </div>
+ );
 }

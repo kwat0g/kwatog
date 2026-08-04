@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Modules\MRP\Controllers;
 
+use App\Common\Services\SettingsService;
 use App\Modules\CRM\Models\Product;
 use App\Modules\MRP\Models\Mold;
+use App\Modules\MRP\Enums\MoldStatus;
 use App\Modules\MRP\Requests\AssignMoldCompatibilityRequest;
 use App\Modules\MRP\Requests\StoreMoldRequest;
 use App\Modules\MRP\Requests\UpdateMoldRequest;
@@ -18,11 +20,22 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class MoldController
 {
-    public function __construct(private readonly MoldService $service) {}
+    public function __construct(
+        private readonly MoldService $service,
+        private readonly SettingsService $settings,
+    ) {}
 
     public function index(Request $request): AnonymousResourceCollection
     {
         return MoldResource::collection($this->service->list($request->query()));
+    }
+
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'statuses' => array_map(static fn (MoldStatus $status): array => ['value' => $status->value, 'label' => $status->label()], MoldStatus::cases()),
+            'warning_ratio_pct' => round($this->settings->requiredFloat('alerts.mold.warning_ratio', 0, 1) * 100, 1),
+        ]]);
     }
 
     public function show(Mold $mold): MoldResource
@@ -33,6 +46,9 @@ class MoldController
     public function store(StoreMoldRequest $request): JsonResponse
     {
         $payload = $request->validated();
+        // Leave status unset so the DB default (available) applies — a null
+        // status from the optional field would override the column default.
+        unset($payload['status']);
         // Sane default for output_rate_per_hour if caller did not provide it.
         if (empty($payload['output_rate_per_hour']) && ! empty($payload['cycle_time_seconds']) && ! empty($payload['cavity_count'])) {
             $payload['output_rate_per_hour'] = (int) floor(3600 / (int) $payload['cycle_time_seconds'] * (int) $payload['cavity_count']);
@@ -89,7 +105,8 @@ class MoldController
 
     public function costTrend(Request $request, Mold $mold): JsonResponse
     {
-        $months = min((int) $request->query('months', 12), 36);
+        $defaultMonths = $this->settings->requiredInt('mrp.mold.cost_trend_default_months', 1, 36);
+        $months = min((int) $request->query('months', $defaultMonths), 36);
         return response()->json([
             'data' => [
                 'mold' => [

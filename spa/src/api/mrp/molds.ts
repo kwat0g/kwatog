@@ -1,21 +1,25 @@
 import { client } from '../client';
 import type { ApiSuccess, PaginatedResponse, ListParams } from '@/types';
-import type { Mold } from '@/types/mrp';
+import type { Mold, CreateMoldData, UpdateMoldData } from '@/types/mrp';
 
 export interface MoldListParams extends ListParams {
-  product_id?: string;
-  status?: string;
-  nearing_limit?: boolean | string;
+ product_id?: string;
+ status?: string;
+ nearing_limit?: boolean | string;
 }
 
 export const moldsApi = {
-  options: () => client.get<{ data: { statuses: Array<{ value: string; label: string }>; warning_ratio_pct?: number } }>('/mrp/molds/options').then((r) => r.data.data),
-  list: (params?: MoldListParams) =>
-    client.get<PaginatedResponse<Mold>>('/mrp/molds', { params }).then((r) => r.data),
-  show: (id: string) =>
-    client.get<ApiSuccess<Mold>>(`/mrp/molds/${id}`).then((r) => r.data.data),
-  history: (id: string) =>
-    client.get<{ data: Array<{ id: string; event_type: string; description: string | null; event_date: string; shot_count_at_event: number }> }>(`/mrp/molds/${id}/history`).then((r) => r.data.data),
-  syncCompatibility: (id: string, machineIds: string[]) =>
-    client.post<ApiSuccess<Mold>>(`/mrp/molds/${id}/compatibility`, { machine_ids: machineIds }).then((r) => r.data.data),
+ options: () => client.get<{ data: { statuses: Array<{ value: string; label: string }>; warning_ratio_pct?: number } }>('/mrp/molds/options').then((r) => r.data.data),
+ list: (params?: MoldListParams) =>
+ client.get<PaginatedResponse<Mold>>('/mrp/molds', { params }).then((r) => r.data),
+ show: (id: string) =>
+ client.get<ApiSuccess<Mold>>(`/mrp/molds/${id}`).then((r) => r.data.data),
+ create: (data: CreateMoldData) =>
+ client.post<ApiSuccess<Mold>>('/mrp/molds', data).then((r) => r.data.data),
+ update: (id: string, data: UpdateMoldData) =>
+ client.put<ApiSuccess<Mold>>(`/mrp/molds/${id}`, data).then((r) => r.data.data),
+ history: (id: string) =>
+ client.get<{ data: Array<{ id: string; event_type: string; description: string | null; event_date: string; shot_count_at_event: number }> }>(`/mrp/molds/${id}/history`).then((r) => r.data.data),
+ syncCompatibility: (id: string, machineIds: string[]) =>
+ client.post<ApiSuccess<Mold>>(`/mrp/molds/${id}/compatibility`, { machine_ids: machineIds }).then((r) => r.data.data),
 };

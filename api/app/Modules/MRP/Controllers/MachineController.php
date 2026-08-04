@@ -24,6 +24,14 @@ class MachineController
         return MachineResource::collection($this->service->list($request->query()));
     }
 
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'statuses' => array_map(static fn (MachineStatus $status): array => ['value' => $status->value, 'label' => $status->label()], MachineStatus::cases()),
+            'transitions' => MachineService::allowedTransitions(),
+        ]]);
+    }
+
     public function show(Machine $machine): MachineResource
     {
         return new MachineResource($this->service->show($machine));
@@ -31,7 +39,11 @@ class MachineController
 
     public function store(StoreMachineRequest $request): JsonResponse
     {
-        $m = $this->service->create($request->validated());
+        $payload = $request->validated();
+        // Leave status unset so the DB default (idle) applies — a null status
+        // from the optional field would otherwise override the column default.
+        unset($payload['status']);
+        $m = $this->service->create($payload);
         return (new MachineResource($m))->response()->setStatusCode(201);
     }
 
