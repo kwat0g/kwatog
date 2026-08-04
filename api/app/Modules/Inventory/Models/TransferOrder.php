@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Inventory\Models;
 
 use App\Common\Traits\HasAuditLog;
+use App\Modules\Inventory\Enums\TransferOrderStatus;
 use App\Common\Traits\HasHashId;
 use App\Modules\Auth\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -23,6 +24,7 @@ class TransferOrder extends Model
     protected $casts = [
         'quantity' => 'decimal:3',
         'transferred_at' => 'datetime',
+        'status' => TransferOrderStatus::class,
     ];
 
     public function fromLocation(): BelongsTo

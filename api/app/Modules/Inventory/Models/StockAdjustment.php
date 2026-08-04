@@ -6,6 +6,7 @@ namespace App\Modules\Inventory\Models;
 
 use App\Common\Traits\HasHashId;
 use App\Modules\Auth\Models\User;
+use App\Modules\Inventory\Enums\StockAdjustmentStatus;
 use App\Modules\Inventory\Enums\StockAdjustmentReason;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -39,6 +40,7 @@ class StockAdjustment extends Model
         'value'       => 'decimal:2',
         'reason_code' => StockAdjustmentReason::class,
         'approved_at' => 'datetime',
+        'status' => StockAdjustmentStatus::class,
     ];
 
     public function item(): BelongsTo

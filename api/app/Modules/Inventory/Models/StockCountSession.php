@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Inventory\Models;
 
 use App\Common\Traits\HasAuditLog;
+use App\Modules\Inventory\Enums\StockCountSessionStatus;
 use App\Common\Traits\HasHashId;
 use App\Modules\Auth\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -29,6 +30,7 @@ class StockCountSession extends Model
         'counted_locations' => 'integer',
         'variance_count' => 'integer',
         'variance_value' => 'decimal:2',
+        'status' => StockCountSessionStatus::class,
     ];
 
     public function warehouse(): BelongsTo

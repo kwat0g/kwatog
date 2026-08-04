@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Models;
 
+use App\Modules\Inventory\Enums\StockCountItemStatus;
 use App\Common\Traits\HasHashId;
 use App\Modules\Auth\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -26,6 +27,7 @@ class StockCountItem extends Model
         'variance' => 'decimal:3',
         'variance_percent' => 'decimal:2',
         'counted_at' => 'datetime',
+        'status' => StockCountItemStatus::class,
     ];
 
     public function session(): BelongsTo

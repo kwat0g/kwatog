@@ -6,11 +6,14 @@ namespace App\Modules\Inventory\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Auth\Models\User;
+use App\Modules\Inventory\Enums\StockCountItemStatus;
+use App\Modules\Inventory\Enums\StockCountSessionStatus;
 use App\Modules\Inventory\Models\StockCountItem;
 use App\Modules\Inventory\Models\StockCountSession;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\SettingsService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -19,6 +22,7 @@ class StockCountService
     public function __construct(
         private readonly DocumentSequenceService $sequences,
         private readonly StockAdjustmentService $adjustments,
+        private readonly SettingsService $settings,
     ) {}
 
     public function listSessions(): Collection
@@ -48,10 +52,10 @@ class StockCountService
             $session = StockCountSession::create([
                 'session_number'  => $this->sequences->generate('stock_count'),
                 'title'           => $data['title'],
-                'scope'           => $data['scope'] ?? 'full',
+                'scope'           => $data['scope'] ?? (string) $this->settings->get('inventory.stock_count.default_scope', ''),
                 'warehouse_id'    => $data['warehouse_id'] ?? null,
                 'zone_id'         => $data['zone_id'] ?? null,
-                'status'          => 'draft',
+                'status'          => StockCountSessionStatus::Draft->value,
                 'total_locations' => 0,
                 'created_by'      => $user->id,
             ]);
@@ -85,7 +89,7 @@ class StockCountService
                     'variance'        => 0,
                     'variance_percent' => 0,
                     'lot_number'      => $stockLevel ? null : $loc->current_lot_number,
-                    'status'          => 'pending',
+                    'status'          => StockCountItemStatus::Pending->value,
                     'created_at'      => now(),
                     'updated_at'      => now(),
                 ];
@@ -102,13 +106,13 @@ class StockCountService
     {
         return DB::transaction(function () use ($id) {
             $session = StockCountSession::query()->lockForUpdate()->findOrFail($id);
-            if ($session->status !== 'draft') {
+            if ($session->status !== StockCountSessionStatus::Draft) {
                 throw new BusinessRuleException('Session must be in draft status to start.');
             }
 
             $locationIds = $session->items()->pluck('location_id');
             $overlap = StockCountSession::query()
-                ->where('status', 'in_progress')
+                ->where('status', StockCountSessionStatus::InProgress->value)
                 ->whereHas('items', fn ($items) => $items->whereIn('location_id', $locationIds))
                 ->lockForUpdate()
                 ->first();
@@ -117,7 +121,7 @@ class StockCountService
             }
 
             $session->update([
-                'status'    => 'in_progress',
+                'status'    => StockCountSessionStatus::InProgress->value,
                 'frozen_at' => now(),
             ]);
             return $session->fresh()->load(['warehouse', 'zone', 'items.location', 'items.item']);
@@ -127,7 +131,7 @@ class StockCountService
     public function recordCount(int $itemId, array $data, User $user): StockCountItem
     {
         $item = StockCountItem::findOrFail($itemId);
-        if ($item->session->status !== 'in_progress') {
+        if ($item->session->status !== StockCountSessionStatus::InProgress) {
             throw new BusinessRuleException('Session is not in progress.');
         }
 
@@ -138,7 +142,7 @@ class StockCountService
                 ? round(abs((float) $data['counted_quantity'] - (float) $item->system_quantity) / (float) $item->system_quantity * 100, 2)
                 : ($data['counted_quantity'] > 0 ? 100 : 0),
             'lot_number'        => $data['lot_number'] ?? $item->lot_number,
-            'status'            => 'counted',
+            'status'            => StockCountItemStatus::Counted->value,
             'counted_by'        => $user->id,
             'counted_at'        => now(),
             'notes'             => $data['notes'] ?? $item->notes,
@@ -146,7 +150,7 @@ class StockCountService
 
         // Update session progress
         $session = $item->session;
-        $counted = $session->items()->whereIn('status', ['counted', 'verified', 'adjusted'])->count();
+        $counted = $session->items()->whereIn('status', [StockCountItemStatus::Counted->value, StockCountItemStatus::Verified->value, StockCountItemStatus::Adjusted->value])->count();
         $session->update(['counted_locations' => $counted]);
 
         return $item->fresh()->load(['location', 'item', 'counter']);
@@ -155,15 +159,15 @@ class StockCountService
     public function approveVariance(int $itemId, User $user): StockCountItem
     {
         $item = StockCountItem::with('session')->findOrFail($itemId);
-        if ($item->session->status !== 'in_progress') {
+        if ($item->session->status !== StockCountSessionStatus::InProgress) {
             throw new BusinessRuleException('Session is not in progress.');
         }
-        if ($item->status !== 'counted') {
+        if ($item->status !== StockCountItemStatus::Counted) {
             throw new BusinessRuleException('Item must be counted first.');
         }
 
         $item->update([
-            'status' => 'verified',
+            'status' => StockCountItemStatus::Verified->value,
         ]);
 
         return $item->fresh()->load(['location', 'item']);
@@ -173,15 +177,16 @@ class StockCountService
     {
         return DB::transaction(function () use ($id, $user) {
             $session = StockCountSession::with('items')->findOrFail($id);
-            if ($session->status !== 'in_progress') {
+            if ($session->status !== StockCountSessionStatus::InProgress) {
                 throw new BusinessRuleException('Session must be in progress to complete.');
             }
 
             $varianceCount = 0;
             $varianceValue = 0;
+            $varianceTolerance = $this->settings->requiredFloat('inventory.stock_count.variance_tolerance_pct', 0);
 
             foreach ($session->items as $item) {
-                if ($item->status !== 'counted' && $item->status !== 'verified') continue;
+                if ($item->status !== StockCountItemStatus::Counted && $item->status !== StockCountItemStatus::Verified) continue;
 
                 $variance = (float) $item->variance;
                 if (abs($variance) > 0.001) {
@@ -189,8 +194,8 @@ class StockCountService
                     $varianceValue += abs($variance);
                 }
 
-                // If variance > 2% and not verified, require approval
-                if (abs($item->variance_percent) > 2 && $item->status !== 'verified') {
+                // If variance exceeds the configured tolerance and is not verified, require approval.
+                if (abs((float) $item->variance_percent) > $varianceTolerance && $item->status !== StockCountItemStatus::Verified) {
                     throw new BusinessRuleException(
                         "Item #{$item->id} has a variance of {$item->variance_percent}% — requires supervisor sign-off."
                     );
@@ -200,12 +205,20 @@ class StockCountService
                 if (abs($variance) > 0.001 && $item->item_id && $item->counted_quantity !== null) {
                     $diff = bcsub((string) $item->counted_quantity, (string) $item->system_quantity, 3);
                     if (bccomp($diff, '0', 3) > 0) {
-                        // Stock increase — use the on-hand cost for valuation
+                        // Stock increase — value the overage at the location's
+                        // current WAC (locked so the read cannot race a
+                        // concurrent adjust), never at zero: a '0' cost drags
+                        // the blended average toward zero with every cycle.
+                        $unitCost = (string) (StockLevel::query()
+                            ->where('item_id', $item->item_id)
+                            ->where('location_id', $item->location_id)
+                            ->lockForUpdate()
+                            ->value('weighted_avg_cost') ?? '0.00');
                         $this->adjustments->adjustIn(
                             $item->item_id,
                             $item->location_id,
                             $diff,
-                            '0', // cost accounted via existing WAC
+                            $unitCost,
                             'Cycle count adjustment — session ' . $session->session_number,
                             $user,
                             bypassCountFreeze: true,
@@ -222,12 +235,12 @@ class StockCountService
                         );
                     }
 
-                    $item->update(['status' => 'adjusted']);
+                    $item->update(['status' => StockCountItemStatus::Adjusted->value]);
                 }
             }
 
             $session->update([
-                'status'           => 'completed',
+                'status'           => StockCountSessionStatus::Completed->value,
                 'completed_at'     => now(),
                 'approved_by'      => $user->id,
                 'variance_count'   => $varianceCount,
@@ -241,10 +254,10 @@ class StockCountService
     public function cancelSession(int $id): StockCountSession
     {
         $session = StockCountSession::findOrFail($id);
-        if (in_array($session->status, ['completed', 'cancelled'])) {
+        if (in_array($session->status, [StockCountSessionStatus::Completed, StockCountSessionStatus::Cancelled], true)) {
             throw new BusinessRuleException('Session already completed or cancelled.');
         }
-        $session->update(['status' => 'cancelled']);
+        $session->update(['status' => StockCountSessionStatus::Cancelled->value]);
         return $session->fresh();
     }
 }
