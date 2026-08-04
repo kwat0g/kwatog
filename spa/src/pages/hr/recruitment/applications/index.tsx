@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { recruitmentApi } from '@/api/recruitment';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -32,7 +32,6 @@ interface AppFilters {
 }
 
 export default function ApplicationsListPage() {
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [stageFilter, setStageFilter] = useState(searchParams.get('stage') ?? '');
   const [filters, setFilters] = useState<AppFilters>({

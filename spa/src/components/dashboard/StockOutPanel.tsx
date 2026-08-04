@@ -8,7 +8,7 @@
  * Follows the same pattern as ChainBottleneckWidget.
  */
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { forecastingApi } from '@/api/forecasting';
 import type { StockOutRisk } from '@/types/forecasting';
 import { Panel } from '@/components/ui/Panel';
@@ -43,7 +43,7 @@ export function StockOutPanel({
   horizonDays,
   hideWhenEmpty = false,
 }: Props) {
-  const navigate = useNavigate();
+  
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['forecasting', 'stock-out', horizonDays],
     queryFn: () => forecastingApi.stockOut({ horizon_days: horizonDays }),

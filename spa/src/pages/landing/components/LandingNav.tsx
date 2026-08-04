@@ -39,7 +39,7 @@ const DEFAULT_NAV_LINKS = [
   { label: 'Contact', href: '#contact' },
 ];
 
-export function LandingNav({ open, onOpenChange, onOpenQuote }: LandingNavProps) {
+export function LandingNav({ open, onOpenChange }: LandingNavProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const isLanding = location.pathname === '/';

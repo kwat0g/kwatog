@@ -11,15 +11,12 @@ import {
   Search,
   Server,
   Sliders,
-  Sparkles,
   Check,
-  RotateCcw,
   Cpu,
   Database,
   Layers,
   Clock,
   Activity,
-  ChevronRight,
 } from 'lucide-react';
 import { settingsApi, type SettingRow, type SettingValue, type SystemInfo } from '@/api/admin/settings';
 import { Button } from '@/components/ui/Button';
@@ -306,7 +303,7 @@ export default function SettingsPage() {
                 {search && (
                   <Button
                     variant="ghost"
-                    size="xs"
+                    size="sm"
                     onClick={() => setSearch('')}
                     className="text-xs text-secondary hover:text-primary"
                   >

@@ -481,7 +481,7 @@ export default function RolePermissionsPage() {
                       </span>
                       <Button
                         variant="secondary"
-                        size="xs"
+                        size="sm"
                         icon={<Eye size={12} />}
                         onClick={() => applyPreset('read_only')}
                       >
@@ -489,7 +489,7 @@ export default function RolePermissionsPage() {
                       </Button>
                       <Button
                         variant="secondary"
-                        size="xs"
+                        size="sm"
                         icon={<Sparkles size={12} />}
                         onClick={() => applyPreset('standard_editor')}
                       >
@@ -497,7 +497,7 @@ export default function RolePermissionsPage() {
                       </Button>
                       <Button
                         variant="secondary"
-                        size="xs"
+                        size="sm"
                         icon={<CheckSquare size={12} />}
                         onClick={() => applyPreset('full_access')}
                       >
@@ -505,7 +505,7 @@ export default function RolePermissionsPage() {
                       </Button>
                       <Button
                         variant="secondary"
-                        size="xs"
+                        size="sm"
                         icon={<Square size={12} />}
                         onClick={() => applyPreset('clear_all')}
                       >
@@ -545,7 +545,7 @@ export default function RolePermissionsPage() {
                   <div className="sm:col-span-12 md:col-span-3 flex items-center justify-end gap-2">
                     <Button
                       variant="secondary"
-                      size="xs"
+                      size="sm"
                       onClick={expandAllModules}
                       className="text-2xs"
                     >
@@ -553,7 +553,7 @@ export default function RolePermissionsPage() {
                     </Button>
                     <Button
                       variant="secondary"
-                      size="xs"
+                      size="sm"
                       onClick={collapseAllModules}
                       className="text-2xs"
                     >
@@ -593,7 +593,7 @@ export default function RolePermissionsPage() {
                   {!isSystem && visibleSlugs.length > 0 && (
                     <Button
                       variant="ghost"
-                      size="xs"
+                      size="sm"
                       onClick={toggleAllVisible}
                       className="text-xs text-secondary hover:text-primary"
                     >

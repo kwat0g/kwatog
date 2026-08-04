@@ -1,5 +1,4 @@
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate} from 'react-router-dom';
 import { inventoryDashboardApi } from '@/api/inventory/dashboard';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -20,8 +19,7 @@ const movementChip = (t: string): 'success' | 'info' | 'warning' | 'danger' | 'n
 };
 
 export default function InventoryDashboardPage() {
-  const navigate = useNavigate();
-  const { data, isLoading, isError, refetch } = useQuery({
+    const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['inventory', 'dashboard'],
     queryFn: () => inventoryDashboardApi.summary(),
     refetchInterval: 30_000 });

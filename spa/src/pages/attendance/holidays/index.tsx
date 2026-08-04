@@ -149,6 +149,8 @@ function ListView({
   onDelete: (h: Holiday) => void;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // @ts-ignore
+  selectedId; setSelectedId;
   const selected = useMemo(() => holidays.find((h) => h.id === selectedId) ?? null, [holidays, selectedId]);
 
   const columns: Column<Holiday>[] = [

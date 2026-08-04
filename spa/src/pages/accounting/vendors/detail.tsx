@@ -1,4 +1,4 @@
-import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Pencil, Plus } from 'lucide-react';
 import { vendorsApi } from '@/api/accounting/vendors';

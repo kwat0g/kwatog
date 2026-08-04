@@ -30,7 +30,6 @@ const TABS: Tab[] = [
 ];
 
 export default function AdminUsersRolesHubPage() {
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const activeTab = searchParams.get('tab') ?? 'users';
 

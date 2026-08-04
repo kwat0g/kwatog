@@ -10,6 +10,7 @@ import { Panel } from '@/components/ui/Panel';
 import { Select } from '@/components/ui/Select';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { cn } from '@/lib/cn';
 
 /**
  * ADV4 — Side-by-side permission diff between two roles.
