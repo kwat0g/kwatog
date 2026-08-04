@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Upload, Calendar, Clock, Sun } from 'lucide-react';
+import { Upload, Clock, Sun } from 'lucide-react';
 import { attendancesApi, type AttendanceListParams } from '@/api/attendance/attendances';
 import { departmentsApi } from '@/api/hr/departments';
 import { Button } from '@/components/ui/Button';
@@ -103,11 +103,6 @@ export default function AttendancePage() {
         subtitle={data ? `${formatInt(data.meta.total)} records` : undefined}
         actions={
           <>
-            {can('attendance.ot.approve') && (
-              <Button variant="secondary" size="sm" icon={<Calendar size={14} />} onClick={() => navigate('/hr/attendance/overtime')}>
-                Overtime
-              </Button>
-            )}
             {(can('attendance.edit') || can('attendance.shifts.manage')) && (
               <Button variant="secondary" size="sm" icon={<Clock size={14} />} onClick={() => navigate('/hr/attendance/shifts')}>
                 Shifts

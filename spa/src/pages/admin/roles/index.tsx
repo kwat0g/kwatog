@@ -278,6 +278,7 @@ export default function RolesIndexPage() {
 
         {data && data.data.length > 0 && (
           <DataTable
+            onRowClick={(row) => navigate(`/admin/roles/${row.id}/permissions`)}
             columns={columns}
             data={data.data}
             meta={data.meta}

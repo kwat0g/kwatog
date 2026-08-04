@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { recruitmentApi } from '@/api/recruitment';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -32,6 +32,7 @@ interface AppFilters {
 }
 
 export default function ApplicationsListPage() {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [stageFilter, setStageFilter] = useState(searchParams.get('stage') ?? '');
   const [filters, setFilters] = useState<AppFilters>({
@@ -137,6 +138,7 @@ export default function ApplicationsListPage() {
       {data && data.data?.length > 0 && (
         <div className="px-5 py-4">
           <DataTable
+            onRowClick={(row) => navigate(`/hr/recruitment/applications/${row.id}`)}
             columns={columns}
             data={data.data}
             meta={data.meta}

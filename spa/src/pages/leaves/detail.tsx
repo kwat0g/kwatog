@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { Check, X, RotateCcw } from 'lucide-react';
-import { leaveRequestsApi } from '@/api/leave';
+import { leaveRequestsApi, leaveBalancesApi } from '@/api/leave';
 import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -19,6 +19,8 @@ import { fromLeaveRequest } from '@/lib/approvals';
 import { CanDo } from '@/components/guards/CanDo';
 import { useAuthStore } from '@/stores/authStore';
 import { formatDate } from '@/lib/formatDate';
+
+const HALF_DAY_LABEL: Record<string, string> = { am: 'AM', pm: 'PM' };
 
 export default function LeaveDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
@@ -41,6 +43,13 @@ export default function LeaveDetailPage() {
   });
 
   const detailKey = ['leaves', 'request', id];
+
+  // Balance for this employee/type/year so approvers see the impact at a glance.
+  const { data: balances = [] } = useQuery({
+    queryKey: ['leaves', 'balances', req?.employee?.id],
+    queryFn: () => leaveBalancesApi.forEmployee(req!.employee!.id),
+    enabled: Boolean(req?.employee?.id),
+  });
 
   function useApprovalMutation<TVar = void>(
     fn: (v: TVar) => Promise<unknown>,
@@ -125,7 +134,7 @@ export default function LeaveDetailPage() {
               <Item label="Employee" value={req.employee?.full_name} sub={req.employee?.employee_no} />
               <Item label="Department" value={req.employee?.department ?? '—'} />
               <Item label="Leave type" value={`${req.leave_type?.code} — ${req.leave_type?.name}`} />
-              <Item label="Days" value={req.days} mono />
+              <Item label="Days" value={req.half_day_period ? `${req.days} · ${HALF_DAY_LABEL[req.half_day_period] ?? req.half_day_period}` : req.days} mono />
               <Item label="Start date" value={formatDate(req.start_date)} mono />
               <Item label="End date" value={formatDate(req.end_date)} mono />
             </dl>
@@ -146,6 +155,38 @@ export default function LeaveDetailPage() {
 
         <Panel title="Approval chain">
           <ApprovalTimeline steps={fromLeaveRequest(req)} />
+        </Panel>
+
+        <Panel title="Leave balance">
+          {balances.length === 0 ? (
+            <p className="text-sm text-muted">No balance record for {new Date(req.start_date).getFullYear()}.</p>
+          ) : (
+            <dl className="space-y-3 text-sm">
+              {balances.map((b) => {
+                const isCurrent = b.leave_type.id === req.leave_type?.id;
+                const remaining = parseFloat(b.remaining);
+                const total = parseFloat(b.total_credits) || 1;
+                const pct = Math.min(100, (remaining / total) * 100);
+                return (
+                  <div key={b.id} className={isCurrent ? 'p-2 -mx-2 rounded-md bg-subtle' : undefined}>
+                    <div className="flex items-baseline justify-between gap-2">
+                      <dt className="text-xs text-muted font-medium">{b.leave_type.code}</dt>
+                      <dd className="font-mono tabular-nums">
+                        {b.remaining}
+                        <span className="text-xs text-muted"> / {b.total_credits} days</span>
+                      </dd>
+                    </div>
+                    <div className="h-1.5 bg-elevated rounded-sm mt-1.5 overflow-hidden">
+                      <div
+                        className={`h-full ${isCurrent ? 'bg-accent' : 'bg-accent/40'}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </dl>
+          )}
         </Panel>
       </div>
 

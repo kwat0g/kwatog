@@ -164,6 +164,7 @@ export default function PostingsListPage() {
       {data && data.data?.length > 0 && (
         <div className="px-5 py-4">
           <DataTable
+            onRowClick={(row) => navigate(`/hr/recruitment/postings/${row.id}`)}
             columns={columns}
             data={data.data}
             meta={data.meta}

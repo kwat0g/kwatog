@@ -168,7 +168,8 @@ export default function MaintenanceSchedulesListPage() {
       )}
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
-          <DataTable columns={columns} data={data.data} meta={data.meta}
+          <DataTable
+            onRowClick={(r) => navigate(`/maintenance/schedules/${r.id}`)} columns={columns} data={data.data} meta={data.meta}
             onPageChange={(page) => setFilters((f) => ({ ...f, page }))} />
         </div>
       )}

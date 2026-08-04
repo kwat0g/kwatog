@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, XCircle, Calendar, Download, MessageSquare, UserPlus } from 'lucide-react';
-import { cn } from '@/lib/cn';
 import { recruitmentApi } from '@/api/recruitment';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -12,6 +11,8 @@ import { Textarea } from '@/components/ui/Textarea';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
+import { ChainHeader } from '@/components/ui/ChainHeader';
+import { ActivityStream } from '@/components/ui/ActivityStream';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
@@ -158,37 +159,16 @@ export default function ApplicationDetailPage() {
       />
 
       {/* Pipeline stepper */}
-      <div className="px-5 py-3">
-        <div className="flex items-center gap-1">
-          {pipelineStages.map((stage, idx) => {
-            const isActive = idx === currentIdx;
-            const isDone = idx < currentIdx;
-            return (
-              <div key={stage.value} className="flex items-center gap-1">
-                <div
-                  className={cn(
-                    'rounded-full px-3 py-1 text-xs font-medium transition-colors',
-                    isActive
-                      ? 'bg-accent text-white'
-                      : isDone
-                      ? 'bg-success/10 text-success'
-                      : 'bg-elevated text-muted',
-                  )}
-                >
-                  {stage.label}
-                </div>
-                {idx < pipelineStages.length - 1 && (
-                  <div className={cn('h-0.5 w-4', isDone ? 'bg-success/40' : 'bg-border-default')} />
-                )}
-              </div>
-            );
-          })}
-          {application.stage === 'rejected' && (
-            <Chip variant="danger" className="ml-2">Rejected at {application.rejected_at_stage ? (stageLabel.get(application.rejected_at_stage) ?? application.rejected_at_stage) : 'Unknown stage'}</Chip>
-          )}
-        </div>
+      <div className="px-5 py-4 border-b border-default mb-4 bg-surface">
+        <ChainHeader
+          steps={pipelineStages.map((stage, idx) => ({
+            key: stage.value,
+            label: stage.label,
+            state: idx < currentIdx ? 'done' : idx === currentIdx ? 'active' : 'pending'
+          }))}
+        />
         {!isTerminal && (
-          <p className="mt-1.5 text-xs text-muted px-5">
+          <p className="mt-8 text-xs text-muted">
             {application.stage === 'new' && 'Review the application and advance to screening when ready.'}
             {application.stage === 'screening' && 'Screen the candidate. You\'ll need to schedule an interview to advance.'}
             {application.stage === 'interview' && 'Schedule and conduct interviews. Advance to offer when interviews are complete.'}
@@ -401,16 +381,20 @@ export default function ApplicationDetailPage() {
             )}
 
             {application.notes?.length ? (
-              <ul className="divide-y divide-default">
-                {application.notes.map((note) => (
-                  <li key={note.id} className="py-2.5">
-                    <p className="text-sm">{note.body}</p>
-                    <p className="mt-1 text-xs text-muted">
-                      {note.user.name} · <span className="font-mono tabular-nums">{formatDateTime(note.created_at)}</span>
-                    </p>
-                  </li>
-                ))}
-              </ul>
+              <ActivityStream
+                className="mt-4"
+                items={application.notes.map((note: any) => ({
+                  id: note.id,
+                  dot: 'info',
+                  text: (
+                    <>
+                      {note.body}
+                      <span className="text-muted block mt-0.5">{note.user?.name}</span>
+                    </>
+                  ),
+                  time: formatDateTime(note.created_at),
+                }))}
+              />
             ) : (
               <p className="text-sm text-muted">No notes yet.</p>
             )}

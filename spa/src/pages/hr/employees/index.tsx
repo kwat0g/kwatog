@@ -192,6 +192,7 @@ export default function EmployeesListPage() {
 
       {data && data.data.length > 0 && (
         <div className="px-5 py-4"><DataTable
+            onRowClick={(row) => navigate(`/hr/employees/${row.id}`)}
           columns={columns}
           data={data.data}
           meta={data.meta}

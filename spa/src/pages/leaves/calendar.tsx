@@ -161,17 +161,18 @@ export default function LeaveCalendarPage() {
                 <Tooltip
                   key={cell.date}
                   side="bottom"
-                  content={
-                    cell.employees_on_leave.length > 0 ? (
-                      <div className="max-w-[200px] text-left whitespace-normal">
-                        {cell.employees_on_leave.map((e, j) => (
-                          <div key={j} className="truncate">
-                            {e.employee_name} ({e.leave_type}) - {e.status_label ?? e.status.replace(/_/g, ' ')}
-                          </div>
-                        ))}
-                      </div>
-                    ) : 'No leaves'
-                  }
+                    content={
+                      cell.employees_on_leave.length > 0 ? (
+                        <div className="max-w-[200px] text-left whitespace-normal">
+                          {cell.employees_on_leave.map((e, j) => (
+                            <div key={j} className="truncate">
+                              {e.employee_name} ({e.leave_type}
+                              {e.half_day_period ? ` · ${e.half_day_period.toUpperCase()}` : ''}) - {e.status_label ?? e.status.replace(/_/g, ' ')}
+                            </div>
+                          ))}
+                        </div>
+                      ) : 'No leaves'
+                    }
                 >
                   <button
                     type="button"
@@ -247,7 +248,10 @@ export default function LeaveCalendarPage() {
                 <div key={i} className="flex items-center justify-between py-2 first:pt-0 last:pb-0">
                   <span className="text-sm">{emp.employee_name}</span>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted">{emp.leave_type}</span>
+                    <span className="text-xs text-muted">
+                      {emp.leave_type}
+                      {emp.half_day_period ? ` · ${emp.half_day_period.toUpperCase()}` : ''}
+                    </span>
                     <span className={cn(
                       'text-2xs font-medium px-1.5 py-0.5 rounded',
                       emp.status === 'approved'

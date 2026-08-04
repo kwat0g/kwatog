@@ -160,6 +160,25 @@ export default function PostingDetailPage() {
                 ))}
             </div>
           </Panel>
+
+          <Panel
+            title={`Applications (${appsData?.data?.length ?? 0})`}
+            noPadding
+          >
+            {appsData?.data?.length ? (
+              <DataTable
+            onRowClick={(row) => navigate(`/hr/recruitment/applications/${row.id}`)}
+            columns={appColumns}
+                data={appsData.data}
+              />
+            ) : (
+              <EmptyState
+                icon="inbox"
+                title="No applications yet"
+                description="Applications for this posting will appear here."
+              />
+            )}
+          </Panel>
         </div>
 
         <div className="space-y-4">
@@ -198,27 +217,6 @@ export default function PostingDetailPage() {
             </dl>
           </Panel>
         </div>
-      </div>
-
-      <div className="px-5 pb-4">
-        <Panel
-          title={`Applications (${appsData?.data?.length ?? 0})`}
-          noPadding
-        >
-          {appsData?.data?.length ? (
-            <DataTable
-              onRowClick={(row) => navigate(`/hr/recruitment/applications/${row.id}`)}
-            columns={appColumns}
-              data={appsData.data}
-            />
-          ) : (
-            <EmptyState
-              icon="inbox"
-              title="No applications yet"
-              description="Applications for this posting will appear here."
-            />
-          )}
-        </Panel>
       </div>
 
       <ConfirmDialog

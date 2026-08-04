@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
 import { employeesApi, type UpdateEmployeeData } from '@/api/hr/employees';
+import { shiftsApi } from '@/api/attendance/shifts';
 import { EmployeeForm, type EmployeeFormValues } from '@/components/hr/EmployeeForm';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SkeletonForm } from '@/components/ui/Skeleton';
@@ -31,12 +32,24 @@ export default function EditEmployeePage() {
   });
 
   const mutation = useMutation({
-    mutationFn: (d: EmployeeFormValues) => employeesApi.update(id, cleanup(d)),
-    onSuccess: (employee) => {
+    mutationFn: async (d: EmployeeFormValues) => {
+      const payload = cleanup(d);
+      const shiftId = payload.shift_id;
+      delete (payload as Record<string, unknown>).shift_id;
+      const employee = await employeesApi.update(id, payload);
+      if (shiftId) {
+        await shiftsApi.assignEmployee(id, {
+          shift_id: shiftId,
+          effective_date: new Date().toISOString().slice(0, 10),
+        });
+      }
+      return employee;
+    },
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['hr', 'employees'] });
       qc.invalidateQueries({ queryKey: ['hr', 'employee', id] });
       toast.success('Employee updated.');
-      navigate(`/hr/employees/${employee.id}`);
+      navigate(`/hr/employees/${id}`);
     },
     onError: (e: AxiosError<ApiValidationError>) => {
       if (e.response?.status === 422 && e.response.data.errors) {

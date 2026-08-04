@@ -3,12 +3,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { overtimeApi } from '@/api/attendance/overtime';
+import { overtimeApi, type OvertimeListParams } from '@/api/attendance/overtime';
 import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { DataTable, NumCell, StackedCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
+import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Textarea } from '@/components/ui/Textarea';
 import { Panel } from '@/components/ui/Panel';
@@ -16,15 +18,16 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
-import type { ListParams } from '@/types';
 import type { OvertimeRequest } from '@/types/attendance';
 
 export default function OvertimeListPage() {
   const { can } = usePermission();
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const [view, setView] = useState<'list' | 'kanban'>('kanban');
-  const [filters, setFilters] = useState<ListParams>({ page: 1, per_page: 100, sort: 'date', direction: 'desc' });
+  const [view, setView] = useState<'list' | 'kanban'>('list');
+  const [filters, setFilters] = useState<OvertimeListParams>({
+    page: 1, per_page: 100, sort: 'date', direction: 'desc',
+  });
   const [reject, setReject] = useState<OvertimeRequest | null>(null);
   const [reason, setReason] = useState('');
   const [confirmApprove, setConfirmApprove] = useState<string | null>(null);
@@ -76,11 +79,11 @@ export default function OvertimeListPage() {
     rejected: all.filter((o) => o.status === 'rejected'),
   };
 
-  const columns: Column<OvertimeRequest>[] = [
-    { key: 'date', header: 'Date', cell: (r) => <NumCell>{formatDate(r.date)}</NumCell> },
+  const columns: Column<OvertimeRequest>[] = [    { key: 'date', header: 'Date', cell: (r) => <NumCell>{formatDate(r.date)}</NumCell> },
     { key: 'employee', header: 'Employee', cell: (r) => <StackedCell primary={r.employee?.full_name ?? '—'} secondary={<span className="font-mono">{r.employee?.employee_no}</span>} /> },
     { key: 'hours_requested', header: 'Hours', align: 'right', cell: (r) => <NumCell>{r.hours_requested}</NumCell> },
     { key: 'reason', header: 'Reason', cell: (r) => <span className="text-muted truncate block max-w-md" title={r.reason}>{r.reason}</span> },
+    { key: 'approver', header: 'Approver', cell: (r) => r.approver?.name ?? '—' },
     { key: 'status', header: 'Status', cell: (r) => (
       <div className="flex items-center gap-1.5">
         <Chip variant={chipVariantForStatus(r.status)}>{r.status_label ?? r.status}</Chip>
@@ -98,6 +101,20 @@ export default function OvertimeListPage() {
         </div>
       ),
     }] : []),
+  ];
+
+  const filterConfig: FilterConfig[] = [
+    {
+      key: 'status',
+      label: 'Status',
+      type: 'select',
+      options: [
+        { value: '', label: 'All' },
+        { value: 'pending', label: 'Pending' },
+        { value: 'approved', label: 'Approved' },
+        { value: 'rejected', label: 'Rejected' },
+      ],
+    },
   ];
 
   return (
@@ -129,6 +146,37 @@ export default function OvertimeListPage() {
         }
       />
 
+      <FilterBar
+        filters={filterConfig}
+        values={filters}
+        onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
+      />
+
+      <div className="px-5 py-2 flex gap-3 text-sm border-b border-default">
+        <label className="flex items-center gap-2">
+          <span className="text-muted text-xs">From</span>
+          <Input
+            fieldSize="sm"
+            type="date"
+            aria-label="From date"
+            value={filters.from ?? ''}
+            onChange={(e) => setFilters((f) => ({ ...f, from: e.target.value || undefined, page: 1 }))}
+            className="font-mono"
+          />
+        </label>
+        <label className="flex items-center gap-2">
+          <span className="text-muted text-xs">To</span>
+          <Input
+            fieldSize="sm"
+            type="date"
+            aria-label="To date"
+            value={filters.to ?? ''}
+            onChange={(e) => setFilters((f) => ({ ...f, to: e.target.value || undefined, page: 1 }))}
+            className="font-mono"
+          />
+        </label>
+      </div>
+
       {isLoading && !data && <SkeletonTable columns={6} rows={6} />}
       {isError && <EmptyState icon="alert-circle" title="Failed to load overtime requests" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />}
       {data && all.length === 0 && (
@@ -136,7 +184,13 @@ export default function OvertimeListPage() {
       )}
 
       {data && all.length > 0 && view === 'list' && (
-        <div className="px-5 py-4"><DataTable columns={columns} data={all} meta={data.meta} onPageChange={(page) => setFilters((f) => ({ ...f, page }))} /></div>
+        <div className="px-5 py-4"><DataTable
+          onRowClick={(r) => navigate(`/hr/attendance/overtime/${r.id}`)}
+          columns={columns}
+          data={all}
+          meta={data.meta}
+          onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+        /></div>
       )}
 
       {data && all.length > 0 && view === 'kanban' && (

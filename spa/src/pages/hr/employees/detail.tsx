@@ -1,6 +1,6 @@
 import { cn } from '@/lib/cn';
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState, type ReactNode } from 'react';
+import { useState, useRef, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -8,8 +8,11 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
-import { Pencil, UserMinus, Eye, EyeOff } from 'lucide-react';
+import { Pencil, UserMinus, Eye, EyeOff, Plus } from 'lucide-react';
 import { employeesApi, type SeparateData } from '@/api/hr/employees';
+import { shiftsApi } from '@/api/attendance/shifts';
+import { employeePropertyApi, type CreateEmployeePropertyData } from '@/api/hr/employee-property';
+import { employeeDocumentApi } from '@/api/hr/employee-documents';
 import { Button } from '@/components/ui/Button';
 import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -46,6 +49,12 @@ export default function EmployeeDetailPage() {
   const { data: employee, isLoading, isError, refetch } = useQuery({
     queryKey: ['hr', 'employee', id],
     queryFn: () => employeesApi.show(id) });
+
+  const { data: currentShift } = useQuery({
+    queryKey: ['attendance', 'current-shift', id],
+    queryFn: () => shiftsApi.currentForEmployee(id),
+    enabled: !!id,
+  });
 
   if (isLoading) return <SkeletonDetail />;
   if (isError || !employee) {
@@ -156,6 +165,12 @@ export default function EmployeeDetailPage() {
                 <div>
                   <dt className="text-2xs uppercase tracking-wider text-muted font-medium">Linked user</dt>
                   <dd>{employee.user.email}</dd>
+                </div>
+              )}
+              {currentShift && (
+                <div>
+                  <dt className="text-2xs uppercase tracking-wider text-muted font-medium">Current shift</dt>
+                  <dd className="font-mono tabular-nums">{currentShift.name} ({currentShift.start_time}–{currentShift.end_time})</dd>
                 </div>
               )}
             </dl>
@@ -324,28 +339,126 @@ function EmploymentHistoryTab({ employee }: { employee: any }) {
 }
 
 function DocumentsTab({ employee }: { employee: any }) {
-  const docs = (employee.documents ?? []) as any[];
-  if (docs.length === 0) return <EmptyState icon="file-question" title="No documents" />;
+  const { can } = usePermission();
+  const qc = useQueryClient();
+  const employeeId = employee.id;
+  const [showUpload, setShowUpload] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const { data: docsResp, isLoading, isError } = useQuery({
+    queryKey: ['employee-documents', employeeId],
+    queryFn: () => employeeDocumentApi.list(employeeId),
+  });
+  const docs = docsResp?.data ?? [];
+
+  const uploadMutation = useMutation({
+    mutationFn: (data: FormData) => employeeDocumentApi.upload(employeeId, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['employee-documents', employeeId] });
+      qc.invalidateQueries({ queryKey: ['hr', 'employee', employeeId] });
+      toast.success('Document uploaded.');
+      setShowUpload(false);
+    },
+    onError: () => toast.error('Failed to upload document.'),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (docId: string) => employeeDocumentApi.delete(docId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['employee-documents', employeeId] });
+      qc.invalidateQueries({ queryKey: ['hr', 'employee', employeeId] });
+      toast.success('Document deleted.');
+    },
+    onError: () => toast.error('Failed to delete document.'),
+  });
+
+  const handleUpload = () => {
+    const file = fileRef.current?.files?.[0];
+    if (!file) return;
+    const docType = (document.getElementById('doc-type') as HTMLSelectElement)?.value || 'other';
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('document_type', docType);
+    uploadMutation.mutate(fd);
+  };
+
+  if (isLoading) return <SkeletonPanel />;
+  if (isError) return <EmptyState icon="alert-circle" title="Failed to load documents" />;
+
   return (
-    <Panel title={`Documents (${docs.length})`} noPadding>
-      <table className={tableCls}>
-        <thead>
-          <tr className={theadTrCls}>
-            <Th>Type</Th>
-            <Th>File</Th>
-            <Th>Uploaded</Th>
-          </tr>
-        </thead>
-        <tbody>
-          {docs.map((d) => (
-            <tr key={d.id} className={trCls}>
-              <Td>{d.document_type}</Td>
-              <Td mono>{d.file_name}</Td>
-              <Td mono>{formatDateTime(d.uploaded_at)}</Td>
+    <Panel
+      title={`Documents (${docs.length})`}
+      noPadding
+      actions={can('hr.employees.documents.view') ? (
+        <Button variant="secondary" size="sm" icon={<Plus size={12} />} onClick={() => setShowUpload(true)}>
+          Upload
+        </Button>
+      ) : null}
+    >
+      {docs.length === 0 ? (
+        <div className="p-4">
+          <EmptyState icon="file-question" title="No documents" />
+        </div>
+      ) : (
+        <table className={tableCls}>
+          <thead>
+            <tr className={theadTrCls}>
+              <Th>Type</Th>
+              <Th>File</Th>
+              <Th>Uploaded</Th>
+              <Th />
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {docs.map((d: any) => (
+              <tr key={d.id} className={trCls}>
+                <Td>{d.document_type}</Td>
+                <Td mono>
+                  <a href={employeeDocumentApi.downloadUrl(d.id)} className="text-accent hover:underline" target="_blank" rel="noreferrer">
+                    {d.file_name}
+                  </a>
+                </Td>
+                <Td mono>{formatDateTime(d.uploaded_at)}</Td>
+                <Td>
+                  {can('hr.employees.edit') && (
+                    <Button variant="ghost" size="sm" onClick={() => {
+                      if (confirm('Delete this document?')) deleteMutation.mutate(d.id);
+                    }}>Delete</Button>
+                  )}
+                </Td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {showUpload && (
+        <Modal isOpen onClose={() => setShowUpload(false)} title="Upload document">
+          <div className="space-y-3 py-2">
+            <div>
+              <label className="text-xs text-muted font-medium mb-1 block">Document type</label>
+              <select id="doc-type" className="w-full h-9 px-3 rounded-md border border-default bg-canvas text-sm">
+                <option value="contract">Contract</option>
+                <option value="resume">Resume</option>
+                <option value="certificate">Certificate</option>
+                <option value="training">Training</option>
+                <option value="government_id">Government ID</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-muted font-medium mb-1 block">File</label>
+              <input ref={fileRef} type="file" className="text-sm" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx" />
+            </div>
+            <div className="flex justify-end gap-2 pt-3 border-t border-default">
+              <Button variant="secondary" onClick={() => setShowUpload(false)} disabled={uploadMutation.isPending}>Cancel</Button>
+              <Button variant="primary" onClick={handleUpload} disabled={uploadMutation.isPending} loading={uploadMutation.isPending}>
+                Upload
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </Panel>
   );
 }
@@ -498,35 +611,126 @@ function ActivityTab({ employee }: { employee: any }) {
 }
 
 function PropertyTab({ employee }: { employee: any }) {
-  const items = (employee.property ?? []) as any[];
-  if (items.length === 0) return <EmptyState icon="inbox" title="No property issued" />;
+  const { can } = usePermission();
+  const qc = useQueryClient();
+  const employeeId = employee.id;
+  const [showIssue, setShowIssue] = useState(false);
+
+  const { data: propertyResp, isLoading, isError } = useQuery({
+    queryKey: ['employee-property', employeeId],
+    queryFn: () => employeePropertyApi.list(employeeId),
+  });
+  const items = propertyResp?.data ?? [];
+
+  const issueMutation = useMutation({
+    mutationFn: (d: CreateEmployeePropertyData) => employeePropertyApi.create(employeeId, d),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['employee-property', employeeId] });
+      qc.invalidateQueries({ queryKey: ['hr', 'employee', employeeId] });
+      toast.success('Property issued.');
+      setShowIssue(false);
+    },
+    onError: () => toast.error('Failed to issue property.'),
+  });
+
+  const returnMutation = useMutation({
+    mutationFn: (propertyId: string) =>
+      employeePropertyApi.update(propertyId, employeeId, { date_returned: new Date().toISOString().slice(0, 10), status: 'returned' }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['employee-property', employeeId] });
+      qc.invalidateQueries({ queryKey: ['hr', 'employee', employeeId] });
+      toast.success('Property returned.');
+    },
+    onError: () => toast.error('Failed to return property.'),
+  });
+
+  if (isLoading) return <SkeletonPanel />;
+  if (isError) return <EmptyState icon="alert-circle" title="Failed to load property" />;
+
   return (
-    <Panel title={`Issued property (${items.length})`} noPadding>
-      <table className={tableCls}>
-        <thead>
-          <tr className={theadTrCls}>
-            <Th>Item</Th>
-            <Th align="right">Qty</Th>
-            <Th align="right">Replacement value</Th>
-            <Th>Issued</Th>
-            <Th>Returned</Th>
-            <Th>Status</Th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((p) => (
-            <tr key={p.id} className={trCls}>
-              <Td>{p.item_name}</Td>
-              <Td align="right" mono>{p.quantity}</Td>
-              <Td align="right" mono>{formatPeso(p.replacement_total ?? 0)}</Td>
-              <Td mono>{formatDate(p.date_issued)}</Td>
-              <Td mono>{p.date_returned ? formatDate(p.date_returned) : '—'}</Td>
-              <Td><Chip variant={chipVariantForStatus(p.status)}>{p.status_label ?? p.status}</Chip></Td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </Panel>
+    <>
+      <Panel
+        title={`Issued property (${items.length})`}
+        noPadding
+        actions={can('hr.employees.edit') ? (
+          <Button variant="secondary" size="sm" icon={<Plus size={12} />} onClick={() => setShowIssue(true)}>
+            Issue
+          </Button>
+        ) : null}
+      >
+        {items.length === 0 ? (
+          <div className="p-4">
+            <EmptyState icon="inbox" title="No property issued" />
+          </div>
+        ) : (
+          <table className={tableCls}>
+            <thead>
+              <tr className={theadTrCls}>
+                <Th>Item</Th>
+                <Th align="right">Qty</Th>
+                <Th align="right">Replacement value</Th>
+                <Th>Issued</Th>
+                <Th>Returned</Th>
+                <Th>Status</Th>
+                <Th />
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((p: any) => (
+                <tr key={p.id} className={trCls}>
+                  <Td>{p.item_name}</Td>
+                  <Td align="right" mono>{p.quantity}</Td>
+                  <Td align="right" mono>{p.replacement_total ? formatPeso(p.replacement_total) : '—'}</Td>
+                  <Td mono>{formatDate(p.date_issued)}</Td>
+                  <Td mono>{p.date_returned ? formatDate(p.date_returned) : '—'}</Td>
+                  <Td><Chip variant={chipVariantForStatus(p.status)}>{p.status_label ?? p.status}</Chip></Td>
+                  <Td>
+                    {p.status === 'issued' && can('hr.employees.edit') && (
+                      <Button variant="ghost" size="sm" onClick={() => returnMutation.mutate(p.id)} loading={returnMutation.isPending}>Return</Button>
+                    )}
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Panel>
+
+      {showIssue && (
+        <IssuePropertyModal
+          onClose={() => setShowIssue(false)}
+          onSubmit={(d) => issueMutation.mutate(d)}
+          isPending={issueMutation.isPending}
+        />
+      )}
+    </>
+  );
+}
+
+function IssuePropertyModal({ onClose, onSubmit, isPending }: {
+  onClose: () => void;
+  onSubmit: (d: CreateEmployeePropertyData) => void;
+  isPending: boolean;
+}) {
+  const { register, handleSubmit, formState: { errors } } = useForm<CreateEmployeePropertyData>({
+    defaultValues: { date_issued: new Date().toISOString().slice(0, 10), quantity: 1 },
+  });
+  return (
+    <Modal isOpen onClose={onClose} title="Issue property">
+      <form onSubmit={handleSubmit((d) => onSubmit(d), onFormInvalid())} className="space-y-3 py-2">
+        <Input label="Item name" required {...register('item_name', { required: 'Required' })} error={errors.item_name?.message} />
+        <div className="grid grid-cols-2 gap-3">
+          <Input label="Quantity" type="number" min={1} required {...register('quantity', { valueAsNumber: true, required: 'Required' })} error={errors.quantity?.message} />
+          <Input label="Unit cost (₱)" type="number" step="0.01" min="0" {...register('replacement_unit_cost')} error={errors.replacement_unit_cost?.message} />
+        </div>
+        <Input label="Date issued" type="date" required {...register('date_issued', { required: 'Required' })} error={errors.date_issued?.message} />
+        <Input label="Notes" {...register('description')} error={errors.description?.message} />
+        <div className="flex justify-end gap-2 pt-3 border-t border-default">
+          <Button type="button" variant="secondary" onClick={onClose} disabled={isPending}>Cancel</Button>
+          <Button type="submit" variant="primary" disabled={isPending} loading={isPending}>Issue</Button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 

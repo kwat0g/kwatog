@@ -229,6 +229,7 @@ export default function CrmCustomerDetailPage() {
                 <EmptyState icon="inbox" title="No sales orders" description="No sales orders for this customer yet." />
               ) : (
                 <DataTable
+            onRowClick={(row) => navigate(`/crm/complaints/${row.id}`)}
                   columns={soColumns}
                   data={ordersData.data}
                   meta={ordersData.meta}

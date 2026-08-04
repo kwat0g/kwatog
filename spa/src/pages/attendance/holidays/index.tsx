@@ -171,6 +171,7 @@ function ListView({
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 px-5 py-4">
       <DataTable
+            onRowClick={(row) => setSelectedId(row.id)}
         columns={columns}
         data={holidays}
         highlightedRowId={selectedId}

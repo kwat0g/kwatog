@@ -8,6 +8,8 @@ import { DataTable, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Panel } from '@/components/ui/Panel';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
+import { StatCard } from '@/components/ui/StatCard';
+import { StageBreakdown } from '@/components/ui/StageBreakdown';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
@@ -89,24 +91,12 @@ export default function RecruitmentDashboard() {
         }
       />
 
-      {/* Stats strip */}
-      <div className="flex items-center gap-4 px-5 py-3 border-b border-default">
-        <div>
-          <p className="text-2xl font-medium font-mono tabular-nums">{openPostings.length}</p>
-          <p className="text-2xs text-muted font-medium uppercase tracking-wider">Open Postings</p>
-        </div>
-        <div className="h-8 w-px bg-border-default" />
-        <div>
-          <p className="text-2xl font-medium font-mono tabular-nums">{totalApps}</p>
-          <p className="text-2xs text-muted font-medium uppercase tracking-wider">Total Applications</p>
-        </div>
-        <div className="h-8 w-px bg-border-default" />
-        {pipelineStages.map((stage) => (
-          <div key={stage.value}>
-            <p className="text-lg font-medium font-mono tabular-nums">{stageCounts[stage.value] ?? 0}</p>
-            <p className="text-2xs text-muted font-medium uppercase tracking-wider">{stage.label}</p>
-          </div>
-        ))}
+      {/* KPI Cards Row */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-5 py-4 border-b border-default">
+        <StatCard label="Open Postings" value={openPostings.length} />
+        <StatCard label="Total Applications" value={totalApps} />
+        <StatCard label="New Applications" value={stageCounts['new'] ?? 0} />
+        <StatCard label="In Interview" value={stageCounts['interview'] ?? 0} />
       </div>
 
       {/* Two-column: Open Postings + Pipeline */}
@@ -133,36 +123,26 @@ export default function RecruitmentDashboard() {
             />
           ) : (
             <DataTable
-              onRowClick={(row) => navigate(`/hr/recruitment/postings/${row.id}`)}
+            onRowClick={(row) => navigate(`/hr/recruitment/postings/${row.id}`)}
             columns={postingColumns}
               data={openPostings}
             />
           )}
         </Panel>
 
-        <Panel title="Application Pipeline">
-          <ul className="space-y-2">
-            {pipelineStages.map((stage) => {
-              const count = stageCounts[stage.value] ?? 0;
-              return (
-                <li key={stage.value}>
-                  <Link
-                    to={`/hr/recruitment/applications?stage=${stage.value}`}
-                    className="flex items-center justify-between rounded-md px-3 py-2 transition-colors hover:bg-elevated group"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Chip variant={STAGE_CHIP[stage.value as ApplicationStage]}>{stage.label}</Chip>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono tabular-nums text-sm font-medium">{count}</span>
-                      <ArrowRight size={14} className="text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </div>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </Panel>
+        <StageBreakdown
+          title="Application Pipeline"
+          stages={pipelineStages.map((stage) => {
+            const count = stageCounts[stage.value] ?? 0;
+            const percent = totalApps > 0 ? (count / totalApps) * 100 : 0;
+            return {
+              label: stage.label,
+              count,
+              percent,
+              color: STAGE_CHIP[stage.value as ApplicationStage]
+            };
+          })}
+        />
       </div>
 
       {/* Recent Applications */}
@@ -184,7 +164,7 @@ export default function RecruitmentDashboard() {
             />
           ) : (
             <DataTable
-              onRowClick={(row) => navigate(`/hr/recruitment/applications/${row.id}`)}
+            onRowClick={(row) => navigate(`/hr/recruitment/applications/${row.id}`)}
             columns={appColumns}
               data={applications}
             />

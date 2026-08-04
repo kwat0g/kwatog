@@ -9,6 +9,7 @@ import { Chip, chipVariantForStatus } from '@/components/ui/Chip';
 import { DataTable, NumCell, StackedCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
+import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Panel } from '@/components/ui/Panel';
 import { Textarea } from '@/components/ui/Textarea';
@@ -18,6 +19,8 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate } from '@/lib/formatDate';
 import type { LeaveRequest } from '@/types/leave';
+
+const HALF_DAY_LABEL: Record<string, string> = { am: 'AM', pm: 'PM' };
 
 export default function LeavesPage() {
   const { can } = usePermission();
@@ -76,7 +79,14 @@ export default function LeavesPage() {
     { key: 'employee', header: 'Employee', cell: (r) => <StackedCell primary={r.employee?.full_name ?? '—'} secondary={<span className="font-mono">{r.employee?.employee_no}</span>} /> },
     { key: 'type', header: 'Type', cell: (r) => r.leave_type?.code ?? '—' },
     { key: 'dates', header: 'Dates', cell: (r) => <NumCell>{formatDate(r.start_date)} → {formatDate(r.end_date)}</NumCell> },
-    { key: 'days', header: 'Days', align: 'right', cell: (r) => <NumCell>{r.days}</NumCell> },
+    { key: 'days', header: 'Days', align: 'right', cell: (r) => (
+      <NumCell>
+        {r.days}
+        {r.half_day_period && (
+          <span className="ml-1 text-2xs font-medium text-muted">· {HALF_DAY_LABEL[r.half_day_period] ?? r.half_day_period}</span>
+        )}
+      </NumCell>
+    ) },
     { key: 'status', header: 'Status', cell: (r) => <Chip variant={chipVariantForStatus(r.status)}>{statusLabels.get(r.status) ?? r.status.replace('_', ' ')}</Chip> },
     {
       key: 'actions',
@@ -139,6 +149,31 @@ export default function LeavesPage() {
         onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
         searchPlaceholder="Search…"
       />
+
+      <div className="px-5 py-2 flex gap-3 text-sm border-b border-default">
+        <label className="flex items-center gap-2">
+          <span className="text-muted text-xs">From</span>
+          <Input
+            fieldSize="sm"
+            type="date"
+            aria-label="From date"
+            value={filters.from ?? ''}
+            onChange={(e) => setFilters((f) => ({ ...f, from: e.target.value || undefined, page: 1 }))}
+            className="font-mono"
+          />
+        </label>
+        <label className="flex items-center gap-2">
+          <span className="text-muted text-xs">To</span>
+          <Input
+            fieldSize="sm"
+            type="date"
+            aria-label="To date"
+            value={filters.to ?? ''}
+            onChange={(e) => setFilters((f) => ({ ...f, to: e.target.value || undefined, page: 1 }))}
+            className="font-mono"
+          />
+        </label>
+      </div>
 
       {isLoading && !data && <SkeletonTable columns={6} rows={6} />}
       {isError && <EmptyState icon="alert-circle" title="Failed to load leave requests" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />}

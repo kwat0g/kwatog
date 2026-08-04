@@ -34,13 +34,30 @@ const schema = z.object({
   leave_type_id: z.string().min(1, 'Select a leave type'),
   start_date: z.string().min(1, 'Required'),
   end_date: z.string().min(1, 'Required'),
+  // M-18 — half-day support, mirroring the HR-side form. 'none' = full day.
+  half_day_period: z.string().min(1).default('none'),
   reason: z.string().max(2000).optional().or(z.literal('')),
 }).refine((d) => d.end_date >= d.start_date, {
   message: 'End date must be on or after start date',
   path: ['end_date'],
+}).refine((d) => d.half_day_period === 'none' || d.start_date === d.end_date, {
+  message: 'Half-day leave must start and end on the same date.',
+  path: ['half_day_period'],
 });
 
 type FormValues = z.infer<typeof schema>;
+
+// Business days (Mon–Sat) between two dates, capped for display sanity.
+function businessDaysBetween(start: string, end: string): number {
+  const a = new Date(start + 'T00:00:00');
+  const b = new Date(end + 'T00:00:00');
+  if (b < a) return 0;
+  let count = 0;
+  for (let d = new Date(a); d <= b; d.setDate(d.getDate() + 1)) {
+    if (d.getDay() !== 0) count++;
+  }
+  return count;
+}
 
 const columns: Column<any>[] = [
   {
@@ -126,14 +143,21 @@ export default function SelfServiceLeavePage() {
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { leave_type_id: '', start_date: '', end_date: '', reason: '' },
+    defaultValues: { leave_type_id: '', start_date: '', end_date: '', half_day_period: 'none', reason: '' },
   });
 
   const selectedTypeId = watch('leave_type_id');
+  const startDate = watch('start_date');
+  const endDate = watch('end_date');
+  const halfDayPeriod = watch('half_day_period');
   const selectedBalance = selectedTypeId ? balanceMap[selectedTypeId] : null;
   const selectedType = selectedTypeId
     ? (types ?? []).find((t) => t.id === selectedTypeId) ?? null
     : null;
+
+  const estimatedDays = halfDayPeriod === 'am' || halfDayPeriod === 'pm'
+    ? 0.5
+    : startDate && endDate ? businessDaysBetween(startDate, endDate) : 0;
 
   const file = useMutation({
     mutationFn: (v: FormValues) =>
@@ -142,6 +166,7 @@ export default function SelfServiceLeavePage() {
         leave_type_id: v.leave_type_id,
         start_date: v.start_date,
         end_date: v.end_date,
+        half_day_period: v.half_day_period === 'none' ? undefined : v.half_day_period as 'am' | 'pm',
         reason: v.reason || undefined,
       }),
     onSuccess: () => {
@@ -278,6 +303,23 @@ export default function SelfServiceLeavePage() {
                 required
               />
             </div>
+            <Select
+              label="Half day"
+              {...register('half_day_period')}
+              error={errors.half_day_period?.message}
+            >
+              <option value="none">Full day</option>
+              <option value="am">Morning (AM)</option>
+              <option value="pm">Afternoon (PM)</option>
+            </Select>
+            {estimatedDays > 0 && (
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted">Estimated days to be deducted</span>
+                <span className={`font-mono tabular-nums font-medium ${selectedBalance && parseFloat(selectedBalance.remaining) < estimatedDays ? 'text-danger-fg' : 'text-primary'}`}>
+                  {estimatedDays} day{estimatedDays === 1 ? '' : 's'}
+                </span>
+              </div>
+            )}
             <Textarea
               label="Reason (optional)"
               rows={3}

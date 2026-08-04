@@ -209,6 +209,7 @@ export default function PayrollPeriodsPage() {
       {data && data.data.length > 0 && (
         <div className="px-5 py-4">
           <DataTable
+            onRowClick={(r) => navigate(`/payroll/periods/${r.id}`)}
             columns={columns}
             data={data.data}
             meta={data.meta}
