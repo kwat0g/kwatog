@@ -8,11 +8,13 @@
  * optional message, and a relative time. Unread rows have a 2px
  * indigo left border. Click navigates to `data.link_to` and marks
  * the row read in the same call.
+ * - Per-row dismiss, "Clear read" in the header, and Load more paging.
  */
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Check, Eye } from 'lucide-react';
+import { Check, Eye, Trash2, X } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { notificationsApi, type NotificationRow } from '@/api/notifications';
 import { Button } from '@/components/ui/Button';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
@@ -41,25 +43,57 @@ const FILTERS: FilterDef[] = [
  { key: 'system', label: 'System' },
 ];
 
+const PAGE_SIZE = 50;
+
 export default function NotificationsListPage() {
  const qc = useQueryClient();
  const navigate = useNavigate();
  const [filter, setFilter] = useState<FilterKey>('all');
+ // The list is capped at PAGE_SIZE per request. Without this the page showed
+ // the newest 50 and silently pretended nothing older existed.
+ const [pageCount, setPageCount] = useState(1);
  const unreadOnly = filter === 'unread';
 
- const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['notifications', { filter, unreadOnly }],
- queryFn: () => notificationsApi.list({ per_page: 50, unread_only: unreadOnly }),
+ const resetPaging = (next: FilterKey) => {
+ setFilter(next);
+ setPageCount(1);
+ };
+
+ const { data, isLoading, isError, isFetching, refetch } = useQuery({
+ queryKey: ['notifications', { filter, unreadOnly, pageCount }],
+ queryFn: () =>
+ notificationsApi.list({ per_page: PAGE_SIZE * pageCount, unread_only: unreadOnly }),
  placeholderData: (prev) => prev,
  });
 
+ const invalidate = () => qc.invalidateQueries({ queryKey: ['notifications'] });
+
  const markRead = useMutation({
  mutationFn: (id: string) => notificationsApi.markRead(id),
- onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
+ onSuccess: invalidate,
+ onError: () => toast.error('Could not mark that notification read.'),
  });
  const markAll = useMutation({
  mutationFn: () => notificationsApi.markAllRead(),
- onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
+ onSuccess: invalidate,
+ onError: () => toast.error('Could not mark all read.'),
+ });
+ const dismiss = useMutation({
+ mutationFn: (id: string) => notificationsApi.remove(id),
+ onSuccess: invalidate,
+ onError: () => toast.error('Could not dismiss that notification.'),
+ });
+ const clearRead = useMutation({
+ mutationFn: () => notificationsApi.clearRead(),
+ onSuccess: (result) => {
+ invalidate();
+ toast.success(
+ result.deleted === 1
+ ? 'Cleared 1 read notification.'
+ : `Cleared ${result.deleted} read notifications.`,
+ );
+ },
+ onError: () => toast.error('Could not clear read notifications.'),
  });
 
  // Apply group filter client-side (filter chips other than All / Unread).
@@ -89,6 +123,10 @@ export default function NotificationsListPage() {
  if (link) navigate(link);
  };
 
+ const loadedCount = data?.data.length ?? 0;
+ const hasMore = (data?.meta.total ?? 0) > loadedCount;
+ const readCount = (data?.meta.total ?? 0) - (data?.meta.unread_count ?? 0);
+
  return (
  <div>
  <PageHeader
@@ -99,6 +137,17 @@ export default function NotificationsListPage() {
  : undefined
  }
  actions={
+ <div className="flex items-center gap-2">
+ <Button
+ variant="ghost"
+ size="sm"
+ icon={<Trash2 size={14} />}
+ onClick={() => clearRead.mutate()}
+ loading={clearRead.isPending}
+ disabled={readCount <= 0}
+ >
+ Clear read
+ </Button>
  <Button
  variant="secondary"
  size="sm"
@@ -109,6 +158,7 @@ export default function NotificationsListPage() {
  >
  Mark all read
  </Button>
+ </div>
  }
  />
 
@@ -118,7 +168,7 @@ export default function NotificationsListPage() {
  size="sm"
  label="Notification filter"
  value={filter}
- onChange={setFilter}
+ onChange={resetPaging}
  options={FILTERS.map((f) => ({
  value: f.key,
  label: f.label,
@@ -221,6 +271,7 @@ export default function NotificationsListPage() {
  {timeAgo(n.created_at)}
  </span>
  </span>
+ <span className="ml-auto shrink-0 flex items-center gap-0.5">
  {isUnread && (
  <Button
  type="button"
@@ -229,11 +280,30 @@ export default function NotificationsListPage() {
  iconOnly
  icon={<Eye size={14} />}
  aria-label="Mark as read"
- onClick={() => { markRead.mutate(n.id);
+ // stopPropagation matters: without it the click bubbles
+ // to the row handler, which navigates to link_to — the
+ // button looked like it worked while leaving the page.
+ onClick={(event) => {
+ event.stopPropagation();
+ markRead.mutate(n.id);
  }}
- className="ml-auto shrink-0 text-muted hover:text-primary"
+ className="text-muted hover:text-primary"
  />
  )}
+ <Button
+ type="button"
+ variant="ghost"
+ size="sm"
+ iconOnly
+ icon={<X size={14} />}
+ aria-label="Dismiss notification"
+ onClick={(event) => {
+ event.stopPropagation();
+ dismiss.mutate(n.id);
+ }}
+ className="text-muted hover:text-danger"
+ />
+ </span>
  </div>
  </li>
  );
@@ -242,6 +312,23 @@ export default function NotificationsListPage() {
  </section>
  );
  })}
+
+ {/* ─── PAGING ─── */}
+ {hasMore && (
+ <div className="flex flex-col items-center gap-1.5 pt-1">
+ <Button
+ variant="secondary"
+ size="sm"
+ onClick={() => setPageCount((n) => n + 1)}
+ loading={isFetching}
+ >
+ Load more
+ </Button>
+ <span className="text-2xs text-muted font-mono tabular-nums">
+ {loadedCount} of {data?.meta.total}
+ </span>
+ </div>
+ )}
  </div>
  )}
  </div>

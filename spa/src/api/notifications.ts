@@ -59,4 +59,12 @@ export const notificationsApi = {
 
  markAllRead: () =>
  client.patch<{ data: { marked_read: number } }>('/notifications/read-all').then((r) => r.data.data),
+
+ /** Dismiss one notification. 404s if it is not the caller's own. */
+ remove: (id: string) =>
+ client.delete<{ data: { deleted: boolean } }>(`/notifications/${id}`).then((r) => r.data.data),
+
+ /** Clear every already-read notification. Unread rows are left alone. */
+ clearRead: () =>
+ client.delete<{ data: { deleted: number } }>('/notifications/clear-read').then((r) => r.data.data),
 };

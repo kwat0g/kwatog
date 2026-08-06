@@ -14,6 +14,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { Bell } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -48,6 +49,7 @@ export function NotificationBell() {
  onSuccess: () => {
  qc.invalidateQueries({ queryKey: ['notifications'] });
  },
+ onError: () => toast.error('Could not mark that notification read.'),
  });
 
  const markAllMutation = useMutation({
@@ -55,6 +57,7 @@ export function NotificationBell() {
  onSuccess: () => {
  qc.invalidateQueries({ queryKey: ['notifications'] });
  },
+ onError: () => toast.error('Could not mark all read.'),
  });
 
  const unread = data?.meta.unread_count ?? 0;

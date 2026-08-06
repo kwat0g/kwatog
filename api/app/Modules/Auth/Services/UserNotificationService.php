@@ -24,9 +24,16 @@ class UserNotificationService
             $query->where('type', (string) $filters['type']);
         }
 
-        $perPage = min((int) ($filters['per_page'] ?? 25), 100);
+        // Clamped at BOTH ends. min() alone let a negative per_page reach
+        // paginate() as a negative LIMIT, which Postgres rejects with a 500.
+        // The controller validates too; this keeps every other caller safe.
+        $perPage = max(1, min((int) ($filters['per_page'] ?? 25), 100));
 
-        return $query->orderByDesc('created_at')->paginate($perPage);
+        // created_at ties are common — a fan-out insert stamps one timestamp
+        // across every recipient row. Without a tiebreaker Postgres may order
+        // ties differently between page 1 and page 2, so a notification can
+        // appear on both pages or on neither. id is the stable secondary key.
+        return $query->orderByDesc('created_at')->orderByDesc('id')->paginate($perPage);
     }
 
     public function unreadCount(User $user): int
