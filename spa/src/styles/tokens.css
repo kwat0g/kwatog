@@ -1,113 +1,88 @@
 /*
- * OGAMI ERP — Design tokens.
- * A modern, monochromatic, and glassmorphic UI.
- * The canvas is grayscale. Color is for meaning.
+ * OGAMI ERP — Atelier design tokens.
+ * Warm paper canvas, espresso ink, clay accent. Opaque surfaces.
+ * Font faces are loaded via @fontsource in src/main.tsx.
+ * Spec: docs/superpowers/specs/2026-08-07-atelier-frontend-redesign.md
  */
-
-@font-face {
-  font-family: 'Geist';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('/fonts/geist-400.woff2') format('woff2');
-}
-
-@font-face {
-  font-family: 'Geist';
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url('/fonts/geist-500.woff2') format('woff2');
-}
-
-@font-face {
-  font-family: 'Geist Mono';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('/fonts/geist-mono-400.woff2') format('woff2');
-}
-
-@font-face {
-  font-family: 'Geist Mono';
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url('/fonts/geist-mono-500.woff2') format('woff2');
-}
 
 :root {
   /* ─── Canvas ─── */
-  --bg-canvas: #ffffff;
-  --bg-surface: rgba(250, 250, 250, 0.85);
-  --bg-elevated: rgba(244, 244, 245, 0.95);
-  --bg-subtle: rgba(244, 244, 245, 0.6);
+  --bg-canvas: #fdfcfa;
+  --bg-surface: #f7f4ef;
+  --bg-elevated: #f2ede4;
+  --bg-subtle: #f5f1e9;
 
-  /* ─── Table Zebra & Header Colors ─── */
+  /* ─── Table zebra & header ─── */
   --bg-zebra-odd: transparent;
-  --bg-zebra-even: rgba(244, 244, 245, 0.5);
-  --bg-row-hover: rgba(228, 228, 231, 0.6);
-  --bg-thead: rgba(244, 244, 245, 0.85);
+  --bg-zebra-even: #f7f4ef;
+  --bg-row-hover: #f2ede4;
+  --bg-thead: #f7f4ef;
 
   /* ─── Borders ─── */
-  --border-subtle: rgba(244, 244, 245, 0.8);
-  --border-default: rgba(228, 228, 231, 0.9);
-  --border-strong: rgba(212, 212, 216, 1);
+  --border-subtle: #f0eae0;
+  --border-default: #e8e2d8;
+  --border-strong: #d6cec1;
 
   /* ─── Text ─── */
-  --text-primary: #09090b;
-  --text-secondary: #52525b;
-  --text-muted: #71717a;
-  --text-subtle: #a1a1aa;
+  --text-primary: #1f1b16;
+  --text-secondary: #4a4239;
+  --text-muted: #6b6259;
+  --text-subtle: #8a8078;
 
-  /* ─── Accent (Indigo) ─── */
-  --accent: #4f46e5;
-  --accent-hover: #4338ca;
-  --accent-fg: #ffffff;
+  /* ─── Accent (clay) ─── */
+  --accent: #b4542a;
+  --accent-hover: #96461f;
+  --accent-fg: #fdfcfa;
 
-  /* Links */
-  --text-link: #18181b;
-  --text-link-hover: #52525b;
+  /* Links — Atelier permits an accent link; the old system forbade colour. */
+  --text-link: #b4542a;
+  --text-link-hover: #96461f;
 
-  /* ─── Semantic — success / warning / danger / info ─── */
-  --success: #10b981;
-  --success-bg: #d1fae5;
-  --success-fg: #065f46;
+  /* ─── Semantic ─── */
+  --success: #3f6d54;
+  --success-bg: #e3ece7;
+  --success-fg: #2c4e3b;
 
-  --warning: #f59e0b;
-  --warning-bg: #fef3c7;
-  --warning-fg: #92400e;
+  --warning: #b07a22;
+  --warning-bg: #f7eedc;
+  --warning-fg: #7a5314;
 
-  --danger: #ef4444;
-  --danger-bg: #fee2e2;
-  --danger-fg: #991b1b;
+  --danger: #a8392f;
+  --danger-bg: #f6e4e1;
+  --danger-fg: #7a2820;
 
-  --info: #3b82f6;
-  --info-bg: #dbeafe;
-  --info-fg: #1e40af;
+  --info: #3d5a80;
+  --info-bg: #e3e9f0;
+  --info-fg: #2a4059;
 
-  --purple: #8b5cf6;
-  --purple-bg: #ede9fe;
-  --purple-fg: #5b21b6;
+  --purple: #75558c;
+  --purple-bg: #ede7f1;
+  --purple-fg: #4c3862;
 
   /* ─── Focus ring ─── */
-  --ring: #4f46e5;
-  --ring-offset: #ffffff;
+  --ring: #b4542a;
+  --ring-offset: #fdfcfa;
 
-  /* ─── Shadows ─── */
-  --shadow-focus: 0 0 0 4px rgba(24, 24, 27, 0.15);
-  --shadow-menu: 0 16px 32px -8px rgba(0, 0, 0, 0.12), 0 8px 16px -4px rgba(0, 0, 0, 0.08);
+  /* ─── Shadows — warm-tinted, overlays only ─── */
+  --shadow-focus: 0 0 0 4px rgba(180, 84, 42, 0.18);
+  --shadow-menu: 0 16px 32px -8px rgba(31, 27, 22, 0.14),
+    0 8px 16px -4px rgba(31, 27, 22, 0.09);
 
   /* ─── Type ─── */
-  --font-sans: 'Geist', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-  --font-mono: 'Geist Mono', 'SF Mono', Menlo, Monaco, Consolas, monospace;
-  --font-display: 'Bricolage Grotesque Variable', 'Geist', system-ui, sans-serif;
+  --font-sans: 'Public Sans Variable', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-mono: 'Spline Sans Mono Variable', 'SF Mono', Menlo, Monaco, Consolas, monospace;
+  --font-display: 'Instrument Serif', Georgia, 'Times New Roman', serif;
 
   /* ─── Radius ─── */
-  --radius-sm: 10px;
-  --radius-md: 16px;
-  --radius-lg: 24px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
   --radius-full: 9999px;
+
+  /* ─── Density — office. [data-theme='floor'] overrides all three. ─── */
+  --row-height: 32px;
+  --hit-min: 28px;
+  --font-size-body: 13px;
 
   /* ─── Motion ─── */
   --duration-fast: 150ms;
@@ -115,7 +90,7 @@
   --duration-slow: 400ms;
   --ease-default: cubic-bezier(0.16, 1, 0.3, 1);
 
-  /* ─── Landing page palette ─── */
+  /* ─── Landing page palette — OUT OF SCOPE, track T10 owns these ─── */
   --landing-canvas: #fafaf9;
   --landing-surface: rgba(245, 244, 241, 0.85);
   --landing-elevated: rgba(239, 237, 234, 0.95);
@@ -137,59 +112,67 @@
   --landing-grid-size: 32px;
 }
 
+/*
+ * Dark — espresso, not black. Semantic -bg values are OPAQUE, pre-composited
+ * at ~18% of the hue over canvas. Alpha would defeat the contrast gate in
+ * styles/__tests__/palette-contrast.test.ts, which cannot resolve rgba()
+ * against an unknown backdrop.
+ */
 [data-theme='dark'] {
-  --bg-canvas: #0a0a0a;
-  --bg-surface: rgba(17, 17, 17, 0.7);
-  --bg-elevated: rgba(26, 26, 26, 0.85);
-  --bg-subtle: rgba(26, 26, 26, 0.4);
+  --bg-canvas: #17140f;
+  --bg-surface: #1f1b16;
+  --bg-elevated: #2a251e;
+  --bg-subtle: #221d17;
 
   --bg-zebra-odd: transparent;
-  --bg-zebra-even: rgba(30, 30, 36, 0.4);
-  --bg-row-hover: rgba(40, 40, 52, 0.5);
-  --bg-thead: rgba(24, 24, 31, 0.8);
+  --bg-zebra-even: #1c1812;
+  --bg-row-hover: #2a251e;
+  --bg-thead: #1f1b16;
 
-  --border-subtle: rgba(26, 26, 26, 0.8);
-  --border-default: rgba(39, 39, 42, 0.9);
-  --border-strong: rgba(63, 63, 70, 1);
+  --border-subtle: #241f19;
+  --border-default: #332c24;
+  --border-strong: #4a4137;
 
-  --text-primary: #fafafa;
-  --text-secondary: #d4d4d8;
-  --text-muted: #a1a1aa;
-  --text-subtle: #71717a;
+  --text-primary: #f5f1ea;
+  --text-secondary: #d6cec1;
+  --text-muted: #a89f93;
+  --text-subtle: #7d7468;
 
-  --accent: #6366f1;
-  --accent-hover: #818cf8;
-  --accent-fg: #ffffff;
+  --accent: #d97848;
+  --accent-hover: #e8926a;
+  --accent-fg: #17140f;
 
-  --text-link: #fafafa;
-  --text-link-hover: #d4d4d8;
+  --text-link: #d97848;
+  --text-link-hover: #e8926a;
 
-  --success: #10b981;
-  --success-bg: rgba(6, 78, 59, 0.5);
-  --success-fg: #6ee7b7;
+  --success: #6fa688;
+  --success-bg: #272e25;
+  --success-fg: #9ed2b4;
 
-  --warning: #f59e0b;
-  --warning-bg: rgba(120, 53, 15, 0.5);
-  --warning-fg: #fcd34d;
+  --warning: #d9a441;
+  --warning-bg: #3a2e18;
+  --warning-fg: #f0cb86;
 
-  --danger: #ef4444;
-  --danger-bg: rgba(127, 29, 29, 0.5);
-  --danger-fg: #fca5a5;
+  --danger: #d9645a;
+  --danger-bg: #3a221d;
+  --danger-fg: #f0a9a2;
 
-  --info: #3b82f6;
-  --info-bg: rgba(30, 58, 138, 0.5);
-  --info-fg: #93c5fd;
+  --info: #7a9bc4;
+  --info-bg: #292c30;
+  --info-fg: #b6cde6;
 
-  --purple: #a78bfa;
-  --purple-bg: rgba(76, 29, 149, 0.5);
-  --purple-fg: #ddd6fe;
+  --purple: #a98cc2;
+  --purple-bg: #312a2f;
+  --purple-fg: #d3c2e4;
 
-  --ring: #6366f1;
-  --ring-offset: #0a0a0a;
+  --ring: #d97848;
+  --ring-offset: #17140f;
 
-  --shadow-focus: 0 0 0 4px rgba(250, 250, 250, 0.2);
-  --shadow-menu: 0 10px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+  --shadow-focus: 0 0 0 4px rgba(217, 120, 72, 0.28);
+  --shadow-menu: 0 16px 32px -8px rgba(0, 0, 0, 0.6),
+    0 8px 16px -4px rgba(0, 0, 0, 0.45);
 
+  /* ─── Landing page palette — OUT OF SCOPE, track T10 owns these ─── */
   --landing-canvas: #1c1917;
   --landing-surface: rgba(41, 37, 36, 0.8);
   --landing-elevated: rgba(68, 64, 60, 0.85);
@@ -208,6 +191,74 @@
   --landing-ink: #fafaf9;
   --landing-line: rgba(250, 250, 249, 0.14);
   --landing-grid: rgba(250, 250, 249, 0.06);
+}
+
+/*
+ * Shop-floor PWAs (factory / driver / maintenance mobile). Route-forced by
+ * TouchShell, never user-selectable. Tablet under fluorescent light, gloved
+ * hands: AAA body contrast, 48px rows, 44px hit targets.
+ *
+ * Declares no --landing-* values on purpose — landing never renders inside a
+ * floor route, and inheriting the light values is correct if it somehow did.
+ */
+[data-theme='floor'] {
+  --bg-canvas: #0d0b08;
+  --bg-surface: #17140f;
+  --bg-elevated: #241f19;
+  --bg-subtle: #1c1812;
+
+  --bg-zebra-odd: transparent;
+  --bg-zebra-even: #17140f;
+  --bg-row-hover: #241f19;
+  --bg-thead: #17140f;
+
+  --border-subtle: #332c24;
+  --border-default: #4a4137;
+  --border-strong: #6b6156;
+
+  --text-primary: #fffdf8;
+  --text-secondary: #e8e2d8;
+  --text-muted: #a89f93;
+  --text-subtle: #8a8078;
+
+  --accent: #ff8a4c;
+  --accent-hover: #ffa473;
+  --accent-fg: #0d0b08;
+
+  --text-link: #ff8a4c;
+  --text-link-hover: #ffa473;
+
+  --success: #4ade80;
+  --success-bg: #12301f;
+  --success-fg: #a7f3c8;
+
+  --warning: #fbbf24;
+  --warning-bg: #3a2c0d;
+  --warning-fg: #fde196;
+
+  --danger: #f87171;
+  --danger-bg: #3a1a1a;
+  --danger-fg: #fcc0c0;
+
+  --info: #93c5fd;
+  --info-bg: #17293d;
+  --info-fg: #c7e0fe;
+
+  --purple: #c4b5fd;
+  --purple-bg: #262040;
+  --purple-fg: #ded5fe;
+
+  --ring: #ff8a4c;
+  --ring-offset: #0d0b08;
+
+  --shadow-focus: 0 0 0 4px rgba(255, 138, 76, 0.35);
+  --shadow-menu: 0 16px 32px -8px rgba(0, 0, 0, 0.7),
+    0 8px 16px -4px rgba(0, 0, 0, 0.5);
+
+  /* Density — the only palette that raises these. */
+  --row-height: 48px;
+  --hit-min: 44px;
+  --font-size-body: 15px;
 }
 
 input:-webkit-autofill,
