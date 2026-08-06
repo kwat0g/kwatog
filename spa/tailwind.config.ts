@@ -2,6 +2,7 @@ import type { Config } from 'tailwindcss';
 
 /**
  * All token values come from spa/src/styles/tokens.css (CSS variables).
+ * Three palettes: :root (light), [data-theme="dark"], [data-theme="floor"].
  * NEVER hard-code colors or fonts in components — extend here instead.
  *
  * Every colour is wrapped in `color-mix(... calc(<alpha-value> * 100%) ...)`.
@@ -129,14 +130,9 @@ const config: Config = {
       },
 
       fontFamily: {
-        sans: ['Geist', 'system-ui', 'sans-serif'],
-        mono: ['Geist Mono', 'SF Mono', 'Menlo', 'monospace'],
-        display: [
-          'Bricolage Grotesque Variable',
-          'Geist',
-          'system-ui',
-          'sans-serif',
-        ],
+        sans: ['Public Sans Variable', 'system-ui', 'sans-serif'],
+        mono: ['Spline Sans Mono Variable', 'SF Mono', 'Menlo', 'monospace'],
+        display: ['Instrument Serif', 'Georgia', 'serif'],
       },
 
       fontSize: {
@@ -146,8 +142,9 @@ const config: Config = {
         base: ['13px', { lineHeight: '1.5' }],
         md: ['14px', { lineHeight: '1.4' }],
         lg: ['16px', { lineHeight: '1.3' }],
-        xl: ['18px', { lineHeight: '1.3' }],
-        '2xl': ['22px', { lineHeight: '1.2' }],
+        xl: ['20px', { lineHeight: '1.25' }],
+        '2xl': ['26px', { lineHeight: '1.15' }],
+        '3xl': ['32px', { lineHeight: '1.1' }],
       },
 
       borderRadius: {
@@ -156,6 +153,21 @@ const config: Config = {
         DEFAULT: 'var(--radius-md)',
         lg: 'var(--radius-lg)',
         full: 'var(--radius-full)',
+      },
+
+      // Density tokens. Office palettes declare 32px / 28px; [data-theme='floor']
+      // raises them to 48px / 44px, so a component reads them unconditionally
+      // rather than branching on theme.
+      height: {
+        row: 'var(--row-height)',
+      },
+
+      minHeight: {
+        hit: 'var(--hit-min)',
+      },
+
+      minWidth: {
+        hit: 'var(--hit-min)',
       },
 
       transitionDuration: {
