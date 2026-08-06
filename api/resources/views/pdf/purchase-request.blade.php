@@ -120,7 +120,7 @@
 
 <div class="footer">
     Generated on {{ $now->format('M d, Y · H:i') }} ·
-    {{ $company['name'] }} · OGAMI ERP
+    {{ $company['name'] }}
 </div>
 
 </body>

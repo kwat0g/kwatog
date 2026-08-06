@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Modules\Quality\Controllers;
 
+use App\Common\Services\SettingsService;
 use App\Common\Concerns\ResolvesHashIds;
 use App\Modules\Quality\Enums\SpcChartStatus;
 use App\Modules\Quality\Enums\SpcChartType;
+use App\Modules\Quality\Enums\SpcAlertRule;
 use App\Modules\Quality\Models\SpcAlert;
 use App\Modules\Quality\Models\SpcControlChart;
 use App\Modules\Quality\Requests\StoreSpcChartRequest;
@@ -20,7 +22,35 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class SpcController
 {
-    public function __construct(private readonly SpcService $service) {}
+    public function __construct(
+        private readonly SpcService $service,
+        private readonly SettingsService $settings,
+    ) {}
+
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'statuses' => array_map(static fn (SpcChartStatus $status): array => [
+                'value' => $status->value,
+                'label' => ucfirst($status->value),
+            ], SpcChartStatus::cases()),
+            'rules' => array_map(static fn (SpcAlertRule $rule): array => [
+                'value' => $rule->value,
+                'label' => $rule->label(),
+            ], SpcAlertRule::cases()),
+            'chart_types' => array_map(static fn (SpcChartType $type): array => [
+                'value' => $type->value,
+                'label' => $type->label(),
+            ], SpcChartType::cases()),
+            'capability_thresholds' => $this->service->capabilityThresholds(),
+            'control_chart_policy' => [
+                'minimum_control_points' => $this->settings->requiredInt('quality.spc.minimum_control_points', 2, 1000),
+                'recalculate_after_points' => $this->settings->requiredInt('quality.spc.recalculate_after_points', 2, 1000),
+                'recalculate_interval_points' => $this->settings->requiredInt('quality.spc.recalculate_interval_points', 1, 1000),
+                'display_history_points' => $this->settings->requiredInt('quality.spc.display_history_points', 1, 1000),
+            ],
+        ]]);
+    }
 
     /**
      * List SPC control charts with optional filters.
@@ -63,7 +93,7 @@ class SpcController
             productId: (int) $data['product_id'],
             specItemId: (int) $data['spec_item_id'],
             type: SpcChartType::from($data['chart_type']),
-            subgroupSize: (int) ($data['subgroup_size'] ?? 5),
+            subgroupSize: (int) ($data['subgroup_size'] ?? $this->settings->requiredInt('quality.spc.default_subgroup_size', 2, 25)),
         );
 
         $chart->load(['product', 'specItem']);
@@ -79,10 +109,11 @@ class SpcController
         $chart->load(['product', 'specItem']);
         $chart->loadCount('unresolvedAlerts');
 
-        // Eager-load most recent 50 data points for charting
+        $history = $this->settings->requiredInt('quality.spc.display_history_points', 1, 1000);
+        // Eager-load the configured number of recent data points for charting.
         $chart->setRelation(
             'dataPoints',
-            $chart->dataPoints()->orderBy('subgroup_number')->limit(50)->get()
+            $chart->dataPoints()->orderBy('subgroup_number')->limit($history)->get()
         );
 
         return new SpcControlChartResource($chart);
@@ -93,9 +124,10 @@ class SpcController
      */
     public function data(Request $request, SpcControlChart $chart): AnonymousResourceCollection
     {
+        $perPage = $this->settings->requiredInt('quality.spc.display_history_points', 1, 1000);
         $points = $chart->dataPoints()
             ->orderByDesc('subgroup_number')
-            ->paginate((int) $request->query('per_page', 50));
+            ->paginate(min((int) $request->query('per_page', $perPage), $perPage));
 
         return SpcDataPointResource::collection($points);
     }

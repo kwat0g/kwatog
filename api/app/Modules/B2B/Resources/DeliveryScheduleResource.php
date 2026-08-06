@@ -6,6 +6,7 @@ namespace App\Modules\B2B\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Str;
 
 class DeliveryScheduleResource extends JsonResource
 {
@@ -15,6 +16,7 @@ class DeliveryScheduleResource extends JsonResource
             'id'             => $this->hash_id,
             'month'          => $this->month,
             'status'         => $this->status,
+            'status_label'   => Str::headline((string) $this->status),
             'lines'          => $this->lines ?? [],
             'purchase_order' => $this->whenLoaded('purchaseOrder', fn () => $this->purchaseOrder ? [
                 'id'        => $this->purchaseOrder->hash_id,

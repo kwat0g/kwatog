@@ -213,19 +213,19 @@ class QuarantineService
                     break;
 
                 case NcrDisposition::Scrap:
-                    $scrapLocation = $this->resolveZoneLocation($quarantine, WarehouseZoneType::Scrap);
+                    $this->resolveZoneLocation($quarantine, WarehouseZoneType::Scrap);
                     $movement = $this->movements->move(new StockMovementInput(
-                        type: StockMovementType::Transfer,
+                        type: StockMovementType::Scrap,
                         itemId: $mrb->item_id,
                         quantity: $qty,
                         fromLocationId: $fromId,
-                        toLocationId: $scrapLocation->id,
+                        toLocationId: null,
                         referenceType: 'material_review_record',
                         referenceId: $mrb->id,
                         remarks: "MRB scrap {$mrb->mrb_number}",
                         createdBy: $by->id,
                     ));
-                    $releaseLocationId = $scrapLocation->id;
+                    $releaseLocationId = $fromId;
                     $newStatus = MrbStatus::Scrapped;
                     break;
 

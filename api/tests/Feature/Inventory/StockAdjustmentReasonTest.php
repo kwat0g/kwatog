@@ -12,8 +12,8 @@ use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Services\StockAdjustmentService;
+use App\Common\Services\SettingsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Event;
 use RuntimeException;
 use Tests\TestCase;
@@ -55,7 +55,7 @@ class StockAdjustmentReasonTest extends TestCase
 
     public function test_create_stores_reason_code_and_applies_when_gate_disabled(): void
     {
-        Config::set('inventory.adjustment_approval_threshold', '0'); // gate off
+        app(SettingsService::class)->set('inventory.adjustment_approval_threshold', 0);
 
         $adj = $this->svc->create(
             itemId: $this->item->id,
@@ -76,7 +76,7 @@ class StockAdjustmentReasonTest extends TestCase
 
     public function test_above_threshold_adjustment_is_held_pending_with_no_movement(): void
     {
-        Config::set('inventory.adjustment_approval_threshold', '500'); // gate on at ₱500
+        app(SettingsService::class)->set('inventory.adjustment_approval_threshold', 500);
 
         // 100 * 10 = ₱1000 > ₱500 → must be pending.
         $adj = $this->svc->create(
@@ -101,7 +101,7 @@ class StockAdjustmentReasonTest extends TestCase
 
     public function test_below_threshold_adjustment_applies_immediately(): void
     {
-        Config::set('inventory.adjustment_approval_threshold', '500');
+        app(SettingsService::class)->set('inventory.adjustment_approval_threshold', 500);
 
         // 10 * 10 = ₱100 <= ₱500 → applied immediately.
         $adj = $this->svc->create(
@@ -137,7 +137,7 @@ class StockAdjustmentReasonTest extends TestCase
 
     public function test_approve_requires_permission(): void
     {
-        Config::set('inventory.adjustment_approval_threshold', '500');
+        app(SettingsService::class)->set('inventory.adjustment_approval_threshold', 500);
 
         $adj = $this->svc->create(
             itemId: $this->item->id,
@@ -161,7 +161,7 @@ class StockAdjustmentReasonTest extends TestCase
 
     public function test_legacy_adjust_in_still_works_without_reason_code(): void
     {
-        Config::set('inventory.adjustment_approval_threshold', '0');
+        app(SettingsService::class)->set('inventory.adjustment_approval_threshold', 0);
 
         $mvmt = $this->svc->adjustIn(
             $this->item->id,

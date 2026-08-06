@@ -16,88 +16,88 @@ import { usePermission } from '@/hooks/usePermission';
 import type { Shipment, ShipmentStatus } from '@/types/supplyChain';
 
 const STATUS_CHIP: Record<ShipmentStatus, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
-  ordered: 'neutral', shipped: 'info', in_transit: 'info',
-  customs: 'warning', cleared: 'info', received: 'success', cancelled: 'neutral',
+ ordered: 'neutral', shipped: 'info', in_transit: 'info',
+ customs: 'warning', cleared: 'info', received: 'success', cancelled: 'neutral',
 };
 
 export default function ShipmentsListPage() {
-  const navigate = useNavigate();
-  const { can } = usePermission();
-  const [filters, setFilters] = useState<ShipmentListParams>({ page: 1, per_page: 25 });
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['supply-chain', 'shipments', filters],
-    queryFn: () => shipmentsApi.list(filters),
-    placeholderData: (prev) => prev,
-  });
-  const { data: shipmentOptions } = useQuery({
-    queryKey: ['supply-chain', 'shipments', 'options'],
-    queryFn: () => shipmentsApi.options(),
-    staleTime: 300_000,
-  });
-  const statusLabels = new Map((shipmentOptions?.statuses ?? []).map((option) => [option.value, option.label]));
+ const navigate = useNavigate();
+ const { can } = usePermission();
+ const [filters, setFilters] = useState<ShipmentListParams>({ page: 1, per_page: 25 });
+ const { data, isLoading, isError, refetch } = useQuery({
+ queryKey: ['supply-chain', 'shipments', filters],
+ queryFn: () => shipmentsApi.list(filters),
+ placeholderData: (prev) => prev,
+ });
+ const { data: shipmentOptions } = useQuery({
+ queryKey: ['supply-chain', 'shipments', 'options'],
+ queryFn: () => shipmentsApi.options(),
+ staleTime: 300_000,
+ });
+ const statusLabels = new Map((shipmentOptions?.statuses ?? []).map((option) => [option.value, option.label]));
 
-  const columns: Column<Shipment>[] = [
-    { key: 'shipment_number', header: 'Shipment',
-      cell: (r) => (
-        <LinkButton
-          className="font-mono text-left"
-          onClick={() => navigate(`/supply-chain/shipments/${r.id}`)}
-        >
-          {r.shipment_number}
-        </LinkButton>
-      ) },
-    { key: 'po', header: 'PO',
-      cell: (r) => r.purchase_order ? <span className="font-mono">{r.purchase_order.po_number}</span> : <span className="text-muted">—</span> },
-    { key: 'carrier', header: 'Carrier', cell: (r) => r.carrier ?? '—' },
-    { key: 'container', header: 'Container', cell: (r) => r.container_number ?? '—' },
-    { key: 'eta', header: 'ETA', align: 'right',
-      cell: (r) => <NumCell>{r.eta ?? '—'}</NumCell> },
-    { key: 'status', header: 'Status',
-      cell: (r) => <Chip variant={STATUS_CHIP[r.status]}>{r.status_label ?? statusLabels.get(r.status) ?? r.status}</Chip> },
-  ];
+ const columns: Column<Shipment>[] = [
+ { key: 'shipment_number', header: 'Shipment',
+ cell: (r) => (
+ <LinkButton
+ className="font-mono text-left"
+ onClick={() => navigate(`/supply-chain/shipments/${r.id}`)}
+ >
+ {r.shipment_number}
+ </LinkButton>
+ ) },
+ { key: 'po', header: 'PO',
+ cell: (r) => r.purchase_order ? <span className="font-mono">{r.purchase_order.po_number}</span> : <span className="text-muted">—</span> },
+ { key: 'carrier', header: 'Carrier', cell: (r) => r.carrier ?? '—' },
+ { key: 'container', header: 'Container', cell: (r) => r.container_number ?? '—' },
+ { key: 'eta', header: 'ETA', align: 'right',
+ cell: (r) => <NumCell>{r.eta ?? '—'}</NumCell> },
+ { key: 'status', header: 'Status',
+ cell: (r) => <Chip variant={STATUS_CHIP[r.status]}>{r.status_label ?? statusLabels.get(r.status) ?? r.status}</Chip> },
+ ];
 
-  const filterConfig: FilterConfig[] = [
-    { key: 'status', label: 'Status', type: 'select', options: [{ value: '', label: 'All' }, ...(shipmentOptions?.statuses ?? [])] },
-  ];
+ const filterConfig: FilterConfig[] = [
+ { key: 'status', label: 'Status', type: 'select', options: [{ value: '', label: 'All' }, ...(shipmentOptions?.statuses ?? [])] },
+ ];
 
-  return (
-    <div>
-      <PageHeader
-        title="Inbound shipments"
-        subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'shipment' : 'shipments'}` : undefined}
-        actions={
-          can('supply_chain.shipments.manage') ? (
-            <Button
-              variant="primary"
-              size="sm"
-              icon={<Plus size={14} />}
-              onClick={() => navigate('/supply-chain/shipments/create')}
-            >
-              New shipment
-            </Button>
-          ) : undefined
-        }
-      />
-      <FilterBar
-        filters={filterConfig}
-        values={filters}
-        onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
-        onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
-        searchPlaceholder="Search shipment, container, or B/L number…"
-      />
-      {isLoading && !data && <SkeletonTable columns={6} rows={6} />}
-      {isError && <EmptyState icon="alert-circle" title="Failed to load shipments"
-        action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />}
-      {data && data.data.length === 0 && (
-        <EmptyState icon="package" title="No shipments yet" description="Imported POs will appear here once an ImpEx Officer opens a shipment." />
-      )}
-      {data && data.data.length > 0 && (
-        <div className="px-5 py-4">
-          <DataTable columns={columns} data={data.data} meta={data.meta}
-            onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
-            onRowClick={(r) => navigate(`/supply-chain/shipments/${r.id}`)} />
-        </div>
-      )}
-    </div>
-  );
+ return (
+ <div>
+ <PageHeader
+ title="Inbound shipments"
+ subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'shipment' : 'shipments'}` : undefined}
+ actions={
+ can('supply_chain.shipments.manage') ? (
+ <Button
+ variant="primary"
+ size="sm"
+ icon={<Plus size={14} />}
+ onClick={() => navigate('/supply-chain/shipments/create')}
+ >
+ New shipment
+ </Button>
+ ) : undefined
+ }
+ />
+ <FilterBar
+ filters={filterConfig}
+ values={filters}
+ onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
+ onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
+ searchPlaceholder="Search shipment, container, or B/L number…"
+ />
+ {isLoading && !data && <SkeletonTable columns={6} rows={6} />}
+ {isError && <EmptyState icon="alert-circle" title="Failed to load shipments"
+ action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />}
+ {data && data.data.length === 0 && (
+ <EmptyState icon="package" title="No shipments yet" description="Imported POs will appear here once an ImpEx Officer opens a shipment." />
+ )}
+ {data && data.data.length > 0 && (
+ <div className="px-5 py-4">
+ <DataTable columns={columns} data={data.data} meta={data.meta}
+ onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+ onRowClick={(r) => navigate(`/supply-chain/shipments/${r.id}`)} />
+ </div>
+ )}
+ </div>
+ );
 }

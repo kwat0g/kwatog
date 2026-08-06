@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace App\Modules\Inventory\Controllers;
 
 use App\Common\Support\HashIdFilter;
+use App\Common\Services\SettingsService;
 use App\Modules\Inventory\Models\StockCountItem;
 use App\Modules\Inventory\Models\StockCountSession;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Models\WarehouseZone;
+use App\Modules\Inventory\Enums\StockCountScope;
 use App\Modules\Inventory\Resources\StockCountItemResource;
 use App\Modules\Inventory\Resources\StockCountSessionResource;
 use App\Modules\Inventory\Services\StockCountService;
@@ -16,10 +18,23 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use RuntimeException;
+use Illuminate\Validation\Rule;
 
 class StockCountController
 {
-    public function __construct(private readonly StockCountService $service) {}
+    public function __construct(
+        private readonly StockCountService $service,
+        private readonly SettingsService $settings,
+    ) {}
+
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'scopes' => array_map(static fn (StockCountScope $scope): array => ['value' => $scope->value, 'label' => $scope->label()], StockCountScope::cases()),
+            'variance_tolerance_pct' => $this->settings->requiredFloat('inventory.stock_count.variance_tolerance_pct', 0),
+            'default_scope' => (string) $this->settings->get('inventory.stock_count.default_scope', ''),
+        ]]);
+    }
 
     /**
      * Route params here are plain `{id}`, not model-bound, so nothing decodes
@@ -58,7 +73,7 @@ class StockCountController
 
         $data = $request->validate([
             'title'        => 'required|string|max:200',
-            'scope'        => 'required|in:full,warehouse,zone',
+            'scope'        => ['required', Rule::enum(StockCountScope::class)],
             'warehouse_id' => 'nullable|integer|exists:warehouses,id',
             'zone_id'      => 'nullable|integer|exists:warehouse_zones,id',
         ]);

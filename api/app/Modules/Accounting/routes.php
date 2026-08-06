@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Modules\Accounting\Controllers\AccountController;
+use App\Modules\Accounting\Controllers\AccountingOptionsController;
 use App\Modules\Accounting\Controllers\AccountingPeriodController;
 use App\Modules\Accounting\Controllers\BillController;
 use App\Modules\Accounting\Controllers\BudgetController;
@@ -20,6 +21,7 @@ use App\Modules\Accounting\Controllers\VendorController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
+    Route::get('/accounting/options', [AccountingOptionsController::class, 'index'])->middleware('permission:accounting.view');
 
     /* ─── Chart of Accounts ──────────────────────────── */
     Route::prefix('accounts')->group(function () {
@@ -41,10 +43,12 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
     /* ─── Journal Entries ────────────────────────────── */
     Route::prefix('journal-entries')->group(function () {
         Route::get('/', [JournalEntryController::class, 'index'])->middleware('permission:accounting.journal.view');
+        Route::get('/options', [JournalEntryController::class, 'options'])->middleware('permission:accounting.journal.view');
         Route::get('/{journalEntry}', [JournalEntryController::class, 'show'])->middleware('permission:accounting.journal.view');
         Route::post('/', [JournalEntryController::class, 'store'])->middleware('permission:accounting.journal.create');
         Route::put('/{journalEntry}', [JournalEntryController::class, 'update'])->middleware('permission:accounting.journal.create');
         Route::delete('/{journalEntry}', [JournalEntryController::class, 'destroy'])->middleware('permission:accounting.journal.create');
+        Route::patch('/{journalEntry}/restore', [JournalEntryController::class, 'restore'])->middleware('permission:accounting.journal.create');
         Route::patch('/{journalEntry}/post', [JournalEntryController::class, 'post'])->middleware('permission:accounting.journal.post');
         Route::post('/{journalEntry}/reverse', [JournalEntryController::class, 'reverse'])->middleware('permission:accounting.journal.reverse');
         Route::get('/{journalEntry}/pdf', [PdfController::class, 'journalEntry'])->middleware('permission:accounting.journal.view');
@@ -83,8 +87,10 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
         Route::post('/', [VendorController::class, 'store'])->middleware('permission:accounting.vendors.manage');
         Route::put('/{vendor}', [VendorController::class, 'update'])->middleware('permission:accounting.vendors.manage');
         Route::delete('/{vendor}', [VendorController::class, 'destroy'])->middleware('permission:accounting.vendors.manage');
+        Route::patch('/{vendor}/restore', [VendorController::class, 'restore'])->middleware('permission:accounting.vendors.manage');
     });
     Route::prefix('bills')->group(function () {
+        Route::get('/options', [BillController::class, 'options'])->middleware('permission:accounting.bills.view');
         Route::get('/', [BillController::class, 'index'])->middleware('permission:accounting.bills.view');
         Route::get('/{bill}', [BillController::class, 'show'])->middleware('permission:accounting.bills.view');
         Route::post('/', [BillController::class, 'store'])->middleware('permission:accounting.bills.create');
@@ -100,10 +106,12 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
         Route::post('/', [CustomerController::class, 'store'])->middleware('permission:accounting.customers.manage');
         Route::put('/{customer}', [CustomerController::class, 'update'])->middleware('permission:accounting.customers.manage');
         Route::delete('/{customer}', [CustomerController::class, 'destroy'])->middleware('permission:accounting.customers.manage');
+        Route::patch('/{customer}/restore', [CustomerController::class, 'restore'])->middleware('permission:accounting.customers.manage');
         Route::get('/{customer}/statement-of-account', [CustomerController::class, 'statementOfAccount'])
             ->middleware('permission:accounting.invoices.view');
     });
     Route::prefix('invoices')->group(function () {
+        Route::get('/options', [InvoiceController::class, 'options'])->middleware('permission:accounting.invoices.view');
         Route::get('/', [InvoiceController::class, 'index'])->middleware('permission:accounting.invoices.view');
         Route::get('/{invoice}', [InvoiceController::class, 'show'])->middleware('permission:accounting.invoices.view');
         Route::post('/', [InvoiceController::class, 'store'])->middleware('permission:accounting.invoices.create');
@@ -134,6 +142,7 @@ Route::middleware(['auth:sanctum', 'feature:accounting'])->group(function () {
     /* ─── Budgeting (ADV9) ────────────────────────────── */
     Route::middleware(['feature:budgeting'])->group(function () {
         Route::prefix('budgets')->group(function () {
+            Route::get('/options', [BudgetController::class, 'options'])->middleware('permission:budgeting.view');
             Route::get('/', [BudgetController::class, 'index'])->middleware('permission:budgeting.view');
             Route::get('/fiscal-years', [BudgetController::class, 'fiscalYears'])->middleware('permission:budgeting.view');
             Route::get('/overview', [BudgetController::class, 'overview'])->middleware('permission:budgeting.view');

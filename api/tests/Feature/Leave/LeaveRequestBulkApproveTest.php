@@ -69,4 +69,50 @@ class LeaveRequestBulkApproveTest extends TestCase
 
         $this->assertSame(LeaveRequestStatus::PendingHr, $r1->fresh()->status);
     }
+
+    public function test_list_search_filters_by_request_no_and_employee(): void
+    {
+        $this->seed([
+            RolePermissionSeeder::class,
+            DepartmentSeeder::class,
+            PositionSeeder::class,
+            LeaveTypeSeeder::class,
+            WorkflowSeeder::class,
+        ]);
+
+        $admin = User::factory()->create([
+            'role_id' => Role::where('slug', 'system_admin')->value('id'),
+        ]);
+
+        $emp  = Employee::factory()->create(['first_name' => 'Ana', 'last_name' => 'Dela Cruz']);
+        $type = LeaveType::query()->first();
+        $svc  = app(LeaveRequestService::class);
+
+        $r1 = $svc->submit($emp->id, [
+            'start_date'    => now()->addWeek()->toDateString(),
+            'end_date'      => now()->addWeek()->toDateString(),
+            'leave_type_id' => $type->id,
+        ]);
+        $r2 = $svc->submit($emp->id, [
+            'start_date'    => now()->addWeeks(2)->toDateString(),
+            'end_date'      => now()->addWeeks(2)->toDateString(),
+            'leave_type_id' => $type->id,
+        ]);
+
+        $this->actingAs($admin)
+            ->getJson('/api/v1/leaves/requests?search=dela%20cruz')
+            ->assertOk()
+            ->assertJsonCount(2, 'data');
+
+        $this->actingAs($admin)
+            ->getJson('/api/v1/leaves/requests?search=' . $r1->leave_request_no)
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $r1->hash_id);
+
+        $this->actingAs($admin)
+            ->getJson('/api/v1/leaves/requests?search=no-such-name-xyz')
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+    }
 }

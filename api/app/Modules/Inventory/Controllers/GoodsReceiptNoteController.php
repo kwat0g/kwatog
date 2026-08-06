@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Modules\Inventory\Controllers;
 
 use App\Common\Support\HashIdFilter;
+use App\Common\Services\SettingsService;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
+use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Requests\AcceptGrnRequest;
 use App\Modules\Inventory\Requests\RejectGrnRequest;
 use App\Modules\Inventory\Requests\StoreGrnRequest;
@@ -19,11 +21,22 @@ use RuntimeException;
 
 class GoodsReceiptNoteController
 {
-    public function __construct(private readonly GrnService $service) {}
+    public function __construct(
+        private readonly GrnService $service,
+        private readonly SettingsService $settings,
+    ) {}
 
     public function index(Request $request): AnonymousResourceCollection
     {
         return GoodsReceiptNoteResource::collection($this->service->list($request->query()));
+    }
+
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'statuses' => array_map(static fn (GrnStatus $status): array => ['value' => $status->value, 'label' => str_replace('_', ' ', ucfirst($status->value))], GrnStatus::cases()),
+            'default_qc_result' => (string) $this->settings->get('inventory.grn.default_qc_result', ''),
+        ]]);
     }
 
     public function show(GoodsReceiptNote $grn): GoodsReceiptNoteResource
@@ -50,6 +63,20 @@ class GoodsReceiptNoteController
     {
         try {
             $map = $request->input('item_accepted_map');
+            if ($map) {
+                // Frontend sends HashID keys; the service matches raw integer
+                // line ids. Decode each key, skipping undecodable entries.
+                $decoded = [];
+                foreach ($map as $key => $qty) {
+                    $id = ctype_digit((string) $key)
+                        ? (int) $key
+                        : \App\Modules\Inventory\Models\GrnItem::tryDecodeHash((string) $key);
+                    if ($id !== null) {
+                        $decoded[$id] = $qty;
+                    }
+                }
+                $map = $decoded;
+            }
             $result = $map
                 ? $this->service->partialAccept($grn, $map, $request->user())
                 : $this->service->accept($grn, $request->user());

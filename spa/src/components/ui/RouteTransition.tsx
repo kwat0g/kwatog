@@ -10,33 +10,33 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 
 interface Props {
-  children: ReactNode;
+ children: ReactNode;
 }
 
 const FADE_MS = 150;
 
 export function RouteTransition({ children }: Props) {
-  const location = useLocation();
-  const [phase, setPhase] = useState<'in' | 'out'>('in');
-  const lastPathRef = useRef(location.pathname);
+ const location = useLocation();
+ const [phase, setPhase] = useState<'in' | 'out'>('in');
+ const lastPathRef = useRef(location.pathname);
 
-  useEffect(() => {
-    if (lastPathRef.current === location.pathname) return;
-    lastPathRef.current = location.pathname;
-    setPhase('out');
-    const id = window.setTimeout(() => setPhase('in'), 16);
-    return () => window.clearTimeout(id);
-  }, [location.pathname]);
+ useEffect(() => {
+ if (lastPathRef.current === location.pathname) return;
+ lastPathRef.current = location.pathname;
+ setPhase('out');
+ const id = window.setTimeout(() => setPhase('in'), 16);
+ return () => window.clearTimeout(id);
+ }, [location.pathname]);
 
-  return (
-    <div
-      className={cn(
-        'transition-opacity ease-out',
-        phase === 'in' ? 'opacity-100' : 'opacity-0',
-      )}
-      style={{ transitionDuration: `${FADE_MS}ms` }}
-    >
-      {children}
-    </div>
-  );
+ return (
+ <div
+ className={cn(
+ 'transition-opacity ease-out',
+ phase === 'in' ? 'opacity-100' : 'opacity-0',
+ )}
+ style={{ transitionDuration: `${FADE_MS}ms` }}
+ >
+ {children}
+ </div>
+ );
 }

@@ -96,9 +96,18 @@ class PayrollGlPostingService
             $isThirteenth = (bool) $period->is_thirteenth_month;
 
             // Lookup account ids.
-            $accounts = DB::table('accounts')->whereIn('code', [
-                '1010','2020','2030','2040','2050','2080','2100','5050','5060','5070','6030','6040','6050',
-            ])->pluck('id', 'code');
+            $accountKeys = [
+                'cash' => 'accounting.accounts.payroll_cash_code', 'sss_payable' => 'accounting.accounts.sss_payable_code',
+                'philhealth_payable' => 'accounting.accounts.philhealth_payable_code', 'pagibig_payable' => 'accounting.accounts.pagibig_payable_code',
+                'withholding_payable' => 'accounting.accounts.withholding_tax_payable_code', 'thirteenth_payable' => 'accounting.accounts.thirteenth_month_payable_code',
+                'loans_payable' => 'accounting.accounts.loans_payable_code', 'salary_expense' => 'accounting.accounts.salary_expense_code',
+                'overtime_expense' => 'accounting.accounts.overtime_expense_code', 'thirteenth_expense' => 'accounting.accounts.thirteenth_month_expense_code',
+                'sss_employer_expense' => 'accounting.accounts.sss_employer_expense_code', 'philhealth_employer_expense' => 'accounting.accounts.philhealth_employer_expense_code',
+                'pagibig_employer_expense' => 'accounting.accounts.pagibig_employer_expense_code',
+            ];
+            $codes = array_map(fn (string $key) => $this->settings->requiredString($key), $accountKeys);
+            $accounts = DB::table('accounts')->whereIn('code', array_values($codes))->pluck('id', 'code');
+            $code = fn (string $name): string => $codes[$name];
 
             // Build journal lines.
             $lines = [];
@@ -161,41 +170,41 @@ class PayrollGlPostingService
                 // 13th-month: gross is in basic_pay slot in the calc-and-pay flow,
                 // but for accounting we expense it under 13th Month and credit a
                 // dedicated payable (paid out via separate disbursement).
-                $debit('5070',  $net, '13th Month Expense');
-                $credit('2080', $net, '13th Month Pay Payable');
+                $debit($code('thirteenth_expense'),  $net, '13th Month Expense');
+                $credit($code('thirteenth_payable'), $net, '13th Month Pay Payable');
             } else {
                 // Salary expense
-                $debit('5050',  $basicLine, 'Salaries Expense');
-                $debit('5060',  $otLine,    'Overtime + Night Diff + Holiday Premium Expense');
+                $debit($code('salary_expense'),  $basicLine, 'Salaries Expense');
+                $debit($code('overtime_expense'),  $otLine,    'Overtime + Night Diff + Holiday Premium Expense');
 
                 // Tardiness / undertime withheld — contra to Salaries Expense.
-                $credit('5050', $lateness, 'Tardiness + Undertime Withheld');
+                $credit($code('salary_expense'), $lateness, 'Tardiness + Undertime Withheld');
 
                 // Applied adjustments (back-pay, corrections). Signed: a
                 // positive figure is extra pay owed (more expense), a negative
                 // one recovers an overpayment.
                 if (Money::lt($adjustments, '0')) {
-                    $credit('5050', Money::negate($adjustments), 'Payroll Adjustments (recovery)');
+                    $credit($code('salary_expense'), Money::negate($adjustments), 'Payroll Adjustments (recovery)');
                 } else {
-                    $debit('5050', $adjustments, 'Payroll Adjustments (back-pay)');
+                    $debit($code('salary_expense'), $adjustments, 'Payroll Adjustments (back-pay)');
                 }
 
                 // Employer expenses
-                $debit('6030',  $sssEr, 'SSS Employer Share Expense');
-                $debit('6040',  $phEr,  'PhilHealth Employer Share Expense');
-                $debit('6050',  $pgEr,  'Pag-IBIG Employer Share Expense');
+                $debit($code('sss_employer_expense'),  $sssEr, 'SSS Employer Share Expense');
+                $debit($code('philhealth_employer_expense'),  $phEr,  'PhilHealth Employer Share Expense');
+                $debit($code('pagibig_employer_expense'),  $pgEr,  'Pag-IBIG Employer Share Expense');
 
                 // Liability credits (gov)
-                $credit('2020', $sssTotal, 'SSS Payable (EE+ER)');
-                $credit('2030', $phTotal,  'PhilHealth Payable (EE+ER)');
-                $credit('2040', $pgTotal,  'Pag-IBIG Payable (EE+ER)');
-                $credit('2050', $wht,      'Withholding Tax Payable');
+                $credit($code('sss_payable'), $sssTotal, 'SSS Payable (EE+ER)');
+                $credit($code('philhealth_payable'), $phTotal,  'PhilHealth Payable (EE+ER)');
+                $credit($code('pagibig_payable'), $pgTotal,  'Pag-IBIG Payable (EE+ER)');
+                $credit($code('withholding_payable'), $wht,      'Withholding Tax Payable');
 
                 // Loan recovery returns to Loans Payable
-                $credit('2100', $loans,    'Employee Loans Payable');
+                    $credit($code('loans_payable'), $loans,    'Employee Loans Payable');
 
                 // Cash outflow for net pay
-                $credit('1010', $net, 'Cash in Bank — Net Pay Disbursed');
+                $credit($code('cash'), $net, 'Cash in Bank — Net Pay Disbursed');
 
                 // Net pay is clamped at zero when deductions would exceed pay,
                 // so the un-recovered remainder is not cash that ever left the
@@ -208,9 +217,9 @@ class PayrollGlPostingService
                     $net,
                 );
                 if (Money::lt($unrecovered, '0')) {
-                    $debit('5050', Money::negate($unrecovered), 'Net Pay Floor Adjustment');
+                    $debit($code('salary_expense'), Money::negate($unrecovered), 'Net Pay Floor Adjustment');
                 } else {
-                    $credit('5050', $unrecovered, 'Unrecovered Deductions (net pay floored at zero)');
+                    $credit($code('salary_expense'), $unrecovered, 'Unrecovered Deductions (net pay floored at zero)');
                 }
             }
 

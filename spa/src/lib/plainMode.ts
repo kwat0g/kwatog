@@ -14,30 +14,30 @@
  */
 
 export function applyPlainMode(): void {
-  if (typeof window === 'undefined') return;
-  if (!new URLSearchParams(window.location.search).has('plain')) return;
+ if (typeof window === 'undefined') return;
+ if (!new URLSearchParams(window.location.search).has('plain')) return;
 
-  const strip = () => {
-    document
-      .querySelectorAll('style, link[rel="stylesheet"]')
-      .forEach((el) => el.remove());
-    // Disable any constructed/adopted stylesheets too (belt and suspenders).
-    Array.from(document.styleSheets).forEach((sheet) => {
-      try {
-        sheet.disabled = true;
-      } catch {
-        /* cross-origin sheet — ignore */
-      }
-    });
-  };
+ const strip = () => {
+ document
+ .querySelectorAll('style, link[rel="stylesheet"]')
+ .forEach((el) => el.remove());
+ // Disable any constructed/adopted stylesheets too (belt and suspenders).
+ Array.from(document.styleSheets).forEach((sheet) => {
+ try {
+ sheet.disabled = true;
+ } catch {
+ /* cross-origin sheet — ignore */
+ }
+ });
+ };
 
-  strip();
+ strip();
 
-  // Vite (and lazy route chunks) inject <style> tags after this runs, so keep
-  // pruning them as they appear.
-  const observer = new MutationObserver(strip);
-  observer.observe(document.documentElement, { childList: true, subtree: true });
+ // Vite (and lazy route chunks) inject <style> tags after this runs, so keep
+ // pruning them as they appear.
+ const observer = new MutationObserver(strip);
+ observer.observe(document.documentElement, { childList: true, subtree: true });
 
-  // A visible marker so it's obvious the page is in plain mode while filming.
-  document.documentElement.setAttribute('data-plain', 'true');
+ // A visible marker so it's obvious the page is in plain mode while filming.
+ document.documentElement.setAttribute('data-plain', 'true');
 }

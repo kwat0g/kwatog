@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\HR\Controllers;
 
 use App\Modules\HR\Models\Clearance;
+use App\Modules\HR\Enums\ClearanceStatus;
+use App\Modules\HR\Enums\SeparationReason;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Requests\InitiateSeparationRequest;
 use App\Modules\HR\Resources\ClearanceResource;
@@ -24,6 +26,18 @@ class SeparationController
     public function index(Request $request): AnonymousResourceCollection
     {
         return ClearanceResource::collection($this->service->list($request->query()));
+    }
+
+    public function options(): JsonResponse
+    {
+        $map = static fn ($case): array => [
+            'value' => $case->value,
+            'label' => str_replace('_', ' ', ucfirst($case->value)),
+        ];
+        return response()->json(['data' => [
+            'statuses' => array_map($map, ClearanceStatus::cases()),
+            'reasons' => array_map($map, SeparationReason::cases()),
+        ]]);
     }
 
     public function show(Clearance $clearance): ClearanceResource

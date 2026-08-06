@@ -23,15 +23,33 @@ use Tests\TestCase;
 
 /**
  * REC-03 — master-data CSV import pipeline (dry-run, atomic commit, rollback).
+ *
+ * The `accounts` table is NOT empty at the start of a test: migration
+ * 0321_seed_runtime_chart_accounts seeds the runtime chart of accounts
+ * (1000/1200/1210/1220/1230/2000/2110) and RefreshDatabase runs migrations. So
+ * these tests import codes from the deliberately-free 91xx range and assert on
+ * the CHANGE in row count rather than an absolute total — otherwise every
+ * future seeded account breaks them again, and "1000,Cash" is rejected as a
+ * duplicate of the seeded "1000 Assets".
  */
 class MasterDataImportTest extends TestCase
 {
     use RefreshDatabase;
 
+    /** Accounts seeded by migration before any test body runs. */
+    private int $baselineAccounts = 0;
+
     protected function setUp(): void
     {
         parent::setUp();
         $this->seed(RolePermissionSeeder::class);
+        $this->baselineAccounts = Account::query()->count();
+    }
+
+    /** Accounts created by the code under test, ignoring the seeded baseline. */
+    private function importedAccounts(): int
+    {
+        return Account::query()->count() - $this->baselineAccounts;
     }
 
     private function admin(): User
@@ -51,7 +69,7 @@ class MasterDataImportTest extends TestCase
 
     public function test_dry_run_validates_without_writing(): void
     {
-        $csv = "code,name,type,normal_balance\n1000,Cash,asset,debit\nBAD,,asset,debit\n";
+        $csv = "code,name,type,normal_balance\n9100,Cash,asset,debit\nBAD,,asset,debit\n";
 
         $res = $this->actingAs($this->admin())
             ->post('/api/v1/imports/coa/dry-run', ['file' => $this->csv($csv)])
@@ -60,35 +78,41 @@ class MasterDataImportTest extends TestCase
         $res->assertJsonPath('data.total', 2);
         $res->assertJsonPath('data.valid', 1);
         $this->assertCount(1, $res->json('data.errors'));
-        // Nothing persisted.
-        $this->assertSame(0, Account::query()->count());
+        // Nothing persisted — delta must be zero.
+        $this->assertSame(0, $this->importedAccounts());
     }
 
     public function test_commit_is_atomic_all_or_nothing(): void
     {
         // One good + one bad row → commit imports NOTHING.
-        $bad = "code,name,type,normal_balance\n1000,Cash,asset,debit\n2000,Bad,notatype,debit\n";
+        $bad = "code,name,type,normal_balance\n9100,Cash,asset,debit\n9200,Bad,notatype,debit\n";
         $this->actingAs($this->admin())
             ->post('/api/v1/imports/coa/commit', ['file' => $this->csv($bad)])
             ->assertStatus(422);
-        $this->assertSame(0, Account::query()->count());
+        $this->assertSame(0, $this->importedAccounts());
         $this->assertSame(0, ImportBatch::query()->count());
 
         // All-good → commits, creates a batch.
-        $good = "code,name,type,normal_balance\n1000,Cash,asset,debit\n3000,Equity,equity,credit\n";
+        $good = "code,name,type,normal_balance\n9100,Cash,asset,debit\n9300,Equity,equity,credit\n";
         $res = $this->actingAs($this->admin())
             ->post('/api/v1/imports/coa/commit', ['file' => $this->csv($good)])
             ->assertStatus(201);
         $res->assertJsonPath('data.imported', 2);
-        $this->assertSame(2, Account::query()->count());
+        $this->assertSame(2, $this->importedAccounts());
         $this->assertSame(1, ImportBatch::query()->where('status', 'committed')->count());
     }
 
+    /**
+     * ItemImporter::requiredColumns() mandates the inventory-planning columns
+     * (reorder_method / reorder_point / safety_stock / minimum_order_quantity /
+     * lead_time_days). This CSV predated them and was rejected up-front with
+     * "Missing required column(s)", so it never reached the row logic at all.
+     */
     public function test_items_import_resolves_category_and_commits(): void
     {
-        $csv = "code,name,item_type,unit_of_measure,category,standard_cost\n"
-             ."RM-001,ABS Resin,raw_material,kg,Resins,120.50\n"
-             ."FG-001,Wiper Bushing,finished_good,pcs,Molded Parts,5.00\n";
+        $csv = "code,name,item_type,unit_of_measure,category,standard_cost,reorder_method,reorder_point,safety_stock,minimum_order_quantity,lead_time_days\n"
+             ."RM-001,ABS Resin,raw_material,kg,Resins,120.50,fixed_quantity,100,50,25,14\n"
+             ."FG-001,Wiper Bushing,finished_good,pcs,Molded Parts,5.00,days_of_supply,200,80,40,7\n";
 
         $this->actingAs($this->admin())
             ->post('/api/v1/imports/items/commit', ['file' => $this->csv($csv)])
@@ -99,6 +123,11 @@ class MasterDataImportTest extends TestCase
         $item = Item::query()->where('code', 'RM-001')->firstOrFail();
         $this->assertSame('ABS Resin', $item->name);
         $this->assertNotNull($item->category_id);
+        // The planning columns must actually land, not just satisfy the header check.
+        $this->assertSame('fixed_quantity', $item->reorder_method instanceof \BackedEnum
+            ? $item->reorder_method->value
+            : (string) $item->reorder_method);
+        $this->assertSame(14, (int) $item->lead_time_days);
     }
 
     public function test_customers_and_vendors_import(): void
@@ -174,18 +203,21 @@ class MasterDataImportTest extends TestCase
 
     public function test_batch_rollback_deletes_imported_records(): void
     {
-        $good = "code,name,type,normal_balance\n1000,Cash,asset,debit\n3000,Equity,equity,credit\n";
+        $good = "code,name,type,normal_balance\n9100,Cash,asset,debit\n9300,Equity,equity,credit\n";
         $commit = $this->actingAs($this->admin())
             ->post('/api/v1/imports/coa/commit', ['file' => $this->csv($good)])
             ->assertStatus(201);
         $batchHash = $commit->json('data.batch_id');
-        $this->assertSame(2, Account::query()->count());
+        $this->assertSame(2, $this->importedAccounts());
 
         $this->actingAs($this->admin())
             ->postJson("/api/v1/imports/batches/{$batchHash}/rollback")
             ->assertStatus(200);
 
-        $this->assertSame(0, Account::query()->count());
+        // Rollback removes only what the batch imported; the seeded chart of
+        // accounts must survive untouched.
+        $this->assertSame(0, $this->importedAccounts());
+        $this->assertSame($this->baselineAccounts, Account::query()->count());
         $this->assertSame(1, ImportBatch::query()->where('status', 'rolled_back')->count());
     }
 
@@ -193,11 +225,11 @@ class MasterDataImportTest extends TestCase
     {
         $commit = $this->actingAs($this->admin())
             ->post('/api/v1/imports/coa/commit', [
-                'file' => $this->csv("code,name,type,normal_balance\n1000,Cash,asset,debit\n"),
+                'file' => $this->csv("code,name,type,normal_balance\n9100,Cash,asset,debit\n"),
             ])
             ->assertCreated();
 
-        $account = Account::query()->where('code', '1000')->firstOrFail();
+        $account = Account::query()->where('code', '9100')->firstOrFail();
         $entry = JournalEntry::create([
             'entry_number' => 'JE-IMPORT-ROLLBACK',
             'date' => '2026-01-01',
@@ -227,11 +259,11 @@ class MasterDataImportTest extends TestCase
         $employee = User::factory()->create([
             'role_id' => Role::query()->where('slug', 'employee')->value('id'),
         ]);
-        $csv = "code,name,type,normal_balance\n1000,Cash,asset,debit\n";
+        $csv = "code,name,type,normal_balance\n9100,Cash,asset,debit\n";
 
         $this->actingAs($employee)
             ->post('/api/v1/imports/coa/commit', ['file' => $this->csv($csv)])
             ->assertStatus(403);
-        $this->assertSame(0, Account::query()->count());
+        $this->assertSame(0, $this->importedAccounts());
     }
 }

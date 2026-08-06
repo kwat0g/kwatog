@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\CRM\Services;
 
 use App\Common\Support\HashIdFilter;
+use App\Common\Support\TrashedFilter;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\CRM\Enums\PricingMethod;
 use App\Modules\CRM\Exceptions\NoPriceAgreementException;
@@ -26,6 +27,8 @@ class PriceAgreementService
     {
         $q = PriceAgreement::query()
             ->with(['product:id,part_number,name,unit_of_measure', 'customer:id,name']);
+
+        TrashedFilter::apply($q, $filters);
 
         if (! empty($filters['customer_id'])) {
             $cid = HashIdFilter::decode($filters['customer_id'], Customer::class);

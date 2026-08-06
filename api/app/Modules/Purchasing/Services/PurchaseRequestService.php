@@ -7,7 +7,9 @@ namespace App\Modules\Purchasing\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\ApprovalService;
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\SettingsService;
 use App\Common\Support\HashIdFilter;
+use App\Common\Support\TrashedFilter;
 use App\Modules\Accounting\Services\BudgetEnforcementService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Models\Item;
@@ -26,6 +28,7 @@ class PurchaseRequestService
         private readonly DocumentSequenceService $sequences,
         private readonly ApprovalService $approvals,
         private readonly BudgetEnforcementService $budget,
+        private readonly SettingsService $settings,
     ) {}
 
     public function list(array $filters, ?User $user = null): LengthAwarePaginator
@@ -36,6 +39,8 @@ class PurchaseRequestService
             'items.item:id,code,name,unit_of_measure',
             'approvalRecords',
         ]);
+
+        TrashedFilter::apply($q, $filters);
 
         if (! empty($filters['status']))   $q->where('status', $filters['status']);
         if (! empty($filters['priority'])) $q->where('priority', $filters['priority']);
@@ -95,7 +100,7 @@ class PurchaseRequestService
                 'template_id'          => $data['template_id'] ?? null,
                 'date'                 => $data['date'] ?? now()->toDateString(),
                 'reason'               => $data['reason'] ?? null,
-                'priority'             => $data['priority'] ?? PurchaseRequestPriority::Normal->value,
+                'priority'             => $data['priority'] ?? (string) $this->settings->get('purchasing.purchase_request.default_priority', ''),
                 'is_auto_generated'    => $isAuto,
                 'auto_generated_reason'=> $data['auto_generated_reason'] ?? null,
                 'is_urgent'            => (bool) ($data['is_urgent'] ?? false),
@@ -147,7 +152,7 @@ class PurchaseRequestService
                 'date'      => $data['date']     ?? $pr->date,
             ]);
             if (isset($data['items'])) {
-                $pr->items()->delete();
+                $pr->items()->forceDelete();
                 foreach ($data['items'] as $row) {
                     $itemId = ! empty($row['item_id'])
                         ? (HashIdFilter::decode($row['item_id'], Item::class) ?? (int) $row['item_id'])
@@ -211,10 +216,11 @@ class PurchaseRequestService
             $requester = $fresh->requester;
             $isDeptHead = $requester && $requester->employee &&
                 $requester->employee->is_department_head;
-            if ($total < 5000 && $isDeptHead) {
+            $autoApproveThreshold = $this->settings->requiredFloat('approval.pr.dept_head_auto_approve_threshold', 0);
+            if ($total < $autoApproveThreshold && $isDeptHead) {
                 // Auto-approve all pending steps in order.
                 while ($this->approvals->nextStep($fresh)) {
-                    $this->approvals->approve($fresh, $requester, 'Auto-approved: amount below ₱5,000 threshold.');
+                    $this->approvals->approve($fresh, $requester, 'Auto-approved: amount below configured department-head threshold.');
                 }
                 if ($this->approvals->isFullyApproved($fresh)) {
                     $fresh->forceFill([
@@ -237,7 +243,7 @@ class PurchaseRequestService
      * so it goes directly to later approvers.
      *
      * OGAMI-013 — The Dept Head skip is now gated behind a value cap
-     * (config('purchasing.urgent_skip_limit')). A high-value "urgent" PR can no
+     * (the persisted purchasing.urgent_skip_limit setting). A high-value "urgent" PR can no
      * longer bypass its department head with only a free-text reason; over the
      * cap, the full chain applies. A '0' cap disables skipping entirely. When a
      * skip IS performed, the urgency_reason is stamped onto the skipped record
@@ -249,7 +255,7 @@ class PurchaseRequestService
 
         // Resolve the cap. '0' disables skipping; any positive value is the
         // inclusive ceiling under which the Dept Head step may be skipped.
-        $limit = (float) config('purchasing.urgent_skip_limit', '0');
+        $limit = $this->settings->requiredFloat('purchasing.urgent_skip_limit', 0);
         $maySkip = $limit > 0 && $total <= $limit;
 
         if (! $maySkip) {

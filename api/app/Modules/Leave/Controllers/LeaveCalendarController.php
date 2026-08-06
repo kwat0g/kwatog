@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Leave\Controllers;
 
 use App\Common\Support\HashIdFilter;
+use App\Common\Services\SettingsService;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Leave\Enums\LeaveRequestStatus;
@@ -16,6 +17,8 @@ use Illuminate\Http\Request;
 
 class LeaveCalendarController
 {
+    public function __construct(private readonly SettingsService $settings) {}
+
     public function index(Request $request): JsonResponse
     {
         $year = $request->integer('year', now()->year);
@@ -68,7 +71,11 @@ class LeaveCalendarController
                 'employees_on_leave' => $onLeave->map(fn ($l) => [
                     'employee_name' => $l->employee?->full_name ?? '',
                     'status' => $l->status instanceof \BackedEnum ? $l->status->value : (string) $l->status,
+                    'status_label' => $l->status?->label() ?? (string) $l->status,
                     'leave_type' => $l->leaveType?->name ?? '',
+                    // M-18 — half-day marker ('am'|'pm') so the calendar
+                    // tooltip distinguishes half-day leaves from full-day.
+                    'half_day_period' => $l->half_day_period?->value ?? null,
                 ])->values()->toArray(),
             ];
         }
@@ -78,6 +85,10 @@ class LeaveCalendarController
                 'year' => $year,
                 'month' => $month,
                 'headcount' => $headcount,
+                'coverage_policy' => [
+                    'success_pct' => $this->settings->requiredFloat('leave.calendar.coverage_success_pct', 0, 100),
+                    'warning_pct' => $this->settings->requiredFloat('leave.calendar.coverage_warning_pct', 0, 100),
+                ],
                 'days' => $days,
             ],
         ]);

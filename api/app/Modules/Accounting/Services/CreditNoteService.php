@@ -35,16 +35,12 @@ use Illuminate\Support\Facades\DB;
  */
 class CreditNoteService
 {
-    private const AR_CODE    = '1100';
-    private const AP_CODE    = '2010';
-    private const VAT_OUTPUT = '2060';
-    private const VAT_INPUT  = '1310';
-
     public function __construct(
         private readonly DocumentSequenceService $sequences,
         private readonly JournalEntryService $journals,
         private readonly AccountingPeriodService $periods,
         private readonly TaxPolicyService $taxPolicy,
+        private readonly AccountingAccountPolicyService $accounts,
     ) {}
 
     /**
@@ -106,7 +102,7 @@ class CreditNoteService
         }
 
         return DB::transaction(function () use ($data, $type, $lines, $by) {
-            $isVatable = (bool) ($data['is_vatable'] ?? true);
+            $isVatable = (bool) ($data['is_vatable'] ?? $this->taxPolicy->isVatRegistered());
 
             $subtotal = Money::zero();
             $resolvedLines = [];
@@ -290,17 +286,17 @@ class CreditNoteService
                 $lines[] = ['account_id' => (int) $l->account_id, 'debit' => (string) $l->amount, 'credit' => '0.00', 'description' => $l->description];
             }
             if ($cn->is_vatable && Money::gt((string) $cn->vat_amount, '0')) {
-                $lines[] = ['account_id' => $this->accountId(self::VAT_OUTPUT), 'debit' => (string) $cn->vat_amount, 'credit' => '0.00', 'description' => 'VAT Output reversal'];
+                $lines[] = ['account_id' => $this->accountId($this->accounts->vatOutput()), 'debit' => (string) $cn->vat_amount, 'credit' => '0.00', 'description' => 'VAT Output reversal'];
             }
-            $lines[] = ['account_id' => $this->accountId(self::AR_CODE), 'debit' => '0.00', 'credit' => (string) $cn->total_amount, 'description' => 'AR reduction'];
+            $lines[] = ['account_id' => $this->accountId($this->accounts->ar()), 'debit' => '0.00', 'credit' => (string) $cn->total_amount, 'description' => 'AR reduction'];
         } else {
             // Supplier credit: DR AP, CR each expense account, CR VAT input.
-            $lines[] = ['account_id' => $this->accountId(self::AP_CODE), 'debit' => (string) $cn->total_amount, 'credit' => '0.00', 'description' => 'AP reduction'];
+            $lines[] = ['account_id' => $this->accountId($this->accounts->ap()), 'debit' => (string) $cn->total_amount, 'credit' => '0.00', 'description' => 'AP reduction'];
             foreach ($cn->lines as $l) {
                 $lines[] = ['account_id' => (int) $l->account_id, 'debit' => '0.00', 'credit' => (string) $l->amount, 'description' => $l->description];
             }
             if ($cn->is_vatable && Money::gt((string) $cn->vat_amount, '0')) {
-                $lines[] = ['account_id' => $this->accountId(self::VAT_INPUT), 'debit' => '0.00', 'credit' => (string) $cn->vat_amount, 'description' => 'VAT Input reversal'];
+                $lines[] = ['account_id' => $this->accountId($this->accounts->vatInput()), 'debit' => '0.00', 'credit' => (string) $cn->vat_amount, 'description' => 'VAT Input reversal'];
             }
         }
         return $lines;

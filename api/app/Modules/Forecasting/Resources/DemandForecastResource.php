@@ -6,6 +6,8 @@ namespace App\Modules\Forecasting\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use App\Modules\Forecasting\Models\DemandForecast;
+use App\Common\Services\SettingsService;
 
 class DemandForecastResource extends JsonResource
 {
@@ -16,6 +18,8 @@ class DemandForecastResource extends JsonResource
             'forecast_year'       => (int) $this->forecast_year,
             'forecast_month'      => (int) $this->forecast_month,
             'method'              => $this->method,
+            'method_label'        => collect((array) app(SettingsService::class)->get('forecasting.methods', []))
+                ->firstWhere('value', (string) $this->method)['label'] ?? (string) $this->method,
             'forecasted_quantity' => (float) $this->forecasted_quantity,
             'confidence_level'    => $this->confidence_level !== null ? (float) $this->confidence_level : null,
             'actual_quantity'     => $this->actual_quantity !== null ? (float) $this->actual_quantity : null,

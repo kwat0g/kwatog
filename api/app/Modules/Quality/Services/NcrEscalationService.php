@@ -21,12 +21,6 @@ use Illuminate\Support\Carbon;
  */
 class NcrEscalationService
 {
-    private const TIERS = [
-        1 => ['role' => 'qc_inspector',  'subject' => 'NCR awaiting corrective'],
-        2 => ['role' => 'production_manager', 'subject' => 'NCR overdue — manager attention'],
-        3 => ['role' => 'system_admin',  'subject' => 'NCR critical overdue — exec escalation'],
-    ];
-
     public function __construct(
         private readonly NotificationService $notifications,
         private readonly SettingsService $settings,
@@ -61,7 +55,16 @@ class NcrEscalationService
             if ($nextTier > 3) {
                 continue;
             }
-            $tier = self::TIERS[$nextTier];
+            $subjects = (array) $this->settings->get('quality.ncr.escalation_subjects', []);
+            $tier = ['role' => '', 'subject' => (string) ($subjects[$nextTier - 1] ?? '')];
+            if ($tier['subject'] === '') {
+                throw new \App\Common\Exceptions\BusinessRuleException('NCR escalation subjects are not configured.');
+            }
+            $roles = array_values(array_filter((array) $this->settings->get('quality.ncr.escalation_roles', []), 'is_string'));
+            $tier['role'] = $roles[$nextTier - 1] ?? '';
+            if ($tier['role'] === '') {
+                throw new \App\Common\Exceptions\BusinessRuleException('NCR escalation roles are not configured.');
+            }
 
             $ncr->forceFill([
                 'escalation_level'  => $nextTier,

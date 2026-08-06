@@ -11,24 +11,26 @@ import type { PaginatedResponse } from '@/types';
 import type { DocumentRecord, DocumentType } from '@/types/documents';
 
 export interface ListDocumentsParams {
-  document_type?: DocumentType;
-  entity_type?: string;
-  from?: string;
-  to?: string;
-  page?: number;
-  per_page?: number;
+ document_type?: DocumentType;
+ entity_type?: string;
+ from?: string;
+ to?: string;
+ page?: number;
+ per_page?: number;
 }
 
 export const documentsApi = {
-  list: (params?: ListDocumentsParams) =>
-    client
-      .get<PaginatedResponse<DocumentRecord>>('/documents', { params })
-      .then((r) => r.data),
+ list: (params?: ListDocumentsParams) =>
+ client
+ .get<PaginatedResponse<DocumentRecord>>('/documents', { params })
+ .then((r) => r.data),
 
-  show: (id: string) =>
-    client
-      .get<{ data: DocumentRecord }>(`/documents/${id}`)
-      .then((r) => r.data.data),
+ show: (id: string) =>
+ client
+ .get<{ data: DocumentRecord }>(`/documents/${id}`)
+ .then((r) => r.data.data),
 
-  destroy: (id: string) => client.delete(`/documents/${id}`),
+ destroy: (id: string) => client.delete(`/documents/${id}`),
+
+ restore: (id: string) => client.patch(`/documents/${id}/restore`),
 };

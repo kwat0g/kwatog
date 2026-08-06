@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Quality\Listeners;
 
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\SalesOrderItem;
 use App\Modules\Production\Models\WorkOrder;
@@ -31,7 +32,10 @@ use Illuminate\Support\Str;
  */
 class CreateDeliveryDraftOnQcPass implements ShouldQueue
 {
-    public function __construct(private readonly DocumentSequenceService $sequences) {}
+    public function __construct(
+        private readonly DocumentSequenceService $sequences,
+        private readonly ?SettingsService $settings = null,
+    ) {}
 
     public function handle(InspectionPassed $event): void
     {
@@ -86,8 +90,10 @@ class CreateDeliveryDraftOnQcPass implements ShouldQueue
 
             // Notify ImpEx / warehouse so they can pick + dispatch.
             try {
+                $settings = $this->settings ?? app(SettingsService::class);
+                $roles = array_values(array_filter((array) $settings->get('quality.outgoing_qc_delivery.notification_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
                 User::query()
-                    ->whereHas('role', fn ($q) => $q->whereIn('slug', ['impex_officer', 'warehouse_staff']))
+                    ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                     ->where('is_active', true)
                     ->get()
                     ->each(function (User $user) use ($wo) {

@@ -11,61 +11,61 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 export default function CustomerDeliveriesPage() {
-  const navigate = useNavigate();
-  const { data: deliveries, isLoading, isError, refetch } = useQuery({
-    queryKey: ['portal', 'customer', 'deliveries'],
-    queryFn: () => customerPortalApi.listDeliveries(),
-    placeholderData: (prev) => prev });
+ const navigate = useNavigate();
+ const { data: deliveries, isLoading, isError, refetch } = useQuery({
+ queryKey: ['portal', 'customer', 'deliveries'],
+ queryFn: () => customerPortalApi.listDeliveries(),
+ placeholderData: (prev) => prev });
 
-  return (
-    <div>
-      <PageHeader title="Deliveries" subtitle="Shipments dispatched to your sites" />
+ return (
+ <div>
+ <PageHeader title="Deliveries" subtitle="Shipments dispatched to your sites" />
 
-      {/* One padded body holds every state, so loading and loaded agree on width. */}
-      <div className="px-5 py-4 max-w-5xl">
-        {isLoading && <SkeletonBlock className="h-64 rounded-md" />}
+ {/* One padded body holds every state, so loading and loaded agree on width. */}
+ <div className="px-5 py-4 max-w-5xl">
+ {isLoading && <SkeletonBlock className="h-64 rounded-md" />}
 
-        {isError && (
-          <EmptyState
-            icon="alert-circle"
-            title="Failed to load deliveries"
-            action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
-          />
-        )}
+ {isError && (
+ <EmptyState
+ icon="alert-circle"
+ title="Failed to load deliveries"
+ action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
+ />
+ )}
 
-        {!isLoading && !isError && (
-          <Panel noPadding>
-            {deliveries && deliveries.length > 0 ? (
-              <table className={tableCls}>
-                <thead>
-                  <tr className={theadTrCls}>
-                    <Th>DR #</Th>
-                    <Th>Delivery Date</Th>
-                    <Th align="right">Status</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {deliveries.map((d) => (
-                    <tr key={d.id} className={cn(trCls, "cursor-pointer")} onClick={() => navigate(`/portal/customer/deliveries/${d.id}`)}>
-                      <Td>
-                        
-                          {d.delivery_number}
-                        
-                      </Td>
-                      <Td className="text-muted">{d.delivered_at ?? '—'}</Td>
-                      <Td align="right" mono>
-                        <Chip variant={chipVariantForStatus(d.status)}>{d.status_label ?? d.status.replace(/_/g, ' ')}</Chip>
-                      </Td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <EmptyState icon="truck" title="No deliveries" description="Your deliveries will appear here once dispatched." />
-            )}
-          </Panel>
-        )}
-      </div>
-    </div>
-  );
+ {!isLoading && !isError && (
+ <Panel noPadding>
+ {deliveries && deliveries.length > 0 ? (
+ <table className={tableCls}>
+ <thead>
+ <tr className={theadTrCls}>
+ <Th>DR #</Th>
+ <Th>Delivery Date</Th>
+ <Th align="right">Status</Th>
+ </tr>
+ </thead>
+ <tbody>
+ {deliveries.map((d) => (
+ <tr key={d.id} className={cn(trCls, "cursor-pointer")} onClick={() => navigate(`/portal/customer/deliveries/${d.id}`)}>
+ <Td>
+ 
+ {d.delivery_number}
+ 
+ </Td>
+ <Td className="text-muted">{d.delivered_at ?? '—'}</Td>
+ <Td align="right" mono>
+ <Chip variant={chipVariantForStatus(d.status)}>{d.status_label ?? d.status.replace(/_/g, ' ')}</Chip>
+ </Td>
+ </tr>
+ ))}
+ </tbody>
+ </table>
+ ) : (
+ <EmptyState icon="truck" title="No deliveries" description="Your deliveries will appear here once dispatched." />
+ )}
+ </Panel>
+ )}
+ </div>
+ </div>
+ );
 }

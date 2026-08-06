@@ -9,6 +9,7 @@ use App\Common\Enums\ExportFrequency;
 use App\Common\Models\ScheduledExport;
 use App\Common\Resources\ScheduledExportResource;
 use App\Common\Services\Export\ExportColumnRegistry;
+use App\Common\Services\SettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -18,6 +19,8 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
  */
 class ScheduledExportController
 {
+    public function __construct(private readonly SettingsService $settings) {}
+
     public function index(Request $request): AnonymousResourceCollection
     {
         $user = $request->user();
@@ -47,12 +50,13 @@ class ScheduledExportController
         abort_unless($user, 401);
 
         $data = $this->validatePayload($request);
+        $defaultTime = $this->settings->requiredString('exports.default_time_of_day');
         $frequency = ExportFrequency::from($data['frequency']);
         $next = $frequency->nextRunFrom(
             now(),
             $data['day_of_week']  ?? null,
             $data['day_of_month'] ?? null,
-            $data['time_of_day']  ?? '06:00',
+            $data['time_of_day']  ?? $defaultTime,
         );
 
         $row = ScheduledExport::create([
@@ -65,7 +69,7 @@ class ScheduledExportController
             'frequency'    => $frequency->value,
             'day_of_week'  => $data['day_of_week']  ?? null,
             'day_of_month' => $data['day_of_month'] ?? null,
-            'time_of_day'  => $data['time_of_day']  ?? '06:00',
+            'time_of_day'  => $data['time_of_day']  ?? $defaultTime,
             'recipients'   => $data['recipients'],
             'next_run_at'  => $next,
             'is_active'    => true,
@@ -82,6 +86,7 @@ class ScheduledExportController
 
         $data = $this->validatePayload($request, partial: true);
         $scheduledExport->fill($data);
+        $defaultTime = $this->settings->requiredString('exports.default_time_of_day');
 
         if (isset($data['frequency']) || isset($data['day_of_week']) || isset($data['day_of_month']) || isset($data['time_of_day'])) {
             $frequency = $scheduledExport->frequency instanceof ExportFrequency
@@ -91,7 +96,7 @@ class ScheduledExportController
                 now(),
                 $scheduledExport->day_of_week,
                 $scheduledExport->day_of_month,
-                (string) ($scheduledExport->time_of_day ?? '06:00'),
+                (string) ($scheduledExport->time_of_day ?? $defaultTime),
             );
         }
 
@@ -104,6 +109,13 @@ class ScheduledExportController
         $this->authorizeRow($scheduledExport, $request);
         $scheduledExport->delete();
         return response()->json(null, 204);
+    }
+
+    public function restore(ScheduledExport $scheduledExport, Request $request): JsonResponse
+    {
+        $this->authorizeRow($scheduledExport, $request);
+        $scheduledExport->restore();
+        return response()->json(['message' => 'Scheduled export restored.']);
     }
 
     /** @return array<string, mixed> */

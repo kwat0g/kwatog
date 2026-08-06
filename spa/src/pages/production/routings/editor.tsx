@@ -33,21 +33,21 @@ import { cn } from '@/lib/cn';
 // ─── Schema ──────────────────────────────────────────────────────
 
 const operationSchema = z.object({
-  sequence:           z.string().regex(/^\d+$/, 'Required').refine((v) => Number(v) > 0, 'Must be > 0'),
-  operation_name:     z.string().min(1, 'Operation name is required').max(100),
-  work_center:        z.string().max(100).optional().or(z.literal('')),
-  machine_id:         z.string().optional().or(z.literal('')),
-  mold_id:            z.string().optional().or(z.literal('')),
-  setup_time_minutes: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Use a non-negative decimal').optional().or(z.literal('')),
-  cycle_time_minutes: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Cycle time is required').refine((v) => Number(v) > 0, 'Must be > 0'),
-  qc_required:        z.boolean(),
-  description:        z.string().max(500).optional().or(z.literal('')),
+ sequence: z.string().regex(/^\d+$/, 'Required').refine((v) => Number(v) > 0, 'Must be > 0'),
+ operation_name: z.string().min(1, 'Operation name is required').max(100),
+ work_center: z.string().max(100).optional().or(z.literal('')),
+ machine_id: z.string().optional().or(z.literal('')),
+ mold_id: z.string().optional().or(z.literal('')),
+ setup_time_minutes: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Use a non-negative decimal').optional().or(z.literal('')),
+ cycle_time_minutes: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Cycle time is required').refine((v) => Number(v) > 0, 'Must be > 0'),
+ qc_required: z.boolean(),
+ description: z.string().max(500).optional().or(z.literal('')),
 });
 
 const schema = z.object({
-  product_id: z.string().min(1, 'Product is required'),
-  notes:      z.string().max(1000).optional().or(z.literal('')),
-  operations: z.array(operationSchema).min(1, 'Add at least one operation'),
+ product_id: z.string().min(1, 'Product is required'),
+ notes: z.string().max(1000).optional().or(z.literal('')),
+ operations: z.array(operationSchema).min(1, 'Add at least one operation'),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -55,356 +55,356 @@ type FormValues = z.infer<typeof schema>;
 // ─── Component ───────────────────────────────────────────────────
 
 export default function RoutingEditorPage() {
-  const { id } = useParams<{ id: string }>();
-  const isEdit = !!id;
-  const navigate = useNavigate();
-  const qc = useQueryClient();
+ const { id } = useParams<{ id: string }>();
+ const isEdit = !!id;
+ const navigate = useNavigate();
+ const qc = useQueryClient();
 
-  // ── Lookups ──────────────────────────────────────────────
-  const products = useQuery({
-    queryKey: ['crm', 'products', 'lookup'],
-    queryFn: () => productsApi.list({ per_page: 100, is_active: 'true' }),
-  });
-  const machines = useQuery({
-    queryKey: ['mrp', 'machines', 'lookup'],
-    queryFn: () => machinesApi.list({ per_page: 100 }),
-  });
-  const molds = useQuery({
-    queryKey: ['mrp', 'molds', 'lookup'],
-    queryFn: () => moldsApi.list({ per_page: 100 }),
-  });
+ // ── Lookups ──────────────────────────────────────────────
+ const products = useQuery({
+ queryKey: ['crm', 'products', 'lookup'],
+ queryFn: () => productsApi.list({ per_page: 100, is_active: 'true' }),
+ });
+ const machines = useQuery({
+ queryKey: ['mrp', 'machines', 'lookup'],
+ queryFn: () => machinesApi.list({ per_page: 100 }),
+ });
+ const molds = useQuery({
+ queryKey: ['mrp', 'molds', 'lookup'],
+ queryFn: () => moldsApi.list({ per_page: 100 }),
+ });
 
-  // ── Existing routing (edit mode) ─────────────────────────
-  const existing = useQuery({
-    queryKey: ['production', 'routings', 'detail', id],
-    queryFn: () => routingsApi.show(id!),
-    enabled: isEdit,
-  });
+ // ── Existing routing (edit mode) ─────────────────────────
+ const existing = useQuery({
+ queryKey: ['production', 'routings', 'detail', id],
+ queryFn: () => routingsApi.show(id!),
+ enabled: isEdit,
+ });
 
-  const {
-    register, control, handleSubmit, setError, reset,
-    formState: { errors, isSubmitting },
-  } = useForm<FormValues>({
-    resolver: zodResolver(schema),
-    defaultValues: {
-      product_id: '',
-      notes: '',
-      operations: [
-        { sequence: '', operation_name: '', work_center: '', machine_id: '', mold_id: '', setup_time_minutes: '', cycle_time_minutes: '', qc_required: false, description: '' },
-      ],
-    },
-  });
+ const {
+ register, control, handleSubmit, setError, reset,
+ formState: { errors, isSubmitting },
+ } = useForm<FormValues>({
+ resolver: zodResolver(schema),
+ defaultValues: {
+ product_id: '',
+ notes: '',
+ operations: [
+ { sequence: '', operation_name: '', work_center: '', machine_id: '', mold_id: '', setup_time_minutes: '', cycle_time_minutes: '', qc_required: false, description: '' },
+ ],
+ },
+ });
 
-  const { fields, append, remove } = useFieldArray({ control, name: 'operations' });
+ const { fields, append, remove } = useFieldArray({ control, name: 'operations' });
 
-  // Populate form when editing an existing routing.
-  useEffect(() => {
-    if (!existing.data) return;
-    const r = existing.data;
-    reset({
-      product_id: r.product?.id ?? '',
-      notes: r.notes ?? '',
-      operations: r.operations.length > 0
-        ? r.operations.map((op) => ({
-            sequence:           String(op.sequence),
-            operation_name:     op.operation_name,
-            work_center:        op.work_center ?? '',
-            machine_id:         op.machine?.id ?? '',
-            mold_id:            op.mold?.id ?? '',
-            setup_time_minutes: op.setup_time_minutes ?? '',
-            cycle_time_minutes: op.cycle_time_minutes ?? '',
-            qc_required:        op.qc_required,
-            description:        op.description ?? '',
-          }))
-        : [{ sequence: '', operation_name: '', work_center: '', machine_id: '', mold_id: '', setup_time_minutes: '', cycle_time_minutes: '', qc_required: false, description: '' }],
-    });
-  }, [existing.data, reset]);
+ // Populate form when editing an existing routing.
+ useEffect(() => {
+ if (!existing.data) return;
+ const r = existing.data;
+ reset({
+ product_id: r.product?.id ?? '',
+ notes: r.notes ?? '',
+ operations: r.operations.length > 0
+ ? r.operations.map((op) => ({
+ sequence: String(op.sequence),
+ operation_name: op.operation_name,
+ work_center: op.work_center ?? '',
+ machine_id: op.machine?.id ?? '',
+ mold_id: op.mold?.id ?? '',
+ setup_time_minutes: op.setup_time_minutes ?? '',
+ cycle_time_minutes: op.cycle_time_minutes ?? '',
+ qc_required: op.qc_required,
+ description: op.description ?? '',
+ }))
+ : [{ sequence: '', operation_name: '', work_center: '', machine_id: '', mold_id: '', setup_time_minutes: '', cycle_time_minutes: '', qc_required: false, description: '' }],
+ });
+ }, [existing.data, reset]);
 
-  // ── Mutations ────────────────────────────────────────────
-  const saveMut = useMutation({
-    mutationFn: (values: FormValues) => {
-      const payload = {
-        product_id: values.product_id,
-        notes: values.notes || null,
-        operations: values.operations.map((op) => ({
-          sequence:           Number(op.sequence),
-          operation_name:     op.operation_name,
-          work_center:        op.work_center || null,
-          machine_id:         op.machine_id || null,
-          mold_id:            op.mold_id || null,
-          setup_time_minutes: op.setup_time_minutes || null,
-          cycle_time_minutes: op.cycle_time_minutes,
-          qc_required:        op.qc_required,
-          description:        op.description || null,
-        })),
-      };
-      return isEdit
-        ? routingsApi.update(id!, payload)
-        : routingsApi.create(payload);
-    },
-    onSuccess: (routing) => {
-      qc.invalidateQueries({ queryKey: ['production', 'routings'] });
-      toast.success(isEdit ? 'Routing updated.' : `Routing v${routing.version} created.`);
-      navigate(`/production/routings/${routing.id}`);
-    },
-    onError: (e: AxiosError<{ message?: string; errors?: Record<string, string[]> }>) => {
-      if (e.response?.status === 422 && e.response.data.errors) {
-        Object.entries(e.response.data.errors).forEach(([field, msgs]) => {
-          setError(field as never, { type: 'server', message: msgs[0] });
-        });
-        toast.error(e.response?.data?.message || 'Validation failed.');
-      } else {
-        toast.error(e.response?.data?.message ?? 'Failed to save routing.');
-      }
-    },
-  });
+ // ── Mutations ────────────────────────────────────────────
+ const saveMut = useMutation({
+ mutationFn: (values: FormValues) => {
+ const payload = {
+ product_id: values.product_id,
+ notes: values.notes || null,
+ operations: values.operations.map((op) => ({
+ sequence: Number(op.sequence),
+ operation_name: op.operation_name,
+ work_center: op.work_center || null,
+ machine_id: op.machine_id || null,
+ mold_id: op.mold_id || null,
+ setup_time_minutes: op.setup_time_minutes || null,
+ cycle_time_minutes: op.cycle_time_minutes,
+ qc_required: op.qc_required,
+ description: op.description || null,
+ })),
+ };
+ return isEdit
+ ? routingsApi.update(id!, payload)
+ : routingsApi.create(payload);
+ },
+ onSuccess: (routing) => {
+ qc.invalidateQueries({ queryKey: ['production', 'routings'] });
+ toast.success(isEdit ? 'Routing updated.' : `Routing v${routing.version} created.`);
+ navigate(`/production/routings/${routing.id}`);
+ },
+ onError: (e: AxiosError<{ message?: string; errors?: Record<string, string[]> }>) => {
+ if (e.response?.status === 422 && e.response.data.errors) {
+ Object.entries(e.response.data.errors).forEach(([field, msgs]) => {
+ setError(field as never, { type: 'server', message: msgs[0] });
+ });
+ toast.error(e.response?.data?.message || 'Validation failed.');
+ } else {
+ toast.error(e.response?.data?.message ?? 'Failed to save routing.');
+ }
+ },
+ });
 
-  // ── Loading / error for edit mode ────────────────────────
-  if (isEdit && existing.isLoading) {
-    return (
-      <div>
-        <PageHeader
-          title="Loading routing..."
-          backTo="/production/routings"
-          backLabel="Routings"
-          breadcrumbs={[
-            { label: 'Production', href: '/production' },
-            { label: 'Routings', href: '/production/routings' },
-            { label: 'Loading...' },
-          ]}
-        />
-        <SkeletonForm />
-      </div>
-    );
-  }
+ // ── Loading / error for edit mode ────────────────────────
+ if (isEdit && existing.isLoading) {
+ return (
+ <div>
+ <PageHeader
+ title="Loading routing..."
+ backTo="/production/routings"
+ backLabel="Routings"
+ breadcrumbs={[
+ { label: 'Production', href: '/production' },
+ { label: 'Routings', href: '/production/routings' },
+ { label: 'Loading...' },
+ ]}
+ />
+ <SkeletonForm />
+ </div>
+ );
+ }
 
-  if (isEdit && existing.isError) {
-    return (
-      <div>
-        <PageHeader
-          title="Routing"
-          backTo="/production/routings"
-          backLabel="Routings"
-          breadcrumbs={[
-            { label: 'Production', href: '/production' },
-            { label: 'Routings', href: '/production/routings' },
-            { label: 'Error' },
-          ]}
-        />
-        <EmptyState
-          icon="alert-circle"
-          title="Failed to load routing"
-          action={<Button variant="secondary" onClick={() => existing.refetch()}>Retry</Button>}
-        />
-      </div>
-    );
-  }
+ if (isEdit && existing.isError) {
+ return (
+ <div>
+ <PageHeader
+ title="Routing"
+ backTo="/production/routings"
+ backLabel="Routings"
+ breadcrumbs={[
+ { label: 'Production', href: '/production' },
+ { label: 'Routings', href: '/production/routings' },
+ { label: 'Error' },
+ ]}
+ />
+ <EmptyState
+ icon="alert-circle"
+ title="Failed to load routing"
+ action={<Button variant="secondary" onClick={() => existing.refetch()}>Retry</Button>}
+ />
+ </div>
+ );
+ }
 
-  const pageTitle = isEdit
-    ? `Edit routing${existing.data?.product ? ` — ${existing.data.product.part_number}` : ''}`
-    : 'New routing';
+ const pageTitle = isEdit
+ ? `Edit routing${existing.data?.product ? ` — ${existing.data.product.part_number}` : ''}`
+ : 'New routing';
 
-  return (
-    <div>
-      <PageHeader
-        title={pageTitle}
-        backTo="/production/routings"
-        backLabel="Routings"
-        breadcrumbs={[
-          { label: 'Production', href: '/production' },
-          { label: 'Routings', href: '/production/routings' },
-          { label: isEdit ? 'Edit' : 'New routing' },
-        ]}
-      />
+ return (
+ <div>
+ <PageHeader
+ title={pageTitle}
+ backTo="/production/routings"
+ backLabel="Routings"
+ breadcrumbs={[
+ { label: 'Production', href: '/production' },
+ { label: 'Routings', href: '/production/routings' },
+ { label: isEdit ? 'Edit' : 'New routing' },
+ ]}
+ />
 
-      <form
-        onSubmit={handleSubmit((v) => saveMut.mutate(v), onFormInvalid<FormValues>())}
-        className="max-w-5xl mx-auto px-5 py-4"
-      >
-        {/* Product + notes */}
-        <fieldset className="mb-8">
-          <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">Product</legend>
-          <div className="grid grid-cols-2 gap-3">
-            <Select
-              label="Finished good"
-              required
-              {...register('product_id')}
-              error={errors.product_id?.message}
-              disabled={isEdit}
-            >
-              <option value="">Select product...</option>
-              {products.data?.data.map((p) => (
-                <option key={p.id} value={p.id}>{p.part_number} — {p.name}</option>
-              ))}
-            </Select>
-            <Textarea
-              label="Notes"
-              {...register('notes')}
-              error={errors.notes?.message}
-              maxLength={1000}
-              placeholder="Optional routing notes..."
-            />
-          </div>
-        </fieldset>
+ <form
+ onSubmit={handleSubmit((v) => saveMut.mutate(v), onFormInvalid<FormValues>())}
+ className="max-w-5xl mx-auto px-5 py-4"
+ >
+ {/* Product + notes */}
+ <fieldset className="mb-8">
+ <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">Product</legend>
+ <div className="grid grid-cols-2 gap-3">
+ <Select
+ label="Finished good"
+ required
+ {...register('product_id')}
+ error={errors.product_id?.message}
+ disabled={isEdit}
+ >
+ <option value="">Select product...</option>
+ {products.data?.data.map((p) => (
+ <option key={p.id} value={p.id}>{p.part_number} — {p.name}</option>
+ ))}
+ </Select>
+ <Textarea
+ label="Notes"
+ {...register('notes')}
+ error={errors.notes?.message}
+ maxLength={1000}
+ placeholder="Optional routing notes..."
+ />
+ </div>
+ </fieldset>
 
-        {/* Operations table */}
-        <fieldset className="mb-8">
-          <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">Operations</legend>
-          <div className="border border-default rounded-md overflow-hidden">
-            <table className={tableCls}>
-              <thead>
-                <tr className={theadTrCls}>
-                  <Th className="w-10">#</Th>
-                  <Th>Operation</Th>
-                  <Th>Work center</Th>
-                  <Th>Machine</Th>
-                  <Th>Mold</Th>
-                  <Th align="right">Setup (min)</Th>
-                  <Th align="right">Cycle (min)</Th>
-                  <Th align="center">QC</Th>
-                  <Th className="w-8" />
-                </tr>
-              </thead>
-              <tbody>
-                {fields.map((field, i) => (
-                  <tr key={field.id} className={cn(trCls, 'align-top')}>
-                    <Td>
-                      <div className="flex items-center gap-1 text-muted">
-                        <GripVertical size={12} className="shrink-0" aria-hidden />
-                        <Input
-                          {...register(`operations.${i}.sequence` as const)}
-                          error={errors.operations?.[i]?.sequence?.message}
-                          className="font-mono text-right w-12"
-                          placeholder="10"
-                        />
-                      </div>
-                    </Td>
-                    <Td>
-                      <Input
-                        {...register(`operations.${i}.operation_name` as const)}
-                        error={errors.operations?.[i]?.operation_name?.message}
-                        placeholder="Operation name"
-                      />
-                    </Td>
-                    <Td>
-                      <Input
-                        {...register(`operations.${i}.work_center` as const)}
-                        error={errors.operations?.[i]?.work_center?.message}
-                        placeholder="Work center"
-                      />
-                    </Td>
-                    <Td>
-                      <Select
-                        {...register(`operations.${i}.machine_id` as const)}
-                        error={errors.operations?.[i]?.machine_id?.message}
-                      >
-                        <option value="">—</option>
-                        {machines.data?.data.map((m) => (
-                          <option key={m.id} value={m.id}>{m.machine_code} — {m.name}</option>
-                        ))}
-                      </Select>
-                    </Td>
-                    <Td>
-                      <Select
-                        {...register(`operations.${i}.mold_id` as const)}
-                        error={errors.operations?.[i]?.mold_id?.message}
-                      >
-                        <option value="">—</option>
-                        {molds.data?.data.map((m) => (
-                          <option key={m.id} value={m.id}>{m.mold_code} — {m.name}</option>
-                        ))}
-                      </Select>
-                    </Td>
-                    <Td>
-                      <Input
-                        {...register(`operations.${i}.setup_time_minutes` as const)}
-                        error={errors.operations?.[i]?.setup_time_minutes?.message}
-                        placeholder="0"
-                        className="font-mono text-right"
-                      />
-                    </Td>
-                    <Td>
-                      <Input
-                        {...register(`operations.${i}.cycle_time_minutes` as const)}
-                        error={errors.operations?.[i]?.cycle_time_minutes?.message}
-                        placeholder="0"
-                        className="font-mono text-right"
-                      />
-                    </Td>
-                    <Td align="center">
-                      <div className="flex items-center justify-center h-8">
-                        <Checkbox {...register(`operations.${i}.qc_required` as const)} />
-                      </div>
-                    </Td>
-                    <Td align="right" mono>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        iconOnly
-                        icon={<Trash2 size={14} />}
-                        aria-label="Remove operation"
-                        onClick={() => remove(i)}
-                        disabled={fields.length === 1}
-                        className="text-muted hover:text-danger"
-                      />
-                    </Td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+ {/* Operations table */}
+ <fieldset className="mb-8">
+ <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-4">Operations</legend>
+ <div className="border border-default rounded-md overflow-hidden">
+ <table className={tableCls}>
+ <thead>
+ <tr className={theadTrCls}>
+ <Th className="w-10">#</Th>
+ <Th>Operation</Th>
+ <Th>Work center</Th>
+ <Th>Machine</Th>
+ <Th>Mold</Th>
+ <Th align="right">Setup (min)</Th>
+ <Th align="right">Cycle (min)</Th>
+ <Th align="center">QC</Th>
+ <Th className="w-8" />
+ </tr>
+ </thead>
+ <tbody>
+ {fields.map((field, i) => (
+ <tr key={field.id} className={cn(trCls, 'align-top')}>
+ <Td>
+ <div className="flex items-center gap-1 text-muted">
+ <GripVertical size={12} className="shrink-0" aria-hidden />
+ <Input
+ {...register(`operations.${i}.sequence` as const)}
+ error={errors.operations?.[i]?.sequence?.message}
+ className="font-mono text-right w-12"
+ placeholder="10"
+ />
+ </div>
+ </Td>
+ <Td>
+ <Input
+ {...register(`operations.${i}.operation_name` as const)}
+ error={errors.operations?.[i]?.operation_name?.message}
+ placeholder="Operation name"
+ />
+ </Td>
+ <Td>
+ <Input
+ {...register(`operations.${i}.work_center` as const)}
+ error={errors.operations?.[i]?.work_center?.message}
+ placeholder="Work center"
+ />
+ </Td>
+ <Td>
+ <Select
+ {...register(`operations.${i}.machine_id` as const)}
+ error={errors.operations?.[i]?.machine_id?.message}
+ >
+ <option value="">—</option>
+ {machines.data?.data.map((m) => (
+ <option key={m.id} value={m.id}>{m.machine_code} — {m.name}</option>
+ ))}
+ </Select>
+ </Td>
+ <Td>
+ <Select
+ {...register(`operations.${i}.mold_id` as const)}
+ error={errors.operations?.[i]?.mold_id?.message}
+ >
+ <option value="">—</option>
+ {molds.data?.data.map((m) => (
+ <option key={m.id} value={m.id}>{m.mold_code} — {m.name}</option>
+ ))}
+ </Select>
+ </Td>
+ <Td>
+ <Input
+ {...register(`operations.${i}.setup_time_minutes` as const)}
+ error={errors.operations?.[i]?.setup_time_minutes?.message}
+ placeholder="0"
+ className="font-mono text-right"
+ />
+ </Td>
+ <Td>
+ <Input
+ {...register(`operations.${i}.cycle_time_minutes` as const)}
+ error={errors.operations?.[i]?.cycle_time_minutes?.message}
+ placeholder="0"
+ className="font-mono text-right"
+ />
+ </Td>
+ <Td align="center">
+ <div className="flex items-center justify-center h-8">
+ <Checkbox {...register(`operations.${i}.qc_required` as const)} />
+ </div>
+ </Td>
+ <Td align="right" mono>
+ <Button
+ type="button"
+ variant="ghost"
+ size="sm"
+ iconOnly
+ icon={<Trash2 size={14} />}
+ aria-label="Remove operation"
+ onClick={() => remove(i)}
+ disabled={fields.length === 1}
+ className="text-muted hover:text-danger"
+ />
+ </Td>
+ </tr>
+ ))}
+ </tbody>
+ </table>
+ </div>
 
-          <div className="mt-3 flex items-center gap-3">
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              icon={<Plus size={14} />}
-              onClick={() => {
-                const nextSeq = fields.length > 0
-                  ? String((Math.max(...fields.map((_, i) => {
-                      const el = document.querySelector<HTMLInputElement>(`[name="operations.${i}.sequence"]`);
-                      return el ? Number(el.value) || 0 : 0;
-                    })) + 10))
-                  : '10';
-                append({
-                  sequence: nextSeq,
-                  operation_name: '',
-                  work_center: '',
-                  machine_id: '',
-                  mold_id: '',
-                  setup_time_minutes: '',
-                  cycle_time_minutes: '',
-                  qc_required: false,
-                  description: '',
-                });
-              }}
-            >
-              Add operation
-            </Button>
-          </div>
+ <div className="mt-3 flex items-center gap-3">
+ <Button
+ type="button"
+ variant="secondary"
+ size="sm"
+ icon={<Plus size={14} />}
+ onClick={() => {
+ const nextSeq = fields.length > 0
+ ? String((Math.max(...fields.map((_, i) => {
+ const el = document.querySelector<HTMLInputElement>(`[name="operations.${i}.sequence"]`);
+ return el ? Number(el.value) || 0 : 0;
+ })) + 10))
+ : '10';
+ append({
+ sequence: nextSeq,
+ operation_name: '',
+ work_center: '',
+ machine_id: '',
+ mold_id: '',
+ setup_time_minutes: '',
+ cycle_time_minutes: '',
+ qc_required: false,
+ description: '',
+ });
+ }}
+ >
+ Add operation
+ </Button>
+ </div>
 
-          {errors.operations?.message && (
-            <p className="mt-2 text-xs text-danger">{errors.operations.message as string}</p>
-          )}
-        </fieldset>
+ {errors.operations?.message && (
+ <p className="mt-2 text-xs text-danger">{errors.operations.message as string}</p>
+ )}
+ </fieldset>
 
-        {/* Submit / cancel */}
-        <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
-          <Button type="button" variant="secondary" onClick={() => navigate('/production/routings')}>
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            variant="primary"
-            disabled={isSubmitting || saveMut.isPending}
-            loading={saveMut.isPending}
-          >
-            {saveMut.isPending ? 'Saving...' : isEdit ? 'Update routing' : 'Create routing'}
-          </Button>
-        </div>
-      </form>
-    </div>
-  );
+ {/* Submit / cancel */}
+ <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+ <Button type="button" variant="secondary" onClick={() => navigate('/production/routings')}>
+ Cancel
+ </Button>
+ <Button
+ type="submit"
+ variant="primary"
+ disabled={isSubmitting || saveMut.isPending}
+ loading={saveMut.isPending}
+ >
+ {saveMut.isPending ? 'Saving...' : isEdit ? 'Update routing' : 'Create routing'}
+ </Button>
+ </div>
+ </form>
+ </div>
+ );
 }

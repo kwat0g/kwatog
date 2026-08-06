@@ -12,35 +12,35 @@ import { cn } from '@/lib/cn';
 type Tone = 'accent' | 'danger' | 'muted';
 
 interface LinkButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  icon?: ReactNode;
-  /** `danger` for destructive inline actions, `muted` for secondary toggles. */
-  tone?: Tone;
+ icon?: ReactNode;
+ /** `danger` for destructive inline actions, `muted` for secondary toggles. */
+ tone?: Tone;
 }
 
 const toneClasses: Record<Tone, string> = {
-  accent: 'text-link hover:text-link-hover',
-  danger: 'text-danger',
-  muted: 'text-muted hover:text-primary',
+ accent: 'text-link hover:text-link-hover',
+ danger: 'text-danger',
+ muted: 'text-muted hover:text-primary',
 };
 
 export const LinkButton = forwardRef<HTMLButtonElement, LinkButtonProps>(
-  ({ tone = 'accent', icon, type = 'button', className, children, ...rest }, ref) => (
-    <button
-      ref={ref}
-      type={type}
-      className={cn(
-        'inline-flex items-center gap-1 cursor-pointer rounded transition-colors duration-fast',
-        'hover:underline underline-offset-2',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1',
-        'disabled:opacity-60 disabled:cursor-not-allowed disabled:no-underline',
-        toneClasses[tone],
-        className,
-      )}
-      {...rest}
-    >
-      {icon}
-      {children}
-    </button>
-  ),
+ ({ tone = 'accent', icon, type = 'button', className, children, ...rest }, ref) => (
+ <button
+ ref={ref}
+ type={type}
+ className={cn(
+ 'inline-flex items-center gap-1 cursor-pointer rounded transition-colors duration-fast',
+ 'hover:underline underline-offset-2',
+ 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1',
+ 'disabled:opacity-60 disabled:cursor-not-allowed disabled:no-underline',
+ toneClasses[tone],
+ className,
+ )}
+ {...rest}
+ >
+ {icon}
+ {children}
+ </button>
+ ),
 );
 LinkButton.displayName = 'LinkButton';

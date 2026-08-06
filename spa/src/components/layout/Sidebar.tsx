@@ -504,15 +504,15 @@ const NavLink = memo(function NavLink({
  to={item.to}
  aria-label={collapsed ? item.label : undefined}
  className={cn(
- 'relative flex items-center gap-2.5 px-4 py-1.5 text-sm transition-colors duration-fast',
+ 'relative flex items-center gap-3 px-3 py-2.5 mx-2 mb-0.5 rounded-xl text-sm transition-all duration-300',
  active
- ? 'text-primary font-medium bg-elevated'
- : 'text-secondary hover:bg-elevated hover:text-primary',
- collapsed && 'justify-center',
+ ? 'text-accent font-semibold bg-accent/15 shadow-sm'
+ : 'text-secondary hover:bg-surface hover:text-primary hover:shadow-sm hover:translate-x-1',
+ collapsed && 'justify-center mx-1 py-2',
  )}
  >
- {active && <span className="absolute left-0 top-1 bottom-1 w-[2px] bg-accent" aria-hidden />}
- <Icon size={14} className={collapsed ? '' : 'shrink-0'} />
+ {active && <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r-md bg-accent" aria-hidden />}
+ <Icon size={16} className={cn(collapsed ? '' : 'shrink-0', active ? 'text-accent' : 'text-muted')} />
  {collapsed && badgeValue != null && badgeValue > 0 && (
  <span
  className={cn(

@@ -5,6 +5,14 @@ declare(strict_types=1);
 namespace App\Modules\Production\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\SettingsService;
+use App\Modules\Inventory\Enums\ItemType;
+use App\Modules\Inventory\Enums\StockMovementType;
+use App\Modules\Inventory\Enums\WarehouseZoneType;
+use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\WarehouseLocation;
+use App\Modules\Inventory\Services\StockMovementService;
+use App\Modules\Inventory\Support\StockMovementInput;
 use App\Modules\MRP\Models\Mold;
 use App\Modules\MRP\Services\MoldService;
 use App\Modules\Production\Enums\WorkOrderStatus;
@@ -14,6 +22,7 @@ use App\Modules\Production\Models\WorkOrderOutput;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Sprint 6 — Task 55.
@@ -27,13 +36,19 @@ use Illuminate\Support\Facades\DB;
  *  - Updates WO totals (quantity_produced/good/rejected) + scrap_rate.
  *  - Increments mold shot count atomically (which may auto-flip mold to
  *    Maintenance via MoldService).
+ *  - F-04: records a ProductionReceipt stock movement for good output at a
+ *    Finished-Goods zone location, linking product part_number to item code.
  *  - Dispatches WorkOrderOutputRecorded event for live dashboard.
  */
 class WorkOrderOutputService
 {
     private const IDEMPOTENCY_TTL_SECONDS = 86400;
 
-    public function __construct(private readonly MoldService $molds) {}
+    public function __construct(
+        private readonly MoldService $molds,
+        private readonly StockMovementService $movements,
+        private readonly SettingsService $settings,
+    ) {}
 
     /**
      * @param array $data {
@@ -136,6 +151,44 @@ class WorkOrderOutputService
                 $mold = Mold::lockForUpdate()->find($fresh->mold_id);
                 if ($mold) {
                     $this->molds->incrementShots($mold, $total);
+                }
+            }
+
+            // F-04 — record ProductionReceipt for good output at an FG-zone location.
+            if ($good > 0) {
+                try {
+                    $product = $fresh->relationLoaded('product') ? $fresh->product : $fresh->product()->first();
+                    if ($product && $product->part_number) {
+                        $fgItem = Item::query()
+                            ->where('code', $product->part_number)
+                            ->where('item_type', ItemType::FinishedGood)
+                            ->first();
+                        if ($fgItem) {
+                            $fgLocation = WarehouseLocation::query()
+                                ->where('is_active', true)
+                                ->whereHas('zone', fn ($q) => $q->where('zone_type', WarehouseZoneType::FinishedGoods->value))
+                                ->orderBy('id')
+                                ->first();
+                            if ($fgLocation) {
+                                $this->movements->move(new StockMovementInput(
+                                    type: StockMovementType::ProductionReceipt,
+                                    itemId: $fgItem->id,
+                                    quantity: (string) $good,
+                                    toLocationId: $fgLocation->id,
+                                    referenceType: 'work_order',
+                                    referenceId: $fresh->id,
+                                    remarks: "WO {$fresh->wo_number} batch {$batchCode}",
+                                    createdBy: $recordedBy,
+                                    bypassCountFreeze: true,
+                                ));
+                            }
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('F-04: ProductionReceipt movement skipped', [
+                        'wo_id' => $fresh->id,
+                        'error' => $e->getMessage(),
+                    ]);
                 }
             }
 

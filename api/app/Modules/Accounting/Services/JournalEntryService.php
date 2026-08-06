@@ -6,8 +6,10 @@ namespace App\Modules\Accounting\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\SearchOperator;
+use App\Common\Support\TrashedFilter;
 
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\SettingsService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\Money;
 use App\Modules\Accounting\Enums\JournalEntryStatus;
@@ -29,6 +31,7 @@ class JournalEntryService
     public function __construct(
         private readonly DocumentSequenceService $sequences,
         private readonly AccountingPeriodService $periods,
+        private readonly SettingsService $settings,
     ) {}
 
     /**
@@ -38,6 +41,8 @@ class JournalEntryService
     {
         // role_id required so User's $with=['role'] eager-load can resolve.
         $q = JournalEntry::query()->with(['creator:id,name,email,role_id', 'poster:id,name,email,role_id']);
+
+        TrashedFilter::apply($q, $filters);
 
         if (! empty($filters['status'])) {
             $q->where('status', $filters['status']);
@@ -151,7 +156,7 @@ class JournalEntryService
                 'total_credit'   => $totalCredit,
             ]);
 
-            JournalEntryLine::where('journal_entry_id', $je->id)->delete();
+            JournalEntryLine::where('journal_entry_id', $je->id)->forceDelete();
             foreach ($lines as $line) {
                 $line['journal_entry_id'] = $je->id;
                 JournalEntryLine::insert($line);
@@ -167,7 +172,7 @@ class JournalEntryService
             throw new BusinessRuleException('Only draft entries can be deleted.');
         }
         DB::transaction(function () use ($je) {
-            JournalEntryLine::where('journal_entry_id', $je->id)->delete();
+            JournalEntryLine::where('journal_entry_id', $je->id)->forceDelete();
             $je->delete();
         });
     }
@@ -248,7 +253,7 @@ class JournalEntryService
         }
 
         // Threshold escape hatch. Default '0' => always require maker !== checker.
-        $limit = (string) config('accounting.je_self_post_limit', '0');
+        $limit = (string) $this->settings->requiredFloat('accounting.je_self_post_limit', 0);
         if (Money::gt($limit, '0') && Money::lt($total, $limit)) {
             return; // below self-post limit — permitted.
         }

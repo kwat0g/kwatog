@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Common\Services;
 
 use Illuminate\Support\Facades\DB;
+use App\Common\Services\SettingsService;
 use InvalidArgumentException;
 
 /**
@@ -19,53 +20,24 @@ use InvalidArgumentException;
  */
 class DocumentSequenceService
 {
-    /**
-     * @return array<string, array{prefix: string, reset: 'monthly'|'yearly', pad: int}>
-     */
-    private const CONFIG = [
-        'employee'      => ['prefix' => 'OGM',  'reset' => 'yearly',  'pad' => 4],
-        'purchase_order'=> ['prefix' => 'PO',   'reset' => 'monthly', 'pad' => 4],
-        'invoice'       => ['prefix' => 'INV',  'reset' => 'monthly', 'pad' => 4],
-        'journal_entry' => ['prefix' => 'JE',   'reset' => 'monthly', 'pad' => 4],
-        'work_order'    => ['prefix' => 'WO',   'reset' => 'monthly', 'pad' => 4],
-        'ncr'           => ['prefix' => 'NCR',  'reset' => 'monthly', 'pad' => 4],
-        'grn'           => ['prefix' => 'GRN',  'reset' => 'monthly', 'pad' => 4],
-        'mrb'           => ['prefix' => 'MRB',  'reset' => 'monthly', 'pad' => 4],
-        'sales_order'   => ['prefix' => 'SO',   'reset' => 'monthly', 'pad' => 4],
-        'mrp_plan'      => ['prefix' => 'MRP',  'reset' => 'monthly', 'pad' => 4],
-        'leave_request' => ['prefix' => 'LR',   'reset' => 'monthly', 'pad' => 4],
-        'inspection'    => ['prefix' => 'QC',   'reset' => 'monthly', 'pad' => 4],
-        'pr'            => ['prefix' => 'PR',   'reset' => 'monthly', 'pad' => 4],
-        'delivery'      => ['prefix' => 'DR',   'reset' => 'monthly', 'pad' => 4],
-        'bill'          => ['prefix' => 'BILL', 'reset' => 'monthly', 'pad' => 4],
-        // REC-13 — credit notes get distinct BIR document numbering.
-        'credit_note'   => ['prefix' => 'CN',   'reset' => 'monthly', 'pad' => 4],
-        'official_receipt' => ['prefix' => 'OR', 'reset' => 'monthly', 'pad' => 4],
-        'bank_payment'  => ['prefix' => 'BPAY', 'reset' => 'monthly', 'pad' => 4],
-        'loan'          => ['prefix' => 'LN',   'reset' => 'monthly', 'pad' => 4],
-        'cash_advance'  => ['prefix' => 'CA',   'reset' => 'monthly', 'pad' => 4],
-        'complaint'     => ['prefix' => 'CMP',  'reset' => 'monthly', 'pad' => 4],
-        'shipment'      => ['prefix' => 'SHP',  'reset' => 'monthly', 'pad' => 4],
-        'maintenance_wo'=> ['prefix' => 'MWO',  'reset' => 'monthly', 'pad' => 4],
-        'asset'         => ['prefix' => 'AST',  'reset' => 'yearly',  'pad' => 4],
-        'clearance'     => ['prefix' => 'CLR',  'reset' => 'monthly', 'pad' => 4],
-        // ADV3 — IATF 16949 traceability.
-        'production_batch' => ['prefix' => 'BATCH', 'reset' => 'monthly', 'pad' => 4],
-        'shipment_lot'     => ['prefix' => 'LOT',   'reset' => 'monthly', 'pad' => 4],
-        'stock_count'      => ['prefix' => 'SC',    'reset' => 'monthly', 'pad' => 4],
-        // Quality — PPAP submissions.
-        'ppap'             => ['prefix' => 'PPAP',  'reset' => 'monthly', 'pad' => 4],
-        // Landing — public quote requests.
-        'quote_request'    => ['prefix' => 'QR',    'reset' => 'monthly', 'pad' => 4],
-        // CRM pipeline — Lead → Opportunity → Quote.
-        'lead'             => ['prefix' => 'LEAD',  'reset' => 'monthly', 'pad' => 4],
-        'opportunity'      => ['prefix' => 'OPP',   'reset' => 'monthly', 'pad' => 4],
-        'quote'            => ['prefix' => 'QT',    'reset' => 'monthly', 'pad' => 4],
-        'asset_transfer'   => ['prefix' => 'AT',    'reset' => 'monthly', 'pad' => 4],
-        // Recruitment — job postings and applications.
-        'job_posting'      => ['prefix' => 'JP',    'reset' => 'monthly', 'pad' => 4],
-        'job_application'  => ['prefix' => 'JA',    'reset' => 'monthly', 'pad' => 4],
-    ];
+    public function __construct(private readonly SettingsService $settings) {}
+
+    /** @return array<string, array{prefix: string, reset: 'monthly'|'yearly', pad: int}> */
+    private function config(): array
+    {
+        $config = $this->settings->get('documents.sequence_config');
+        if (! is_array($config) || $config === []) {
+            throw new \App\Common\Exceptions\BusinessRuleException('Document sequence configuration is missing.');
+        }
+        foreach ($config as $type => $row) {
+            if (! is_string($type) || ! is_array($row) || ! is_string($row['prefix'] ?? null)
+                || ! in_array($row['reset'] ?? null, ['monthly', 'yearly'], true)
+                || ! is_int($row['pad'] ?? null) || $row['pad'] < 1 || $row['pad'] > 12) {
+                throw new \App\Common\Exceptions\BusinessRuleException('Document sequence configuration is invalid.');
+            }
+        }
+        return $config;
+    }
 
     /**
      * Generate the next document number for the given type.
@@ -76,11 +48,12 @@ class DocumentSequenceService
      */
     public function generate(string $documentType): string
     {
-        if (! isset(self::CONFIG[$documentType])) {
+        $config = $this->config();
+        if (! isset($config[$documentType])) {
             throw new InvalidArgumentException("Unknown document type: {$documentType}");
         }
 
-        ['prefix' => $prefix, 'reset' => $reset, 'pad' => $pad] = self::CONFIG[$documentType];
+        ['prefix' => $prefix, 'reset' => $reset, 'pad' => $pad] = $config[$documentType];
 
         $now = now();
         $year = (int) $now->format('Y');
@@ -127,6 +100,6 @@ class DocumentSequenceService
     /** @return array<int, string> */
     public function knownTypes(): array
     {
-        return array_keys(self::CONFIG);
+        return array_keys($this->config());
     }
 }

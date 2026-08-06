@@ -62,7 +62,7 @@
     <div class="line">{{ $hr_signatory ?? 'HR Officer / HR Manager' }}</div>
   </div>
   <div class="sig">
-    <div class="line">{{ $company['name'] ?? 'Philippine Ogami Corporation' }}</div>
+    <div class="line">{{ $company['name'] ?? '' }}</div>
   </div>
 </div>
 

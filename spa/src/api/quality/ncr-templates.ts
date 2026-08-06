@@ -3,26 +3,29 @@ import type { ApiSuccess, PaginatedResponse, ListParams } from '@/types';
 import type { NcrTemplate, CreateNcrTemplateData } from '@/types/quality';
 
 export const ncrTemplatesApi = {
-  options: () => client.get<{ data: { sources: Array<{ value: string; label: string }>; severities: Array<{ value: string; label: string }> } }>('/quality/ncr-templates/options').then((r) => r.data.data),
-  list: (params?: ListParams) =>
-    client.get<PaginatedResponse<NcrTemplate>>('/quality/ncr-templates', { params }).then((r) => r.data),
+ options: () => client.get<{ data: { sources: Array<{ value: string; label: string }>; severities: Array<{ value: string; label: string }> } }>('/quality/ncr-templates/options').then((r) => r.data.data),
+ list: (params?: ListParams) =>
+ client.get<PaginatedResponse<NcrTemplate>>('/quality/ncr-templates', { params }).then((r) => r.data),
 
-  active: () =>
-    client
-      .get<PaginatedResponse<NcrTemplate>>('/quality/ncr-templates/active', {
-        params: { per_page: 200 },
-      })
-      .then((r) => r.data.data),
+ active: () =>
+ client
+ .get<PaginatedResponse<NcrTemplate>>('/quality/ncr-templates/active', {
+ params: { per_page: 200 },
+ })
+ .then((r) => r.data.data),
 
-  show: (id: string) =>
-    client.get<ApiSuccess<NcrTemplate>>(`/quality/ncr-templates/${id}`).then((r) => r.data.data),
+ show: (id: string) =>
+ client.get<ApiSuccess<NcrTemplate>>(`/quality/ncr-templates/${id}`).then((r) => r.data.data),
 
-  create: (data: CreateNcrTemplateData) =>
-    client.post<ApiSuccess<NcrTemplate>>('/quality/ncr-templates', data).then((r) => r.data.data),
+ create: (data: CreateNcrTemplateData) =>
+ client.post<ApiSuccess<NcrTemplate>>('/quality/ncr-templates', data).then((r) => r.data.data),
 
-  update: (id: string, data: Partial<CreateNcrTemplateData> & { is_active?: boolean }) =>
-    client.patch<ApiSuccess<NcrTemplate>>(`/quality/ncr-templates/${id}`, data).then((r) => r.data.data),
+ update: (id: string, data: Partial<CreateNcrTemplateData> & { is_active?: boolean }) =>
+ client.patch<ApiSuccess<NcrTemplate>>(`/quality/ncr-templates/${id}`, data).then((r) => r.data.data),
 
-  destroy: (id: string) =>
-    client.delete<ApiSuccess<NcrTemplate>>(`/quality/ncr-templates/${id}`).then((r) => r.data.data),
+ destroy: (id: string) =>
+  client.delete<ApiSuccess<NcrTemplate>>(`/quality/ncr-templates/${id}`).then((r) => r.data.data),
+
+ restore: (id: string) =>
+  client.patch<ApiSuccess<NcrTemplate>>(`/quality/ncr-templates/${id}/restore`).then((r) => r.data.data),
 };

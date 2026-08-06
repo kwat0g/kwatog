@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Common\Controllers;
 
 use App\Common\Services\CalendarAggregatorService;
+use App\Common\Services\SettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -16,7 +17,10 @@ use Illuminate\Support\Carbon;
  */
 class CalendarController
 {
-    public function __construct(private readonly CalendarAggregatorService $service) {}
+    public function __construct(
+        private readonly CalendarAggregatorService $service,
+        private readonly SettingsService $settings,
+    ) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -31,9 +35,10 @@ class CalendarController
         $from = Carbon::parse((string) $request->query('from'))->startOfDay();
         $to   = Carbon::parse((string) $request->query('to'))->endOfDay();
 
-        if ($from->diffInDays($to) > CalendarAggregatorService::MAX_RANGE_DAYS) {
+        $maxRangeDays = $this->settings->requiredInt('calendar.max_range_days', 1, 3650);
+        if ($from->diffInDays($to) > $maxRangeDays) {
             return response()->json([
-                'message' => 'Date range exceeds the maximum of '.CalendarAggregatorService::MAX_RANGE_DAYS.' days.',
+                'message' => 'Date range exceeds the maximum of '.$maxRangeDays.' days.',
                 'errors'  => ['to' => ['Range too large.']],
             ], 422);
         }

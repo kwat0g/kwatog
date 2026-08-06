@@ -20,6 +20,23 @@
         <env name="APP_ENV" value="testing"/>
         <env name="APP_KEY" value="base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="/>
         <env name="BCRYPT_ROUNDS" value="4"/>
+        <!--
+            Company identity. Migration 0123_seed_company_branding_settings seeds
+            these from env() with '' fallbacks, and SettingsService::requiredString()
+            rejects an empty value — so without these the suite fails with
+            "Required setting company.legal_name is missing or invalid." on any
+            document-generating endpoint. COMPANY_VAT_STATUS additionally drives
+            TaxPolicyService::isVatRegistered(); an empty value silently zeroes
+            VAT on every quote and invoice.
+        -->
+        <env name="COMPANY_LEGAL_NAME" value="Philippine Ogami Corporation"/>
+        <env name="COMPANY_ADDRESS" value="FCIE Complex, Dasmariñas, Cavite, Philippines"/>
+        <env name="COMPANY_PHONE" value="+63 46 000 0000"/>
+        <env name="COMPANY_EMAIL" value="info@ogami.test"/>
+        <env name="COMPANY_TIN" value="000-000-000-000"/>
+        <env name="COMPANY_VAT_STATUS" value="VAT Registered"/>
+        <env name="COMPANY_PUBLIC_URL" value="https://ogami.test"/>
+        <env name="PDF_FOOTER_DISCLAIMER" value="System-generated document."/>
         <env name="BROADCAST_CONNECTION" value="null"/>
         <env name="CACHE_STORE" value="array"/>
         <env name="DB_CONNECTION" value="pgsql"/>

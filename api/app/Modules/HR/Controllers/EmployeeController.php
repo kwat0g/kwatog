@@ -5,6 +5,12 @@ declare(strict_types=1);
 namespace App\Modules\HR\Controllers;
 
 use App\Modules\HR\Enums\ApplicationStage;
+use App\Modules\HR\Enums\EmploymentType;
+use App\Modules\HR\Enums\EmployeeStatus;
+use App\Modules\HR\Enums\PayType;
+use App\Modules\HR\Enums\Gender;
+use App\Modules\HR\Enums\CivilStatus;
+use App\Modules\HR\Enums\SeparationReason;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\JobApplication;
 use App\Modules\HR\Requests\SeparateEmployeeRequest;
@@ -16,6 +22,8 @@ use App\Modules\HR\Services\RecruitmentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class EmployeeController
 {
@@ -46,6 +54,36 @@ class EmployeeController
     public function index(Request $request): AnonymousResourceCollection
     {
         return EmployeeResource::collection($this->service->list($request->query(), $request->user()));
+    }
+
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'statuses' => array_map(
+                static fn (EmployeeStatus $status): array => ['value' => $status->value, 'label' => $status->label()],
+                EmployeeStatus::cases(),
+            ),
+            'employment_types' => array_map(
+                static fn (EmploymentType $type): array => ['value' => $type->value, 'label' => $type->label()],
+                EmploymentType::cases(),
+            ),
+            'pay_types' => array_map(
+                static fn (PayType $type): array => ['value' => $type->value, 'label' => $type->label()],
+                PayType::cases(),
+            ),
+            'genders' => array_map(
+                static fn (Gender $gender): array => ['value' => $gender->value, 'label' => $gender->label()],
+                Gender::cases(),
+            ),
+            'civil_statuses' => array_map(
+                static fn (CivilStatus $status): array => ['value' => $status->value, 'label' => $status->label()],
+                CivilStatus::cases(),
+            ),
+            'separation_reasons' => array_map(
+                static fn (SeparationReason $reason): array => ['value' => $reason->value, 'label' => str_replace('_', ' ', ucfirst($reason->value))],
+                SeparationReason::cases(),
+            ),
+        ]]);
     }
 
     /**
@@ -153,8 +191,85 @@ class EmployeeController
         return response()->json(null, 204);
     }
 
+    public function restore(Employee $employee): JsonResponse
+    {
+        $employee->restore();
+        return response()->json(['message' => 'Employee restored.']);
+    }
+
     public function separate(SeparateEmployeeRequest $request, Employee $employee): EmployeeResource
     {
         return new EmployeeResource($this->service->separate($employee, $request->validated()));
+    }
+
+    /**
+     * Photos live on the LOCAL disk (never public) and are served only through
+     * the permission-gated photo() action. Direct /storage/ access is
+     * intentionally impossible — same pattern as delivery proofs.
+     */
+    public function uploadPhoto(Request $request, Employee $employee): JsonResponse
+    {
+        $request->validate(['photo' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048']]);
+
+        if ($employee->photo_path) {
+            Storage::disk('local')->delete($employee->photo_path);
+            // Also clear any legacy public-disk copy from before this hardening.
+            Storage::disk('public')->delete($employee->photo_path);
+        }
+
+        $path = $request->file('photo')->store('employee-photos', 'local');
+        $employee->update(['photo_path' => $path]);
+
+        return response()->json(['data' => ['photo_url' => "/api/v1/hr/employees/{$employee->hash_id}/photo"]]);
+    }
+
+    /**
+     * Stream the employee photo. Route must be protected by
+     * permission_any:hr.employees.view,hr.directory.view (directory users and
+     * the employee's own self-service view must both be able to load it).
+     */
+    public function photo(Employee $employee): StreamedResponse
+    {
+        if (! $employee->photo_path) {
+            abort(404, 'No photo for this employee.');
+        }
+
+        // Prefer the local disk; fall back to the legacy public disk so photos
+        // uploaded before this hardening still render.
+        $disk = Storage::disk('local');
+        $path = $employee->photo_path;
+        if (! $disk->exists($path)) {
+            $legacy = Storage::disk('public');
+            if ($legacy->exists($path)) {
+                $disk = $legacy;
+            } else {
+                abort(404, 'Photo file not found on disk.');
+            }
+        }
+
+        $contents = $disk->get($path);
+        $mime     = $disk->mimeType($path) ?? 'application/octet-stream';
+        $filename = basename($path);
+
+        return response()->stream(
+            fn () => print $contents,
+            200,
+            [
+                'Content-Type'        => $mime,
+                'Cache-Control'       => 'private, no-store, max-age=0',
+                'Content-Disposition' => sprintf('inline; filename="%s"', $filename),
+            ],
+        );
+    }
+
+    public function deletePhoto(Employee $employee): JsonResponse
+    {
+        if ($employee->photo_path) {
+            Storage::disk('local')->delete($employee->photo_path);
+            // Also clear any legacy public-disk copy.
+            Storage::disk('public')->delete($employee->photo_path);
+            $employee->update(['photo_path' => null]);
+        }
+        return response()->json(null, 204);
     }
 }

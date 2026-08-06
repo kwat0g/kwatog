@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Modules\Dashboard\Services;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Dashboard\Services\Concerns\DashboardQueries;
+use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -18,6 +20,8 @@ use Illuminate\Support\Facades\Schema;
 class WarehouseDashboardService
 {
     use DashboardQueries;
+
+    public function __construct(private readonly SettingsService $settings) {}
 
     private const CACHE_TTL = 30;
 
@@ -37,6 +41,9 @@ class WarehouseDashboardService
                     $this->kpi('Pending Transfers', (string) $pendingTransfers, 'count'),
                 ],
                 'panels' => [
+                    'delivery_horizon_days' => $this->settings->requiredInt('dashboard.widgets.delivery_horizon_days', 0),
+                    'zone_utilization_warning_pct' => round($this->settings->requiredFloat('inventory.dashboard.zone_utilization_warning_ratio', 0, 1) * 100, 1),
+                    'zone_utilization_critical_pct' => round($this->settings->requiredFloat('inventory.dashboard.zone_utilization_critical_ratio', 0, 1) * 100, 1),
                     'incoming_queue' => $this->warehouseIncomingQueue(),
                     'outgoing_queue' => $this->warehouseOutgoingQueue(),
                     'low_stock_alerts' => $this->warehouseLowStockAlerts(),
@@ -72,11 +79,12 @@ class WarehouseDashboardService
             ? '(SELECT COUNT(*) FROM purchase_order_items poi WHERE poi.purchase_order_id = po.id)'
             : '0';
 
+        $deliveryDays = $this->settings->requiredInt('dashboard.widgets.delivery_horizon_days', 0);
         return DB::table('purchase_orders as po')
             ->leftJoin('vendors as v', 'v.id', '=', 'po.vendor_id')
-            ->whereIn('po.status', ['sent', 'partial'])
+            ->whereIn('po.status', [PurchaseOrderStatus::Sent->value, PurchaseOrderStatus::PartiallyReceived->value])
             ->whereNotNull('po.expected_delivery_date')
-            ->where('po.expected_delivery_date', '<=', today()->addDays(7))
+            ->where('po.expected_delivery_date', '<=', today()->addDays($deliveryDays))
             ->select('po.id', 'po.po_number', 'v.name as vendor_name', 'po.expected_delivery_date',
                 DB::raw("{$itemsCountSub} as items_count"))
             ->orderBy('po.expected_delivery_date')

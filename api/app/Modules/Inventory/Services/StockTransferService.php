@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Models\StockLevel;
@@ -17,14 +18,16 @@ class StockTransferService
     public function transfer(int $itemId, int $fromLocationId, int $toLocationId, string $qty, ?string $remarks, User $by): StockMovement
     {
         $level = StockLevel::query()->where('item_id', $itemId)->where('location_id', $fromLocationId)->first();
-        $cost = $level?->weighted_avg_cost ?? '0';
+        if ($level === null || $level->weighted_avg_cost === null) {
+            throw new BusinessRuleException('The source stock level has no authoritative weighted-average cost.');
+        }
         return $this->movements->move(new StockMovementInput(
             type: StockMovementType::Transfer,
             itemId: $itemId,
             fromLocationId: $fromLocationId,
             toLocationId: $toLocationId,
             quantity: $qty,
-            unitCost: (string) $cost,
+            unitCost: null,
             referenceType: 'stock_transfer',
             referenceId: null,
             remarks: $remarks,

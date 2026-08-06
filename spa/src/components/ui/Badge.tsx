@@ -2,31 +2,31 @@ import { type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 
 interface BadgeProps {
-  children: ReactNode;
-  variant?: 'accent' | 'warning' | 'danger' | 'neutral';
-  className?: string;
-  /** Optional accessible label, e.g. "5 pending". */
-  'aria-label'?: string;
+ children: ReactNode;
+ variant?: 'accent' | 'warning' | 'danger' | 'neutral';
+ className?: string;
+ /** Optional accessible label, e.g. "5 pending". */
+ 'aria-label'?: string;
 }
 
 const variants = {
-  accent:  'bg-accent text-accent-fg',
-  warning: 'bg-warning-bg text-warning-fg',
-  danger:  'bg-danger text-white',
-  neutral: 'bg-elevated text-muted',
+ accent: 'bg-accent text-accent-fg',
+ warning: 'bg-warning-bg text-warning-fg',
+ danger: 'bg-danger text-white',
+ neutral: 'bg-elevated text-muted',
 } as const;
 
 export function Badge({ children, variant = 'accent', className, ...rest }: BadgeProps) {
-  return (
-    <span
-      aria-label={rest['aria-label']}
-      className={cn(
-        'inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-2xs font-medium leading-none',
-        variants[variant],
-        className,
-      )}
-    >
-      {children}
-    </span>
-  );
+ return (
+ <span
+ aria-label={rest['aria-label']}
+ className={cn(
+ 'inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-2xs font-medium leading-none',
+ variants[variant],
+ className,
+ )}
+ >
+ {children}
+ </span>
+ );
 }

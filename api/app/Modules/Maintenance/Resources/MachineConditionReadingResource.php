@@ -7,6 +7,7 @@ namespace App\Modules\Maintenance\Resources;
 use App\Modules\Maintenance\Models\MachineConditionReading;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Str;
 
 /**
  * @mixin MachineConditionReading
@@ -25,6 +26,7 @@ class MachineConditionReadingResource extends JsonResource
             'unit'        => $this->unit,
             'recorded_at' => optional($this->recorded_at)?->toISOString(),
             'source'      => $this->source,
+            'source_label'=> Str::headline((string) $this->source),
             'notes'       => $this->notes,
             'created_at'  => optional($this->created_at)?->toISOString(),
         ];

@@ -26,12 +26,15 @@ const AttendancePage = lazy(() => import('@/pages/attendance'));
 const AttendanceImportPage = lazy(() => import('@/pages/attendance/import'));
 const OvertimeListPage = lazy(() => import('@/pages/attendance/overtime'));
 const OvertimeCreatePage = lazy(() => import('@/pages/attendance/overtime/create'));
+const OvertimeDetailPage = lazy(() => import('@/pages/attendance/overtime/detail'));
 
 // Leaves (Sprint 2 — Tasks 20/21)
 const LeavesPage = lazy(() => import('@/pages/leaves'));
 const CreateLeavePage = lazy(() => import('@/pages/leaves/create'));
 const LeaveDetailPage = lazy(() => import('@/pages/leaves/detail'));
 const LeaveCalendarPage = lazy(() => import('@/pages/leaves/calendar'));
+const LeaveTypesPage = lazy(() => import('@/pages/leaves/types'));
+const YearEndLeavePage = lazy(() => import('@/pages/leaves/year-end'));
 
 // Loans (Sprint 2 — Task 22)
 const LoansPage = lazy(() => import('@/pages/loans'));
@@ -39,12 +42,12 @@ const CreateLoanPage = lazy(() => import('@/pages/loans/create'));
 const LoanDetailPage = lazy(() => import('@/pages/loans/detail'));
 
 // Separation (Sprint 8 — Task 71)
-const SeparationsListPage  = lazy(() => import('@/pages/hr/separations'));
+const SeparationsListPage = lazy(() => import('@/pages/hr/separations'));
 const SeparationDetailPage = lazy(() => import('@/pages/hr/separations/detail'));
 
 // Succession Plans
 const SuccessionPlansListPage = lazy(() => import('@/pages/hr/succession-plans'));
-const SuccessionPlanFormPage  = lazy(() => import('@/pages/hr/succession-plans/form'));
+const SuccessionPlanFormPage = lazy(() => import('@/pages/hr/succession-plans/form'));
 
 // Performance Reviews
 const PerformanceCyclesPage = lazy(() => import('@/pages/hr/performance-reviews'));
@@ -53,6 +56,11 @@ const SubmitReviewPage = lazy(() => import('@/pages/hr/performance-reviews/submi
 
 // Training Matrix
 const TrainingMatrixPage = lazy(() => import('@/pages/hr/training/matrix'));
+const TrainingListPage = lazy(() => import('@/pages/hr/training/list'));
+const TrainingFormPage = lazy(() => import('@/pages/hr/training/form'));
+
+// Skills
+const SkillsListPage = lazy(() => import('@/pages/hr/skills'));
 
 // Recruitment
 const RecruitmentDashboard = lazy(() => import('@/pages/hr/recruitment'));
@@ -64,166 +72,194 @@ const ApplicationsListPage = lazy(() => import('@/pages/hr/recruitment/applicati
 const ApplicationDetailPage = lazy(() => import('@/pages/hr/recruitment/applications/detail'));
 
 export const hrRoutes = (
-  <>
-    {/* HR module */}
-    <Route element={<ModuleGuard module="hr" />}>
-      <Route
-        path="/hr/departments"
-        element={<PermissionGuard permission="hr.departments.view"><DepartmentsPage /></PermissionGuard>}
-      />
-      <Route
-        path="/hr/positions"
-        element={<PermissionGuard permission="hr.positions.view"><PositionsPage /></PermissionGuard>}
-      />
-      <Route
-        path="/hr/employees"
-        element={<PermissionGuard permission="hr.employees.view"><EmployeesListPage /></PermissionGuard>}
-      />
-      <Route
-        path="/hr/employees/create"
-        element={<PermissionGuard permission="hr.employees.create"><CreateEmployeePage /></PermissionGuard>}
-      />
-      <Route
-        path="/hr/employees/:id"
-        element={<PermissionGuard permission="hr.employees.view"><EmployeeDetailPage /></PermissionGuard>}
-      />
-      <Route
-        path="/hr/employees/:id/edit"
-        element={<PermissionGuard permission="hr.employees.edit"><EditEmployeePage /></PermissionGuard>}
-      />
-      <Route
-        path="/hr/profile-update-requests"
-        element={<PermissionGuard permission="hr.employees.view"><ProfileUpdateRequestsPage /></PermissionGuard>}
-      />
-      <Route
-        path="/hr/salary-adjustments"
-        element={<PermissionGuard permission="hr.salary_adjustments.view"><SalaryAdjustmentsPage /></PermissionGuard>}
-      />
-      {/* Series F / Task F5 — Employee directory + org chart */}
-      <Route
-        path="/hr/directory"
-        element={<PermissionGuard permission="hr.directory.view"><EmployeeDirectoryPage /></PermissionGuard>}
-      />
-    </Route>
+ <>
+ {/* HR module */}
+ <Route element={<ModuleGuard module="hr" />}>
+ <Route
+ path="/hr/departments"
+ element={<PermissionGuard permission="hr.departments.view"><DepartmentsPage /></PermissionGuard>}
+ />
+ <Route
+ path="/hr/positions"
+ element={<PermissionGuard permission="hr.positions.view"><PositionsPage /></PermissionGuard>}
+ />
+ <Route
+ path="/hr/employees"
+ element={<PermissionGuard permission="hr.employees.view"><EmployeesListPage /></PermissionGuard>}
+ />
+ <Route
+ path="/hr/employees/create"
+ element={<PermissionGuard permission="hr.employees.create"><CreateEmployeePage /></PermissionGuard>}
+ />
+ <Route
+ path="/hr/employees/:id"
+ element={<PermissionGuard permission="hr.employees.view"><EmployeeDetailPage /></PermissionGuard>}
+ />
+ <Route
+ path="/hr/employees/:id/edit"
+ element={<PermissionGuard permission="hr.employees.edit"><EditEmployeePage /></PermissionGuard>}
+ />
+ <Route
+ path="/hr/profile-update-requests"
+ element={<PermissionGuard permission="hr.employees.view"><ProfileUpdateRequestsPage /></PermissionGuard>}
+ />
+ <Route
+ path="/hr/salary-adjustments"
+ element={<PermissionGuard permission="hr.salary_adjustments.view"><SalaryAdjustmentsPage /></PermissionGuard>}
+ />
+ {/* Series F / Task F5 — Employee directory + org chart */}
+ <Route
+ path="/hr/directory"
+ element={<PermissionGuard permission="hr.directory.view"><EmployeeDirectoryPage /></PermissionGuard>}
+ />
+ </Route>
 
-    {/* Attendance module */}
-    <Route element={<ModuleGuard module="attendance" />}>
-      <Route
-        path="/hr/attendance"
-        element={<PermissionGuard anyOf={['attendance.edit', 'attendance.import', 'attendance.ot.approve']}><AttendancePage /></PermissionGuard>}
-      />
-      <Route
-        path="/hr/attendance/import"
-        element={<PermissionGuard permission="attendance.import"><AttendanceImportPage /></PermissionGuard>}
-      />
-      <Route
-        path="/hr/attendance/shifts"
-        element={<PermissionGuard anyOf={['attendance.edit', 'attendance.shifts.manage']}><ShiftsPage /></PermissionGuard>}
-      />
-      <Route
-        path="/hr/attendance/shifts/assign"
-        element={<PermissionGuard permission="attendance.shifts.manage"><BulkAssignShiftPage /></PermissionGuard>}
-      />
-      <Route
-        path="/hr/attendance/holidays"
-        element={<PermissionGuard anyOf={['attendance.edit', 'attendance.holidays.manage']}><HolidaysPage /></PermissionGuard>}
-      />
-      <Route
-        path="/hr/attendance/overtime"
-        element={<PermissionGuard permission="attendance.ot.approve"><OvertimeListPage /></PermissionGuard>}
-      />
-      <Route
-        path="/hr/attendance/overtime/create"
-        element={<PermissionGuard permission="attendance.edit"><OvertimeCreatePage /></PermissionGuard>}
-      />
-    </Route>
+ {/* Attendance module */}
+ <Route element={<ModuleGuard module="attendance" />}>
+ <Route
+ path="/hr/attendance"
+ element={<PermissionGuard anyOf={['attendance.edit', 'attendance.import', 'attendance.ot.approve']}><AttendancePage /></PermissionGuard>}
+ />
+ <Route
+ path="/hr/attendance/import"
+ element={<PermissionGuard permission="attendance.import"><AttendanceImportPage /></PermissionGuard>}
+ />
+ <Route
+ path="/hr/attendance/shifts"
+ element={<PermissionGuard anyOf={['attendance.edit', 'attendance.shifts.manage']}><ShiftsPage /></PermissionGuard>}
+ />
+ <Route
+ path="/hr/attendance/shifts/assign"
+ element={<PermissionGuard permission="attendance.shifts.manage"><BulkAssignShiftPage /></PermissionGuard>}
+ />
+ <Route
+ path="/hr/attendance/holidays"
+ element={<PermissionGuard anyOf={['attendance.edit', 'attendance.holidays.manage']}><HolidaysPage /></PermissionGuard>}
+ />
+ <Route
+ path="/hr/attendance/overtime"
+ element={<PermissionGuard permission="attendance.ot.approve"><OvertimeListPage /></PermissionGuard>}
+ />
+ <Route
+ path="/hr/attendance/overtime/create"
+ element={<PermissionGuard permission="attendance.edit"><OvertimeCreatePage /></PermissionGuard>}
+ />
+ <Route
+ path="/hr/attendance/overtime/:id"
+ element={<PermissionGuard anyOf={['attendance.ot.approve', 'attendance.view']}><OvertimeDetailPage /></PermissionGuard>}
+ />
+ </Route>
 
-    {/* Leave module */}
-    <Route element={<ModuleGuard module="leave" />}>
-      <Route
-        path="/hr/leaves"
-        element={<PermissionGuard anyOf={['leave.approve_dept', 'leave.approve_hr']}><LeavesPage /></PermissionGuard>}
+ {/* Leave module */}
+ <Route element={<ModuleGuard module="leave" />}>
+ <Route
+ path="/hr/leaves"
+ element={<PermissionGuard anyOf={['leave.approve_dept', 'leave.approve_hr']}><LeavesPage /></PermissionGuard>}
+ />
+ <Route
+ path="/hr/leaves/calendar"
+ element={<PermissionGuard anyOf={['leave.approve_dept', 'leave.approve_hr']}><LeaveCalendarPage /></PermissionGuard>}
+ />
+ <Route
+ path="/hr/leaves/create"
+ element={<PermissionGuard anyOf={['leave.approve_dept', 'leave.approve_hr']}><CreateLeavePage /></PermissionGuard>}
+ />
+ <Route
+ path="/hr/leaves/:id"
+ element={<PermissionGuard anyOf={['leave.approve_dept', 'leave.approve_hr']}><LeaveDetailPage /></PermissionGuard>}
+ />
+<Route
+        path="/hr/leaves/types"
+        element={<PermissionGuard permission="leave.types.manage"><LeaveTypesPage /></PermissionGuard>}
       />
       <Route
-        path="/hr/leaves/calendar"
-        element={<PermissionGuard anyOf={['leave.approve_dept', 'leave.approve_hr']}><LeaveCalendarPage /></PermissionGuard>}
+        path="/hr/leaves/year-end"
+        element={<PermissionGuard permission="leave.types.manage"><YearEndLeavePage /></PermissionGuard>}
       />
-      <Route
-        path="/hr/leaves/create"
-        element={<PermissionGuard anyOf={['leave.approve_dept', 'leave.approve_hr']}><CreateLeavePage /></PermissionGuard>}
-      />
-      <Route
-        path="/hr/leaves/:id"
-        element={<PermissionGuard anyOf={['leave.approve_dept', 'leave.approve_hr']}><LeaveDetailPage /></PermissionGuard>}
-      />
-    </Route>
+ </Route>
 
-    {/* Loans module */}
-    <Route element={<ModuleGuard module="loans" />}>
-      <Route
-        path="/hr/loans"
-        element={<PermissionGuard anyOf={['loans.approve', 'loans.write_off']}><LoansPage /></PermissionGuard>}
-      />
-      <Route
-        path="/hr/loans/create"
-        element={<PermissionGuard anyOf={['loans.approve', 'loans.write_off']}><CreateLoanPage /></PermissionGuard>}
-      />
-      <Route
-        path="/hr/loans/:id"
-        element={<PermissionGuard anyOf={['loans.approve', 'loans.write_off']}><LoanDetailPage /></PermissionGuard>}
-      />
-    </Route>
+ {/* Loans module */}
+ <Route element={<ModuleGuard module="loans" />}>
+ <Route
+ path="/hr/loans"
+ element={<PermissionGuard anyOf={['loans.approve', 'loans.write_off']}><LoansPage /></PermissionGuard>}
+ />
+ <Route
+ path="/hr/loans/create"
+ element={<PermissionGuard anyOf={['loans.approve', 'loans.write_off']}><CreateLoanPage /></PermissionGuard>}
+ />
+ <Route
+ path="/hr/loans/:id"
+ element={<PermissionGuard anyOf={['loans.approve', 'loans.write_off']}><LoanDetailPage /></PermissionGuard>}
+ />
+ </Route>
 
-    {/* HR Separations (Sprint 8 — Task 71) */}
-    <Route element={<ModuleGuard module="hr" />}>
-      <Route path="/hr/separations"
-        element={<PermissionGuard permission="hr.separation.view"><SeparationsListPage /></PermissionGuard>} />
-      <Route path="/hr/separations/:id"
-        element={<PermissionGuard permission="hr.separation.view"><SeparationDetailPage /></PermissionGuard>} />
-    </Route>
+ {/* HR Separations (Sprint 8 — Task 71) */}
+ <Route element={<ModuleGuard module="hr" />}>
+ <Route path="/hr/separations"
+ element={<PermissionGuard permission="hr.separation.view"><SeparationsListPage /></PermissionGuard>} />
+ <Route path="/hr/separations/:id"
+ element={<PermissionGuard permission="hr.separation.view"><SeparationDetailPage /></PermissionGuard>} />
+ </Route>
 
-    {/* Succession Plans */}
-    <Route element={<ModuleGuard module="hr" />}>
-      <Route path="/hr/succession-plans"
-        element={<PermissionGuard permission="hr.succession.manage"><SuccessionPlansListPage /></PermissionGuard>} />
-      <Route path="/hr/succession-plans/create"
-        element={<PermissionGuard permission="hr.succession.manage"><SuccessionPlanFormPage /></PermissionGuard>} />
-      <Route path="/hr/succession-plans/:id/edit"
-        element={<PermissionGuard permission="hr.succession.manage"><SuccessionPlanFormPage /></PermissionGuard>} />
-    </Route>
+ {/* Succession Plans */}
+ <Route element={<ModuleGuard module="hr" />}>
+ <Route path="/hr/succession-plans"
+ element={<PermissionGuard permission="hr.succession.manage"><SuccessionPlansListPage /></PermissionGuard>} />
+ <Route path="/hr/succession-plans/create"
+ element={<PermissionGuard permission="hr.succession.manage"><SuccessionPlanFormPage /></PermissionGuard>} />
+ <Route path="/hr/succession-plans/:id/edit"
+ element={<PermissionGuard permission="hr.succession.manage"><SuccessionPlanFormPage /></PermissionGuard>} />
+ </Route>
 
-    {/* Performance Reviews */}
-    <Route element={<ModuleGuard module="hr" />}>
-      <Route path="/hr/performance-reviews"
-        element={<PermissionGuard permission="hr.performance.view"><PerformanceCyclesPage /></PermissionGuard>} />
-      <Route path="/hr/performance-reviews/reviews"
-        element={<PermissionGuard permission="hr.performance.view"><PerformanceReviewsPage /></PermissionGuard>} />
-      <Route path="/hr/performance-reviews/:id/submit"
-        element={<PermissionGuard permission="hr.performance.view"><SubmitReviewPage /></PermissionGuard>} />
-    </Route>
+ {/* Performance Reviews */}
+ <Route element={<ModuleGuard module="hr" />}>
+ <Route path="/hr/performance-reviews"
+ element={<PermissionGuard permission="hr.performance.view"><PerformanceCyclesPage /></PermissionGuard>} />
+ <Route path="/hr/performance-reviews/reviews"
+ element={<PermissionGuard permission="hr.performance.view"><PerformanceReviewsPage /></PermissionGuard>} />
+ <Route path="/hr/performance-reviews/:id/submit"
+ element={<PermissionGuard permission="hr.performance.view"><SubmitReviewPage /></PermissionGuard>} />
+ </Route>
 
-    {/* Training Matrix */}
-    <Route element={<ModuleGuard module="hr" />}>
-      <Route path="/hr/training/matrix"
-        element={<PermissionGuard permission="hr.trainings.view"><TrainingMatrixPage /></PermissionGuard>} />
-    </Route>
+ {/* Training Matrix */}
+ <Route element={<ModuleGuard module="hr" />}>
+ <Route path="/hr/training/matrix"
+ element={<PermissionGuard permission="hr.trainings.view"><TrainingMatrixPage /></PermissionGuard>} />
+ </Route>
 
-    {/* Recruitment */}
-    <Route element={<ModuleGuard module="recruitment" />}>
-      <Route path="/hr/recruitment"
-        element={<PermissionGuard permission="hr.recruitment.view"><RecruitmentDashboard /></PermissionGuard>} />
-      <Route path="/hr/recruitment/postings"
-        element={<PermissionGuard permission="hr.recruitment.view"><PostingsListPage /></PermissionGuard>} />
-      <Route path="/hr/recruitment/postings/create"
-        element={<PermissionGuard permission="hr.recruitment.manage"><PostingCreatePage /></PermissionGuard>} />
-      <Route path="/hr/recruitment/postings/:id"
-        element={<PermissionGuard permission="hr.recruitment.view"><PostingDetailPage /></PermissionGuard>} />
-      <Route path="/hr/recruitment/postings/:id/edit"
-        element={<PermissionGuard permission="hr.recruitment.manage"><PostingEditPage /></PermissionGuard>} />
-      <Route path="/hr/recruitment/applications"
-        element={<PermissionGuard permission="hr.recruitment.view"><ApplicationsListPage /></PermissionGuard>} />
-      <Route path="/hr/recruitment/applications/:id"
-        element={<PermissionGuard permission="hr.recruitment.view"><ApplicationDetailPage /></PermissionGuard>} />
-    </Route>
-  </>
+ {/* Training Catalog */}
+ <Route element={<ModuleGuard module="hr" />}>
+ <Route path="/hr/trainings"
+ element={<PermissionGuard permission="hr.trainings.view"><TrainingListPage /></PermissionGuard>} />
+ <Route path="/hr/trainings/create"
+ element={<PermissionGuard permission="hr.trainings.manage"><TrainingFormPage /></PermissionGuard>} />
+ <Route path="/hr/trainings/:id/edit"
+ element={<PermissionGuard permission="hr.trainings.manage"><TrainingFormPage /></PermissionGuard>} />
+ </Route>
+
+ {/* Skills Catalog */}
+ <Route element={<ModuleGuard module="hr" />}>
+ <Route path="/hr/skills"
+ element={<PermissionGuard permission="hr.trainings.view"><SkillsListPage /></PermissionGuard>} />
+ </Route>
+
+ {/* Recruitment */}
+ <Route element={<ModuleGuard module="recruitment" />}>
+ <Route path="/hr/recruitment"
+ element={<PermissionGuard permission="hr.recruitment.view"><RecruitmentDashboard /></PermissionGuard>} />
+ <Route path="/hr/recruitment/postings"
+ element={<PermissionGuard permission="hr.recruitment.view"><PostingsListPage /></PermissionGuard>} />
+ <Route path="/hr/recruitment/postings/create"
+ element={<PermissionGuard permission="hr.recruitment.manage"><PostingCreatePage /></PermissionGuard>} />
+ <Route path="/hr/recruitment/postings/:id"
+ element={<PermissionGuard permission="hr.recruitment.view"><PostingDetailPage /></PermissionGuard>} />
+ <Route path="/hr/recruitment/postings/:id/edit"
+ element={<PermissionGuard permission="hr.recruitment.manage"><PostingEditPage /></PermissionGuard>} />
+ <Route path="/hr/recruitment/applications"
+ element={<PermissionGuard permission="hr.recruitment.view"><ApplicationsListPage /></PermissionGuard>} />
+ <Route path="/hr/recruitment/applications/:id"
+ element={<PermissionGuard permission="hr.recruitment.view"><ApplicationDetailPage /></PermissionGuard>} />
+ </Route>
+ </>
 );

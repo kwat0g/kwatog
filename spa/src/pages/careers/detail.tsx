@@ -16,228 +16,228 @@ import { formatDate } from '@/lib/formatDate';
 import { formatPeso } from '@/lib/formatNumber';
 
 const applySchema = z.object({
-  first_name: z.string().min(1, 'First name is required').max(100),
-  last_name: z.string().min(1, 'Last name is required').max(100),
-  email: z.string().min(1, 'Email is required').email('Invalid email'),
-  phone: z.string().min(1, 'Phone is required').max(30),
-  cover_letter: z.string().max(5000).optional(),
+ first_name: z.string().min(1, 'First name is required').max(100),
+ last_name: z.string().min(1, 'Last name is required').max(100),
+ email: z.string().min(1, 'Email is required').email('Invalid email'),
+ phone: z.string().min(1, 'Phone is required').max(30),
+ cover_letter: z.string().max(5000).optional(),
 });
 
 type ApplyForm = z.infer<typeof applySchema>;
 
 export default function JobPostingDetailPage() {
-  const { id } = useParams<{ id: string }>();
-  const [resume, setResume] = useState<File | null>(null);
-  const [trackingCode, setTrackingCode] = useState<string | null>(null);
-  const [resumeError, setResumeError] = useState<string | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
+ const { id } = useParams<{ id: string }>();
+ const [resume, setResume] = useState<File | null>(null);
+ const [trackingCode, setTrackingCode] = useState<string | null>(null);
+ const [resumeError, setResumeError] = useState<string | null>(null);
+ const [menuOpen, setMenuOpen] = useState(false);
+ const fileRef = useRef<HTMLInputElement>(null);
 
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ['public-posting', id],
-    queryFn: () => publicRecruitmentApi.showPosting(id!).then((r) => r.data.data),
-    enabled: !!id,
-  });
+ const { data, isLoading, isError } = useQuery({
+ queryKey: ['public-posting', id],
+ queryFn: () => publicRecruitmentApi.showPosting(id!).then((r) => r.data.data),
+ enabled: !!id,
+ });
 
-  const {
-    register,
-    handleSubmit,
-    setError,
-    formState: { errors },
-  } = useForm<ApplyForm>({
-    resolver: zodResolver(applySchema),
-  });
+ const {
+ register,
+ handleSubmit,
+ setError,
+ formState: { errors },
+ } = useForm<ApplyForm>({
+ resolver: zodResolver(applySchema),
+ });
 
-  const mutation = useMutation({
-    mutationFn: (formData: FormData) => publicRecruitmentApi.apply(id!, formData),
-    onSuccess: (res) => {
-      setTrackingCode(res.data.tracking_code);
-    },
-    onError: (err: AxiosError<{ message?: string; errors?: Record<string, string[]> }>) => {
-      const body = err.response?.data;
-      if (err.response?.status === 422 && body?.errors) {
-        Object.entries(body.errors).forEach(([field, msgs]) => {
-          setError(field as keyof ApplyForm, { message: msgs[0] });
-        });
-      }
-    },
-  });
+ const mutation = useMutation({
+ mutationFn: (formData: FormData) => publicRecruitmentApi.apply(id!, formData),
+ onSuccess: (res) => {
+ setTrackingCode(res.data.tracking_code);
+ },
+ onError: (err: AxiosError<{ message?: string; errors?: Record<string, string[]> }>) => {
+ const body = err.response?.data;
+ if (err.response?.status === 422 && body?.errors) {
+ Object.entries(body.errors).forEach(([field, msgs]) => {
+ setError(field as keyof ApplyForm, { message: msgs[0] });
+ });
+ }
+ },
+ });
 
-  const onSubmit = (data: ApplyForm) => {
-    if (!resume) {
-      setResumeError('Please upload your resume (PDF, DOC, or DOCX).');
-      return;
-    }
-    setResumeError(null);
-    const fd = new FormData();
-    fd.append('first_name', data.first_name);
-    fd.append('last_name', data.last_name);
-    fd.append('email', data.email);
-    fd.append('phone', data.phone);
-    if (data.cover_letter) fd.append('cover_letter', data.cover_letter);
-    fd.append('resume', resume);
-    mutation.mutate(fd);
-  };
+ const onSubmit = (data: ApplyForm) => {
+ if (!resume) {
+ setResumeError('Please upload your resume (PDF, DOC, or DOCX).');
+ return;
+ }
+ setResumeError(null);
+ const fd = new FormData();
+ fd.append('first_name', data.first_name);
+ fd.append('last_name', data.last_name);
+ fd.append('email', data.email);
+ fd.append('phone', data.phone);
+ if (data.cover_letter) fd.append('cover_letter', data.cover_letter);
+ fd.append('resume', resume);
+ mutation.mutate(fd);
+ };
 
-  const posting = data;
+ const posting = data;
 
-  return (
-    <div className="min-h-screen bg-canvas" style={{ fontFamily: "'Bricolage Grotesque Variable', sans-serif" }}>
-      <LandingNav open={menuOpen} onOpenChange={setMenuOpen} />
+ return (
+ <div className="min-h-screen bg-canvas" style={{ fontFamily: "'Bricolage Grotesque Variable', sans-serif" }}>
+ <LandingNav open={menuOpen} onOpenChange={setMenuOpen} />
 
-      <main className="mx-auto max-w-3xl px-5 pb-24 pt-32">
-        <Link
-          to="/careers"
-          className="mb-8 inline-flex items-center gap-1.5 text-sm text-muted hover:text-primary"
-        >
-          <ArrowLeft size={14} /> Back to all positions
-        </Link>
+ <main className="mx-auto max-w-3xl px-5 pb-24 pt-32">
+ <Link
+ to="/careers"
+ className="mb-8 inline-flex items-center gap-1.5 text-sm text-muted hover:text-primary"
+ >
+ <ArrowLeft size={14} /> Back to all positions
+ </Link>
 
-        {isLoading && (
-          <div className="space-y-4">
-            <div className="h-8 w-2/3 animate-pulse rounded bg-elevated" />
-            <div className="h-4 w-1/3 animate-pulse rounded bg-elevated" />
-            <div className="h-32 animate-pulse rounded bg-surface" />
-          </div>
-        )}
+ {isLoading && (
+ <div className="space-y-4">
+ <div className="h-8 w-2/3 animate-pulse rounded bg-elevated" />
+ <div className="h-4 w-1/3 animate-pulse rounded bg-elevated" />
+ <div className="h-32 animate-pulse rounded bg-surface" />
+ </div>
+ )}
 
-        {isError && <p className="text-muted">Failed to load job posting.</p>}
+ {isError && <p className="text-muted">Failed to load job posting.</p>}
 
-        {posting && (
-          <>
-            <h1 className="text-2xl font-medium tracking-tight text-primary">{posting.title}</h1>
-            <div className="mt-3 flex flex-wrap gap-4 text-sm text-secondary">
-              <span className="flex items-center gap-1.5">
-                <MapPin size={14} /> {posting.department.name}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Briefcase size={14} /> {posting.employment_type_label ?? posting.employment_type}
-              </span>
-              {posting.salary_range && (
-                <span className="font-mono text-xs tabular-nums">
-                  {formatPeso(posting.salary_range.min)} – {formatPeso(posting.salary_range.max)}
-                </span>
-              )}
-            </div>
+ {posting && (
+ <>
+ <h1 className="text-2xl font-medium tracking-tight text-primary">{posting.title}</h1>
+ <div className="mt-3 flex flex-wrap gap-4 text-sm text-secondary">
+ <span className="flex items-center gap-1.5">
+ <MapPin size={14} /> {posting.department.name}
+ </span>
+ <span className="flex items-center gap-1.5">
+ <Briefcase size={14} /> {posting.employment_type_label ?? posting.employment_type}
+ </span>
+ {posting.salary_range && (
+ <span className="font-mono text-xs tabular-nums">
+ {formatPeso(posting.salary_range.min)} – {formatPeso(posting.salary_range.max)}
+ </span>
+ )}
+ </div>
 
-            <section className="mt-8">
-              <h2 className="text-lg font-medium text-primary">Description</h2>
-              <p className="mt-2 whitespace-pre-line text-secondary">{posting.description}</p>
-            </section>
+ <section className="mt-8">
+ <h2 className="text-lg font-medium text-primary">Description</h2>
+ <p className="mt-2 whitespace-pre-line text-secondary">{posting.description}</p>
+ </section>
 
-            <section className="mt-6">
-              <h2 className="text-lg font-medium text-primary">Requirements</h2>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {posting.requirements
-                  .split('\n')
-                  .map((r: string) => r.trim())
-                  .filter(Boolean)
-                  .map((req: string, i: number) => (
-                    <span
-                      key={i}
-                      className="inline-flex items-center rounded-md border border-default bg-surface px-3 py-1.5 text-sm text-secondary"
-                    >
-                      {req}
-                    </span>
-                  ))}
-              </div>
-            </section>
+ <section className="mt-6">
+ <h2 className="text-lg font-medium text-primary">Requirements</h2>
+ <div className="mt-3 flex flex-wrap gap-2">
+ {posting.requirements
+ .split('\n')
+ .map((r: string) => r.trim())
+ .filter(Boolean)
+ .map((req: string, i: number) => (
+ <span
+ key={i}
+ className="inline-flex items-center rounded-md border border-default bg-surface px-3 py-1.5 text-sm text-secondary"
+ >
+ {req}
+ </span>
+ ))}
+ </div>
+ </section>
 
-            {posting.closes_at && (
-              <p className="mt-6 text-sm text-warning">
-                Application deadline: {formatDate(posting.closes_at)}
-              </p>
-            )}
+ {posting.closes_at && (
+ <p className="mt-6 text-sm text-warning">
+ Application deadline: {formatDate(posting.closes_at)}
+ </p>
+ )}
 
-            <hr className="my-10 border-default" />
+ <hr className="my-10 border-default" />
 
-            {trackingCode ? (
-              <div className="rounded-md border border-default bg-success-bg p-5 text-center">
-                <CheckCircle className="mx-auto mb-3 text-success" size={40} />
-                <h2 className="text-xl font-medium text-primary">Application Submitted!</h2>
-                <p className="mt-2 text-secondary">
-                  Your tracking code is:
-                </p>
-                <p className="mt-1 font-mono text-2xl font-medium tracking-widest text-primary">
-                  {trackingCode}
-                </p>
-                <p className="mt-3 text-sm text-muted">
-                  Save this code. You can check your application status at{' '}
-                  <Link to="/careers/track" className="underline">the tracking page</Link>.
-                </p>
-              </div>
-            ) : (
-              <div>
-                <h2 className="text-xl font-medium text-primary">Apply for this Position</h2>
-                <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-4">
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-secondary">First Name *</label>
-                      <Input {...register('first_name')} />
-                      {errors.first_name && <p className="mt-1 text-xs text-danger">{errors.first_name.message}</p>}
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-secondary">Last Name *</label>
-                      <Input {...register('last_name')} />
-                      {errors.last_name && <p className="mt-1 text-xs text-danger">{errors.last_name.message}</p>}
-                    </div>
-                  </div>
+ {trackingCode ? (
+ <div className="rounded-md border border-default bg-success-bg p-5 text-center">
+ <CheckCircle className="mx-auto mb-3 text-success" size={40} />
+ <h2 className="text-xl font-medium text-primary">Application Submitted!</h2>
+ <p className="mt-2 text-secondary">
+ Your tracking code is:
+ </p>
+ <p className="mt-1 font-mono text-2xl font-medium tracking-widest text-primary">
+ {trackingCode}
+ </p>
+ <p className="mt-3 text-sm text-muted">
+ Save this code. You can check your application status at{' '}
+ <Link to="/careers/track" className="underline">the tracking page</Link>.
+ </p>
+ </div>
+ ) : (
+ <div>
+ <h2 className="text-xl font-medium text-primary">Apply for this Position</h2>
+ <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-4">
+ <div className="grid gap-4 sm:grid-cols-2">
+ <div>
+ <label className="mb-1 block text-sm font-medium text-secondary">First Name *</label>
+ <Input {...register('first_name')} />
+ {errors.first_name && <p className="mt-1 text-xs text-danger">{errors.first_name.message}</p>}
+ </div>
+ <div>
+ <label className="mb-1 block text-sm font-medium text-secondary">Last Name *</label>
+ <Input {...register('last_name')} />
+ {errors.last_name && <p className="mt-1 text-xs text-danger">{errors.last_name.message}</p>}
+ </div>
+ </div>
 
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-secondary">Email *</label>
-                      <Input type="email" {...register('email')} />
-                      {errors.email && <p className="mt-1 text-xs text-danger">{errors.email.message}</p>}
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-secondary">Phone *</label>
-                      <Input {...register('phone')} placeholder="09XX-XXX-XXXX" />
-                      {errors.phone && <p className="mt-1 text-xs text-danger">{errors.phone.message}</p>}
-                    </div>
-                  </div>
+ <div className="grid gap-4 sm:grid-cols-2">
+ <div>
+ <label className="mb-1 block text-sm font-medium text-secondary">Email *</label>
+ <Input type="email" {...register('email')} />
+ {errors.email && <p className="mt-1 text-xs text-danger">{errors.email.message}</p>}
+ </div>
+ <div>
+ <label className="mb-1 block text-sm font-medium text-secondary">Phone *</label>
+ <Input {...register('phone')} placeholder="09XX-XXX-XXXX" />
+ {errors.phone && <p className="mt-1 text-xs text-danger">{errors.phone.message}</p>}
+ </div>
+ </div>
 
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-secondary">Resume *</label>
-                    <div
-                      onClick={() => fileRef.current?.click()}
-                      className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-default px-4 py-3 text-sm text-secondary hover:border-strong"
-                    >
-                      <Upload size={16} />
-                      {resume ? resume.name : 'Click to upload (PDF, DOC, DOCX — max 5MB)'}
-                    </div>
-                    <input
-                      ref={fileRef}
-                      type="file"
-                      accept=".pdf,.doc,.docx"
-                      className="hidden"
-                      onChange={(e) => {
-                        setResume(e.target.files?.[0] ?? null);
-                        setResumeError(null);
-                      }}
-                    />
-                    {resumeError && <p className="mt-1 text-xs text-danger">{resumeError}</p>}
-                  </div>
+ <div>
+ <label className="mb-1 block text-sm font-medium text-secondary">Resume *</label>
+ <div
+ onClick={() => fileRef.current?.click()}
+ className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-default px-4 py-3 text-sm text-secondary hover:border-strong"
+ >
+ <Upload size={16} />
+ {resume ? resume.name : 'Click to upload (PDF, DOC, DOCX — max 5MB)'}
+ </div>
+ <input
+ ref={fileRef}
+ type="file"
+ accept=".pdf,.doc,.docx"
+ className="hidden"
+ onChange={(e) => {
+ setResume(e.target.files?.[0] ?? null);
+ setResumeError(null);
+ }}
+ />
+ {resumeError && <p className="mt-1 text-xs text-danger">{resumeError}</p>}
+ </div>
 
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-secondary">Cover Letter</label>
-                    <Textarea {...register('cover_letter')} rows={4} placeholder="Tell us why you're a great fit..." />
-                  </div>
+ <div>
+ <label className="mb-1 block text-sm font-medium text-secondary">Cover Letter</label>
+ <Textarea {...register('cover_letter')} rows={4} placeholder="Tell us why you're a great fit..." />
+ </div>
 
-                  <Button type="submit" disabled={mutation.isPending} className="w-full">
-                    {mutation.isPending ? 'Submitting...' : 'Submit Application'}
-                  </Button>
+ <Button type="submit" disabled={mutation.isPending} className="w-full">
+ {mutation.isPending ? 'Submitting...' : 'Submit Application'}
+ </Button>
 
-                  {mutation.isError && (
-                    <p className="text-sm text-danger">Something went wrong. Please try again.</p>
-                  )}
-                </form>
-              </div>
-            )}
-          </>
-        )}
-      </main>
+ {mutation.isError && (
+ <p className="text-sm text-danger">Something went wrong. Please try again.</p>
+ )}
+ </form>
+ </div>
+ )}
+ </>
+ )}
+ </main>
 
-      <LandingFooter />
-    </div>
-  );
+ <LandingFooter />
+ </div>
+ );
 }

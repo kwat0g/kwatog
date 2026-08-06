@@ -13,16 +13,16 @@ import Pusher from 'pusher-js';
 import axios from 'axios';
 
 declare global {
-  interface Window { Pusher: typeof Pusher }
+ interface Window { Pusher: typeof Pusher }
 }
 
 window.Pusher = Pusher;
 
 const env = (k: string, fallback?: string): string | undefined => {
-  // import.meta.env is injected by Vite at build time.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const v = (import.meta as any).env?.[k];
-  return v == null || v === '' ? fallback : String(v);
+ // import.meta.env is injected by Vite at build time.
+ // eslint-disable-next-line @typescript-eslint/no-explicit-any
+ const v = (import.meta as any).env?.[k];
+ return v == null || v === '' ? fallback : String(v);
 };
 
 // pusher-js does not support a URL path prefix, so the Reverb port must
@@ -31,31 +31,31 @@ const env = (k: string, fallback?: string): string | undefined => {
 const isHttps = window.location.protocol === 'https:';
 
 export const echo = new Echo({
-  broadcaster: 'reverb',
-  key: env('VITE_REVERB_APP_KEY', 'ogami_reverb'),
-  wsHost: env('VITE_REVERB_HOST', window.location.hostname),
-  wsPort: Number(env('VITE_REVERB_PORT', '8080')),
-  wssPort: Number(env('VITE_REVERB_PORT', '443')),
-  forceTLS: env('VITE_REVERB_SCHEME', isHttps ? 'https' : 'http') === 'https',
-  enabledTransports: ['ws', 'wss'],
-  authEndpoint: '/api/v1/broadcasting/auth',
-  // Pusher's default XHR authorizer does not copy Laravel's XSRF cookie into
-  // the X-XSRF-TOKEN header. Use Axios so private-channel authorization
-  // carries both the session cookie and the current CSRF token.
-  authorizer: (channel: { name: string }) => ({
-    authorize: (socketId: string, callback: (error: boolean, data: unknown) => void) => {
-      axios.post(
-        '/api/v1/broadcasting/auth',
-        { socket_id: socketId, channel_name: channel.name },
-        {
-          withCredentials: true,
-          headers: {
-            Accept: 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
-          },
-        },
-      ).then((response) => callback(false, response.data))
-        .catch((error: unknown) => callback(true, error));
-    },
-  }),
+ broadcaster: 'reverb',
+ key: env('VITE_REVERB_APP_KEY', 'ogami_reverb'),
+ wsHost: env('VITE_REVERB_HOST', window.location.hostname),
+ wsPort: Number(env('VITE_REVERB_PORT', '8080')),
+ wssPort: Number(env('VITE_REVERB_PORT', '443')),
+ forceTLS: env('VITE_REVERB_SCHEME', isHttps ? 'https' : 'http') === 'https',
+ enabledTransports: ['ws', 'wss'],
+ authEndpoint: '/api/v1/broadcasting/auth',
+ // Pusher's default XHR authorizer does not copy Laravel's XSRF cookie into
+ // the X-XSRF-TOKEN header. Use Axios so private-channel authorization
+ // carries both the session cookie and the current CSRF token.
+ authorizer: (channel: { name: string }) => ({
+ authorize: (socketId: string, callback: (error: boolean, data: unknown) => void) => {
+ axios.post(
+ '/api/v1/broadcasting/auth',
+ { socket_id: socketId, channel_name: channel.name },
+ {
+ withCredentials: true,
+ headers: {
+ Accept: 'application/json',
+ 'X-Requested-With': 'XMLHttpRequest',
+ },
+ },
+ ).then((response) => callback(false, response.data))
+ .catch((error: unknown) => callback(true, error));
+ },
+ }),
 });

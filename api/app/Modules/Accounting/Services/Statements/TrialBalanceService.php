@@ -6,6 +6,8 @@ namespace App\Modules\Accounting\Services\Statements;
 
 use App\Common\Support\Money;
 use App\Modules\Accounting\Exceptions\LedgerImbalanceException;
+use App\Modules\Accounting\Enums\AccountType;
+use App\Modules\Accounting\Enums\NormalBalance;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -17,7 +19,7 @@ class TrialBalanceService
      *
      * @return array{
      *   from: string, to: string,
-     *   accounts: array<int, array{code:string, name:string, type:string, normal_balance:string, debit_total:string, credit_total:string, balance:string, balance_side:string}>,
+     *   accounts: array<int, array{code:string, name:string, type:string, type_label:string, normal_balance:string, normal_balance_label:string, debit_total:string, credit_total:string, balance:string, balance_side:string}>,
      *   totals: array{debit:string, credit:string}
      * }
      */
@@ -59,7 +61,9 @@ class TrialBalanceService
                     'code'           => $r->code,
                     'name'           => $r->name,
                     'type'           => $r->type,
+                    'type_label'     => AccountType::tryFrom((string) $r->type)?->label() ?? (string) $r->type,
                     'normal_balance' => $r->normal_balance,
+                    'normal_balance_label' => NormalBalance::tryFrom((string) $r->normal_balance)?->label() ?? (string) $r->normal_balance,
                     'debit_total'    => $debit,
                     'credit_total'   => $credit,
                     'balance'        => $balance,

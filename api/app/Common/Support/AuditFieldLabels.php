@@ -68,7 +68,7 @@ final class AuditFieldLabels
                 'employment_type'       => ['label' => 'Employment Type',    'type' => 'enum'],
                 'pay_type'              => ['label' => 'Pay Type',           'type' => 'enum'],
                 'basic_monthly_salary'  => ['label' => 'Monthly Salary',     'type' => 'money'],
-                'daily_rate'            => ['label' => 'Daily Rate',         'type' => 'money'],
+                'semi_monthly_rate'            => ['label' => 'Semi-monthly Rate', 'type' => 'money'],
                 'date_hired'            => ['label' => 'Date Hired',         'type' => 'date'],
                 'date_regularized'      => ['label' => 'Date Regularized',   'type' => 'date'],
                 'date_separated'        => ['label' => 'Date Separated',     'type' => 'date'],

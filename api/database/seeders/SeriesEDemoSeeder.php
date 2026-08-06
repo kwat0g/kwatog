@@ -290,7 +290,7 @@ class SeriesEDemoSeeder extends Seeder
             'owner_id'     => $admin->id,
             'name'         => 'Monthly compensation snapshot',
             'module'       => 'hr.employees',
-            'columns'      => ['employee_no', 'full_name', 'monthly_salary', 'daily_rate', 'pay_type'],
+            'columns'      => ['employee_no', 'full_name', 'monthly_salary', 'semi_monthly_rate', 'pay_type'],
             'filters'      => ['status' => 'active'],
             'format'       => ExportFormat::Csv->value,
             'frequency'    => ExportFrequency::Monthly->value,

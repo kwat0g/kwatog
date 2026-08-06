@@ -79,7 +79,7 @@ class BalanceSheetService
             $is = $this->incomeStatement->generate($fyStart, $asOf);
             if (! Money::isZero($is['net_income'])) {
                 $equity[] = [
-                    'code'   => '3099',
+                    'code'   => $this->settings->requiredString('accounting.statements.current_period_net_income_code'),
                     'name'   => 'Current Period Net Income',
                     'amount' => $is['net_income'],
                 ];

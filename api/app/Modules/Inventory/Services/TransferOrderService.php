@@ -6,6 +6,7 @@ namespace App\Modules\Inventory\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Auth\Models\User;
+use App\Modules\Inventory\Enums\TransferOrderStatus;
 use App\Modules\Inventory\Models\TransferOrder;
 use App\Common\Services\DocumentSequenceService;
 use Illuminate\Database\Eloquent\Collection;
@@ -47,7 +48,7 @@ class TransferOrderService
                 'item_id'           => $data['item_id'],
                 'quantity'          => $data['quantity'],
                 'reason'            => $data['reason'] ?? null,
-                'status'            => 'pending',
+                'status'            => TransferOrderStatus::Pending->value,
                 'created_by'        => $user->id,
             ]);
         });
@@ -57,7 +58,7 @@ class TransferOrderService
     {
         return DB::transaction(function () use ($id, $user) {
             $order = TransferOrder::findOrFail($id);
-            if ($order->status !== 'pending') {
+            if ($order->status !== TransferOrderStatus::Pending) {
                 throw new BusinessRuleException('Transfer order is not pending.');
             }
 
@@ -72,7 +73,7 @@ class TransferOrderService
             );
 
             $order->update([
-                'status'         => 'transferred',
+                'status'         => TransferOrderStatus::Transferred->value,
                 'transferred_by' => $user->id,
                 'transferred_at' => now(),
             ]);
@@ -90,10 +91,10 @@ class TransferOrderService
     public function cancel(int $id): TransferOrder
     {
         $order = TransferOrder::findOrFail($id);
-        if ($order->status !== 'pending') {
+        if ($order->status !== TransferOrderStatus::Pending) {
             throw new BusinessRuleException('Can only cancel pending transfer orders.');
         }
-        $order->update(['status' => 'cancelled']);
+        $order->update(['status' => TransferOrderStatus::Cancelled->value]);
         return $order->fresh();
     }
 }

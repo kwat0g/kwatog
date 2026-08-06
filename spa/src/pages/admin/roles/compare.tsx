@@ -21,323 +21,323 @@ import { cn } from '@/lib/cn';
  * roles (e.g. "Day Supervisor" vs. "Night Supervisor").
  */
 export default function CompareRolesPage() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const a = searchParams.get('a') ?? '';
-  const b = searchParams.get('b') ?? '';
+ const [searchParams, setSearchParams] = useSearchParams();
+ const a = searchParams.get('a') ?? '';
+ const b = searchParams.get('b') ?? '';
 
-  const roleList = useQuery({
-    queryKey: ['admin', 'roles', 'all-for-compare'],
-    queryFn: () => rolesApi.list({ per_page: 100, sort: 'name', direction: 'asc' }),
-    staleTime: 60_000,
-  });
+ const roleList = useQuery({
+ queryKey: ['admin', 'roles', 'all-for-compare'],
+ queryFn: () => rolesApi.list({ per_page: 100, sort: 'name', direction: 'asc' }),
+ staleTime: 60_000,
+ });
 
-  const compare = useQuery<RoleCompareResult>({
-    queryKey: ['admin', 'roles', 'compare', a, b],
-    queryFn: () => rolesApi.compare(a, b),
-    enabled: !!a && !!b && a !== b,
-  });
+ const compare = useQuery<RoleCompareResult>({
+ queryKey: ['admin', 'roles', 'compare', a, b],
+ queryFn: () => rolesApi.compare(a, b),
+ enabled: !!a && !!b && a !== b,
+ });
 
-  const setA = (next: string) => setSearchParams({ a: next, b }, { replace: true });
-  const setB = (next: string) => setSearchParams({ a, b: next }, { replace: true });
-  const swap = () => setSearchParams({ a: b, b: a }, { replace: true });
+ const setA = (next: string) => setSearchParams({ a: next, b }, { replace: true });
+ const setB = (next: string) => setSearchParams({ a, b: next }, { replace: true });
+ const swap = () => setSearchParams({ a: b, b: a }, { replace: true });
 
-  const grouped = useMemo(() => {
-    const data = compare.data;
-    if (!data) return null;
-    const groupByModule = (rows: RolePermissionRow[]): Record<string, RolePermissionRow[]> =>
-      rows.reduce<Record<string, RolePermissionRow[]>>((acc, r) => {
-        (acc[r.module] ||= []).push(r);
-        return acc;
-      }, {});
-    return {
-      only_a: groupByModule(data.only_in_a),
-      common: groupByModule(data.common),
-      only_b: groupByModule(data.only_in_b),
-    };
-  }, [compare.data]);
+ const grouped = useMemo(() => {
+ const data = compare.data;
+ if (!data) return null;
+ const groupByModule = (rows: RolePermissionRow[]): Record<string, RolePermissionRow[]> =>
+ rows.reduce<Record<string, RolePermissionRow[]>>((acc, r) => {
+ (acc[r.module] ||= []).push(r);
+ return acc;
+ }, {});
+ return {
+ only_a: groupByModule(data.only_in_a),
+ common: groupByModule(data.common),
+ only_b: groupByModule(data.only_in_b),
+ };
+ }, [compare.data]);
 
-  const differentCount = compare.data
-    ? compare.data.only_in_a.length + compare.data.only_in_b.length
-    : 0;
+ const differentCount = compare.data
+ ? compare.data.only_in_a.length + compare.data.only_in_b.length
+ : 0;
 
-  const escapeCsv = (value: string): string => {
-    if (value.includes(',') || value.includes('"') || value.includes('\n')) {
-      return `"${value.replace(/"/g, '""')}"`;
-    }
-    return value;
-  };
+ const escapeCsv = (value: string): string => {
+ if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+ return `"${value.replace(/"/g, '""')}"`;
+ }
+ return value;
+ };
 
-  const exportCsv = () => {
-    if (!compare.data) return;
-    const rows: string[] = [];
-    rows.push('Section,Permission Slug,Permission Name,Module');
-    for (const p of compare.data.only_in_a) {
-      rows.push(`"Only in ${compare.data.role_a.name}","${escapeCsv(p.slug)}","${escapeCsv(p.name)}","${escapeCsv(p.module)}"`);
-    }
-    rows.push('');
-    rows.push('Section,Permission Slug,Permission Name,Module');
-    for (const p of compare.data.common) {
-      rows.push('"Common to Both","' + escapeCsv(p.slug) + '","' + escapeCsv(p.name) + '","' + escapeCsv(p.module) + '"');
-    }
-    rows.push('');
-    rows.push('Section,Permission Slug,Permission Name,Module');
-    for (const p of compare.data.only_in_b) {
-      rows.push(`"Only in ${compare.data.role_b.name}","${escapeCsv(p.slug)}","${escapeCsv(p.name)}","${escapeCsv(p.module)}"`);
-    }
-    const csvContent = rows.join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    const safeNameA = compare.data.role_a.name.toLowerCase().replace(/\s+/g, '-');
-    const safeNameB = compare.data.role_b.name.toLowerCase().replace(/\s+/g, '-');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `role-compare-${safeNameA}-vs-${safeNameB}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+ const exportCsv = () => {
+ if (!compare.data) return;
+ const rows: string[] = [];
+ rows.push('Section,Permission Slug,Permission Name,Module');
+ for (const p of compare.data.only_in_a) {
+ rows.push(`"Only in ${compare.data.role_a.name}","${escapeCsv(p.slug)}","${escapeCsv(p.name)}","${escapeCsv(p.module)}"`);
+ }
+ rows.push('');
+ rows.push('Section,Permission Slug,Permission Name,Module');
+ for (const p of compare.data.common) {
+ rows.push('"Common to Both","' + escapeCsv(p.slug) + '","' + escapeCsv(p.name) + '","' + escapeCsv(p.module) + '"');
+ }
+ rows.push('');
+ rows.push('Section,Permission Slug,Permission Name,Module');
+ for (const p of compare.data.only_in_b) {
+ rows.push(`"Only in ${compare.data.role_b.name}","${escapeCsv(p.slug)}","${escapeCsv(p.name)}","${escapeCsv(p.module)}"`);
+ }
+ const csvContent = rows.join('\n');
+ const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+ const url = URL.createObjectURL(blob);
+ const link = document.createElement('a');
+ const safeNameA = compare.data.role_a.name.toLowerCase().replace(/\s+/g, '-');
+ const safeNameB = compare.data.role_b.name.toLowerCase().replace(/\s+/g, '-');
+ link.setAttribute('href', url);
+ link.setAttribute('download', `role-compare-${safeNameA}-vs-${safeNameB}.csv`);
+ link.style.visibility = 'hidden';
+ document.body.appendChild(link);
+ link.click();
+ document.body.removeChild(link);
+ };
 
-  return (
-    <div>
-      <PageHeader
-        title="Compare roles"
-        subtitle="Side-by-side permission diff. Useful before cloning a role or auditing access drift."
-        backTo="/admin/roles"
-        backLabel="Roles"
-        breadcrumbs={[
-          { label: 'Admin', href: '/admin' },
-          { label: 'Roles', href: '/admin/roles' },
-          { label: 'Compare' },
-        ]}
-        actions={
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={<Download size={14} />}
-            onClick={exportCsv}
-            disabled={!compare.data}
-          >
-            Export
-          </Button>
-        }
-      />
-      <div className="px-5 py-4">
-        {/* Pickers */}
-        <Panel title="Roles to compare" className="mb-4">
-          <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-3 items-end">
-            <Select
-              label="Role A"
-              value={a}
-              onChange={(e: { target: { value: string } }) => setA(e.target.value)}
-            >
-              <option value="">Select a role…</option>
-              {(roleList.data?.data ?? []).map((r) => (
-                <option key={r.id} value={r.id} disabled={r.id === b}>
-                  {r.name} {r.is_system ? '(System)' : ''}
-                </option>
-              ))}
-            </Select>
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={<ArrowLeftRight size={14} />}
-              onClick={swap}
-              disabled={!a || !b}
-              aria-label="Swap A and B"
-            >
-              Swap
-            </Button>
-            <Select
-              label="Role B"
-              value={b}
-              onChange={(e: { target: { value: string } }) => setB(e.target.value)}
-            >
-              <option value="">Select a role…</option>
-              {(roleList.data?.data ?? []).map((r) => (
-                <option key={r.id} value={r.id} disabled={r.id === a}>
-                  {r.name} {r.is_system ? '(System)' : ''}
-                </option>
-              ))}
-            </Select>
-          </div>
-        </Panel>
+ return (
+ <div>
+ <PageHeader
+ title="Compare roles"
+ subtitle="Side-by-side permission diff. Useful before cloning a role or auditing access drift."
+ backTo="/admin/roles"
+ backLabel="Roles"
+ breadcrumbs={[
+ { label: 'Admin', href: '/admin' },
+ { label: 'Roles', href: '/admin/roles' },
+ { label: 'Compare' },
+ ]}
+ actions={
+ <Button
+ variant="secondary"
+ size="sm"
+ icon={<Download size={14} />}
+ onClick={exportCsv}
+ disabled={!compare.data}
+ >
+ Export
+ </Button>
+ }
+ />
+ <div className="px-5 py-4">
+ {/* Pickers */}
+ <Panel title="Roles to compare" className="mb-4">
+ <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-3 items-end">
+ <Select
+ label="Role A"
+ value={a}
+ onChange={(e: { target: { value: string } }) => setA(e.target.value)}
+ >
+ <option value="">Select a role…</option>
+ {(roleList.data?.data ?? []).map((r) => (
+ <option key={r.id} value={r.id} disabled={r.id === b}>
+ {r.name} {r.is_system ? '(System)' : ''}
+ </option>
+ ))}
+ </Select>
+ <Button
+ variant="secondary"
+ size="sm"
+ icon={<ArrowLeftRight size={14} />}
+ onClick={swap}
+ disabled={!a || !b}
+ aria-label="Swap A and B"
+ >
+ Swap
+ </Button>
+ <Select
+ label="Role B"
+ value={b}
+ onChange={(e: { target: { value: string } }) => setB(e.target.value)}
+ >
+ <option value="">Select a role…</option>
+ {(roleList.data?.data ?? []).map((r) => (
+ <option key={r.id} value={r.id} disabled={r.id === a}>
+ {r.name} {r.is_system ? '(System)' : ''}
+ </option>
+ ))}
+ </Select>
+ </div>
+ </Panel>
 
-        {!a || !b ? (
-          <EmptyState
-            icon="inbox"
-            title="Pick two roles to compare"
-            description="Select any two roles above to see which permissions they share and where they differ."
-          />
-        ) : a === b ? (
-          <EmptyState
-            icon="alert-circle"
-            title="Pick two different roles"
-            description="You selected the same role for both sides."
-          />
-        ) : compare.isLoading ? (
-          <SkeletonTable columns={4} rows={8} />
-        ) : compare.isError ? (
-          <EmptyState
-            icon="alert-circle"
-            title="Failed to load comparison"
-            action={
-              <Button variant="secondary" onClick={() => compare.refetch()}>
-                Retry
-              </Button>
-            }
-          />
-        ) : compare.data ? (
-          <>
-            {/* Stat strip */}
-            <Panel className="mb-4">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                <Stat
-                  label={`${compare.data.role_a.name} permissions`}
-                  value={compare.data.role_a.permissions_count}
-                />
-                <Stat
-                  label={`${compare.data.role_b.name} permissions`}
-                  value={compare.data.role_b.permissions_count}
-                />
-                <Stat label="Common" value={compare.data.common.length} tone={compare.data.common.length > 0 ? 'success' : 'neutral'} />
-                <Stat
-                  label="Different"
-                  value={differentCount}
-                  tone={differentCount > 0 ? 'warning' : 'neutral'}
-                />
-              </div>
-            </Panel>
+ {!a || !b ? (
+ <EmptyState
+ icon="inbox"
+ title="Pick two roles to compare"
+ description="Select any two roles above to see which permissions they share and where they differ."
+ />
+ ) : a === b ? (
+ <EmptyState
+ icon="alert-circle"
+ title="Pick two different roles"
+ description="You selected the same role for both sides."
+ />
+ ) : compare.isLoading ? (
+ <SkeletonTable columns={4} rows={8} />
+ ) : compare.isError ? (
+ <EmptyState
+ icon="alert-circle"
+ title="Failed to load comparison"
+ action={
+ <Button variant="secondary" onClick={() => compare.refetch()}>
+ Retry
+ </Button>
+ }
+ />
+ ) : compare.data ? (
+ <>
+ {/* Stat strip */}
+ <Panel className="mb-4">
+ <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+ <Stat
+ label={`${compare.data.role_a.name} permissions`}
+ value={compare.data.role_a.permissions_count}
+ />
+ <Stat
+ label={`${compare.data.role_b.name} permissions`}
+ value={compare.data.role_b.permissions_count}
+ />
+ <Stat label="Common" value={compare.data.common.length} tone={compare.data.common.length > 0 ? 'success' : 'neutral'} />
+ <Stat
+ label="Different"
+ value={differentCount}
+ tone={differentCount > 0 ? 'warning' : 'neutral'}
+ />
+ </div>
+ </Panel>
 
-            {/* Three columns */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <DiffColumn
-                title={`Only in ${compare.data.role_a.name}`}
-                tone="warning"
-                empty="Nothing exclusive to this role."
-                grouped={grouped?.only_a ?? {}}
-              />
-              <DiffColumn
-                title="Common to both"
-                tone="neutral"
-                empty="No shared permissions."
-                grouped={grouped?.common ?? {}}
-              />
-              <DiffColumn
-                title={`Only in ${compare.data.role_b.name}`}
-                tone="info"
-                empty="Nothing exclusive to this role."
-                grouped={grouped?.only_b ?? {}}
-              />
-            </div>
+ {/* Three columns */}
+ <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+ <DiffColumn
+ title={`Only in ${compare.data.role_a.name}`}
+ tone="warning"
+ empty="Nothing exclusive to this role."
+ grouped={grouped?.only_a ?? {}}
+ />
+ <DiffColumn
+ title="Common to both"
+ tone="neutral"
+ empty="No shared permissions."
+ grouped={grouped?.common ?? {}}
+ />
+ <DiffColumn
+ title={`Only in ${compare.data.role_b.name}`}
+ tone="info"
+ empty="Nothing exclusive to this role."
+ grouped={grouped?.only_b ?? {}}
+ />
+ </div>
 
 
-          </>
-        ) : null}
-      </div>
-    </div>
-  );
+ </>
+ ) : null}
+ </div>
+ </div>
+ );
 }
 
 function Stat({
-  label,
-  value,
-  tone = 'neutral',
+ label,
+ value,
+ tone = 'neutral',
 }: {
-  label: string;
-  value: number;
-  tone?: 'success' | 'warning' | 'neutral';
+ label: string;
+ value: number;
+ tone?: 'success' | 'warning' | 'neutral';
 }) {
-  return (
-    <div>
-      <div className="text-2xs uppercase tracking-wider text-muted font-medium">{label}</div>
-      <div className="flex items-center gap-2 mt-0.5">
-        <span className="text-lg font-medium tabular-nums">{value}</span>
-        {tone !== 'neutral' && (
-          <Chip variant={tone}>{tone === 'success' ? 'common' : 'different'}</Chip>
-        )}
-      </div>
-    </div>
-  );
+ return (
+ <div>
+ <div className="text-2xs uppercase tracking-wider text-muted font-medium">{label}</div>
+ <div className="flex items-center gap-2 mt-0.5">
+ <span className="text-lg font-medium tabular-nums">{value}</span>
+ {tone !== 'neutral' && (
+ <Chip variant={tone}>{tone === 'success' ? 'common' : 'different'}</Chip>
+ )}
+ </div>
+ </div>
+ );
 }
 
 function getActionBadge(slug: string) {
-  const lower = slug.toLowerCase();
-  if (lower.includes('delete') || lower.includes('destroy') || lower.includes('remove')) {
-    return { label: 'DELETE', variant: 'danger' as const };
-  }
-  if (lower.includes('create') || lower.includes('add') || lower.includes('store')) {
-    return { label: 'CREATE', variant: 'info' as const };
-  }
-  if (lower.includes('edit') || lower.includes('update') || lower.includes('modify')) {
-    return { label: 'EDIT', variant: 'warning' as const };
-  }
-  if (lower.includes('view') || lower.includes('read') || lower.includes('index') || lower.includes('show')) {
-    return { label: 'VIEW', variant: 'success' as const };
-  }
-  if (lower.includes('approve') || lower.includes('finalize') || lower.includes('post') || lower.includes('override')) {
-    return { label: 'APPROVE', variant: 'purple' as const };
-  }
-  return { label: 'ACCESS', variant: 'neutral' as const };
+ const lower = slug.toLowerCase();
+ if (lower.includes('delete') || lower.includes('destroy') || lower.includes('remove')) {
+ return { label: 'DELETE', variant: 'danger' as const };
+ }
+ if (lower.includes('create') || lower.includes('add') || lower.includes('store')) {
+ return { label: 'CREATE', variant: 'info' as const };
+ }
+ if (lower.includes('edit') || lower.includes('update') || lower.includes('modify')) {
+ return { label: 'EDIT', variant: 'warning' as const };
+ }
+ if (lower.includes('view') || lower.includes('read') || lower.includes('index') || lower.includes('show')) {
+ return { label: 'VIEW', variant: 'success' as const };
+ }
+ if (lower.includes('approve') || lower.includes('finalize') || lower.includes('post') || lower.includes('override')) {
+ return { label: 'APPROVE', variant: 'purple' as const };
+ }
+ return { label: 'ACCESS', variant: 'neutral' as const };
 }
 
 function DiffColumn({
-  title,
-  tone,
-  empty,
-  grouped,
+ title,
+ tone,
+ empty,
+ grouped,
 }: {
-  title: string;
-  tone: 'warning' | 'info' | 'neutral';
-  empty: string;
-  grouped: Record<string, RolePermissionRow[]>;
+ title: string;
+ tone: 'warning' | 'info' | 'neutral';
+ empty: string;
+ grouped: Record<string, RolePermissionRow[]>;
 }) {
-  const totalRows = Object.values(grouped).reduce((sum, r) => sum + r.length, 0);
-  return (
-    <Panel
-      title={
-        <span className="flex items-center gap-2">
-          <span>{title}</span>
-          <Chip variant={tone}>{totalRows}</Chip>
-        </span>
-      }
-    >
-      {totalRows === 0 ? (
-        <p className="text-sm text-muted py-3">{empty}</p>
-      ) : (
-        <div className="flex flex-col gap-3">
-          {Object.entries(grouped).map(([module, rows]) => (
-            <div key={module} className="border border-default rounded-md overflow-hidden bg-surface">
-              <div className="px-3 py-1.5 text-2xs uppercase tracking-wider text-muted font-medium border-b border-default bg-subtle/50 flex justify-between items-center">
-                <span>{module}</span>
-                <span className="font-mono text-2xs">{rows.length}</span>
-              </div>
-              <ul className="divide-y divide-subtle">
-                {rows.map((p, idx) => {
-                  const badge = getActionBadge(p.slug);
-                  return (
-                    <li
-                      key={p.slug}
-                      className={cn(
-                        'px-3 py-2 flex items-center justify-between gap-2 transition-colors',
-                        idx % 2 === 1 ? 'bg-[var(--bg-zebra-even)] hover:bg-[var(--bg-row-hover)]' : 'bg-[var(--bg-zebra-odd)] hover:bg-[var(--bg-row-hover)]',
-                      )}
-                    >
-                      <div className="min-w-0">
-                        <div className="text-xs font-medium text-primary truncate">{p.name}</div>
-                        <div className="text-2xs font-mono text-muted truncate">{p.slug}</div>
-                      </div>
-                      <Chip variant={badge.variant} className="text-[9px] font-mono font-bold px-1.5 shrink-0">
-                        {badge.label}
-                      </Chip>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
-        </div>
-      )}
-    </Panel>
-  );
+ const totalRows = Object.values(grouped).reduce((sum, r) => sum + r.length, 0);
+ return (
+ <Panel
+ title={
+ <span className="flex items-center gap-2">
+ <span>{title}</span>
+ <Chip variant={tone}>{totalRows}</Chip>
+ </span>
+ }
+ >
+ {totalRows === 0 ? (
+ <p className="text-sm text-muted py-3">{empty}</p>
+ ) : (
+ <div className="flex flex-col gap-3">
+ {Object.entries(grouped).map(([module, rows]) => (
+ <div key={module} className="border border-default rounded-md overflow-hidden bg-surface">
+ <div className="px-3 py-1.5 text-2xs uppercase tracking-wider text-muted font-medium border-b border-default bg-subtle/50 flex justify-between items-center">
+ <span>{module}</span>
+ <span className="font-mono text-2xs">{rows.length}</span>
+ </div>
+ <ul className="divide-y divide-subtle">
+ {rows.map((p, idx) => {
+ const badge = getActionBadge(p.slug);
+ return (
+ <li
+ key={p.slug}
+ className={cn(
+ 'px-3 py-2 flex items-center justify-between gap-2 transition-colors',
+ idx % 2 === 1 ? 'bg-[var(--bg-zebra-even)] hover:bg-[var(--bg-row-hover)]' : 'bg-[var(--bg-zebra-odd)] hover:bg-[var(--bg-row-hover)]',
+ )}
+ >
+ <div className="min-w-0">
+ <div className="text-xs font-medium text-primary truncate">{p.name}</div>
+ <div className="text-2xs font-mono text-muted truncate">{p.slug}</div>
+ </div>
+ <Chip variant={badge.variant} className="text-[9px] font-mono font-medium px-1.5 shrink-0">
+ {badge.label}
+ </Chip>
+ </li>
+ );
+ })}
+ </ul>
+ </div>
+ ))}
+ </div>
+ )}
+ </Panel>
+ );
 }

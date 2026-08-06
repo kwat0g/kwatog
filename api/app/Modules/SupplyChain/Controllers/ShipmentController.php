@@ -6,6 +6,8 @@ namespace App\Modules\SupplyChain\Controllers;
 
 use App\Modules\SupplyChain\Enums\ShipmentDocumentType;
 use App\Modules\SupplyChain\Enums\ShipmentStatus;
+use App\Modules\SupplyChain\Enums\Incoterm;
+use App\Modules\SupplyChain\Enums\LandedCostAllocationMethod;
 use App\Modules\SupplyChain\Models\Shipment;
 use App\Modules\SupplyChain\Models\ShipmentDocument;
 use App\Modules\SupplyChain\Requests\CreateShipmentRequest;
@@ -26,6 +28,37 @@ class ShipmentController
         private readonly ShipmentService $service,
         private readonly LandedCostService $landedCostService,
     ) {}
+
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'statuses' => array_map(
+                static function (ShipmentStatus $status): array {
+                    $next = collect(ShipmentStatus::cases())
+                        ->first(fn (ShipmentStatus $candidate): bool => $status->canTransitionTo($candidate));
+                    return [
+                        'value' => $status->value,
+                        'label' => $status->label(),
+                        'next_status' => $next?->value,
+                        'is_terminal' => $status->isTerminal(),
+                    ];
+                },
+                ShipmentStatus::cases(),
+            ),
+            'document_types' => array_map(
+                static fn (ShipmentDocumentType $type): array => ['value' => $type->value, 'label' => $type->label()],
+                ShipmentDocumentType::cases(),
+            ),
+            'incoterms' => array_map(
+                static fn (Incoterm $term): array => ['value' => $term->value, 'label' => $term->label()],
+                Incoterm::cases(),
+            ),
+            'allocation_methods' => array_map(
+                static fn (LandedCostAllocationMethod $method): array => ['value' => $method->value, 'label' => $method->label()],
+                LandedCostAllocationMethod::cases(),
+            ),
+        ]]);
+    }
 
     public function index(Request $request): AnonymousResourceCollection
     {
@@ -122,13 +155,19 @@ class ShipmentController
         return response()->json([], 204);
     }
 
+    public function restoreDocument(ShipmentDocument $document): JsonResponse
+    {
+        $document->restore();
+        return response()->json(['message' => 'Shipment document restored.']);
+    }
+
     /**
      * OGAMI-104 — Calculate and persist landed cost allocations for a shipment.
      */
     public function calculateLandedCost(Request $request, Shipment $shipment): ShipmentResource
     {
         $data = $request->validate([
-            'allocation_method' => ['nullable', 'string', Rule::in(['by_value', 'by_weight', 'by_quantity', 'manual'])],
+            'allocation_method' => ['nullable', 'string', Rule::in(LandedCostAllocationMethod::values())],
         ]);
 
         return new ShipmentResource(
@@ -140,5 +179,11 @@ class ShipmentController
     {
         $this->service->delete($shipment);
         return response()->json([], 204);
+    }
+
+    public function restore(Shipment $shipment): JsonResponse
+    {
+        $shipment->restore();
+        return response()->json(['message' => 'Shipment restored.']);
     }
 }

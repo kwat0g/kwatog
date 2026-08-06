@@ -22,7 +22,7 @@ class LoginController
      *         required=true,
      *         @OA\JsonContent(
      *             required={"email", "password"},
-     *             @OA\Property(property="email", type="string", format="email", example="admin@ogami.ph"),
+     *             @OA\Property(property="email", type="string", format="email"),
      *             @OA\Property(property="password", type="string", format="password", example="password")
      *         )
      *     ),

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Common\Controllers;
 
 use App\Common\Services\ApprovalBoardService;
+use App\Common\Services\SettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -15,7 +16,10 @@ use Illuminate\Http\Request;
  */
 class ApprovalBoardController
 {
-    public function __construct(private readonly ApprovalBoardService $service) {}
+    public function __construct(
+        private readonly ApprovalBoardService $service,
+        private readonly SettingsService $settings,
+    ) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -27,5 +31,13 @@ class ApprovalBoardController
         $board = $this->service->board($request->user(), is_string($type) ? $type : null);
 
         return response()->json(['data' => $board]);
+    }
+
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'kinds' => $this->service->kindOptions(),
+            'overdue_hours' => $this->settings->requiredInt('approvals.reminder_hours', 1),
+        ]]);
     }
 }

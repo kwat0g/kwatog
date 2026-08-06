@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Payroll\Listeners;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Payroll\Events\PayrollPeriodFinalized;
 use App\Modules\Payroll\Services\BankFileService;
@@ -28,12 +29,13 @@ use Illuminate\Support\Facades\Log;
  */
 class GenerateBankFileOnPayrollFinalized
 {
-    public function __construct(private readonly BankFileService $bankFiles) {}
+    public function __construct(private readonly BankFileService $bankFiles, private readonly ?SettingsService $settings = null) {}
 
     public function handle(PayrollPeriodFinalized $event): void
     {
         try {
-            $generator = User::whereHas('role', fn ($q) => $q->where('slug', 'system_admin'))
+            $roles = array_values(array_filter((array) ($this->settings ?? app(SettingsService::class))->get('system.automation.actor_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
+            $generator = User::whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                 ->where('is_active', true)
                 ->orderBy('id')
                 ->first();

@@ -43,6 +43,31 @@ trait HasHashId
     }
 
     /**
+     * Resolve route binding by hash_id including soft-deleted records.
+     *
+     * The framework calls this (instead of resolveRouteBinding) when a route
+     * opts in via ->withTrashed() and the model uses SoftDeletes. Archive/restore
+     * endpoints rely on it: the trashed row must bind before it can be restored.
+     */
+    public function resolveSoftDeletableRouteBinding($value, $field = null): ?Model
+    {
+        if ($field !== null) {
+            return $this->withTrashed()->where($field, $value)->firstOrFail();
+        }
+
+        if (app()->environment('testing') && ctype_digit((string) $value)) {
+            return $this->withTrashed()->whereKey((int) $value)->firstOrFail();
+        }
+
+        $decoded = app('hashids')->decode((string) $value);
+        if (empty($decoded)) {
+            abort(404);
+        }
+
+        return $this->withTrashed()->whereKey((int) $decoded[0])->firstOrFail();
+    }
+
+    /**
      * Accessor: $model->hash_id  →  encoded string.
      */
     public function getHashIdAttribute(): string

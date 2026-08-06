@@ -6,10 +6,13 @@ namespace App\Modules\Leave\Models;
 
 use App\Modules\Auth\Models\User;
 use Illuminate\Database\Eloquent\Model;
+use App\Common\Traits\HasHashId;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ProcessedYearEndLeaveType extends Model
 {
+    use HasHashId;
+
     protected $fillable = [
         'leave_type_id',
         'year',

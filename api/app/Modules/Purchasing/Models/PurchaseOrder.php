@@ -18,10 +18,11 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class PurchaseOrder extends Model
 {
-    use HasFactory, HasHashId, HasAuditLog, HasApprovalWorkflow;
+    use HasFactory, HasHashId, HasAuditLog, HasApprovalWorkflow, SoftDeletes;
 
     protected static function newFactory(): \Database\Factories\PurchaseOrderFactory
     {

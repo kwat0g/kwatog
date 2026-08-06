@@ -6,8 +6,10 @@ namespace App\Modules\Production\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\SettingsService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\SearchOperator;
+use App\Common\Support\TrashedFilter;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\Inventory\Enums\ReservationStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
@@ -68,10 +70,17 @@ class WorkOrderService
         'cancelled'   => [],
     ];
 
+    /** @return array<string, list<string>> */
+    public static function allowedTransitions(): array
+    {
+        return self::ALLOWED;
+    }
+
     public function __construct(
         private readonly DocumentSequenceService $sequences,
         private readonly BomService $boms,
         private readonly StockMovementService $stock,
+        private readonly SettingsService $settings,
     ) {}
 
     public function list(array $filters): LengthAwarePaginator
@@ -83,6 +92,8 @@ class WorkOrderService
                 'machine:id,machine_code,name',
                 'mold:id,mold_code,name',
             ]);
+
+        TrashedFilter::apply($q, $filters);
 
         if (! empty($filters['status'])) {
             $q->where('status', $filters['status']);
@@ -146,7 +157,9 @@ class WorkOrderService
                 'quantity_target'     => (int) $data['quantity_target'],
                 'planned_start'       => $data['planned_start'],
                 'planned_end'         => $data['planned_end'],
-                'priority'            => (int) ($data['priority'] ?? 0),
+                'priority'            => array_key_exists('priority', $data) && $data['priority'] !== null
+                    ? (int) $data['priority']
+                    : $this->settings->requiredInt('mrp.work_order.normal_priority', 0, 255),
                 'status'              => WorkOrderStatus::Planned->value,
                 'created_by'          => (int) $data['created_by'],
             ];
@@ -583,8 +596,9 @@ class WorkOrderService
     /**
      * Reserve every BOM line of $wo. For each material, pick the location
      * with the largest available stock; if the chosen location can't cover
-     * the BOM quantity, the StockMovementService will throw and the parent
-     * transaction rolls back.
+     * the BOM quantity, the reservation is split across the locations with
+     * the most available stock (F-10) until the demand is met. When the
+     * pooled on-hand still can't cover it, the parent transaction rolls back.
      *
      * Locations are locked for update so concurrent confirms don't race the
      * same on-hand pool.
@@ -600,28 +614,66 @@ class WorkOrderService
                 (int) $material->item_id,
                 $needed,
             );
-            if ($locationId === null) {
-                // No single location has enough; let StockMovementService::reserve
-                // throw on the largest-stock location for a clear error message.
-                $locationId = $this->largestLocationForItem((int) $material->item_id);
-                if ($locationId === null) {
-                    throw new RuntimeException(
-                        "No stock available for item {$material->item_id} (work order {$wo->wo_number})."
-                    );
-                }
+            if ($locationId !== null) {
+                $this->reserveAt((int) $material->item_id, $locationId, $needed, $wo->id);
+                continue;
             }
 
-            $this->stock->reserve((int) $material->item_id, $locationId, $needed);
-
-            MaterialReservation::create([
-                'item_id'       => (int) $material->item_id,
-                'work_order_id' => $wo->id,
-                'location_id'   => $locationId,
-                'quantity'      => $needed,
-                'status'        => ReservationStatus::Reserved->value,
-                'reserved_at'   => Carbon::now(),
-            ]);
+            // F-10 — no single location covers the demand: split across the
+            // locations with the most available stock until the need is met.
+            // A failure to cover the pooled on-hand throws here and the
+            // confirm() transaction rolls back the partial reservations.
+            if (! $this->reserveMaterialsSplit((int) $material->item_id, $needed, $wo->id)) {
+                throw new RuntimeException(
+                    "Insufficient stock for item {$material->item_id} (work order {$wo->wo_number}): "
+                    . "needed {$needed}."
+                );
+            }
         }
+    }
+
+    private function reserveAt(int $itemId, int $locationId, string $quantity, int $woId): void
+    {
+        $this->stock->reserve($itemId, $locationId, $quantity);
+
+        MaterialReservation::create([
+            'item_id'       => $itemId,
+            'work_order_id' => $woId,
+            'location_id'   => $locationId,
+            'quantity'      => $quantity,
+            'status'        => ReservationStatus::Reserved->value,
+            'reserved_at'   => Carbon::now(),
+        ]);
+    }
+
+    /**
+     * @return bool true when the full demand was reserved across locations
+     */
+    private function reserveMaterialsSplit(int $itemId, string $needed, int $woId): bool
+    {
+        $remaining = $needed;
+        $levels = StockLevel::where('item_id', $itemId)
+            // F-02 — never draw held/scrapped stock for production.
+            ->whereHas('location.zone', function ($q) {
+                $q->whereNotIn('zone_type', [
+                    \App\Modules\Inventory\Enums\WarehouseZoneType::Quarantine->value,
+                    \App\Modules\Inventory\Enums\WarehouseZoneType::Scrap->value,
+                ]);
+            })
+            ->orderByRaw('(quantity - reserved_quantity) DESC')
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($levels as $level) {
+            if (bccomp($remaining, '0', 3) <= 0) break;
+            $available = bcsub((string) $level->quantity, (string) $level->reserved_quantity, 3);
+            if (bccomp($available, '0', 3) <= 0) continue;
+            $take = bccomp($available, $remaining, 3) >= 0 ? $remaining : $available;
+            $this->reserveAt($itemId, (int) $level->location_id, $take, $woId);
+            $remaining = bcsub($remaining, $take, 3);
+        }
+
+        return bccomp($remaining, '0', 3) <= 0;
     }
 
     /**
@@ -705,24 +757,18 @@ class WorkOrderService
     private function bestLocationForItem(int $itemId, string $needed): ?int
     {
         $row = StockLevel::where('item_id', $itemId)
+            // F-02 — never pick quarantine/scrap-zone stock for production.
+            ->whereHas('location.zone', function ($q) {
+                $q->whereNotIn('zone_type', [
+                    \App\Modules\Inventory\Enums\WarehouseZoneType::Quarantine->value,
+                    \App\Modules\Inventory\Enums\WarehouseZoneType::Scrap->value,
+                ]);
+            })
             ->orderByRaw('(quantity - reserved_quantity) DESC')
             ->lockForUpdate()
             ->first();
         if (! $row) return null;
         $available = bcsub((string) $row->quantity, (string) $row->reserved_quantity, 3);
         return bccomp($available, $needed, 3) >= 0 ? (int) $row->location_id : null;
-    }
-
-    /**
-     * Fallback location selector — returns whichever location has the
-     * most stock for the item. Used to produce a meaningful insufficient-
-     * stock error message when no single location covers the demand.
-     */
-    private function largestLocationForItem(int $itemId): ?int
-    {
-        $row = StockLevel::where('item_id', $itemId)
-            ->orderByDesc('quantity')
-            ->first();
-        return $row ? (int) $row->location_id : null;
     }
 }

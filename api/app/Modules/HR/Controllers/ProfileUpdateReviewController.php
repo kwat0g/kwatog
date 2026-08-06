@@ -6,10 +6,12 @@ namespace App\Modules\HR\Controllers;
 
 use App\Modules\HR\Models\ProfileUpdateRequest;
 use App\Modules\HR\Requests\FinanceReviewProfileUpdateRequest;
+use App\Modules\HR\Enums\ProfileUpdateStatus;
 use App\Modules\HR\Requests\ReviewProfileUpdateRequest;
 use App\Modules\HR\Resources\ProfileUpdateRequestResource;
 use App\Modules\HR\Services\ProfileUpdateRequestService;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 /**
@@ -26,6 +28,16 @@ class ProfileUpdateReviewController
         return ProfileUpdateRequestResource::collection(
             $this->service->listForReview($request->query()),
         );
+    }
+
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'statuses' => array_map(
+                static fn (ProfileUpdateStatus $status): array => ['value' => $status->value, 'label' => $status->label()],
+                ProfileUpdateStatus::cases(),
+            ),
+        ]]);
     }
 
     public function review(

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Production\Notifications\DailyProductionSummary;
 use App\Modules\Production\Services\ProductionSummaryService;
@@ -19,7 +20,7 @@ class SendDailyProductionSummary extends Command
     protected $signature   = 'production:send-daily-summary {--date=}';
     protected $description = 'Email today\'s production summary to plant managers (Task A10)';
 
-    public function handle(ProductionSummaryService $svc): int
+    public function handle(ProductionSummaryService $svc, SettingsService $settings): int
     {
         $date = $this->option('date')
             ? Carbon::parse((string) $this->option('date'))
@@ -27,8 +28,9 @@ class SendDailyProductionSummary extends Command
 
         $summary = $svc->forDate($date);
 
+        $roles = array_values(array_filter((array) $settings->get('production.summary.notification_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
         $users = User::query()
-            ->whereHas('role', fn ($q) => $q->whereIn('slug', ['production_manager', 'system_admin']))
+            ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
             ->where('is_active', true)
             ->whereNotNull('email')
             ->get();

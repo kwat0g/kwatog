@@ -11,10 +11,11 @@ use App\Modules\HR\Models\Employee;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Attendance extends Model
 {
-    use HasFactory, HasHashId, HasAuditLog;
+    use HasFactory, HasHashId, HasAuditLog, SoftDeletes;
 
     protected $fillable = [
         'employee_id', 'date', 'shift_id',

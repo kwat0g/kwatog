@@ -100,9 +100,12 @@ class EmployeeDirectoryController
             'first_name'     => $e->first_name,
             'last_name'      => $e->last_name,
             'photo_path'     => $e->photo_path,
+            // Photo is served through the authenticated /photo endpoint.
+            'photo_url'      => $e->photo_path ? "/api/v1/hr/employees/{$e->hash_id}/photo" : null,
             'mobile_number'  => $e->mobile_number ? $this->maskMobile($e->mobile_number) : null,
             'email'          => $e->email,
             'status'         => $e->status?->value,
+            'status_label'   => $e->status?->label(),
             'position'       => $e->position
                 ? ['id' => app('hashids')->encode($e->position->id), 'title' => $e->position->title]
                 : null,

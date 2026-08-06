@@ -7,6 +7,7 @@ namespace App\Modules\Production\Notifications;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use App\Common\Services\SettingsService;
 
 /**
  * Task A10 — Daily 18:00 email to plant_manager / production_manager.
@@ -24,8 +25,10 @@ class DailyProductionSummary extends Notification
 
     public function toMail(mixed $notifiable): MailMessage
     {
+        $companyName = app(SettingsService::class)->requiredString('company.legal_name');
+
         return (new MailMessage)
             ->subject('Production Summary — '.$this->summary['date'])
-            ->view('emails.production-summary', ['summary' => $this->summary]);
+            ->view('emails.production-summary', ['summary' => $this->summary, 'companyName' => $companyName]);
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Quality\Services\ItemQualityPlanService;
@@ -17,10 +18,10 @@ class RolloutBaselineQualityPlans extends Command
 
     protected $description = 'Idempotently create conservative baseline incoming quality plans for eligible items';
 
-    public function handle(ItemQualityPlanService $plans): int
+    public function handle(ItemQualityPlanService $plans, SettingsService $settings): int
     {
         $actor = User::query()->where('is_active', true)
-            ->whereHas('role', fn ($role) => $role->where('slug', 'system_admin'))
+            ->whereHas('role', fn ($role) => $role->whereIn('slug', array_values(array_filter((array) $settings->get('system.automation.actor_roles', []), static fn ($role): bool => is_string($role) && $role !== ''))))
             ->orderBy('id')->first();
         if (! $actor) {
             $this->error('No active system administrator is available to own generated plan revisions.');
@@ -28,8 +29,13 @@ class RolloutBaselineQualityPlans extends Command
             return self::FAILURE;
         }
 
+        $eligibleTypes = $settings->get('quality.rollout.eligible_item_types', '__missing_quality_rollout_types__');
+        if (! is_array($eligibleTypes) || $eligibleTypes === []) {
+            $this->error('quality.rollout.eligible_item_types is missing or invalid.');
+            return self::FAILURE;
+        }
         $query = Item::query()->active()
-            ->whereIn('item_type', config('quality_rollout.eligible_item_types', ['raw_material']))
+            ->whereIn('item_type', $eligibleTypes)
             ->whereDoesntHave('qualityPlans', fn ($plan) => $plan->effective());
         if ($this->option('critical-only')) {
             $query->where('is_critical', true);
@@ -46,6 +52,11 @@ class RolloutBaselineQualityPlans extends Command
         $rows = [];
         foreach ($items as $item) {
             $template = str_contains(strtolower($item->name.' '.$item->code), 'resin') ? 'resin' : 'general';
+            $parameters = $settings->get("quality.rollout.template.{$template}", []);
+            if (! is_array($parameters) || $parameters === []) {
+                $this->error("quality.rollout.template.{$template} is missing or invalid.");
+                return self::FAILURE;
+            }
             $rows[] = [$item->code, $item->name, $template, $apply ? 'created' : 'would create'];
             if (! $apply) {
                 continue;
@@ -53,8 +64,8 @@ class RolloutBaselineQualityPlans extends Command
 
             $plans->createRevision($item, [
                 'sampling_method' => 'fixed',
-                'fixed_sample_size' => (int) config('quality_rollout.fixed_sample_size', 3),
-                'parameters' => config("quality_rollout.templates.{$template}"),
+                'fixed_sample_size' => $settings->requiredInt('quality.rollout.fixed_sample_size', 1, 1000),
+                'parameters' => $parameters,
                 'effective_from' => now()->toDateString(),
                 'notes' => 'Baseline rollout plan. QC must review and publish a tailored revision where drawing, COA, or supplier controls require tighter limits.',
             ], $actor);

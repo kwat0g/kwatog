@@ -4,17 +4,17 @@ import '@testing-library/jest-dom';
 // Stub it once so any module that triggers themeStore initialization
 // during test imports doesn't blow up.
 if (typeof window !== 'undefined' && !window.matchMedia) {
-  Object.defineProperty(window, 'matchMedia', {
-    writable: true,
-    value: (query: string) => ({
-      matches: false,
-      media: query,
-      onchange: null,
-      addListener: () => {},
-      removeListener: () => {},
-      addEventListener: () => {},
-      removeEventListener: () => {},
-      dispatchEvent: () => false,
-    }),
-  });
+ Object.defineProperty(window, 'matchMedia', {
+ writable: true,
+ value: (query: string) => ({
+ matches: false,
+ media: query,
+ onchange: null,
+ addListener: () => {},
+ removeListener: () => {},
+ addEventListener: () => {},
+ removeEventListener: () => {},
+ dispatchEvent: () => false,
+ }),
+ });
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Dashboard\Services;
 
+use App\Common\Services\SettingsService;
 use App\Common\Support\Money;
 use App\Modules\Accounting\Enums\BillStatus;
 use App\Modules\Accounting\Enums\InvoiceStatus;
@@ -15,6 +16,7 @@ use App\Modules\Accounting\Services\BudgetService;
 use App\Modules\Accounting\Services\InvoiceService;
 use App\Modules\Dashboard\Services\ForecastingDashboardService;
 use App\Modules\Payroll\Models\PayrollPeriod;
+use App\Modules\Payroll\Enums\PayrollPeriodStatus;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -26,6 +28,7 @@ class FinanceDashboardService
         private readonly BillService $billService,
         private readonly InvoiceService $invoiceService,
         private readonly ForecastingDashboardService $forecastingService,
+        private readonly SettingsService $settings,
     ) {}
 
     public function summary(): array
@@ -34,12 +37,17 @@ class FinanceDashboardService
         // before this revision aren't served with the new schema missing.
         return Cache::tags(['financial_statements', 'finance_dashboard'])
             ->remember('finance_dashboard:summary:v2', now()->addSeconds(30), function () {
-                // Cash balance: sum of asset/cash accounts (1010 + 1020 + 1030).
+                $cashCodes = array_values(array_filter([
+                    $this->settings->get('accounting.accounts.cash_code'),
+                    $this->settings->get('accounting.accounts.payroll_cash_code'),
+                    $this->settings->get('accounting.accounts.asset_cash_code'),
+                ], static fn ($code) => is_string($code) && $code !== ''));
+                // Cash balance is derived from the configured cash accounts.
                 $cashBalance = (string) DB::table('journal_entry_lines as jel')
                     ->join('journal_entries as je', 'je.id', '=', 'jel.journal_entry_id')
                     ->join('accounts as a',         'a.id',  '=', 'jel.account_id')
                     ->where('je.status', 'posted')
-                    ->whereIn('a.code', ['1010', '1020', '1030'])
+                    ->whereIn('a.code', $cashCodes)
                     ->selectRaw('COALESCE(SUM(jel.debit) - SUM(jel.credit), 0) as bal')
                     ->value('bal');
 
@@ -96,8 +104,10 @@ class FinanceDashboardService
                     'top_overdue_customers'  => $topOverdue,
                     // Task D5 — additional Finance Officer panels.
                 'payroll_pipeline'       => $this->payrollPipeline(),
+                'payroll_pipeline_history_days' => $this->settings->requiredInt('dashboard.finance.payroll_pipeline_history_days', 1),
                 'unposted_jes'           => $this->unpostedJes(),
-                'ap_due_this_week'       => $this->apDueThisWeek(),
+                    'ap_due_this_week'       => $this->apDueThisWeek(),
+                    'ap_due_horizon_days'   => $this->settings->requiredInt('dashboard.widgets.ap_due_horizon_days', 0),
                 'budget_vs_actual_top'   => $this->budgetVsActualTop(),
                 'revenue_forecast'       => $this->forecastingService->revenueForecast(),
                 ];
@@ -112,7 +122,8 @@ class FinanceDashboardService
      */
     private function payrollPipeline(): array
     {
-        $cutoff = CarbonImmutable::now()->subDays(90)->toDateString();
+        $historyDays = $this->settings->requiredInt('dashboard.finance.payroll_pipeline_history_days', 1);
+        $cutoff = CarbonImmutable::now()->subDays($historyDays)->toDateString();
 
         $rows = PayrollPeriod::query()
             ->where('period_start', '>=', $cutoff)
@@ -127,6 +138,17 @@ class FinanceDashboardService
             if (array_key_exists($key, $base)) $base[$key] = (int) $count;
         }
         $base['total'] = array_sum($base);
+        $base['stages'] = collect([
+            PayrollPeriodStatus::Draft,
+            PayrollPeriodStatus::Processing,
+            PayrollPeriodStatus::Approved,
+            PayrollPeriodStatus::Finalized,
+            PayrollPeriodStatus::Disbursed,
+        ])->map(fn (PayrollPeriodStatus $status): array => [
+            'value' => $status->value,
+            'label' => $status->label(),
+            'count' => $base[$status->value] ?? 0,
+        ])->all();
         return $base;
     }
 
@@ -155,7 +177,8 @@ class FinanceDashboardService
     private function apDueThisWeek(): array
     {
         $today  = CarbonImmutable::now()->toDateString();
-        $weekly = CarbonImmutable::now()->addDays(7)->toDateString();
+        $horizonDays = $this->settings->requiredInt('dashboard.widgets.ap_due_horizon_days', 0);
+        $weekly = CarbonImmutable::now()->addDays($horizonDays)->toDateString();
 
         $base = Bill::query()
             ->whereIn('status', [BillStatus::Unpaid, BillStatus::Partial])

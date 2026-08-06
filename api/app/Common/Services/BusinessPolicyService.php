@@ -30,6 +30,11 @@ class BusinessPolicyService
         return $this->positiveInt('mrp.default_lead_time_days');
     }
 
+    public function mrpWorkOrderNormalPriority(): int
+    {
+        return $this->nonNegativeInt('mrp.work_order.normal_priority');
+    }
+
     public function purchaseOrderVpThreshold(): float
     {
         $value = $this->settings->get('approval.po.vp_threshold', '__missing_business_policy__');
@@ -40,7 +45,24 @@ class BusinessPolicyService
         return (float) $value;
     }
 
-    /** @return array{customer_payment_terms_days:int,vendor_payment_terms_days:int,sales_delivery_lead_days:int,mrp_default_lead_time_days:int,purchase_order_vp_threshold:float} */
+    public function functionalCurrencyCode(): string
+    {
+        $code = (string) $this->settings->get('accounting.functional_currency_code', 'PHP');
+        return strtoupper(trim($code) !== '' ? $code : 'PHP');
+    }
+
+    public function reportingCurrencyCode(): string
+    {
+        $code = (string) $this->settings->get('accounting.reporting_currency_code', 'PHP');
+        return strtoupper(trim($code) !== '' ? $code : 'PHP');
+    }
+
+    public function translationAdjustmentAccountCode(): string
+    {
+        return $this->settings->requiredString('accounting.statements.translation_adjustment_code');
+    }
+
+    /** @return array<string, int|float|string> */
     public function defaults(): array
     {
         return [
@@ -48,7 +70,11 @@ class BusinessPolicyService
             'vendor_payment_terms_days' => $this->vendorPaymentTermsDays(),
             'sales_delivery_lead_days' => $this->salesDeliveryLeadDays(),
             'mrp_default_lead_time_days' => $this->mrpDefaultLeadTimeDays(),
+            'mrp_work_order_normal_priority' => $this->mrpWorkOrderNormalPriority(),
             'purchase_order_vp_threshold' => $this->purchaseOrderVpThreshold(),
+            'functional_currency_code' => $this->functionalCurrencyCode(),
+            'reporting_currency_code' => $this->reportingCurrencyCode(),
+            'translation_adjustment_account_code' => $this->translationAdjustmentAccountCode(),
         ];
     }
 

@@ -55,6 +55,12 @@ class CustomerController
         return response()->json(null, 204);
     }
 
+    public function restore(Customer $customer): JsonResponse
+    {
+        $customer->restore();
+        return response()->json(['message' => 'Customer restored.']);
+    }
+
     /**
      * GET /api/v1/accounting/customers/{customer}/statement-of-account
      * Generate a customer statement of account with running balance and aging.

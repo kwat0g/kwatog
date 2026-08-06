@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Resources;
 
+use Illuminate\Support\Str;
+
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -22,6 +24,7 @@ class JobPostingResource extends JsonResource
             'salary_range_max' => $this->salary_range_max,
             'show_salary'     => $this->show_salary,
             'status'          => $this->status?->value,
+            'status_label'    => Str::headline((string) ($this->status?->value ?? $this->status)),
             'slots'           => $this->slots,
             'posted_at'       => $this->posted_at?->toIso8601String(),
             'closes_at'       => $this->closes_at?->toIso8601String(),
@@ -43,6 +46,7 @@ class JobPostingResource extends JsonResource
             ),
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
+            'deleted_at' => optional($this->deleted_at)?->toIso8601String(),
         ];
     }
 }

@@ -120,8 +120,9 @@ class SupplierPerformanceService
     /**
      * @return Collection<int, SupplierPerformanceSnapshot>
      */
-    public function trendForVendor(Vendor $vendor, int $months = 6): Collection
+    public function trendForVendor(Vendor $vendor, ?int $months = null): Collection
     {
+        $months ??= $this->settingInt('purchasing.supplier_score.trend_months', 1, 36);
         $cutoff = Carbon::now()->subMonths($months - 1)->startOfMonth();
         return SupplierPerformanceSnapshot::query()
             ->where('vendor_id', $vendor->id)
@@ -386,5 +387,10 @@ class SupplierPerformanceService
             throw new \App\Common\Exceptions\BusinessRuleException("Required supplier policy {$key} is missing or invalid.");
         }
         return (float) $value;
+    }
+
+    private function settingInt(string $key, int $minimum, int $maximum): int
+    {
+        return $this->settings->requiredInt($key, $minimum, $maximum);
     }
 }

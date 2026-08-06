@@ -6,6 +6,8 @@ namespace App\Modules\Production\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use App\Modules\Production\Enums\WorkOrderStatus;
+use App\Modules\Production\Services\WorkOrderService;
 
 class WorkOrderResource extends JsonResource
 {
@@ -48,6 +50,13 @@ class WorkOrderResource extends JsonResource
             'actual_end'          => optional($this->actual_end)->toIso8601String(),
             'status'              => (string) $this->status?->value,
             'status_label'        => $this->status?->label(),
+            'next_statuses'       => array_map(
+                static fn (string $next): array => [
+                    'value' => $next,
+                    'label' => WorkOrderStatus::tryFrom($next)?->label() ?? $next,
+                ],
+                WorkOrderService::allowedTransitions()[$this->status?->value ?? ''] ?? [],
+            ),
             'pause_reason'        => $this->pause_reason,
             'priority'            => (int) $this->priority,
             'creator'             => $this->whenLoaded('creator', fn () => $this->creator ? [
@@ -99,6 +108,7 @@ class WorkOrderResource extends JsonResource
             ),
             'created_at'          => optional($this->created_at)->toIso8601String(),
             'updated_at'          => optional($this->updated_at)->toIso8601String(),
+            'deleted_at'          => optional($this->deleted_at)?->toIso8601String(),
         ];
     }
 }

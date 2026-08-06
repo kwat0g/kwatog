@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace App\Modules\MRP\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\SettingsService;
 use App\Common\Support\HashIdFilter;
 use App\Modules\CRM\Models\Product;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\MRP\Models\Bom;
+use App\Common\Support\TrashedFilter;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -16,11 +18,15 @@ use RuntimeException;
 
 class BomService
 {
+    public function __construct(private readonly SettingsService $settings) {}
+
     public function list(array $filters): LengthAwarePaginator
     {
         $q = Bom::query()
             ->with(['product:id,part_number,name,unit_of_measure'])
             ->withCount('items');
+
+        TrashedFilter::apply($q, $filters);
 
         if (! empty($filters['product_id'])) {
             $pid = HashIdFilter::decode($filters['product_id'], Product::class);
@@ -96,9 +102,6 @@ class BomService
         $bom->delete();
     }
 
-    /** @var int OGAMI-015 — hard cap on BOM nesting depth (cycle / runaway guard). */
-    private const MAX_EXPLODE_DEPTH = 10;
-
     /**
      * Public method used by MRP engine (Task 52): expand a finished-good qty
      * into the required raw-material quantities (gross, including waste).
@@ -134,6 +137,11 @@ class BomService
         ]);
     }
 
+    private function maxExplodeDepth(): int
+    {
+        return $this->settings->requiredInt('mrp.bom.max_explode_depth', 1, 100);
+    }
+
     /**
      * Recursive worker. Walks every line of $bom, multiplying $multiplier by
      * each line's effective (waste-inclusive, unit-converted) quantity. A line
@@ -146,10 +154,11 @@ class BomService
      */
     private function explodeInto(Bom $bom, float $multiplier, array &$accumulator, array $productPath, int $depth): void
     {
-        if ($depth > self::MAX_EXPLODE_DEPTH) {
+        $maxDepth = $this->maxExplodeDepth();
+        if ($depth > $maxDepth) {
             throw new RuntimeException(
                 'BOM explosion exceeded the maximum nesting depth of '
-                . self::MAX_EXPLODE_DEPTH . ' — check for a circular bill of materials.'
+                . $maxDepth . ' — check for a circular bill of materials.'
             );
         }
 

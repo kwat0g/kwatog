@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Quality\Listeners;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Production\Events\WorkOrderCompleted;
 use App\Modules\Quality\Enums\InspectionEntityType;
@@ -33,6 +34,7 @@ class TriggerOutgoingQC implements ShouldQueue
 {
     public function __construct(
         private readonly InspectionService $inspections,
+        private readonly SettingsService $settings,
     ) {}
 
     public function handle(WorkOrderCompleted $event): void
@@ -51,7 +53,8 @@ class TriggerOutgoingQC implements ShouldQueue
             if (! $wo->sales_order_id && ! $wo->parent_ncr_id) return;
 
             $productId = $wo->product_id;
-            $batchQty  = max(1, (int) ($wo->quantity_good ?: $wo->quantity_produced ?: 0));
+            $batchQty = (int) ($wo->quantity_good ?: $wo->quantity_produced ?: 0);
+            if ($batchQty < 1) return;
             if (! $productId) return;
 
             // Guard columns covered by the DB unique index
@@ -123,8 +126,9 @@ class TriggerOutgoingQC implements ShouldQueue
 
             // Notify QC team.
             try {
+                $roles = array_values(array_filter((array) $this->settings->get('quality.outgoing_qc.notification_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
                 User::query()
-                    ->whereHas('role', fn ($q) => $q->whereIn('slug', ['qc_inspector', 'production_manager']))
+                    ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                     ->where('is_active', true)
                     ->get()
                     ->each(function (User $user) use ($wo) {

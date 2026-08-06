@@ -10,23 +10,23 @@ import { useAuthStore } from '@/stores/authStore';
 import { useRecentItemsStore } from '@/stores/recentItemsStore';
 
 export function useRecentPageTracker() {
-  const { pathname } = useLocation();
-  const permissions = useAuthStore((s) => s.permissions);
-  const features = useAuthStore((s) => s.features);
-  const roleSlug = useAuthStore((s) => s.user?.role?.slug);
-  const addRecent = useRecentItemsStore((s) => s.add);
+ const { pathname } = useLocation();
+ const permissions = useAuthStore((s) => s.permissions);
+ const features = useAuthStore((s) => s.features);
+ const roleSlug = useAuthStore((s) => s.user?.role?.slug);
+ const addRecent = useRecentItemsStore((s) => s.add);
 
-  useEffect(() => {
-    for (const section of SECTIONS) {
-      const match = section.items.find(
-        (item) =>
-          item.to === pathname &&
-          isNavItemVisible(item, { permissions, features, roleSlug }),
-      );
-      if (match) {
-        addRecent({ url: match.to, label: match.label, sublabel: section.label, type: 'page' });
-        return;
-      }
-    }
-  }, [pathname, permissions, features, roleSlug, addRecent]);
+ useEffect(() => {
+ for (const section of SECTIONS) {
+ const match = section.items.find(
+ (item) =>
+ item.to === pathname &&
+ isNavItemVisible(item, { permissions, features, roleSlug }),
+ );
+ if (match) {
+ addRecent({ url: match.to, label: match.label, sublabel: section.label, type: 'page' });
+ return;
+ }
+ }
+ }, [pathname, permissions, features, roleSlug, addRecent]);
 }

@@ -6,6 +6,7 @@ namespace App\Modules\Purchasing\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 
 class PurchaseOrderResource extends JsonResource
 {
@@ -21,6 +22,12 @@ class PurchaseOrderResource extends JsonResource
             'total_amount'           => (string) $this->total_amount,
             'is_vatable'             => (bool) $this->is_vatable,
             'status'                 => (string) $this->status?->value,
+            'status_label'           => $this->status?->label() ?? (string) $this->status,
+            'is_billable'            => in_array($this->status, [
+                PurchaseOrderStatus::Sent,
+                PurchaseOrderStatus::PartiallyReceived,
+                PurchaseOrderStatus::Received,
+            ], true),
             'requires_vp_approval'   => (bool) $this->requires_vp_approval,
             'is_auto_generated'      => (bool) $this->is_auto_generated,
             'current_approval_step'  => (int) $this->current_approval_step,
@@ -51,6 +58,7 @@ class PurchaseOrderResource extends JsonResource
                 'grn_number'    => $g->grn_number,
                 'received_date' => optional($g->received_date)->toDateString(),
                 'status'        => (string) $g->status?->value,
+                'status_label'  => $g->status?->label() ?? (string) $g->status,
             ])->all()),
             'bills'                  => $this->whenLoaded('bills', fn () => $this->bills->map(fn ($b) => [
                 'id'           => $b->hash_id,
@@ -58,6 +66,7 @@ class PurchaseOrderResource extends JsonResource
                 'total_amount' => (string) $b->total_amount,
                 'balance'      => (string) $b->balance,
                 'status'       => (string) $b->status?->value,
+                'status_label' => $b->status?->label() ?? (string) $b->status,
                 'due_date'     => optional($b->due_date)->toDateString(),
                 'has_variances' => (bool) $b->has_variances,
                 'three_way_overridden' => (bool) $b->three_way_overridden,
@@ -83,6 +92,7 @@ class PurchaseOrderResource extends JsonResource
             ] : null),
             'created_at'             => optional($this->created_at)->toIso8601String(),
             'updated_at'             => optional($this->updated_at)->toIso8601String(),
+            'deleted_at'             => optional($this->deleted_at)?->toIso8601String(),
         ];
     }
 }

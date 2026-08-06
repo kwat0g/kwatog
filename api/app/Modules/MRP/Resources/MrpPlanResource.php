@@ -6,6 +6,10 @@ namespace App\Modules\MRP\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use App\Modules\MRP\Enums\MrpPlanStatus;
+use App\Modules\Production\Enums\WorkOrderStatus;
+use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
+use App\Modules\Purchasing\Enums\PurchaseRequestPriority;
 
 class MrpPlanResource extends JsonResource
 {
@@ -23,6 +27,7 @@ class MrpPlanResource extends JsonResource
             ] : null),
             'version'         => (int) $this->version,
             'status'          => (string) $this->status?->value,
+            'status_label'    => MrpPlanStatus::tryFrom((string) $this->status?->value)?->label() ?? (string) $this->status?->value,
             'total_lines'     => (int) $this->total_lines,
             'shortages_found' => (int) $this->shortages_found,
             'auto_pr_count'   => (int) $this->auto_pr_count,
@@ -37,13 +42,15 @@ class MrpPlanResource extends JsonResource
                     'product_id' => $w->product_id,
                     'quantity_target' => (int) $w->quantity_target,
                     'status' => (string) $w->status?->value,
+                    'status_label' => WorkOrderStatus::tryFrom((string) $w->status?->value)?->label() ?? (string) $w->status?->value,
                     'planned_start' => optional($w->planned_start)->toIso8601String(),
                 ])
             ),
             'purchase_requests' => $this->whenLoaded('purchaseRequests', fn () =>
                 $this->purchaseRequests->map(fn ($p) => [
                     'id' => $p->hash_id, 'pr_number' => $p->pr_number,
-                    'priority' => $p->priority, 'status' => $p->status,
+                    'priority' => $p->priority, 'priority_label' => PurchaseRequestPriority::tryFrom((string) $p->priority)?->label() ?? (string) $p->priority, 'status' => $p->status,
+                    'status_label' => PurchaseRequestStatus::tryFrom((string) $p->status)?->label() ?? (string) $p->status,
                     'is_auto_generated' => (bool) $p->is_auto_generated,
                     'date' => optional($p->date)->toDateString(),
                 ])

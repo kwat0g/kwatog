@@ -14,7 +14,7 @@ use Illuminate\Console\Command;
 class CheckTrainingExpiries extends Command
 {
     protected $signature   = 'training:check-expiries';
-    protected $description = 'Send tiered alerts for expiring/expired training records (30/14/7/expired)';
+    protected $description = 'Send configured tiered alerts for expiring/expired training records';
 
     public function handle(TrainingExpiryService $svc): int
     {

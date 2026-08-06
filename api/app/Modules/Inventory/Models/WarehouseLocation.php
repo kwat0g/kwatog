@@ -12,10 +12,11 @@ use Illuminate\Database\Eloquent\Model;
 use App\Modules\Inventory\Models\Item;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class WarehouseLocation extends Model
 {
-    use HasFactory, HasHashId, HasAuditLog;
+    use HasFactory, HasHashId, HasAuditLog, SoftDeletes;
 
     protected static function newFactory(): \Database\Factories\WarehouseLocationFactory
     {

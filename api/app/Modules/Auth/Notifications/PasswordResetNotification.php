@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Auth\Notifications;
 
+use App\Common\Services\SettingsService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -25,14 +26,15 @@ class PasswordResetNotification extends Notification
     public function toMail(mixed $notifiable): MailMessage
     {
         $appUrl = config('app.frontend_url', config('app.url'));
+        $company = app(SettingsService::class)->requiredString('company.legal_name');
 
         return (new MailMessage)
-            ->subject('Your Ogami ERP Password Has Been Reset')
+            ->subject("Your {$company} ERP Password Has Been Reset")
             ->greeting('Hi '.($notifiable->name ?? 'there').',')
-            ->line('An administrator has reset your Ogami ERP password.')
+            ->line("An administrator has reset your {$company} ERP password.")
             ->line('Login URL: '.$appUrl)
             ->line('Temporary Password: '.$this->tempPassword)
             ->line('You will be required to change your password on next login.')
-            ->salutation('— Ogami HR Department');
+            ->salutation("— {$company} HR Department");
     }
 }

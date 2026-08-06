@@ -9,10 +9,6 @@ use App\Modules\B2B\Services\B2bAuthService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
-// TODO: replace inline abort_if(...) tenancy guards in CustomerPortalController
-// with a Vendor/Customer model scope (Phase 2 follow-up). Existing 50+ inline
-// checks have been visually audited; a model-scope refactor narrows the blast
-// radius if a future controller forgets the guard.
 class CustomerAuthController
 {
     public function __construct(private readonly B2bAuthService $auth) {}

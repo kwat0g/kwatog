@@ -14,7 +14,13 @@ class AlertResource extends JsonResource
         return [
             'id'           => $this->hash_id,
             'type'         => $this->type instanceof \BackedEnum ? $this->type->value : $this->type,
+            'type_label'   => $this->type instanceof \BackedEnum && method_exists($this->type, 'label')
+                ? $this->type->label()
+                : \Illuminate\Support\Str::headline((string) ($this->type instanceof \BackedEnum ? $this->type->value : $this->type)),
             'severity'     => $this->severity instanceof \BackedEnum ? $this->severity->value : $this->severity,
+            'severity_label'=> $this->severity instanceof \BackedEnum && method_exists($this->severity, 'label')
+                ? $this->severity->label()
+                : \Illuminate\Support\Str::headline((string) ($this->severity instanceof \BackedEnum ? $this->severity->value : $this->severity)),
             'title'        => $this->title,
             'message'      => $this->message,
             'entity_type'  => $this->entity_type ? class_basename($this->entity_type) : null,

@@ -6,6 +6,7 @@ namespace App\Modules\SupplyChain\Services;
 
 use App\Modules\SupplyChain\Models\Container;
 use App\Modules\SupplyChain\Models\Shipment;
+use App\Common\Support\TrashedFilter;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -15,6 +16,8 @@ class ContainerService
     public function listByShipment(Shipment $shipment, array $filters = []): LengthAwarePaginator
     {
         $q = Container::query()->where('shipment_id', $shipment->id);
+
+        TrashedFilter::apply($q, $filters);
 
         if (! empty($filters['search'])) {
             $term = '%'.trim((string) $filters['search']).'%';

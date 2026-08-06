@@ -42,247 +42,247 @@ const DIGEST_TYPE = '*';
  * by default would promise mail the backend never sends.
  */
 const CHANNEL_DEFAULT: Record<Channel, boolean> = {
-  in_app: true,
-  email: false,
-  digest: false,
+ in_app: true,
+ email: false,
+ digest: false,
 };
 
 export default function NotificationPreferencesPage() {
-  const qc = useQueryClient();
-  const [search, setSearch] = useState('');
+ const qc = useQueryClient();
+ const [search, setSearch] = useState('');
 
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['notification-preferences'],
-    queryFn: () => client.get<{ data: Pref[] }>('/notification-preferences').then(r => r.data.data),
-  });
-  const { data: catalog } = useQuery({
-    queryKey: ['notification-preferences', 'options'],
-    queryFn: () => client.get<{ data: { groups: NotificationGroup[] } }>('/notification-preferences/options').then((r) => r.data.data),
-    staleTime: 5 * 60 * 1000,
-  });
-  const catalogGroups = useMemo(() => catalog?.groups ?? [], [catalog?.groups]);
-  const allTypes = catalogGroups.flatMap((group) => group.types);
+ const { data, isLoading, isError, refetch } = useQuery({
+ queryKey: ['notification-preferences'],
+ queryFn: () => client.get<{ data: Pref[] }>('/notification-preferences').then(r => r.data.data),
+ });
+ const { data: catalog } = useQuery({
+ queryKey: ['notification-preferences', 'options'],
+ queryFn: () => client.get<{ data: { groups: NotificationGroup[] } }>('/notification-preferences/options').then((r) => r.data.data),
+ staleTime: 5 * 60 * 1000,
+ });
+ const catalogGroups = useMemo(() => catalog?.groups ?? [], [catalog?.groups]);
+ const allTypes = catalogGroups.flatMap((group) => group.types);
 
-  const upsert = useMutation({
-    mutationFn: (preferences: Pref[]) =>
-      client.put('/notification-preferences', { preferences }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['notification-preferences'] });
-    },
-    onError: () => toast.error('Failed to save preferences. Please try again.'),
-  });
+ const upsert = useMutation({
+ mutationFn: (preferences: Pref[]) =>
+ client.put('/notification-preferences', { preferences }),
+ onSuccess: () => {
+ qc.invalidateQueries({ queryKey: ['notification-preferences'] });
+ },
+ onError: () => toast.error('Failed to save preferences. Please try again.'),
+ });
 
-  const isEnabled = (type: string, channel: Channel) =>
-    data?.find(p => p.notification_type === type && p.channel === channel)?.enabled
-      ?? CHANNEL_DEFAULT[channel];
+ const isEnabled = (type: string, channel: Channel) =>
+ data?.find(p => p.notification_type === type && p.channel === channel)?.enabled
+ ?? CHANNEL_DEFAULT[channel];
 
-  const onToggle = (type: string, channel: Channel, enabled: boolean) => {
-    upsert.mutate([{ notification_type: type, channel, enabled }]);
-  };
+ const onToggle = (type: string, channel: Channel, enabled: boolean) => {
+ upsert.mutate([{ notification_type: type, channel, enabled }]);
+ };
 
-  // Switch is a controlled <input type="checkbox"> — onChange yields an event.
-  const handleSwitch = (type: string, channel: Channel) =>
-    (e: ChangeEvent<HTMLInputElement>) => onToggle(type, channel, e.target.checked);
+ // Switch is a controlled <input type="checkbox"> — onChange yields an event.
+ const handleSwitch = (type: string, channel: Channel) =>
+ (e: ChangeEvent<HTMLInputElement>) => onToggle(type, channel, e.target.checked);
 
-  /** Flip an entire column in one PUT rather than 23 round-trips. */
-  const setColumn = (channel: 'in_app' | 'email', enabled: boolean) => {
-    upsert.mutate(
-      allTypes.map((t) => ({ notification_type: t.key, channel, enabled })),
-    );
-  };
+ /** Flip an entire column in one PUT rather than 23 round-trips. */
+ const setColumn = (channel: 'in_app' | 'email', enabled: boolean) => {
+ upsert.mutate(
+ allTypes.map((t) => ({ notification_type: t.key, channel, enabled })),
+ );
+ };
 
-  const groups = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return catalogGroups;
-    return catalogGroups
-      .map((g) => ({
-        ...g,
-        types: g.types.filter(
-          (t) => t.label.toLowerCase().includes(q) || t.description.toLowerCase().includes(q),
-        ),
-      }))
-      .filter((g) => g.types.length > 0);
-  }, [catalogGroups, search]);
+ const groups = useMemo(() => {
+ const q = search.trim().toLowerCase();
+ if (!q) return catalogGroups;
+ return catalogGroups
+ .map((g) => ({
+ ...g,
+ types: g.types.filter(
+ (t) => t.label.toLowerCase().includes(q) || t.description.toLowerCase().includes(q),
+ ),
+ }))
+ .filter((g) => g.types.length > 0);
+ }, [catalogGroups, search]);
 
-  const matchCount = groups.reduce((n, g) => n + g.types.length, 0);
+ const matchCount = groups.reduce((n, g) => n + g.types.length, 0);
 
-  const enabledCount = (channel: 'in_app' | 'email') =>
-    allTypes.filter((t) => isEnabled(t.key, channel)).length;
+ const enabledCount = (channel: 'in_app' | 'email') =>
+ allTypes.filter((t) => isEnabled(t.key, channel)).length;
 
-  return (
-    <div>
-      <PageHeader
-        title="Notification Preferences"
-        subtitle={
-          data
-            ? `${enabledCount('in_app')} in-app · ${enabledCount('email')} email of ${allTypes.length} types`
-            : 'Choose which events reach you, and where'
-        }
-        backTo="/self-service/profile"
-        backLabel="Profile"
-        breadcrumbs={[
-          { label: 'Self-service', href: '/self-service' },
-          { label: 'Profile', href: '/self-service/profile' },
-          { label: 'Notifications' },
-        ]}
-      />
+ return (
+ <div>
+ <PageHeader
+ title="Notification Preferences"
+ subtitle={
+ data
+ ? `${enabledCount('in_app')} in-app · ${enabledCount('email')} email of ${allTypes.length} types`
+ : 'Choose which events reach you, and where'
+ }
+ backTo="/self-service/profile"
+ backLabel="Profile"
+ breadcrumbs={[
+ { label: 'Self-service', href: '/self-service' },
+ { label: 'Profile', href: '/self-service/profile' },
+ { label: 'Notifications' },
+ ]}
+ />
 
-      <div className="px-5 py-4 space-y-4">
-        {/* LOADING */}
-        {isLoading && !data && (
-          <div className="space-y-4">
-            <SkeletonBlock className="h-16 rounded-md" />
-            <SkeletonBlock className="h-96 rounded-md" />
-          </div>
-        )}
+ <div className="px-5 py-4 space-y-4">
+ {/* LOADING */}
+ {isLoading && !data && (
+ <div className="space-y-4">
+ <SkeletonBlock className="h-16 rounded-md" />
+ <SkeletonBlock className="h-96 rounded-md" />
+ </div>
+ )}
 
-        {/* ERROR */}
-        {isError && (
-          <EmptyState
-            icon="alert-circle"
-            title="Couldn't load your preferences"
-            description="An error occurred while loading your notification settings. Please try again."
-            action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
-          />
-        )}
+ {/* ERROR */}
+ {isError && (
+ <EmptyState
+ icon="alert-circle"
+ title="Couldn't load your preferences"
+ description="An error occurred while loading your notification settings. Please try again."
+ action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
+ />
+ )}
 
-        {data && (
-          <>
-            {/* REC-06 — daily email digest opt-in (global, all unread types). */}
-            <Panel title="Daily email digest">
-              <div className="flex items-start justify-between gap-4">
-                <p className="text-xs text-muted max-w-2xl">
-                  One email each morning summarizing your unread notifications.
-                  Read state is left untouched, and this is independent of the
-                  per-event settings below.
-                </p>
-                <Switch
-                  checked={isEnabled(DIGEST_TYPE, 'digest')}
-                  onChange={handleSwitch(DIGEST_TYPE, 'digest')}
-                  aria-label="Enable daily email digest"
-                />
-              </div>
-            </Panel>
+ {data && (
+ <>
+ {/* REC-06 — daily email digest opt-in (global, all unread types). */}
+ <Panel title="Daily email digest">
+ <div className="flex items-start justify-between gap-4">
+ <p className="text-xs text-muted max-w-2xl">
+ One email each morning summarizing your unread notifications.
+ Read state is left untouched, and this is independent of the
+ per-event settings below.
+ </p>
+ <Switch
+ checked={isEnabled(DIGEST_TYPE, 'digest')}
+ onChange={handleSwitch(DIGEST_TYPE, 'digest')}
+ aria-label="Enable daily email digest"
+ />
+ </div>
+ </Panel>
 
-            <Panel
-              title="Per-event delivery"
-              meta={search ? `${matchCount} of ${allTypes.length} shown` : `${allTypes.length} events`}
-              noPadding
-              actions={
-                <div className="w-56">
-                  <Input
-                    type="search"
-                    fieldSize="sm"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Filter events…"
-                    aria-label="Filter notification types"
-                    prefix={<Search size={12} />}
-                  />
-                </div>
-              }
-            >
-              {matchCount === 0 ? (
-                <div className="px-4 py-6">
-                  <EmptyState
-                    size="compact"
-                    icon="search"
-                    title="No matching events"
-                    description="Try a different search term."
-                    action={<Button variant="secondary" size="sm" onClick={() => setSearch('')}>Clear</Button>}
-                  />
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className={tableCls}>
-                    <thead className="sticky top-0 z-10 bg-canvas">
-                      <tr className={theadTrCls}>
-                        <Th className="w-full">Event</Th>
-                        <Th align="center" className="w-28 whitespace-nowrap">In-app</Th>
-                        <Th align="center" className="w-28 whitespace-nowrap">Email</Th>
-                      </tr>
-                      <tr className="border-b border-default bg-subtle">
-                        <Td className="py-1.5 text-2xs text-muted">
-                          Apply to every event
-                        </Td>
-                        {(['in_app', 'email'] as const).map((channel) => (
-                          <Td key={channel} align="center" className="py-1.5">
-                            <span className="inline-flex items-center gap-1.5 text-2xs">
-                              <LinkButton
-                                onClick={() => setColumn(channel, true)}
-                                disabled={upsert.isPending}
-                                className="text-2xs"
-                              >
-                                All
-                              </LinkButton>
-                              <span className="text-text-subtle" aria-hidden="true">·</span>
-                              <LinkButton
-                                tone="muted"
-                                onClick={() => setColumn(channel, false)}
-                                disabled={upsert.isPending}
-                                className="text-2xs"
-                              >
-                                None
-                              </LinkButton>
-                            </span>
-                          </Td>
-                        ))}
-                      </tr>
-                    </thead>
-                    {groups.map((group) => (
-                      <tbody key={group.title}>
-                        <tr className="border-b border-subtle bg-subtle/60">
-                          <th
-                            colSpan={3}
-                            scope="colgroup"
-                            className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium"
-                          >
-                            {group.title}
-                            <span className="ml-2 normal-case tracking-normal text-text-subtle font-normal">
-                              {group.hint}
-                            </span>
-                          </th>
-                        </tr>
-                        {group.types.map((row) => (
-                          <tr
-                            key={row.key}
-                            className={cn('border-b border-subtle hover:bg-subtle align-top')}
-                          >
-                            <Td className="py-2">
-                              <div className="text-sm text-primary">{row.label}</div>
-                              <div className="text-xs text-muted">{row.description}</div>
-                            </Td>
-                            <Td align="center" className="py-2">
-                              <Switch
-                                checked={isEnabled(row.key, 'in_app')}
-                                onChange={handleSwitch(row.key, 'in_app')}
-                                aria-label={`Enable in-app notifications for ${row.label}`}
-                              />
-                            </Td>
-                            <Td align="center" className="py-2">
-                              <Switch
-                                checked={isEnabled(row.key, 'email')}
-                                onChange={handleSwitch(row.key, 'email')}
-                                aria-label={`Enable email notifications for ${row.label}`}
-                              />
-                            </Td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    ))}
-                  </table>
-                </div>
-              )}
-            </Panel>
+ <Panel
+ title="Per-event delivery"
+ meta={search ? `${matchCount} of ${allTypes.length} shown` : `${allTypes.length} events`}
+ noPadding
+ actions={
+ <div className="w-56">
+ <Input
+ type="search"
+ fieldSize="sm"
+ value={search}
+ onChange={(e) => setSearch(e.target.value)}
+ placeholder="Filter events…"
+ aria-label="Filter notification types"
+ prefix={<Search size={12} />}
+ />
+ </div>
+ }
+ >
+ {matchCount === 0 ? (
+ <div className="px-4 py-6">
+ <EmptyState
+ size="compact"
+ icon="search"
+ title="No matching events"
+ description="Try a different search term."
+ action={<Button variant="secondary" size="sm" onClick={() => setSearch('')}>Clear</Button>}
+ />
+ </div>
+ ) : (
+ <div className="overflow-x-auto">
+ <table className={tableCls}>
+ <thead className="sticky top-0 z-10 bg-canvas">
+ <tr className={theadTrCls}>
+ <Th className="w-full">Event</Th>
+ <Th align="center" className="w-28 whitespace-nowrap">In-app</Th>
+ <Th align="center" className="w-28 whitespace-nowrap">Email</Th>
+ </tr>
+ <tr className="border-b border-default bg-subtle">
+ <Td className="py-1.5 text-2xs text-muted">
+ Apply to every event
+ </Td>
+ {(['in_app', 'email'] as const).map((channel) => (
+ <Td key={channel} align="center" className="py-1.5">
+ <span className="inline-flex items-center gap-1.5 text-2xs">
+ <LinkButton
+ onClick={() => setColumn(channel, true)}
+ disabled={upsert.isPending}
+ className="text-2xs"
+ >
+ All
+ </LinkButton>
+ <span className="text-text-subtle" aria-hidden="true">·</span>
+ <LinkButton
+ tone="muted"
+ onClick={() => setColumn(channel, false)}
+ disabled={upsert.isPending}
+ className="text-2xs"
+ >
+ None
+ </LinkButton>
+ </span>
+ </Td>
+ ))}
+ </tr>
+ </thead>
+ {groups.map((group) => (
+ <tbody key={group.title}>
+ <tr className="border-b border-subtle bg-subtle/60">
+ <th
+ colSpan={3}
+ scope="colgroup"
+ className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium"
+ >
+ {group.title}
+ <span className="ml-2 normal-case tracking-normal text-text-subtle font-normal">
+ {group.hint}
+ </span>
+ </th>
+ </tr>
+ {group.types.map((row) => (
+ <tr
+ key={row.key}
+ className={cn('border-b border-subtle hover:bg-subtle align-top')}
+ >
+ <Td className="py-2">
+ <div className="text-sm text-primary">{row.label}</div>
+ <div className="text-xs text-muted">{row.description}</div>
+ </Td>
+ <Td align="center" className="py-2">
+ <Switch
+ checked={isEnabled(row.key, 'in_app')}
+ onChange={handleSwitch(row.key, 'in_app')}
+ aria-label={`Enable in-app notifications for ${row.label}`}
+ />
+ </Td>
+ <Td align="center" className="py-2">
+ <Switch
+ checked={isEnabled(row.key, 'email')}
+ onChange={handleSwitch(row.key, 'email')}
+ aria-label={`Enable email notifications for ${row.label}`}
+ />
+ </Td>
+ </tr>
+ ))}
+ </tbody>
+ ))}
+ </table>
+ </div>
+ )}
+ </Panel>
 
-            <p className="text-xs text-muted">
-              Changes save as you toggle. In-app delivery is on unless you turn
-              it off; email and the digest are opt-in and stay silent until
-              switched on here.
-            </p>
-          </>
-        )}
-      </div>
-    </div>
-  );
+ <p className="text-xs text-muted">
+ Changes save as you toggle. In-app delivery is on unless you turn
+ it off; email and the digest are opt-in and stay silent until
+ switched on here.
+ </p>
+ </>
+ )}
+ </div>
+ </div>
+ );
 }

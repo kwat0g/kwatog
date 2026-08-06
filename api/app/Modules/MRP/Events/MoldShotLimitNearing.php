@@ -13,7 +13,7 @@ use Illuminate\Queue\SerializesModels;
 
 /**
  * Sprint 6 audit §1.7 — Fired when a mold's current_shot_count crosses
- * 80% of max_shots_before_maintenance. Maintenance head should schedule
+ * the configured warning ratio of max_shots_before_maintenance. Maintenance head should schedule
  * a preventive overhaul before the mold hits 100% (which would auto-flip
  * it to Maintenance status and block new WOs).
  */

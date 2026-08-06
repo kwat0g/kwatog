@@ -73,7 +73,7 @@ class ProcessYearEndLeave implements ShouldQueue
 
         $employees = Employee::query()
             ->where('status', 'active')
-            ->get(['id', 'pay_type', 'daily_rate', 'basic_monthly_salary']);
+            ->get(['id', 'pay_type', 'semi_monthly_rate', 'basic_monthly_salary']);
 
         $totalEmployees = 0;
         $totalConverted = 0.0;
@@ -196,7 +196,7 @@ class ProcessYearEndLeave implements ShouldQueue
     private function dailyRate(Employee $emp): float
     {
         $days = app(\App\Common\Services\SettingsService::class)->requiredInt('payroll.work_days_per_month', 1);
-        return (float) ($emp->daily_rate ?: ((float) ($emp->basic_monthly_salary ?? 0) / $days));
+        return (float) ($emp->monthlyEquivalentSalary() ?? 0) / $days;
     }
 
     /**

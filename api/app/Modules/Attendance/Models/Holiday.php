@@ -9,10 +9,11 @@ use App\Common\Traits\HasHashId;
 use App\Modules\Attendance\Enums\HolidayType;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Holiday extends Model
 {
-    use HasFactory, HasHashId, HasAuditLog;
+    use HasFactory, HasHashId, HasAuditLog, SoftDeletes;
 
     protected $fillable = ['name', 'date', 'type', 'is_recurring'];
 

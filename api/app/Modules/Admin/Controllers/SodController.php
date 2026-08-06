@@ -8,6 +8,7 @@ use App\Modules\Admin\Models\SodConflictRule;
 use App\Modules\Admin\Resources\SodConflictRuleResource;
 use App\Modules\Admin\Services\SodService;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Str;
 
 /**
  * REC-01 — read the SoD conflict matrix and the "who violates SoD today" report.
@@ -45,6 +46,7 @@ class SodController
                     'code'     => $r->code,
                     'name'     => $r->name,
                     'severity' => $r->severity->value,
+                    'severity_label' => Str::headline((string) $r->severity->value),
                 ])->all(),
             ], $report),
             'meta' => ['total_users_flagged' => count($report)],

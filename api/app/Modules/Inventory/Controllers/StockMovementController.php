@@ -6,13 +6,22 @@ namespace App\Modules\Inventory\Controllers;
 
 use App\Common\Support\HashIdFilter;
 use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Resources\StockMovementResource;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class StockMovementController
 {
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'movement_types' => array_map(static fn (StockMovementType $type): array => ['value' => $type->value, 'label' => str_replace('_', ' ', ucfirst($type->value))], StockMovementType::cases()),
+        ]]);
+    }
+
     public function index(Request $request): AnonymousResourceCollection
     {
         $q = StockMovement::query()->with(['item', 'fromLocation', 'toLocation', 'creator:id,name,role_id']);

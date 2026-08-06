@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Services;
 
+use App\Common\Services\SettingsService;
 use App\Modules\HR\Models\Employee;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -16,14 +17,20 @@ use Illuminate\Support\Facades\Schema;
  */
 class SelfServiceHomeService
 {
+    public function __construct(private readonly SettingsService $settings) {}
+
     /**
-     * @return array{todays_shift: ?array, leave_balances: array, pending_count: int, latest_payslip: ?array}
+     * @return array{todays_shift: ?array, leave_balances: array, leave_balance_policy: array, pending_count: int, latest_payslip: ?array}
      */
     public function summary(Employee $employee): array
     {
         return [
             'todays_shift'   => $this->todaysShift($employee),
             'leave_balances' => $this->leaveBalances($employee),
+            'leave_balance_policy' => [
+                'warning_ratio' => $this->settings->requiredFloat('leave.balance.display_warning_ratio', 0, 1),
+                'critical_ratio' => $this->settings->requiredFloat('leave.balance.display_critical_ratio', 0, 1),
+            ],
             'pending_count'  => $this->pendingCount($employee),
             'latest_payslip' => $this->latestPayslip($employee),
         ];

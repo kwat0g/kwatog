@@ -121,10 +121,10 @@ class BadgeControllerTest extends TestCase
         $this->assertSame('neutral', $resp['approvals']['severity']);
     }
 
-    public function test_severity_thresholds_come_from_config(): void
+    public function test_severity_thresholds_come_from_settings(): void
     {
-        config()->set('badges.severity.danger', 2);
-        config()->set('badges.severity.warning', 0);
+        app(\App\Common\Services\SettingsService::class)->set('dashboard.badges.danger_threshold', 2);
+        app(\App\Common\Services\SettingsService::class)->set('dashboard.badges.warning_threshold', 0);
 
         $svc = app(\App\Modules\Dashboard\Services\BadgeService::class);
         $ref = new \ReflectionClass($svc);

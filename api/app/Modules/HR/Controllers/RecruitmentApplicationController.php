@@ -11,10 +11,12 @@ use App\Modules\HR\Requests\StoreInterviewRequest;
 use App\Modules\HR\Resources\ApplicationInterviewResource;
 use App\Modules\HR\Resources\JobApplicationResource;
 use App\Modules\HR\Services\RecruitmentService;
+use App\Modules\HR\Enums\InterviewOutcome;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 
 class RecruitmentApplicationController
 {
@@ -73,7 +75,7 @@ class RecruitmentApplicationController
     {
         $data = $request->validate([
             'notes'   => ['nullable', 'string'],
-            'outcome' => ['nullable', 'in:pending,passed,failed'],
+            'outcome' => ['nullable', Rule::enum(InterviewOutcome::class)],
         ]);
 
         $this->service->updateInterview($interview, $data);

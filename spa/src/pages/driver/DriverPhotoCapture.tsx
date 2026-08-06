@@ -11,134 +11,134 @@ import { cn } from '@/lib/cn';
 const MAX_BYTES = 8 * 1024 * 1024; // mirrors backend image|max:8192
 
 function describeUploadError(err: unknown): string {
-  if (isAxiosError(err) && err.response) {
-    if (err.response.status === 422) {
-      const errors = err.response.data?.errors as Record<string, string[]> | undefined;
-      const first = errors ? Object.values(errors)[0]?.[0] : undefined;
-      if (first) return first;
-      const msg = err.response.data?.message;
-      if (typeof msg === 'string' && msg.length > 0) return msg;
-    }
-    if (err.response.status === 413) return 'Photo is too large. Try a smaller image.';
-    if (err.response.status === 404) return 'Delivery not found or no longer assigned to you.';
-  }
-  return 'Upload failed.';
+ if (isAxiosError(err) && err.response) {
+ if (err.response.status === 422) {
+ const errors = err.response.data?.errors as Record<string, string[]> | undefined;
+ const first = errors ? Object.values(errors)[0]?.[0] : undefined;
+ if (first) return first;
+ const msg = err.response.data?.message;
+ if (typeof msg === 'string' && msg.length > 0) return msg;
+ }
+ if (err.response.status === 413) return 'Photo is too large. Try a smaller image.';
+ if (err.response.status === 404) return 'Delivery not found or no longer assigned to you.';
+ }
+ return 'Upload failed.';
 }
 
 export default function DriverPhotoCapture() {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-  const qc = useQueryClient();
-  const fileRef = useRef<HTMLInputElement>(null);
-  const galleryRef = useRef<HTMLInputElement>(null);
-  const [preview, setPreview] = useState<string | null>(null);
-  const [file, setFile] = useState<File | null>(null);
-  const [hint, setHint] = useState<string | null>(null);
+ const { id } = useParams<{ id: string }>();
+ const navigate = useNavigate();
+ const qc = useQueryClient();
+ const fileRef = useRef<HTMLInputElement>(null);
+ const galleryRef = useRef<HTMLInputElement>(null);
+ const [preview, setPreview] = useState<string | null>(null);
+ const [file, setFile] = useState<File | null>(null);
+ const [hint, setHint] = useState<string | null>(null);
 
-  // Revoke previous blob URL whenever preview changes, and on unmount.
-  useEffect(() => {
-    return () => {
-      if (preview) URL.revokeObjectURL(preview);
-    };
-  }, [preview]);
+ // Revoke previous blob URL whenever preview changes, and on unmount.
+ useEffect(() => {
+ return () => {
+ if (preview) URL.revokeObjectURL(preview);
+ };
+ }, [preview]);
 
-  const upload = useMutation({
-    mutationFn: () => {
-      if (!file || !id) throw new Error('no file');
-      return driverApi.uploadReceipt(id, file);
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['driver'] });
-      toast.success('Receipt uploaded.');
-      if (id) navigate(`/driver/${id}`);
-    },
-    onError: (err) => toast.error(describeUploadError(err)),
-  });
+ const upload = useMutation({
+ mutationFn: () => {
+ if (!file || !id) throw new Error('no file');
+ return driverApi.uploadReceipt(id, file);
+ },
+ onSuccess: () => {
+ qc.invalidateQueries({ queryKey: ['driver'] });
+ toast.success('Receipt uploaded.');
+ if (id) navigate(`/driver/${id}`);
+ },
+ onError: (err) => toast.error(describeUploadError(err)),
+ });
 
-  if (!id) {
-    return <div className="py-12 text-center text-muted">Missing delivery id.</div>;
-  }
+ if (!id) {
+ return <div className="py-12 text-center text-muted">Missing delivery id.</div>;
+ }
 
-  const onPickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    // Reset the input so picking the same file again still fires onChange.
-    e.target.value = '';
-    if (!f) {
-      setHint('No photo selected. Tap "Take Photo" or "Choose from Gallery" to try again.');
-      return;
-    }
-    if (!f.type.startsWith('image/')) {
-      setHint('That file is not an image. Please pick a photo.');
-      return;
-    }
-    if (f.size > MAX_BYTES) {
-      setHint(`Photo is too large (${(f.size / (1024 * 1024)).toFixed(1)} MB). Maximum 8 MB.`);
-      return;
-    }
-    setHint(null);
-    setFile(f);
-    setPreview(URL.createObjectURL(f));
-  };
+ const onPickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+ const f = e.target.files?.[0];
+ // Reset the input so picking the same file again still fires onChange.
+ e.target.value = '';
+ if (!f) {
+ setHint('No photo selected. Tap "Take Photo" or "Choose from Gallery" to try again.');
+ return;
+ }
+ if (!f.type.startsWith('image/')) {
+ setHint('That file is not an image. Please pick a photo.');
+ return;
+ }
+ if (f.size > MAX_BYTES) {
+ setHint(`Photo is too large (${(f.size / (1024 * 1024)).toFixed(1)} MB). Maximum 8 MB.`);
+ return;
+ }
+ setHint(null);
+ setFile(f);
+ setPreview(URL.createObjectURL(f));
+ };
 
-  return (
-    <div className="space-y-4">
-      <Link
-        to={`/driver/${id}`}
-        className={cn('inline-block text-sm text-muted underline min-h-[44px] py-2 rounded', focusRing)}
-      >
-        ← Back to delivery
-      </Link>
-      <h1 className="text-lg font-medium text-primary">Receipt Photo</h1>
+ return (
+ <div className="space-y-4">
+ <Link
+ to={`/driver/${id}`}
+ className={cn('inline-block text-sm text-muted underline min-h-[44px] py-2 rounded', focusRing)}
+ >
+ ← Back to delivery
+ </Link>
+ <h1 className="text-lg font-medium text-primary">Receipt Photo</h1>
 
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        onChange={onPickFile}
-      />
-      <input
-        ref={galleryRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={onPickFile}
-      />
+ <input
+ ref={fileRef}
+ type="file"
+ accept="image/*"
+ capture="environment"
+ className="hidden"
+ onChange={onPickFile}
+ />
+ <input
+ ref={galleryRef}
+ type="file"
+ accept="image/*"
+ className="hidden"
+ onChange={onPickFile}
+ />
 
-      {preview ? (
-        <img src={preview} alt="receipt preview" className="w-full rounded-md" />
-      ) : (
-        <div className="aspect-[4/3] rounded-md border-2 border-dashed border-strong flex items-center justify-center text-muted">
-          No photo yet
-        </div>
-      )}
+ {preview ? (
+ <img src={preview} alt="receipt preview" className="w-full rounded-md" />
+ ) : (
+ <div className="aspect-[4/3] rounded-md border-2 border-dashed border-strong flex items-center justify-center text-muted">
+ No photo yet
+ </div>
+ )}
 
-      {hint && (
-        <div className="text-sm text-warning" role="status">
-          {hint}
-        </div>
-      )}
+ {hint && (
+ <div className="text-sm text-warning" role="status">
+ {hint}
+ </div>
+ )}
 
-      <div className="grid grid-cols-2 gap-2">
-        <Button variant="secondary" size="xl" onClick={() => fileRef.current?.click()}>
-          {preview ? 'Retake' : 'Take photo'}
-        </Button>
-        <Button variant="secondary" size="xl" onClick={() => galleryRef.current?.click()}>
-          Choose from gallery
-        </Button>
-      </div>
+ <div className="grid grid-cols-2 gap-2">
+ <Button variant="secondary" size="xl" onClick={() => fileRef.current?.click()}>
+ {preview ? 'Retake' : 'Take photo'}
+ </Button>
+ <Button variant="secondary" size="xl" onClick={() => galleryRef.current?.click()}>
+ Choose from gallery
+ </Button>
+ </div>
 
-      <Button
-        variant="primary"
-        size="xl"
-        className="w-full"
-        disabled={!file}
-        loading={upload.isPending}
-        onClick={() => upload.mutate()}
-      >
-        {upload.isPending ? 'Uploading…' : 'Upload photo'}
-      </Button>
-    </div>
-  );
+ <Button
+ variant="primary"
+ size="xl"
+ className="w-full"
+ disabled={!file}
+ loading={upload.isPending}
+ onClick={() => upload.mutate()}
+ >
+ {upload.isPending ? 'Uploading…' : 'Upload photo'}
+ </Button>
+ </div>
+ );
 }

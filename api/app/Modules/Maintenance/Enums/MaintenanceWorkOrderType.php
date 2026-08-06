@@ -14,4 +14,6 @@ enum MaintenanceWorkOrderType: string
     {
         return array_map(fn (self $c) => $c->value, self::cases());
     }
+
+    public function label(): string { return ucfirst($this->value); }
 }

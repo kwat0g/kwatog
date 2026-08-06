@@ -6,6 +6,7 @@ namespace App\Modules\Accounting\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use App\Modules\Accounting\Enums\BudgetStatus;
 
 class BudgetResource extends JsonResource
 {
@@ -29,6 +30,7 @@ class BudgetResource extends JsonResource
             'available'        => $this->available,
             'utilization_pct'  => $this->utilization_percent,
             'status'           => $this->status,
+            'status_label'     => BudgetStatus::tryFrom((string) $this->status)?->label() ?? (string) $this->status,
             'submitted_by'     => $this->whenLoaded('submittedBy', fn () => [
                 'id'   => $this->submittedBy?->hash_id,
                 'name' => $this->submittedBy?->name,

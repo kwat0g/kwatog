@@ -20,8 +20,8 @@ class RequestSalaryAdjustmentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'to_basic_monthly_salary' => ['nullable', 'numeric', 'min:0', 'max:9999999.99', 'required_without:to_daily_rate'],
-            'to_daily_rate'           => ['nullable', 'numeric', 'min:0', 'max:99999.99', 'required_without:to_basic_monthly_salary'],
+            'to_basic_monthly_salary' => ['nullable', 'numeric', 'min:0', 'max:9999999.99', 'required_without:to_semi_monthly_rate'],
+            'to_semi_monthly_rate'           => ['nullable', 'numeric', 'min:0', 'max:99999.99', 'required_without:to_basic_monthly_salary'],
             'effective_date'          => ['required', 'date'],
             'reason'                  => ['nullable', 'string', 'max:1000'],
         ];

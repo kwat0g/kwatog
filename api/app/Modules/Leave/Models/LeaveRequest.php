@@ -9,15 +9,17 @@ use App\Common\Traits\HasAuditLog;
 use App\Common\Traits\HasHashId;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
+use App\Modules\Leave\Enums\LeaveHalfDayPeriod;
 use App\Modules\Leave\Enums\LeaveRequestStatus;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class LeaveRequest extends Model
 {
-    use HasFactory, HasHashId, HasAuditLog, HasApprovalWorkflow;
+    use HasFactory, HasHashId, HasAuditLog, HasApprovalWorkflow, SoftDeletes;
 
     protected static function newFactory(): Factory
     {
@@ -35,6 +37,7 @@ class LeaveRequest extends Model
         'end_date'          => 'date',
         'days'              => 'decimal:1',
         'status'            => LeaveRequestStatus::class,
+        'half_day_period'   => LeaveHalfDayPeriod::class,
         'dept_approved_at'  => 'datetime',
         'hr_approved_at'    => 'datetime',
     ];

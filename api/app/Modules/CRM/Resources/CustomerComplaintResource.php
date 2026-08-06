@@ -6,6 +6,7 @@ namespace App\Modules\CRM\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Str;
 
 class CustomerComplaintResource extends JsonResource
 {
@@ -15,7 +16,9 @@ class CustomerComplaintResource extends JsonResource
             'id'                => $this->hash_id,
             'complaint_number'  => $this->complaint_number,
             'severity'          => $this->severity instanceof \BackedEnum ? $this->severity->value : $this->severity,
+            'severity_label'    => Str::headline((string) ($this->severity instanceof \BackedEnum ? $this->severity->value : $this->severity)),
             'status'            => $this->status   instanceof \BackedEnum ? $this->status->value   : $this->status,
+            'status_label'      => Str::headline((string) ($this->status instanceof \BackedEnum ? $this->status->value : $this->status)),
             'description'       => $this->description,
             'affected_quantity' => (int) $this->affected_quantity,
             'received_date'     => optional($this->received_date)?->toDateString(),
@@ -39,6 +42,8 @@ class CustomerComplaintResource extends JsonResource
                 'ncr_number' => $this->ncr->ncr_number,
                 'status'     => $this->ncr->status instanceof \BackedEnum ? $this->ncr->status->value : $this->ncr->status,
                 'severity'   => $this->ncr->severity instanceof \BackedEnum ? $this->ncr->severity->value : $this->ncr->severity,
+                'status_label' => Str::headline((string) ($this->ncr->status instanceof \BackedEnum ? $this->ncr->status->value : $this->ncr->status)),
+                'severity_label' => Str::headline((string) ($this->ncr->severity instanceof \BackedEnum ? $this->ncr->severity->value : $this->ncr->severity)),
             ] : null),
             'creator'           => $this->whenLoaded('creator', fn () => $this->creator ? [
                 'id'   => $this->creator->hash_id,

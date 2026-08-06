@@ -16,161 +16,161 @@ import { formatDate } from '@/lib/formatDate';
 import type { JobPosting, JobApplication, ApplicationStage } from '@/types/recruitment';
 
 const STAGE_CHIP: Record<ApplicationStage, 'neutral' | 'info' | 'warning' | 'success' | 'danger'> = {
-  new: 'neutral',
-  screening: 'info',
-  interview: 'warning',
-  offer: 'info',
-  hired: 'success',
-  rejected: 'danger',
+ new: 'neutral',
+ screening: 'info',
+ interview: 'warning',
+ offer: 'info',
+ hired: 'success',
+ rejected: 'danger',
 };
 
 export default function RecruitmentDashboard() {
-  const navigate = useNavigate();
-  const { can } = usePermission();
+ const navigate = useNavigate();
+ const { can } = usePermission();
 
-  const { data: postingsData, isLoading: postingsLoading } = useQuery({
-    queryKey: ['recruitment-postings', { status: 'open', per_page: 5 }],
-    queryFn: () => recruitmentApi.listPostings({ status: 'open', per_page: 5 }).then((r) => r.data),
-    placeholderData: (prev) => prev,
-  });
+ const { data: postingsData, isLoading: postingsLoading } = useQuery({
+ queryKey: ['recruitment-postings', { status: 'open', per_page: 5 }],
+ queryFn: () => recruitmentApi.listPostings({ status: 'open', per_page: 5 }).then((r) => r.data),
+ placeholderData: (prev) => prev,
+ });
 
-  const { data: applicationsData, isLoading: appsLoading } = useQuery({
-    queryKey: ['recruitment-applications', { per_page: 10 }],
-    queryFn: () => recruitmentApi.listApplications({ per_page: 10 }).then((r) => r.data),
-  });
-  const { data: recruitmentOptions } = useQuery({
-    queryKey: ['recruitment', 'options'],
-    queryFn: () => recruitmentApi.options().then((r) => r.data.data),
-    staleTime: 5 * 60 * 1000,
-  });
+ const { data: applicationsData, isLoading: appsLoading } = useQuery({
+ queryKey: ['recruitment-applications', { per_page: 10 }],
+ queryFn: () => recruitmentApi.listApplications({ per_page: 10 }).then((r) => r.data),
+ });
+ const { data: recruitmentOptions } = useQuery({
+ queryKey: ['recruitment', 'options'],
+ queryFn: () => recruitmentApi.options().then((r) => r.data.data),
+ staleTime: 5 * 60 * 1000,
+ });
 
-  const openPostings = postingsData?.data ?? [];
-  const applications = applicationsData?.data ?? [];
-  const totalApps = applicationsData?.meta?.total ?? 0;
-  const stageLabel = new Map((recruitmentOptions?.application_stages ?? []).map((stage) => [stage.value, stage.label]));
-  const pipelineStages = (recruitmentOptions?.application_stages ?? []).filter((stage) => !stage.is_terminal);
+ const openPostings = postingsData?.data ?? [];
+ const applications = applicationsData?.data ?? [];
+ const totalApps = applicationsData?.meta?.total ?? 0;
+ const stageLabel = new Map((recruitmentOptions?.application_stages ?? []).map((stage) => [stage.value, stage.label]));
+ const pipelineStages = (recruitmentOptions?.application_stages ?? []).filter((stage) => !stage.is_terminal);
 
-  const stageCounts = applications.reduce<Record<string, number>>((acc, app: JobApplication) => {
-    acc[app.stage] = (acc[app.stage] ?? 0) + 1;
-    return acc;
-  }, {});
+ const stageCounts = applications.reduce<Record<string, number>>((acc, app: JobApplication) => {
+ acc[app.stage] = (acc[app.stage] ?? 0) + 1;
+ return acc;
+ }, {});
 
-  const isLoading = postingsLoading && appsLoading;
+ const isLoading = postingsLoading && appsLoading;
 
-  if (isLoading) return <SkeletonDetail />;
+ if (isLoading) return <SkeletonDetail />;
 
-  const postingColumns: Column<JobPosting>[] = [
-    { key: 'title', header: 'Position', cell: (r) => <span className="font-medium">{r.title}</span> },
-    { key: 'department', header: 'Department', cell: (r) => r.department?.name ?? '—' },
-    { key: 'slots', header: 'Slots', cell: (r) => <span className="font-mono tabular-nums">{r.slots}</span> },
-    { key: 'application_count', header: 'Applicants', cell: (r) => <span className="font-mono tabular-nums">{r.application_count ?? 0}</span> },
-  ];
+ const postingColumns: Column<JobPosting>[] = [
+ { key: 'title', header: 'Position', cell: (r) => <span className="font-medium">{r.title}</span> },
+ { key: 'department', header: 'Department', cell: (r) => r.department?.name ?? '—' },
+ { key: 'slots', header: 'Slots', cell: (r) => <span className="font-mono tabular-nums">{r.slots}</span> },
+ { key: 'application_count', header: 'Applicants', cell: (r) => <span className="font-mono tabular-nums">{r.application_count ?? 0}</span> },
+ ];
 
-  const appColumns: Column<JobApplication>[] = [
-    { key: 'full_name', header: 'Applicant', cell: (r) => <span className="font-medium">{r.full_name}</span> },
-    { key: 'position', header: 'Position', cell: (r) => r.job_posting?.title ?? '—' },
-    { key: 'stage', header: 'Stage', cell: (r) => <Chip variant={STAGE_CHIP[r.stage]}>{stageLabel.get(r.stage) ?? r.stage}</Chip> },
-    { key: 'applied_at', header: 'Applied', cell: (r) => <span className="font-mono text-xs tabular-nums">{formatDate(r.applied_at)}</span> },
-  ];
+ const appColumns: Column<JobApplication>[] = [
+ { key: 'full_name', header: 'Applicant', cell: (r) => <span className="font-medium">{r.full_name}</span> },
+ { key: 'position', header: 'Position', cell: (r) => r.job_posting?.title ?? '—' },
+ { key: 'stage', header: 'Stage', cell: (r) => <Chip variant={STAGE_CHIP[r.stage]}>{stageLabel.get(r.stage) ?? r.stage}</Chip> },
+ { key: 'applied_at', header: 'Applied', cell: (r) => <span className="font-mono text-xs tabular-nums">{formatDate(r.applied_at)}</span> },
+ ];
 
-  return (
-    <div>
-      <PageHeader
-        title="Recruitment"
-        subtitle="Manage job postings and applications"
-        breadcrumbs={[
-          { label: 'HR', href: '/hr' },
-          { label: 'Recruitment' },
-        ]}
-        actions={
-          can('hr.recruitment.manage') ? (
-            <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/hr/recruitment/postings/create')}>
-              New Posting
-            </Button>
-          ) : undefined
-        }
-      />
+ return (
+ <div>
+ <PageHeader
+ title="Recruitment"
+ subtitle="Manage job postings and applications"
+ breadcrumbs={[
+ { label: 'HR', href: '/hr' },
+ { label: 'Recruitment' },
+ ]}
+ actions={
+ can('hr.recruitment.manage') ? (
+ <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/hr/recruitment/postings/create')}>
+ New Posting
+ </Button>
+ ) : undefined
+ }
+ />
 
-      {/* KPI Cards Row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-5 py-4 border-b border-default">
-        <StatCard label="Open Postings" value={openPostings.length} />
-        <StatCard label="Total Applications" value={totalApps} />
-        <StatCard label="New Applications" value={stageCounts['new'] ?? 0} />
-        <StatCard label="In Interview" value={stageCounts['interview'] ?? 0} />
-      </div>
+ {/* KPI Cards Row */}
+ <div className="grid grid-cols-2 md:grid-cols-4 gap-4 px-5 py-4 border-b border-default">
+ <StatCard label="Open Postings" value={openPostings.length} />
+ <StatCard label="Total Applications" value={totalApps} />
+ <StatCard label="New Applications" value={stageCounts['new'] ?? 0} />
+ <StatCard label="In Interview" value={stageCounts['interview'] ?? 0} />
+ </div>
 
-      {/* Two-column: Open Postings + Pipeline */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 px-5 py-4">
-        <Panel
-          title="Open Postings"
-          actions={
-            <Link to="/hr/recruitment/postings" className="inline-flex items-center gap-1 text-xs text-accent hover:underline">
-              View all <ArrowRight size={12} />
-            </Link>
-          }
-          noPadding
-        >
-          {openPostings.length === 0 ? (
-            <EmptyState
-              icon="briefcase"
-              title="No open postings"
-              description="Create a job posting to start receiving applications."
-              action={
-                can('hr.recruitment.manage') ? (
-                  <Button variant="primary" size="sm" onClick={() => navigate('/hr/recruitment/postings/create')}>New Posting</Button>
-                ) : undefined
-              }
-            />
-          ) : (
-            <DataTable
-            onRowClick={(row) => navigate(`/hr/recruitment/postings/${row.id}`)}
-            columns={postingColumns}
-              data={openPostings}
-            />
-          )}
-        </Panel>
+ {/* Two-column: Open Postings + Pipeline */}
+ <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 px-5 py-4">
+ <Panel
+ title="Open Postings"
+ actions={
+ <Link to="/hr/recruitment/postings" className="inline-flex items-center gap-1 text-xs text-accent hover:underline">
+ View all <ArrowRight size={12} />
+ </Link>
+ }
+ noPadding
+ >
+ {openPostings.length === 0 ? (
+ <EmptyState
+ icon="briefcase"
+ title="No open postings"
+ description="Create a job posting to start receiving applications."
+ action={
+ can('hr.recruitment.manage') ? (
+ <Button variant="primary" size="sm" onClick={() => navigate('/hr/recruitment/postings/create')}>New Posting</Button>
+ ) : undefined
+ }
+ />
+ ) : (
+ <DataTable
+ onRowClick={(row) => navigate(`/hr/recruitment/postings/${row.id}`)}
+ columns={postingColumns}
+ data={openPostings}
+ />
+ )}
+ </Panel>
 
-        <StageBreakdown
-          title="Application Pipeline"
-          stages={pipelineStages.map((stage) => {
-            const count = stageCounts[stage.value] ?? 0;
-            const percent = totalApps > 0 ? (count / totalApps) * 100 : 0;
-            return {
-              label: stage.label,
-              count,
-              percent,
-              color: STAGE_CHIP[stage.value as ApplicationStage]
-            };
-          })}
-        />
-      </div>
+ <StageBreakdown
+ title="Application Pipeline"
+ stages={pipelineStages.map((stage) => {
+ const count = stageCounts[stage.value] ?? 0;
+ const percent = totalApps > 0 ? (count / totalApps) * 100 : 0;
+ return {
+ label: stage.label,
+ count,
+ percent,
+ color: STAGE_CHIP[stage.value as ApplicationStage]
+ };
+ })}
+ />
+ </div>
 
-      {/* Recent Applications */}
-      <div className="px-5 pb-4">
-        <Panel
-          title="Recent Applications"
-          actions={
-            <Link to="/hr/recruitment/applications" className="inline-flex items-center gap-1 text-xs text-accent hover:underline">
-              View all <ArrowRight size={12} />
-            </Link>
-          }
-          noPadding
-        >
-          {applications.length === 0 ? (
-            <EmptyState
-              icon="inbox"
-              title="No applications yet"
-              description="Applications will appear here as candidates apply."
-            />
-          ) : (
-            <DataTable
-            onRowClick={(row) => navigate(`/hr/recruitment/applications/${row.id}`)}
-            columns={appColumns}
-              data={applications}
-            />
-          )}
-        </Panel>
-      </div>
-    </div>
-  );
+ {/* Recent Applications */}
+ <div className="px-5 pb-4">
+ <Panel
+ title="Recent Applications"
+ actions={
+ <Link to="/hr/recruitment/applications" className="inline-flex items-center gap-1 text-xs text-accent hover:underline">
+ View all <ArrowRight size={12} />
+ </Link>
+ }
+ noPadding
+ >
+ {applications.length === 0 ? (
+ <EmptyState
+ icon="inbox"
+ title="No applications yet"
+ description="Applications will appear here as candidates apply."
+ />
+ ) : (
+ <DataTable
+ onRowClick={(row) => navigate(`/hr/recruitment/applications/${row.id}`)}
+ columns={appColumns}
+ data={applications}
+ />
+ )}
+ </Panel>
+ </div>
+ </div>
+ );
 }

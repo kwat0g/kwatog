@@ -6,20 +6,20 @@
 import { downloadAuthenticatedFile } from '@/api/download';
 
 export const statutoryApi = {
-  bir1601c: (year: number, month: number): Promise<boolean> =>
-    downloadAuthenticatedFile(`/api/v1/payroll/statutory/1601c?year=${year}&month=${month}`, {
-      errorMessage: 'Failed to download BIR 1601-C.',
-    }),
-  philhealthRf1: (year: number, month: number): Promise<boolean> =>
-    downloadAuthenticatedFile(`/api/v1/payroll/statutory/rf1?year=${year}&month=${month}`, {
-      errorMessage: 'Failed to download PhilHealth RF-1.',
-    }),
-  pagibigMcrf: (year: number, month: number): Promise<boolean> =>
-    downloadAuthenticatedFile(`/api/v1/payroll/statutory/mcrf?year=${year}&month=${month}`, {
-      errorMessage: 'Failed to download Pag-IBIG MCRF.',
-    }),
-  bir1604cf: (year: number): Promise<boolean> =>
-    downloadAuthenticatedFile(`/api/v1/payroll/statutory/1604cf?year=${year}`, {
-      errorMessage: 'Failed to download BIR 1604-CF.',
-    }),
+ bir1601c: (year: number, month: number): Promise<boolean> =>
+ downloadAuthenticatedFile(`/api/v1/payroll/statutory/1601c?year=${year}&month=${month}`, {
+ errorMessage: 'Failed to download BIR 1601-C.',
+ }),
+ philhealthRf1: (year: number, month: number): Promise<boolean> =>
+ downloadAuthenticatedFile(`/api/v1/payroll/statutory/rf1?year=${year}&month=${month}`, {
+ errorMessage: 'Failed to download PhilHealth RF-1.',
+ }),
+ pagibigMcrf: (year: number, month: number): Promise<boolean> =>
+ downloadAuthenticatedFile(`/api/v1/payroll/statutory/mcrf?year=${year}&month=${month}`, {
+ errorMessage: 'Failed to download Pag-IBIG MCRF.',
+ }),
+ bir1604cf: (year: number): Promise<boolean> =>
+ downloadAuthenticatedFile(`/api/v1/payroll/statutory/1604cf?year=${year}`, {
+ errorMessage: 'Failed to download BIR 1604-CF.',
+ }),
 };

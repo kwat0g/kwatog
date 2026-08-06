@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Resources;
 
+use App\Modules\Quality\Enums\NcrDisposition;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -20,6 +21,7 @@ class MaterialReviewRecordResource extends JsonResource
             'status'      => $this->status->value,
             'status_label'=> $this->status->label(),
             'disposition' => $this->disposition,
+            'disposition_label' => NcrDisposition::tryFrom((string) $this->disposition)?->label(),
             'quantity'    => (string) $this->quantity,
 
             'item' => $this->whenLoaded('item', fn () => [

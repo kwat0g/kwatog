@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Services;
 
+use App\Common\Services\SettingsService;
 use App\Common\Support\Money;
+use App\Modules\Accounting\Enums\StatementAgingBucket;
 use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Models\Collection;
 use App\Modules\Accounting\Models\Customer;
@@ -17,6 +19,7 @@ use Carbon\Carbon;
  */
 class StatementOfAccountService
 {
+    public function __construct(private readonly SettingsService $settings) {}
     /**
      * Generate a statement of account for a given customer as of a date.
      *
@@ -74,11 +77,15 @@ class StatementOfAccountService
                 'code' => $customer->code,
             ],
             'as_of'            => $asOfDate->toDateString(),
-            'currency'         => 'PHP',
+            'currency'         => $this->settings->requiredString('accounting.functional_currency_code'),
             'opening_balance'  => $openingBalance,
             'transactions'     => $visibleEntries,
             'closing_balance'  => $closingBalance,
             'aging'            => $aging,
+            'aging_options'    => array_map(
+                static fn (StatementAgingBucket $bucket): array => ['value' => $bucket->value, 'label' => $bucket->label()],
+                StatementAgingBucket::cases(),
+            ),
             'total_outstanding' => $totalOutstanding,
         ];
     }

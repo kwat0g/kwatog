@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\CRM\Resources;
 
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Str;
 
 class CommissionEarningResource extends JsonResource
 {
@@ -24,6 +25,7 @@ class CommissionEarningResource extends JsonResource
             'commission_rate'   => $this->commission_rate,
             'commission_amount' => $this->commission_amount,
             'status'            => $this->status?->value,
+            'status_label'      => Str::headline((string) ($this->status?->value ?? $this->status)),
             'approved_at'       => $this->approved_at?->toIso8601String(),
             'paid_at'           => $this->paid_at?->toIso8601String(),
             'period_start'      => $this->period_start?->toDateString(),

@@ -17,12 +17,12 @@ namespace App\Common\Enums;
  *    mold_shot_limit        mold.current_shot_count > 80% of max_shots
  *    mold_shot_critical     mold.current_shot_count > 95% of max_shots
  *    wo_overdue             wo.planned_end < now() and status != 'completed'
- *    oee_below_threshold    machine OEE < 75% for 3 consecutive days
+ *    oee_below_threshold    machine OEE below the configured threshold/window
  *
  *  FINANCE
- *    ar_overdue_30   invoice.due_date < today - 30 and unpaid
- *    ar_overdue_60   invoice.due_date < today - 60 and unpaid
- *    ap_due_soon     bill.due_date = today + 3 and unpaid
+ *    ar_overdue_30   invoice.due_date beyond the configured warning band
+ *    ar_overdue_60   invoice.due_date beyond the configured critical band
+ *    ap_due_soon     bill.due_date within the configured due-soon band
  *
  *  QUALITY
  *    qc_fail_rate_high   daily scrap rate > 5% on any product
@@ -51,6 +51,25 @@ enum AlertType: string
     public static function values(): array
     {
         return array_map(fn (self $c) => $c->value, self::cases());
+    }
+
+    public function label(): string
+    {
+        return match ($this) {
+            self::StockCritical => 'Stock critical',
+            self::StockLow => 'Stock low',
+            self::NoSupplier => 'No supplier',
+            self::MachineBreakdown => 'Machine breakdown',
+            self::MoldShotLimit => 'Mold approaching limit',
+            self::MoldShotCritical => 'Mold critical limit',
+            self::WoOverdue => 'Work order overdue',
+            self::OeeBelowThreshold => 'OEE below threshold',
+            self::ArOverdue30 => 'AR overdue (warning)',
+            self::ArOverdue60 => 'AR overdue (critical)',
+            self::ApDueSoon => 'AP due soon',
+            self::QcFailRateHigh => 'QC fail rate high',
+            self::ChainBottleneck => 'Chain bottleneck',
+        };
     }
 
     public function defaultSeverity(): AlertSeverity

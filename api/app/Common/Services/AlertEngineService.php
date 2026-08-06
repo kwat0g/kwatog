@@ -10,12 +10,15 @@ use App\Common\Models\Alert;
 use App\Common\Notifications\CriticalAlertEmail;
 use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\Invoice;
+use App\Modules\Accounting\Enums\BillStatus;
+use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\MRP\Models\Mold;
 use App\Modules\Production\Models\WorkOrder;
+use App\Modules\Production\Enums\WorkOrderStatus;
 use App\Modules\Purchasing\Models\ApprovedSupplier;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
@@ -220,7 +223,7 @@ class AlertEngineService
             );
         });
 
-        // Mold shot thresholds (80% / 95%)
+        // Mold shot thresholds from the configured warning and critical ratios.
         Mold::query()
             ->whereNotNull('max_shots_before_maintenance')
             ->where('max_shots_before_maintenance', '>', 0)
@@ -253,7 +256,12 @@ class AlertEngineService
 
         // Work order overdue
         WorkOrder::query()
-            ->whereIn('status', ['planned', 'confirmed', 'in_progress', 'in_production', 'paused'])
+            ->whereIn('status', [
+                WorkOrderStatus::Planned->value,
+                WorkOrderStatus::Confirmed->value,
+                WorkOrderStatus::InProgress->value,
+                WorkOrderStatus::Paused->value,
+            ])
             ->whereNotNull('planned_end')
             ->where('planned_end', '<', now())
             ->get()
@@ -269,9 +277,9 @@ class AlertEngineService
                 );
             });
 
-        // OEE below 75% for 3+ consecutive days. Using a simple proxy:
+        // OEE below the configured quality threshold over the configured lookback window. Using a simple proxy:
         // for each machine, compute (good_count / max(1, good+reject)) over
-        // the last 3 days from work_order_outputs. If < 0.75, raise.
+        // the configured lookback window from work_order_outputs. If below the configured threshold, raise.
         $oeeDays = $this->positiveIntSetting('alerts.oee.lookback_days');
         $minimumOutput = $this->positiveIntSetting('alerts.oee.minimum_output_count');
         $oeeThreshold = $this->ratioSetting('alerts.oee.quality_rate_threshold');
@@ -322,9 +330,12 @@ class AlertEngineService
             throw new \App\Common\Exceptions\BusinessRuleException('AR warning days must be lower than AR critical days.');
         }
 
-        // AR overdue 30 / 60
+        // AR warning / critical overdue bands from configured day thresholds.
         DB::table('invoices')
-            ->whereIn('status', ['unpaid', 'partial', 'finalized'])
+            ->whereIn('status', [
+                InvoiceStatus::Partial->value,
+                InvoiceStatus::Finalized->value,
+            ])
             ->whereNotNull('due_date')
             ->where('due_date', '<', $today->copy()->subDays($warningDays))
             ->select('id', 'invoice_number', 'due_date', 'balance', 'customer_id')
@@ -341,7 +352,7 @@ class AlertEngineService
                         AlertType::ArOverdue60,
                         AlertSeverity::Critical,
                         "AR severely overdue: {$row->invoice_number}",
-                        "Invoice {$row->invoice_number} is {$daysOver} days past due. Balance ₱".number_format((float) $row->balance, 2).'.',
+                        "Invoice {$row->invoice_number} is {$daysOver} days past due. Balance ".app(CurrencyDisplayService::class)->format($row->balance).'.',
                         $invoice,
                         ['days_overdue' => $daysOver, 'balance' => (float) $row->balance],
                     );
@@ -350,16 +361,16 @@ class AlertEngineService
                         AlertType::ArOverdue30,
                         AlertSeverity::Warning,
                         "AR overdue: {$row->invoice_number}",
-                        "Invoice {$row->invoice_number} is {$daysOver} days past due. Balance ₱".number_format((float) $row->balance, 2).'.',
+                        "Invoice {$row->invoice_number} is {$daysOver} days past due. Balance ".app(CurrencyDisplayService::class)->format($row->balance).'.',
                         $invoice,
                         ['days_overdue' => $daysOver, 'balance' => (float) $row->balance],
                     );
                 }
             });
 
-        // AP due in 3 days
+        // AP due-soon threshold from configured days.
         DB::table('bills')
-            ->whereIn('status', ['unpaid', 'partial'])
+            ->whereIn('status', [BillStatus::Unpaid->value, BillStatus::Partial->value])
             ->whereDate('due_date', $today->copy()->addDays($apDueSoonDays))
             ->select('id', 'bill_number', 'due_date', 'balance', 'vendor_id')
             ->get()
@@ -372,7 +383,7 @@ class AlertEngineService
                     AlertType::ApDueSoon,
                     AlertSeverity::Info,
                     "Bill due soon: {$row->bill_number}",
-                    "Bill {$row->bill_number} is due in {$apDueSoonDays} days ({$row->due_date}). Balance ₱".number_format((float) $row->balance, 2).'.',
+                    "Bill {$row->bill_number} is due in {$apDueSoonDays} days ({$row->due_date}). Balance ".app(CurrencyDisplayService::class)->format($row->balance).'.',
                     $bill,
                     ['due_date' => $row->due_date, 'balance' => (float) $row->balance],
                 );
@@ -425,18 +436,12 @@ class AlertEngineService
     private function emailCritical(Alert $alert): void
     {
         try {
-            // Determine recipients by alert type → role.
-            $roleSlugs = match ($alert->type) {
-                AlertType::StockCritical, AlertType::StockLow, AlertType::NoSupplier => ['warehouse_staff', 'purchasing_officer', 'ppc_head'],
-
-                AlertType::MachineBreakdown, AlertType::MoldShotCritical, AlertType::MoldShotLimit => ['production_manager', 'maintenance_tech'],
-
-                AlertType::WoOverdue, AlertType::OeeBelowThreshold => ['production_manager'],
-
-                AlertType::ArOverdue30, AlertType::ArOverdue60, AlertType::ApDueSoon => ['finance_officer'],
-
-                AlertType::QcFailRateHigh => ['qc_inspector', 'production_manager'],
-            };
+            $catalog = (array) $this->settings->get('alerts.critical.notification_roles', []);
+            $roleSlugs = array_values(array_filter(
+                (array) ($catalog[$alert->type->value] ?? []),
+                static fn ($role): bool => is_string($role) && $role !== '',
+            ));
+            if ($roleSlugs === []) return;
 
             $users = User::query()
                 ->whereHas('role', fn ($q) => $q->whereIn('slug', $roleSlugs))

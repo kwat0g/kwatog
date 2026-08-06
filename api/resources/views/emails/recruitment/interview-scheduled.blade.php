@@ -12,10 +12,10 @@ We are pleased to invite you for an interview for the **{{ $positionTitle }}** p
 Please arrive 15 minutes early and bring a valid ID.
 
 **Company Address:**<br>
-Philippine Ogami Corporation<br>
-FCIE, Dasmariñas, Cavite
+{{ $companyName }}<br>
+{{ $companyAddress }}
 
 Regards,<br>
 HR Department<br>
-Philippine Ogami Corporation
+{{ $companyName }}
 </x-mail::message>

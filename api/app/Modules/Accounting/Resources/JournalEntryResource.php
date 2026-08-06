@@ -23,6 +23,7 @@ class JournalEntryResource extends JsonResource
             'total_debit'          => (string) $this->total_debit,
             'total_credit'         => (string) $this->total_credit,
             'status'               => $this->status?->value,
+            'status_label'         => $this->status?->label(),
             'reversed_by_entry_id' => $this->reversed_by_entry_id
                 ? JournalEntry::find($this->reversed_by_entry_id)?->hash_id
                 : null,
@@ -39,6 +40,7 @@ class JournalEntryResource extends JsonResource
             'lines'                => JournalEntryLineResource::collection($this->whenLoaded('lines')),
             'created_at'           => optional($this->created_at)->toIso8601String(),
             'updated_at'           => optional($this->updated_at)->toIso8601String(),
+            'deleted_at'           => optional($this->deleted_at)?->toIso8601String(),
         ];
     }
 }

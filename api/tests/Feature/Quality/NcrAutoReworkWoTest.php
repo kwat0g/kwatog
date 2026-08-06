@@ -17,6 +17,7 @@ use App\Modules\Quality\Models\NcrAction;
 use App\Modules\Quality\Models\NonConformanceReport;
 use App\Modules\Quality\Services\NcrService;
 use Database\Seeders\RolePermissionSeeder;
+use App\Common\Services\SettingsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -28,6 +29,7 @@ class NcrAutoReworkWoTest extends TestCase
     {
         parent::setUp();
         $this->seed(RolePermissionSeeder::class);
+        app(SettingsService::class)->set('quality.ncr.replacement_work_order_priority', 7);
     }
 
     private function user(): User

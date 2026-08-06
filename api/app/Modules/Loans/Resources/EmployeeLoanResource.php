@@ -20,6 +20,7 @@ class EmployeeLoanResource extends JsonResource
                 'full_name'   => $this->employee->full_name,
             ] : null),
             'loan_type'              => $this->loan_type?->value,
+            'loan_type_label'        => $this->loan_type?->label(),
             'principal'              => (string) $this->principal,
             'interest_rate'          => (string) $this->interest_rate,
             'monthly_amortization'   => (string) $this->monthly_amortization,
@@ -32,6 +33,7 @@ class EmployeeLoanResource extends JsonResource
             'approval_chain_size'    => (int) $this->approval_chain_size,
             'purpose'                => $this->purpose,
             'status'                 => $this->status?->value,
+            'status_label'           => $this->status?->label(),
             'is_final_pay_deduction' => (bool) $this->is_final_pay_deduction,
             'has_overdue_approval'   => $this->relationLoaded('approvalRecords')
                 ? $this->approvalRecords->contains(fn ($r) => $r->action === 'pending' && $r->is_overdue)

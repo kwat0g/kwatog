@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Services;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Budget;
 use App\Modules\Accounting\Models\BudgetLineItem;
 use App\Modules\Accounting\Models\FiscalYear;
@@ -11,6 +12,8 @@ use Illuminate\Support\Facades\DB;
 
 class BudgetService
 {
+    public function __construct(private readonly SettingsService $settings) {}
+
     /**
      * Create a budget with line items in one transaction.
      */
@@ -79,10 +82,14 @@ class BudgetService
     public function checkConsumption(Budget $budget): string
     {
         $pct = $budget->utilization_percent;
-        if ($pct >= 120) return 'overdrawn';
-        if ($pct >= 100) return 'exhausted';
-        if ($pct >= 95)  return 'critical';
-        if ($pct >= 80)  return 'warning';
+        $warning = $this->settings->requiredFloat('budget.warning_ratio', 0, 1);
+        $critical = $this->settings->requiredFloat('budget.critical_ratio', $warning, 1);
+        $exhausted = $this->settings->requiredFloat('budget.exhausted_ratio', $critical);
+        $overdrawn = $this->settings->requiredFloat('budget.overdrawn_ratio', $exhausted);
+        if ($pct / 100 >= $overdrawn) return 'overdrawn';
+        if ($pct / 100 >= $exhausted) return 'exhausted';
+        if ($pct / 100 >= $critical) return 'critical';
+        if ($pct / 100 >= $warning) return 'warning';
         return 'ok';
     }
 
@@ -101,7 +108,7 @@ class BudgetService
 
         $byDepartment = $budgets->groupBy(fn ($b) => $b->department_id ?? 0)
             ->map(fn ($deptBudgets, $deptId) => [
-                'department' => $deptId === 0 ? 'Company-wide' : ($deptBudgets->first()->department?->name ?? 'Unknown'),
+                'department' => $deptId === 0 ? 'Company-wide' : ($deptBudgets->first()->department?->name ?? '—'),
                 'allocated'  => (float) $deptBudgets->sum('total_allocated'),
                 'spent'      => (float) $deptBudgets->sum('total_spent'),
                 'committed'  => (float) $deptBudgets->sum('total_committed'),

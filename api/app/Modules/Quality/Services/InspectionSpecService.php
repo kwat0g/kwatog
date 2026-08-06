@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Quality\Services;
 
+use App\Common\Support\TrashedFilter;
 use App\Common\Support\HashIdFilter;
 use App\Modules\CRM\Models\Product;
 use App\Modules\Quality\Models\InspectionSpec;
@@ -31,6 +32,8 @@ class InspectionSpecService
         $q = InspectionSpec::query()
             ->with(['product:id,part_number,name'])
             ->withCount('items');
+
+        TrashedFilter::apply($q, $filters);
 
         if (! empty($filters['product_id'])) {
             $pid = HashIdFilter::decode($filters['product_id'], Product::class);
@@ -80,7 +83,7 @@ class InspectionSpecService
                     'is_active' => true,
                     'notes'     => $notes,
                 ]);
-                $spec->items()->delete();
+                $spec->items()->forceDelete();
             } else {
                 $spec = InspectionSpec::create([
                     'product_id' => $productId,

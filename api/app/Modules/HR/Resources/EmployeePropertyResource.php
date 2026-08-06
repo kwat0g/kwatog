@@ -6,6 +6,7 @@ namespace App\Modules\HR\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Str;
 
 class EmployeePropertyResource extends JsonResource
 {
@@ -21,6 +22,8 @@ class EmployeePropertyResource extends JsonResource
             'date_issued'   => optional($this->date_issued)->toDateString(),
             'date_returned' => optional($this->date_returned)->toDateString(),
             'status'        => $this->status,
+            'status_label'  => Str::headline((string) $this->status),
+            'deleted_at'    => optional($this->deleted_at)?->toIso8601String(),
         ];
     }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Assets\Resources;
 
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Str;
 
 class AssetTransferResource extends JsonResource
 {
@@ -28,6 +29,7 @@ class AssetTransferResource extends JsonResource
             ]),
             'reason'          => $this->reason,
             'status'          => $this->status?->value,
+            'status_label'    => Str::headline((string) ($this->status?->value ?? $this->status)),
             'transfer_date'   => $this->transfer_date?->toDateString(),
             'approved_at'     => $this->approved_at?->toIso8601String(),
             'created_at'      => $this->created_at?->toIso8601String(),

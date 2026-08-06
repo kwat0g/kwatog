@@ -6,33 +6,33 @@ import { Link } from 'react-router-dom';
 import type { ReactNode } from 'react';
 
 interface Props {
-  type: string;
-  typeLabel?: string;
-  severity: string;
-  message: ReactNode;
-  link: string;
-  time?: string;
+ type: string;
+ typeLabel?: string;
+ severity: string;
+ message: ReactNode;
+ link: string;
+ time?: string;
 }
 
 const dotClass: Record<string, string> = {
-  danger: 'bg-danger',
-  warning: 'bg-warning',
-  info: 'bg-accent',
+ danger: 'bg-danger',
+ warning: 'bg-warning',
+ info: 'bg-accent',
 };
 
 export function BreakdownAlertCard({ type, typeLabel, severity, message, link, time }: Props) {
-  return (
-    <Link
-      to={link}
-      className="flex items-start gap-2 py-1.5 hover:bg-subtle rounded-sm px-2 -mx-2 transition-colors"
-    >
-      <span className={`mt-1 inline-block h-2 w-2 rounded-full ${dotClass[severity] ?? 'bg-elevated'}`} aria-hidden />
-      <div className="flex-1 min-w-0">
-        <div className="text-xs text-primary truncate">{message}</div>
-        <div className="text-2xs font-mono text-muted">
-          {typeLabel ?? type}{time ? ` · ${time}` : ''}
-        </div>
-      </div>
-    </Link>
-  );
+ return (
+ <Link
+ to={link}
+ className="flex items-start gap-2 py-1.5 hover:bg-subtle rounded-sm px-2 -mx-2 transition-colors"
+ >
+ <span className={`mt-1 inline-block h-2 w-2 rounded-full ${dotClass[severity] ?? 'bg-elevated'}`} aria-hidden />
+ <div className="flex-1 min-w-0">
+ <div className="text-xs text-primary truncate">{message}</div>
+ <div className="text-2xs font-mono text-muted">
+ {typeLabel ?? type}{time ? ` · ${time}` : ''}
+ </div>
+ </div>
+ </Link>
+ );
 }

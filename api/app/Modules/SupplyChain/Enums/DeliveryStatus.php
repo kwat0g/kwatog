@@ -35,4 +35,25 @@ enum DeliveryStatus: string
     {
         return array_map(fn (self $c) => $c->value, self::cases());
     }
+
+    /** Statuses a driver may report from the mobile delivery workflow. */
+    public static function driverValues(): array
+    {
+        return array_map(
+            static fn (self $status): string => $status->value,
+            [self::Loading, self::InTransit, self::Delivered],
+        );
+    }
+
+    public function label(): string
+    {
+        return match ($this) {
+            self::Scheduled => 'Scheduled',
+            self::Loading => 'Loading',
+            self::InTransit => 'In transit',
+            self::Delivered => 'Delivered',
+            self::Confirmed => 'Confirmed',
+            self::Cancelled => 'Cancelled',
+        };
+    }
 }

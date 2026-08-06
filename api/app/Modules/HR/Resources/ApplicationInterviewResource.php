@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Resources;
 
+use App\Modules\HR\Enums\InterviewOutcome;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -18,6 +19,7 @@ class ApplicationInterviewResource extends JsonResource
             'interviewer_name' => $this->interviewer_name,
             'notes'            => $this->notes,
             'outcome'          => $this->outcome?->value,
+            'outcome_label'    => $this->outcome instanceof InterviewOutcome ? $this->outcome->label() : null,
             'created_by'       => $this->whenLoaded('createdBy', fn () => [
                 'id'   => $this->createdBy->hash_id,
                 'name' => $this->createdBy->name,

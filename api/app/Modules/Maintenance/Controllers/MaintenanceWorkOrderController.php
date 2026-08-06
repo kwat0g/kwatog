@@ -4,7 +4,12 @@ declare(strict_types=1);
 
 namespace App\Modules\Maintenance\Controllers;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
+use App\Modules\Maintenance\Enums\MaintainableType;
+use App\Modules\Maintenance\Enums\MaintenancePriority;
+use App\Modules\Maintenance\Enums\MaintenanceWorkOrderType;
+use App\Modules\Maintenance\Enums\MaintenanceWorkOrderStatus;
 use App\Modules\Maintenance\Requests\AssignMaintenanceWorkOrderRequest;
 use App\Modules\Maintenance\Requests\CompleteMaintenanceWorkOrderRequest;
 use App\Modules\Maintenance\Requests\RecordSparePartUsageRequest;
@@ -21,11 +26,42 @@ class MaintenanceWorkOrderController
     public function __construct(
         private readonly MaintenanceWorkOrderService $service,
         private readonly SparePartUsageService $spareParts,
+        private readonly SettingsService $settings,
     ) {}
 
     public function index(Request $request): AnonymousResourceCollection
     {
         return MaintenanceWorkOrderResource::collection($this->service->list($request->query()));
+    }
+
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'maintainable_types' => array_map(
+                static fn (MaintainableType $type): array => ['value' => $type->value, 'label' => ucfirst($type->value)],
+                MaintainableType::cases(),
+            ),
+            'types' => array_map(
+                static fn (MaintenanceWorkOrderType $type): array => ['value' => $type->value, 'label' => ucfirst($type->value)],
+                MaintenanceWorkOrderType::cases(),
+            ),
+            'priorities' => array_map(
+                static fn (MaintenancePriority $priority): array => ['value' => $priority->value, 'label' => ucfirst($priority->value)],
+                MaintenancePriority::cases(),
+            ),
+            'statuses' => array_map(
+                static function (MaintenanceWorkOrderStatus $status): array {
+                    return [
+                        'value' => $status->value,
+                        'label' => str_replace('_', ' ', ucfirst($status->value)),
+                        'is_terminal' => $status->isTerminal(),
+                    ];
+                },
+                MaintenanceWorkOrderStatus::cases(),
+            ),
+            'default_type' => (string) $this->settings->get('maintenance.work_order.default_type', ''),
+            'default_priority' => (string) $this->settings->get('maintenance.work_order.default_priority', ''),
+        ]]);
     }
 
     public function show(MaintenanceWorkOrder $workOrder): MaintenanceWorkOrderResource

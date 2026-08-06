@@ -11,10 +11,11 @@ use App\Modules\Inventory\Models\Item;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class ApprovedSupplier extends Model
 {
-    use HasFactory, HasHashId, HasAuditLog;
+    use HasFactory, HasHashId, HasAuditLog, SoftDeletes;
 
     protected $fillable = [
         'item_id', 'vendor_id', 'is_preferred',

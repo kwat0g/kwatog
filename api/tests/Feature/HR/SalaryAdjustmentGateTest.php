@@ -47,7 +47,7 @@ class SalaryAdjustmentGateTest extends TestCase
 
         app(EmployeeService::class)->update($employee, [
             'basic_monthly_salary' => '99000.00',
-            'daily_rate'           => '5000.00',
+            'semi_monthly_rate'    => '5000.00',
         ]);
 
         $this->assertSame('20000.00', (string) $employee->fresh()->basic_monthly_salary);

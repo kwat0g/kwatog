@@ -6,6 +6,7 @@ namespace App\Modules\SupplyChain\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use App\Modules\SupplyChain\Enums\DeliveryStatus;
 
 class DriverUpdateStatusRequest extends FormRequest
 {
@@ -14,7 +15,7 @@ class DriverUpdateStatusRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'status' => ['required', Rule::in(['loading', 'in_transit', 'delivered'])],
+            'status' => ['required', Rule::in(DeliveryStatus::driverValues())],
         ];
     }
 }

@@ -20,19 +20,19 @@ import { formatPeso } from '@/lib/formatNumber';
 // ─── Validation ──────────────────────────────────────────────────────────────
 
 const itemSchema = z.object({
-  sales_order_item_id: z.string().min(1, 'Select a line item'),
-  quantity: z.coerce
-    .number({ invalid_type_error: 'Must be a number' })
-    .positive('Must be greater than zero'),
-  inspection_id: z.string().optional(),
+ sales_order_item_id: z.string().min(1, 'Select a line item'),
+ quantity: z.coerce
+ .number({ invalid_type_error: 'Must be a number' })
+ .positive('Must be greater than zero'),
+ inspection_id: z.string().optional(),
 });
 
 const schema = z.object({
-  sales_order_id: z.string().min(1, 'Sales order is required'),
-  vehicle_id: z.string().optional(),
-  scheduled_date: z.string().min(1, 'Scheduled date is required'),
-  notes: z.string().max(2000).optional(),
-  items: z.array(itemSchema).min(1, 'Add at least one delivery line'),
+ sales_order_id: z.string().min(1, 'Sales order is required'),
+ vehicle_id: z.string().optional(),
+ scheduled_date: z.string().min(1, 'Scheduled date is required'),
+ notes: z.string().max(2000).optional(),
+ items: z.array(itemSchema).min(1, 'Add at least one delivery line'),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -40,292 +40,292 @@ type FormValues = z.infer<typeof schema>;
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function CreateDeliveryPage() {
-  const navigate = useNavigate();
-  const qc = useQueryClient();
+ const navigate = useNavigate();
+ const qc = useQueryClient();
 
-  // ── Fetch reference data ──
-  const { data: soData, isLoading: soLoading, isError: soError } = useQuery({
-    queryKey: ['crm', 'sales-orders', 'for-delivery'],
-    queryFn: () =>
-      salesOrdersApi.list({ status: 'confirmed', per_page: 200 }),
-  });
-  const soList = soData?.data ?? [];
+ // ── Fetch reference data ──
+ const { data: soData, isLoading: soLoading, isError: soError } = useQuery({
+ queryKey: ['crm', 'sales-orders', 'for-delivery'],
+ queryFn: () =>
+ salesOrdersApi.list({ status: 'confirmed', per_page: 200 }),
+ });
+ const soList = soData?.data ?? [];
 
-  const { data: vehiclesData, isLoading: vehiclesLoading } = useQuery({
-    queryKey: ['supply-chain', 'vehicles', 'all'],
-    queryFn: () => vehiclesApi.list({ per_page: 200 }),
-  });
-  const vehicleList = vehiclesData?.data ?? [];
+ const { data: vehiclesData, isLoading: vehiclesLoading } = useQuery({
+ queryKey: ['supply-chain', 'vehicles', 'all'],
+ queryFn: () => vehiclesApi.list({ per_page: 200 }),
+ });
+ const vehicleList = vehiclesData?.data ?? [];
 
-  // ── Form ──
-  const {
-    register,
-    control,
-    handleSubmit,
-    watch,
-    setError,
-    formState: { errors, isSubmitting },
-  } = useForm<FormValues>({
-    resolver: zodResolver(schema),
-    defaultValues: {
-      sales_order_id: '',
-      vehicle_id: '',
-      scheduled_date: '',
-      notes: '',
-      items: [{ sales_order_item_id: '', quantity: undefined as unknown as number, inspection_id: '' }],
-    },
-  });
+ // ── Form ──
+ const {
+ register,
+ control,
+ handleSubmit,
+ watch,
+ setError,
+ formState: { errors, isSubmitting },
+ } = useForm<FormValues>({
+ resolver: zodResolver(schema),
+ defaultValues: {
+ sales_order_id: '',
+ vehicle_id: '',
+ scheduled_date: '',
+ notes: '',
+ items: [{ sales_order_item_id: '', quantity: undefined as unknown as number, inspection_id: '' }],
+ },
+ });
 
-  const { fields, append, remove } = useFieldArray({ control, name: 'items' });
+ const { fields, append, remove } = useFieldArray({ control, name: 'items' });
 
-  // Watch SO selection to populate line item options.
-  const selectedSoId = watch('sales_order_id');
+ // Watch SO selection to populate line item options.
+ const selectedSoId = watch('sales_order_id');
 
-  // When SO changes, fetch the SO detail to get its line items.
-  const { data: selectedSo, isLoading: soDetailLoading } = useQuery({
-    queryKey: ['crm', 'sales-orders', selectedSoId],
-    queryFn: () => salesOrdersApi.show(selectedSoId),
-    enabled: Boolean(selectedSoId),
-  });
+ // When SO changes, fetch the SO detail to get its line items.
+ const { data: selectedSo, isLoading: soDetailLoading } = useQuery({
+ queryKey: ['crm', 'sales-orders', selectedSoId],
+ queryFn: () => salesOrdersApi.show(selectedSoId),
+ enabled: Boolean(selectedSoId),
+ });
 
-  const soItems = selectedSo?.items ?? [];
+ const soItems = selectedSo?.items ?? [];
 
-  // ── Mutation ──
-  const mutation = useMutation({
-    mutationFn: (data: FormValues) =>
-      deliveriesApi.create({
-        sales_order_id: data.sales_order_id,
-        vehicle_id: data.vehicle_id || undefined,
-        scheduled_date: data.scheduled_date,
-        notes: data.notes || undefined,
-        items: data.items.map((i) => ({
-          sales_order_item_id: i.sales_order_item_id,
-          quantity: i.quantity,
-          inspection_id: i.inspection_id || undefined,
-        })),
-      }),
-    onSuccess: (delivery) => {
-      qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries'] });
-      toast.success('Delivery created');
-      navigate(`/supply-chain/deliveries/${delivery.id}`);
-    },
-    onError: (err) => {
-      applyServerValidationErrors(err, setError, 'Failed to create delivery.');
-    },
-  });
+ // ── Mutation ──
+ const mutation = useMutation({
+ mutationFn: (data: FormValues) =>
+ deliveriesApi.create({
+ sales_order_id: data.sales_order_id,
+ vehicle_id: data.vehicle_id || undefined,
+ scheduled_date: data.scheduled_date,
+ notes: data.notes || undefined,
+ items: data.items.map((i) => ({
+ sales_order_item_id: i.sales_order_item_id,
+ quantity: i.quantity,
+ inspection_id: i.inspection_id || undefined,
+ })),
+ }),
+ onSuccess: (delivery) => {
+ qc.invalidateQueries({ queryKey: ['supply-chain', 'deliveries'] });
+ toast.success('Delivery created');
+ navigate(`/supply-chain/deliveries/${delivery.id}`);
+ },
+ onError: (err) => {
+ applyServerValidationErrors(err, setError, 'Failed to create delivery.');
+ },
+ });
 
-  // ── Pre-populate driver_id from SO if SO has a delivery address ──
-  // (not applicable here — driver comes from fleet, not SO)
+ // ── Pre-populate driver_id from SO if SO has a delivery address ──
+ // (not applicable here — driver comes from fleet, not SO)
 
-  return (
-    <div>
-      <PageHeader
-        title="New delivery"
-        backTo="/supply-chain/deliveries"
-        backLabel="Deliveries"
-        breadcrumbs={[
-          { label: 'Deliveries', href: '/supply-chain/deliveries' },
-          { label: 'New delivery' },
-        ]}
-      />
+ return (
+ <div>
+ <PageHeader
+ title="New delivery"
+ backTo="/supply-chain/deliveries"
+ backLabel="Deliveries"
+ breadcrumbs={[
+ { label: 'Deliveries', href: '/supply-chain/deliveries' },
+ { label: 'New delivery' },
+ ]}
+ />
 
-      <form
-        onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())}
-        className="max-w-3xl mx-auto px-5 py-4"
-      >
-        {/* ── Sales Order ── */}
-        <fieldset className="mb-6">
-          <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">
-            Sales order
-          </legend>
-          <Select
-            label="Sales order"
-            {...register('sales_order_id')}
-            error={errors.sales_order_id?.message}
-            required
-            disabled={soLoading || soError}
-          >
-            <option value="">
-              {soLoading
-                ? 'Loading sales orders…'
-                : soError
-                ? 'Failed to load sales orders'
-                : '— Select confirmed sales order —'}
-            </option>
-            {soList.map((so) => (
-              <option key={so.id} value={so.id}>
-                {so.so_number}
-                {so.customer ? ` — ${so.customer.name}` : ''}
-              </option>
-            ))}
-          </Select>
-          {selectedSo && (
-            <p className="mt-1.5 text-xs text-muted">
-              {selectedSo.item_count} line{selectedSo.item_count === 1 ? '' : 's'} ·{' '}
-              Customer: {selectedSo.customer?.name ?? '—'} · Total: {formatPeso(selectedSo.total_amount)}
-            </p>
-          )}
-        </fieldset>
+ <form
+ onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())}
+ className="max-w-3xl mx-auto px-5 py-4"
+ >
+ {/* ── Sales Order ── */}
+ <fieldset className="mb-6">
+ <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">
+ Sales order
+ </legend>
+ <Select
+ label="Sales order"
+ {...register('sales_order_id')}
+ error={errors.sales_order_id?.message}
+ required
+ disabled={soLoading || soError}
+ >
+ <option value="">
+ {soLoading
+ ? 'Loading sales orders…'
+ : soError
+ ? 'Failed to load sales orders'
+ : '— Select confirmed sales order —'}
+ </option>
+ {soList.map((so) => (
+ <option key={so.id} value={so.id}>
+ {so.so_number}
+ {so.customer ? ` — ${so.customer.name}` : ''}
+ </option>
+ ))}
+ </Select>
+ {selectedSo && (
+ <p className="mt-1.5 text-xs text-muted">
+ {selectedSo.item_count} line{selectedSo.item_count === 1 ? '' : 's'} ·{' '}
+ Customer: {selectedSo.customer?.name ?? '—'} · Total: {formatPeso(selectedSo.total_amount)}
+ </p>
+ )}
+ </fieldset>
 
-        {/* ── Schedule ── */}
-        <fieldset className="mb-6">
-          <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">
-            Schedule
-          </legend>
-          <Input
-            label="Scheduled delivery date"
-            type="date"
-            {...register('scheduled_date')}
-            error={errors.scheduled_date?.message}
-            required
-          />
-        </fieldset>
+ {/* ── Schedule ── */}
+ <fieldset className="mb-6">
+ <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">
+ Schedule
+ </legend>
+ <Input
+ label="Scheduled delivery date"
+ type="date"
+ {...register('scheduled_date')}
+ error={errors.scheduled_date?.message}
+ required
+ />
+ </fieldset>
 
-        {/* ── Vehicle (optional) ── */}
-        <fieldset className="mb-6">
-          <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">
-            Vehicle (optional)
-          </legend>
-          <Select
-            label="Vehicle"
-            {...register('vehicle_id')}
-            error={errors.vehicle_id?.message}
-            disabled={vehiclesLoading}
-          >
-            <option value="">
-              {vehiclesLoading ? 'Loading vehicles…' : '— No vehicle assigned —'}
-            </option>
-            {vehicleList.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.name} ({v.plate_number})
-              </option>
-            ))}
-          </Select>
-        </fieldset>
+ {/* ── Vehicle (optional) ── */}
+ <fieldset className="mb-6">
+ <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">
+ Vehicle (optional)
+ </legend>
+ <Select
+ label="Vehicle"
+ {...register('vehicle_id')}
+ error={errors.vehicle_id?.message}
+ disabled={vehiclesLoading}
+ >
+ <option value="">
+ {vehiclesLoading ? 'Loading vehicles…' : '— No vehicle assigned —'}
+ </option>
+ {vehicleList.map((v) => (
+ <option key={v.id} value={v.id}>
+ {v.name} ({v.plate_number})
+ </option>
+ ))}
+ </Select>
+ </fieldset>
 
-        {/* ── Delivery line items ── */}
-        <fieldset className="mb-6">
-          <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">
-            Delivery items
-          </legend>
+ {/* ── Delivery line items ── */}
+ <fieldset className="mb-6">
+ <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">
+ Delivery items
+ </legend>
 
-          {!selectedSoId && (
-            <p className="text-xs text-muted px-3 py-2 bg-subtle rounded-md border border-default mb-3">
-              Select a sales order above to populate line item choices.
-            </p>
-          )}
+ {!selectedSoId && (
+ <p className="text-xs text-muted px-3 py-2 bg-subtle rounded-md border border-default mb-3">
+ Select a sales order above to populate line item choices.
+ </p>
+ )}
 
-          {errors.items?.root?.message && (
-            <p className="text-xs text-danger mb-2">{errors.items.root.message}</p>
-          )}
+ {errors.items?.root?.message && (
+ <p className="text-xs text-danger mb-2">{errors.items.root.message}</p>
+ )}
 
-          <div className="space-y-3">
-            {fields.map((field, index) => (
-              <div
-                key={field.id}
-                className="grid grid-cols-[1fr_120px_auto] gap-2 items-end p-3 bg-subtle rounded-md border border-default"
-              >
-                {/* SO Item select */}
-                <Select
-                  label="Sales order line"
-                  required
-                  {...register(`items.${index}.sales_order_item_id`)}
-                  disabled={!selectedSoId || soDetailLoading}
-                  error={errors.items?.[index]?.sales_order_item_id?.message}
-                >
-                  <option value="">
-                    {!selectedSoId
-                      ? 'Select SO first'
-                      : soDetailLoading
-                      ? 'Loading items…'
-                      : soItems.length === 0
-                      ? 'No line items on this order'
-                      : '— Select item —'}
-                  </option>
-                  {soItems.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.product?.part_number
-                        ? `${item.product.part_number} — ${item.product.name}`
-                        : `Line ${item.id}`}
-                      {' '}(Qty: {item.quantity} {item.product?.unit_of_measure ?? ''})
-                    </option>
-                  ))}
-                </Select>
+ <div className="space-y-3">
+ {fields.map((field, index) => (
+ <div
+ key={field.id}
+ className="grid grid-cols-[1fr_120px_auto] gap-2 items-end p-3 bg-subtle rounded-md border border-default"
+ >
+ {/* SO Item select */}
+ <Select
+ label="Sales order line"
+ required
+ {...register(`items.${index}.sales_order_item_id`)}
+ disabled={!selectedSoId || soDetailLoading}
+ error={errors.items?.[index]?.sales_order_item_id?.message}
+ >
+ <option value="">
+ {!selectedSoId
+ ? 'Select SO first'
+ : soDetailLoading
+ ? 'Loading items…'
+ : soItems.length === 0
+ ? 'No line items on this order'
+ : '— Select item —'}
+ </option>
+ {soItems.map((item) => (
+ <option key={item.id} value={item.id}>
+ {item.product?.part_number
+ ? `${item.product.part_number} — ${item.product.name}`
+ : `Line ${item.id}`}
+ {' '}(Qty: {item.quantity} {item.product?.unit_of_measure ?? ''})
+ </option>
+ ))}
+ </Select>
 
-                {/* Quantity */}
-                <Input
-                  label="Qty"
-                  required
-                  type="number"
-                  step="any"
-                  min="0.001"
-                  {...register(`items.${index}.quantity`)}
-                  error={errors.items?.[index]?.quantity?.message}
-                  className="font-mono tabular-nums"
-                />
+ {/* Quantity */}
+ <Input
+ label="Qty"
+ required
+ type="number"
+ step="any"
+ min="0.001"
+ {...register(`items.${index}.quantity`)}
+ error={errors.items?.[index]?.quantity?.message}
+ className="font-mono tabular-nums"
+ />
 
-                {/* Remove button */}
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  iconOnly
-                  icon={<X size={14} />}
-                  onClick={() => remove(index)}
-                  disabled={fields.length === 1}
-                  title="Remove line"
-                  aria-label="Remove line"
-                  className="hover:text-danger hover:border-danger"
-                />
-              </div>
-            ))}
-          </div>
+ {/* Remove button */}
+ <Button
+ type="button"
+ variant="secondary"
+ size="sm"
+ iconOnly
+ icon={<X size={14} />}
+ onClick={() => remove(index)}
+ disabled={fields.length === 1}
+ title="Remove line"
+ aria-label="Remove line"
+ className="hover:text-danger hover:border-danger"
+ />
+ </div>
+ ))}
+ </div>
 
-          <LinkButton
-            onClick={() =>
-              append({ sales_order_item_id: '', quantity: undefined as unknown as number, inspection_id: '' })
-            }
-            disabled={!selectedSoId}
-            icon={<Plus size={14} />}
-            className="mt-2 text-xs"
-          >
-            Add delivery line
-          </LinkButton>
-        </fieldset>
+ <LinkButton
+ onClick={() =>
+ append({ sales_order_item_id: '', quantity: undefined as unknown as number, inspection_id: '' })
+ }
+ disabled={!selectedSoId}
+ icon={<Plus size={14} />}
+ className="mt-2 text-xs"
+ >
+ Add delivery line
+ </LinkButton>
+ </fieldset>
 
-        {/* ── Notes ── */}
-        <fieldset className="mb-6">
-          <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">
-            Notes
-          </legend>
-          <Textarea
-            label="Notes"
-            {...register('notes')}
-            rows={3}
-            error={errors.notes?.message}
-            placeholder="Optional delivery notes, special instructions…"
-          />
-        </fieldset>
+ {/* ── Notes ── */}
+ <fieldset className="mb-6">
+ <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">
+ Notes
+ </legend>
+ <Textarea
+ label="Notes"
+ {...register('notes')}
+ rows={3}
+ error={errors.notes?.message}
+ placeholder="Optional delivery notes, special instructions…"
+ />
+ </fieldset>
 
-        {/* ── Actions ── */}
-        <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => navigate('/supply-chain/deliveries')}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            variant="primary"
-            disabled={isSubmitting || mutation.isPending}
-            loading={mutation.isPending}
-          >
-            {mutation.isPending ? 'Creating…' : 'Create delivery'}
-          </Button>
-        </div>
-      </form>
-    </div>
-  );
+ {/* ── Actions ── */}
+ <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+ <Button
+ type="button"
+ variant="secondary"
+ onClick={() => navigate('/supply-chain/deliveries')}
+ >
+ Cancel
+ </Button>
+ <Button
+ type="submit"
+ variant="primary"
+ disabled={isSubmitting || mutation.isPending}
+ loading={mutation.isPending}
+ >
+ {mutation.isPending ? 'Creating…' : 'Create delivery'}
+ </Button>
+ </div>
+ </form>
+ </div>
+ );
 }

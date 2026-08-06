@@ -33,7 +33,7 @@ class ApprovalService
             ApprovalRecord::where('approvable_type', $approvable->getMorphClass())
                 ->where('approvable_id', $approvable->getKey())
                 ->whereIn('action', ['pending', 'skipped'])
-                ->delete();
+                ->forceDelete();
 
             foreach ($workflow->steps as $step) {
                 $threshold = isset($step['threshold']) ? (float) $step['threshold'] : null;

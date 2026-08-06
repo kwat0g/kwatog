@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Resources;
 
+use Illuminate\Support\Str;
+
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -16,6 +18,7 @@ class ReviewCycleResource extends JsonResource
             'name'          => $this->name,
             'cycle_type'    => $this->cycle_type?->value,
             'status'        => $this->status?->value,
+            'status_label'  => Str::headline((string) ($this->status?->value ?? $this->status)),
             'start_date'    => $this->start_date?->toDateString(),
             'end_date'      => $this->end_date?->toDateString(),
             'description'   => $this->description,

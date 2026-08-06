@@ -6,6 +6,7 @@ namespace App\Modules\MRP\Controllers;
 
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\MRP\Models\MrpPlan;
+use App\Modules\MRP\Enums\MrpPlanStatus;
 use App\Modules\MRP\Resources\MrpPlanResource;
 use App\Modules\MRP\Services\MrpEngineService;
 use Illuminate\Http\JsonResponse;
@@ -19,6 +20,16 @@ class MrpPlanController
     public function index(Request $request): AnonymousResourceCollection
     {
         return MrpPlanResource::collection($this->engine->list($request->query()));
+    }
+
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'statuses' => array_map(static fn (MrpPlanStatus $status): array => [
+                'value' => $status->value,
+                'label' => ucfirst($status->value),
+            ], MrpPlanStatus::cases()),
+        ]]);
     }
 
     public function show(MrpPlan $mrpPlan): MrpPlanResource

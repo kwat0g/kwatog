@@ -128,7 +128,7 @@ class ArDunningService
             'title'   => 'AR Escalation — Highest dunning tier reached',
             'message' => "Invoice {$invoice->invoice_number} for ".
                 ($invoice->customer?->name ?? 'unknown customer').
-                " is {$daysOverdue} days overdue (₱".number_format((float) $invoice->balance, 2).").",
+                " is {$daysOverdue} days overdue (".app(\App\Common\Services\CurrencyDisplayService::class)->format($invoice->balance).").",
             'link_to' => '/accounting/invoices',
         ]);
     }

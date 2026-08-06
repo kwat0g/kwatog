@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Modules\Forecasting\Controllers;
 
+use App\Common\Services\SettingsService;
 use Illuminate\Routing\Controller;
 use App\Modules\CRM\Models\Product;
 use App\Modules\Forecasting\Models\DemandForecast;
+use App\Modules\Forecasting\Enums\DemandSource;
 use App\Modules\Forecasting\Resources\DemandForecastResource;
 use App\Modules\Forecasting\Services\ForecastingService;
 use Illuminate\Http\JsonResponse;
@@ -15,7 +17,25 @@ use Illuminate\Support\Carbon;
 
 class DemandForecastController extends Controller
 {
-    public function __construct(private readonly ForecastingService $service) {}
+    public function __construct(
+        private readonly ForecastingService $service,
+        private readonly SettingsService $settings,
+    ) {}
+
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'methods' => array_values(array_filter((array) $this->settings->get('forecasting.methods', []), static fn ($method): bool => is_array($method) && isset($method['value'], $method['label']))),
+            'demand_sources' => array_map(
+                static fn (DemandSource $source): array => ['value' => $source->value, 'label' => $source->label()],
+                DemandSource::cases(),
+            ),
+            'accuracy_policy' => [
+                'excellent_mape' => $this->settings->requiredFloat('forecasting.accuracy.excellent_mape', 0),
+                'acceptable_mape' => $this->settings->requiredFloat('forecasting.accuracy.acceptable_mape', 0),
+            ],
+        ]]);
+    }
 
     /**
      * GET /forecasting/demand-forecasts
@@ -46,6 +66,23 @@ class DemandForecastController extends Controller
         return DemandForecastResource::collection($paginated)->response();
     }
 
+    public function settings(): JsonResponse
+    {
+        $minHorizon = $this->settings->requiredInt('forecasting.minimum_horizon_months', 1, 36);
+        $maxHorizon = $this->settings->requiredInt('forecasting.maximum_horizon_months', $minHorizon, 36);
+        $minLookback = $this->settings->requiredInt('forecasting.minimum_lookback_months', 1, 36);
+        $maxLookback = $this->settings->requiredInt('forecasting.maximum_lookback_months', $minLookback, 60);
+        return response()->json(['data' => [
+            'default_history_months' => $this->settings->requiredInt('forecasting.default_history_months', 1, 36),
+            'default_horizon_months' => $this->settings->requiredInt('forecasting.default_horizon_months', $minHorizon, $maxHorizon),
+            'default_lookback_months' => $this->settings->requiredInt('forecasting.default_lookback_months', $minLookback, $maxLookback),
+            'minimum_horizon_months' => $minHorizon,
+            'maximum_horizon_months' => $maxHorizon,
+            'minimum_lookback_months' => $minLookback,
+            'maximum_lookback_months' => $maxLookback,
+        ]]);
+    }
+
     /**
      * GET /forecasting/demand-forecasts/historical
      * Returns the last N months of confirmed demand for one product/customer.
@@ -67,7 +104,7 @@ class DemandForecastController extends Controller
         }
 
         $now    = Carbon::now();
-        $months = (int) ($data['months_back'] ?? 12);
+        $months = (int) ($data['months_back'] ?? $this->settings->requiredInt('forecasting.default_history_months', 3, 36));
 
         $series = $this->service->historicalDemand(
             $productId,
@@ -86,12 +123,16 @@ class DemandForecastController extends Controller
      */
     public function recompute(Request $request): JsonResponse
     {
+        $minHorizon = $this->settings->requiredInt('forecasting.minimum_horizon_months', 1, 36);
+        $maxHorizon = $this->settings->requiredInt('forecasting.maximum_horizon_months', $minHorizon, 36);
+        $minLookback = $this->settings->requiredInt('forecasting.minimum_lookback_months', 1, 36);
+        $maxLookback = $this->settings->requiredInt('forecasting.maximum_lookback_months', $minLookback, 60);
         $data = $request->validate([
             'product_id'      => ['required', 'string'],
             'customer_id'     => ['nullable', 'string'],
             'method'          => ['required', 'in:moving_avg,weighted_avg'],
-            'horizon_months'  => ['nullable', 'integer', 'min:1', 'max:12'],
-            'lookback_months' => ['nullable', 'integer', 'min:3', 'max:24'],
+            'horizon_months'  => ['nullable', 'integer', "min:{$minHorizon}", "max:{$maxHorizon}"],
+            'lookback_months' => ['nullable', 'integer', "min:{$minLookback}", "max:{$maxLookback}"],
         ]);
 
         $productId = Product::tryDecodeHash($data['product_id']);
@@ -102,8 +143,8 @@ class DemandForecastController extends Controller
             $customerId = \App\Modules\Accounting\Models\Customer::tryDecodeHash($data['customer_id']);
         }
 
-        $horizon  = $data['horizon_months']  ?? 3;
-        $lookback = $data['lookback_months'] ?? 6;
+        $horizon  = (int) ($data['horizon_months'] ?? $this->settings->requiredInt('forecasting.default_horizon_months', $minHorizon, $maxHorizon));
+        $lookback = (int) ($data['lookback_months'] ?? $this->settings->requiredInt('forecasting.default_lookback_months', $minLookback, $maxLookback));
 
         $start = Carbon::now()->startOfMonth()->addMonthNoOverflow();
         $written = [];

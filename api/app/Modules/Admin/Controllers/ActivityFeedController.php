@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Admin\Controllers;
 
 use App\Common\Services\ActivityFeedService;
+use App\Modules\Admin\Enums\ActivityType;
+use App\Modules\Admin\Enums\ActivitySeverity;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -17,11 +19,19 @@ class ActivityFeedController
 {
     public function __construct(private readonly ActivityFeedService $service) {}
 
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'types' => array_map(static fn (ActivityType $type): array => ['value' => $type->value, 'label' => $type->label()], ActivityType::cases()),
+            'severities' => array_map(static fn (ActivitySeverity $severity): array => ['value' => $severity->value, 'label' => $severity->label()], ActivitySeverity::cases()),
+        ]]);
+    }
+
     public function index(Request $request): JsonResponse
     {
         $request->validate([
             'type'      => ['nullable', 'string', 'max:30'],
-            'severity'  => ['nullable', 'string', 'in:info,success,warning,danger'],
+            'severity'  => ['nullable', \Illuminate\Validation\Rule::enum(ActivitySeverity::class)],
             'actor_user_id' => ['nullable', 'string'],
             'from'      => ['nullable', 'date'],
             'to'        => ['nullable', 'date', 'after_or_equal:from'],
@@ -36,6 +46,7 @@ class ActivityFeedController
             'data' => $page->getCollection()->map(fn ($e) => [
                 'id'           => $e->hash_id,
                 'type'         => $e->type,
+                'type_label'   => ActivityType::tryFrom((string) $e->type)?->label() ?? ucfirst((string) $e->type),
                 'action'       => $e->action,
                 'actor'        => $e->actor ? [
                     'id'    => app('hashids')->encode($e->actor->id),

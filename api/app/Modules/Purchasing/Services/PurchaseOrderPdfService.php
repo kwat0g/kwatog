@@ -25,9 +25,9 @@ class PurchaseOrderPdfService
             'approvalRecords.approver:id,name',
         ]);
         $company = [
-            'name'    => $this->settings->requiredString('company.legal_name'),
-            'address' => $this->settings->requiredString('company.address'),
-            'tin'     => $this->settings->requiredString('company.tin'),
+            'name'    => $this->setting('company.legal_name', 'PHILIPPINE OGAMI CORPORATION'),
+            'address' => $this->setting('company.address', 'First Cavite Industrial Estate (FCIE), Dasmariñas, Cavite, Philippines'),
+            'tin'     => $this->setting('company.tin', '000-123-456-0000'),
         ];
         $pdf = Pdf::loadView('pdf.purchase-order', [
             'po'        => $po,
@@ -41,5 +41,15 @@ class PurchaseOrderPdfService
             'Content-Type'        => 'application/pdf',
             'Content-Disposition' => 'inline; filename="'.$filename.'"',
         ]);
+    }
+
+    private function setting(string $key, string $default): string
+    {
+        try {
+            $val = $this->settings->get($key);
+            return is_string($val) && trim($val) !== '' ? $val : $default;
+        } catch (\Throwable) {
+            return $default;
+        }
     }
 }

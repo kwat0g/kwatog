@@ -19,6 +19,7 @@ Route::middleware(['auth:sanctum', 'feature:purchasing'])->prefix('purchasing')-
 
     /* ─── Purchase Requests ─── */
     Route::get('/purchase-requests',       [PurchaseRequestController::class, 'index'])->middleware('permission:purchasing.view');
+    Route::get('/purchase-requests/options', [PurchaseRequestController::class, 'options'])->middleware('permission:purchasing.view');
     // Static routes (no {purchaseRequest} param) must come BEFORE the wildcard.
     Route::get('/purchase-requests/pending-count', [PurchaseRequestController::class, 'pendingCount'])->middleware('permission:purchasing.pr.approve');
     Route::post('/purchase-requests/bulk-approve', [PurchaseRequestController::class, 'bulkApprove'])->middleware('permission:purchasing.pr.approve');
@@ -28,6 +29,7 @@ Route::middleware(['auth:sanctum', 'feature:purchasing'])->prefix('purchasing')-
     Route::post('/purchase-requests',      [PurchaseRequestController::class, 'store'])->middleware('permission:purchasing.pr.create');
     Route::put('/purchase-requests/{purchaseRequest}', [PurchaseRequestController::class, 'update'])->middleware('permission:purchasing.pr.create');
     Route::delete('/purchase-requests/{purchaseRequest}', [PurchaseRequestController::class, 'destroy'])->middleware('permission:purchasing.pr.create');
+    Route::patch('/purchase-requests/{purchaseRequest}/restore', [PurchaseRequestController::class, 'restore'])->middleware('permission:purchasing.pr.manage');
 
     Route::patch('/purchase-requests/{purchaseRequest}/submit',  [PurchaseRequestController::class, 'submit'])->middleware('permission:purchasing.pr.create');
     Route::patch('/purchase-requests/{purchaseRequest}/acknowledge-budget', [PurchaseRequestController::class, 'acknowledgeBudget'])->middleware('permission:budgeting.approve');
@@ -43,13 +45,16 @@ Route::middleware(['auth:sanctum', 'feature:purchasing'])->prefix('purchasing')-
     Route::post('/pr-templates',                    [PurchaseRequestTemplateController::class, 'store'])->middleware('permission:purchasing.pr.create');
     Route::put('/pr-templates/{template}',           [PurchaseRequestTemplateController::class, 'update'])->middleware('permission:purchasing.pr.create');
     Route::delete('/pr-templates/{template}',        [PurchaseRequestTemplateController::class, 'destroy'])->middleware('permission:purchasing.pr.create');
+    Route::patch('/pr-templates/{template}/restore',  [PurchaseRequestTemplateController::class, 'restore'])->middleware('permission:purchasing.pr.manage');
 
     /* ─── Purchase Orders ─── */
+    Route::get('/purchase-orders/options', [PurchaseOrderController::class, 'options'])->middleware('permission:purchasing.view');
     Route::get('/purchase-orders',       [PurchaseOrderController::class, 'index'])->middleware('permission:purchasing.view');
     Route::get('/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'show'])->middleware('permission:purchasing.view');
     Route::post('/purchase-orders',      [PurchaseOrderController::class, 'store'])->middleware('permission:purchasing.po.create');
     Route::put('/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'update'])->middleware('permission:purchasing.po.create');
     Route::delete('/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'destroy'])->middleware('permission:purchasing.po.create');
+    Route::patch('/purchase-orders/{purchaseOrder}/restore', [PurchaseOrderController::class, 'restore'])->middleware('permission:purchasing.po.manage');
     Route::patch('/purchase-orders/{purchaseOrder}/submit',  [PurchaseOrderController::class, 'submit'])->middleware('permission:purchasing.po.create');
     Route::patch('/purchase-orders/{purchaseOrder}/acknowledge-budget', [PurchaseOrderController::class, 'acknowledgeBudget'])->middleware('permission:budgeting.approve');
     Route::patch('/purchase-orders/{purchaseOrder}/approve', [PurchaseOrderController::class, 'approve'])->middleware('permission:purchasing.po.approve');
@@ -64,6 +69,7 @@ Route::middleware(['auth:sanctum', 'feature:purchasing'])->prefix('purchasing')-
     Route::post('/approved-suppliers',      [ApprovedSupplierController::class, 'store'])->middleware('permission:purchasing.po.create');
     Route::put('/approved-suppliers/{approvedSupplier}', [ApprovedSupplierController::class, 'update'])->middleware('permission:purchasing.po.create');
     Route::delete('/approved-suppliers/{approvedSupplier}', [ApprovedSupplierController::class, 'destroy'])->middleware('permission:purchasing.po.create');
+    Route::patch('/approved-suppliers/{approvedSupplier}/restore', [ApprovedSupplierController::class, 'restore'])->middleware('permission:purchasing.suppliers.manage');
 
     /* ─── 3-way match ─── */
     Route::get('/three-way-match/{bill}',   [ThreeWayMatchController::class, 'show'])->middleware('permission:accounting.bills.view');

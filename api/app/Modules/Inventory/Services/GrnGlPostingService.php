@@ -81,8 +81,8 @@ class GrnGlPostingService
             $unitCost = (string) $row->unit_cost;
             $value    = Money::round2(bcmul($accepted, $unitCost, 6));
 
-            $item = Item::query()->whereKey($row->item_id)->first();
-            $code = $item ? $this->inventoryAccountCode($item) : '1200';
+            $item = Item::query()->whereKey($row->item_id)->firstOrFail();
+            $code = $this->inventoryAccountCode($item);
 
             $byAccount[$code] = isset($byAccount[$code])
                 ? Money::add($byAccount[$code], $value)
@@ -98,34 +98,25 @@ class GrnGlPostingService
         }
 
         // Lookup account ids (DR rows + GRNI).
-        $codes = array_unique(array_merge(array_keys($byAccount), ['2110']));
+        $grniCode = $this->settings->requiredString('accounting.accounts.grni_code');
+        $codes = array_unique(array_merge(array_keys($byAccount), [$grniCode]));
         $accountIds = DB::table('accounts')->whereIn('code', $codes)->pluck('id', 'code');
 
-        if (! isset($accountIds['2110'])) {
-            Log::error('GrnGlPostingService: GRNI account 2110 not found in COA', [
+        if (! isset($accountIds[$grniCode])) {
+            Log::error('GrnGlPostingService: configured GRNI account not found in COA', [
                 'grn_id' => $grn->id,
             ]);
-            throw new RuntimeException('GRNI clearing account 2110 missing from chart of accounts.');
+            throw new RuntimeException("GRNI clearing account {$grniCode} missing from chart of accounts.");
         }
 
         $lines = [];
         foreach ($byAccount as $code => $amount) {
             if (! isset($accountIds[$code])) {
-                Log::warning('GrnGlPostingService: inventory account missing; defaulting to 1200', [
+                Log::error('GrnGlPostingService: configured inventory account missing', [
                     'grn_id' => $grn->id,
                     'missing_code' => $code,
                 ]);
-                $fallback = $accountIds['1200'] ?? null;
-                if (! $fallback) {
-                    throw new BusinessRuleException("Inventory account {$code} missing and 1200 fallback also missing.");
-                }
-                $lines[] = [
-                    'account_id'  => $fallback,
-                    'debit'       => $amount,
-                    'credit'      => '0.00',
-                    'description' => "GRN {$grn->grn_number} — inventory receipt",
-                ];
-                continue;
+                throw new BusinessRuleException("Inventory account {$code} missing from chart of accounts.");
             }
             $lines[] = [
                 'account_id'  => $accountIds[$code],
@@ -135,7 +126,7 @@ class GrnGlPostingService
             ];
         }
         $lines[] = [
-            'account_id'  => $accountIds['2110'],
+            'account_id'  => $accountIds[$grniCode],
             'debit'       => '0.00',
             'credit'      => $total,
             'description' => "GRN {$grn->grn_number} — GRNI clearing",
@@ -171,21 +162,17 @@ class GrnGlPostingService
         });
     }
 
-    /**
-     * Pragmatic switch — keep this in sync with the COA. We deliberately
-     * avoid a configurable mapping table; the four item_type values map
-     * 1:1 onto the four inventory accounts.
-     */
-    private function inventoryAccountCode(Item $item): string
+    /** Resolve the configured inventory account for an item type. */
+    public function inventoryAccountCode(Item $item): string
     {
         $type = $item->item_type instanceof ItemType ? $item->item_type->value : (string) $item->item_type;
 
         return match ($type) {
-            ItemType::RawMaterial->value  => '1200',
-            ItemType::FinishedGood->value => '1210',
-            ItemType::Packaging->value    => '1220',
-            ItemType::SparePart->value    => '1230',
-            default => '1200',
+            ItemType::RawMaterial->value  => $this->settings->requiredString('accounting.accounts.inventory_raw_material_code'),
+            ItemType::FinishedGood->value => $this->settings->requiredString('accounting.accounts.inventory_finished_goods_code'),
+            ItemType::Packaging->value    => $this->settings->requiredString('accounting.accounts.inventory_packaging_code'),
+            ItemType::SparePart->value    => $this->settings->requiredString('accounting.accounts.inventory_spare_parts_code'),
+            default => throw new BusinessRuleException("No inventory account configured for item type {$type}"),
         };
     }
 }

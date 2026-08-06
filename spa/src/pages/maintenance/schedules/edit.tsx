@@ -16,108 +16,108 @@ import { onFormInvalid } from '@/lib/formErrors';
 import type { ApiValidationError } from '@/types';
 
 const schema = z.object({
-  description: z.string().min(1).max(200),
-  interval_type: z.string().min(1, 'Interval type required'),
-  interval_value: z.coerce.number().int().min(1),
-  is_active: z.string(),
+ description: z.string().min(1).max(200),
+ interval_type: z.string().min(1, 'Interval type required'),
+ interval_value: z.coerce.number().int().min(1),
+ is_active: z.string(),
 });
 type FormValues = z.infer<typeof schema>;
 
 export default function EditMaintenanceSchedulePage() {
-  const { id = '' } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-  const qc = useQueryClient();
-  const { data: options } = useQuery({ queryKey: ['maintenance', 'schedule-options'], queryFn: () => schedulesApi.options() });
+ const { id = '' } = useParams<{ id: string }>();
+ const navigate = useNavigate();
+ const qc = useQueryClient();
+ const { data: options } = useQuery({ queryKey: ['maintenance', 'schedule-options'], queryFn: () => schedulesApi.options() });
 
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['maintenance', 'schedules', id],
-    queryFn: () => schedulesApi.show(id),
-    enabled: !!id,
-  });
+ const { data, isLoading, isError, refetch } = useQuery({
+ queryKey: ['maintenance', 'schedules', id],
+ queryFn: () => schedulesApi.show(id),
+ enabled: !!id,
+ });
 
-  const { register, handleSubmit, setError, formState: { errors } } = useForm<FormValues>({
-    resolver: zodResolver(schema),
-    values: data ? {
-      description: data.description,
-      interval_type: data.interval_type,
-      interval_value: data.interval_value,
-      is_active: data.is_active ? 'true' : 'false',
-    } : undefined,
-  });
+ const { register, handleSubmit, setError, formState: { errors } } = useForm<FormValues>({
+ resolver: zodResolver(schema),
+ values: data ? {
+ description: data.description,
+ interval_type: data.interval_type,
+ interval_value: data.interval_value,
+ is_active: data.is_active ? 'true' : 'false',
+ } : undefined,
+ });
 
-  const mutation = useMutation({
-    mutationFn: (values: FormValues) => schedulesApi.update(id, {
-      ...values,
-      is_active: values.is_active === 'true',
-    } as Parameters<typeof schedulesApi.update>[1]),
-    onSuccess: (schedule) => {
-      qc.invalidateQueries({ queryKey: ['maintenance', 'schedules'] });
-      toast.success('Schedule updated.');
-      navigate(`/maintenance/schedules/${schedule.id}`);
-    },
-    onError: (err: AxiosError<ApiValidationError>) => {
-      if (err.response?.status === 422 && err.response.data.errors) {
-        Object.entries(err.response.data.errors).forEach(([k, v]) =>
-          setError(k as keyof FormValues, { type: 'server', message: v[0] }));
-        toast.error(err.response?.data?.message || 'Validation failed.');
-      } else {
-        toast.error('Failed to update schedule.');
-      }
-    },
-  });
+ const mutation = useMutation({
+ mutationFn: (values: FormValues) => schedulesApi.update(id, {
+ ...values,
+ is_active: values.is_active === 'true',
+ } as Parameters<typeof schedulesApi.update>[1]),
+ onSuccess: (schedule) => {
+ qc.invalidateQueries({ queryKey: ['maintenance', 'schedules'] });
+ toast.success('Schedule updated.');
+ navigate(`/maintenance/schedules/${schedule.id}`);
+ },
+ onError: (err: AxiosError<ApiValidationError>) => {
+ if (err.response?.status === 422 && err.response.data.errors) {
+ Object.entries(err.response.data.errors).forEach(([k, v]) =>
+ setError(k as keyof FormValues, { type: 'server', message: v[0] }));
+ toast.error(err.response?.data?.message || 'Validation failed.');
+ } else {
+ toast.error('Failed to update schedule.');
+ }
+ },
+ });
 
-  if (isLoading) return <SkeletonDetail />;
-  if (isError || !data) return (
-    <EmptyState icon="alert-circle" title="Failed to load schedule"
-      action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />
-  );
+ if (isLoading) return <SkeletonDetail />;
+ if (isError || !data) return (
+ <EmptyState icon="alert-circle" title="Failed to load schedule"
+ action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />
+ );
 
-  return (
-    <div>
-      <PageHeader
-        title="Edit schedule"
-        backTo={`/maintenance/schedules/${id}`}
-        backLabel="Schedule"
-        breadcrumbs={[
-          { label: 'Maintenance', href: '/maintenance' },
-          { label: 'Schedules', href: '/maintenance/schedules' },
-          { label: data.description, href: `/maintenance/schedules/${id}` },
-          { label: 'Edit' },
-        ]}
-      />
-      <form onSubmit={handleSubmit((v) => mutation.mutate(v), onFormInvalid<FormValues>())} className="max-w-2xl mx-auto px-5 py-4">
-        <div className="mb-6 p-3 bg-subtle rounded-md text-sm">
-          <span className="text-muted text-xs uppercase tracking-wider font-medium mr-2">Target</span>
-          <span className="font-mono">{data.maintainable?.code ?? '—'}</span>
-          <span className="ml-2 text-muted">{data.maintainable?.name}</span>
-          <span className="ml-2">({data.maintainable_type})</span>
-          <span className="ml-3 text-xs text-muted">(target cannot be changed)</span>
-        </div>
+ return (
+ <div>
+ <PageHeader
+ title="Edit schedule"
+ backTo={`/maintenance/schedules/${id}`}
+ backLabel="Schedule"
+ breadcrumbs={[
+ { label: 'Maintenance', href: '/maintenance' },
+ { label: 'Schedules', href: '/maintenance/schedules' },
+ { label: data.description, href: `/maintenance/schedules/${id}` },
+ { label: 'Edit' },
+ ]}
+ />
+ <form onSubmit={handleSubmit((v) => mutation.mutate(v), onFormInvalid<FormValues>())} className="max-w-2xl mx-auto px-5 py-4">
+ <div className="mb-6 p-3 bg-subtle rounded-md text-sm">
+ <span className="text-muted text-xs uppercase tracking-wider font-medium mr-2">Target</span>
+ <span className="font-mono">{data.maintainable?.code ?? '—'}</span>
+ <span className="ml-2 text-muted">{data.maintainable?.name}</span>
+ <span className="ml-2">({data.maintainable_type})</span>
+ <span className="ml-3 text-xs text-muted">(target cannot be changed)</span>
+ </div>
 
-        <fieldset className="mb-6">
-          <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">Schedule</legend>
-          <Input label="Description" {...register('description')} error={errors.description?.message} required />
-          <div className="grid grid-cols-2 gap-3 mt-3">
-            <Select label="Interval type" {...register('interval_type')} error={errors.interval_type?.message} required>
-              {(options?.interval_types ?? []).map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
-            </Select>
-            <Input label="Interval value" type="number" {...register('interval_value')} error={errors.interval_value?.message} required />
-          </div>
-          <div className="mt-3">
-            <Select label="Status" {...register('is_active')} error={errors.is_active?.message}>
-              <option value="true">Active</option>
-              <option value="false">Disabled</option>
-            </Select>
-          </div>
-        </fieldset>
+ <fieldset className="mb-6">
+ <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">Schedule</legend>
+ <Input label="Description" {...register('description')} error={errors.description?.message} required />
+ <div className="grid grid-cols-2 gap-3 mt-3">
+ <Select label="Interval type" {...register('interval_type')} error={errors.interval_type?.message} required>
+ {(options?.interval_types ?? []).map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
+ </Select>
+ <Input label="Interval value" type="number" {...register('interval_value')} error={errors.interval_value?.message} required />
+ </div>
+ <div className="mt-3">
+ <Select label="Status" {...register('is_active')} error={errors.is_active?.message}>
+ <option value="true">Active</option>
+ <option value="false">Disabled</option>
+ </Select>
+ </div>
+ </fieldset>
 
-        <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
-          <Button type="button" variant="secondary" onClick={() => navigate(`/maintenance/schedules/${id}`)}>Cancel</Button>
-          <Button type="submit" variant="primary" loading={mutation.isPending}>
-            {mutation.isPending ? 'Saving…' : 'Save changes'}
-          </Button>
-        </div>
-      </form>
-    </div>
-  );
+ <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+ <Button type="button" variant="secondary" onClick={() => navigate(`/maintenance/schedules/${id}`)}>Cancel</Button>
+ <Button type="submit" variant="primary" loading={mutation.isPending}>
+ {mutation.isPending ? 'Saving…' : 'Save changes'}
+ </Button>
+ </div>
+ </form>
+ </div>
+ );
 }

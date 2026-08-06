@@ -109,7 +109,7 @@ export function MarqueeSection() {
             <li
               key={`${name}-${i}`}
               aria-hidden={i >= partners.length}
-              className="select-none font-display text-3xl font-medium tracking-tight text-landing-muted transition-colors duration-300 hover:text-landing-text sm:text-4xl"
+              className="select-none font-display text-4xl font-semibold tracking-[-0.02em] text-landing-muted transition-all duration-300 hover:text-landing-text hover:scale-105 sm:text-5xl"
             >
               {name}
             </li>

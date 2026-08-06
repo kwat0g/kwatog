@@ -18,183 +18,183 @@ import type { AxiosError } from 'axios';
 import type { CreateNcrTemplateData } from '@/types/quality';
 
 type FormValues = {
-  name: string;
-  source: string;
-  severity: string;
-  product_id: string;
-  defect_description: string;
-  notes: string;
+ name: string;
+ source: string;
+ severity: string;
+ product_id: string;
+ defect_description: string;
+ notes: string;
 };
 
 export default function NcrTemplateFormPage() {
-  const { id } = useParams<{ id: string }>();
-  const isEdit = !!id;
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
+ const { id } = useParams<{ id: string }>();
+ const isEdit = !!id;
+ const navigate = useNavigate();
+ const queryClient = useQueryClient();
 
-  const [form, setForm] = useState<FormValues>({
-    name: '',
-    source: '',
-    severity: '',
-    product_id: '',
-    defect_description: '',
-    notes: '',
-  });
+ const [form, setForm] = useState<FormValues>({
+ name: '',
+ source: '',
+ severity: '',
+ product_id: '',
+ defect_description: '',
+ notes: '',
+ });
 
-  const { data: templateOptions } = useQuery({
-    queryKey: ['quality', 'ncr-templates', 'options'],
-    queryFn: () => ncrTemplatesApi.options(),
-  });
+ const { data: templateOptions } = useQuery({
+ queryKey: ['quality', 'ncr-templates', 'options'],
+ queryFn: () => ncrTemplatesApi.options(),
+ });
 
-  // Load existing template for edit mode
-  const { data: existing, isLoading: loadingExisting } = useQuery({
-    queryKey: ['quality', 'ncr-templates', id],
-    queryFn: () => ncrTemplatesApi.show(id!),
-    enabled: isEdit,
-  });
+ // Load existing template for edit mode
+ const { data: existing, isLoading: loadingExisting } = useQuery({
+ queryKey: ['quality', 'ncr-templates', id],
+ queryFn: () => ncrTemplatesApi.show(id!),
+ enabled: isEdit,
+ });
 
-  useEffect(() => {
-    if (existing) {
-      setForm({
-        name: existing.name,
-        source: existing.source,
-        severity: existing.severity,
-        product_id: existing.product?.id ?? '',
-        defect_description: existing.defect_description ?? '',
-        notes: existing.notes ?? '',
-      });
-    }
-  }, [existing]);
+ useEffect(() => {
+ if (existing) {
+ setForm({
+ name: existing.name,
+ source: existing.source,
+ severity: existing.severity,
+ product_id: existing.product?.id ?? '',
+ defect_description: existing.defect_description ?? '',
+ notes: existing.notes ?? '',
+ });
+ }
+ }, [existing]);
 
-  const products = useQuery({
-    queryKey: ['inventory', 'items', { per_page: 200, item_type: 'product' }],
-    queryFn: () => itemsApi.list({ per_page: 200, item_type: 'product' }),
-  });
+ const products = useQuery({
+ queryKey: ['inventory', 'items', { per_page: 200, item_type: 'product' }],
+ queryFn: () => itemsApi.list({ per_page: 200, item_type: 'product' }),
+ });
 
-  const createMut = useMutation({
-    mutationFn: (data: CreateNcrTemplateData) =>
-      isEdit
-        ? ncrTemplatesApi.update(id!, data)
-        : ncrTemplatesApi.create(data),
-    onSuccess: () => {
-      toast.success(isEdit ? 'Template updated' : 'Template created');
-      queryClient.invalidateQueries({ queryKey: ['quality', 'ncr-templates'] });
-      navigate('/quality/ncr-templates');
-    },
-    onError: (e: AxiosError<{ message?: string }>) => {
-      toast.error(e.response?.data?.message ?? 'Failed to save template');
-    },
-  });
+ const createMut = useMutation({
+ mutationFn: (data: CreateNcrTemplateData) =>
+ isEdit
+ ? ncrTemplatesApi.update(id!, data)
+ : ncrTemplatesApi.create(data),
+ onSuccess: () => {
+ toast.success(isEdit ? 'Template updated' : 'Template created');
+ queryClient.invalidateQueries({ queryKey: ['quality', 'ncr-templates'] });
+ navigate('/quality/ncr-templates');
+ },
+ onError: (e: AxiosError<{ message?: string }>) => {
+ toast.error(e.response?.data?.message ?? 'Failed to save template');
+ },
+ });
 
-  const set = (key: keyof FormValues, value: string) =>
-    setForm((f) => ({ ...f, [key]: value }));
+ const set = (key: keyof FormValues, value: string) =>
+ setForm((f) => ({ ...f, [key]: value }));
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    createMut.mutate({
-      name: form.name,
-      source: form.source as CreateNcrTemplateData['source'],
-      severity: form.severity as CreateNcrTemplateData['severity'],
-      product_id: form.product_id || null,
-      defect_description: form.defect_description || undefined,
-      notes: form.notes || undefined,
-    });
-  };
+ const handleSubmit = (e: React.FormEvent) => {
+ e.preventDefault();
+ createMut.mutate({
+ name: form.name,
+ source: form.source as CreateNcrTemplateData['source'],
+ severity: form.severity as CreateNcrTemplateData['severity'],
+ product_id: form.product_id || null,
+ defect_description: form.defect_description || undefined,
+ notes: form.notes || undefined,
+ });
+ };
 
-  if (isEdit && loadingExisting) {
-    return <SkeletonForm />;
-  }
+ if (isEdit && loadingExisting) {
+ return <SkeletonForm />;
+ }
 
-  const isPending = createMut.isPending;
+ const isPending = createMut.isPending;
 
-  return (
-    <div>
-      <PageHeader
-        title={isEdit ? 'Edit NCR template' : 'New NCR template'}
-        backTo="/quality/ncr-templates"
-        backLabel="NCR templates"
-        breadcrumbs={[{ label: 'Quality', href: '/quality' }, { label: 'NCR templates', href: '/quality/ncr-templates' }, { label: isEdit ? 'Edit NCR template' : 'New NCR template' }]}
-      />
-      <form onSubmit={handleSubmit} className="px-5 py-4">
-        <div className="space-y-4 max-w-3xl">
-          <Panel title="Template details">
-            <div className="grid grid-cols-3 gap-3">
-              <Input
-                label="Template name"
-                required
-                value={form.name}
-                onChange={(e) => set('name', e.target.value)}
-                placeholder="Defect description"
-              />
-              <Select
-                label="Source"
-                required
-                value={form.source}
-                onChange={(e) => set('source', e.target.value)}
-              >
-                <option value="">— Select —</option>
-                {(templateOptions?.sources ?? []).map((source) => <option key={source.value} value={source.value}>{source.label}</option>)}
-              </Select>
-              <Select
-                label="Severity"
-                required
-                value={form.severity}
-                onChange={(e) => set('severity', e.target.value)}
-              >
-                <option value="">— Select —</option>
-                {(templateOptions?.severities ?? []).map((severity) => <option key={severity.value} value={severity.value}>{severity.label}</option>)}
-              </Select>
-            </div>
-            <div className="mt-3">
-              <Select
-                label="Product (optional)"
-                value={form.product_id}
-                onChange={(e) => set('product_id', e.target.value)}
-              >
-                <option value="">— None —</option>
-                {products.data?.data.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.code} — {p.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
-          </Panel>
+ return (
+ <div>
+ <PageHeader
+ title={isEdit ? 'Edit NCR template' : 'New NCR template'}
+ backTo="/quality/ncr-templates"
+ backLabel="NCR templates"
+ breadcrumbs={[{ label: 'Quality', href: '/quality' }, { label: 'NCR templates', href: '/quality/ncr-templates' }, { label: isEdit ? 'Edit NCR template' : 'New NCR template' }]}
+ />
+ <form onSubmit={handleSubmit} className="px-5 py-4">
+ <div className="space-y-4 max-w-3xl">
+ <Panel title="Template details">
+ <div className="grid grid-cols-3 gap-3">
+ <Input
+ label="Template name"
+ required
+ value={form.name}
+ onChange={(e) => set('name', e.target.value)}
+ placeholder="Defect description"
+ />
+ <Select
+ label="Source"
+ required
+ value={form.source}
+ onChange={(e) => set('source', e.target.value)}
+ >
+ <option value="">— Select —</option>
+ {(templateOptions?.sources ?? []).map((source) => <option key={source.value} value={source.value}>{source.label}</option>)}
+ </Select>
+ <Select
+ label="Severity"
+ required
+ value={form.severity}
+ onChange={(e) => set('severity', e.target.value)}
+ >
+ <option value="">— Select —</option>
+ {(templateOptions?.severities ?? []).map((severity) => <option key={severity.value} value={severity.value}>{severity.label}</option>)}
+ </Select>
+ </div>
+ <div className="mt-3">
+ <Select
+ label="Product (optional)"
+ value={form.product_id}
+ onChange={(e) => set('product_id', e.target.value)}
+ >
+ <option value="">— None —</option>
+ {products.data?.data.map((p) => (
+ <option key={p.id} value={p.id}>
+ {p.code} — {p.name}
+ </option>
+ ))}
+ </Select>
+ </div>
+ </Panel>
 
-          <Panel title="Defect details">
-            <Textarea
-              label="Defect description"
-              value={form.defect_description}
-              onChange={(e) => set('defect_description', e.target.value)}
-              rows={4}
-              placeholder="Describe the common defect pattern…"
-            />
-            <div className="mt-3">
-              <Textarea
-                label="Internal notes"
-                value={form.notes}
-                onChange={(e) => set('notes', e.target.value)}
-                rows={3}
-                placeholder="Any internal guidance for QC inspectors…"
-              />
-            </div>
-          </Panel>
+ <Panel title="Defect details">
+ <Textarea
+ label="Defect description"
+ value={form.defect_description}
+ onChange={(e) => set('defect_description', e.target.value)}
+ rows={4}
+ placeholder="Describe the common defect pattern…"
+ />
+ <div className="mt-3">
+ <Textarea
+ label="Internal notes"
+ value={form.notes}
+ onChange={(e) => set('notes', e.target.value)}
+ rows={3}
+ placeholder="Any internal guidance for QC inspectors…"
+ />
+ </div>
+ </Panel>
 
-          <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
-            <Button
-              variant="secondary"
-              type="button"
-              onClick={() => navigate('/quality/ncr-templates')}
-              disabled={isPending}
-            >
-              Cancel
-            </Button>
-            <Button variant="primary" type="submit" loading={isPending} disabled={!form.name.trim()}>
-              {isEdit ? 'Update template' : 'Create template'}
-            </Button>
-          </div>
-        </div>
-      </form>
-    </div>
-  );
+ <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+ <Button
+ variant="secondary"
+ type="button"
+ onClick={() => navigate('/quality/ncr-templates')}
+ disabled={isPending}
+ >
+ Cancel
+ </Button>
+ <Button variant="primary" type="submit" loading={isPending} disabled={!form.name.trim()}>
+ {isEdit ? 'Update template' : 'Create template'}
+ </Button>
+ </div>
+ </div>
+ </form>
+ </div>
+ );
 }

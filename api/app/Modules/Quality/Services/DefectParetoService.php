@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Quality\Services;
 
+use App\Common\Services\SettingsService;
 use Carbon\Carbon;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
@@ -17,10 +18,17 @@ use Illuminate\Support\Facades\DB;
  */
 class DefectParetoService
 {
+    public function __construct(private readonly SettingsService $settings) {}
+
+    private function defaultFrom(): Carbon
+    {
+        return now()->subDays($this->settings->requiredInt('quality.dashboard.defect_history_days', 1))->startOfDay();
+    }
+
     /** @return array{from:string,to:string,passed:int,failed:int,total:int,pass_rate:float} */
     public function inspectionSummary(array $filters): array
     {
-        $from = isset($filters['from']) ? Carbon::parse($filters['from'])->startOfDay() : now()->subDays(30)->startOfDay();
+        $from = isset($filters['from']) ? Carbon::parse($filters['from'])->startOfDay() : $this->defaultFrom();
         $to = isset($filters['to']) ? Carbon::parse($filters['to'])->endOfDay() : now()->endOfDay();
 
         $query = DB::table('inspections')
@@ -69,7 +77,7 @@ class DefectParetoService
      */
     public function run(array $filters): array
     {
-        $from = isset($filters['from']) ? Carbon::parse($filters['from'])->startOfDay() : now()->subDays(30)->startOfDay();
+        $from = isset($filters['from']) ? Carbon::parse($filters['from'])->startOfDay() : $this->defaultFrom();
         $to   = isset($filters['to'])   ? Carbon::parse($filters['to'])->endOfDay()     : now()->endOfDay();
         $limit = (int) ($filters['limit'] ?? 10);
 
@@ -135,7 +143,7 @@ class DefectParetoService
      */
     public function inspectionsWithDefect(string $parameterName, array $filters): array
     {
-        $from = isset($filters['from']) ? Carbon::parse($filters['from'])->startOfDay() : now()->subDays(30)->startOfDay();
+        $from = isset($filters['from']) ? Carbon::parse($filters['from'])->startOfDay() : $this->defaultFrom();
         $to   = isset($filters['to'])   ? Carbon::parse($filters['to'])->endOfDay()     : now()->endOfDay();
 
         $q = DB::table('inspections as i')

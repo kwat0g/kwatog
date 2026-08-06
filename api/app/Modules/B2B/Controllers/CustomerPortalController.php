@@ -14,10 +14,12 @@ use App\Modules\B2B\Resources\CustomerDeliveryResource;
 use App\Modules\B2B\Resources\DeliveryScheduleResource;
 use App\Modules\B2B\Services\CustomerPortalService;
 use App\Modules\CRM\Models\CustomerComplaint;
+use App\Modules\CRM\Resources\CustomerComplaintResource;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Resources\SalesOrderResource;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\DeliveryProof;
+use App\Modules\Quality\Enums\NcrSeverity;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -184,7 +186,17 @@ class CustomerPortalController extends Controller
         $user = $this->user($request);
         $complaints = $this->service->complaints($user->customer_id);
 
-        return response()->json(['data' => $complaints]);
+        return response()->json(['data' => CustomerComplaintResource::collection($complaints)]);
+    }
+
+    public function complaintOptions(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'severities' => array_map(
+                static fn (NcrSeverity $severity): array => ['value' => $severity->value, 'label' => ucfirst($severity->value)],
+                NcrSeverity::cases(),
+            ),
+        ]]);
     }
 
     /**

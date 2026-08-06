@@ -14,6 +14,7 @@ use App\Modules\Admin\Resources\LoginHistoryResource;
 use App\Modules\Admin\Services\UserAdminService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Auth\Notifications\WelcomeNotification;
+use App\Modules\Admin\Enums\AdminUserStatus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
@@ -27,6 +28,16 @@ class UserAdminController
     {
         $users = $this->service->list($request->validated());
         return AdminUserListResource::collection($users);
+    }
+
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'statuses' => array_map(
+                static fn (AdminUserStatus $status): array => ['value' => $status->value, 'label' => $status->label()],
+                AdminUserStatus::cases(),
+            ),
+        ]]);
     }
 
     public function show(User $user): AdminUserDetailResource

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\SupplyChain\Resources;
 
+use App\Modules\SupplyChain\Enums\DeliveryStatus;
+use App\Modules\Quality\Enums\InspectionStatus;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -16,6 +18,9 @@ class DeliveryResource extends JsonResource
             'id'                  => $this->hash_id,
             'delivery_number'     => $this->delivery_number,
             'status'              => $this->status instanceof \BackedEnum ? $this->status->value : $this->status,
+            'status_label'        => ($status = $this->status instanceof DeliveryStatus ? $this->status : DeliveryStatus::tryFrom((string) $this->status))?->label() ?? (string) $this->status,
+            'next_status'         => $nextStatus = $this->nextStatus($status),
+            'next_status_label'   => $nextStatus ? DeliveryStatus::from($nextStatus)->label() : null,
             'scheduled_date'      => optional($this->scheduled_date)?->toDateString(),
             'departed_at'         => optional($this->departed_at)?->toISOString(),
             'delivered_at'        => optional($this->delivered_at)?->toISOString(),
@@ -94,12 +99,23 @@ class DeliveryResource extends JsonResource
                     'id'                => $i->inspection->hash_id,
                     'inspection_number' => $i->inspection->inspection_number,
                     'status'            => $i->inspection->status instanceof \BackedEnum ? $i->inspection->status->value : $i->inspection->status,
+                    'status_label'      => InspectionStatus::tryFrom((string) ($i->inspection->status instanceof \BackedEnum ? $i->inspection->status->value : $i->inspection->status))?->label() ?? (string) $i->inspection->status,
                 ] : null,
                 'quantity'            => (float) $i->quantity,
                 'unit_price'          => (string) $i->unit_price,
             ])->all()),
             'created_at'          => optional($this->created_at)?->toISOString(),
             'updated_at'          => optional($this->updated_at)?->toISOString(),
+            'deleted_at'          => optional($this->deleted_at)?->toIso8601String(),
         ];
+    }
+
+    private function nextStatus(?DeliveryStatus $status): ?string
+    {
+        if (! $status) return null;
+        foreach (DeliveryStatus::cases() as $candidate) {
+            if ($status->canTransitionTo($candidate)) return $candidate->value;
+        }
+        return null;
     }
 }

@@ -27,9 +27,9 @@ class SalaryAdjustment extends Model
     protected $fillable = [
         'employee_id',
         'from_basic_monthly_salary',
-        'from_daily_rate',
+        'from_semi_monthly_rate',
         'to_basic_monthly_salary',
-        'to_daily_rate',
+        'to_semi_monthly_rate',
         'effective_date',
         'reason',
         'requested_by',
@@ -38,9 +38,9 @@ class SalaryAdjustment extends Model
 
     protected $casts = [
         'from_basic_monthly_salary' => 'decimal:2',
-        'from_daily_rate'           => 'decimal:2',
+        'from_semi_monthly_rate'           => 'decimal:2',
         'to_basic_monthly_salary'   => 'decimal:2',
-        'to_daily_rate'             => 'decimal:2',
+        'to_semi_monthly_rate'             => 'decimal:2',
         'effective_date'            => 'date',
         'applied_at'                => 'datetime',
         'status'                    => SalaryAdjustmentStatus::class,

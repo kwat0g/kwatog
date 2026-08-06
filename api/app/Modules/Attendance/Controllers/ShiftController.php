@@ -5,15 +5,18 @@ declare(strict_types=1);
 namespace App\Modules\Attendance\Controllers;
 
 use App\Modules\Attendance\Models\Shift;
+use App\Modules\Attendance\Requests\AssignEmployeeShiftRequest;
 use App\Modules\Attendance\Requests\BulkAssignShiftRequest;
 use App\Modules\Attendance\Requests\StoreShiftRequest;
 use App\Modules\Attendance\Requests\UpdateShiftRequest;
+use App\Modules\HR\Models\Employee;
 use App\Modules\Attendance\Resources\ShiftResource;
 use App\Modules\Attendance\Services\ShiftAssignmentService;
 use App\Modules\Attendance\Services\ShiftService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Carbon\Carbon;
 
 class ShiftController
 {
@@ -53,6 +56,12 @@ class ShiftController
         return response()->json(null, 204);
     }
 
+    public function restore(Shift $shift): JsonResponse
+    {
+        $shift->restore();
+        return response()->json(['message' => 'Shift restored.']);
+    }
+
     public function bulkAssign(BulkAssignShiftRequest $request): JsonResponse
     {
         $d = $request->validatedData();
@@ -63,5 +72,26 @@ class ShiftController
             $d['end_date'] ?? null,
         );
         return response()->json(['data' => $result]);
+    }
+
+    public function assignEmployee(AssignEmployeeShiftRequest $request, Employee $employee): JsonResponse
+    {
+        $d = $request->validatedData();
+        $this->assignments->assignToEmployee(
+            $employee->getKey(),
+            $d['shift_id'],
+            $d['effective_date'],
+            $d['end_date'] ?? null,
+        );
+        return response()->json(['data' => ['message' => 'Shift assigned.']]);
+    }
+
+    public function currentEmployeeShift(Employee $employee): ShiftResource|JsonResponse
+    {
+        $shift = $this->assignments->current($employee, Carbon::today());
+        if (! $shift) {
+            return response()->json(['data' => null]);
+        }
+        return new ShiftResource($shift);
     }
 }

@@ -47,11 +47,16 @@ function monitor(page) {
   const httpErrors = [];
 
   page.on('console', (message) => {
-    if (message.type() === 'error') consoleErrors.push(message.text().slice(0, 300));
+    const text = message.text();
+    if (message.type() === 'error' && !/401\s*\(Unauthorized\)/i.test(text)) consoleErrors.push(text.slice(0, 300));
   });
   page.on('pageerror', (error) => consoleErrors.push(`PAGEERROR: ${String(error).slice(0, 300)}`));
   page.on('response', (response) => {
-    if (response.status() >= 400 && response.url().includes('/api/')) {
+    // Unauthenticated public pages intentionally probe /auth/user during
+    // bootstrap; a 401 there is the expected guest result, not a route
+    // failure. Keep recording all other API errors.
+    const isExpectedGuestBootstrap = response.status() === 401 && response.url().endsWith('/api/v1/auth/user');
+    if (response.status() >= 400 && response.url().includes('/api/') && !isExpectedGuestBootstrap) {
       httpErrors.push(`${response.status()} ${response.request().method()} ${response.url()}`);
     }
   });

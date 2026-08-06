@@ -8,6 +8,7 @@ use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockMovement;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 /**
  * Series F — Task F3. Stock Card.
@@ -80,6 +81,7 @@ class StockCardService
                 'id'             => $m->hash_id,
                 'date'           => $m->created_at?->toIso8601String(),
                 'movement_type'  => (string) $m->movement_type,
+                'movement_type_label' => Str::headline((string) $m->movement_type),
                 'reference_type' => (string) ($m->reference_type ?? ''),
                 'reference_id'   => $m->reference_id !== null
                     ? app('hashids')->encode((int) $m->reference_id)

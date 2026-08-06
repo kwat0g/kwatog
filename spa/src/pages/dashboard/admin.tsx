@@ -7,420 +7,420 @@ import { Chip } from '@/components/ui/Chip';
 import { DashboardShell, KpiGrid, PanelRow } from '@/components/dashboard/DashboardShell';
 import { SparkLine } from '@/components/charts/SparkLine';
 import {
-  dashboardsApi,
-  type AdminDashboardData,
-  type AdminSession,
-  type AdminLockedAccount,
-  type AdminFailedLogin,
-  type AdminFailedJob,
-  type AdminAlert,
-  type AdminAuditEvent,
+ dashboardsApi,
+ type AdminDashboardData,
+ type AdminSession,
+ type AdminLockedAccount,
+ type AdminFailedLogin,
+ type AdminFailedJob,
+ type AdminAlert,
+ type AdminAuditEvent,
 } from '@/api/dashboards';
 
 type KpiUnit = 'sessions' | 'accounts' | 'attempts' | 'jobs';
 
 const kpiAccent: Record<KpiUnit, string> = {
-  sessions: 'text-accent',
-  accounts: 'text-danger',
-  attempts: 'text-warning',
-  jobs:     'text-danger',
+ sessions: 'text-accent',
+ accounts: 'text-danger',
+ attempts: 'text-warning',
+ jobs: 'text-danger',
 };
 
 /**
  * System Administrator dashboard — system health and security monitoring.
  *
  * Row 1 — 4 KPI stat cards: active sessions, locked accounts, failed logins 24h, failed jobs
- * Row 2 — Active sessions table  +  Account security summary
+ * Row 2 — Active sessions table + Account security summary
  * Row 3 — Auth events: 24h breakdown + hourly sparkline + recent failures
- * Row 4 — Queue health  +  Open system alerts
+ * Row 4 — Queue health + Open system alerts
  * Row 5 — Recent audit trail (3-column grid)
  */
 export default function AdminDashboard() {
-  const q = useQuery({
-    queryKey: ['dashboard', 'admin'],
-    queryFn: () => dashboardsApi.admin(),
-    refetchInterval: 30_000,
-    placeholderData: (prev) => prev,
-  });
+ const q = useQuery({
+ queryKey: ['dashboard', 'admin'],
+ queryFn: () => dashboardsApi.admin(),
+ refetchInterval: 30_000,
+ placeholderData: (prev) => prev,
+ });
 
-  return (
-    <DashboardShell<AdminDashboardData>
-      title="System Administrator"
-      subtitle="Platform health, security events, and account monitoring."
-      query={q}
-      refreshingQueryKey={['dashboard', 'admin']}
-    >
-      {({ kpis, panels }) => (
-        <>
-          {/* Row 1 — 4 system KPI stat cards */}
-          <KpiGrid count={kpis.length}>
-            {kpis.map((kpi) => (
-              <StatCard
-                key={kpi.label}
-                label={kpi.label}
-                value={<span className={kpiAccent[kpi.unit as KpiUnit] ?? 'text-primary'}>{kpi.value}</span>}
-                helper={kpi.unit}
-              />
-            ))}
-          </KpiGrid>
+ return (
+ <DashboardShell<AdminDashboardData>
+ title="System Administrator"
+ subtitle="Platform health, security events, and account monitoring."
+ query={q}
+ refreshingQueryKey={['dashboard', 'admin']}
+ >
+ {({ kpis, panels }) => (
+ <>
+ {/* Row 1 — 4 system KPI stat cards */}
+ <KpiGrid count={kpis.length}>
+ {kpis.map((kpi) => (
+ <StatCard
+ key={kpi.label}
+ label={kpi.label}
+ value={<span className={kpiAccent[kpi.unit as KpiUnit] ?? 'text-primary'}>{kpi.value}</span>}
+ helper={kpi.unit}
+ />
+ ))}
+ </KpiGrid>
 
-          {/* Row 2 — Active sessions + Account security */}
-          <PanelRow>
-            <ActiveSessionsPanel data={panels.active_sessions} />
-            <AccountSecurityPanel data={panels.account_security} />
-          </PanelRow>
+ {/* Row 2 — Active sessions + Account security */}
+ <PanelRow>
+ <ActiveSessionsPanel data={panels.active_sessions} />
+ <AccountSecurityPanel data={panels.account_security} />
+ </PanelRow>
 
-          {/* Row 3 — Auth events */}
-          <AuthEventsPanel data={panels.auth_events} />
+ {/* Row 3 — Auth events */}
+ <AuthEventsPanel data={panels.auth_events} />
 
-          {/* Row 4 — Queue health + Open alerts */}
-          <PanelRow>
-            <QueueHealthPanel data={panels.queue_health} />
-            <OpenAlertsPanel data={panels.open_alerts} />
-          </PanelRow>
+ {/* Row 4 — Queue health + Open alerts */}
+ <PanelRow>
+ <QueueHealthPanel data={panels.queue_health} />
+ <OpenAlertsPanel data={panels.open_alerts} />
+ </PanelRow>
 
-          {/* Row 5 — Audit trail */}
-          <AuditTrailPanel events={panels.recent_audit} />
-        </>
-      )}
-    </DashboardShell>
-  );
+ {/* Row 5 — Audit trail */}
+ <AuditTrailPanel events={panels.recent_audit} />
+ </>
+ )}
+ </DashboardShell>
+ );
 }
 
 /* ── Active Sessions ─────────────────────────────────────────────────────── */
 
 function ActiveSessionsPanel({
-  data,
+ data,
 }: {
-  data: AdminDashboardData['panels']['active_sessions'];
+ data: AdminDashboardData['panels']['active_sessions'];
 }) {
-  return (
-    <Panel
-      title="Active Sessions"
-      meta={`${data.total} session${data.total !== 1 ? 's' : ''} · ${data.unique_users} user${data.unique_users !== 1 ? 's' : ''}`}
-      actions={<Link className="text-xs text-link hover:underline" to="/admin/users">Manage users →</Link>}
-    >
-      {data.sessions.length === 0 ? (
-        <EmptyState size="compact" icon="monitor" title="Nobody signed in" description={`No active sessions in the last ${data.active_window_minutes ?? 'configured'} minutes.`} />
-      ) : (
-        <div className="space-y-0">
-          {data.sessions.map((s: AdminSession, i: number) => (
-            <div
-              key={i}
-              className="flex items-center gap-2 py-1.5 border-b border-subtle last:border-0 text-sm"
-            >
-              <div className="min-w-0 flex-1">
-                <span className="font-medium truncate block">{s.user}</span>
-                <span className="text-2xs text-muted">{s.role}</span>
-              </div>
-              <div className="text-right shrink-0">
-                <span className="text-xs font-mono tabular-nums text-secondary block">{s.ip}</span>
-                <span className="text-2xs text-muted">{s.device}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </Panel>
-  );
+ return (
+ <Panel
+ title="Active Sessions"
+ meta={`${data.total} session${data.total !== 1 ? 's' : ''} · ${data.unique_users} user${data.unique_users !== 1 ? 's' : ''}`}
+ actions={<Link className="text-xs text-link hover:underline" to="/admin/users">Manage users →</Link>}
+ >
+ {data.sessions.length === 0 ? (
+ <EmptyState size="compact" icon="monitor" title="Nobody signed in" description={`No active sessions in the last ${data.active_window_minutes ?? 'configured'} minutes.`} />
+ ) : (
+ <div className="space-y-0">
+ {data.sessions.map((s: AdminSession, i: number) => (
+ <div
+ key={i}
+ className="flex items-center gap-2 py-1.5 border-b border-subtle last:border-0 text-sm"
+ >
+ <div className="min-w-0 flex-1">
+ <span className="font-medium truncate block">{s.user}</span>
+ <span className="text-2xs text-muted">{s.role}</span>
+ </div>
+ <div className="text-right shrink-0">
+ <span className="text-xs font-mono tabular-nums text-secondary block">{s.ip}</span>
+ <span className="text-2xs text-muted">{s.device}</span>
+ </div>
+ </div>
+ ))}
+ </div>
+ )}
+ </Panel>
+ );
 }
 
 /* ── Account Security ────────────────────────────────────────────────────── */
 
 function AccountSecurityPanel({
-  data,
+ data,
 }: {
-  data: AdminDashboardData['panels']['account_security'];
+ data: AdminDashboardData['panels']['account_security'];
 }) {
-  const stats = [
-    { label: 'Total accounts',        value: data.total,                color: '' },
-    { label: 'Active',                value: data.active,               color: 'text-success' },
-    { label: 'Inactive / disabled',   value: data.inactive,             color: data.inactive > 0 ? 'text-warning' : '' },
-    { label: 'Currently locked',      value: data.locked,               color: data.locked > 0 ? 'text-danger' : '' },
-    { label: 'At risk (≥3 failures)', value: data.at_risk,              color: data.at_risk > 0 ? 'text-warning' : '' },
-    { label: 'Must change password',  value: data.must_change_password, color: data.must_change_password > 0 ? 'text-warning' : '' },
-  ];
+ const stats = [
+ { label: 'Total accounts', value: data.total, color: '' },
+ { label: 'Active', value: data.active, color: 'text-success' },
+ { label: 'Inactive / disabled', value: data.inactive, color: data.inactive > 0 ? 'text-warning' : '' },
+ { label: 'Currently locked', value: data.locked, color: data.locked > 0 ? 'text-danger' : '' },
+ { label: 'At risk (≥3 failures)', value: data.at_risk, color: data.at_risk > 0 ? 'text-warning' : '' },
+ { label: 'Must change password', value: data.must_change_password, color: data.must_change_password > 0 ? 'text-warning' : '' },
+ ];
 
-  return (
-    <Panel
-      title="Account Security"
-      actions={<Link className="text-xs text-link hover:underline" to="/admin/users">All accounts →</Link>}
-    >
-      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 mb-3">
-        {stats.map((s) => (
-          <div key={s.label} className="flex justify-between items-baseline">
-            <span className="text-2xs text-muted truncate mr-2">{s.label}</span>
-            <span className={`text-sm font-mono tabular-nums font-medium shrink-0 ${s.color}`}>
-              {s.value}
-            </span>
-          </div>
-        ))}
-      </div>
+ return (
+ <Panel
+ title="Account Security"
+ actions={<Link className="text-xs text-link hover:underline" to="/admin/users">All accounts →</Link>}
+ >
+ <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 mb-3">
+ {stats.map((s) => (
+ <div key={s.label} className="flex justify-between items-baseline">
+ <span className="text-2xs text-muted truncate mr-2">{s.label}</span>
+ <span className={`text-sm font-mono tabular-nums font-medium shrink-0 ${s.color}`}>
+ {s.value}
+ </span>
+ </div>
+ ))}
+ </div>
 
-      {data.locked_accounts.length > 0 && (
-        <>
-          <div className="text-2xs uppercase tracking-wider text-muted mb-1 pt-2 border-t border-subtle">
-            Locked now
-          </div>
-          <div className="space-y-0">
-            {data.locked_accounts.map((acc: AdminLockedAccount, i: number) => (
-              <div
-                key={i}
-                className="flex items-center justify-between py-1.5 border-b border-subtle last:border-0 text-sm"
-              >
-                <div className="min-w-0 flex-1">
-                  <span className="font-medium truncate block">{acc.name}</span>
-                  <span className="text-2xs text-muted truncate block">{acc.email}</span>
-                </div>
-                <span className="text-xs font-mono tabular-nums text-danger shrink-0 ml-2">
-                  {acc.attempts} attempts
-                </span>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-    </Panel>
-  );
+ {data.locked_accounts.length > 0 && (
+ <>
+ <div className="text-2xs uppercase tracking-wider text-muted mb-1 pt-2 border-t border-subtle">
+ Locked now
+ </div>
+ <div className="space-y-0">
+ {data.locked_accounts.map((acc: AdminLockedAccount, i: number) => (
+ <div
+ key={i}
+ className="flex items-center justify-between py-1.5 border-b border-subtle last:border-0 text-sm"
+ >
+ <div className="min-w-0 flex-1">
+ <span className="font-medium truncate block">{acc.name}</span>
+ <span className="text-2xs text-muted truncate block">{acc.email}</span>
+ </div>
+ <span className="text-xs font-mono tabular-nums text-danger shrink-0 ml-2">
+ {acc.attempts} attempts
+ </span>
+ </div>
+ ))}
+ </div>
+ </>
+ )}
+ </Panel>
+ );
 }
 
 /* ── Auth Events ─────────────────────────────────────────────────────────── */
 
 const AUTH_STATUS_VARIANT: Record<string, 'success' | 'danger' | 'warning' | 'neutral'> = {
-  success:                 'success',
-  failed_credentials:      'danger',
-  failed_locked:           'danger',
-  failed_inactive:         'warning',
-  failed_password_expired: 'warning',
+ success: 'success',
+ failed_credentials: 'danger',
+ failed_locked: 'danger',
+ failed_inactive: 'warning',
+ failed_password_expired: 'warning',
 };
 
 function AuthEventsPanel({
-  data,
+ data,
 }: {
-  data: AdminDashboardData['panels']['auth_events'];
+ data: AdminDashboardData['panels']['auth_events'];
 }) {
-  const breakdown = data.breakdown_24h;
-  const windowHours = data.window_hours;
-  const statusLabels = new Map(data.status_options.map((option) => [option.value, option.label]));
-  const totalAttempts = Object.values(breakdown).reduce((s, n) => s + n, 0);
+ const breakdown = data.breakdown_24h;
+ const windowHours = data.window_hours;
+ const statusLabels = new Map(data.status_options.map((option) => [option.value, option.label]));
+ const totalAttempts = Object.values(breakdown).reduce((s, n) => s + n, 0);
 
-  return (
-    <Panel
-      title={`Authentication Events · Last ${windowHours}h`}
-      meta={`${totalAttempts} total attempts`}
-      actions={<Link className="text-xs text-link hover:underline" to="/admin/audit-logs">View audit log →</Link>}
-    >
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Left: status breakdown + sparkline */}
-        <div>
-          <div className="text-2xs uppercase tracking-wider text-muted mb-2">By status</div>
-          <div className="space-y-1.5">
-            {Object.entries(breakdown).map(([status, count]) => (
-              <div key={status} className="flex items-center justify-between text-sm">
-                <span className="text-muted truncate mr-2">
-                  {statusLabels.get(status) ?? status}
-                </span>
-                <span className={`font-mono tabular-nums font-medium shrink-0 ${
-                  status === 'success' ? 'text-success' : 'text-danger'
-                }`}>
-                  {count}
-                </span>
-              </div>
-            ))}
-            {Object.keys(breakdown).length === 0 && (
-              <p className="text-sm text-muted">No login attempts in the last {windowHours}h.</p>
-            )}
-          </div>
+ return (
+ <Panel
+ title={`Authentication Events · Last ${windowHours}h`}
+ meta={`${totalAttempts} total attempts`}
+ actions={<Link className="text-xs text-link hover:underline" to="/admin/audit-logs">View audit log →</Link>}
+ >
+ <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+ {/* Left: status breakdown + sparkline */}
+ <div>
+ <div className="text-2xs uppercase tracking-wider text-muted mb-2">By status</div>
+ <div className="space-y-1.5">
+ {Object.entries(breakdown).map(([status, count]) => (
+ <div key={status} className="flex items-center justify-between text-sm">
+ <span className="text-muted truncate mr-2">
+ {statusLabels.get(status) ?? status}
+ </span>
+ <span className={`font-mono tabular-nums font-medium shrink-0 ${
+ status === 'success' ? 'text-success' : 'text-danger'
+ }`}>
+ {count}
+ </span>
+ </div>
+ ))}
+ {Object.keys(breakdown).length === 0 && (
+ <p className="text-sm text-muted">No login attempts in the last {windowHours}h.</p>
+ )}
+ </div>
 
-          {data.success_trend_24h.length > 0 && (
-            <div className="mt-4">
-              <div className="text-2xs uppercase tracking-wider text-muted mb-1">Successful / hour</div>
-              <SparkLine
-                data={data.success_trend_24h}
-                color="var(--success)"
-                height={32}
-                width={160}
-              />
-            </div>
-          )}
-        </div>
+ {data.success_trend_24h.length > 0 && (
+ <div className="mt-4">
+ <div className="text-2xs uppercase tracking-wider text-muted mb-1">Successful / hour</div>
+ <SparkLine
+ data={data.success_trend_24h}
+ color="var(--success)"
+ height={32}
+ width={160}
+ />
+ </div>
+ )}
+ </div>
 
-        {/* Right: recent failures */}
-        <div className="lg:col-span-2">
-          <div className="text-2xs uppercase tracking-wider text-muted mb-2">Recent failures</div>
-          {data.recent_failures.length === 0 ? (
-            <EmptyState size="compact" icon="shield" title="No failed logins" description={`No failed sign-in attempts in the last ${windowHours}h.`} />
-          ) : (
-            <div className="space-y-0">
-              {data.recent_failures.map((f: AdminFailedLogin, i: number) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-2 py-1.5 border-b border-subtle last:border-0 text-sm"
-                >
-                  <Chip variant={AUTH_STATUS_VARIANT[f.status] ?? 'neutral'} className="shrink-0">
-                    {statusLabels.get(f.status) ?? f.status}
-                  </Chip>
-                  <span className="truncate flex-1 text-xs">{f.email}</span>
-                  <span className="text-2xs font-mono tabular-nums text-muted shrink-0">{f.ip}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </Panel>
-  );
+ {/* Right: recent failures */}
+ <div className="lg:col-span-2">
+ <div className="text-2xs uppercase tracking-wider text-muted mb-2">Recent failures</div>
+ {data.recent_failures.length === 0 ? (
+ <EmptyState size="compact" icon="shield" title="No failed logins" description={`No failed sign-in attempts in the last ${windowHours}h.`} />
+ ) : (
+ <div className="space-y-0">
+ {data.recent_failures.map((f: AdminFailedLogin, i: number) => (
+ <div
+ key={i}
+ className="flex items-center gap-2 py-1.5 border-b border-subtle last:border-0 text-sm"
+ >
+ <Chip variant={AUTH_STATUS_VARIANT[f.status] ?? 'neutral'} className="shrink-0">
+ {statusLabels.get(f.status) ?? f.status}
+ </Chip>
+ <span className="truncate flex-1 text-xs">{f.email}</span>
+ <span className="text-2xs font-mono tabular-nums text-muted shrink-0">{f.ip}</span>
+ </div>
+ ))}
+ </div>
+ )}
+ </div>
+ </div>
+ </Panel>
+ );
 }
 
 /* ── Queue Health ────────────────────────────────────────────────────────── */
 
 function QueueHealthPanel({
-  data,
+ data,
 }: {
-  data: AdminDashboardData['panels']['queue_health'];
+ data: AdminDashboardData['panels']['queue_health'];
 }) {
-  return (
-    <Panel
-      title="Queue Health"
-      meta={
-        data.healthy ? (
-          <span className="text-success text-xs font-medium">● Healthy</span>
-        ) : (
-          <span className="text-danger text-xs font-medium">● Issues detected</span>
-        )
-      }
-    >
-      <div className="grid grid-cols-2 gap-3 mb-3">
-        <div className="p-3 rounded-md bg-elevated">
-          <div className="text-2xs uppercase tracking-wider text-muted mb-0.5">Pending</div>
-          <div className="text-2xl font-mono tabular-nums font-medium">{data.pending_jobs}</div>
-        </div>
-        <div className="p-3 rounded-md bg-elevated">
-          <div className="text-2xs uppercase tracking-wider text-muted mb-0.5">Failed</div>
-          <div className={`text-2xl font-mono tabular-nums font-medium ${data.failed_jobs > 0 ? 'text-danger' : ''}`}>
-            {data.failed_jobs}
-          </div>
-        </div>
-      </div>
+ return (
+ <Panel
+ title="Queue Health"
+ meta={
+ data.healthy ? (
+ <span className="text-success text-xs font-medium">● Healthy</span>
+ ) : (
+ <span className="text-danger text-xs font-medium">● Issues detected</span>
+ )
+ }
+ >
+ <div className="grid grid-cols-2 gap-3 mb-3">
+ <div className="p-3 rounded-md bg-elevated">
+ <div className="text-2xs uppercase tracking-wider text-muted mb-0.5">Pending</div>
+ <div className="text-2xl font-mono tabular-nums font-medium">{data.pending_jobs}</div>
+ </div>
+ <div className="p-3 rounded-md bg-elevated">
+ <div className="text-2xs uppercase tracking-wider text-muted mb-0.5">Failed</div>
+ <div className={`text-2xl font-mono tabular-nums font-medium ${data.failed_jobs > 0 ? 'text-danger' : ''}`}>
+ {data.failed_jobs}
+ </div>
+ </div>
+ </div>
 
-      {data.recent_failed.length > 0 && (
-        <>
-          <div className="text-2xs uppercase tracking-wider text-muted mb-1">Recent failures</div>
-          <div className="space-y-0">
-            {data.recent_failed.map((job: AdminFailedJob, i: number) => (
-              <div key={i} className="py-1.5 border-b border-subtle last:border-0">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-mono text-xs text-secondary truncate">{job.queue}</span>
-                  <span className="text-2xs text-muted shrink-0 ml-2 font-mono tabular-nums">{job.failed_at}</span>
-                </div>
-                <p className="text-2xs text-muted truncate mt-0.5">{job.error}</p>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
+ {data.recent_failed.length > 0 && (
+ <>
+ <div className="text-2xs uppercase tracking-wider text-muted mb-1">Recent failures</div>
+ <div className="space-y-0">
+ {data.recent_failed.map((job: AdminFailedJob, i: number) => (
+ <div key={i} className="py-1.5 border-b border-subtle last:border-0">
+ <div className="flex items-center justify-between text-sm">
+ <span className="font-mono text-xs text-secondary truncate">{job.queue}</span>
+ <span className="text-2xs text-muted shrink-0 ml-2 font-mono tabular-nums">{job.failed_at}</span>
+ </div>
+ <p className="text-2xs text-muted truncate mt-0.5">{job.error}</p>
+ </div>
+ ))}
+ </div>
+ </>
+ )}
 
-      {data.failed_jobs === 0 && data.pending_jobs === 0 && (
-        <EmptyState size="compact" icon="check-circle" title="Queue is clear" description="No pending or failed jobs." />
-      )}
-    </Panel>
-  );
+ {data.failed_jobs === 0 && data.pending_jobs === 0 && (
+ <EmptyState size="compact" icon="check-circle" title="Queue is clear" description="No pending or failed jobs." />
+ )}
+ </Panel>
+ );
 }
 
 /* ── Open Alerts ─────────────────────────────────────────────────────────── */
 
 const ALERT_VARIANT: Record<string, 'danger' | 'warning' | 'info' | 'neutral'> = {
-  critical: 'danger',
-  warning:  'warning',
-  info:     'info',
+ critical: 'danger',
+ warning: 'warning',
+ info: 'info',
 };
 
 function OpenAlertsPanel({
-  data,
+ data,
 }: {
-  data: AdminDashboardData['panels']['open_alerts'];
+ data: AdminDashboardData['panels']['open_alerts'];
 }) {
-  return (
-    <Panel
-      title="Open System Alerts"
-      meta={data.total > 0 ? `${data.total} open` : undefined}
-      actions={<Link className="text-xs text-link hover:underline" to="/alerts">All alerts →</Link>}
-    >
-      {data.total > 0 && (
-        <div className="flex gap-3 mb-3">
-          {data.critical > 0 && (
-            <span className="inline-flex items-center gap-1 text-xs font-medium text-danger">
-              <span className="h-1.5 w-1.5 rounded-full bg-danger inline-block" />
-              {data.critical} critical
-            </span>
-          )}
-          {data.warning > 0 && (
-            <span className="inline-flex items-center gap-1 text-xs font-medium text-warning">
-              <span className="h-1.5 w-1.5 rounded-full bg-warning inline-block" />
-              {data.warning} warning
-            </span>
-          )}
-        </div>
-      )}
+ return (
+ <Panel
+ title="Open System Alerts"
+ meta={data.total > 0 ? `${data.total} open` : undefined}
+ actions={<Link className="text-xs text-link hover:underline" to="/alerts">All alerts →</Link>}
+ >
+ {data.total > 0 && (
+ <div className="flex gap-3 mb-3">
+ {data.critical > 0 && (
+ <span className="inline-flex items-center gap-1 text-xs font-medium text-danger">
+ <span className="h-1.5 w-1.5 rounded-full bg-danger inline-block" />
+ {data.critical} critical
+ </span>
+ )}
+ {data.warning > 0 && (
+ <span className="inline-flex items-center gap-1 text-xs font-medium text-warning">
+ <span className="h-1.5 w-1.5 rounded-full bg-warning inline-block" />
+ {data.warning} warning
+ </span>
+ )}
+ </div>
+ )}
 
-      {data.items.length === 0 ? (
-        <EmptyState size="compact" icon="bell-off" title="All clear" description="No open system alerts." />
-      ) : (
-        <div className="space-y-0">
-          {data.items.map((alert: AdminAlert) => (
-            <div
-              key={alert.id}
-              className="flex items-start gap-2 py-2 border-b border-subtle last:border-0"
-            >
-              <Chip variant={ALERT_VARIANT[alert.severity] ?? 'neutral'} className="shrink-0 mt-0.5">
-                {alert.severity_label ?? alert.severity}
-              </Chip>
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium truncate">{alert.title}</div>
-                <div className="text-2xs text-muted truncate">{alert.message}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </Panel>
-  );
+ {data.items.length === 0 ? (
+ <EmptyState size="compact" icon="bell-off" title="All clear" description="No open system alerts." />
+ ) : (
+ <div className="space-y-0">
+ {data.items.map((alert: AdminAlert) => (
+ <div
+ key={alert.id}
+ className="flex items-start gap-2 py-2 border-b border-subtle last:border-0"
+ >
+ <Chip variant={ALERT_VARIANT[alert.severity] ?? 'neutral'} className="shrink-0 mt-0.5">
+ {alert.severity_label ?? alert.severity}
+ </Chip>
+ <div className="min-w-0 flex-1">
+ <div className="text-sm font-medium truncate">{alert.title}</div>
+ <div className="text-2xs text-muted truncate">{alert.message}</div>
+ </div>
+ </div>
+ ))}
+ </div>
+ )}
+ </Panel>
+ );
 }
 
 /* ── Audit Trail ─────────────────────────────────────────────────────────── */
 
 const ACTION_COLOR: Record<string, string> = {
-  created: 'text-success',
-  updated: 'text-info',
-  deleted: 'text-danger',
+ created: 'text-success',
+ updated: 'text-info',
+ deleted: 'text-danger',
 };
 
 function AuditTrailPanel({ events }: { events: AdminAuditEvent[] }) {
-  return (
-    <Panel
-      title="Recent Audit Trail"
-      actions={<Link className="text-xs text-link hover:underline" to="/admin/audit-logs">Full log →</Link>}
-    >
-      {events.length === 0 ? (
-        <EmptyState size="compact" icon="file-text" title="No audit events" description="Recent record changes will appear here." />
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6">
-          {events.map((e: AdminAuditEvent, i: number) => (
-            <div
-              key={i}
-              className="flex items-start gap-2 py-1.5 border-b border-subtle last:border-0 text-sm"
-            >
-              <span className={`font-mono text-2xs uppercase shrink-0 mt-0.5 w-12 ${ACTION_COLOR[e.action] ?? 'text-muted'}`}>
-                {e.action}
-              </span>
-              <div className="min-w-0 flex-1">
-                <span className="font-medium truncate block">{e.entity}</span>
-                <span className="text-2xs text-muted">{e.user} · {e.ip}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </Panel>
-  );
+ return (
+ <Panel
+ title="Recent Audit Trail"
+ actions={<Link className="text-xs text-link hover:underline" to="/admin/audit-logs">Full log →</Link>}
+ >
+ {events.length === 0 ? (
+ <EmptyState size="compact" icon="file-text" title="No audit events" description="Recent record changes will appear here." />
+ ) : (
+ <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6">
+ {events.map((e: AdminAuditEvent, i: number) => (
+ <div
+ key={i}
+ className="flex items-start gap-2 py-1.5 border-b border-subtle last:border-0 text-sm"
+ >
+ <span className={`font-mono text-2xs uppercase shrink-0 mt-0.5 w-12 ${ACTION_COLOR[e.action] ?? 'text-muted'}`}>
+ {e.action}
+ </span>
+ <div className="min-w-0 flex-1">
+ <span className="font-medium truncate block">{e.entity}</span>
+ <span className="text-2xs text-muted">{e.user} · {e.ip}</span>
+ </div>
+ </div>
+ ))}
+ </div>
+ )}
+ </Panel>
+ );
 }

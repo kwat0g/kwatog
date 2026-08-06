@@ -9,15 +9,15 @@ import { QueryClient } from '@tanstack/react-query';
  * prevent cross-user cache leaks on shared terminals.
  */
 export const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 30_000,
-      retry: 1,
-      refetchOnWindowFocus: false,
-      networkMode: 'offlineFirst',
-    },
-    mutations: {
-      networkMode: 'offlineFirst',
-    },
-  },
+ defaultOptions: {
+ queries: {
+ staleTime: 30_000,
+ retry: 1,
+ refetchOnWindowFocus: false,
+ networkMode: 'offlineFirst',
+ },
+ mutations: {
+ networkMode: 'offlineFirst',
+ },
+ },
 });

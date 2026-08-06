@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\CRM\Resources;
 
+use App\Modules\CRM\Enums\PricingMethod;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -26,11 +27,13 @@ class PriceAgreementResource extends JsonResource
             'price'          => (string) $this->price,
             'effective_from' => optional($this->effective_from)->toDateString(),
             'effective_to'   => optional($this->effective_to)->toDateString(),
-            'pricing_method' => $this->pricing_method?->value ?? 'flat',
+            'pricing_method' => $this->pricing_method?->value,
+            'pricing_method_label' => ($method = $this->pricing_method instanceof PricingMethod ? $this->pricing_method : PricingMethod::tryFrom((string) $this->pricing_method))?->label() ?? PricingMethod::default()->label(),
             'tiers'          => $this->tiers,
             'is_currently_active' => (bool) $this->is_currently_active,
             'created_at'     => optional($this->created_at)->toIso8601String(),
             'updated_at'     => optional($this->updated_at)->toIso8601String(),
+            'deleted_at'     => optional($this->deleted_at)?->toIso8601String(),
         ];
     }
 }

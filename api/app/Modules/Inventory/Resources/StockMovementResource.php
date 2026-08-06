@@ -6,6 +6,7 @@ namespace App\Modules\Inventory\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Str;
 
 class StockMovementResource extends JsonResource
 {
@@ -15,6 +16,7 @@ class StockMovementResource extends JsonResource
             'id'             => $this->hash_id,
             'created_at'     => optional($this->created_at)->toIso8601String(),
             'movement_type'  => (string) $this->movement_type?->value,
+            'movement_type_label' => Str::headline((string) $this->movement_type?->value),
             'item'           => $this->whenLoaded('item', fn () => [
                 'id'   => $this->item->hash_id,
                 'code' => $this->item->code,

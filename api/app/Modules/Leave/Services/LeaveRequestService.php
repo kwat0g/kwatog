@@ -15,6 +15,7 @@ use App\Modules\Leave\Events\LeaveRequestApproved;
 use App\Modules\Leave\Events\LeaveRequestPendingHR;
 use App\Modules\Leave\Events\LeaveRequestRejected;
 use App\Modules\Leave\Events\LeaveRequestSubmitted;
+use App\Common\Support\TrashedFilter;
 use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Leave\Models\LeaveType;
 use Carbon\CarbonImmutable;
@@ -34,11 +35,22 @@ class LeaveRequestService
         $q = LeaveRequest::query()
             ->with(['employee:id,employee_no,first_name,middle_name,last_name,suffix,department_id', 'employee.department:id,name', 'leaveType', 'deptApprover:id,name', 'hrApprover:id,name']);
 
+        TrashedFilter::apply($q, $filters);
+
         if (!empty($filters['employee_id'])) {
             $empId = \App\Common\Support\HashIdFilter::decode(
                 $filters['employee_id'], \App\Modules\HR\Models\Employee::class,
             );
             if ($empId) $q->where('employee_id', $empId);
+        }
+        if (!empty($filters['search'])) {
+            $term = trim((string) $filters['search']);
+            $q->where(fn ($qq) => $qq
+                ->where('leave_request_no', 'ilike', "%{$term}%")
+                ->orWhereHas('employee', fn ($e) => $e->where('employee_no', 'ilike', "%{$term}%")
+                    ->orWhere('first_name', 'ilike', "%{$term}%")
+                    ->orWhere('middle_name', 'ilike', "%{$term}%")
+                    ->orWhere('last_name', 'ilike', "%{$term}%")));
         }
         if (!empty($filters['status'])) $q->where('status', $filters['status']);
         if (!empty($filters['from'])) $q->where('start_date', '>=', $filters['from']);

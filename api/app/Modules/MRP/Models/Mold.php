@@ -83,7 +83,8 @@ class Mold extends Model
 
     public function getNearingLimitAttribute(): bool
     {
-        return $this->shot_percentage >= 80.0;
+        $ratio = app(\App\Common\Services\SettingsService::class)->requiredFloat('alerts.mold.warning_ratio', 0, 1);
+        return $this->shot_percentage >= ($ratio * 100);
     }
 
     /** Lifecycle cost per shot = (acquisition + total maintenance) / lifetime shots. */

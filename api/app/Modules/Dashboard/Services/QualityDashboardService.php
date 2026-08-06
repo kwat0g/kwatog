@@ -8,10 +8,13 @@ use App\Modules\Auth\Models\User;
 use App\Modules\Dashboard\Services\Concerns\DashboardQueries;
 use App\Modules\Dashboard\Services\ForecastingDashboardService;
 use App\Modules\Quality\Services\CopqService;
+use App\Modules\Quality\Enums\InspectionStage;
+use App\Common\Services\SettingsService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 /**
  * P4.1 extraction — QC Inspector dashboard.
@@ -27,6 +30,7 @@ class QualityDashboardService
 
     public function __construct(
         private readonly ForecastingDashboardService $forecastingService,
+        private readonly SettingsService $settings,
     ) {}
 
     public function quality(User $user): array
@@ -51,6 +55,13 @@ class QualityDashboardService
                     'qc_chain_coverage' => $this->qualityChainCoverage(),
                     'defect_rate_forecast' => $this->forecastingService->defectRateForecast(),
                     'copq'              => $this->copq()->compute(now()->startOfMonth(), now()->endOfMonth()),
+                ],
+                'display_policy' => [
+                    'defect_danger_pct' => $this->settings->requiredFloat('quality.dashboard.defect_danger_pct', 0, 100),
+                    'defect_warning_pct' => $this->settings->requiredFloat('quality.dashboard.defect_warning_pct', 0, 100),
+                    'coverage_success_pct' => $this->settings->requiredFloat('quality.dashboard.coverage_success_pct', 0, 100),
+                    'coverage_info_pct' => $this->settings->requiredFloat('quality.dashboard.coverage_info_pct', 0, 100),
+                    'coverage_warning_pct' => $this->settings->requiredFloat('quality.dashboard.coverage_warning_pct', 0, 100),
                 ],
             ];
         });
@@ -91,6 +102,7 @@ class QualityDashboardService
                 'id'                => app('hashids')->encode((int) $r->id),
                 'inspection_number' => $r->inspection_number,
                 'stage'             => $r->stage,
+                'stage_label'       => Str::headline((string) $r->stage),
                 'product'           => $r->product_name ?? '—',
                 'batch_no'          => null,
                 'qty'               => (string) ($r->batch_quantity ?? '0'),
@@ -120,22 +132,24 @@ class QualityDashboardService
                 'id'          => app('hashids')->encode((int) $r->id),
                 'ncr_number'  => $r->ncr_number,
                 'severity'    => $r->severity,
-                'customer'    => $r->product_name ?? 'Internal',
+                'severity_label' => Str::headline((string) $r->severity),
+                'customer'    => $r->product_name ?? '—',
                 'defect_code' => $r->defect_description ?? '—',
                 'status'      => $r->status,
+                'status_label' => Str::headline((string) $r->status),
             ])
             ->all();
     }
 
     /**
-     * @return array{incoming: array{inspected: int, total: int, pct: int}, in_process: array{inspected: int, total: int, pct: int}, outgoing: array{inspected: int, total: int, pct: int}}
+     * @return array{incoming: array{label: string, inspected: int, total: int, pct: int}, in_process: array{label: string, inspected: int, total: int, pct: int}, outgoing: array{label: string, inspected: int, total: int, pct: int}}
      */
     private function qualityChainCoverage(): array
     {
         $result = [
-            'incoming'   => ['inspected' => 0, 'total' => 0, 'pct' => 0],
-            'in_process' => ['inspected' => 0, 'total' => 0, 'pct' => 0],
-            'outgoing'   => ['inspected' => 0, 'total' => 0, 'pct' => 0],
+            'incoming'   => ['label' => InspectionStage::Incoming->label(), 'inspected' => 0, 'total' => 0, 'pct' => 0],
+            'in_process' => ['label' => InspectionStage::InProcess->label(), 'inspected' => 0, 'total' => 0, 'pct' => 0],
+            'outgoing'   => ['label' => InspectionStage::Outgoing->label(), 'inspected' => 0, 'total' => 0, 'pct' => 0],
         ];
         if (Schema::hasTable('goods_receipt_notes')) {
             $result['incoming']['total'] = (int) DB::table('goods_receipt_notes')->whereBetween('created_at', [now()->startOfWeek(), now()->endOfWeek()])->count();

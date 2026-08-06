@@ -220,8 +220,9 @@ class ApprovalEscalationService
             return;
         }
 
+        $actorRoles = array_values(array_filter((array) $this->settings->get('system.automation.actor_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
         $systemUser = User::query()
-            ->whereHas('role', fn ($q) => $q->where('slug', 'system_admin'))
+            ->whereHas('role', fn ($q) => $q->whereIn('slug', $actorRoles))
             ->where('is_active', true)
             ->orderBy('id')
             ->first();
@@ -278,15 +279,11 @@ class ApprovalEscalationService
 
     private function resolveSuperior(ApprovalRecord $rec): ?User
     {
-        $superiorRole = match ($rec->role_slug) {
-            'department_head'    => 'production_manager',
-            'production_manager' => 'system_admin',
-            'purchasing_officer' => 'system_admin',
-            'finance_officer'    => 'system_admin',
-            'hr_officer'         => 'system_admin',
-            'ppc_head'           => 'system_admin',
-            default              => 'system_admin',
-        };
+        $roleMap = (array) $this->settings->get('approvals.escalation.superior_role_map', []);
+        $superiorRole = is_string($roleMap[$rec->role_slug] ?? null)
+            ? $roleMap[$rec->role_slug]
+            : null;
+        if ($superiorRole === null || $superiorRole === '') return null;
 
         return User::query()
             ->whereHas('role', fn ($q) => $q->where('slug', $superiorRole))

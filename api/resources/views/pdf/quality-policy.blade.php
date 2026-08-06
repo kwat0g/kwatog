@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Quality Policy — Philippine Ogami Corporation</title>
+<title>Quality Policy — {{ $companyName }}</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body {
@@ -146,51 +146,40 @@
   {{-- ── Header ── --}}
   <div class="header">
     <span class="cert-badge">
-      IATF 16949:2016 Certified<br>
+      {{ $qualityStandard }} Certified<br>
       Automotive Plastic Injection Molder
     </span>
-    <div class="company-name">Philippine Ogami Corporation</div>
+    <div class="company-name">{{ $companyName }}</div>
     <div class="company-meta">
-      First Cavite Industrial Estate (FCIE), Dasmariñas, Cavite 4114, Philippines
+      {{ $companyAddress }}
     </div>
   </div>
 
   {{-- ── Document title ── --}}
   <div class="doc-title-block">
     <h1>Quality Policy</h1>
-    <div class="doc-ref">DOC-QMS-001 &nbsp;|&nbsp; Rev. A &nbsp;|&nbsp; Effective: January 2025</div>
+    <div class="doc-ref">DOC-QMS-001 &nbsp;|&nbsp; Rev. A &nbsp;|&nbsp; Effective: {{ $effectiveDate }}</div>
   </div>
 
   {{-- ── Commitment statement ── --}}
   <div class="section">
     <div class="section-title">Commitment</div>
     <p>
-      Philippine Ogami Corporation is a Japanese-owned precision plastic injection molder
-      supplying wiper bushings, pivot caps, relay covers, and related automotive components
-      to Toyota, Nissan, Honda, Suzuki, and Yamaha. We are committed to manufacturing
-      products that consistently meet or exceed the requirements of our customers and
-      all applicable statutory and regulatory obligations.
+      {{ $commitmentBody }}
     </p>
     <p>
-      Our Quality Management System is established, implemented, and continually improved
-      in accordance with <strong>IATF 16949:2016</strong> and <strong>ISO 9001:2015</strong>,
-      reflecting our dedication to defect prevention, waste reduction, and the delivery of
-      zero-defect parts on every shipment.
+      {{ $systemBody }}
     </p>
   </div>
 
   {{-- ── Quality objectives ── --}}
   <div class="section">
     <div class="section-title">Quality Objectives</div>
-    <p>To fulfil this policy, Philippine Ogami Corporation pursues the following measurable objectives:</p>
+    <p>To fulfil this policy, {{ $companyName }} pursues the following measurable objectives:</p>
     <ul>
-      <li><strong>Customer Satisfaction</strong> — Achieve and sustain a customer satisfaction score of ≥ 95% through on-time delivery and zero field complaints.</li>
-      <li><strong>Defect Prevention</strong> — Maintain outgoing defect rate below 100 PPM through AQL 0.65 Level II sampling and 100% critical-dimension measurement.</li>
-      <li><strong>On-Time Delivery</strong> — Achieve ≥ 98% on-time-in-full (OTIF) delivery to all automotive OEM schedules.</li>
-      <li><strong>Continual Improvement</strong> — Close 100% of Non-Conformance Reports (NCRs) with verified corrective action within 30 days of issuance.</li>
-      <li><strong>Employee Competence</strong> — Ensure all production and QC personnel complete role-specific training annually, with competency re-verified every two years.</li>
-      <li><strong>Supplier Quality</strong> — Maintain incoming material rejection rate below 0.5% through incoming inspection and supplier performance monitoring.</li>
-      <li><strong>Regulatory Compliance</strong> — Achieve zero violations of applicable DOLE, DENR, and BFAD/FDA regulations within each calendar year.</li>
+      @foreach ($objectives as $objective)
+        <li><strong>{{ $objective['title'] }}</strong> — {{ $objective['body'] }}</li>
+      @endforeach
     </ul>
   </div>
 
@@ -198,9 +187,9 @@
   <div class="section">
     <div class="section-title">Scope</div>
     <p>
-      This policy applies to all processes, personnel, and facilities of Philippine Ogami
-      Corporation involved in the design, manufacture, inspection, and delivery of plastic
-      injection-molded automotive components at our FCIE Dasmariñas plant. It extends to
+      This policy applies to all processes, personnel, and facilities of {{ $companyName }}
+      involved in the design, manufacture, inspection, and delivery of plastic
+      injection-molded automotive components at our {{ $companyAddress }} plant. It extends to
       our supply chain partners and sub-contractors providing materials or services that
       affect product quality.
     </p>
@@ -216,7 +205,7 @@
   <div class="signatures">
     <div class="sig-cell">
       <div class="sig-line">Approved by: Plant Manager</div>
-      <div class="sig-name">Philippine Ogami Corporation</div>
+      <div class="sig-name">{{ $companyName }}</div>
     </div>
     <div class="sig-cell right">
       <div class="sig-line">Effective Date: {{ $effectiveDate }}</div>
@@ -227,8 +216,7 @@
   {{-- ── Footer ── --}}
   <div class="footer">
     <span class="doc-id">QMS-QP-001 Rev. A</span>
-    Philippine Ogami Corporation &nbsp;·&nbsp;
-    First Cavite Industrial Estate (FCIE), Dasmariñas, Cavite 4114, Philippines<br>
+    {{ $companyName }} &nbsp;·&nbsp; {{ $companyAddress }}<br>
     This document is controlled. Printed copies are uncontrolled unless stamped "CONTROLLED COPY".<br>
     Printed: {{ $generatedAt }}
   </div>

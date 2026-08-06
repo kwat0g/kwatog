@@ -6,6 +6,7 @@ namespace App\Modules\Quality\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Str;
 
 class SpcAlertResource extends JsonResource
 {
@@ -15,6 +16,7 @@ class SpcAlertResource extends JsonResource
             'id'              => $this->hash_id,
             'rule_code'       => $this->rule_code instanceof \BackedEnum ? $this->rule_code->value : $this->rule_code,
             'severity'        => $this->severity,
+            'severity_label'  => Str::headline((string) $this->severity),
             'notes'           => $this->notes,
             'acknowledged_at' => optional($this->acknowledged_at)?->toISOString(),
             'resolved_at'     => optional($this->resolved_at)?->toISOString(),

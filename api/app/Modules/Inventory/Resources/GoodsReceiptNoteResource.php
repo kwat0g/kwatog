@@ -6,6 +6,7 @@ namespace App\Modules\Inventory\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Str;
 
 class GoodsReceiptNoteResource extends JsonResource
 {
@@ -16,6 +17,7 @@ class GoodsReceiptNoteResource extends JsonResource
             'grn_number'      => $this->grn_number,
             'received_date'   => optional($this->received_date)->toDateString(),
             'status'          => (string) $this->status?->value,
+            'status_label'    => Str::headline((string) ($this->status?->value ?? $this->status)),
             'rejected_reason' => $this->rejected_reason,
             'remarks'         => $this->remarks,
             'accepted_at'     => optional($this->accepted_at)->toIso8601String(),

@@ -17,115 +17,115 @@ import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells
  * Drops into pages/dashboard/index.tsx for any user with `accounting.dashboard.view`.
  */
 export function FinanceSection() {
-  const navigate = useNavigate();
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['accounting', 'dashboard', 'summary'],
-    queryFn: () => financeDashboardApi.summary(),
-    staleTime: 30_000,
-  });
+ const navigate = useNavigate();
+ const { data, isLoading, isError, refetch } = useQuery({
+ queryKey: ['accounting', 'dashboard', 'summary'],
+ queryFn: () => financeDashboardApi.summary(),
+ staleTime: 30_000,
+ });
 
-  if (isLoading && !data) {
-    return (
-      <div className="px-5 py-4 space-y-4">
-        <div className="grid grid-cols-4 gap-4">{[1, 2, 3, 4].map((i) => <SkeletonBlock key={i} className="h-20" />)}</div>
-        <SkeletonBlock className="h-48" />
-      </div>
-    );
-  }
-  if (isError) {
-    return <EmptyState icon="alert-circle" title="Failed to load finance summary" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />;
-  }
-  if (!data) return null;
+ if (isLoading && !data) {
+ return (
+ <div className="px-5 py-4 space-y-4">
+ <div className="grid grid-cols-4 gap-4">{[1, 2, 3, 4].map((i) => <SkeletonBlock key={i} className="h-20" />)}</div>
+ <SkeletonBlock className="h-48" />
+ </div>
+ );
+ }
+ if (isError) {
+ return <EmptyState icon="alert-circle" title="Failed to load finance summary" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />;
+ }
+ if (!data) return null;
 
-  return (
-    <div className="px-5 py-4 space-y-4">
-      <div className="grid grid-cols-4 gap-4">
-        <StatCard label="Cash Balance"   value={formatPeso(data.cash_balance)}   linkTo={kpiLink('Cash Balance')} />
-        <StatCard label="AR Outstanding" value={formatPeso(data.ar_outstanding)} linkTo={kpiLink('AR Outstanding')} />
-        <StatCard label="AP Outstanding" value={formatPeso(data.ap_outstanding)} linkTo={kpiLink('AP Outstanding')} />
-        <StatCard label="Revenue MTD"    value={formatPeso(data.revenue_mtd)}    linkTo={kpiLink('Revenue MTD')} />
-      </div>
+ return (
+ <div className="px-5 py-4 space-y-4">
+ <div className="grid grid-cols-4 gap-4">
+ <StatCard label="Cash Balance" value={formatPeso(data.cash_balance)} linkTo={kpiLink('Cash Balance')} />
+ <StatCard label="AR Outstanding" value={formatPeso(data.ar_outstanding)} linkTo={kpiLink('AR Outstanding')} />
+ <StatCard label="AP Outstanding" value={formatPeso(data.ap_outstanding)} linkTo={kpiLink('AP Outstanding')} />
+ <StatCard label="Revenue MTD" value={formatPeso(data.revenue_mtd)} linkTo={kpiLink('Revenue MTD')} />
+ </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <Panel title="Aging" meta="AR · AP">
-          <div className="text-sm">
-            <div className="font-mono tabular-nums">
-              <Row label="AR — Current"  value={data.ar_aging_summary.current} />
-              <Row label="AR — 1–30"     value={data.ar_aging_summary.d1_30} />
-              <Row label="AR — 31–60"    value={data.ar_aging_summary.d31_60} />
-              <Row label="AR — 61–90"    value={data.ar_aging_summary.d61_90} />
-              <Row label="AR — 91+"      value={data.ar_aging_summary.d91_plus} danger />
-              <Row label="AR Total"      value={data.ar_aging_summary.total} bold />
-            </div>
-            <div className="font-mono tabular-nums mt-3 pt-3 border-t border-default">
-              <Row label="AP — Current"  value={data.ap_aging_summary.current} />
-              <Row label="AP — 1–30"     value={data.ap_aging_summary.d1_30} />
-              <Row label="AP — 31–60"    value={data.ap_aging_summary.d31_60} />
-              <Row label="AP — 61–90"    value={data.ap_aging_summary.d61_90} />
-              <Row label="AP — 91+"      value={data.ap_aging_summary.d91_plus} danger />
-              <Row label="AP Total"      value={data.ap_aging_summary.total} bold />
-            </div>
-          </div>
-        </Panel>
+ <div className="grid grid-cols-2 gap-4">
+ <Panel title="Aging" meta="AR · AP">
+ <div className="text-sm">
+ <div className="font-mono tabular-nums">
+ <Row label="AR — Current" value={data.ar_aging_summary.current} />
+ <Row label="AR — 1–30" value={data.ar_aging_summary.d1_30} />
+ <Row label="AR — 31–60" value={data.ar_aging_summary.d31_60} />
+ <Row label="AR — 61–90" value={data.ar_aging_summary.d61_90} />
+ <Row label="AR — 91+" value={data.ar_aging_summary.d91_plus} danger />
+ <Row label="AR Total" value={data.ar_aging_summary.total} bold />
+ </div>
+ <div className="font-mono tabular-nums mt-3 pt-3 border-t border-default">
+ <Row label="AP — Current" value={data.ap_aging_summary.current} />
+ <Row label="AP — 1–30" value={data.ap_aging_summary.d1_30} />
+ <Row label="AP — 31–60" value={data.ap_aging_summary.d31_60} />
+ <Row label="AP — 61–90" value={data.ap_aging_summary.d61_90} />
+ <Row label="AP — 91+" value={data.ap_aging_summary.d91_plus} danger />
+ <Row label="AP Total" value={data.ap_aging_summary.total} bold />
+ </div>
+ </div>
+ </Panel>
 
-        <Panel title="Recent Journal Entries" meta={`last ${data.recent_journal_entries.length}`}>
-          {data.recent_journal_entries.length === 0 ? (
-            <p className="text-sm text-muted">No entries yet.</p>
-          ) : (
-            <ul className="text-sm divide-y divide-subtle">
-              {data.recent_journal_entries.map((je) => (
-                <li key={je.id} className="py-1.5">
-                  <Link to={`/accounting/journal-entries/${je.id}`} className="block hover:bg-subtle px-2 -mx-2 rounded">
-                    <div className="flex items-baseline justify-between">
-                      <span className="font-mono text-accent">{je.entry_number}</span>
-                      <span className="font-mono tabular-nums">{formatPeso(je.total_debit)}</span>
-                    </div>
-                    <div className="text-xs text-muted truncate">{formatDate(je.date)} · {je.description}</div>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Panel>
-      </div>
+ <Panel title="Recent Journal Entries" meta={`last ${data.recent_journal_entries.length}`}>
+ {data.recent_journal_entries.length === 0 ? (
+ <p className="text-sm text-muted">No entries yet.</p>
+ ) : (
+ <ul className="text-sm divide-y divide-subtle">
+ {data.recent_journal_entries.map((je) => (
+ <li key={je.id} className="py-1.5">
+ <Link to={`/accounting/journal-entries/${je.id}`} className="block hover:bg-subtle px-2 -mx-2 rounded">
+ <div className="flex items-baseline justify-between">
+ <span className="font-mono text-accent">{je.entry_number}</span>
+ <span className="font-mono tabular-nums">{formatPeso(je.total_debit)}</span>
+ </div>
+ <div className="text-xs text-muted truncate">{formatDate(je.date)} · {je.description}</div>
+ </Link>
+ </li>
+ ))}
+ </ul>
+ )}
+ </Panel>
+ </div>
 
-      {data.top_overdue_customers.length > 0 && (
-        <Panel title="Top overdue customers">
-          <table className={tableCls}>
-            <thead>
-              <tr className={theadTrCls}>
-                <Th>Customer</Th>
-                <Th align="right">1–30</Th>
-                <Th align="right">31–60</Th>
-                <Th align="right">61–90</Th>
-                <Th align="right">91+</Th>
-                <Th align="right">Total</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.top_overdue_customers.map((c) => (
-                <tr key={c.customer_id} className={cn(trCls, "cursor-pointer")} onClick={() => navigate(`/accounting/customers/${c.customer_id}`)}>
-                  <Td>{c.customer_name}</Td>
-                  <Td align="right" mono>{formatPeso(c.d1_30)}</Td>
-                  <Td align="right" mono>{formatPeso(c.d31_60)}</Td>
-                  <Td align="right" mono>{formatPeso(c.d61_90)}</Td>
-                  <Td align="right" mono className="text-danger-fg">{formatPeso(c.d91_plus)}</Td>
-                  <Td align="right" mono className="font-medium">{formatPeso(c.total)}</Td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Panel>
-      )}
-    </div>
-  );
+ {data.top_overdue_customers.length > 0 && (
+ <Panel title="Top overdue customers">
+ <table className={tableCls}>
+ <thead>
+ <tr className={theadTrCls}>
+ <Th>Customer</Th>
+ <Th align="right">1–30</Th>
+ <Th align="right">31–60</Th>
+ <Th align="right">61–90</Th>
+ <Th align="right">91+</Th>
+ <Th align="right">Total</Th>
+ </tr>
+ </thead>
+ <tbody>
+ {data.top_overdue_customers.map((c) => (
+ <tr key={c.customer_id} className={cn(trCls, "cursor-pointer")} onClick={() => navigate(`/accounting/customers/${c.customer_id}`)}>
+ <Td>{c.customer_name}</Td>
+ <Td align="right" mono>{formatPeso(c.d1_30)}</Td>
+ <Td align="right" mono>{formatPeso(c.d31_60)}</Td>
+ <Td align="right" mono>{formatPeso(c.d61_90)}</Td>
+ <Td align="right" mono className="text-danger-fg">{formatPeso(c.d91_plus)}</Td>
+ <Td align="right" mono className="font-medium">{formatPeso(c.total)}</Td>
+ </tr>
+ ))}
+ </tbody>
+ </table>
+ </Panel>
+ )}
+ </div>
+ );
 }
 
 function Row({ label, value, danger, bold }: { label: string; value: string; danger?: boolean; bold?: boolean }) {
-  return (
-    <div className="flex justify-between py-0.5">
-      <span className="text-muted">{label}</span>
-      <span className={(danger ? 'text-danger-fg ' : '') + (bold ? 'font-medium ' : '')}>{formatPeso(value)}</span>
-    </div>
-  );
+ return (
+ <div className="flex justify-between py-0.5">
+ <span className="text-muted">{label}</span>
+ <span className={(danger ? 'text-danger-fg ' : '') + (bold ? 'font-medium ' : '')}>{formatPeso(value)}</span>
+ </div>
+ );
 }

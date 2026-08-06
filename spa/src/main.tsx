@@ -18,42 +18,49 @@ useThemeStore.getState().init();
 applyPlainMode();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <App />
-        <Toaster
-          position="top-right"
-          toastOptions={{
-            duration: 4000,
-            style: {
-              fontSize: '13px',
-              borderRadius: '6px',
-              padding: '10px 14px',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-            },
-            success: {
-              style: {
-                background: 'var(--success-bg)',
-                color: 'var(--success-fg)',
-                border: '1px solid var(--success)',
-              },
-              iconTheme: { primary: 'var(--success)', secondary: 'var(--success-bg)' },
-            },
-            error: {
-              style: {
-                background: 'var(--danger-bg)',
-                color: 'var(--danger-fg)',
-                border: '1px solid var(--danger)',
-              },
-              iconTheme: { primary: 'var(--danger)', secondary: 'var(--danger-bg)' },
-              duration: 5000,
-            },
-          }}
-        />
-      </BrowserRouter>
-    </QueryClientProvider>
-  </React.StrictMode>,
+ <React.StrictMode>
+ <QueryClientProvider client={queryClient}>
+ <BrowserRouter>
+ <App />
+ <Toaster
+ position="top-center"
+ toastOptions={{
+ duration: 4000,
+ style: {
+ fontSize: '14px',
+ borderRadius: '12px',
+ padding: '12px 16px',
+ boxShadow: 'var(--shadow-menu)',
+ background: 'var(--bg-surface)',
+ color: 'var(--text-primary)',
+ border: '1px solid var(--border-default)',
+ backdropFilter: 'blur(12px)',
+ WebkitBackdropFilter: 'blur(12px)',
+ },
+ success: {
+ style: {
+ background: 'var(--success-bg)',
+ color: 'var(--success-fg)',
+ border: '1px solid var(--success)',
+ backdropFilter: 'blur(12px)',
+ },
+ iconTheme: { primary: 'var(--success)', secondary: 'var(--success-bg)' },
+ },
+ error: {
+ style: {
+ background: 'var(--danger-bg)',
+ color: 'var(--danger-fg)',
+ border: '1px solid var(--danger)',
+ backdropFilter: 'blur(12px)',
+ },
+ iconTheme: { primary: 'var(--danger)', secondary: 'var(--danger-bg)' },
+ duration: 5000,
+ },
+ }}
+ />
+ </BrowserRouter>
+ </QueryClientProvider>
+ </React.StrictMode>,
 );
 
 // Register service worker for PWA offline support (factory + driver terminals)

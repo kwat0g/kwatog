@@ -6,6 +6,7 @@ namespace App\Modules\B2B\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use App\Modules\SupplyChain\Enums\DeliveryStatus;
 
 class CustomerDeliveryResource extends JsonResource
 {
@@ -15,6 +16,9 @@ class CustomerDeliveryResource extends JsonResource
             'id' => $this->hash_id,
             'delivery_number' => $this->delivery_number,
             'status' => $this->status instanceof \BackedEnum ? $this->status->value : $this->status,
+            'status_label' => ($status = $this->status instanceof DeliveryStatus
+                ? $this->status
+                : DeliveryStatus::tryFrom((string) $this->status))?->label() ?? (string) $this->status,
             'scheduled_date' => optional($this->scheduled_date)?->toDateString(),
             'delivered_at' => optional($this->delivered_at)?->toISOString(),
             'confirmed_at' => optional($this->confirmed_at)?->toISOString(),

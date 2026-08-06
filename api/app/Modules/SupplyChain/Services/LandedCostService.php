@@ -9,6 +9,7 @@ use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use App\Modules\SupplyChain\Models\Shipment;
 use App\Modules\SupplyChain\Models\ShipmentLandedCost;
+use App\Modules\SupplyChain\Enums\LandedCostAllocationMethod;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -33,9 +34,8 @@ class LandedCostService
      */
     public function calculate(Shipment $shipment, ?string $method = null): Shipment
     {
-        $method ??= $shipment->allocation_method ?? 'by_value';
-        $valid = ['by_value', 'by_weight', 'by_quantity', 'manual'];
-        if (! in_array($method, $valid, true)) {
+        $method ??= $shipment->allocation_method ?? LandedCostAllocationMethod::ByValue->value;
+        if (! in_array($method, LandedCostAllocationMethod::values(), true)) {
             throw new InvalidArgumentException("Invalid allocation method: {$method}");
         }
 
@@ -113,7 +113,7 @@ class LandedCostService
      */
     public function recalculate(Shipment $shipment): Shipment
     {
-        $method = $shipment->allocation_method ?? 'by_value';
+        $method = $shipment->allocation_method ?? LandedCostAllocationMethod::ByValue->value;
         return $this->calculate($shipment, $method);
     }
 
@@ -179,7 +179,10 @@ class LandedCostService
             $item->loadMissing('item');
             $weight = (float) ($item->item->net_weight ?? $item->item->weight ?? 0);
             // Scale weight by ordered quantity for proportional allocation.
-            return $weight * (float) ($item->quantity ?? 1);
+            // Purchase-order quantity is required for new lines. Treat an
+            // incomplete legacy line as zero rather than inventing one unit
+            // and skewing landed-cost allocation.
+            return $weight * (float) ($item->quantity ?? 0);
         });
     }
 

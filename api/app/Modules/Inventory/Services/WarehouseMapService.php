@@ -9,6 +9,7 @@ use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Str;
 
 class WarehouseMapService
 {
@@ -94,6 +95,7 @@ class WarehouseMapService
             'last_movement' => $lastMovement ? [
                 'id' => $lastMovement->hash_id,
                 'movement_type' => $lastMovement->movement_type->value,
+                'movement_type_label' => Str::headline($lastMovement->movement_type->value),
                 'item_code' => $lastMovement->item?->code,
                 'quantity' => $lastMovement->quantity,
                 'direction' => $lastMovement->to_location_id === $locationId ? 'in' : 'out',

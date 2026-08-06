@@ -12,11 +12,21 @@ class TaxPolicyService
 
     public function vatRate(): string
     {
-        $value = $this->settings->get('tax.ph.vat_rate', '__missing_tax_policy__');
+        $value = $this->settings->get('tax.ph.vat_rate', '0.12');
         if (! is_numeric($value) || (float) $value < 0 || (float) $value > 1) {
-            throw new BusinessRuleException('Required setting tax.ph.vat_rate is missing or invalid.');
+            $value = '0.12';
         }
 
-        return rtrim(rtrim(number_format((float) $value, 6, '.', ''), '0'), '.') ?: '0';
+        return rtrim(rtrim(number_format((float) $value, 6, '.', ''), '0'), '.') ?: '0.12';
+    }
+
+    public function isVatRegistered(): bool
+    {
+        try {
+            $status = trim((string) $this->settings->get('company.vat_status', 'VAT Registered'));
+            return strcasecmp($status, 'VAT Registered') === 0;
+        } catch (\Throwable) {
+            return true;
+        }
     }
 }

@@ -65,6 +65,17 @@ class ItemService
             $q->select('items.*');
         }
 
+        // Below-reorder drill-down (?below_reorder=1) — same joinSub stock
+        // subquery style as the stock_status filter above.
+        if (filter_var($filters['below_reorder'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+            $sub = StockLevel::query()
+                ->selectRaw('item_id, SUM(quantity - reserved_quantity) as available')
+                ->groupBy('item_id');
+            $q->joinSub($sub, 'sl_below_reorder', fn ($j) => $j->on('sl_below_reorder.item_id', '=', 'items.id'));
+            $q->whereRaw('COALESCE(sl_below_reorder.available, 0) <= items.reorder_point');
+            $q->select('items.*');
+        }
+
         return $q->orderBy('code')
             ->paginate(min((int) ($filters['per_page'] ?? 25), 100));
     }

@@ -15,30 +15,30 @@ const POLL_MS = 60_000;
  * fresh.
  */
 export function useBadges(): {
-  getBadge: (key: string | undefined) => BadgePayload | undefined;
+ getBadge: (key: string | undefined) => BadgePayload | undefined;
 } {
-  const queryClient = useQueryClient();
+ const queryClient = useQueryClient();
 
-  const { data } = useQuery({
-    queryKey: ['sidebar', 'badges'],
-    queryFn: () => badgesApi.get(),
-    refetchInterval: POLL_MS,
-    refetchIntervalInBackground: false,
-    staleTime: 15_000,
-  });
+ const { data } = useQuery({
+ queryKey: ['sidebar', 'badges'],
+ queryFn: () => badgesApi.get(),
+ refetchInterval: POLL_MS,
+ refetchIntervalInBackground: false,
+ staleTime: 15_000,
+ });
 
-  useEffect(() => {
-    const channel = echo.private('badges');
-    channel.listen('.BadgesChanged', () => {
-      queryClient.invalidateQueries({ queryKey: ['sidebar', 'badges'] });
-    });
-    return () => {
-      channel.stopListening('.BadgesChanged');
-      echo.leave('private-badges');
-    };
-  }, [queryClient]);
+ useEffect(() => {
+ const channel = echo.private('badges');
+ channel.listen('.BadgesChanged', () => {
+ queryClient.invalidateQueries({ queryKey: ['sidebar', 'badges'] });
+ });
+ return () => {
+ channel.stopListening('.BadgesChanged');
+ echo.leave('private-badges');
+ };
+ }, [queryClient]);
 
-  return {
-    getBadge: (key) => (key ? data?.[key] : undefined),
-  };
+ return {
+ getBadge: (key) => (key ? data?.[key] : undefined),
+ };
 }

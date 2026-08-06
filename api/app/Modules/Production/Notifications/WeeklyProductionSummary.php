@@ -7,6 +7,7 @@ namespace App\Modules\Production\Notifications;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use App\Common\Services\SettingsService;
 
 /**
  * Task A10 — Weekly Friday 18:00 trend email.
@@ -24,8 +25,10 @@ class WeeklyProductionSummary extends Notification
 
     public function toMail(mixed $notifiable): MailMessage
     {
+        $companyName = app(SettingsService::class)->requiredString('company.legal_name');
+
         return (new MailMessage)
             ->subject('Weekly Production Summary — '.$this->summary['range_start'].' to '.$this->summary['range_end'])
-            ->view('emails.production-summary-weekly', ['summary' => $this->summary]);
+            ->view('emails.production-summary-weekly', ['summary' => $this->summary, 'companyName' => $companyName]);
     }
 }

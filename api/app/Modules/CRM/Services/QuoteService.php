@@ -138,7 +138,7 @@ class QuoteService
             ]);
 
             if ($items !== null) {
-                $quote->items()->delete();
+                $quote->items()->forceDelete();
                 $this->syncItems($quote, $items);
             }
 
@@ -246,7 +246,8 @@ class QuoteService
             $unitPrice = (float) ($item['unit_price'] ?? 0);
             $subtotal += round($qty * $unitPrice, 2);
         }
-        $tax   = round($subtotal * (float) $this->taxPolicy->vatRate(), 2);
+        $taxRate = $this->taxPolicy->isVatRegistered() ? (float) $this->taxPolicy->vatRate() : 0.0;
+        $tax   = round($subtotal * $taxRate, 2);
         $total = round($subtotal + $tax, 2);
         return [$subtotal, $tax, $total];
     }

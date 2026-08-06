@@ -51,7 +51,7 @@ class YearEndLeaveReconciliationTest extends TestCase
     public function test_convertible_type_encashes_and_pays_via_adjustment(): void
     {
         $emp = Employee::factory()->create([
-            'pay_type' => 'monthly', 'basic_monthly_salary' => '22000.00', 'daily_rate' => null,
+            'pay_type' => 'monthly', 'basic_monthly_salary' => '22000.00', 'semi_monthly_rate' => null,
         ]); // daily rate = 22000/22 = 1000.00
         $lt = LeaveType::create([
             'name' => 'Vacation Leave', 'code' => 'VL-'.substr(uniqid(), -5),

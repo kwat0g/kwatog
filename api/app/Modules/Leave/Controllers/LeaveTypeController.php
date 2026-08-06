@@ -46,6 +46,12 @@ class LeaveTypeController
         return response()->json(null, 204);
     }
 
+    public function restore(LeaveType $leaveType): JsonResponse
+    {
+        $leaveType->restore();
+        return response()->json(['message' => 'Leave type restored.']);
+    }
+
     /** OGAMI-104 — Manually trigger year-end leave forfeiture/conversion. */
     public function processYearEnd(ProcessYearEndLeaveRequest $request): JsonResponse
     {

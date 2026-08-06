@@ -56,9 +56,9 @@ class RawPunchImportTest extends TestCase
             'department_id'        => $dept->id,
             'position_id'          => $pos->id,
             'employment_type'      => 'regular',
-            'pay_type'             => 'daily',
+            'pay_type'             => 'semi_monthly',
             'date_hired'           => '2025-01-01',
-            'daily_rate'           => '600.00',
+            'semi_monthly_rate'    => '6600.00',
             'status'               => 'active',
         ]);
     }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Services;
 
+use App\Common\Services\SettingsService;
 use App\Common\Support\Money;
 use App\Modules\Accounting\Models\FxRate;
 use App\Modules\Accounting\Services\Statements\BalanceSheetService;
@@ -38,12 +39,11 @@ use RuntimeException;
  */
 class CurrencyTranslationService
 {
-    private const FUNCTIONAL = 'PHP';
-
     public function __construct(
         private readonly TrialBalanceService $trialBalance,
         private readonly IncomeStatementService $incomeStatement,
         private readonly BalanceSheetService $balanceSheet,
+        private readonly SettingsService $settings,
     ) {}
 
     /**
@@ -51,7 +51,7 @@ class CurrencyTranslationService
      */
     public function closingRate(string $currency, Carbon $asOf): string
     {
-        if (strtoupper($currency) === self::FUNCTIONAL) {
+        if (strtoupper($currency) === $this->functionalCurrency()) {
             return '1.00000000';
         }
         $rate = FxRate::query()
@@ -74,7 +74,7 @@ class CurrencyTranslationService
      */
     public function averageRate(string $currency, Carbon $from, Carbon $to): string
     {
-        if (strtoupper($currency) === self::FUNCTIONAL) {
+        if (strtoupper($currency) === $this->functionalCurrency()) {
             return '1.00000000';
         }
         $rates = FxRate::query()
@@ -90,6 +90,11 @@ class CurrencyTranslationService
             $sum = bcadd($sum, (string) $r, 8);
         }
         return bcdiv($sum, (string) $rates->count(), 8);
+    }
+
+    private function functionalCurrency(): string
+    {
+        return strtoupper($this->settings->requiredString('accounting.functional_currency_code'));
     }
 
     /** Translate a functional (PHP) amount into the reporting currency. */
@@ -171,10 +176,10 @@ class CurrencyTranslationService
         $assets = array_map(fn ($a) => $this->translateLine($a, $closing), $php['assets']['accounts']);
         $liabilities = array_map(fn ($a) => $this->translateLine($a, $closing), $php['liabilities']['accounts']);
 
-        // Equity: net-income line (code 3099) at average rate; the rest at
+        // Equity: net-income line at average rate; the rest at
         // closing (historical contribution rates not tracked — see docblock).
         $equity = array_map(function ($a) use ($closing, $average) {
-            $rate = ($a['code'] ?? null) === '3099' ? $average : $closing;
+            $rate = ($a['code'] ?? null) === $this->settings->requiredString('accounting.statements.current_period_net_income_code') ? $average : $closing;
             return $this->translateLine($a, $rate);
         }, $php['equity']['accounts']);
 
@@ -187,7 +192,7 @@ class CurrencyTranslationService
 
         // Surface CTA as an equity line so the pack reads as a real statement.
         $equity[] = [
-            'code'   => '3900',
+            'code'   => $this->settings->requiredString('accounting.statements.translation_adjustment_code'),
             'name'   => 'Cumulative Translation Adjustment (CTA)',
             'amount' => $cta,
         ];

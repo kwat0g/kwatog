@@ -26,6 +26,7 @@ class ApprovedSupplierResource extends JsonResource
             'lead_time_days' => (int) $this->lead_time_days,
             'last_price'     => $this->last_price ? (string) $this->last_price : null,
             'last_price_at'  => optional($this->last_price_at)->toIso8601String(),
+            'deleted_at'     => optional($this->deleted_at)?->toIso8601String(),
         ];
     }
 }

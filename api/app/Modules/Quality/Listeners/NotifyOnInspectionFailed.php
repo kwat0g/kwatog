@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Quality\Listeners;
 
 use App\Common\Services\NotificationService;
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Quality\Events\InspectionFailed;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -19,14 +20,18 @@ use Illuminate\Support\Facades\Log;
  */
 class NotifyOnInspectionFailed implements ShouldQueue
 {
-    public function __construct(private readonly NotificationService $notifications) {}
+    public function __construct(
+        private readonly NotificationService $notifications,
+        private readonly SettingsService $settings,
+    ) {}
 
     public function handle(InspectionFailed $event): void
     {
         try {
             $inspection = $event->inspection;
 
-            $audience = User::whereHas('role', fn ($q) => $q->whereIn('slug', ['production_manager', 'qc_inspector']))
+            $roles = array_values(array_filter((array) $this->settings->get('quality.inspection_failed.notification_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
+            $audience = User::whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                 ->where('is_active', true)
                 ->get();
 

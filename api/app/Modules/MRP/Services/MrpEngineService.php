@@ -20,6 +20,7 @@ use App\Modules\Production\Services\WorkOrderService;
 use App\Modules\Purchasing\Models\ApprovedSupplier;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Models\PurchaseRequestItem;
+use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -141,7 +142,15 @@ class MrpEngineService
                 // Sprint 6 audit §1.4: lock the per-item stock_levels rows so
                 // concurrent SO confirmations cannot race the same on-hand /
                 // reserved quantities. Order by id for deterministic locking.
+                // F-02 — quarantine/scrap-zone stock is held or scrapped and
+                // must not satisfy gross requirements.
                 $levels = StockLevel::where('item_id', $itemId)
+                    ->whereHas('location.zone', function ($q) {
+                        $q->whereNotIn('zone_type', [
+                            \App\Modules\Inventory\Enums\WarehouseZoneType::Quarantine->value,
+                            \App\Modules\Inventory\Enums\WarehouseZoneType::Scrap->value,
+                        ]);
+                    })
                     ->orderBy('location_id')
                     ->lockForUpdate()
                     ->get();
@@ -222,6 +231,9 @@ class MrpEngineService
 
             // Create one draft WO per SO line.
             $draftWoCount = 0;
+            $urgentDeliveryDays = $this->settings->requiredInt('mrp.work_order.urgent_delivery_days', 0, 3650);
+            $urgentPriority = $this->settings->requiredInt('mrp.work_order.urgent_priority', 0, 255);
+            $normalPriority = $this->settings->requiredInt('mrp.work_order.normal_priority', 0, 255);
             foreach ($lines as $line) {
                 $this->workOrders->createDraft([
                     'product_id'          => $line->product_id,
@@ -231,7 +243,9 @@ class MrpEngineService
                     'quantity_target'     => (int) $line->quantity,
                     'planned_start'       => $line->delivery_date->copy()->subDays(2)->toDateTimeString(),
                     'planned_end'         => $line->delivery_date->copy()->subDay()->toDateTimeString(),
-                    'priority'            => $line->delivery_date->diffInDays(Carbon::now()) <= 7 ? 100 : 50,
+                    'priority'            => $line->delivery_date->diffInDays(Carbon::now()) <= $urgentDeliveryDays
+                        ? $urgentPriority
+                        : $normalPriority,
                     'created_by'          => $so->created_by,
                 ]);
                 $draftWoCount++;
@@ -401,7 +415,11 @@ class MrpEngineService
         $row = DB::table('purchase_order_items as poi')
             ->join('purchase_orders as po', 'po.id', '=', 'poi.purchase_order_id')
             ->where('poi.item_id', $itemId)
-            ->whereIn('po.status', ['approved', 'sent', 'partially_received'])
+            ->whereIn('po.status', [
+                PurchaseOrderStatus::Approved->value,
+                PurchaseOrderStatus::Sent->value,
+                PurchaseOrderStatus::PartiallyReceived->value,
+            ])
             ->selectRaw('COALESCE(SUM(poi.quantity - poi.quantity_received), 0) as in_transit')
             ->first();
         return (float) ($row->in_transit ?? 0);

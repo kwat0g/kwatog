@@ -19,6 +19,7 @@ use App\Modules\Payroll\Services\ThirteenthMonthService;
 use Database\Seeders\GovernmentTableSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -122,7 +123,8 @@ class ThirteenthMonthTest extends TestCase
 
         // Period is the special 13th-month PayrollPeriod
         $this->assertTrue($period->is_thirteenth_month);
-        $this->assertSame(PayrollPeriodStatus::Draft, $period->status);
+        // Computed, not Draft: rows exist and await a checker's approval.
+        $this->assertSame(PayrollPeriodStatus::Computed, $period->status);
 
         // One Payroll row created for the employee
         $payroll = Payroll::where('payroll_period_id', $period->id)
@@ -136,12 +138,13 @@ class ThirteenthMonthTest extends TestCase
         $this->assertSame($expectedAmount, $payroll->net_pay,
             'net_pay must equal gross_pay (zero deductions on 13th-month period)');
 
-        // Accrual record is marked paid
+        // The accrual carries its final amount and is linked to the payroll row,
+        // but payment is only recognised at finalize (maker-checker).
         $accrual = ThirteenthMonthAccrual::where('employee_id', $emp->id)->where('year', 2025)->first();
-        $this->assertTrue((bool) $accrual->is_paid, 'accrual must be flagged is_paid=true');
+        $this->assertFalse((bool) $accrual->is_paid, 'compute must not recognise payment');
         $this->assertSame($expectedAmount, (string) $accrual->accrued_amount,
             'accrual.accrued_amount updated to final canonical value');
-        $this->assertNotNull($accrual->paid_date);
+        $this->assertNull($accrual->paid_date);
         $this->assertSame($payroll->id, $accrual->payroll_id);
     }
 
@@ -178,46 +181,60 @@ class ThirteenthMonthTest extends TestCase
         $this->assertSame($expectedAmount, $payroll->net_pay);
 
         $accrual = ThirteenthMonthAccrual::where('employee_id', $emp->id)->where('year', 2025)->first();
-        $this->assertTrue((bool) $accrual->is_paid);
+        $this->assertNotNull($accrual->payroll_id, 'accrual is linked at compute');
+        $this->assertFalse((bool) $accrual->is_paid, 'payment is recognised at finalize');
     }
 
     /**
-     * is_paid flag is set to true after computeAndPay() runs.
-     * (Explicit, standalone assertion — complements the full-year test above.)
+     * is_paid is recognised at FINALIZE, not at compute.
+     *
+     * computeAndPay() used to flip it while the period sat at Draft, so the
+     * year's 13th month read as settled before any checker had seen it — and
+     * accrue() skips a paid accrual, so nothing would ever revisit it. That
+     * bypassed the REC-04 maker-checker gate every other material batch has.
      */
-    public function test_is_paid_flag_set_true_after_compute_and_pay(): void
+    public function test_is_paid_is_only_recognised_once_the_period_is_finalized(): void
     {
         $emp = $this->makeEmployee();
         $accrual = $this->seedAccrual($emp, 2025, '120000.00');
 
         $this->assertFalse((bool) $accrual->is_paid);
 
-        $this->svc->computeAndPay(2025, $this->adminUser);
+        $period = $this->svc->computeAndPay(2025, $this->adminUser);
+
+        // Computed and linked, but NOT yet paid.
+        $accrual->refresh();
+        $this->assertSame(PayrollPeriodStatus::Computed, $period->status,
+            'a computed 13th-month run awaits approval, it is not Draft');
+        $this->assertFalse((bool) $accrual->is_paid, 'compute must not recognise payment');
+        $this->assertNotNull($accrual->payroll_id, 'payroll_id FK must be linked at compute');
+        $this->assertNull($accrual->paid_date, 'paid_date must wait for finalize');
+
+        // Approve (a different actor — maker-checker) then finalize.
+        $periods = app(\App\Modules\Payroll\Services\PayrollPeriodService::class);
+        $checker = User::factory()->create([
+            'role_id' => Role::where('slug', 'finance_officer')->value('id'),
+        ]);
+        $periods->approve($period->fresh(), $checker);
+        $periods->finalize($period->fresh(), $checker);
 
         $accrual->refresh();
-        $this->assertTrue((bool) $accrual->is_paid,
-            'ThirteenthMonthAccrual.is_paid must be true after computeAndPay');
-        $this->assertNotNull($accrual->payroll_id,
-            'payroll_id FK must be linked on the accrual after payout');
-        $this->assertNotNull($accrual->paid_date,
-            'paid_date must be set on the accrual after payout');
+        $this->assertTrue((bool) $accrual->is_paid, 'finalize must recognise payment');
+        $this->assertNotNull($accrual->paid_date);
     }
 
     /**
      * Idempotency: running computeAndPay() twice for the same year does NOT
      * double-pay.
      *
-     * Actual behaviour (from reading the service):
-     *   - First run: creates PayrollPeriod + Payroll rows, marks accruals is_paid=true.
-     *   - Second run: re-uses the same PayrollPeriod, wipes payroll rows (delete),
-     *     but now no is_paid=false accruals exist → zero Payroll rows are re-created.
+     * A re-run wipes the period's payroll rows and rebuilds them, so the result
+     * is the same rows — not doubled, and not empty.
      *
-     * This means the second call leaves the period "empty" (no payroll rows).
-     * We assert: total Payroll rows in the period = count from the FIRST run
-     * (i.e. identical to first run, not doubled), AND accruals remain is_paid=true.
-     *
-     * NOTE: The "wipe-then-reinsert" pattern means a second call to a non-finalized
-     * period actually clears the payrolls. We pin this real behaviour here.
+     * This test used to pin a bug as intended behaviour: because compute marked
+     * accruals is_paid, the second run's wipe found no unpaid accruals to rebuild
+     * from and left the period EMPTY — a re-run silently destroyed the payroll and
+     * nobody got paid. Recognising payment at finalize instead makes the rebuild
+     * work, which is what real idempotency looks like.
      */
     public function test_idempotency_second_run_does_not_double_pay(): void
     {
@@ -239,18 +256,53 @@ class ThirteenthMonthTest extends TestCase
         $this->assertSame($period->id, $period2->id,
             'second run must return the same PayrollPeriod, not a duplicate');
 
-        // Actual idempotency: accruals are already paid, so wipe empties the
-        // payroll table for this period and nothing new is inserted.
-        // Total rows after second run should NOT be 4 (double-pay scenario).
+        // Rebuilt, not doubled and not emptied.
         $secondRunCount = Payroll::where('payroll_period_id', $period->id)->count();
-        $this->assertNotSame(4, $secondRunCount,
-            'second run must not double the payroll rows (no double-pay)');
+        $this->assertSame($firstRunCount, $secondRunCount,
+            'a re-run must rebuild the same rows — neither doubling nor destroying them');
 
-        // Accruals stay marked paid (not re-opened)
-        $acc1 = ThirteenthMonthAccrual::where('employee_id', $emp1->id)->where('year', 2025)->first();
-        $acc2 = ThirteenthMonthAccrual::where('employee_id', $emp2->id)->where('year', 2025)->first();
-        $this->assertTrue((bool) $acc1->is_paid, 'emp1 accrual must remain is_paid after second run');
-        $this->assertTrue((bool) $acc2->is_paid, 'emp2 accrual must remain is_paid after second run');
+        // Each employee holds exactly one claim on the year's 13th-month cycle,
+        // so a second period could not pay them again.
+        $this->assertSame(2, DB::table('payroll_cycle_claims')
+            ->where('payroll_period_id', $period->id)
+            ->where('cycle_key', $period->fresh()->cycleKey())
+            ->count());
+    }
+
+    /**
+     * Voiding a finalized 13th-month run must un-recognise the payment.
+     *
+     * computeAndPay() only picks up accruals where is_paid = false, so if a void
+     * left them marked paid the replacement run would pay nobody — the year's
+     * 13th month would silently vanish.
+     */
+    public function test_voiding_a_finalized_run_reopens_the_accruals(): void
+    {
+        $emp = $this->makeEmployee();
+        $this->seedAccrual($emp, 2025, '240000.00');
+
+        $periods = app(\App\Modules\Payroll\Services\PayrollPeriodService::class);
+        $checker = User::factory()->create([
+            'role_id' => Role::where('slug', 'finance_officer')->value('id'),
+        ]);
+
+        $period = $this->svc->computeAndPay(2025, $this->adminUser);
+        $periods->approve($period->fresh(), $checker);
+        $periods->finalize($period->fresh(), $checker);
+
+        $accrual = ThirteenthMonthAccrual::where('employee_id', $emp->id)->where('year', 2025)->firstOrFail();
+        $this->assertTrue((bool) $accrual->is_paid);
+
+        $periods->void($period->fresh(), $checker, 'Wrong accrual base');
+
+        $accrual->refresh();
+        $this->assertFalse((bool) $accrual->is_paid, 'a voided run must reopen the accrual');
+        $this->assertNull($accrual->paid_date);
+
+        // Cycle claims are released too, so a replacement run can pay them.
+        $this->assertSame(0, DB::table('payroll_cycle_claims')
+            ->where('payroll_period_id', $period->id)
+            ->count());
     }
 
     /**
@@ -288,9 +340,9 @@ class ThirteenthMonthTest extends TestCase
         $this->assertSame(1, Payroll::where('payroll_period_id', $period->id)->count(),
             'resigned employee must be excluded from the 13th-month run');
 
-        // Active employee: paid
+        // Active employee: included in the run (payment recognised at finalize).
         $activeAccrual = ThirteenthMonthAccrual::where('employee_id', $activeEmp->id)->first();
-        $this->assertTrue((bool) $activeAccrual->is_paid);
+        $this->assertNotNull($activeAccrual->payroll_id, 'active employee must be in the run');
 
         // Resigned employee: still unpaid
         $resignedAccrual = ThirteenthMonthAccrual::where('employee_id', $resignedEmp->id)->first();

@@ -8,6 +8,7 @@ use App\Modules\Auth\Models\PasswordHistory;
 use App\Modules\Auth\Models\PasswordResetRequest;
 use App\Modules\Auth\Models\User;
 use App\Modules\Auth\Notifications\PasswordResetLinkNotification;
+use App\Common\Services\SettingsService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -17,8 +18,7 @@ use Illuminate\Validation\ValidationException;
 
 class PasswordResetService
 {
-    private const PASSWORD_HISTORY_DEPTH = 3;
-    private const EXPIRY_MINUTES = 60;
+    public function __construct(private readonly SettingsService $settings) {}
 
     public function sendResetLink(string $email, Request $request): void
     {
@@ -33,13 +33,14 @@ class PasswordResetService
 
         // Atomic so a crash can never leave the user with their old token
         // deleted but no replacement created (silent self-service lockout).
-        DB::transaction(function () use ($user, $hash, $request): void {
+        $expiryMinutes = $this->settings->requiredInt('security.password_reset_expiry_minutes', 5, 10080);
+        DB::transaction(function () use ($user, $hash, $request, $expiryMinutes): void {
             PasswordResetRequest::where('user_id', $user->id)->delete();
 
             PasswordResetRequest::create([
                 'user_id'    => $user->id,
                 'token_hash' => $hash,
-                'expires_at' => now()->addMinutes(self::EXPIRY_MINUTES),
+                'expires_at' => now()->addMinutes($expiryMinutes),
                 'ip_address' => $request->ip(),
             ]);
         });
@@ -47,7 +48,7 @@ class PasswordResetService
         $base = rtrim((string) config('app.frontend_url', config('app.url')), '/');
         $url  = $base . '/reset-password?token=' . $raw;
 
-        $user->notify(new PasswordResetLinkNotification($url));
+        $user->notify(new PasswordResetLinkNotification($url, $expiryMinutes));
 
         Log::channel('auth')->info('password.reset_requested', [
             'user_id' => $user->id,
@@ -79,7 +80,8 @@ class PasswordResetService
             ]);
         }
 
-        $recent = $user->passwordHistory()->limit(self::PASSWORD_HISTORY_DEPTH)->pluck('password_hash');
+        $historyDepth = $this->settings->requiredInt('security.password_history_depth', 0, 10);
+        $recent = $user->passwordHistory()->limit($historyDepth)->pluck('password_hash');
         foreach ($recent as $oldHash) {
             if (Hash::check($newPassword, $oldHash)) {
                 throw ValidationException::withMessages([
@@ -88,7 +90,7 @@ class PasswordResetService
             }
         }
 
-        DB::transaction(function () use ($user, $row, $newPassword): void {
+        DB::transaction(function () use ($user, $row, $newPassword, $historyDepth): void {
             PasswordHistory::create([
                 'user_id'       => $user->id,
                 'password_hash' => $user->password,
@@ -106,7 +108,7 @@ class PasswordResetService
             $row->forceFill(['used_at' => now()])->save();
 
             $keepIds = $user->passwordHistory()
-                ->limit(self::PASSWORD_HISTORY_DEPTH)
+                ->limit($historyDepth)
                 ->pluck('id')
                 ->all();
 

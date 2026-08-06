@@ -7,6 +7,7 @@ namespace App\Modules\Inventory\Resources;
 use App\Modules\Auth\Resources\UserResource;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Str;
 
 class TransferOrderResource extends JsonResource
 {
@@ -34,6 +35,7 @@ class TransferOrderResource extends JsonResource
             'quantity'        => $this->quantity,
             'reason'          => $this->reason,
             'status'          => $this->status,
+            'status_label'    => Str::headline((string) $this->status),
             'created_by'      => $this->whenLoaded('creator', fn () => new UserResource($this->creator)),
             'transferred_by'  => $this->whenLoaded('transferrer', fn () => new UserResource($this->transferrer)),
             'transferred_at'  => $this->transferred_at?->toISOString(),

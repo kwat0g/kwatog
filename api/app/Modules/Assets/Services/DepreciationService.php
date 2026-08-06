@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Assets\Services;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Services\JournalEntryService;
 use App\Modules\Assets\Enums\AssetStatus;
@@ -23,6 +24,7 @@ class DepreciationService
 {
     public function __construct(
         private readonly JournalEntryService $journals,
+        private readonly SettingsService $settings,
     ) {}
 
     /**
@@ -71,8 +73,8 @@ class DepreciationService
             }
 
             // Post one consolidated JE for the period
-            $depExp  = Account::where('code', '6080')->firstOrFail();
-            $accDep  = Account::where('code', '1410')->firstOrFail();
+            $depExp  = Account::where('code', $this->settings->requiredString('accounting.accounts.depreciation_expense_code'))->firstOrFail();
+            $accDep  = Account::where('code', $this->settings->requiredString('accounting.accounts.asset_accumulated_depreciation_code'))->firstOrFail();
             $lines = [
                 ['account_id' => $depExp->id, 'debit'  => number_format($totalAmount, 2, '.', ''), 'credit' => '0.00', 'description' => 'Monthly depreciation'],
                 ['account_id' => $accDep->id, 'debit'  => '0.00', 'credit' => number_format($totalAmount, 2, '.', ''),  'description' => 'Monthly depreciation'],

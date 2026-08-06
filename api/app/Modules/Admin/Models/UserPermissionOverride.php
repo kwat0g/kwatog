@@ -12,10 +12,11 @@ use App\Modules\Auth\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class UserPermissionOverride extends Model
 {
-    use HasFactory, HasHashId, HasAuditLog;
+    use HasFactory, HasHashId, HasAuditLog, SoftDeletes;
 
     protected $fillable = [
         'user_id',

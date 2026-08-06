@@ -39,10 +39,23 @@ Route::match(['get', 'post'], '/broadcasting/auth', [BroadcastController::class,
 |
 */
 
-Route::get('/health', function () {
+Route::get('/health', function (\Illuminate\Http\Request $request) {
     // Phase 4 — deep healthcheck. Reports component-by-component so a load
     // balancer can route around partial failures and uptime monitors get
     // useful telemetry instead of a flat 200.
+    //
+    // The detailed per-component checks disclose internal topology (which
+    // components are up/down), so they are only included when the request
+    // carries the optional HEALTH_DETAIL_TOKEN (via X-Health-Token header or
+    // ?token= query). When no token is configured, behavior is unchanged —
+    // the checks are returned as before — keeping existing monitors working.
+    // Read via config(), not env() — prod-entrypoint runs `config:cache` and
+    // env() returns null outside config files once config is cached.
+    $token = (string) config('health.detail_token', '');
+    $granted = $token === ''
+        || hash_equals($token, (string) $request->header('X-Health-Token', ''))
+        || hash_equals($token, (string) $request->query('token', ''));
+
     $checks = [
         'app'   => true,
         'time'  => now()->toIso8601String(),
@@ -73,11 +86,11 @@ Route::get('/health', function () {
     }
 
     $healthy = $checks['app'] && $checks['db'] && $checks['redis'];
-    return response()->json([
-        'status'  => $healthy ? 'ok' : 'degraded',
-        'service' => 'ogami-api',
-        'checks'  => $checks,
-    ], $healthy ? 200 : 503);
+    $body = ['status' => $healthy ? 'ok' : 'degraded', 'service' => 'ogami-api'];
+    if ($granted) {
+        $body['checks'] = $checks;
+    }
+    return response()->json($body, $healthy ? 200 : 503);
 });
 
 Route::middleware(['auth:sanctum'])
@@ -85,6 +98,8 @@ Route::middleware(['auth:sanctum'])
 
 /* ─── Alerts (Task A2) — cross-module so registered here ─────────── */
 Route::middleware(['auth:sanctum'])->prefix('alerts')->group(function () {
+    Route::get('/options',             [AlertController::class, 'options'])
+        ->middleware('permission:alerts.view');
     Route::get('/',                  [AlertController::class, 'index'])
         ->middleware('permission:alerts.view');
     Route::get('/unread-count',      [AlertController::class, 'unreadCount'])
@@ -109,6 +124,9 @@ Route::middleware(['auth:sanctum'])
     ->middleware('permission:calendar.view');
 
 // Task F2 — Approvals Kanban board (read-only — mutations stay on per-entity controllers)
+Route::middleware(['auth:sanctum'])
+    ->get('/approvals/options', [ApprovalBoardController::class, 'options'])
+    ->middleware('permission:approvals.board.view');
 Route::middleware(['auth:sanctum'])
     ->get('/approvals/board', [ApprovalBoardController::class, 'index'])
     ->middleware('permission:approvals.board.view');

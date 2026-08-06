@@ -10,43 +10,43 @@ import { create } from 'zustand';
  */
 
 export interface ServerErrorEntry {
-  id: string;
-  timestamp: string;
-  method: string;
-  url: string;
-  status: number | null;
-  message: string;
-  exception?: string;
-  file?: string;
-  line?: number;
-  trace?: Array<{ file?: string; line?: number; function?: string; class?: string }>;
-  raw?: unknown;
+ id: string;
+ timestamp: string;
+ method: string;
+ url: string;
+ status: number | null;
+ message: string;
+ exception?: string;
+ file?: string;
+ line?: number;
+ trace?: Array<{ file?: string; line?: number; function?: string; class?: string }>;
+ raw?: unknown;
 }
 
 const MAX_ENTRIES = 25;
 
 interface ErrorLogState {
-  entries: ServerErrorEntry[];
-  unreadCount: number;
-  push: (entry: Omit<ServerErrorEntry, 'id' | 'timestamp'>) => void;
-  clear: () => void;
-  markRead: () => void;
+ entries: ServerErrorEntry[];
+ unreadCount: number;
+ push: (entry: Omit<ServerErrorEntry, 'id' | 'timestamp'>) => void;
+ clear: () => void;
+ markRead: () => void;
 }
 
 export const useErrorLogStore = create<ErrorLogState>((set) => ({
-  entries: [],
-  unreadCount: 0,
-  push: (e) => set((s) => {
-    const entry: ServerErrorEntry = {
-      ...e,
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      timestamp: new Date().toISOString(),
-    };
-    return {
-      entries: [entry, ...s.entries].slice(0, MAX_ENTRIES),
-      unreadCount: s.unreadCount + 1,
-    };
-  }),
-  clear: () => set({ entries: [], unreadCount: 0 }),
-  markRead: () => set({ unreadCount: 0 }),
+ entries: [],
+ unreadCount: 0,
+ push: (e) => set((s) => {
+ const entry: ServerErrorEntry = {
+ ...e,
+ id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+ timestamp: new Date().toISOString(),
+ };
+ return {
+ entries: [entry, ...s.entries].slice(0, MAX_ENTRIES),
+ unreadCount: s.unreadCount + 1,
+ };
+ }),
+ clear: () => set({ entries: [], unreadCount: 0 }),
+ markRead: () => set({ unreadCount: 0 }),
 }));

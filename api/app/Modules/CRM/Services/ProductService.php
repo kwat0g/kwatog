@@ -6,6 +6,7 @@ namespace App\Modules\CRM\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Support\SearchOperator;
+use App\Common\Support\TrashedFilter;
 use App\Modules\CRM\Models\Product;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -15,6 +16,8 @@ class ProductService
     public function list(array $filters): LengthAwarePaginator
     {
         $q = Product::query();
+
+        TrashedFilter::apply($q, $filters);
 
         // Subquery: does this product have an active BOM? (Task 49 — gracefully
         // handles the case where bill_of_materials table doesn't yet exist.)

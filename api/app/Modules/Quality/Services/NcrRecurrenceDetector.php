@@ -68,8 +68,12 @@ class NcrRecurrenceDetector
                 ]);
             }
 
+            $notificationRoles = array_values(array_filter(
+                (array) $this->settings->get('quality.ncr.recurrence_notification_roles', []),
+                static fn ($role): bool => is_string($role) && $role !== '',
+            ));
             $recipients = User::query()
-                ->whereHas('role', fn ($q) => $q->whereIn('slug', ['qc_inspector', 'production_manager']))
+                ->whereHas('role', fn ($q) => $q->whereIn('slug', $notificationRoles))
                 ->where('is_active', true)
                 ->get();
             foreach ($recipients as $user) {

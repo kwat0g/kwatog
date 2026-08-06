@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Maintenance\Jobs;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Maintenance\Services\MaintenanceScheduleService;
 use App\Modules\Maintenance\Services\MaintenanceWorkOrderService;
@@ -27,8 +28,8 @@ use Illuminate\Support\Facades\Log;
  *   - Predictive maintenance evaluation: condition readings exceeding thresholds
  *     that trigger corrective WOs.
  *
- * The system "user" attribution: uses the first user with role slug
- * 'system_admin', falling back to the lowest user id.
+ * The system "user" attribution uses the first user in the configured
+ * automation-actor roles; it aborts when no eligible actor exists.
  */
 class GeneratePreventiveMaintenanceJob implements ShouldQueue
 {
@@ -40,10 +41,15 @@ class GeneratePreventiveMaintenanceJob implements ShouldQueue
         MaintenanceScheduleService $schedules,
         MaintenanceWorkOrderService $workOrders,
         PredictiveMaintenanceService $predictive,
+        SettingsService $settings,
     ): void {
-        $systemUser = User::query()->orderBy('id')->first();
+        $roles = array_values(array_filter((array) $settings->get('system.automation.actor_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
+        $systemUser = $roles === [] ? null : User::query()
+            ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
+            ->orderBy('id')
+            ->first();
         if (! $systemUser) {
-            Log::warning('GeneratePreventiveMaintenanceJob: no system user found; aborting.');
+            Log::warning('GeneratePreventiveMaintenanceJob: no configured automation actor found; aborting.');
             return;
         }
 
@@ -58,7 +64,8 @@ class GeneratePreventiveMaintenanceJob implements ShouldQueue
         }
 
         // 3. Mold-shot 100% threshold
-        foreach ($schedules->moldShotSchedulesAtOrAboveThreshold(100.0) as $schedule) {
+        $threshold = $settings->requiredFloat('maintenance.mold_schedule.trigger_threshold_pct', 0, 100);
+        foreach ($schedules->moldShotSchedulesAtOrAboveThreshold($threshold) as $schedule) {
             $workOrders->create([], $systemUser, $schedule);
         }
 

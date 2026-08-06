@@ -2,18 +2,28 @@
  * PhilippinesSection — Filipino identity, carried by words and place.
  *
  * Per the monochrome direction, national identity is textual and grounded:
- * locally engineered precision manufacturing section —
- * no flag, no sun. The visual is a quiet location plate: a blueprint grid, a
- * datum mark at the plant's coordinates, and a precise address readout.
+ * locally engineered precision manufacturing section — no flag, no sun. The
+ * visual is a real location plate: a live OpenStreetMap of the plant in
+ * Dasmariñas, desaturated to paper, with a crosshair datum over the factory,
+ * coordinate readouts in the corners, and the address beneath. The map is
+ * lazy-loaded so the leaflet chunk never ships in the main bundle.
  */
 
-import { useLayoutEffect, useRef } from 'react';
+import { Suspense, lazy } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import gsap from 'gsap';
-import { MapPin } from 'lucide-react';
-import { DatumMark } from '../components/DatumMark';
+import { ExternalLink, MapPin } from 'lucide-react';
 import { landingApi } from '@/api/landing';
-import { registerScrollTrigger, reduceMotion } from '../motion';
+
+const PlantMap = lazy(() =>
+  import('../components/PlantMap').then((m) => ({ default: m.PlantMap })),
+);
+
+const GRID_FALLBACK: React.CSSProperties = {
+  backgroundImage:
+    'linear-gradient(var(--landing-grid) 1px, transparent 1px),' +
+    'linear-gradient(90deg, var(--landing-grid) 1px, transparent 1px)',
+  backgroundSize: '32px 32px',
+};
 
 export function PhilippinesSection() {
   const { data: contact } = useQuery({ queryKey: ['landing', 'contact'], queryFn: landingApi.contact, staleTime: 300_000 });
@@ -21,100 +31,27 @@ export function PhilippinesSection() {
   const points = content?.philippines_points ?? [];
   const copy = content?.philippines_copy;
   const copyBody = (copy?.body ?? '').replace('{{company}}', contact?.legal_name ?? '—');
-  const figureRef = useRef<HTMLElement>(null);
-  const reticleRef = useRef<SVGCircleElement>(null);
-  const hLineRef = useRef<HTMLDivElement>(null);
-  const vLineRef = useRef<HTMLDivElement>(null);
-  const gridRef = useRef<HTMLDivElement>(null);
 
-  useLayoutEffect(() => {
-    if (reduceMotion()) return;
-
-    const figure = figureRef.current;
-    const reticle = reticleRef.current;
-    const hLine = hLineRef.current;
-    const vLine = vLineRef.current;
-    if (!figure || !reticle || !hLine || !vLine) return;
-
-    registerScrollTrigger();
-
-    const ctx = gsap.context(() => {
-      // Slow rotating outer reticle ring — purely decorative
-      gsap.to(reticle, {
-        rotation: 360,
-        transformOrigin: '50% 50%',
-        duration: 28,
-        ease: 'none',
-        repeat: -1,
-      });
-
-      // Crosshair draw-in on scroll reveal (once)
-      gsap.set(hLine, { scaleX: 0 });
-      gsap.set(vLine, { scaleY: 0 });
-      gsap.to([hLine, vLine], {
-        scaleX: 1,
-        scaleY: 1,
-        duration: 0.9,
-        ease: 'power2.out',
-        stagger: 0.1,
-        scrollTrigger: {
-          trigger: figure,
-          start: 'top 80%',
-          once: true,
-        },
-      });
-
-      // Pointer-parallax on the blueprint grid — a few px of depth on mouse
-      // move. Fine pointers only: on touch there is no hover, and the rAF would
-      // otherwise spin forever animating a ~0px translate.
-      const grid = gridRef.current;
-      if (!grid || !window.matchMedia('(pointer: fine)').matches) return;
-
-      let rafId = 0;
-      let targetX = 0;
-      let targetY = 0;
-      let currentX = 0;
-      let currentY = 0;
-      const MAX = 6;
-
-      function onMove(e: PointerEvent) {
-        const r = figure!.getBoundingClientRect();
-        const nx = (e.clientX - r.left) / r.width - 0.5;
-        const ny = (e.clientY - r.top) / r.height - 0.5;
-        targetX = nx * MAX;
-        targetY = ny * MAX;
-      }
-      function onLeave() {
-        targetX = 0;
-        targetY = 0;
-      }
-      function tick() {
-        currentX += (targetX - currentX) * 0.08;
-        currentY += (targetY - currentY) * 0.08;
-        if (grid) grid.style.transform = `translate(${currentX}px, ${currentY}px)`;
-        rafId = requestAnimationFrame(tick);
-      }
-
-      figure.addEventListener('pointermove', onMove, { passive: true });
-      figure.addEventListener('pointerleave', onLeave, { passive: true });
-      rafId = requestAnimationFrame(tick);
-
-      return () => {
-        figure.removeEventListener('pointermove', onMove);
-        figure.removeEventListener('pointerleave', onLeave);
-        cancelAnimationFrame(rafId);
-      };
-    }, figure);
-
-    return () => ctx.revert();
-  }, []);
+  const contactLat = contact?.latitude ?? null;
+  const contactLon = contact?.longitude ?? null;
+  const hasCoordinates =
+    typeof contactLat === 'number' && typeof contactLon === 'number';
+  const region = (contact?.address ?? '')
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .slice(-3, -1)
+    .join(' · ');
+  const mapsUrl = hasCoordinates
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${contactLat},${contactLon}`)}`
+    : null;
 
   return (
     <section
       id="filipino-made"
       className="relative overflow-hidden bg-landing-surface px-5 sm:px-5 py-20 sm:py-28"
     >
-      <div className="mx-auto grid max-w-6xl items-center gap-14 lg:grid-cols-2 lg:gap-20">
+      <div className="mx-auto grid max-w-[1440px] items-center gap-14 lg:grid-cols-2 lg:gap-20">
         {/* Copy */}
         <div data-reveal="left">
           <div data-reveal className="flex items-center gap-3">
@@ -127,7 +64,7 @@ export function PhilippinesSection() {
           <h2
             data-reveal
             data-reveal-delay="0.05"
-            className="mt-5 font-display text-[clamp(2.1rem,4.8vw,3.75rem)] font-medium leading-[1.04] tracking-[-0.02em] text-landing-text"
+            className="mt-6 font-display text-[clamp(2.5rem,5vw,4.5rem)] font-semibold leading-[0.98] tracking-[-0.03em] text-landing-text"
           >
             {copy?.title ?? '—'}
           </h2>
@@ -135,7 +72,7 @@ export function PhilippinesSection() {
           <p
             data-reveal
             data-reveal-delay="0.1"
-            className="mt-5 max-w-xl font-sans text-[15px] leading-relaxed text-landing-text-secondary sm:text-base"
+            className="mt-6 max-w-xl font-sans text-base font-light tracking-wide leading-relaxed text-landing-text-secondary sm:text-lg"
           >
             {copyBody || '—'}
           </p>
@@ -146,12 +83,12 @@ export function PhilippinesSection() {
                 key={`${p.value}-${p.label}`}
                 data-reveal
                 data-reveal-delay={(0.12 + i * 0.06).toFixed(2)}
-                className="flex items-baseline gap-5 border-t border-landing-border pt-5"
+                className="group flex items-baseline gap-6 border-t border-landing-border pt-6 transition-colors duration-300 hover:border-landing-accent"
               >
-                <dt className="w-20 shrink-0 font-display text-2xl font-medium tracking-tight text-landing-accent">
+                <dt className="w-24 shrink-0 font-display text-4xl font-semibold tracking-tight text-landing-accent transition-transform duration-500 group-hover:-translate-y-1">
                   {p.value}
                 </dt>
-                <dd className="font-sans text-[14px] leading-relaxed text-landing-text-secondary">
+                <dd className="font-sans text-base font-light leading-relaxed text-landing-text-secondary">
                   {p.label}
                 </dd>
               </div>
@@ -159,86 +96,63 @@ export function PhilippinesSection() {
           </dl>
         </div>
 
-        {/* Visual — location plate */}
+        {/* Visual — live location plate */}
         <div data-reveal="right" data-reveal-delay="0.1" className="relative">
-          <figure
-            ref={figureRef}
-            className="relative mx-auto aspect-square w-full max-w-md overflow-hidden rounded-md border border-landing-border-strong bg-landing-canvas"
-          >
-            {/* blueprint grid — pointer-parallax layer with vertical bleed so edges stay hidden */}
-            <div
-              ref={gridRef}
-              aria-hidden="true"
-              className="pointer-events-none absolute top-[-5%] h-[110%] w-full"
-              style={{
-                backgroundImage:
-                  'linear-gradient(var(--landing-grid) 1px, transparent 1px),' +
-                  'linear-gradient(90deg, var(--landing-grid) 1px, transparent 1px)',
-                backgroundSize: '32px 32px',
-              }}
-            />
+          <figure className="relative mx-auto aspect-square w-full max-w-[500px] overflow-hidden rounded-2xl border border-landing-border-strong bg-landing-canvas shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] transition-transform duration-700 hover:scale-[1.02]">
+            {/* The real map — lazy chunk; blueprint grid as the load placeholder */}
+            <Suspense
+              fallback={<div aria-hidden="true" className="absolute inset-0" style={GRID_FALLBACK} />}
+            >
+              {hasCoordinates ? (
+                <div className="absolute inset-0 isolate">
+                  <PlantMap
+                    latitude={contactLat}
+                    longitude={contactLon}
+                    address={contact?.address ?? null}
+                  />
+                </div>
+              ) : (
+                <div aria-hidden="true" className="absolute inset-0" style={GRID_FALLBACK} />
+              )}
+            </Suspense>
 
-            {/* crosshair guides — draw in on reveal (scale from center) */}
-            <div
-              ref={vLineRef}
-              aria-hidden="true"
-              className="absolute left-1/2 top-0 h-full w-px origin-center -translate-x-1/2 bg-landing-line"
-            />
-            <div
-              ref={hLineRef}
-              aria-hidden="true"
-              className="absolute left-0 top-1/2 h-px w-full origin-center -translate-y-1/2 bg-landing-line"
-            />
+            {/* coordinate readouts — instrument chips over the paper map.
+                Solid paper backgrounds: color-mix alpha fails on some engines,
+                leaving floating text over the tiles. */}
+            <span className="absolute left-5 top-5 z-10 rounded-[3px] border border-landing-border bg-landing-canvas px-1.5 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-landing-muted">
+                {hasCoordinates ? `${Math.abs(contactLat).toFixed(4)}° ${contactLat >= 0 ? 'N' : 'S'}` : '—'}
+            </span>
+            <span className="absolute right-5 top-5 z-10 rounded-[3px] border border-landing-border bg-landing-canvas px-1.5 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-landing-muted">
+                {hasCoordinates ? `${Math.abs(contactLon).toFixed(4)}° ${contactLon >= 0 ? 'E' : 'W'}` : '—'}
+            </span>
 
-            {/* datum + outer reticle ring */}
-            <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-              <DatumMark
-                size={120}
-                strokeWidth={1.1}
-                className="text-landing-accent"
-              />
-              {/* Rotating dashed reticle — GSAP-driven, aria-hidden */}
-              <svg
-                aria-hidden="true"
-                className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
-                width={150}
-                height={150}
-                viewBox="0 0 150 150"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={0.8}
+            {/* open in Google Maps — full native experience, new tab */}
+            {mapsUrl ? (
+              <a
+                href={mapsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Open the plant location in Google Maps"
+                className="absolute left-1/2 top-14 z-10 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-[3px] border border-landing-border-strong bg-landing-canvas px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-landing-text transition-colors duration-200 hover:border-landing-accent hover:text-landing-accent sm:top-5"
               >
-                <circle
-                  ref={reticleRef}
-                  cx="75"
-                  cy="75"
-                  r="68"
-                  className="text-landing-accent/25"
-                  strokeDasharray="5 9"
-                />
-              </svg>
-            </div>
+                <ExternalLink size={12} className="text-landing-accent" />
+                Open in Google Maps
+              </a>
+            ) : null}
 
             {/* location label */}
-            <div className="absolute left-1/2 top-[calc(50%+76px)] -translate-x-1/2 whitespace-nowrap text-center">
-              <span className="flex items-center justify-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.16em] text-landing-text">
-                <MapPin size={13} className="text-landing-accent" />
+            <div className="absolute left-1/2 top-[calc(50%+64px)] z-10 w-[86%] -translate-x-1/2 text-center">
+              <span className="inline-flex max-w-full items-center justify-center gap-1.5 rounded-[3px] border border-landing-border bg-landing-canvas px-2 py-1 text-center font-mono text-[11px] uppercase leading-snug tracking-[0.16em] text-landing-text">
+                <MapPin size={13} className="shrink-0 text-landing-accent" />
                 {contact?.address ?? '—'}
               </span>
             </div>
 
-            {/* coordinate readouts */}
-            <span className="absolute left-5 top-5 font-mono text-[10px] uppercase tracking-[0.18em] text-landing-muted">
-                {typeof contact?.latitude === 'number' ? `${Math.abs(contact.latitude).toFixed(4)}° ${contact.latitude >= 0 ? 'N' : 'S'}` : '—'}
+            <span className="absolute bottom-8 left-5 z-10 rounded-[3px] border border-landing-border bg-landing-canvas px-1.5 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-landing-muted">
+              {region || '—'}
             </span>
-            <span className="absolute right-5 top-5 font-mono text-[10px] uppercase tracking-[0.18em] text-landing-muted">
-                {typeof contact?.longitude === 'number' ? `${Math.abs(contact.longitude).toFixed(4)}° ${contact.longitude >= 0 ? 'E' : 'W'}` : '—'}
-            </span>
-            <span className="absolute bottom-5 left-5 font-mono text-[10px] uppercase tracking-[0.18em] text-landing-subtle-text">
-              Datum · plant origin
-            </span>
-            <span className="absolute bottom-5 right-5 font-mono text-[10px] uppercase tracking-[0.18em] text-landing-subtle-text">
-              {contact?.address?.split(',').at(-1)?.trim() ?? '—'}
+            <span className="absolute bottom-5 left-5 z-10 font-mono text-[10px] uppercase tracking-[0.18em] text-landing-subtle-text">
+              Plant · datum
             </span>
           </figure>
         </div>

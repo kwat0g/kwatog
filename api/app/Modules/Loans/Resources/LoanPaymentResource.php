@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Loans\Resources;
 
+use App\Modules\Loans\Enums\LoanPaymentType;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -16,6 +17,7 @@ class LoanPaymentResource extends JsonResource
             'amount'       => (string) $this->amount,
             'payment_date' => optional($this->payment_date)->toDateString(),
             'payment_type' => $this->payment_type,
+            'payment_type_label' => LoanPaymentType::tryFrom((string) $this->payment_type)?->label() ?? (string) $this->payment_type,
             'remarks'      => $this->remarks,
         ];
     }

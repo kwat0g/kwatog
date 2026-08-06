@@ -7,8 +7,8 @@
  * D2 (Plant Manager), D4 (HR), and D5 (Finance) dashboards.
  *
  * Data source: GET /api/v1/dashboards/ppc (via dashboardsApi.ppc)
- * Backend:     RoleDashboardService::ppc()
- * Cache:       30s Redis per user
+ * Backend: RoleDashboardService::ppc()
+ * Cache: 30s Redis per user
  */
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
@@ -34,661 +34,661 @@ import { KpiStrip } from '@/components/dashboard/KpiStrip';
 /* ───────────────────────── Typed interface ───────────────────────── */
 
 interface PpcKpi {
-  label: string;
-  value: string;
-  unit: string;
+ label: string;
+ value: string;
+ unit: string;
 }
 
 interface ChainStage {
-  key: string;
-  label: string;
-  color: string;
-  count: number;
-  percent: number;
+ key: string;
+ label: string;
+ color: string;
+ count: number;
+ percent: number;
 }
 
 interface AlertItem {
-  kind: string;
-  severity: string;
-  label: string;
-  ref: string | null;
-  ref_id: string | null;
+ kind: string;
+ severity: string;
+ label: string;
+ ref: string | null;
+ ref_id: string | null;
 }
 
 interface MachineRow {
-  id: string;
-  code: string;
-  name: string;
-  status: string;
-  status_label?: string;
-  has_active_wo: boolean;
+ id: string;
+ code: string;
+ name: string;
+ status: string;
+ status_label?: string;
+ has_active_wo: boolean;
 }
 
 interface GanttRow {
-  machine: string;
-  date: string;
-  label: string;
-  status: string;
+ machine: string;
+ date: string;
+ label: string;
+ status: string;
 }
 
 interface ProductionGanttRow { machine: string; day: string; status: string; wo_number: string | null; }
 
 interface MrpShortage {
-  item_code: string;
-  item_name: string;
-  shortage: string;
-  urgency: string | null;
-  pr_status: string | null;
+ item_code: string;
+ item_name: string;
+ shortage: string;
+ urgency: string | null;
+ pr_status: string | null;
 }
 
 interface WoStatusItem {
-  status: string;
-  status_label?: string;
-  count: number;
+ status: string;
+ status_label?: string;
+ count: number;
 }
 
 interface PpcDashboardData {
-  kpis: PpcKpi[];
-  panels: {
-    chain_stages: ChainStage[];
-    alerts: AlertItem[];
-    machine_util: MachineRow[];
-    // D3 — New panels
-    mrp_last_run: string;
-    unplanned_wos: number;
-    production_gantt: ProductionGanttRow[];
-    mrp_shortages: MrpShortage[];
-    machine_availability: GanttRow[];
-    wo_status_breakdown: WoStatusItem[];
-    gantt_horizon_days?: number;
-  };
+ kpis: PpcKpi[];
+ panels: {
+ chain_stages: ChainStage[];
+ alerts: AlertItem[];
+ machine_util: MachineRow[];
+ // D3 — New panels
+ mrp_last_run: string;
+ unplanned_wos: number;
+ production_gantt: ProductionGanttRow[];
+ mrp_shortages: MrpShortage[];
+ machine_availability: GanttRow[];
+ wo_status_breakdown: WoStatusItem[];
+ gantt_horizon_days?: number;
+ };
 }
 
 /* ───────────────────────── Inline sub-panel components ───────────────────────── */
 
 function KpiRow({ kpis }: { kpis: PpcKpi[] }) {
-  return (
-    <KpiGrid count={kpis.length}>
-      {kpis.map((k) => (
-        <StatCard
-          key={k.label}
-          label={k.label}
-          value={/^[A-Z]{3}$/.test(k.unit) ? `${k.unit} ${k.value}` : k.value}
-          helper={!/^[A-Z]{3}$/.test(k.unit) && k.unit !== 'count' ? k.unit : undefined}
-          linkTo={kpiLink(k.label)}
-        />
-      ))}
-    </KpiGrid>
-  );
+ return (
+ <KpiGrid count={kpis.length}>
+ {kpis.map((k) => (
+ <StatCard
+ key={k.label}
+ label={k.label}
+ value={/^[A-Z]{3}$/.test(k.unit) ? `${k.unit} ${k.value}` : k.value}
+ helper={!/^[A-Z]{3}$/.test(k.unit) && k.unit !== 'count' ? k.unit : undefined}
+ linkTo={kpiLink(k.label)}
+ />
+ ))}
+ </KpiGrid>
+ );
 }
 
 function ChainStagePanel({ stages }: { stages: ChainStage[] }) {
-  if (stages.length === 0) return null;
+ if (stages.length === 0) return null;
 
-  return (
-    <Panel title="Active orders by chain stage">
-      <ul className="space-y-2">
-        {stages.map((s) => {
-          const href = chainStageLink(s.key);
-          const inner = (
-            <>
-              <div className="flex items-center justify-between text-sm mb-1">
-                <span>{s.label}</span>
-                <span className="font-mono tabular-nums">{s.count}</span>
-              </div>
-              <div
-                role="progressbar"
-                aria-valuenow={s.percent}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-label={`${s.label}: ${s.count} orders`}
-                className="h-1 bg-subtle rounded-full overflow-hidden"
-              >
-                <div
-                  className={stageFillClass(s.color)}
-                  style={{ width: `${s.percent}%` }}
-                />
-              </div>
-            </>
-          );
-          return (
-            <li key={s.key}>
-              {href ? (
-                <Link
-                  to={href}
-                  className="block rounded-sm px-1 -mx-1 hover:bg-subtle transition-colors duration-fast"
-                  aria-label={`View ${s.label} orders`}
-                >
-                  {inner}
-                </Link>
-              ) : (
-                inner
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </Panel>
-  );
+ return (
+ <Panel title="Active orders by chain stage">
+ <ul className="space-y-2">
+ {stages.map((s) => {
+ const href = chainStageLink(s.key);
+ const inner = (
+ <>
+ <div className="flex items-center justify-between text-sm mb-1">
+ <span>{s.label}</span>
+ <span className="font-mono tabular-nums">{s.count}</span>
+ </div>
+ <div
+ role="progressbar"
+ aria-valuenow={s.percent}
+ aria-valuemin={0}
+ aria-valuemax={100}
+ aria-label={`${s.label}: ${s.count} orders`}
+ className="h-1 bg-subtle rounded-full overflow-hidden"
+ >
+ <div
+ className={stageFillClass(s.color)}
+ style={{ width: `${s.percent}%` }}
+ />
+ </div>
+ </>
+ );
+ return (
+ <li key={s.key}>
+ {href ? (
+ <Link
+ to={href}
+ className="block rounded-sm px-1 -mx-1 hover:bg-subtle transition-colors duration-fast"
+ aria-label={`View ${s.label} orders`}
+ >
+ {inner}
+ </Link>
+ ) : (
+ inner
+ )}
+ </li>
+ );
+ })}
+ </ul>
+ </Panel>
+ );
 }
 
 function AlertsPanel({ alerts }: { alerts: AlertItem[] }) {
-  if (alerts.length === 0) return null;
-  return (
-    <Panel title="Alerts" meta={alerts.length.toString()}>
-      <ul className="divide-y divide-subtle">
-        {alerts.map((a, i) => (
-          <li key={`${a.kind}-${i}`} className="py-2">
-            <Link
-              to={alertRefLink(a.ref, a.ref_id, a.kind)}
-              className="flex items-center gap-2 w-full text-sm rounded-sm px-1 -mx-1 hover:bg-subtle transition-colors duration-fast"
-              aria-label={`View ${a.label}`}
-            >
-              <span className={alertDotClass(a.severity)} aria-hidden="true" />
-              <span className="truncate">{a.label}</span>
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </Panel>
-  );
+ if (alerts.length === 0) return null;
+ return (
+ <Panel title="Alerts" meta={alerts.length.toString()}>
+ <ul className="divide-y divide-subtle">
+ {alerts.map((a, i) => (
+ <li key={`${a.kind}-${i}`} className="py-2">
+ <Link
+ to={alertRefLink(a.ref, a.ref_id, a.kind)}
+ className="flex items-center gap-2 w-full text-sm rounded-sm px-1 -mx-1 hover:bg-subtle transition-colors duration-fast"
+ aria-label={`View ${a.label}`}
+ >
+ <span className={alertDotClass(a.severity)} aria-hidden="true" />
+ <span className="truncate">{a.label}</span>
+ </Link>
+ </li>
+ ))}
+ </ul>
+ </Panel>
+ );
 }
 
 function MachineUtilPanel({ machines }: { machines: MachineRow[] }) {
-  if (machines.length === 0) {
-    return (
-      <Panel title="Machine utilisation">
-        <EmptyState icon="cpu" title="No machines" description="No machines configured yet." />
-      </Panel>
-    );
-  }
+ if (machines.length === 0) {
+ return (
+ <Panel title="Machine utilisation">
+ <EmptyState icon="cpu" title="No machines" description="No machines configured yet." />
+ </Panel>
+ );
+ }
 
-  return (
-    <Panel title="Machine utilisation" noPadding bodyClassName="px-1.5 pb-2">
-      <table className={tableCls}>
-        <thead>
-          <tr className={theadTrCls}>
-            <Th>Code</Th>
-            <Th>Name</Th>
-            <Th>Status</Th>
-            <Th align="right">Active WO</Th>
-          </tr>
-        </thead>
-        <tbody>
-          {machines.map((m) => (
-            <tr key={m.id} className={trCls}>
-              <Td mono>{m.code}</Td>
-              <Td className="text-muted">{m.name}</Td>
-              <Td>
-                <Chip variant={machineStatusVariant(m.status)}>{m.status_label ?? m.status}</Chip>
-              </Td>
-              <Td align="right" mono aria-label={m.has_active_wo ? 'Has active work order' : 'No active work order'}>
-                {m.has_active_wo ? '✓' : '—'}
-              </Td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </Panel>
-  );
+ return (
+ <Panel title="Machine utilisation" noPadding bodyClassName="px-1.5 pb-2">
+ <table className={tableCls}>
+ <thead>
+ <tr className={theadTrCls}>
+ <Th>Code</Th>
+ <Th>Name</Th>
+ <Th>Status</Th>
+ <Th align="right">Active WO</Th>
+ </tr>
+ </thead>
+ <tbody>
+ {machines.map((m) => (
+ <tr key={m.id} className={trCls}>
+ <Td mono>{m.code}</Td>
+ <Td className="text-muted">{m.name}</Td>
+ <Td>
+ <Chip variant={machineStatusVariant(m.status)}>{m.status_label ?? m.status}</Chip>
+ </Td>
+ <Td align="right" mono aria-label={m.has_active_wo ? 'Has active work order' : 'No active work order'}>
+ {m.has_active_wo ? '✓' : '—'}
+ </Td>
+ </tr>
+ ))}
+ </tbody>
+ </table>
+ </Panel>
+ );
 }
 
 /* ───────────────────────── Helpers ───────────────────────── */
 
 function stageFillClass(color?: string): string {
-  if (color === 'danger') return 'h-full bg-danger';
-  if (color === 'warning') return 'h-full bg-warning';
-  if (color === 'info') return 'h-full bg-info';
-  return 'h-full bg-success';
+ if (color === 'danger') return 'h-full bg-danger';
+ if (color === 'warning') return 'h-full bg-warning';
+ if (color === 'info') return 'h-full bg-info';
+ return 'h-full bg-success';
 }
 
 function alertDotClass(severity?: string): string {
-  const base = 'inline-block w-1.5 h-1.5 rounded-full';
-  if (severity === 'danger') return `${base} bg-danger`;
-  if (severity === 'warning') return `${base} bg-warning`;
-  if (severity === 'info') return `${base} bg-info`;
-  return `${base} bg-success`;
+ const base = 'inline-block w-1.5 h-1.5 rounded-full';
+ if (severity === 'danger') return `${base} bg-danger`;
+ if (severity === 'warning') return `${base} bg-warning`;
+ if (severity === 'info') return `${base} bg-info`;
+ return `${base} bg-success`;
 }
 
 function machineStatusVariant(status: string): 'info' | 'danger' | 'warning' | 'neutral' {
-  if (status === 'running') return 'info';
-  if (status === 'breakdown') return 'danger';
-  if (status === 'maintenance') return 'warning';
-  return 'neutral';
+ if (status === 'running') return 'info';
+ if (status === 'breakdown') return 'danger';
+ if (status === 'maintenance') return 'warning';
+ return 'neutral';
 }
 
 /* ───────────────────────── D3 — New sub-panel components ───────────────────────── */
 
 function MrpMetaPanel({ lastRun, unplanned }: { lastRun: string; unplanned: number }) {
-  return (
-    <Panel title="MRP Overview">
-      <dl className="space-y-3 text-sm">
-        <div className="flex justify-between">
-          <dt className="text-muted">Last MRP Run</dt>
-          <dd className="font-mono tabular-nums">{lastRun || '—'}</dd>
-        </div>
-        <div className="flex justify-between">
-          <dt className="text-muted">Unplanned WOs</dt>
-          <dd className="font-mono tabular-nums">{unplanned}</dd>
-        </div>
-      </dl>
-    </Panel>
-  );
+ return (
+ <Panel title="MRP Overview">
+ <dl className="space-y-3 text-sm">
+ <div className="flex justify-between">
+ <dt className="text-muted">Last MRP Run</dt>
+ <dd className="font-mono tabular-nums">{lastRun || '—'}</dd>
+ </div>
+ <div className="flex justify-between">
+ <dt className="text-muted">Unplanned WOs</dt>
+ <dd className="font-mono tabular-nums">{unplanned}</dd>
+ </div>
+ </dl>
+ </Panel>
+ );
 }
 
 function ProductionGanttPanel({ rows, horizonDays }: { rows: ProductionGanttRow[]; horizonDays: number }) {
-  if (rows.length === 0) {
-    return (
-      <Panel title={`Production Gantt (${horizonDays}-day)`}>
-        <EmptyState icon="inbox" title="No scheduled work" description={`No production scheduled in the next ${horizonDays} days.`} />
-      </Panel>
-    );
-  }
+ if (rows.length === 0) {
+ return (
+ <Panel title={`Production Gantt (${horizonDays}-day)`}>
+ <EmptyState icon="inbox" title="No scheduled work" description={`No production scheduled in the next ${horizonDays} days.`} />
+ </Panel>
+ );
+ }
 
-  const machines = [...new Set(rows.map((r) => r.machine))];
-  const days = [...new Set(rows.map((r) => r.day))].sort();
+ const machines = [...new Set(rows.map((r) => r.machine))];
+ const days = [...new Set(rows.map((r) => r.day))].sort();
 
-  return (
-    <Panel title={`Production Gantt (${horizonDays}-day)`}>
-      <div className="overflow-x-auto">
-        <table className={tableCls}>
-          <thead>
-            <tr className={theadTrCls}>
-              <Th className="pr-2">Machine</Th>
-              {days.map((d) => (
-                <Th key={d} align="center" className="px-1">
-                  {new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short' })}
-                </Th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {machines.map((m) => (
-              <tr key={m} className={trCls}>
-                <Td mono className="text-xs">{m}</Td>
-                {days.map((d) => {
-                  const cell = rows.find((r) => r.machine === m && r.day === d);
-                  const cls = cell?.status === 'running' ? 'bg-info/30'
-                    : cell?.status === 'planned' ? 'bg-warning/20'
-                    : 'bg-subtle/30';
-                  return (
-                    <Td align="center" className={` rounded-sm ${cls}`} key={`${m}-${d}`} title={cell?.wo_number ?? undefined} aria-label={`${m} on ${d}: ${cell?.status ?? 'available'}${cell?.wo_number ? ` (${cell.wo_number})` : ''}`}>
-                      {cell?.status === 'running' ? '▶' : cell?.status === 'planned' ? '○' : '·'}
-                    </Td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </Panel>
-  );
+ return (
+ <Panel title={`Production Gantt (${horizonDays}-day)`}>
+ <div className="overflow-x-auto">
+ <table className={tableCls}>
+ <thead>
+ <tr className={theadTrCls}>
+ <Th className="pr-2">Machine</Th>
+ {days.map((d) => (
+ <Th key={d} align="center" className="px-1">
+ {new Date(d + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short' })}
+ </Th>
+ ))}
+ </tr>
+ </thead>
+ <tbody>
+ {machines.map((m) => (
+ <tr key={m} className={trCls}>
+ <Td mono className="text-xs">{m}</Td>
+ {days.map((d) => {
+ const cell = rows.find((r) => r.machine === m && r.day === d);
+ const cls = cell?.status === 'running' ? 'bg-info/30'
+ : cell?.status === 'planned' ? 'bg-warning/20'
+ : 'bg-subtle/30';
+ return (
+ <Td align="center" className={` rounded-sm ${cls}`} key={`${m}-${d}`} title={cell?.wo_number ?? undefined} aria-label={`${m} on ${d}: ${cell?.status ?? 'available'}${cell?.wo_number ? ` (${cell.wo_number})` : ''}`}>
+ {cell?.status === 'running' ? '▶' : cell?.status === 'planned' ? '○' : '·'}
+ </Td>
+ );
+ })}
+ </tr>
+ ))}
+ </tbody>
+ </table>
+ </div>
+ </Panel>
+ );
 }
 
 function MrpShortagesPanel({ shortages }: { shortages: MrpShortage[] }) {
-  if (shortages.length === 0) {
-    return (
-      <Panel title="MRP Shortages">
-        <EmptyState icon="check-circle" title="No shortages" description="All auto-generated PRs have been processed." />
-      </Panel>
-    );
-  }
+ if (shortages.length === 0) {
+ return (
+ <Panel title="MRP Shortages">
+ <EmptyState icon="check-circle" title="No shortages" description="All auto-generated PRs have been processed." />
+ </Panel>
+ );
+ }
 
-  return (
-    <Panel title="MRP Shortages" meta={shortages.length.toString()} noPadding bodyClassName="px-1.5 pb-2">
-      <table className={tableCls}>
-        <thead>
-          <tr className={theadTrCls}>
-            <Th>Item</Th>
-            <Th align="right">Qty</Th>
-            <Th>Urgency</Th>
-            <Th>PR</Th>
-          </tr>
-        </thead>
-        <tbody>
-          {shortages.map((s) => (
-            <tr key={s.item_code} className={trCls}>
-              <Td>
-                <span className="font-mono text-xs">{s.item_code}</span>
-                <span className="text-muted ml-1">{s.item_name}</span>
-              </Td>
-              <Td align="right" mono>{s.shortage}</Td>
-              <Td>
-                <Chip variant={s.urgency === 'urgent' ? 'danger' : s.urgency === 'high' ? 'warning' : 'neutral'}>
-                  {s.urgency ?? '—'}
-                </Chip>
-              </Td>
-              <Td>
-                <Chip variant={s.pr_status === 'pending' ? 'warning' : 'neutral'}>
-                  {s.pr_status ?? '—'}
-                </Chip>
-              </Td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </Panel>
-  );
+ return (
+ <Panel title="MRP Shortages" meta={shortages.length.toString()} noPadding bodyClassName="px-1.5 pb-2">
+ <table className={tableCls}>
+ <thead>
+ <tr className={theadTrCls}>
+ <Th>Item</Th>
+ <Th align="right">Qty</Th>
+ <Th>Urgency</Th>
+ <Th>PR</Th>
+ </tr>
+ </thead>
+ <tbody>
+ {shortages.map((s) => (
+ <tr key={s.item_code} className={trCls}>
+ <Td>
+ <span className="font-mono text-xs">{s.item_code}</span>
+ <span className="text-muted ml-1">{s.item_name}</span>
+ </Td>
+ <Td align="right" mono>{s.shortage}</Td>
+ <Td>
+ <Chip variant={s.urgency === 'urgent' ? 'danger' : s.urgency === 'high' ? 'warning' : 'neutral'}>
+ {s.urgency ?? '—'}
+ </Chip>
+ </Td>
+ <Td>
+ <Chip variant={s.pr_status === 'pending' ? 'warning' : 'neutral'}>
+ {s.pr_status ?? '—'}
+ </Chip>
+ </Td>
+ </tr>
+ ))}
+ </tbody>
+ </table>
+ </Panel>
+ );
 }
 
 function MachineAvailabilityGrid({ rows, horizonDays }: { rows: GanttRow[]; horizonDays: number }) {
-  if (rows.length === 0) {
-    return (
-      <Panel title={`Machine Availability (${horizonDays}-day)`}>
-        <EmptyState icon="cpu" title="No machines" description="No machines configured." />
-      </Panel>
-    );
-  }
+ if (rows.length === 0) {
+ return (
+ <Panel title={`Machine Availability (${horizonDays}-day)`}>
+ <EmptyState icon="cpu" title="No machines" description="No machines configured." />
+ </Panel>
+ );
+ }
 
-  const machines = [...new Set(rows.map((r) => r.machine))];
-  const days = [...new Map(rows.map((r) => [r.date, r.label])).entries()]
-    .sort(([a], [b]) => a.localeCompare(b)); // [date, label][]
+ const machines = [...new Set(rows.map((r) => r.machine))];
+ const days = [...new Map(rows.map((r) => [r.date, r.label])).entries()]
+ .sort(([a], [b]) => a.localeCompare(b)); // [date, label][]
 
-  return (
-    <Panel title={`Machine Availability (${horizonDays}-day)`}>
-      <div className="overflow-x-auto">
-        <table className={tableCls}>
-          <thead>
-            <tr className={theadTrCls}>
-              <Th className="pr-2">Machine</Th>
-              {days.map(([date, label]) => (
-                <Th key={date} align="center" className="px-1">{label}</Th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {machines.map((m) => (
-              <tr key={m} className={trCls}>
-                <Td mono className="text-xs">{m}</Td>
-                {days.map(([date]) => {
-                  const cell = rows.find((r) => r.machine === m && r.date === date);
-                  const cls = cell?.status === 'available' ? 'bg-success/20'
-                    : cell?.status === 'busy' ? 'bg-info/30'
-                    : 'bg-danger/20';
-                  return (
-                    <Td align="center" className={` rounded-sm ${cls}`} key={`${m}-${date}`} aria-label={`${m} on ${date}: ${cell?.status ?? 'unknown'}`}>
-                      {cell?.status === 'available' ? '✓' : cell?.status === 'busy' ? '●' : '✗'}
-                    </Td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </Panel>
-  );
+ return (
+ <Panel title={`Machine Availability (${horizonDays}-day)`}>
+ <div className="overflow-x-auto">
+ <table className={tableCls}>
+ <thead>
+ <tr className={theadTrCls}>
+ <Th className="pr-2">Machine</Th>
+ {days.map(([date, label]) => (
+ <Th key={date} align="center" className="px-1">{label}</Th>
+ ))}
+ </tr>
+ </thead>
+ <tbody>
+ {machines.map((m) => (
+ <tr key={m} className={trCls}>
+ <Td mono className="text-xs">{m}</Td>
+ {days.map(([date]) => {
+ const cell = rows.find((r) => r.machine === m && r.date === date);
+ const cls = cell?.status === 'available' ? 'bg-success/20'
+ : cell?.status === 'busy' ? 'bg-info/30'
+ : 'bg-danger/20';
+ return (
+ <Td align="center" className={` rounded-sm ${cls}`} key={`${m}-${date}`} aria-label={`${m} on ${date}: ${cell?.status ?? 'unknown'}`}>
+ {cell?.status === 'available' ? '✓' : cell?.status === 'busy' ? '●' : '✗'}
+ </Td>
+ );
+ })}
+ </tr>
+ ))}
+ </tbody>
+ </table>
+ </div>
+ </Panel>
+ );
 }
 
 function WoStatusBreakdownPanel({ items }: { items: WoStatusItem[] }) {
-  if (items.length === 0) {
-    return (
-      <Panel title="WO Status Breakdown">
-        <EmptyState icon="inbox" title="No work orders" description="No work orders found." />
-      </Panel>
-    );
-  }
+ if (items.length === 0) {
+ return (
+ <Panel title="WO Status Breakdown">
+ <EmptyState icon="inbox" title="No work orders" description="No work orders found." />
+ </Panel>
+ );
+ }
 
-  const maxCount = Math.max(1, ...items.map((i) => i.count));
+ const maxCount = Math.max(1, ...items.map((i) => i.count));
 
-  return (
-    <Panel title="WO Status Breakdown">
-      <ul className="space-y-2">
-        {items.map((i) => {
-          const pct = Math.round((i.count / maxCount) * 100);
-          return (
-            <li key={i.status}>
-              <div className="flex items-center justify-between text-sm mb-1">
-                <span>{i.status_label ?? i.status.replace(/_/g, ' ')}</span>
-                <span className="font-mono tabular-nums">{i.count}</span>
-              </div>
-              <div
-                role="progressbar"
-                aria-valuenow={pct}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-label={`${i.status_label ?? i.status}: ${i.count} work orders`}
-                className="h-2 bg-subtle rounded-full overflow-hidden"
-              >
-                <div
-                  className={woBarClass(i.status)}
-                  style={{ width: `${pct}%` }}
-                />
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-    </Panel>
-  );
+ return (
+ <Panel title="WO Status Breakdown">
+ <ul className="space-y-2">
+ {items.map((i) => {
+ const pct = Math.round((i.count / maxCount) * 100);
+ return (
+ <li key={i.status}>
+ <div className="flex items-center justify-between text-sm mb-1">
+ <span>{i.status_label ?? i.status.replace(/_/g, ' ')}</span>
+ <span className="font-mono tabular-nums">{i.count}</span>
+ </div>
+ <div
+ role="progressbar"
+ aria-valuenow={pct}
+ aria-valuemin={0}
+ aria-valuemax={100}
+ aria-label={`${i.status_label ?? i.status}: ${i.count} work orders`}
+ className="h-2 bg-subtle rounded-full overflow-hidden"
+ >
+ <div
+ className={woBarClass(i.status)}
+ style={{ width: `${pct}%` }}
+ />
+ </div>
+ </li>
+ );
+ })}
+ </ul>
+ </Panel>
+ );
 }
 
 function woBarClass(status: string): string {
-  if (status === 'in_progress') return 'h-full bg-info rounded-full';
-  if (status === 'completed') return 'h-full bg-success rounded-full';
-  if (status === 'paused') return 'h-full bg-warning rounded-full';
-  if (status === 'planned' || status === 'confirmed') return 'h-full bg-accent rounded-full';
-  return 'h-full bg-subtle rounded-full';
+ if (status === 'in_progress') return 'h-full bg-info rounded-full';
+ if (status === 'completed') return 'h-full bg-success rounded-full';
+ if (status === 'paused') return 'h-full bg-warning rounded-full';
+ if (status === 'planned' || status === 'confirmed') return 'h-full bg-accent rounded-full';
+ return 'h-full bg-subtle rounded-full';
 }
 
 /* ───────────────────────── Page component ───────────────────────── */
 
 export default function PpcDashboard() {
-  const { can } = usePermission();
+ const { can } = usePermission();
 
-  const q = useQuery({
-    queryKey: ['dashboard', 'ppc'],
-    queryFn: () => dashboardsApi.ppc<PpcDashboardData>(),
-    refetchInterval: 60_000,
-  });
+ const q = useQuery({
+ queryKey: ['dashboard', 'ppc'],
+ queryFn: () => dashboardsApi.ppc<PpcDashboardData>(),
+ refetchInterval: 60_000,
+ });
 
-  const bottlenecks = useQuery({
-    queryKey: ['chain-bottlenecks', 'ppc_head'],
-    queryFn: (): Promise<ChainBottlenecks> => chainApi.bottlenecks('ppc_head'),
-    enabled: can('dashboard.view_bottlenecks'),
-    refetchInterval: 60_000,
-    staleTime: 60_000,
-  });
+ const bottlenecks = useQuery({
+ queryKey: ['chain-bottlenecks', 'ppc_head'],
+ queryFn: (): Promise<ChainBottlenecks> => chainApi.bottlenecks('ppc_head'),
+ enabled: can('dashboard.view_bottlenecks'),
+ refetchInterval: 60_000,
+ staleTime: 60_000,
+ });
 
-  return (
-    <DashboardShell<PpcDashboardData>
-      title="PPC Dashboard"
-      subtitle="Live · refreshes every 60s"
-      query={q}
-      refreshingQueryKey={['dashboard', 'ppc']}
-    >
-      {({ kpis, panels }) => {
-        const woStatusChartData =
-          panels?.wo_status_breakdown?.map((i) => ({
-            name: i.status_label ?? i.status.replace(/_/g, ' '),
-            value: i.count,
-            color:
-              i.status === 'completed' ? 'var(--success)'
-              : i.status === 'in_progress' ? 'var(--info)'
-              : 'var(--warning)',
-          })) ?? [];
+ return (
+ <DashboardShell<PpcDashboardData>
+ title="PPC Dashboard"
+ subtitle="Live · refreshes every 60s"
+ query={q}
+ refreshingQueryKey={['dashboard', 'ppc']}
+ >
+ {({ kpis, panels }) => {
+ const woStatusChartData =
+ panels?.wo_status_breakdown?.map((i) => ({
+ name: i.status_label ?? i.status.replace(/_/g, ' '),
+ value: i.count,
+ color:
+ i.status === 'completed' ? 'var(--success)'
+ : i.status === 'in_progress' ? 'var(--info)'
+ : 'var(--warning)',
+ })) ?? [];
 
-        const machineStatusCounts: Record<string, number> = {};
-        (panels?.machine_util ?? []).forEach((m) => {
-          machineStatusCounts[m.status] = (machineStatusCounts[m.status] || 0) + 1;
-        });
-        const machineStatusLabels = new Map((panels?.machine_util ?? []).map((m) => [m.status, m.status_label ?? m.status]));
-        const machineUtilChartData = Object.entries(machineStatusCounts).map(([label, count]) => ({
-          label: machineStatusLabels.get(label) ?? label,
-          count,
-        }));
+ const machineStatusCounts: Record<string, number> = {};
+ (panels?.machine_util ?? []).forEach((m) => {
+ machineStatusCounts[m.status] = (machineStatusCounts[m.status] || 0) + 1;
+ });
+ const machineStatusLabels = new Map((panels?.machine_util ?? []).map((m) => [m.status, m.status_label ?? m.status]));
+ const machineUtilChartData = Object.entries(machineStatusCounts).map(([label, count]) => ({
+ label: machineStatusLabels.get(label) ?? label,
+ count,
+ }));
 
-        return (
-          <>
-            {/* ── Row 1: KPIs ── */}
-            <KpiRow kpis={kpis} />
+ return (
+ <>
+ {/* ── Row 1: KPIs ── */}
+ <KpiRow kpis={kpis} />
 
-            {/* KPI Scorecard strip */}
-            <KpiStrip codes={['oee', 'wo_completion_rate', 'on_time_delivery', 'first_pass_yield']} />
+ {/* KPI Scorecard strip */}
+ <KpiStrip codes={['oee', 'wo_completion_rate', 'on_time_delivery', 'first_pass_yield']} />
 
-            {/* ── Row 2: Chain stages + Alerts ── */}
-            <PanelRow>
-              {Array.isArray(panels?.chain_stages) && panels.chain_stages.length > 0 ? (
-                <ChainStagePanel stages={panels.chain_stages} />
-              ) : (
-                <Panel title="Active orders by chain stage">
-                  <EmptyState icon="inbox" title="Order pipeline empty" description="No active orders in any stage." />
-                </Panel>
-              )}
+ {/* ── Row 2: Chain stages + Alerts ── */}
+ <PanelRow>
+ {Array.isArray(panels?.chain_stages) && panels.chain_stages.length > 0 ? (
+ <ChainStagePanel stages={panels.chain_stages} />
+ ) : (
+ <Panel title="Active orders by chain stage">
+ <EmptyState icon="inbox" title="Order pipeline empty" description="No active orders in any stage." />
+ </Panel>
+ )}
 
-              {Array.isArray(panels?.alerts) && panels.alerts.length > 0 ? (
-                <AlertsPanel alerts={panels.alerts} />
-              ) : (
-                <Panel title="Alerts">
-                  <EmptyState icon="bell-off" title="All clear" description="No active alerts." />
-                </Panel>
-              )}
-            </PanelRow>
+ {Array.isArray(panels?.alerts) && panels.alerts.length > 0 ? (
+ <AlertsPanel alerts={panels.alerts} />
+ ) : (
+ <Panel title="Alerts">
+ <EmptyState icon="bell-off" title="All clear" description="No active alerts." />
+ </Panel>
+ )}
+ </PanelRow>
 
-            {/* ── Row 3: Machine utilisation (full width) ── */}
-            <MachineUtilPanel machines={panels?.machine_util ?? []} />
+ {/* ── Row 3: Machine utilisation (full width) ── */}
+ <MachineUtilPanel machines={panels?.machine_util ?? []} />
 
-            {/* ── Row 4: D3 — MRP meta + Production Gantt ── */}
-            <PanelRow>
-              <MrpMetaPanel
-                lastRun={panels?.mrp_last_run ?? '—'}
-                unplanned={panels?.unplanned_wos ?? 0}
-              />
-              <ProductionGanttPanel rows={panels?.production_gantt ?? []} horizonDays={panels?.gantt_horizon_days ?? 0} />
-            </PanelRow>
+ {/* ── Row 4: D3 — MRP meta + Production Gantt ── */}
+ <PanelRow>
+ <MrpMetaPanel
+ lastRun={panels?.mrp_last_run ?? '—'}
+ unplanned={panels?.unplanned_wos ?? 0}
+ />
+ <ProductionGanttPanel rows={panels?.production_gantt ?? []} horizonDays={panels?.gantt_horizon_days ?? 0} />
+ </PanelRow>
 
-            {/* ── Row 5: D3 — MRP Shortages + Machine Availability ── */}
-            <PanelRow>
-              <MrpShortagesPanel shortages={panels?.mrp_shortages ?? []} />
-              <MachineAvailabilityGrid rows={panels?.machine_availability ?? []} horizonDays={panels?.gantt_horizon_days ?? 0} />
-            </PanelRow>
+ {/* ── Row 5: D3 — MRP Shortages + Machine Availability ── */}
+ <PanelRow>
+ <MrpShortagesPanel shortages={panels?.mrp_shortages ?? []} />
+ <MachineAvailabilityGrid rows={panels?.machine_availability ?? []} horizonDays={panels?.gantt_horizon_days ?? 0} />
+ </PanelRow>
 
-            {/* ── Row 6: D3 — WO Status Breakdown (full width) ── */}
-            <WoStatusBreakdownPanel items={panels?.wo_status_breakdown ?? []} />
+ {/* ── Row 6: D3 — WO Status Breakdown (full width) ── */}
+ <WoStatusBreakdownPanel items={panels?.wo_status_breakdown ?? []} />
 
-            {/* ── Row 6.5: Chart visualizations ── */}
-            <PanelRow>
-              <Panel title="WO Status Distribution">
-                {woStatusChartData.length === 0 ? (
-                  <EmptyState icon="inbox" title="No work orders" description="No work order data available." />
-                ) : (
-                  <DonutBreakdown
-                    data={woStatusChartData}
-                    centerLabel="Total WOs"
-                    centerValue={String(woStatusChartData.reduce((sum, i) => sum + i.value, 0))}
-                  />
-                )}
-              </Panel>
-              <Panel title="Machine Status Distribution">
-                {machineUtilChartData.length === 0 ? (
-                  <EmptyState icon="cpu" title="No machines" description="No machine data available." />
-                ) : (
-                  <BarComparison
-                    data={machineUtilChartData}
-                    bars={[{ dataKey: 'count', color: 'var(--accent)', label: 'Machines' }]}
-                    xKey="label"
-                    height={180}
-                  />
-                )}
-              </Panel>
-            </PanelRow>
+ {/* ── Row 6.5: Chart visualizations ── */}
+ <PanelRow>
+ <Panel title="WO Status Distribution">
+ {woStatusChartData.length === 0 ? (
+ <EmptyState icon="inbox" title="No work orders" description="No work order data available." />
+ ) : (
+ <DonutBreakdown
+ data={woStatusChartData}
+ centerLabel="Total WOs"
+ centerValue={String(woStatusChartData.reduce((sum, i) => sum + i.value, 0))}
+ />
+ )}
+ </Panel>
+ <Panel title="Machine Status Distribution">
+ {machineUtilChartData.length === 0 ? (
+ <EmptyState icon="cpu" title="No machines" description="No machine data available." />
+ ) : (
+ <BarComparison
+ data={machineUtilChartData}
+ bars={[{ dataKey: 'count', color: 'var(--accent)', label: 'Machines' }]}
+ xKey="label"
+ height={180}
+ />
+ )}
+ </Panel>
+ </PanelRow>
 
-            {/* ── Row 7: Demand Forecast + Stock-out Risk ── */}
-            <PanelRow cols={3}>
-              <DemandForecastPanel />
-              <StockOutPanel />
-              <ForecastAccuracyPanel />
-            </PanelRow>
+ {/* ── Row 7: Demand Forecast + Stock-out Risk ── */}
+ <PanelRow cols={3}>
+ <DemandForecastPanel />
+ <StockOutPanel />
+ <ForecastAccuracyPanel />
+ </PanelRow>
 
-            {/* ── Row 8: Chain bottleneck widget (gated by permission, Series C — Task C5) ── */}
-            {can('dashboard.view_bottlenecks') && renderBottleneckWidget(bottlenecks)}
-          </>
-        );
-      }}
-    </DashboardShell>
-  );
+ {/* ── Row 8: Chain bottleneck widget (gated by permission, Series C — Task C5) ── */}
+ {can('dashboard.view_bottlenecks') && renderBottleneckWidget(bottlenecks)}
+ </>
+ );
+ }}
+ </DashboardShell>
+ );
 }
 
 /* ───────────────────────── Bottleneck widget (co-located) ───────────────────────── */
 
 function renderBottleneckWidget(
-  bq: ReturnType<typeof useQuery<ChainBottlenecks>>,
+ bq: ReturnType<typeof useQuery<ChainBottlenecks>>,
 ) {
-  const groups = (bq.data?.groups ?? []).filter((g): g is ChainBottleneckGroup => g.count > 0);
+ const groups = (bq.data?.groups ?? []).filter((g): g is ChainBottleneckGroup => g.count > 0);
 
-  /* loading */
-  if (bq.isLoading && !bq.data) {
-    return (
-      <Panel title="Chain bottlenecks" meta="Refreshes every 60s">
-        <div className="space-y-2">
-          {[0, 1, 2].map((i) => <SkeletonBlock key={i} className="h-8 w-full" />)}
-        </div>
-      </Panel>
-    );
-  }
+ /* loading */
+ if (bq.isLoading && !bq.data) {
+ return (
+ <Panel title="Chain bottlenecks" meta="Refreshes every 60s">
+ <div className="space-y-2">
+ {[0, 1, 2].map((i) => <SkeletonBlock key={i} className="h-8 w-full" />)}
+ </div>
+ </Panel>
+ );
+ }
 
-  /* error */
-  if (bq.isError) {
-    return (
-      <Panel title="Chain bottlenecks">
-        <EmptyState
-          icon="alert-circle"
-          title="Failed to load bottlenecks"
-          action={<Button variant="secondary" onClick={() => bq.refetch()}>Retry</Button>}
-        />
-      </Panel>
-    );
-  }
+ /* error */
+ if (bq.isError) {
+ return (
+ <Panel title="Chain bottlenecks">
+ <EmptyState
+ icon="alert-circle"
+ title="Failed to load bottlenecks"
+ action={<Button variant="secondary" onClick={() => bq.refetch()}>Retry</Button>}
+ />
+ </Panel>
+ );
+ }
 
-  /* empty — nothing stuck */
-  if (groups.length === 0) return null;
+ /* empty — nothing stuck */
+ if (groups.length === 0) return null;
 
-  /* data */
-  const total = bq.data?.total ?? 0;
-  return (
-    <Panel title="Chain bottlenecks" meta={`${total} stuck`} bodyClassName="p-0">
-      <ul>
-        {groups.map((g) => (
-          <li
-            key={g.key}
-            className="flex items-center justify-between px-4 py-2.5 border-b border-subtle last:border-b-0"
-          >
-            <div className="min-w-0 flex-1">
-              <div className="text-sm text-primary truncate">{g.label}</div>
-              <div className="text-xs text-muted truncate">
-                {g.rows.slice(0, 3).map((r: ChainBottleneckRow) => r.doc_number).join(', ')}
-                {g.rows.length > 3 ? ` +${g.rows.length - 3} more` : ''}
-              </div>
-            </div>
-            <div className="flex items-center gap-2 ml-3">
-              <Chip variant={g.count >= 5 ? 'danger' : 'warning'}>
-                <span className="font-mono tabular-nums">{g.count}</span>
-              </Chip>
-              <Link
-                to={bottleneckLink(g.rows[0])}
-                className="text-xs text-accent hover:underline"
-              >
-                View
-              </Link>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </Panel>
-  );
+ /* data */
+ const total = bq.data?.total ?? 0;
+ return (
+ <Panel title="Chain bottlenecks" meta={`${total} stuck`} bodyClassName="p-0">
+ <ul>
+ {groups.map((g) => (
+ <li
+ key={g.key}
+ className="flex items-center justify-between px-4 py-2.5 border-b border-subtle last:border-b-0"
+ >
+ <div className="min-w-0 flex-1">
+ <div className="text-sm text-primary truncate">{g.label}</div>
+ <div className="text-xs text-muted truncate">
+ {g.rows.slice(0, 3).map((r: ChainBottleneckRow) => r.doc_number).join(', ')}
+ {g.rows.length > 3 ? ` +${g.rows.length - 3} more` : ''}
+ </div>
+ </div>
+ <div className="flex items-center gap-2 ml-3">
+ <Chip variant={g.count >= 5 ? 'danger' : 'warning'}>
+ <span className="font-mono tabular-nums">{g.count}</span>
+ </Chip>
+ <Link
+ to={bottleneckLink(g.rows[0])}
+ className="text-xs text-accent hover:underline"
+ >
+ View
+ </Link>
+ </div>
+ </li>
+ ))}
+ </ul>
+ </Panel>
+ );
 }
 
 function bottleneckLink(row: ChainBottleneckRow | undefined): string {
-  if (!row) return '#';
-  switch (row.entity_type) {
-    case 'sales_order':      return `/crm/sales-orders/${row.entity_id}`;
-    case 'work_order':       return `/production/work-orders/${row.entity_id}`;
-    case 'inspection':       return `/quality/inspections/${row.entity_id}`;
-    case 'delivery':         return `/supply-chain/deliveries/${row.entity_id}`;
-    case 'invoice':          return `/accounting/invoices/${row.entity_id}`;
-    case 'purchase_request': return `/purchasing/purchase-requests/${row.entity_id}`;
-    case 'bill':             return `/accounting/bills/${row.entity_id}`;
-    default:                 return '#';
-  }
+ if (!row) return '#';
+ switch (row.entity_type) {
+ case 'sales_order': return `/crm/sales-orders/${row.entity_id}`;
+ case 'work_order': return `/production/work-orders/${row.entity_id}`;
+ case 'inspection': return `/quality/inspections/${row.entity_id}`;
+ case 'delivery': return `/supply-chain/deliveries/${row.entity_id}`;
+ case 'invoice': return `/accounting/invoices/${row.entity_id}`;
+ case 'purchase_request': return `/purchasing/purchase-requests/${row.entity_id}`;
+ case 'bill': return `/accounting/bills/${row.entity_id}`;
+ default: return '#';
+ }
 }

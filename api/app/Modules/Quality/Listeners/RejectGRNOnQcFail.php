@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Quality\Listeners;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Services\GrnService;
@@ -31,7 +32,7 @@ use Illuminate\Support\Facades\Log;
  */
 class RejectGRNOnQcFail implements ShouldQueue
 {
-    public function __construct(private readonly GrnService $grns) {}
+    public function __construct(private readonly GrnService $grns, private readonly ?SettingsService $settings = null) {}
 
     public function handle(InspectionFailed $event): void
     {
@@ -62,8 +63,9 @@ class RejectGRNOnQcFail implements ShouldQueue
                 ? User::find($inspection->inspector_id)
                 : null;
             if (! $by) {
+                $roles = array_values(array_filter((array) ($this->settings ?? app(SettingsService::class))->get('quality.grn_qc_failure.actor_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
                 $by = User::query()
-                    ->whereHas('role', fn ($q) => $q->where('slug', 'system_admin'))
+                    ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                     ->where('is_active', true)
                     ->first();
             }

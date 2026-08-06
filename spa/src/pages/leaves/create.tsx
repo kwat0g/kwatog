@@ -19,165 +19,165 @@ import type { ApiValidationError } from '@/types';
 import { onFormInvalid } from '@/lib/formErrors';
 
 const schema = z.object({
-  employee_id: z.string().min(1, 'Employee is required'),
-  leave_type_id: z.string().min(1, 'Leave type is required'),
-  start_date: z.string().min(1, 'Start date is required'),
-  end_date: z.string().min(1, 'End date is required'),
-  // M-18 — half-day support. 'none' = full-day request.
-  half_day_period: z.string().min(1).default('none'),
-  reason: z.string().max(2000, 'Max 2000 characters').optional().or(z.literal('')),
+ employee_id: z.string().min(1, 'Employee is required'),
+ leave_type_id: z.string().min(1, 'Leave type is required'),
+ start_date: z.string().min(1, 'Start date is required'),
+ end_date: z.string().min(1, 'End date is required'),
+ // M-18 — half-day support. 'none' = full-day request.
+ half_day_period: z.string().min(1).default('none'),
+ reason: z.string().max(2000, 'Max 2000 characters').optional().or(z.literal('')),
 }).refine((d) => !d.start_date || !d.end_date || new Date(d.end_date) >= new Date(d.start_date),
-  { message: 'End date must be on or after start date', path: ['end_date'] })
-  .refine((d) => d.half_day_period === 'none' || d.start_date === d.end_date,
-    { message: 'Half-day leave must start and end on the same date.', path: ['half_day_period'] });
+ { message: 'End date must be on or after start date', path: ['end_date'] })
+ .refine((d) => d.half_day_period === 'none' || d.start_date === d.end_date,
+ { message: 'Half-day leave must start and end on the same date.', path: ['half_day_period'] });
 type FormValues = z.infer<typeof schema>;
 
 export default function CreateLeavePage() {
-  const navigate = useNavigate();
-  const qc = useQueryClient();
-  const user = useAuthStore((s) => s.user);
-  const { can } = usePermission();
-  const isAdmin = can('leave.view') && (user?.role.slug === 'system_admin' || user?.role.slug === 'hr_officer');
+ const navigate = useNavigate();
+ const qc = useQueryClient();
+ const user = useAuthStore((s) => s.user);
+ const { can } = usePermission();
+ const isAdmin = can('leave.view') && (user?.role.slug === 'system_admin' || user?.role.slug === 'hr_officer');
 
-  const { data: typesResp } = useQuery({ queryKey: ['leaves', 'types'], queryFn: () => leaveTypesApi.list() });
-  const { data: leaveOptions } = useQuery({
-    queryKey: ['leaves', 'request-options'],
-    queryFn: () => leaveRequestsApi.options(),
-    staleTime: 300_000,
-  });
-  const types = typesResp?.data ?? [];
+ const { data: typesResp } = useQuery({ queryKey: ['leaves', 'types'], queryFn: () => leaveTypesApi.list() });
+ const { data: leaveOptions } = useQuery({
+ queryKey: ['leaves', 'request-options'],
+ queryFn: () => leaveRequestsApi.options(),
+ staleTime: 300_000,
+ });
+ const types = typesResp?.data ?? [];
 
-  const { data: employeesResp } = useQuery({
-    queryKey: ['hr', 'employees', 'all-active'],
-    queryFn: () => employeesApi.list({ per_page: 100, status: 'active' }),
-    enabled: isAdmin,
-  });
-  const employees = employeesResp?.data ?? [];
+ const { data: employeesResp } = useQuery({
+ queryKey: ['hr', 'employees', 'all-active'],
+ queryFn: () => employeesApi.list({ per_page: 100, status: 'active' }),
+ enabled: isAdmin,
+ });
+ const employees = employeesResp?.data ?? [];
 
-  const {
-    register, handleSubmit, watch, setError,
-    formState: { errors, isSubmitting },
-  } = useForm<FormValues>({
-    resolver: zodResolver(schema),
-    defaultValues: {
-      employee_id: user?.employee?.id ?? '',
-    },
-  });
+ const {
+ register, handleSubmit, watch, setError,
+ formState: { errors, isSubmitting },
+ } = useForm<FormValues>({
+ resolver: zodResolver(schema),
+ defaultValues: {
+ employee_id: user?.employee?.id ?? '',
+ },
+ });
 
-  const employeeId = watch('employee_id');
-  const leaveTypeId = watch('leave_type_id');
-  const startDate = watch('start_date');
-  const endDate = watch('end_date');
+ const employeeId = watch('employee_id');
+ const leaveTypeId = watch('leave_type_id');
+ const startDate = watch('start_date');
+ const endDate = watch('end_date');
 
-  const { data: balances = [] } = useQuery({
-    queryKey: ['leaves', 'balances', employeeId],
-    queryFn: () => isAdmin && employeeId
-      ? leaveBalancesApi.forEmployee(employeeId)
-      : leaveBalancesApi.me(),
-    enabled: !!employeeId || !isAdmin,
-  });
+ const { data: balances = [] } = useQuery({
+ queryKey: ['leaves', 'balances', employeeId],
+ queryFn: () => isAdmin && employeeId
+ ? leaveBalancesApi.forEmployee(employeeId)
+ : leaveBalancesApi.me(),
+ enabled: !!employeeId || !isAdmin,
+ });
 
-  const selectedBalance = balances.find((b) => b.leave_type.id === leaveTypeId);
+ const selectedBalance = balances.find((b) => b.leave_type.id === leaveTypeId);
 
-  const halfDay = watch('half_day_period');
+ const halfDay = watch('half_day_period');
 
-  // Auto-compute estimated days (excluding Sundays). M-18 — half-day = 0.5.
-  let estimatedDays = 0;
-  if (halfDay === 'am' || halfDay === 'pm') {
-    estimatedDays = 0.5;
-  } else if (startDate && endDate) {
-    const a = new Date(startDate); const b = new Date(endDate);
-    if (b >= a) {
-      for (let d = new Date(a); d <= b; d.setDate(d.getDate() + 1)) {
-        if (d.getDay() !== 0) estimatedDays++;
-      }
-    }
-  }
+ // Auto-compute estimated days (excluding Sundays). M-18 — half-day = 0.5.
+ let estimatedDays = 0;
+ if (halfDay === 'am' || halfDay === 'pm') {
+ estimatedDays = 0.5;
+ } else if (startDate && endDate) {
+ const a = new Date(startDate); const b = new Date(endDate);
+ if (b >= a) {
+ for (let d = new Date(a); d <= b; d.setDate(d.getDate() + 1)) {
+ if (d.getDay() !== 0) estimatedDays++;
+ }
+ }
+ }
 
-  const mutation = useMutation({
-    mutationFn: (d: FormValues) => leaveRequestsApi.create({
-      employee_id: d.employee_id,
-      leave_type_id: d.leave_type_id,
-      start_date: d.start_date,
-      end_date: d.end_date,
-      half_day_period: d.half_day_period === 'none' ? undefined : d.half_day_period as 'am' | 'pm',
-      reason: d.reason || undefined,
-    }),
-    onSuccess: (req) => {
-      qc.invalidateQueries({ queryKey: ['leaves'] });
-      toast.success(`Leave request ${req.leave_request_no} submitted.`);
-      navigate(`/hr/leaves/${req.id}`);
-    },
-    onError: (e: AxiosError<ApiValidationError>) => {
-      if (e.response?.status === 422) {
-        const data = e.response.data;
-        if (data.errors) {
-          Object.entries(data.errors).forEach(([f, msgs]) =>
-            setError(f as keyof FormValues, { type: 'server', message: msgs[0] }),
-          );
-        } else if (data.message) {
-          toast.error(data.message);
-        }
-      } else toast.error('Failed to submit leave request.');
-    },
-  });
+ const mutation = useMutation({
+ mutationFn: (d: FormValues) => leaveRequestsApi.create({
+ employee_id: d.employee_id,
+ leave_type_id: d.leave_type_id,
+ start_date: d.start_date,
+ end_date: d.end_date,
+ half_day_period: d.half_day_period === 'none' ? undefined : d.half_day_period as 'am' | 'pm',
+ reason: d.reason || undefined,
+ }),
+ onSuccess: (req) => {
+ qc.invalidateQueries({ queryKey: ['leaves'] });
+ toast.success(`Leave request ${req.leave_request_no} submitted.`);
+ navigate(`/hr/leaves/${req.id}`);
+ },
+ onError: (e: AxiosError<ApiValidationError>) => {
+ if (e.response?.status === 422) {
+ const data = e.response.data;
+ if (data.errors) {
+ Object.entries(data.errors).forEach(([f, msgs]) =>
+ setError(f as keyof FormValues, { type: 'server', message: msgs[0] }),
+ );
+ } else if (data.message) {
+ toast.error(data.message);
+ }
+ } else toast.error('Failed to submit leave request.');
+ },
+ });
 
-  return (
-    <div>
-      <PageHeader title="Request leave" backTo="/hr/leaves" backLabel="Leaves" breadcrumbs={[{ label: 'HR', href: '/hr' }, { label: 'Leaves', href: '/hr/leaves' }, { label: 'New Request' }]} />
-      <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-2xl mx-auto px-5 py-4 space-y-4">
-        <Panel title="Leave details">
-          <div className="grid grid-cols-2 gap-3">
-            {isAdmin && (
-              <Select label="Employee" required {...register('employee_id')} error={errors.employee_id?.message}>
-                <option value="">— Select —</option>
-                {employees.map((e) => <option key={e.id} value={e.id}>{e.full_name} ({e.employee_no})</option>)}
-              </Select>
-            )}
-            {!isAdmin && (
-              <input type="hidden" {...register('employee_id')} />
-            )}
-            <Select label="Leave type" required {...register('leave_type_id')} error={errors.leave_type_id?.message}>
-              <option value="">— Select —</option>
-              {types.map((t) => <option key={t.id} value={t.id}>{t.code} — {t.name}</option>)}
-            </Select>
-            <Input label="Start date" type="date" required {...register('start_date')} error={errors.start_date?.message} />
-            <Input label="End date" type="date" required {...register('end_date')} error={errors.end_date?.message} />
-            <Select label="Half-day" {...register('half_day_period')} error={errors.half_day_period?.message}>
-              {(leaveOptions?.half_day_periods ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </Select>
-          </div>
-          <div className="mt-3">
-            <Textarea label="Reason" {...register('reason')} error={errors.reason?.message} rows={3} />
-          </div>
-          {selectedBalance && (
-            <div className="mt-3 p-3 bg-surface border border-default rounded-md text-sm">
-              <div className="text-2xs uppercase tracking-wider text-muted mb-1">{selectedBalance.leave_type.code} balance</div>
-              <div className="flex items-baseline gap-3">
-                <span className="font-mono tabular-nums text-2xl font-medium">{selectedBalance.remaining}</span>
-                <span className="text-xs text-muted">of {selectedBalance.total_credits} days remaining</span>
-                {estimatedDays > 0 && (
-                  <span className={`ml-auto font-mono tabular-nums text-sm ${parseFloat(selectedBalance.remaining) < estimatedDays ? 'text-danger-fg' : 'text-success-fg'}`}>
-                    Requesting {estimatedDays} day{estimatedDays === 1 ? '' : 's'}
-                  </span>
-                )}
-              </div>
-              <div className="h-1.5 bg-elevated rounded-sm mt-2 overflow-hidden">
-                <div
-                  className="h-full bg-accent"
-                  style={{ width: `${Math.min(100, (parseFloat(selectedBalance.used) / Math.max(1, parseFloat(selectedBalance.total_credits))) * 100)}%` }}
-                />
-              </div>
-            </div>
-          )}
-        </Panel>
-        <div className="flex justify-end gap-2 pt-2">
-          <Button type="button" variant="secondary" onClick={() => navigate('/hr/leaves')}>Cancel</Button>
-          <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending} loading={mutation.isPending}>
-            {mutation.isPending ? 'Submitting…' : 'Submit request'}
-          </Button>
-        </div>
-      </form>
-    </div>
-  );
+ return (
+ <div>
+ <PageHeader title="Request leave" backTo="/hr/leaves" backLabel="Leaves" breadcrumbs={[{ label: 'HR', href: '/hr' }, { label: 'Leaves', href: '/hr/leaves' }, { label: 'New Request' }]} />
+ <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-2xl mx-auto px-5 py-4 space-y-4">
+ <Panel title="Leave details">
+ <div className="grid grid-cols-2 gap-3">
+ {isAdmin && (
+ <Select label="Employee" required {...register('employee_id')} error={errors.employee_id?.message}>
+ <option value="">— Select —</option>
+ {employees.map((e) => <option key={e.id} value={e.id}>{e.full_name} ({e.employee_no})</option>)}
+ </Select>
+ )}
+ {!isAdmin && (
+ <input type="hidden" {...register('employee_id')} />
+ )}
+ <Select label="Leave type" required {...register('leave_type_id')} error={errors.leave_type_id?.message}>
+ <option value="">— Select —</option>
+ {types.map((t) => <option key={t.id} value={t.id}>{t.code} — {t.name}</option>)}
+ </Select>
+ <Input label="Start date" type="date" required {...register('start_date')} error={errors.start_date?.message} />
+ <Input label="End date" type="date" required {...register('end_date')} error={errors.end_date?.message} />
+ <Select label="Half-day" {...register('half_day_period')} error={errors.half_day_period?.message}>
+ {(leaveOptions?.half_day_periods ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+ </Select>
+ </div>
+ <div className="mt-3">
+ <Textarea label="Reason" {...register('reason')} error={errors.reason?.message} rows={3} />
+ </div>
+ {selectedBalance && (
+ <div className="mt-3 p-3 bg-surface border border-default rounded-md text-sm">
+ <div className="text-2xs uppercase tracking-wider text-muted mb-1">{selectedBalance.leave_type.code} balance</div>
+ <div className="flex items-baseline gap-3">
+ <span className="font-mono tabular-nums text-2xl font-medium">{selectedBalance.remaining}</span>
+ <span className="text-xs text-muted">of {selectedBalance.total_credits} days remaining</span>
+ {estimatedDays > 0 && (
+ <span className={`ml-auto font-mono tabular-nums text-sm ${parseFloat(selectedBalance.remaining) < estimatedDays ? 'text-danger-fg' : 'text-success-fg'}`}>
+ Requesting {estimatedDays} day{estimatedDays === 1 ? '' : 's'}
+ </span>
+ )}
+ </div>
+ <div className="h-1.5 bg-elevated rounded-sm mt-2 overflow-hidden">
+ <div
+ className="h-full bg-accent"
+ style={{ width: `${Math.min(100, (parseFloat(selectedBalance.used) / Math.max(1, parseFloat(selectedBalance.total_credits))) * 100)}%` }}
+ />
+ </div>
+ </div>
+ )}
+ </Panel>
+ <div className="flex justify-end gap-2 pt-2">
+ <Button type="button" variant="secondary" onClick={() => navigate('/hr/leaves')}>Cancel</Button>
+ <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending} loading={mutation.isPending}>
+ {mutation.isPending ? 'Submitting…' : 'Submit request'}
+ </Button>
+ </div>
+ </form>
+ </div>
+ );
 }

@@ -6,6 +6,7 @@ namespace App\Modules\Accounting\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Str;
 
 class BudgetTransferResource extends JsonResource
 {
@@ -20,6 +21,7 @@ class BudgetTransferResource extends JsonResource
             'amount'           => (float) $this->amount,
             'reason'           => $this->reason,
             'status'           => $this->status,
+            'status_label'     => Str::headline((string) $this->status),
             'requested_by'     => $this->whenLoaded('requestedBy', fn () => [
                 'id'   => $this->requestedBy?->hash_id,
                 'name' => $this->requestedBy?->name,

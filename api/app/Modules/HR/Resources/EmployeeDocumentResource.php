@@ -16,6 +16,7 @@ class EmployeeDocumentResource extends JsonResource
             'document_type' => $this->document_type,
             'file_name'     => $this->file_name,
             'uploaded_at'   => optional($this->uploaded_at)->toIso8601String(),
+            'deleted_at'    => optional($this->deleted_at)?->toIso8601String(),
         ];
     }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Attendance\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Support\TrashedFilter;
 use App\Modules\Attendance\Models\Shift;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -14,6 +15,7 @@ class ShiftService
     public function list(array $filters): LengthAwarePaginator
     {
         $q = Shift::query();
+        TrashedFilter::apply($q, $filters);
         if (!empty($filters['search'])) $q->where('name', 'ilike', "%{$filters['search']}%");
         if (array_key_exists('is_active', $filters) && $filters['is_active'] !== '') {
             $q->where('is_active', filter_var($filters['is_active'], FILTER_VALIDATE_BOOLEAN));

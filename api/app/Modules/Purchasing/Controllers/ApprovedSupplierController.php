@@ -39,4 +39,10 @@ class ApprovedSupplierController
         $this->service->delete($approvedSupplier);
         return response()->json(null, 204);
     }
+
+    public function restore(ApprovedSupplier $approvedSupplier): JsonResponse
+    {
+        $approvedSupplier->restore();
+        return response()->json(['message' => 'Approved supplier restored.']);
+    }
 }

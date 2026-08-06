@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Production\Services;
 
 use App\Modules\MRP\Models\Machine;
+use App\Modules\MRP\Enums\MachineStatus;
 use App\Modules\Production\Enums\MachineDowntimeCategory;
 use App\Modules\Production\Models\MachineDowntime;
 use App\Modules\Production\Models\WorkOrderOutput;
@@ -143,6 +144,7 @@ class OeeService
                     'name'         => $m->name,
                     'tonnage'      => $m->tonnage,
                     'status'       => (string) $m->status?->value,
+                    'status_label' => MachineStatus::tryFrom((string) $m->status?->value)?->label() ?? (string) $m->status?->value,
                 ] + $this->calculate($m, $from, $to);
             });
     }
@@ -215,7 +217,8 @@ class OeeService
                     ->filter(fn ($r) => ($r['diagnostics']['run_time'] ?? 0) > 0);
                 $trend[] = [
                     'date' => $cursor->toDateString(),
-                    'oee'  => $perDay->isEmpty() ? 0.0 : round($perDay->avg('oee'), 4),
+                    // A day with no production activity has no measured OEE.
+                    'oee'  => $perDay->isEmpty() ? null : round($perDay->avg('oee'), 4),
                 ];
                 $cursor->addDay();
             }
@@ -259,6 +262,7 @@ class OeeService
             'name'         => $m->name,
             'tonnage'      => $m->tonnage,
             'status'       => (string) $m->status?->value,
+            'status_label' => MachineStatus::tryFrom((string) $m->status?->value)?->label() ?? (string) $m->status?->value,
         ] + $this->calculate($m, $from, $to);
     }
 }

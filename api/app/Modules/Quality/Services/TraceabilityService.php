@@ -10,6 +10,10 @@ use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\SupplyChain\Models\ShipmentLot;
+use App\Modules\Production\Enums\WorkOrderStatus;
+use App\Modules\Quality\Enums\InspectionStage;
+use App\Modules\Quality\Enums\InspectionStatus;
+use App\Modules\SupplyChain\Enums\DeliveryStatus;
 
 /**
  * ADV3 — IATF 16949 traceability search.
@@ -84,6 +88,7 @@ class TraceabilityService
                     'id' => $sl->delivery->hash_id,
                     'delivery_number' => $sl->delivery->delivery_number,
                     'status' => (string) ($sl->delivery->status?->value ?? $sl->delivery->status),
+                    'status_label' => DeliveryStatus::tryFrom((string) ($sl->delivery->status?->value ?? $sl->delivery->status))?->label() ?? (string) ($sl->delivery->status?->value ?? $sl->delivery->status),
                     'delivered_at' => optional($sl->delivery->delivered_at)->toIso8601String(),
                     'lot_number' => $sl->lot_number,
                     'quantity' => (int) $sl->quantity,
@@ -107,13 +112,13 @@ class TraceabilityService
     }
 
     /**
-     * @return array{found: bool, term: string, type: string|null, trace: array}
+     * @return array{found: bool, term: string, type: string|null, type_label: string|null, trace: array}
      */
     public function search(string $term): array
     {
         $term = trim($term);
         if ($term === '') {
-            return ['found' => false, 'term' => $term, 'type' => null, 'trace' => []];
+            return ['found' => false, 'term' => $term, 'type' => null, 'type_label' => null, 'trace' => []];
         }
 
         // Try batch_number (WO).
@@ -122,7 +127,7 @@ class TraceabilityService
             ->where('batch_number', $term)
             ->first();
         if ($wo) {
-            return ['found' => true, 'term' => $term, 'type' => 'batch', 'trace' => $this->traceFromWorkOrder($wo)];
+            return ['found' => true, 'term' => $term, 'type' => 'batch', 'type_label' => 'Production batch', 'trace' => $this->traceFromWorkOrder($wo)];
         }
 
         // Try lot_number (ShipmentLot).
@@ -131,7 +136,7 @@ class TraceabilityService
             ->where('lot_number', $term)
             ->first();
         if ($lot) {
-            return ['found' => true, 'term' => $term, 'type' => 'lot', 'trace' => $this->traceFromLot($lot)];
+            return ['found' => true, 'term' => $term, 'type' => 'lot', 'type_label' => 'Shipment lot', 'trace' => $this->traceFromLot($lot)];
         }
 
         // Try material_lot_number (GRN item).
@@ -141,10 +146,10 @@ class TraceabilityService
             ->latest('id')
             ->first();
         if ($grnItem) {
-            return ['found' => true, 'term' => $term, 'type' => 'material_lot', 'trace' => $this->traceFromMaterialLot($grnItem)];
+            return ['found' => true, 'term' => $term, 'type' => 'material_lot', 'type_label' => 'Material lot', 'trace' => $this->traceFromMaterialLot($grnItem)];
         }
 
-        return ['found' => false, 'term' => $term, 'type' => null, 'trace' => []];
+        return ['found' => false, 'term' => $term, 'type' => null, 'type_label' => null, 'trace' => []];
     }
 
     /** Build the trace tree starting from a WO (batch). */
@@ -188,6 +193,7 @@ class TraceabilityService
                     'id'              => $lot->delivery->hash_id,
                     'delivery_number' => $lot->delivery->delivery_number,
                     'status'          => (string) ($lot->delivery->status?->value ?? $lot->delivery->status),
+                    'status_label'    => DeliveryStatus::tryFrom((string) ($lot->delivery->status?->value ?? $lot->delivery->status))?->label() ?? (string) ($lot->delivery->status?->value ?? $lot->delivery->status),
                     'delivered_at'    => optional($lot->delivery->delivered_at)->toIso8601String(),
                     'confirmed_at'    => optional($lot->delivery->confirmed_at)->toIso8601String(),
                 ] : null,
@@ -262,6 +268,7 @@ class TraceabilityService
             'actual_start'      => optional($wo->actual_start)->toIso8601String(),
             'actual_end'        => optional($wo->actual_end)->toIso8601String(),
             'status'            => (string) ($wo->status?->value ?? $wo->status),
+            'status_label'      => WorkOrderStatus::tryFrom((string) ($wo->status?->value ?? $wo->status))?->label() ?? (string) ($wo->status?->value ?? $wo->status),
         ];
     }
 
@@ -298,6 +305,8 @@ class TraceabilityService
                 'inspection_number' => $i->inspection_number,
                 'stage'             => $i->stage instanceof \BackedEnum ? $i->stage->value : $i->stage,
                 'status'            => $i->status instanceof \BackedEnum ? $i->status->value : $i->status,
+                'stage_label'       => InspectionStage::tryFrom((string) ($i->stage instanceof \BackedEnum ? $i->stage->value : $i->stage))?->label() ?? (string) ($i->stage instanceof \BackedEnum ? $i->stage->value : $i->stage),
+                'status_label'      => InspectionStatus::tryFrom((string) ($i->status instanceof \BackedEnum ? $i->status->value : $i->status))?->label() ?? (string) ($i->status instanceof \BackedEnum ? $i->status->value : $i->status),
                 'completed_at'      => optional($i->completed_at)->toIso8601String(),
             ])
             ->all();
@@ -328,6 +337,8 @@ class TraceabilityService
                 'inspection_number' => $i->inspection_number,
                 'stage'             => $i->stage instanceof \BackedEnum ? $i->stage->value : $i->stage,
                 'status'            => $i->status instanceof \BackedEnum ? $i->status->value : $i->status,
+                'stage_label'       => InspectionStage::tryFrom((string) ($i->stage instanceof \BackedEnum ? $i->stage->value : $i->stage))?->label() ?? (string) ($i->stage instanceof \BackedEnum ? $i->stage->value : $i->stage),
+                'status_label'      => InspectionStatus::tryFrom((string) ($i->status instanceof \BackedEnum ? $i->status->value : $i->status))?->label() ?? (string) ($i->status instanceof \BackedEnum ? $i->status->value : $i->status),
                 'completed_at'      => optional($i->completed_at)->toIso8601String(),
             ];
         }

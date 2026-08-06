@@ -25,9 +25,14 @@ class EmployeeResource extends JsonResource
 
             'birth_date' => optional($this->birth_date)->toDateString(),
             'gender' => $this->gender?->value,
+            'gender_label' => $this->gender?->label(),
             'civil_status' => $this->civil_status?->value,
+            'civil_status_label' => $this->civil_status?->label(),
             'nationality' => $this->nationality,
             'photo_path' => $this->photo_path,
+            // Photo is served through the authenticated /photo endpoint — never
+            // via a public /storage/ URL.
+            'photo_url' => $this->photo_path ? "/api/v1/hr/employees/{$this->hash_id}/photo" : null,
 
             'address' => [
                 'street' => $this->street_address,
@@ -38,19 +43,26 @@ class EmployeeResource extends JsonResource
             ],
             'contact' => [
                 'mobile_number' => $this->mobile_number,
-                'email' => $this->email,
+                // The user account is the authoritative login/contact fallback
+                // when older employee rows have no email column value. Avoid
+                // lazy-loading here; the relation is only consulted when the
+                // resource caller explicitly included it.
+                'email' => $this->email ?: ($this->relationLoaded('user') ? $this->user?->email : null),
                 'emergency_contact_name' => $this->emergency_contact_name,
                 'emergency_contact_relation' => $this->emergency_contact_relation,
                 'emergency_contact_phone' => $this->emergency_contact_phone,
             ],
 
             'status' => $this->status?->value,
+            'status_label' => $this->status?->label(),
             'employment_type' => $this->employment_type?->value,
+            'employment_type_label' => $this->employment_type?->label(),
             'pay_type' => $this->pay_type?->value,
+            'pay_type_label' => $this->pay_type?->label(),
             'date_hired' => optional($this->date_hired)->toDateString(),
             'date_regularized' => optional($this->date_regularized)->toDateString(),
             'basic_monthly_salary' => $canViewSensitive ? $this->basic_monthly_salary : null,
-            'daily_rate' => $canViewSensitive ? $this->daily_rate : null,
+            'semi_monthly_rate' => $canViewSensitive ? $this->semi_monthly_rate : null,
 
             'bank_name' => $this->bank_name,
 
@@ -78,6 +90,7 @@ class EmployeeResource extends JsonResource
 
             'created_at' => optional($this->created_at)->toIso8601String(),
             'updated_at' => optional($this->updated_at)->toIso8601String(),
+            'deleted_at' => optional($this->deleted_at)?->toIso8601String(),
         ];
     }
 

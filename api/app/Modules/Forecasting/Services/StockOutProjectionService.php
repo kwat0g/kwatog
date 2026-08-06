@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Forecasting\Services;
 
+use App\Common\Services\SettingsService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -15,8 +16,8 @@ use Illuminate\Support\Facades\DB;
  *
  *   - on_hand   : sum(stock_levels.quantity - stock_levels.reserved_quantity)
  *   - daily_demand :
- *        a) if a forecast exists for the next month → forecasted_qty / 30
- *        b) else → average of last 30 days of `material_issue` / `consume`
+ *        a) if a forecast exists for the configured forecast period → daily rate
+ *        b) else → average over the configured demand-history window
  *           movements (negative quantity rows in stock_movements)
  *
  *   - days_until_stockout = max(0, (on_hand - safety_stock) / daily_demand)
@@ -26,9 +27,12 @@ use Illuminate\Support\Facades\DB;
  */
 class StockOutProjectionService
 {
+    public function __construct(private readonly SettingsService $settings) {}
+
     /** @return array<int, array<string, mixed>> */
-    public function projectAll(int $horizonDays = 60): array
+    public function projectAll(?int $horizonDays = null): array
     {
+        $horizonDays ??= $this->settings->requiredInt('inventory.stockout.default_horizon_days', 1);
         $now = Carbon::now();
         $monthY = $now->year;
         $monthM = $now->month;
@@ -54,12 +58,18 @@ class StockOutProjectionService
             return [];
         }
 
-        // 2) Average daily consumption over the last 30 days, derived from issue/consume movements.
-        //    `material_issue` is negative; we take the absolute and divide by 30 to get a daily rate.
-        $thirtyDaysAgo = $now->copy()->subDays(30)->toDateTimeString();
+        // 2) Average daily consumption over the configured history window.
+        //    `material_issue` is negative; take the absolute and derive a daily rate.
+        $historyDays = $this->settings->requiredInt('inventory.stockout.demand_history_days', 1);
+        $forecastDays = $this->settings->requiredInt('inventory.stockout.forecast_period_days', 1);
+        $coverageBuffer = $this->settings->requiredFloat('inventory.stockout.coverage_buffer_ratio', 1);
+        $zeroLeadRatio = $this->settings->requiredFloat('inventory.stockout.zero_lead_reorder_ratio', 0);
+        $highRiskBuffer = $this->settings->requiredInt('inventory.stockout.high_risk_buffer_days', 0);
+        $mediumRiskDays = $this->settings->requiredInt('inventory.stockout.medium_risk_days', 1);
+        $historyStart = $now->copy()->subDays($historyDays)->toDateTimeString();
         $consumption = DB::table('stock_movements')
             ->whereIn('movement_type', ['material_issue', 'consume', 'production_issue'])
-            ->where('created_at', '>=', $thirtyDaysAgo)
+            ->where('created_at', '>=', $historyStart)
             ->groupBy('item_id')
             ->select('item_id', DB::raw('SUM(ABS(quantity)) as consumed_30d'))
             ->pluck('consumed_30d', 'item_id');
@@ -67,7 +77,7 @@ class StockOutProjectionService
         // 3) Forecasted demand for the *next* month (derived daily). Forecasts are scoped
         //    to PRODUCTS, but here we work with INVENTORY ITEMS, which are different
         //    domains. We use forecast as a soft hint when items.code matches a product
-        //    part_number; otherwise we fall back to the 30-day average.
+        //    part_number; otherwise we fall back to the configured historical average.
         $next = $now->copy()->addMonthNoOverflow();
         $forecastByPart = DB::table('demand_forecasts as f')
             ->join('products as p', 'p.id', '=', 'f.product_id')
@@ -85,14 +95,14 @@ class StockOutProjectionService
             $reorder = (float) $it->reorder_point;
             $leadTime = (int) ($it->lead_time_days ?? 0);
 
-            // Daily demand: forecast first, else 30-day moving average.
+            // Daily demand: forecast first, else configured moving average.
             $dailyDemand = 0.0;
             $source = 'none';
             if (isset($forecastByPart[$it->code])) {
-                $dailyDemand = (float) $forecastByPart[$it->code] / 30.0;
+                $dailyDemand = (float) $forecastByPart[$it->code] / $forecastDays;
                 $source = 'forecast';
             } elseif (isset($consumption[$it->id]) && (float) $consumption[$it->id] > 0) {
-                $dailyDemand = (float) $consumption[$it->id] / 30.0;
+                $dailyDemand = (float) $consumption[$it->id] / $historyDays;
                 $source = 'historical';
             }
 
@@ -107,10 +117,10 @@ class StockOutProjectionService
             if ($daysUntilStockout !== null) {
                 // Order in time for lead time + 1 buffer day before depletion.
                 $reorderDate = $now->copy()->addDays(max(0, $daysUntilStockout - $leadTime))->toDateString();
-                // Suggested qty = MAX(MOQ, lead_time × daily_demand × 1.2 safety buffer).
+                // Suggested qty = MAX(MOQ, lead_time × daily_demand × configured safety buffer).
                 $suggested = max(
                     (float) $it->minimum_order_quantity,
-                    $leadTime > 0 ? ($leadTime * $dailyDemand * 1.2) : ($reorder * 0.5)
+                    $leadTime > 0 ? ($leadTime * $dailyDemand * $coverageBuffer) : ($reorder * $zeroLeadRatio)
                 );
                 $suggestedQty = round($suggested, 3);
             }
@@ -119,9 +129,9 @@ class StockOutProjectionService
             if ($daysUntilStockout !== null) {
                 if ($daysUntilStockout <= $leadTime) {
                     $risk = 'critical';
-                } elseif ($daysUntilStockout <= ($leadTime + 7)) {
+                } elseif ($daysUntilStockout <= ($leadTime + $highRiskBuffer)) {
                     $risk = 'high';
-                } elseif ($daysUntilStockout <= 30) {
+                } elseif ($daysUntilStockout <= $mediumRiskDays) {
                     $risk = 'medium';
                 } else {
                     $risk = 'low';

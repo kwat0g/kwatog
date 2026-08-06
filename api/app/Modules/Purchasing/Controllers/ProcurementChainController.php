@@ -5,10 +5,14 @@ declare(strict_types=1);
 namespace App\Modules\Purchasing\Controllers;
 
 use App\Modules\Accounting\Models\Bill;
+use App\Modules\Accounting\Enums\BillStatus;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
+use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseRequest;
+use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
+use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -31,30 +35,30 @@ class ProcurementChainController extends Controller
 
         // ── Material Requirements ──
         $prCounts = Cache::remember('procurement_chain_pr', 60, fn () => [
-            'pending_pr'   => PurchaseRequest::whereIn('status', ['draft', 'pending'])->count(),
-            'approved_pr'  => PurchaseRequest::whereIn('status', ['approved', 'converted'])->count(),
+            'pending_pr'   => PurchaseRequest::whereIn('status', [PurchaseRequestStatus::Draft->value, PurchaseRequestStatus::Pending->value])->count(),
+            'approved_pr'  => PurchaseRequest::whereIn('status', [PurchaseRequestStatus::Approved->value, PurchaseRequestStatus::Converted->value])->count(),
         ]);
 
         $poCounts = Cache::remember('procurement_chain_po', 60, fn () => [
-            'draft_po'              => PurchaseOrder::where('status', 'draft')->count(),
-            'sent_po'               => PurchaseOrder::whereIn('status', ['approved', 'sent'])->count(),
-            'partially_received_po' => PurchaseOrder::where('status', 'partially_received')->count(),
-            'received_po'           => PurchaseOrder::where('status', 'received')->count(),
+            'draft_po'              => PurchaseOrder::where('status', PurchaseOrderStatus::Draft->value)->count(),
+            'sent_po'               => PurchaseOrder::whereIn('status', [PurchaseOrderStatus::Approved->value, PurchaseOrderStatus::Sent->value])->count(),
+            'partially_received_po' => PurchaseOrder::where('status', PurchaseOrderStatus::PartiallyReceived->value)->count(),
+            'received_po'           => PurchaseOrder::where('status', PurchaseOrderStatus::Received->value)->count(),
         ]);
 
         // ── Receiving ──
         $grnCounts = Cache::remember('procurement_chain_grn', 60, fn () => [
-            'grn_received'  => GoodsReceiptNote::whereIn('status', ['accepted', 'partial'])->count(),
-            'grn_pending_qc' => GoodsReceiptNote::where('status', 'pending_qc')->count(),
+            'grn_received'  => GoodsReceiptNote::whereIn('status', [GrnStatus::Accepted->value, GrnStatus::PartialAccepted->value])->count(),
+            'grn_pending_qc' => GoodsReceiptNote::where('status', GrnStatus::PendingQc->value)->count(),
         ]);
 
         // ── Billing ──
         $billCounts = Cache::remember('procurement_chain_bills', 60, fn () => [
-            'bills_unpaid'  => Bill::whereIn('status', ['unpaid', 'partial'])->count(),
-            'bills_overdue' => Bill::whereIn('status', ['unpaid', 'partial'])
+            'bills_unpaid'  => Bill::whereIn('status', [BillStatus::Unpaid->value, BillStatus::Partial->value])->count(),
+            'bills_overdue' => Bill::whereIn('status', [BillStatus::Unpaid->value, BillStatus::Partial->value])
                 ->where('due_date', '<', now())
                 ->count(),
-            'bills_this_month' => (string) Bill::whereIn('status', ['unpaid', 'partial', 'paid'])
+            'bills_this_month' => (string) Bill::whereIn('status', [BillStatus::Unpaid->value, BillStatus::Partial->value, BillStatus::Paid->value])
                 ->whereMonth('date', now()->month)
                 ->whereYear('date', now()->year)
                 ->sum(DB::raw('total_amount - COALESCE(amount_paid, 0)')),

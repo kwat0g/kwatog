@@ -13,100 +13,100 @@ import { Button } from '@/components/ui/Button';
 import type { ApiValidationError } from '@/types';
 
 const cleanup = (d: EmployeeFormValues): UpdateEmployeeData => {
-  const out: Record<string, unknown> = { ...d };
-  Object.keys(out).forEach((k) => {
-    if (out[k] === '') out[k] = undefined;
-  });
-  return out as UpdateEmployeeData;
+ const out: Record<string, unknown> = { ...d };
+ Object.keys(out).forEach((k) => {
+ if (out[k] === '') out[k] = undefined;
+ });
+ return out as UpdateEmployeeData;
 };
 
 export default function EditEmployeePage() {
-  const { id = '' } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-  const qc = useQueryClient();
-  const setErrorRef = useRef<((field: keyof EmployeeFormValues, msg: string) => void) | null>(null);
+ const { id = '' } = useParams<{ id: string }>();
+ const navigate = useNavigate();
+ const qc = useQueryClient();
+ const setErrorRef = useRef<((field: keyof EmployeeFormValues, msg: string) => void) | null>(null);
 
-  const { data: employee, isLoading, isError, refetch } = useQuery({
-    queryKey: ['hr', 'employee', id],
-    queryFn: () => employeesApi.show(id),
-  });
+ const { data: employee, isLoading, isError, refetch } = useQuery({
+ queryKey: ['hr', 'employee', id],
+ queryFn: () => employeesApi.show(id),
+ });
 
-  const mutation = useMutation({
-    mutationFn: async (d: EmployeeFormValues) => {
-      const payload = cleanup(d);
-      const shiftId = payload.shift_id;
-      delete (payload as Record<string, unknown>).shift_id;
-      const employee = await employeesApi.update(id, payload);
-      if (shiftId) {
-        await shiftsApi.assignEmployee(id, {
-          shift_id: shiftId,
-          effective_date: new Date().toISOString().slice(0, 10),
-        });
-      }
-      return employee;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['hr', 'employees'] });
-      qc.invalidateQueries({ queryKey: ['hr', 'employee', id] });
-      toast.success('Employee updated.');
-      navigate(`/hr/employees/${id}`);
-    },
-    onError: (e: AxiosError<ApiValidationError>) => {
-      if (e.response?.status === 422 && e.response.data.errors) {
-        Object.entries(e.response.data.errors).forEach(([field, msgs]) => {
-          setErrorRef.current?.(field as keyof EmployeeFormValues, msgs[0]);
-        });
-        toast.error(e.response?.data?.message || 'Validation failed.');
-      } else {
-        toast.error('Failed to update employee.');
-      }
-    },
-  });
+ const mutation = useMutation({
+ mutationFn: async (d: EmployeeFormValues) => {
+ const payload = cleanup(d);
+ const shiftId = payload.shift_id;
+ delete (payload as Record<string, unknown>).shift_id;
+ const employee = await employeesApi.update(id, payload);
+ if (shiftId) {
+ await shiftsApi.assignEmployee(id, {
+ shift_id: shiftId,
+ effective_date: new Date().toISOString().slice(0, 10),
+ });
+ }
+ return employee;
+ },
+ onSuccess: () => {
+ qc.invalidateQueries({ queryKey: ['hr', 'employees'] });
+ qc.invalidateQueries({ queryKey: ['hr', 'employee', id] });
+ toast.success('Employee updated.');
+ navigate(`/hr/employees/${id}`);
+ },
+ onError: (e: AxiosError<ApiValidationError>) => {
+ if (e.response?.status === 422 && e.response.data.errors) {
+ Object.entries(e.response.data.errors).forEach(([field, msgs]) => {
+ setErrorRef.current?.(field as keyof EmployeeFormValues, msgs[0]);
+ });
+ toast.error(e.response?.data?.message || 'Validation failed.');
+ } else {
+ toast.error('Failed to update employee.');
+ }
+ },
+ });
 
-  if (isLoading) {
-    return (
-      <div>
-        <PageHeader title="Edit employee" backTo="/hr/employees" backLabel="Employees" breadcrumbs={[{ label: 'HR', href: '/hr' }, { label: 'Employees', href: '/hr/employees' }, { label: 'Edit' }]} />
-        <SkeletonForm />
-      </div>
-    );
-  }
+ if (isLoading) {
+ return (
+ <div>
+ <PageHeader title="Edit employee" backTo="/hr/employees" backLabel="Employees" breadcrumbs={[{ label: 'HR', href: '/hr' }, { label: 'Employees', href: '/hr/employees' }, { label: 'Edit' }]} />
+ <SkeletonForm />
+ </div>
+ );
+ }
 
-  if (isError || !employee) {
-    return (
-      <div>
-        <PageHeader title="Edit employee" backTo="/hr/employees" backLabel="Employees" />
-        <EmptyState
-          icon="alert-circle"
-          title="Failed to load employee"
-          action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
-        />
-      </div>
-    );
-  }
+ if (isError || !employee) {
+ return (
+ <div>
+ <PageHeader title="Edit employee" backTo="/hr/employees" backLabel="Employees" />
+ <EmptyState
+ icon="alert-circle"
+ title="Failed to load employee"
+ action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
+ />
+ </div>
+ );
+ }
 
-  return (
-    <div>
-      <PageHeader
-        title={`Edit ${employee.full_name}`}
-        subtitle={<span className="font-mono">{employee.employee_no}</span>}
-        backTo={`/hr/employees/${employee.id}`}
-        backLabel="Profile"
-        breadcrumbs={[
-          { label: 'HR', href: '/hr' },
-          { label: 'Employees', href: '/hr/employees' },
-          { label: employee.full_name, href: `/hr/employees/${employee.id}` },
-          { label: 'Edit' },
-        ]}
-      />
-      <EmployeeForm
-        employee={employee}
-        onSubmit={(d) => mutation.mutate(d)}
-        onCancel={() => navigate(`/hr/employees/${employee.id}`)}
-        isPending={mutation.isPending}
-        registerSetError={(fn) => { setErrorRef.current = fn; }}
-        submitLabel="Save changes"
-      />
-    </div>
-  );
+ return (
+ <div>
+ <PageHeader
+ title={`Edit ${employee.full_name}`}
+ subtitle={<span className="font-mono">{employee.employee_no}</span>}
+ backTo={`/hr/employees/${employee.id}`}
+ backLabel="Profile"
+ breadcrumbs={[
+ { label: 'HR', href: '/hr' },
+ { label: 'Employees', href: '/hr/employees' },
+ { label: employee.full_name, href: `/hr/employees/${employee.id}` },
+ { label: 'Edit' },
+ ]}
+ />
+ <EmployeeForm
+ employee={employee}
+ onSubmit={(d) => mutation.mutate(d)}
+ onCancel={() => navigate(`/hr/employees/${employee.id}`)}
+ isPending={mutation.isPending}
+ registerSetError={(fn) => { setErrorRef.current = fn; }}
+ submitLabel="Save changes"
+ />
+ </div>
+ );
 }

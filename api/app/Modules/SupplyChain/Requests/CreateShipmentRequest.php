@@ -6,6 +6,7 @@ namespace App\Modules\SupplyChain\Requests;
 
 use App\Common\Concerns\ResolvesHashIds;
 use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\SupplyChain\Enums\Incoterm;
 use Illuminate\Foundation\Http\FormRequest;
 
 class CreateShipmentRequest extends FormRequest
@@ -30,7 +31,7 @@ class CreateShipmentRequest extends FormRequest
             'vessel'            => ['nullable', 'string', 'max:100'],
             'container_number'  => ['nullable', 'string', 'max:32'],
             'bl_number'         => ['nullable', 'string', 'max:32'],
-            'incoterm'          => ['nullable', 'string', 'in:EXW,FCA,FAS,FOB,CFR,CIF,CPT,CIP,DAP,DPU,DDP'],
+            'incoterm'          => ['nullable', \Illuminate\Validation\Rule::enum(Incoterm::class)],
             'etd'               => ['nullable', 'date'],
             'eta'               => ['nullable', 'date'],
             'notes'             => ['nullable', 'string', 'max:2000'],

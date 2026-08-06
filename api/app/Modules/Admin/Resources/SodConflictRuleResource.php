@@ -6,6 +6,7 @@ namespace App\Modules\Admin\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Str;
 
 /**
  * @mixin \App\Modules\Admin\Models\SodConflictRule
@@ -19,6 +20,7 @@ class SodConflictRuleResource extends JsonResource
             'code'         => $this->code,
             'name'         => $this->name,
             'severity'     => $this->severity->value,
+            'severity_label' => Str::headline((string) $this->severity->value),
             'rationale'    => $this->rationale,
             'active'       => $this->active,
             'permission_a' => [

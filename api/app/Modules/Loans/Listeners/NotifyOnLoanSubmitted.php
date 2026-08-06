@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Loans\Listeners;
 
 use App\Common\Services\NotificationService;
+use App\Common\Services\CurrencyDisplayService;
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Loans\Enums\LoanType;
 use App\Modules\Loans\Events\LoanSubmitted;
@@ -13,7 +15,11 @@ use Illuminate\Support\Facades\Log;
 
 class NotifyOnLoanSubmitted implements ShouldQueue
 {
-    public function __construct(private readonly NotificationService $notifications) {}
+    public function __construct(
+        private readonly NotificationService $notifications,
+        private readonly ?SettingsService $settings = null,
+        private readonly ?CurrencyDisplayService $currency = null,
+    ) {}
 
     public function handle(LoanSubmitted $event): void
     {
@@ -26,14 +32,16 @@ class NotifyOnLoanSubmitted implements ShouldQueue
                 ? 'Cash Advance'
                 : 'Company Loan';
 
+            $roles = array_values(array_filter((array) ($this->settings ?? app(SettingsService::class))->get('loans.submitted.notification_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
             $audience = User::query()
-                ->whereHas('role', fn ($q) => $q->where('slug', 'finance_officer'))
+                ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                 ->where('is_active', true)
                 ->get();
 
+            $currency = $this->currency ?? app(CurrencyDisplayService::class);
             $this->notifications->send($audience, 'loans.submitted', [
                 'title'       => "{$typeLabel} Request from {$emp->full_name}",
-                'message'     => "\u{20B1}" . number_format((float) $loan->principal, 2) . " — awaiting Finance approval.",
+                'message'     => $currency->format($loan->principal) . " — awaiting Finance approval.",
                 'link_to'     => "/hr/loans/{$loan->hash_id}",
                 'entity_type' => 'employee_loan',
                 'entity_id'   => $loan->hash_id,

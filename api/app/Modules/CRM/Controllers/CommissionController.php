@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\CRM\Controllers;
 
+use App\Modules\CRM\Enums\CommissionStatus;
 use App\Modules\CRM\Models\CommissionEarning;
 use App\Modules\CRM\Requests\StoreCommissionRateRequest;
 use App\Modules\CRM\Resources\CommissionEarningResource;
@@ -23,6 +24,16 @@ class CommissionController extends Controller
         return CommissionEarningResource::collection(
             $this->service->list($request->all())
         );
+    }
+
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'statuses' => array_map(static fn (CommissionStatus $status): array => [
+                'value' => $status->value,
+                'label' => ucfirst($status->value),
+            ], CommissionStatus::cases()),
+        ]]);
     }
 
     public function rates(Request $request): AnonymousResourceCollection

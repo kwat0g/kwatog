@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace App\Modules\HR\Controllers;
 
 use App\Modules\HR\Models\SuccessionPlan;
+use App\Modules\HR\Enums\SuccessionReadiness;
+use App\Modules\HR\Enums\SuccessionPriority;
+use App\Modules\HR\Enums\SuccessionStatus;
 use App\Modules\HR\Requests\StoreSuccessionPlanRequest;
 use App\Modules\HR\Requests\UpdateSuccessionPlanRequest;
 use App\Modules\HR\Resources\SuccessionPlanResource;
@@ -23,6 +26,24 @@ class SuccessionPlanController extends Controller
         return SuccessionPlanResource::collection(
             $this->service->list($request->all())
         );
+    }
+
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'statuses' => array_map(
+                static fn (SuccessionStatus $status): array => ['value' => $status->value, 'label' => ucfirst($status->value)],
+                SuccessionStatus::cases(),
+            ),
+            'readiness' => array_map(
+                static fn (SuccessionReadiness $readiness): array => ['value' => $readiness->value, 'label' => str_replace('_', ' ', ucfirst($readiness->value))],
+                SuccessionReadiness::cases(),
+            ),
+            'priorities' => array_map(
+                static fn (SuccessionPriority $priority): array => ['value' => $priority->value, 'label' => ucfirst($priority->value)],
+                SuccessionPriority::cases(),
+            ),
+        ]]);
     }
 
     public function store(StoreSuccessionPlanRequest $request): \Illuminate\Http\JsonResponse
@@ -50,5 +71,11 @@ class SuccessionPlanController extends Controller
     {
         $this->service->delete($successionPlan);
         return response()->json(null, 204);
+    }
+
+    public function restore(SuccessionPlan $successionPlan): JsonResponse
+    {
+        $successionPlan->restore();
+        return response()->json(['message' => 'Succession plan restored.']);
     }
 }

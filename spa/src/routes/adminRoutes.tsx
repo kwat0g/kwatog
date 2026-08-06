@@ -38,154 +38,154 @@ const EntityAuditTrailPage = lazy(() => import('@/pages/admin/audit-logs/entity'
 const SessionsPage = lazy(() => import('@/pages/admin/sessions'));
 
 export const adminRoutes = (
-  <>
-    {/* Admin — no hub page, direct access to sub-pages */}
-    {/* Admin */}
-    <Route
-      path="/admin/roles"
-      element={
-        <PermissionGuard permission="admin.roles.manage">
-          <RolesIndexPage />
-        </PermissionGuard>
-      }
-    />
-    <Route
-      path="/admin/roles/create"
-      element={
-        <PermissionGuard permission="admin.roles.manage">
-          <CreateRolePage />
-        </PermissionGuard>
-      }
-    />
-    {/* ADV4 — must come before /admin/roles/:id/permissions to avoid being captured. */}
-    <Route
-      path="/admin/roles/compare"
-      element={
-        <PermissionGuard permission="admin.roles.manage">
-          <CompareRolesPage />
-        </PermissionGuard>
-      }
-    />
-    <Route
-      path="/admin/roles/permissions-search"
-      element={
-        <PermissionGuard permission="admin.roles.manage">
-          <PermissionSearchPage />
-        </PermissionGuard>
-      }
-    />
-    <Route
-      path="/admin/roles/:id/permissions"
-      element={
-        <PermissionGuard permission="admin.roles.manage">
-          <RolePermissionsPage />
-        </PermissionGuard>
-      }
-    />
-    <Route
-      path="/admin/settings"
-      element={
-        <PermissionGuard permission="admin.settings.manage">
-          <SettingsPage />
-        </PermissionGuard>
-      }
-    />
-    <Route
-      path="/admin/imports"
-      element={
-        <PermissionGuard permission="admin.import.manage">
-          <ImportsPage />
-        </PermissionGuard>
-      }
-    />
-    <Route
-      path="/admin/sessions"
-      element={
-        <PermissionGuard permission="admin.settings.manage">
-          <SessionsPage />
-        </PermissionGuard>
-      }
-    />
-    <Route
-      path="/admin/audit-logs"
-      element={
-        <PermissionGuard permission="admin.audit_logs.view">
-          <AuditLogsPage />
-        </PermissionGuard>
-      }
-    />
-    <Route
-      path="/admin/sod"
-      element={
-        <PermissionGuard permission="admin.sod.view">
-          <SodMatrixPage />
-        </PermissionGuard>
-      }
-    />
-    {/* Entity-scoped audit trail — must come before :id */}
-    <Route
-      path="/admin/audit-logs/entity"
-      element={
-        <PermissionGuard permission="admin.audit_logs.view">
-          <EntityAuditTrailPage />
-        </PermissionGuard>
-      }
-    />
+ <>
+ {/* Admin — no hub page, direct access to sub-pages */}
+ {/* Admin */}
+ <Route
+ path="/admin/roles"
+ element={
+ <PermissionGuard permission="admin.roles.manage">
+ <RolesIndexPage />
+ </PermissionGuard>
+ }
+ />
+ <Route
+ path="/admin/roles/create"
+ element={
+ <PermissionGuard permission="admin.roles.manage">
+ <CreateRolePage />
+ </PermissionGuard>
+ }
+ />
+ {/* ADV4 — must come before /admin/roles/:id/permissions to avoid being captured. */}
+ <Route
+ path="/admin/roles/compare"
+ element={
+ <PermissionGuard permission="admin.roles.manage">
+ <CompareRolesPage />
+ </PermissionGuard>
+ }
+ />
+ <Route
+ path="/admin/roles/permissions-search"
+ element={
+ <PermissionGuard permission="admin.roles.manage">
+ <PermissionSearchPage />
+ </PermissionGuard>
+ }
+ />
+ <Route
+ path="/admin/roles/:id/permissions"
+ element={
+ <PermissionGuard permission="admin.roles.manage">
+ <RolePermissionsPage />
+ </PermissionGuard>
+ }
+ />
+ <Route
+ path="/admin/settings"
+ element={
+ <PermissionGuard permission="admin.settings.manage">
+ <SettingsPage />
+ </PermissionGuard>
+ }
+ />
+ <Route
+ path="/admin/imports"
+ element={
+ <PermissionGuard permission="admin.import.manage">
+ <ImportsPage />
+ </PermissionGuard>
+ }
+ />
+ <Route
+ path="/admin/sessions"
+ element={
+ <PermissionGuard permission="admin.settings.manage">
+ <SessionsPage />
+ </PermissionGuard>
+ }
+ />
+ <Route
+ path="/admin/audit-logs"
+ element={
+ <PermissionGuard permission="admin.audit_logs.view">
+ <AuditLogsPage />
+ </PermissionGuard>
+ }
+ />
+ <Route
+ path="/admin/sod"
+ element={
+ <PermissionGuard permission="admin.sod.view">
+ <SodMatrixPage />
+ </PermissionGuard>
+ }
+ />
+ {/* Entity-scoped audit trail — must come before :id */}
+ <Route
+ path="/admin/audit-logs/entity"
+ element={
+ <PermissionGuard permission="admin.audit_logs.view">
+ <EntityAuditTrailPage />
+ </PermissionGuard>
+ }
+ />
 
-    {/* Series E (E2) — scheduled CSV/Excel exports */}
-    <Route
-      path="/admin/scheduled-exports"
-      element={
-        <PermissionGuard permission="admin.scheduled_exports.view">
-          <ScheduledExportsPage />
-        </PermissionGuard>
-      }
-    />
+ {/* Series E (E2) — scheduled CSV/Excel exports */}
+ <Route
+ path="/admin/scheduled-exports"
+ element={
+ <PermissionGuard permission="admin.scheduled_exports.view">
+ <ScheduledExportsPage />
+ </PermissionGuard>
+ }
+ />
 
-    {/* U2 — Admin user management */}
-    <Route
-      path="/admin/users"
-      element={
-        <PermissionGuard permission="admin.users.manage">
-          <AdminUsersIndexPage />
-        </PermissionGuard>
-      }
-    />
-    <Route
-      path="/admin/users/create"
-      element={
-        <PermissionGuard permission="admin.users.manage">
-          <AdminCreateUserPage />
-        </PermissionGuard>
-      }
-    />
-    <Route
-      path="/admin/users/:id"
-      element={
-        <PermissionGuard permission="admin.users.manage">
-          <AdminUserDetailPage />
-        </PermissionGuard>
-      }
-    />
-    <Route
-      path="/alerts"
-      element={
-        <PermissionGuard permission="alerts.view">
-          <AlertsListPage />
-        </PermissionGuard>
-      }
-    />
-    <Route
-      path="/admin/gov-tables"
-      element={
-        <PermissionGuard permission="admin.gov_tables.manage">
-          <AdminGovTablesPage />
-        </PermissionGuard>
-      }
-    />
+ {/* U2 — Admin user management */}
+ <Route
+ path="/admin/users"
+ element={
+ <PermissionGuard permission="admin.users.manage">
+ <AdminUsersIndexPage />
+ </PermissionGuard>
+ }
+ />
+ <Route
+ path="/admin/users/create"
+ element={
+ <PermissionGuard permission="admin.users.manage">
+ <AdminCreateUserPage />
+ </PermissionGuard>
+ }
+ />
+ <Route
+ path="/admin/users/:id"
+ element={
+ <PermissionGuard permission="admin.users.manage">
+ <AdminUserDetailPage />
+ </PermissionGuard>
+ }
+ />
+ <Route
+ path="/alerts"
+ element={
+ <PermissionGuard permission="alerts.view">
+ <AlertsListPage />
+ </PermissionGuard>
+ }
+ />
+ <Route
+ path="/admin/gov-tables"
+ element={
+ <PermissionGuard permission="admin.gov_tables.manage">
+ <AdminGovTablesPage />
+ </PermissionGuard>
+ }
+ />
 
-    {/* Audit log diff detail (Sprint 8 — Task 79) */}
-    <Route path="/admin/audit-logs/:id"
-      element={<PermissionGuard permission="admin.audit_logs.view"><AuditLogDetailPage /></PermissionGuard>} />
-  </>
+ {/* Audit log diff detail (Sprint 8 — Task 79) */}
+ <Route path="/admin/audit-logs/:id"
+ element={<PermissionGuard permission="admin.audit_logs.view"><AuditLogDetailPage /></PermissionGuard>} />
+ </>
 );

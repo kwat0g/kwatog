@@ -24,259 +24,259 @@ import type { ChainStep } from '@/types/chain';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 const errMsg = (e: unknown, fallback: string) =>
-  (e instanceof AxiosError ? e.response?.data?.message : undefined) ?? fallback;
+ (e instanceof AxiosError ? e.response?.data?.message : undefined) ?? fallback;
 
 const statusVariant: Record<PurchaseRequestStatus, 'neutral' | 'warning' | 'info' | 'success' | 'danger'> = {
-  draft: 'neutral', pending: 'info', approved: 'success', rejected: 'danger',
-  converted: 'neutral', cancelled: 'neutral',
+ draft: 'neutral', pending: 'info', approved: 'success', rejected: 'danger',
+ converted: 'neutral', cancelled: 'neutral',
 };
 
 export default function PurchaseRequestDetailPage() {
-  const { id = '' } = useParams<{ id: string }>();
-  const nav = useNavigate();
-  const qc = useQueryClient();
-  const { can } = usePermission();
+ const { id = '' } = useParams<{ id: string }>();
+ const nav = useNavigate();
+ const qc = useQueryClient();
+ const { can } = usePermission();
 
-  const [confirm, setConfirm] = useState<'submit' | 'approve' | 'cancel' | null>(null);
-  const [rejectOpen, setRejectOpen] = useState(false);
+ const [confirm, setConfirm] = useState<'submit' | 'approve' | 'cancel' | null>(null);
+ const [rejectOpen, setRejectOpen] = useState(false);
 
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['purchasing', 'purchase-requests', id],
-    queryFn: () => purchaseRequestsApi.show(id),
-    enabled: !!id,
-  });
+ const { data, isLoading, isError, refetch } = useQuery({
+ queryKey: ['purchasing', 'purchase-requests', id],
+ queryFn: () => purchaseRequestsApi.show(id),
+ enabled: !!id,
+ });
 
-  const detailKey = ['purchasing', 'purchase-requests', id];
+ const detailKey = ['purchasing', 'purchase-requests', id];
 
-  function useOptimisticAction<TVar = void>(
-    fn: (v: TVar) => Promise<unknown>,
-    nextStatus: string,
-    opts: { successMsg: string; errorMsg: string; afterSuccess?: () => void },
-  ) {
-    return useMutation<unknown, unknown, TVar, { prev?: unknown }>({
-      mutationFn: fn,
-      onMutate: async () => {
-        await qc.cancelQueries({ queryKey: detailKey });
-        const prev = qc.getQueryData(detailKey);
-        qc.setQueryData(detailKey, (old: typeof data) => old ? { ...old, status: nextStatus } : old);
-        return { prev };
-      },
-      onError: (e, _v, ctx) => {
-        if (ctx?.prev) qc.setQueryData(detailKey, ctx.prev);
-        toast.error(errMsg(e, opts.errorMsg));
-      },
-      onSuccess: () => { toast.success(opts.successMsg); opts.afterSuccess?.(); },
-      onSettled: () => { qc.invalidateQueries({ queryKey: detailKey }); },
-    });
-  }
+ function useOptimisticAction<TVar = void>(
+ fn: (v: TVar) => Promise<unknown>,
+ nextStatus: string,
+ opts: { successMsg: string; errorMsg: string; afterSuccess?: () => void },
+ ) {
+ return useMutation<unknown, unknown, TVar, { prev?: unknown }>({
+ mutationFn: fn,
+ onMutate: async () => {
+ await qc.cancelQueries({ queryKey: detailKey });
+ const prev = qc.getQueryData(detailKey);
+ qc.setQueryData(detailKey, (old: typeof data) => old ? { ...old, status: nextStatus } : old);
+ return { prev };
+ },
+ onError: (e, _v, ctx) => {
+ if (ctx?.prev) qc.setQueryData(detailKey, ctx.prev);
+ toast.error(errMsg(e, opts.errorMsg));
+ },
+ onSuccess: () => { toast.success(opts.successMsg); opts.afterSuccess?.(); },
+ onSettled: () => { qc.invalidateQueries({ queryKey: detailKey }); },
+ });
+ }
 
-  const submit = useOptimisticAction(() => purchaseRequestsApi.submit(id), 'pending', { successMsg: 'Submitted for approval.', errorMsg: 'Failed to submit.', afterSuccess: () => setConfirm(null) });
-  const approve = useOptimisticAction(() => purchaseRequestsApi.approve(id), 'approved', { successMsg: 'Purchase request approved.', errorMsg: 'Failed to approve.', afterSuccess: () => setConfirm(null) });
-  const reject = useOptimisticAction<string>((reason) => purchaseRequestsApi.reject(id, reason), 'rejected', { successMsg: 'Purchase request rejected.', errorMsg: 'Failed to reject.', afterSuccess: () => setRejectOpen(false) });
-  const cancel = useOptimisticAction(() => purchaseRequestsApi.cancel(id), 'cancelled', { successMsg: 'Purchase request cancelled.', errorMsg: 'Failed to cancel.', afterSuccess: () => setConfirm(null) });
-  const acknowledgeBudget = useMutation({
-    mutationFn: () => purchaseRequestsApi.acknowledgeBudget(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: detailKey }); toast.success('Budget warning acknowledged.'); },
-    onError: (e) => toast.error(errMsg(e, 'Failed to acknowledge budget warning.')),
-  });
+ const submit = useOptimisticAction(() => purchaseRequestsApi.submit(id), 'pending', { successMsg: 'Submitted for approval.', errorMsg: 'Failed to submit.', afterSuccess: () => setConfirm(null) });
+ const approve = useOptimisticAction(() => purchaseRequestsApi.approve(id), 'approved', { successMsg: 'Purchase request approved.', errorMsg: 'Failed to approve.', afterSuccess: () => setConfirm(null) });
+ const reject = useOptimisticAction<string>((reason) => purchaseRequestsApi.reject(id, reason), 'rejected', { successMsg: 'Purchase request rejected.', errorMsg: 'Failed to reject.', afterSuccess: () => setRejectOpen(false) });
+ const cancel = useOptimisticAction(() => purchaseRequestsApi.cancel(id), 'cancelled', { successMsg: 'Purchase request cancelled.', errorMsg: 'Failed to cancel.', afterSuccess: () => setConfirm(null) });
+ const acknowledgeBudget = useMutation({
+ mutationFn: () => purchaseRequestsApi.acknowledgeBudget(id),
+ onSuccess: () => { qc.invalidateQueries({ queryKey: detailKey }); toast.success('Budget warning acknowledged.'); },
+ onError: (e) => toast.error(errMsg(e, 'Failed to acknowledge budget warning.')),
+ });
 
-  if (isLoading) return <SkeletonTable rows={6} columns={5} />;
-  if (isError || !data) return (
-    <EmptyState icon="alert-circle" title="Failed to load PR" action={<Button onClick={() => refetch()}>Retry</Button>} />
-  );
+ if (isLoading) return <SkeletonTable rows={6} columns={5} />;
+ if (isError || !data) return (
+ <EmptyState icon="alert-circle" title="Failed to load PR" action={<Button onClick={() => refetch()}>Retry</Button>} />
+ );
 
-  return (
-    <div>
-      <PageHeader
-        title={<span className="font-mono">{data.pr_number}</span>}
-        backTo="/purchasing/purchase-requests" backLabel="Purchase requests"
-        breadcrumbs={[{ label: 'Purchasing', href: '/purchasing' }, { label: 'Purchase requests', href: '/purchasing/purchase-requests' }, { label: data.pr_number }]}
-        actions={
-          <div className="flex items-center gap-2">
-            <Chip variant={statusVariant[data.status]}>{data.status_label ?? data.status}</Chip>
-            {data.is_auto_generated && <Chip variant="warning">AUTO</Chip>}
-            {data.is_urgent && <Chip variant="danger"><Zap size={12} className="inline mr-0.5" />URGENT</Chip>}
-            {data.status === 'draft' && can('purchasing.pr.create') && (
-              <Button size="sm" variant="primary" icon={<Send size={14} />} onClick={() => setConfirm('submit')} loading={submit.isPending}>Submit</Button>
-            )}
-            {data.status === 'pending' && can('purchasing.pr.approve') && (
-              <>
-                <Button size="sm" variant="secondary" icon={<ThumbsDown size={14} />} onClick={() => setRejectOpen(true)} loading={reject.isPending}>Reject</Button>
-                <Button size="sm" variant="primary" icon={<ThumbsUp size={14} />} onClick={() => setConfirm('approve')} loading={approve.isPending}>Approve</Button>
-              </>
-            )}
-            {data.status === 'approved' && can('purchasing.po.create') && (
-              <Button size="sm" variant="primary" icon={<ShoppingCart size={14} />} onClick={() => nav(`/purchasing/purchase-orders/create?pr_id=${data.id}`)}>Convert to PO</Button>
-            )}
-            <Button size="sm" variant="secondary" icon={<FileText size={14} />}
-              onClick={() => void downloadAuthenticatedFile(purchaseRequestsApi.pdfUrl(data.id), { openInNewTab: true, errorMessage: 'Failed to generate purchase request PDF.' })}>PDF</Button>
-            {(data.status === 'draft' || data.status === 'pending') && (
-              <Button size="sm" variant="secondary" icon={<X size={14} />} onClick={() => setConfirm('cancel')} loading={cancel.isPending}>Cancel</Button>
-            )}
-          </div>
-        }
-      />
-      <div className="px-5 py-4 space-y-4">
-        {data.budget_warning_level && (
-          <div className="flex items-center justify-between gap-4 rounded-md border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
-            <div>
-              <div className="font-medium">Budget {data.budget_warning_level}</div>
-              <div className="text-muted">{data.budget_warning_message}</div>
-            </div>
-            {['exhausted', 'overdrawn'].includes(data.budget_warning_level) && !data.budget_acknowledged_at && can('budgeting.approve') && (
-              <Button size="sm" variant="secondary" onClick={() => acknowledgeBudget.mutate()} loading={acknowledgeBudget.isPending}>Finance acknowledge</Button>
-            )}
-            {data.budget_acknowledged_at && <Chip variant="success">Finance acknowledged</Chip>}
-          </div>
-        )}
-        <Panel title="Approval chain">
-          <ChainHeader steps={buildPrChainSteps(data)} />
-        </Panel>
-      </div>
-      <div className="px-5 grid grid-cols-3 gap-4 pb-6">
-        <div className="col-span-2 space-y-4">
-          <Panel title="Header">
-            <dl className="grid grid-cols-3 gap-y-3 gap-x-6 text-sm">
-              <div><dt className="text-2xs uppercase tracking-wider text-muted">Date</dt><dd className="font-mono">{formatDate(data.date)}</dd></div>
-              <div><dt className="text-2xs uppercase tracking-wider text-muted">Priority</dt><dd className="flex items-center gap-1">{data.priority_label ?? data.priority}{data.is_urgent && <span title={data.urgency_reason ?? ''}><AlertTriangle size={12} className="text-danger" /></span>}</dd></div>
-              <div><dt className="text-2xs uppercase tracking-wider text-muted">Department</dt><dd>{data.department?.name ?? '—'}</dd></div>
-              <div><dt className="text-2xs uppercase tracking-wider text-muted">Template</dt><dd>{data.template?.name ?? '—'}</dd></div>
-              <div><dt className="text-2xs uppercase tracking-wider text-muted">Requester</dt><dd>{data.requester?.name ?? '—'}</dd></div>
-              <div><dt className="text-2xs uppercase tracking-wider text-muted">Total estimate</dt><dd className="font-mono tabular-nums">{formatPeso(data.total_estimated_amount)}</dd></div>
-              {data.reason && <div className="col-span-3"><dt className="text-2xs uppercase tracking-wider text-muted">Reason</dt><dd>{data.reason}</dd></div>}
-            </dl>
-          </Panel>
-          <Panel title="Line items">
-            <table className={tableCls}>
-              <thead><tr className={theadTrCls}>
-                <Th>Item</Th>
-                <Th>Description</Th>
-                <Th align="right">Qty</Th>
-                <Th>Unit</Th>
-                <Th align="right">Est. price</Th>
-                <Th align="right">Total</Th>
-              </tr></thead>
-              <tbody>
-                {data.items?.map((l) => (
-                  <tr key={l.id} className={trCls}>
-                    <Td mono>{l.item?.code ?? '—'}</Td>
-                    <Td>{l.description}</Td>
-                    <Td align="right" mono>{Number(l.quantity).toFixed(2)}</Td>
-                    <Td>{l.unit}</Td>
-                    <Td align="right" mono>{l.estimated_unit_price ? Number(l.estimated_unit_price).toFixed(2) : '—'}</Td>
-                    <Td align="right" mono className="font-medium">
-                      {l.estimated_total}
-                      {l.suggested_vendor && <div className="text-2xs text-muted mt-0.5">Vendor: {l.suggested_vendor.name}</div>}
-                    </Td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </Panel>
-        </div>
-        <div className="space-y-4">
-          <Panel title="Approval chain">
-            <ApprovalTimeline steps={fromApprovalRecords(data.approval_records)} />
-          </Panel>
-          {/* Sprint P2 — unified Linked records panel. */}
-          {data.purchase_orders && data.purchase_orders.length > 0 && (
-            <Panel title="Linked records">
-              <LinkedRecords
-                groups={[
-                  {
-                    label: 'Purchase orders',
-                    items: data.purchase_orders.map((po) => ({
-                      id: po.po_number,
-                      href: `/purchasing/purchase-orders/${po.id}`,
-                      meta: `${po.vendor?.name ?? ''} · ${formatPeso(po.total_amount)}`,
-                      chip: {
-                        variant: (po.status === 'received' || po.status === 'closed' ? 'success'
-                                : po.status === 'cancelled' ? 'danger'
-                                : po.status === 'partially_received' ? 'warning'
-                                : 'info') as 'success' | 'danger' | 'warning' | 'info',
-                        text: po.status_label ?? po.status.replace('_', ' '),
-                      },
-                    })),
-                  },
-                ]}
-              />
-            </Panel>
-          )}
-        </div>
-      </div>
+ return (
+ <div>
+ <PageHeader
+ title={<span className="font-mono">{data.pr_number}</span>}
+ backTo="/purchasing/purchase-requests" backLabel="Purchase requests"
+ breadcrumbs={[{ label: 'Purchasing', href: '/purchasing' }, { label: 'Purchase requests', href: '/purchasing/purchase-requests' }, { label: data.pr_number }]}
+ actions={
+ <div className="flex items-center gap-2">
+ <Chip variant={statusVariant[data.status]}>{data.status_label ?? data.status}</Chip>
+ {data.is_auto_generated && <Chip variant="warning">AUTO</Chip>}
+ {data.is_urgent && <Chip variant="danger"><Zap size={12} className="inline mr-0.5" />URGENT</Chip>}
+ {data.status === 'draft' && can('purchasing.pr.create') && (
+ <Button size="sm" variant="primary" icon={<Send size={14} />} onClick={() => setConfirm('submit')} loading={submit.isPending}>Submit</Button>
+ )}
+ {data.status === 'pending' && can('purchasing.pr.approve') && (
+ <>
+ <Button size="sm" variant="secondary" icon={<ThumbsDown size={14} />} onClick={() => setRejectOpen(true)} loading={reject.isPending}>Reject</Button>
+ <Button size="sm" variant="primary" icon={<ThumbsUp size={14} />} onClick={() => setConfirm('approve')} loading={approve.isPending}>Approve</Button>
+ </>
+ )}
+ {data.status === 'approved' && can('purchasing.po.create') && (
+ <Button size="sm" variant="primary" icon={<ShoppingCart size={14} />} onClick={() => nav(`/purchasing/purchase-orders/create?pr_id=${data.id}`)}>Convert to PO</Button>
+ )}
+ <Button size="sm" variant="secondary" icon={<FileText size={14} />}
+ onClick={() => void downloadAuthenticatedFile(purchaseRequestsApi.pdfUrl(data.id), { openInNewTab: true, errorMessage: 'Failed to generate purchase request PDF.' })}>PDF</Button>
+ {(data.status === 'draft' || data.status === 'pending') && (
+ <Button size="sm" variant="secondary" icon={<X size={14} />} onClick={() => setConfirm('cancel')} loading={cancel.isPending}>Cancel</Button>
+ )}
+ </div>
+ }
+ />
+ <div className="px-5 py-4 space-y-4">
+ {data.budget_warning_level && (
+ <div className="flex items-center justify-between gap-4 rounded-md border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
+ <div>
+ <div className="font-medium">Budget {data.budget_warning_level}</div>
+ <div className="text-muted">{data.budget_warning_message}</div>
+ </div>
+ {['exhausted', 'overdrawn'].includes(data.budget_warning_level) && !data.budget_acknowledged_at && can('budgeting.approve') && (
+ <Button size="sm" variant="secondary" onClick={() => acknowledgeBudget.mutate()} loading={acknowledgeBudget.isPending}>Finance acknowledge</Button>
+ )}
+ {data.budget_acknowledged_at && <Chip variant="success">Finance acknowledged</Chip>}
+ </div>
+ )}
+ <Panel title="Approval chain">
+ <ChainHeader steps={buildPrChainSteps(data)} />
+ </Panel>
+ </div>
+ <div className="px-5 grid grid-cols-3 gap-4 pb-6">
+ <div className="col-span-2 space-y-4">
+ <Panel title="Header">
+ <dl className="grid grid-cols-3 gap-y-3 gap-x-6 text-sm">
+ <div><dt className="text-2xs uppercase tracking-wider text-muted">Date</dt><dd className="font-mono">{formatDate(data.date)}</dd></div>
+ <div><dt className="text-2xs uppercase tracking-wider text-muted">Priority</dt><dd className="flex items-center gap-1">{data.priority_label ?? data.priority}{data.is_urgent && <span title={data.urgency_reason ?? ''}><AlertTriangle size={12} className="text-danger" /></span>}</dd></div>
+ <div><dt className="text-2xs uppercase tracking-wider text-muted">Department</dt><dd>{data.department?.name ?? '—'}</dd></div>
+ <div><dt className="text-2xs uppercase tracking-wider text-muted">Template</dt><dd>{data.template?.name ?? '—'}</dd></div>
+ <div><dt className="text-2xs uppercase tracking-wider text-muted">Requester</dt><dd>{data.requester?.name ?? '—'}</dd></div>
+ <div><dt className="text-2xs uppercase tracking-wider text-muted">Total estimate</dt><dd className="font-mono tabular-nums">{formatPeso(data.total_estimated_amount)}</dd></div>
+ {data.reason && <div className="col-span-3"><dt className="text-2xs uppercase tracking-wider text-muted">Reason</dt><dd>{data.reason}</dd></div>}
+ </dl>
+ </Panel>
+ <Panel title="Line items">
+ <table className={tableCls}>
+ <thead><tr className={theadTrCls}>
+ <Th>Item</Th>
+ <Th>Description</Th>
+ <Th align="right">Qty</Th>
+ <Th>Unit</Th>
+ <Th align="right">Est. price</Th>
+ <Th align="right">Total</Th>
+ </tr></thead>
+ <tbody>
+ {data.items?.map((l) => (
+ <tr key={l.id} className={trCls}>
+ <Td mono>{l.item?.code ?? '—'}</Td>
+ <Td>{l.description}</Td>
+ <Td align="right" mono>{Number(l.quantity).toFixed(2)}</Td>
+ <Td>{l.unit}</Td>
+ <Td align="right" mono>{l.estimated_unit_price ? Number(l.estimated_unit_price).toFixed(2) : '—'}</Td>
+ <Td align="right" mono className="font-medium">
+ {l.estimated_total}
+ {l.suggested_vendor && <div className="text-2xs text-muted mt-0.5">Vendor: {l.suggested_vendor.name}</div>}
+ </Td>
+ </tr>
+ ))}
+ </tbody>
+ </table>
+ </Panel>
+ </div>
+ <div className="space-y-4">
+ <Panel title="Approval chain">
+ <ApprovalTimeline steps={fromApprovalRecords(data.approval_records)} />
+ </Panel>
+ {/* Sprint P2 — unified Linked records panel. */}
+ {data.purchase_orders && data.purchase_orders.length > 0 && (
+ <Panel title="Linked records">
+ <LinkedRecords
+ groups={[
+ {
+ label: 'Purchase orders',
+ items: data.purchase_orders.map((po) => ({
+ id: po.po_number,
+ href: `/purchasing/purchase-orders/${po.id}`,
+ meta: `${po.vendor?.name ?? ''} · ${formatPeso(po.total_amount)}`,
+ chip: {
+ variant: (po.status === 'received' || po.status === 'closed' ? 'success'
+ : po.status === 'cancelled' ? 'danger'
+ : po.status === 'partially_received' ? 'warning'
+ : 'info') as 'success' | 'danger' | 'warning' | 'info',
+ text: po.status_label ?? po.status.replace('_', ' '),
+ },
+ })),
+ },
+ ]}
+ />
+ </Panel>
+ )}
+ </div>
+ </div>
 
-      <ConfirmDialog
-        isOpen={confirm === 'submit'}
-        onClose={() => setConfirm(null)}
-        onConfirm={() => submit.mutate()}
-        title="Submit for approval?"
-        description={<>Once submitted, the PR enters the approval workflow and edits are no longer allowed.</>}
-        confirmLabel="Submit"
-        variant="primary"
-        pending={submit.isPending}
-      />
-      <ConfirmDialog
-        isOpen={confirm === 'approve'}
-        onClose={() => setConfirm(null)}
-        onConfirm={() => approve.mutate()}
-        title="Approve this PR?"
-        description={<>Approving advances the workflow. The action is recorded against your account in the audit log.</>}
-        confirmLabel="Approve"
-        variant="primary"
-        pending={approve.isPending}
-      />
-      <ConfirmDialog
-        isOpen={confirm === 'cancel'}
-        onClose={() => setConfirm(null)}
-        onConfirm={() => cancel.mutate()}
-        title="Cancel this PR?"
-        description={<>Cancellation is permanent. A cancelled PR cannot be re-submitted.</>}
-        confirmLabel="Yes, cancel PR"
-        cancelLabel="Keep PR"
-        variant="danger"
-        pending={cancel.isPending}
-      />
-      <ReasonDialog
-        isOpen={rejectOpen}
-        onClose={() => setRejectOpen(false)}
-        onConfirm={(reason) => reject.mutate(reason)}
-        title="Reject this PR?"
-        description="Rejection is recorded in the approval workflow. Provide a clear reason for the requester."
-        reasonLabel="Rejection reason"
-        reasonPlaceholder="e.g. Budget exceeded, please re-scope and re-submit"
-        minLength={10}
-        confirmLabel="Reject"
-        variant="danger"
-        pending={reject.isPending}
-      />
-    </div>
-  );
+ <ConfirmDialog
+ isOpen={confirm === 'submit'}
+ onClose={() => setConfirm(null)}
+ onConfirm={() => submit.mutate()}
+ title="Submit for approval?"
+ description={<>Once submitted, the PR enters the approval workflow and edits are no longer allowed.</>}
+ confirmLabel="Submit"
+ variant="primary"
+ pending={submit.isPending}
+ />
+ <ConfirmDialog
+ isOpen={confirm === 'approve'}
+ onClose={() => setConfirm(null)}
+ onConfirm={() => approve.mutate()}
+ title="Approve this PR?"
+ description={<>Approving advances the workflow. The action is recorded against your account in the audit log.</>}
+ confirmLabel="Approve"
+ variant="primary"
+ pending={approve.isPending}
+ />
+ <ConfirmDialog
+ isOpen={confirm === 'cancel'}
+ onClose={() => setConfirm(null)}
+ onConfirm={() => cancel.mutate()}
+ title="Cancel this PR?"
+ description={<>Cancellation is permanent. A cancelled PR cannot be re-submitted.</>}
+ confirmLabel="Yes, cancel PR"
+ cancelLabel="Keep PR"
+ variant="danger"
+ pending={cancel.isPending}
+ />
+ <ReasonDialog
+ isOpen={rejectOpen}
+ onClose={() => setRejectOpen(false)}
+ onConfirm={(reason) => reject.mutate(reason)}
+ title="Reject this PR?"
+ description="Rejection is recorded in the approval workflow. Provide a clear reason for the requester."
+ reasonLabel="Rejection reason"
+ reasonPlaceholder="e.g. Budget exceeded, please re-scope and re-submit"
+ minLength={10}
+ confirmLabel="Reject"
+ variant="danger"
+ pending={reject.isPending}
+ />
+ </div>
+ );
 }
 
 /** PR chain: Draft → Submitted → each approval step → Approved → Converted. */
 function buildPrChainSteps(pr: PurchaseRequest): ChainStep[] {
-  const steps: ChainStep[] = [
-    { key: 'draft', label: 'Draft', date: formatDate(pr.date),
-      state: pr.status === 'draft' ? 'active' : 'done' },
-    { key: 'submit', label: 'Submitted', date: pr.submitted_at ? formatDate(pr.submitted_at) : undefined,
-      state: pr.submitted_at ? 'done' : pr.status === 'draft' ? 'pending' : 'active' },
-  ];
-  for (const r of (pr.approval_records ?? [])) {
-    steps.push({
-      key: `step-${r.step_order}`,
-      label: r.role_slug.replace(/_/g, ' '),
-      date: r.acted_at ? formatDate(r.acted_at) : undefined,
-      state: r.action === 'approved' ? 'done' : r.action === 'pending' ? 'active' : 'pending',
-    });
-  }
-  steps.push({
-    key: 'approved', label: 'Approved',
-    date: pr.approved_at ? formatDate(pr.approved_at) : undefined,
-    state: pr.status === 'approved' ? 'active' : pr.status === 'converted' ? 'done' : 'pending',
-  });
-  steps.push({
-    key: 'converted', label: 'Converted to PO',
-    state: pr.status === 'converted' ? 'done' : 'pending',
-  });
-  return steps;
+ const steps: ChainStep[] = [
+ { key: 'draft', label: 'Draft', date: formatDate(pr.date),
+ state: pr.status === 'draft' ? 'active' : 'done' },
+ { key: 'submit', label: 'Submitted', date: pr.submitted_at ? formatDate(pr.submitted_at) : undefined,
+ state: pr.submitted_at ? 'done' : pr.status === 'draft' ? 'pending' : 'active' },
+ ];
+ for (const r of (pr.approval_records ?? [])) {
+ steps.push({
+ key: `step-${r.step_order}`,
+ label: r.role_slug.replace(/_/g, ' '),
+ date: r.acted_at ? formatDate(r.acted_at) : undefined,
+ state: r.action === 'approved' ? 'done' : r.action === 'pending' ? 'active' : 'pending',
+ });
+ }
+ steps.push({
+ key: 'approved', label: 'Approved',
+ date: pr.approved_at ? formatDate(pr.approved_at) : undefined,
+ state: pr.status === 'approved' ? 'active' : pr.status === 'converted' ? 'done' : 'pending',
+ });
+ steps.push({
+ key: 'converted', label: 'Converted to PO',
+ state: pr.status === 'converted' ? 'done' : 'pending',
+ });
+ return steps;
 }

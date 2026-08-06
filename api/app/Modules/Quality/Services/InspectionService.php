@@ -67,6 +67,8 @@ class InspectionService
         if (! empty($filters['status'])) {
             $q->where('status', $filters['status']);
         }
+        if (! empty($filters['from'])) $q->whereDate('created_at', '>=', $filters['from']);
+        if (! empty($filters['to']))   $q->whereDate('created_at', '<=', $filters['to']);
         if (! empty($filters['product_id'])) {
             // InspectionController::index() forwards the raw query bag, so the
             // SPA's hash string would hit a bigint column (Postgres 22P02 → 500).
@@ -134,7 +136,9 @@ class InspectionService
         ?string $notes = null,
         ?int $grnItemId = null,
     ): Inspection {
-        $batchQuantity = max(1, $batchQuantity);
+        if ($batchQuantity < 1) {
+            throw new BusinessRuleException('Incoming inspection requires a positive batch quantity.');
+        }
         $plan = AqlSampleSizeService::forBatch($batchQuantity);
 
         return DB::transaction(function () use ($item, $batchQuantity, $grnId, $by, $notes, $plan, $grnItemId) {
@@ -182,7 +186,10 @@ class InspectionService
         GoodsReceiptNote $grn,
         ?User $by = null,
     ): Inspection {
-        $batchQuantity = max(1, (int) (float) $line->quantity_received);
+        $batchQuantity = (int) (float) $line->quantity_received;
+        if ($batchQuantity < 1) {
+            throw new BusinessRuleException('Incoming inspection requires a positive received quantity.');
+        }
         $aql = AqlSampleSizeService::forBatch($batchQuantity);
         $sampleSize = match ($qualityPlan->sampling_method) {
             'full' => $batchQuantity,
@@ -257,7 +264,10 @@ class InspectionService
     {
         $stage = InspectionStage::from((string) $data['stage']);
         $productId = (int) $data['product_id'];
-        $batchQty = max(1, (int) $data['batch_quantity']);
+        $batchQty = (int) $data['batch_quantity'];
+        if ($batchQty < 1) {
+            throw new BusinessRuleException('Inspection requires a positive batch quantity.');
+        }
 
         $product = Product::query()->findOrFail($productId);
         $spec = InspectionSpec::query()

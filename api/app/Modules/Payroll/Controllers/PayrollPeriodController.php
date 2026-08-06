@@ -5,9 +5,13 @@ declare(strict_types=1);
 namespace App\Modules\Payroll\Controllers;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\SettingsService;
 use App\Common\Support\HashIdFilter;
 use App\Modules\Payroll\Jobs\PostPayrollToGlJob;
 use App\Modules\Payroll\Jobs\ProcessPayrollJob;
+use App\Modules\HR\Enums\EmploymentType;
+use App\Modules\HR\Enums\PayType;
+use App\Modules\HR\Models\Department;
 use App\Modules\Payroll\Models\DisbursementProof;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Payroll\Requests\CreatePayrollPeriodRequest;
@@ -15,9 +19,14 @@ use App\Modules\Payroll\Requests\RunThirteenthMonthRequest;
 use App\Modules\Payroll\Requests\VoidPayrollPeriodRequest;
 use App\Modules\Payroll\Resources\PayrollPeriodResource;
 use App\Modules\Payroll\Services\BankFileService;
+use App\Modules\Payroll\Enums\BankFileFormat;
+use App\Modules\Payroll\Enums\PayrollPeriodStatus;
+use App\Modules\Payroll\Enums\PayrollPeriodType;
+use App\Modules\Payroll\Enums\PayrollHalfType;
 use App\Modules\Payroll\Services\PayrollPeriodService;
 use App\Modules\Payroll\Services\ThirteenthMonthService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Validation\Rule;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use RuntimeException;
@@ -27,11 +36,76 @@ class PayrollPeriodController
     public function __construct(
         private readonly PayrollPeriodService $service,
         private readonly ThirteenthMonthService $thirteenthMonth,
+        private readonly SettingsService $settings,
     ) {}
 
     public function index(Request $request): AnonymousResourceCollection
     {
         return PayrollPeriodResource::collection($this->service->list($request->query()));
+    }
+
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'statuses' => array_map(static fn (PayrollPeriodStatus $status): array => ['value' => $status->value, 'label' => $status->label()], PayrollPeriodStatus::cases()),
+            'period_types' => array_map(
+                static fn (PayrollPeriodType $type): array => ['value' => $type->value, 'label' => $type->label()],
+                PayrollPeriodType::cases(),
+            ),
+            'half_types' => array_map(
+                static fn (PayrollHalfType $type): array => ['value' => $type->value, 'label' => $type->label()],
+                PayrollHalfType::cases(),
+            ),
+            // Scope pickers for the create form. A period may be limited to
+            // employment types, pay types and/or departments; leaving all three
+            // empty means company-wide.
+            'employment_types' => array_map(
+                static fn (EmploymentType $type): array => ['value' => $type->value, 'label' => $type->label()],
+                EmploymentType::cases(),
+            ),
+            'pay_types' => array_map(
+                static fn (PayType $type): array => ['value' => $type->value, 'label' => $type->label()],
+                PayType::cases(),
+            ),
+            'departments' => Department::query()
+                ->orderBy('name')
+                ->get(['id', 'name', 'code'])
+                ->map(static fn (Department $d): array => [
+                    'value' => $d->hash_id,
+                    'label' => $d->code ? "{$d->name} ({$d->code})" : $d->name,
+                ])
+                ->all(),
+            'bank_file_formats' => array_map(static fn (BankFileFormat $format): array => ['value' => $format->value, 'label' => strtoupper($format->value === 'generic' ? 'Generic CSV' : $format->value)], BankFileFormat::cases()),
+            'default_bank_file_format' => (string) $this->settings->get('payroll.bank_file.default_format', ''),
+        ]]);
+    }
+
+    /**
+     * POST /payroll-periods/scope-preview
+     *
+     * How many employees would this scope actually pay, and how many of them are
+     * already claimed by another period for the same cutoff? Lets HR see the
+     * blast radius BEFORE creating the period, instead of discovering an empty
+     * run or a collision after Compute.
+     */
+    public function scopePreview(Request $request): JsonResponse
+    {
+        abort_unless($request->user()?->hasPermission('payroll.periods.create'), 403);
+
+        $validated = $request->validate([
+            'period_start'          => ['required', 'date'],
+            'period_end'            => ['required', 'date', 'after_or_equal:period_start'],
+            'is_first_half'         => ['nullable', 'boolean'],
+            'is_thirteenth_month'   => ['nullable', 'boolean'],
+            'scope_employment_types'   => ['nullable', 'array'],
+            'scope_employment_types.*' => ['string'],
+            'scope_pay_types'          => ['nullable', 'array'],
+            'scope_pay_types.*'        => ['string'],
+            'scope_department_ids'     => ['nullable', 'array'],
+            'scope_department_ids.*'   => ['string'],
+        ]);
+
+        return response()->json(['data' => $this->service->scopePreview($validated)]);
     }
 
     /**
@@ -154,9 +228,6 @@ class PayrollPeriodController
 
     public function markDisbursed(PayrollPeriod $period, Request $request): PayrollPeriodResource
     {
-        if (! class_exists(DisbursementProof::class)) {
-            throw new BusinessRuleException('DisbursementProof model not yet available.');
-        }
         $user = $request->user();
         if (! $user) {
             throw new BusinessRuleException('Authenticated user required.');
@@ -216,18 +287,25 @@ class PayrollPeriodController
 
     public function bankFile(PayrollPeriod $period, Request $request)
     {
-        if (! class_exists(BankFileService::class)) {
-            return response()->json(['message' => 'Bank file service not yet available.'], 503);
-        }
-
         $validated = $request->validate([
-            'format' => ['sometimes', 'string', 'in:generic,bdo,bpi,metrobank'],
+            'format' => ['sometimes', Rule::enum(BankFileFormat::class)],
         ]);
 
         /** @var BankFileService $svc */
         $svc = app(BankFileService::class);
 
-        return $svc->stream($period, $request->user(), $validated['format'] ?? 'generic');
+        return $svc->stream($period, $request->user(), $validated['format'] ?? null);
+    }
+
+    public function bankFileOptions(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'formats' => array_map(static fn (BankFileFormat $format): array => [
+                'value' => $format->value,
+                'label' => strtoupper($format->value === 'generic' ? 'Generic CSV' : $format->value),
+            ], BankFileFormat::cases()),
+            'default_format' => (string) $this->settings->get('payroll.bank_file.default_format', ''),
+        ]]);
     }
 
     /**
@@ -236,26 +314,19 @@ class PayrollPeriodController
      */
     public function bankFilePreview(PayrollPeriod $period, Request $request): JsonResponse
     {
-        if (! class_exists(BankFileService::class)) {
-            return response()->json(['message' => 'Bank file service not yet available.'], 503);
-        }
-
         $validated = $request->validate([
-            'format' => ['sometimes', 'string', 'in:generic,bdo,bpi,metrobank'],
+            'format' => ['sometimes', Rule::enum(BankFileFormat::class)],
         ]);
 
         /** @var BankFileService $svc */
         $svc = app(BankFileService::class);
-        $preview = $svc->preview($period, $validated['format'] ?? 'generic');
+        $preview = $svc->preview($period, $validated['format'] ?? null);
 
         return response()->json(['data' => $preview]);
     }
 
     public function runThirteenthMonth(RunThirteenthMonthRequest $request): JsonResponse
     {
-        if (! method_exists($this->thirteenthMonth, 'computeAndPay')) {
-            return response()->json(['message' => '13th month service not yet available.'], 503);
-        }
         $period = $this->thirteenthMonth->computeAndPay(
             (int) $request->validated('year'),
             $request->user(),

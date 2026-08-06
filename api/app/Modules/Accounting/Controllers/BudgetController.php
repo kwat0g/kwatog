@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace App\Modules\Accounting\Controllers;
 
 use App\Common\Support\HashIdFilter;
+use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Jobs\SyncBudgetActuals;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Budget;
 use App\Modules\Accounting\Models\FiscalYear;
+use App\Modules\Accounting\Enums\BudgetType;
+use App\Modules\Accounting\Enums\BudgetStatus;
 use App\Modules\Accounting\Resources\BudgetResource;
 use App\Modules\Accounting\Resources\FiscalYearResource;
 use App\Modules\Accounting\Services\BudgetEnforcementService;
@@ -17,13 +20,32 @@ use App\Modules\HR\Models\Department;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Validation\Rule;
 
 class BudgetController extends Controller
 {
     public function __construct(
         private readonly BudgetService $budgetService,
         private readonly BudgetEnforcementService $enforcementService,
+        private readonly SettingsService $settings,
     ) {}
+
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'budget_types' => array_map(
+                static fn (BudgetType $type): array => ['value' => $type->value, 'label' => $type->label()],
+                BudgetType::cases(),
+            ),
+            'statuses' => array_map(
+                static fn (BudgetStatus $status): array => ['value' => $status->value, 'label' => $status->label()],
+                BudgetStatus::cases(),
+            ),
+            'warning_ratio_pct' => round($this->settings->requiredFloat('budget.warning_ratio', 0, 1) * 100, 1),
+            'critical_ratio_pct' => round($this->settings->requiredFloat('budget.critical_ratio', 0, 1) * 100, 1),
+            'exhausted_ratio_pct' => round($this->settings->requiredFloat('budget.exhausted_ratio', 0) * 100, 1),
+        ]]);
+    }
 
     /**
      * Decode HashID values on the incoming request so the rest of the
@@ -123,7 +145,7 @@ class BudgetController extends Controller
         $validated = $request->validate([
             'fiscal_year_id' => 'required|exists:fiscal_years,id',
             'department_id'  => 'nullable|exists:departments,id',
-            'budget_type'    => 'required|string|max:30',
+            'budget_type'    => ['required', Rule::enum(BudgetType::class)],
             'name'           => 'required|string|max:200',
             'line_items'     => 'required|array|min:1',
             'line_items.*.account_id' => 'required|exists:accounts,id',
@@ -171,7 +193,7 @@ class BudgetController extends Controller
         }
 
         $validated = $request->validate([
-            'budget_type' => 'sometimes|string|max:30',
+            'budget_type' => ['sometimes', Rule::enum(BudgetType::class)],
             'name'        => 'sometimes|string|max:200',
         ]);
 

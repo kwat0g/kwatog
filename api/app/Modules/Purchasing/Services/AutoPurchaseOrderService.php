@@ -8,6 +8,7 @@ use App\Common\Enums\AlertSeverity;
 use App\Common\Enums\AlertType;
 use App\Common\Services\AlertEngineService;
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\SettingsService;
 use App\Common\Services\TaxPolicyService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Models\Item;
@@ -33,6 +34,7 @@ class AutoPurchaseOrderService
         private readonly DocumentSequenceService $sequences,
         private readonly AlertEngineService $alerts,
         private readonly TaxPolicyService $taxPolicy,
+        private readonly SettingsService $settings,
     ) {}
 
     public function createForCriticalShortage(Item $item): ?PurchaseOrder
@@ -61,22 +63,33 @@ class AutoPurchaseOrderService
             ->exists();
         if ($hasOpenAuto) return null;
 
-        $qty   = max(1.0, $reorder + (float) $item->safety_stock - $onHand);
+        $qty   = $reorder + (float) $item->safety_stock - $onHand;
+        if ($qty <= 0) return null;
         $price = (float) ($supplier->last_price ?? $item->standard_cost ?? 0);
+        // An auto-generated PO must never invent a zero price. Wait for an
+        // authoritative supplier/item cost and let the normal procurement
+        // flow handle the shortage when no price exists.
+        if ($price <= 0) return null;
+        $leadTimeDays = (int) ($supplier->lead_time_days ?? 0);
+        if ($leadTimeDays <= 0) $leadTimeDays = (int) ($item->lead_time_days ?? 0);
+        if ($leadTimeDays <= 0) {
+            $leadTimeDays = $this->settings->requiredInt('mrp.default_lead_time_days', 0, 365);
+        }
         $sub   = round($qty * $price, 2);
-        $vat   = round($sub * (float) $this->taxPolicy->vatRate(), 2);
+        $isVatable = $this->taxPolicy->isVatRegistered();
+        $vat   = $isVatable ? round($sub * (float) $this->taxPolicy->vatRate(), 2) : 0.0;
 
-        return DB::transaction(function () use ($item, $supplier, $qty, $price, $sub, $vat) {
+        return DB::transaction(function () use ($item, $supplier, $qty, $price, $sub, $vat, $leadTimeDays, $isVatable) {
             $po = PurchaseOrder::create([
                 'po_number'             => $this->sequences->generate('po'),
                 'vendor_id'             => $supplier->vendor_id,
                 'purchase_request_id'   => null,
                 'date'                  => Carbon::today(),
-                'expected_delivery_date'=> Carbon::today()->addDays((int) $supplier->lead_time_days),
+                'expected_delivery_date'=> Carbon::today()->addDays((int) $leadTimeDays),
                 'subtotal'              => $sub,
                 'vat_amount'            => $vat,
                 'total_amount'          => $sub + $vat,
-                'is_vatable'            => true,
+                'is_vatable'            => $isVatable,
                 'requires_vp_approval'  => true,
                 'created_by'            => null,
                 'remarks'               => "Auto-generated for critical stock alert on {$item->code}.",
@@ -119,8 +132,12 @@ class AutoPurchaseOrderService
     private function notifyVp(PurchaseOrder $po, Item $item): void
     {
         try {
+            $roles = array_values(array_filter(
+                (array) $this->settings->get('purchasing.auto_po.approval_roles', []),
+                static fn ($role): bool => is_string($role) && $role !== '',
+            ));
             $vps = User::query()
-                ->whereHas('role', fn ($q) => $q->whereIn('slug', ['system_admin', 'production_manager']))
+                ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                 ->where('is_active', true)
                 ->get();
             foreach ($vps as $u) {

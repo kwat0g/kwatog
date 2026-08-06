@@ -42,4 +42,10 @@ class TrainingController
         $this->service->delete($training);
         return response()->json(null, 204);
     }
+
+    public function restore(Training $training): JsonResponse
+    {
+        $training->restore();
+        return response()->json(['message' => 'Training restored.']);
+    }
 }

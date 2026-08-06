@@ -42,8 +42,9 @@ class AlertOnSupplierDeterioration implements ShouldQueue
             }
             if ($drop < (float) $threshold) return;
 
+            $roles = array_values(array_filter((array) $this->settings->get('purchasing.supplier_score.notification_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
             $audience = User::query()
-                ->whereHas('role', fn ($q) => $q->where('slug', 'purchasing_officer'))
+                ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                 ->where('is_active', true)
                 ->get();
 

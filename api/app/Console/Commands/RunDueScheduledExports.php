@@ -9,6 +9,7 @@ use App\Common\Enums\ExportFrequency;
 use App\Common\Models\ScheduledExport;
 use App\Common\Services\Export\ExportRunner;
 use App\Common\Services\Export\SpreadsheetExportService;
+use App\Common\Services\SettingsService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -32,6 +33,7 @@ class RunDueScheduledExports extends Command
     public function __construct(
         private readonly ExportRunner $runner,
         private readonly SpreadsheetExportService $spreadsheets,
+        private readonly SettingsService $settings,
     ) {
         parent::__construct();
     }
@@ -84,10 +86,11 @@ class RunDueScheduledExports extends Command
         $recipients = (array) ($row->recipients ?? []);
         $name = $row->name;
         $module = $row->module;
+        $company = $this->settings->requiredString('company.legal_name');
 
-        Mail::raw("Attached is your scheduled export: {$name} ({$module}).", function ($message) use ($recipients, $filename, $bytes, $name, $format) {
+        Mail::raw("Attached is your scheduled export: {$name} ({$module}).", function ($message) use ($recipients, $filename, $bytes, $name, $format, $company) {
             $message->to($recipients)
-                ->subject("[Ogami ERP] Scheduled export: {$name}")
+                ->subject("[{$company} ERP] Scheduled export: {$name}")
                 ->attachData($bytes, $filename, [
                     'mime' => $format->mimeType(),
                 ]);
@@ -98,7 +101,7 @@ class RunDueScheduledExports extends Command
             now(),
             $row->day_of_week,
             $row->day_of_month,
-            (string) ($row->time_of_day ?? '06:00'),
+            (string) ($row->time_of_day ?? $this->settings->requiredString('exports.default_time_of_day')),
         );
         $row->save();
     }

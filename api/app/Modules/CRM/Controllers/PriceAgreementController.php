@@ -55,6 +55,12 @@ class PriceAgreementController
         return response()->json(null, 204);
     }
 
+    public function restore(PriceAgreement $priceAgreement): JsonResponse
+    {
+        $priceAgreement->restore();
+        return response()->json(['message' => 'Price agreement restored.']);
+    }
+
     public function forCustomer(Customer $customer): AnonymousResourceCollection
     {
         return PriceAgreementResource::collection(

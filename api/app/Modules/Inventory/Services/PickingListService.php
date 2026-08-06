@@ -32,7 +32,7 @@ class PickingListService
 
         return [
             'slip_number'  => $mis->slip_number,
-            'work_order'   => $mis->work_order_id ? "#{$mis->work_order_id}" : ($mis->reference_text ?? 'N/A'),
+            'work_order'   => $mis->work_order_id ? "#{$mis->work_order_id}" : $mis->reference_text,
             'issued_date'  => $mis->issued_date,
             'lines'        => $pickingLines,
             'total_lines'  => count($pickingLines),

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Dashboard\Services;
 
 use App\Modules\Auth\Models\User;
+use App\Modules\Accounting\Enums\InvoiceStatus;
+use App\Modules\Accounting\Enums\BillStatus;
 use App\Modules\Dashboard\Services\Concerns\DashboardQueries;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -32,7 +34,7 @@ class PlantManagerDashboardService
 
             return [
                 'kpis' => [
-                    $this->kpi("Revenue · {$label}",    $this->revenueInRange($start, $end),    'PHP'),
+                    $this->kpi("Revenue · {$label}",    $this->revenueInRange($start, $end),    $this->functionalCurrency()),
                     $this->kpi("Production · {$label}", $this->productionInRange($start, $end), 'units'),
                     $this->kpi('OEE · Today',           $this->oeeToday(),                       'pct'),
                     $this->kpi('On-Time Delivery',      $this->otdRate(),                        'pct'),
@@ -61,8 +63,8 @@ class PlantManagerDashboardService
 
         $cashBalance = $this->cashBalance();
 
-        $arOutstanding = $this->safeSum('invoices', 'balance', fn ($q) => $q->whereIn('status', ['unpaid', 'partial']));
-        $apOutstanding = $this->safeSum('bills',    'balance', fn ($q) => $q->whereIn('status', ['unpaid', 'partial']));
+        $arOutstanding = $this->safeSum('invoices', 'balance', fn ($q) => $q->whereIn('status', [InvoiceStatus::Finalized->value, InvoiceStatus::Partial->value]));
+        $apOutstanding = $this->safeSum('bills',    'balance', fn ($q) => $q->whereIn('status', [BillStatus::Unpaid->value, BillStatus::Partial->value]));
 
         $revenueMtd = '0.00';
         if (Schema::hasTable('journal_entry_lines') && Schema::hasTable('accounts')) {

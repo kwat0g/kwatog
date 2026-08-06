@@ -28,9 +28,11 @@ class LeaveRequestResource extends JsonResource
             'start_date'       => optional($this->start_date)->toDateString(),
             'end_date'         => optional($this->end_date)->toDateString(),
             'days'             => (string) $this->days,
+            'half_day_period'  => $this->half_day_period?->value,
             'reason'           => $this->reason,
             'document_path'    => $this->document_path,
             'status'           => $this->status?->value,
+            'status_label'     => $this->status?->label(),
             'dept_approver'    => $this->whenLoaded('deptApprover', fn () => $this->deptApprover ? [
                 'id' => $this->deptApprover->hash_id, 'name' => $this->deptApprover->name,
             ] : null),
@@ -42,6 +44,7 @@ class LeaveRequestResource extends JsonResource
             'rejection_reason' => $this->rejection_reason,
             'created_at'       => optional($this->created_at)->toIso8601String(),
             'updated_at'       => optional($this->updated_at)->toIso8601String(),
+            'deleted_at'       => optional($this->deleted_at)?->toIso8601String(),
         ];
     }
 }

@@ -6,8 +6,11 @@ namespace App\Modules\HR\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Enums\ClearanceStatus;
+use App\Modules\HR\Enums\EmployeeStatus;
+use App\Modules\HR\Enums\EmploymentChangeType;
 use App\Modules\HR\Enums\SeparationReason;
 use App\Modules\HR\Models\Clearance;
 use App\Modules\HR\Models\Employee;
@@ -32,25 +35,8 @@ class SeparationService
 {
     public function __construct(
         private readonly DocumentSequenceService $sequences,
+        private readonly SettingsService $settings,
     ) {}
-
-    /** Default clearance checklist seeded on every new clearance. */
-    public static function defaultChecklist(): array
-    {
-        return [
-            ['department' => 'Production',  'item_key' => 'tools_returned',          'label' => 'Tools returned'],
-            ['department' => 'Production',  'item_key' => 'ppe_returned',            'label' => 'PPE returned'],
-            ['department' => 'Warehouse',   'item_key' => 'materials_returned',      'label' => 'Materials returned'],
-            ['department' => 'Maintenance', 'item_key' => 'no_pending_work',         'label' => 'No pending maintenance work'],
-            ['department' => 'Finance',     'item_key' => 'no_outstanding_ca',       'label' => 'No outstanding cash advance'],
-            ['department' => 'Finance',     'item_key' => 'no_outstanding_loan',     'label' => 'No outstanding company loan'],
-            ['department' => 'HR',          'item_key' => 'id_returned',             'label' => 'Company ID returned'],
-            ['department' => 'HR',          'item_key' => 'file_201_complete',       'label' => '201 file complete'],
-            ['department' => 'HR',          'item_key' => 'exit_interview_done',     'label' => 'Exit interview done'],
-            ['department' => 'IT',          'item_key' => 'equipment_returned',      'label' => 'IT equipment returned'],
-            ['department' => 'IT',          'item_key' => 'accounts_disabled',       'label' => 'System accounts disabled'],
-        ];
-    }
 
     public function list(array $filters): LengthAwarePaginator
     {
@@ -68,7 +54,7 @@ class SeparationService
     public function show(Clearance $clearance): Clearance
     {
         return $clearance->load([
-            'employee:id,employee_no,first_name,last_name,department_id,position_id,date_hired,basic_monthly_salary,daily_rate,pay_type',
+            'employee:id,employee_no,first_name,last_name,department_id,position_id,date_hired,basic_monthly_salary,semi_monthly_rate,pay_type',
             'employee.department:id,name,code',
             'employee.position:id,title',
             'initiator:id,name',
@@ -92,7 +78,7 @@ class SeparationService
                 'signed_by'  => null,
                 'signed_at'  => null,
                 'remarks'    => null,
-            ], self::defaultChecklist());
+            ], $this->configuredChecklist());
 
             $clearance = Clearance::create([
                 'clearance_no'      => $this->sequences->generate('clearance'),
@@ -104,11 +90,11 @@ class SeparationService
                 'initiated_by'      => $by->id,
             ]);
 
-            $employee->forceFill(['status' => 'on_leave'])->save();
+            $employee->forceFill(['status' => EmployeeStatus::OnLeave->value])->save();
 
             EmploymentHistory::create([
                 'employee_id'    => $employee->id,
-                'change_type'    => 'separated',
+                'change_type'    => EmploymentChangeType::Separated->value,
                 'from_value'     => null,
                 'to_value'       => json_encode([
                     'separation_date'   => (string) $data['separation_date'],
@@ -128,6 +114,38 @@ class SeparationService
 
             return $this->show($clearance);
         });
+    }
+
+    /** @return array<int, array{department:string,item_key:string,label:string}> */
+    private function configuredChecklist(): array
+    {
+        $items = $this->settings->get('hr.separation.clearance_checklist');
+        if (! is_array($items) || $items === []) {
+            $items = self::defaultChecklist();
+        }
+        foreach ($items as $item) {
+            if (! is_array($item) || ! isset($item['department'], $item['item_key'], $item['label'])) {
+                throw new BusinessRuleException('Separation clearance checklist contains an invalid item.');
+            }
+        }
+        return array_values($items);
+    }
+
+    public static function defaultChecklist(): array
+    {
+        return [
+            ['department' => 'HR', 'item_key' => 'exit_interview', 'label' => 'Exit Interview Completed'],
+            ['department' => 'HR', 'item_key' => 'id_surrender', 'label' => 'Company ID & Uniform Surrendered'],
+            ['department' => 'FIN', 'item_key' => 'loan_cleared', 'label' => 'Company Loans & Advances Settled'],
+            ['department' => 'FIN', 'item_key' => 'accountability_cleared', 'label' => 'Financial Accountabilities Cleared'],
+            ['department' => 'IT', 'item_key' => 'email_deactivated', 'label' => 'Email & System Access Revoked'],
+            ['department' => 'IT', 'item_key' => 'laptop_surrendered', 'label' => 'IT Equipment & Accessories Returned'],
+            ['department' => 'PROD', 'item_key' => 'tools_surrendered', 'label' => 'Factory Tools & PPE Returned'],
+            ['department' => 'WH', 'item_key' => 'stock_handover', 'label' => 'Warehouse Custody Handover'],
+            ['department' => 'MAINT', 'item_key' => 'maintenance_keys', 'label' => 'Locker & Tool Cabinet Keys Returned'],
+            ['department' => 'ADMIN', 'item_key' => 'gate_pass', 'label' => 'Security Clearance & Gate Pass'],
+            ['department' => 'EXEC', 'item_key' => 'final_approval', 'label' => 'Executive Management Clearance'],
+        ];
     }
 
     public function signItem(Clearance $clearance, string $itemKey, User $by, ?string $remarks = null): Clearance
@@ -231,7 +249,7 @@ class SeparationService
 
             EmploymentHistory::create([
                 'employee_id'    => $employee->id,
-                'change_type'    => 'separated',
+                'change_type'    => EmploymentChangeType::Separated->value,
                 'from_value'     => null,
                 'to_value'       => json_encode([
                     'separation_date'   => optional($clearance->separation_date)?->toDateString(),
@@ -240,7 +258,7 @@ class SeparationService
                     'status'            => 'finalized',
                 ]),
                 'effective_date' => $clearance->separation_date,
-                'remarks'        => 'Separation finalized. Final pay ₱'.number_format((float) $clearance->final_pay_amount, 2).'.',
+                'remarks'        => 'Separation finalized. Final pay '.app(\App\Common\Services\CurrencyDisplayService::class)->format($clearance->final_pay_amount).'.',
                 'approved_by'    => $by->id,
             ]);
 

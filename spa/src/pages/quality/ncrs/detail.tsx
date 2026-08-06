@@ -28,352 +28,352 @@ import { ChainHeader } from '@/components/chain';
 import { buildNcrChain } from '@/lib/chains';
 import { usePermission } from '@/hooks/usePermission';
 import type {
-  NcrActionType,
-  NcrDisposition,
-  NcrSeverity,
-  NcrStatus,
+ NcrActionType,
+ NcrDisposition,
+ NcrSeverity,
+ NcrStatus,
 } from '@/types/quality';
 
 const STATUS_CHIP: Record<NcrStatus, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
-  open: 'warning',
-  in_progress: 'info',
-  closed: 'success',
-  cancelled: 'neutral',
+ open: 'warning',
+ in_progress: 'info',
+ closed: 'success',
+ cancelled: 'neutral',
 };
 
 const SEVERITY_CHIP: Record<NcrSeverity, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
-  low: 'neutral',
-  medium: 'warning',
-  high: 'danger',
-  critical: 'danger',
+ low: 'neutral',
+ medium: 'warning',
+ high: 'danger',
+ critical: 'danger',
 };
 
 export default function NcrDetailPage() {
-  const { id = '' } = useParams<{ id: string }>();
-  const qc = useQueryClient();
-  const { can } = usePermission();
-  const [actionType, setActionType] = useState<NcrActionType>('containment');
-  const [actionDesc, setActionDesc] = useState('');
-  const [disposition, setDisposition] = useState<NcrDisposition | ''>('');
-  const [rootCause, setRootCause] = useState('');
-  const [correctiveAction, setCorrectiveAction] = useState('');
-  const [confirmClose, setConfirmClose] = useState(false);
-  const [confirmCancel, setConfirmCancel] = useState(false);
+ const { id = '' } = useParams<{ id: string }>();
+ const qc = useQueryClient();
+ const { can } = usePermission();
+ const [actionType, setActionType] = useState<NcrActionType>('containment');
+ const [actionDesc, setActionDesc] = useState('');
+ const [disposition, setDisposition] = useState<NcrDisposition | ''>('');
+ const [rootCause, setRootCause] = useState('');
+ const [correctiveAction, setCorrectiveAction] = useState('');
+ const [confirmClose, setConfirmClose] = useState(false);
+ const [confirmCancel, setConfirmCancel] = useState(false);
 
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['quality', 'ncrs', id],
-    queryFn: () => ncrsApi.show(id),
-    enabled: Boolean(id),
-    placeholderData: (prev) => prev,
-  });
-  const { data: options } = useQuery({
-    queryKey: ['quality', 'ncrs', 'options'],
-    queryFn: () => ncrsApi.options(),
-  });
-  const labelFor = (items: Array<{ value: string; label: string }> | undefined, value: string | null | undefined) =>
-    (value && items?.find((item) => item.value === value)?.label) ?? value?.replace('_', ' ') ?? '—';
+ const { data, isLoading, isError, refetch } = useQuery({
+ queryKey: ['quality', 'ncrs', id],
+ queryFn: () => ncrsApi.show(id),
+ enabled: Boolean(id),
+ placeholderData: (prev) => prev,
+ });
+ const { data: options } = useQuery({
+ queryKey: ['quality', 'ncrs', 'options'],
+ queryFn: () => ncrsApi.options(),
+ });
+ const labelFor = (items: Array<{ value: string; label: string }> | undefined, value: string | null | undefined) =>
+ (value && items?.find((item) => item.value === value)?.label) ?? value?.replace('_', ' ') ?? '—';
 
-  const addAction = useMutation({
-    mutationFn: () =>
-      ncrsApi.addAction(id, { action_type: actionType, description: actionDesc }),
-    onSuccess: () => {
-      toast.success('Action added');
-      setActionDesc('');
-      qc.invalidateQueries({ queryKey: ['quality', 'ncrs', id] });
-    },
-    onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Failed'),
-  });
+ const addAction = useMutation({
+ mutationFn: () =>
+ ncrsApi.addAction(id, { action_type: actionType, description: actionDesc }),
+ onSuccess: () => {
+ toast.success('Action added');
+ setActionDesc('');
+ qc.invalidateQueries({ queryKey: ['quality', 'ncrs', id] });
+ },
+ onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Failed'),
+ });
 
-  const setDispositionMut = useMutation({
-    mutationFn: () =>
-      ncrsApi.setDisposition(id, {
-        disposition: disposition as NcrDisposition,
-        root_cause: rootCause || undefined,
-        corrective_action: correctiveAction || undefined,
-      }),
-    onSuccess: () => {
-      toast.success('Disposition saved');
-      qc.invalidateQueries({ queryKey: ['quality', 'ncrs', id] });
-    },
-    onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Failed'),
-  });
+ const setDispositionMut = useMutation({
+ mutationFn: () =>
+ ncrsApi.setDisposition(id, {
+ disposition: disposition as NcrDisposition,
+ root_cause: rootCause || undefined,
+ corrective_action: correctiveAction || undefined,
+ }),
+ onSuccess: () => {
+ toast.success('Disposition saved');
+ qc.invalidateQueries({ queryKey: ['quality', 'ncrs', id] });
+ },
+ onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Failed'),
+ });
 
-  const close = useMutation({
-    mutationFn: () => ncrsApi.close(id),
-    onSuccess: (ncr) => {
-      toast.success(
-        ncr.replacement_work_order
-          ? `NCR closed; replacement WO ${ncr.replacement_work_order.wo_number} created`
-          : 'NCR closed'
-      );
-      qc.invalidateQueries({ queryKey: ['quality', 'ncrs', id] });
-      setConfirmClose(false);
-    },
-    onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Could not close'),
-  });
+ const close = useMutation({
+ mutationFn: () => ncrsApi.close(id),
+ onSuccess: (ncr) => {
+ toast.success(
+ ncr.replacement_work_order
+ ? `NCR closed; replacement WO ${ncr.replacement_work_order.wo_number} created`
+ : 'NCR closed'
+ );
+ qc.invalidateQueries({ queryKey: ['quality', 'ncrs', id] });
+ setConfirmClose(false);
+ },
+ onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Could not close'),
+ });
 
-  const cancel = useMutation({
-    mutationFn: (reason: string) => ncrsApi.cancel(id, reason),
-    onSuccess: () => {
-      toast.success('NCR cancelled');
-      qc.invalidateQueries({ queryKey: ['quality', 'ncrs', id] });
-      setConfirmCancel(false);
-    },
-    onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Could not cancel'),
-  });
+ const cancel = useMutation({
+ mutationFn: (reason: string) => ncrsApi.cancel(id, reason),
+ onSuccess: () => {
+ toast.success('NCR cancelled');
+ qc.invalidateQueries({ queryKey: ['quality', 'ncrs', id] });
+ setConfirmCancel(false);
+ },
+ onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Could not cancel'),
+ });
 
-  if (isLoading && !data) return <SkeletonDetail />;
-  if (isError || !data) {
-    return (
-      <EmptyState
-        icon="alert-circle"
-        title="Failed to load NCR"
-        action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
-      />
-    );
-  }
+ if (isLoading && !data) return <SkeletonDetail />;
+ if (isError || !data) {
+ return (
+ <EmptyState
+ icon="alert-circle"
+ title="Failed to load NCR"
+ action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
+ />
+ );
+ }
 
-  const isTerminal = ['closed', 'cancelled'].includes(data.status);
+ const isTerminal = ['closed', 'cancelled'].includes(data.status);
 
-  const ncrChain = buildNcrChain(data);
+ const ncrChain = buildNcrChain(data);
 
-  // Build LinkedRecords groups
-  const linkedGroups: import('@/types/chain').LinkedGroup[] = [];
-  if (data.product) {
-    linkedGroups.push({
-      label: 'Product',
-      items: [{
-        id: `${data.product.part_number} — ${data.product.name}`,
-        href: `/crm/products/${data.product.id}`,
-      }],
-    });
-  }
-  if (data.inspection) {
-    linkedGroups.push({
-      label: 'Inspection',
-      items: [{
-        id: data.inspection.inspection_number,
-        href: `/quality/inspections/${data.inspection.id}`,
-        meta: `${data.inspection.stage_label ?? data.inspection.stage} · ${data.inspection.status_label ?? data.inspection.status}`,
-      }],
-    });
-  }
-  if (data.replacement_work_order) {
-    linkedGroups.push({
-      label: 'Replacement WO',
-      items: [{
-        id: data.replacement_work_order.wo_number,
-        href: `/production/work-orders/${data.replacement_work_order.id}`,
-        meta: `${data.replacement_work_order.quantity_target} pcs · ${data.replacement_work_order.status_label ?? data.replacement_work_order.status}`,
-      }],
-    });
-  }
+ // Build LinkedRecords groups
+ const linkedGroups: import('@/types/chain').LinkedGroup[] = [];
+ if (data.product) {
+ linkedGroups.push({
+ label: 'Product',
+ items: [{
+ id: `${data.product.part_number} — ${data.product.name}`,
+ href: `/crm/products/${data.product.id}`,
+ }],
+ });
+ }
+ if (data.inspection) {
+ linkedGroups.push({
+ label: 'Inspection',
+ items: [{
+ id: data.inspection.inspection_number,
+ href: `/quality/inspections/${data.inspection.id}`,
+ meta: `${data.inspection.stage_label ?? data.inspection.stage} · ${data.inspection.status_label ?? data.inspection.status}`,
+ }],
+ });
+ }
+ if (data.replacement_work_order) {
+ linkedGroups.push({
+ label: 'Replacement WO',
+ items: [{
+ id: data.replacement_work_order.wo_number,
+ href: `/production/work-orders/${data.replacement_work_order.id}`,
+ meta: `${data.replacement_work_order.quantity_target} pcs · ${data.replacement_work_order.status_label ?? data.replacement_work_order.status}`,
+ }],
+ });
+ }
 
-  const ACTION_DOT: Record<NcrActionType, 'success' | 'warning' | 'info'> = {
-    containment: 'warning',
-    corrective: 'info',
-    preventive: 'success',
-  };
-  const activityItems: import('@/types/chain').ActivityItem[] = (data.actions ?? []).map((a) => ({
-    dot: ACTION_DOT[a.action_type],
-    text: (
-      <span>
-        <span className="font-medium uppercase text-2xs tracking-wider text-muted">{a.action_type_label ?? a.action_type}</span>
-        <span className="ml-2">{a.description}</span>
-        <span className="ml-2 text-muted">— {a.performer?.name ?? 'system'}</span>
-      </span>
-    ),
-    time: a.performed_at?.slice(0, 16).replace('T', ' ') ?? '',
-  }));
+ const ACTION_DOT: Record<NcrActionType, 'success' | 'warning' | 'info'> = {
+ containment: 'warning',
+ corrective: 'info',
+ preventive: 'success',
+ };
+ const activityItems: import('@/types/chain').ActivityItem[] = (data.actions ?? []).map((a) => ({
+ dot: ACTION_DOT[a.action_type],
+ text: (
+ <span>
+ <span className="font-medium uppercase text-2xs tracking-wider text-muted">{a.action_type_label ?? a.action_type}</span>
+ <span className="ml-2">{a.description}</span>
+ <span className="ml-2 text-muted">— {a.performer?.name ?? 'system'}</span>
+ </span>
+ ),
+ time: a.performed_at?.slice(0, 16).replace('T', ' ') ?? '',
+ }));
 
-  return (
-    <div>
-      <PageHeader
-        title={
-          <span>
-            {data.ncr_number}
-            <Chip variant={STATUS_CHIP[data.status]} className="ml-3">{labelFor(options?.statuses, data.status)}</Chip>
-            <Chip variant={SEVERITY_CHIP[data.severity]} className="ml-2">{labelFor(options?.severities, data.severity)}</Chip>
-            {data.is_auto_generated && (
-              <span title="Auto-generated from inspection failure" className="ml-2 inline-block">
-                <Chip variant="info">Auto</Chip>
-              </span>
-            )}
-          </span>
-        }
-        subtitle={data.product ? `${data.product.part_number} — ${data.product.name}` : labelFor(options?.sources, data.source)}
-        breadcrumbs={[{ label: 'Quality', href: '/quality' }, { label: 'NCRs', href: '/quality/ncrs' }, { label: data.ncr_number }]}
-        actions={
-          <div className="flex items-center gap-2">
-            {!isTerminal && data.disposition && can('quality.ncr.manage') && (
-              <Button variant="primary" size="sm" icon={<Check size={14} />} onClick={() => setConfirmClose(true)}>
-                Close NCR
-              </Button>
-            )}
-            {!isTerminal && can('quality.ncr.manage') && (
-              <Button variant="secondary" size="sm" icon={<Ban size={14} />} onClick={() => setConfirmCancel(true)}>
-                Cancel
-              </Button>
-            )}
-          </div>
-        }
-      />
+ return (
+ <div>
+ <PageHeader
+ title={
+ <span>
+ {data.ncr_number}
+ <Chip variant={STATUS_CHIP[data.status]} className="ml-3">{labelFor(options?.statuses, data.status)}</Chip>
+ <Chip variant={SEVERITY_CHIP[data.severity]} className="ml-2">{labelFor(options?.severities, data.severity)}</Chip>
+ {data.is_auto_generated && (
+ <span title="Auto-generated from inspection failure" className="ml-2 inline-block">
+ <Chip variant="info">Auto</Chip>
+ </span>
+ )}
+ </span>
+ }
+ subtitle={data.product ? `${data.product.part_number} — ${data.product.name}` : labelFor(options?.sources, data.source)}
+ breadcrumbs={[{ label: 'Quality', href: '/quality' }, { label: 'NCRs', href: '/quality/ncrs' }, { label: data.ncr_number }]}
+ actions={
+ <div className="flex items-center gap-2">
+ {!isTerminal && data.disposition && can('quality.ncr.manage') && (
+ <Button variant="primary" size="sm" icon={<Check size={14} />} onClick={() => setConfirmClose(true)}>
+ Close NCR
+ </Button>
+ )}
+ {!isTerminal && can('quality.ncr.manage') && (
+ <Button variant="secondary" size="sm" icon={<Ban size={14} />} onClick={() => setConfirmCancel(true)}>
+ Cancel
+ </Button>
+ )}
+ </div>
+ }
+ />
 
-      <div className="px-5 pt-4">
-        <Panel title="Quality flow">
-          <ChainHeader steps={ncrChain} />
-        </Panel>
-      </div>
+ <div className="px-5 pt-4">
+ <Panel title="Quality flow">
+ <ChainHeader steps={ncrChain} />
+ </Panel>
+ </div>
 
-      <div className="px-5 grid grid-cols-3 gap-4">
-        <div className="col-span-2 space-y-4">
-          <Panel title="Details">
-            <dl className="grid grid-cols-3 gap-x-4 gap-y-3 text-sm">
-              <div>
-                <dt className="text-2xs uppercase tracking-wider text-muted">Source</dt>
-                <dd>{labelFor(options?.sources, data.source)}</dd>
-              </div>
-              <div>
-                <dt className="text-2xs uppercase tracking-wider text-muted">Affected qty</dt>
-                <dd className="font-mono tabular-nums">{data.affected_quantity}</dd>
-              </div>
-              <div>
-                <dt className="text-2xs uppercase tracking-wider text-muted">Disposition</dt>
-                <dd>{labelFor(options?.dispositions, data.disposition)}</dd>
-              </div>
-              <div className="col-span-3">
-                <dt className="text-2xs uppercase tracking-wider text-muted">Defect description</dt>
-                <dd className="whitespace-pre-line">{data.defect_description}</dd>
-              </div>
-              {data.root_cause && (
-                <div className="col-span-3">
-                  <dt className="text-2xs uppercase tracking-wider text-muted">Root cause</dt>
-                  <dd className="whitespace-pre-line">{data.root_cause}</dd>
-                </div>
-              )}
-              {data.corrective_action && (
-                <div className="col-span-3">
-                  <dt className="text-2xs uppercase tracking-wider text-muted">Corrective action</dt>
-                  <dd className="whitespace-pre-line">{data.corrective_action}</dd>
-                </div>
-              )}
-            </dl>
-          </Panel>
+ <div className="px-5 grid grid-cols-3 gap-4">
+ <div className="col-span-2 space-y-4">
+ <Panel title="Details">
+ <dl className="grid grid-cols-3 gap-x-4 gap-y-3 text-sm">
+ <div>
+ <dt className="text-2xs uppercase tracking-wider text-muted">Source</dt>
+ <dd>{labelFor(options?.sources, data.source)}</dd>
+ </div>
+ <div>
+ <dt className="text-2xs uppercase tracking-wider text-muted">Affected qty</dt>
+ <dd className="font-mono tabular-nums">{data.affected_quantity}</dd>
+ </div>
+ <div>
+ <dt className="text-2xs uppercase tracking-wider text-muted">Disposition</dt>
+ <dd>{labelFor(options?.dispositions, data.disposition)}</dd>
+ </div>
+ <div className="col-span-3">
+ <dt className="text-2xs uppercase tracking-wider text-muted">Defect description</dt>
+ <dd className="whitespace-pre-line">{data.defect_description}</dd>
+ </div>
+ {data.root_cause && (
+ <div className="col-span-3">
+ <dt className="text-2xs uppercase tracking-wider text-muted">Root cause</dt>
+ <dd className="whitespace-pre-line">{data.root_cause}</dd>
+ </div>
+ )}
+ {data.corrective_action && (
+ <div className="col-span-3">
+ <dt className="text-2xs uppercase tracking-wider text-muted">Corrective action</dt>
+ <dd className="whitespace-pre-line">{data.corrective_action}</dd>
+ </div>
+ )}
+ </dl>
+ </Panel>
 
-          {!isTerminal && can('quality.ncr.manage') && (
-            <Panel title="Set disposition">
-              <div className="grid grid-cols-3 gap-3">
-                <Select
-                  label="Disposition"
-                  value={disposition}
-                  onChange={(e) => setDisposition(e.target.value as NcrDisposition | '')}
-                >
-                  <option value="">— Select —</option>
-                  {(options?.dispositions ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                </Select>
-              </div>
-              <Textarea
-                label="Root cause"
-                rows={3}
-                value={rootCause}
-                onChange={(e) => setRootCause(e.target.value)}
-              />
-              <Textarea
-                label="Corrective action"
-                rows={3}
-                value={correctiveAction}
-                onChange={(e) => setCorrectiveAction(e.target.value)}
-              />
-              <div className="flex justify-end mt-3">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={!disposition}
-                  loading={setDispositionMut.isPending}
-                  onClick={() => setDispositionMut.mutate()}
-                >
-                  Save disposition
-                </Button>
-              </div>
-            </Panel>
-          )}
+ {!isTerminal && can('quality.ncr.manage') && (
+ <Panel title="Set disposition">
+ <div className="grid grid-cols-3 gap-3">
+ <Select
+ label="Disposition"
+ value={disposition}
+ onChange={(e) => setDisposition(e.target.value as NcrDisposition | '')}
+ >
+ <option value="">— Select —</option>
+ {(options?.dispositions ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+ </Select>
+ </div>
+ <Textarea
+ label="Root cause"
+ rows={3}
+ value={rootCause}
+ onChange={(e) => setRootCause(e.target.value)}
+ />
+ <Textarea
+ label="Corrective action"
+ rows={3}
+ value={correctiveAction}
+ onChange={(e) => setCorrectiveAction(e.target.value)}
+ />
+ <div className="flex justify-end mt-3">
+ <Button
+ variant="secondary"
+ size="sm"
+ disabled={!disposition}
+ loading={setDispositionMut.isPending}
+ onClick={() => setDispositionMut.mutate()}
+ >
+ Save disposition
+ </Button>
+ </div>
+ </Panel>
+ )}
 
-          {!isTerminal && can('quality.ncr.manage') && (
-            <Panel title="Add action">
-              <div className="grid grid-cols-3 gap-3">
-                <Select
-                  label="Type"
-                  value={actionType}
-                  onChange={(e) => setActionType(e.target.value as NcrActionType)}
-                >
-                  {(options?.actions ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                </Select>
-              </div>
-              <Textarea
-                label="Description"
-                rows={3}
-                value={actionDesc}
-                onChange={(e) => setActionDesc(e.target.value)}
-              />
-              <div className="flex justify-end mt-3">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  icon={<Plus size={14} />}
-                  disabled={!actionDesc}
-                  loading={addAction.isPending}
-                  onClick={() => addAction.mutate()}
-                >
-                  Add action
-                </Button>
-              </div>
-            </Panel>
-          )}
-        </div>
+ {!isTerminal && can('quality.ncr.manage') && (
+ <Panel title="Add action">
+ <div className="grid grid-cols-3 gap-3">
+ <Select
+ label="Type"
+ value={actionType}
+ onChange={(e) => setActionType(e.target.value as NcrActionType)}
+ >
+ {(options?.actions ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+ </Select>
+ </div>
+ <Textarea
+ label="Description"
+ rows={3}
+ value={actionDesc}
+ onChange={(e) => setActionDesc(e.target.value)}
+ />
+ <div className="flex justify-end mt-3">
+ <Button
+ variant="secondary"
+ size="sm"
+ icon={<Plus size={14} />}
+ disabled={!actionDesc}
+ loading={addAction.isPending}
+ onClick={() => addAction.mutate()}
+ >
+ Add action
+ </Button>
+ </div>
+ </Panel>
+ )}
+ </div>
 
-        <div className="space-y-4">
-          {linkedGroups.length > 0 && (
-            <Panel title="Linked records">
-              <LinkedRecords groups={linkedGroups} />
-            </Panel>
-          )}
-          {activityItems.length > 0 && (
-            <Panel title="Activity">
-              <ActivityStream items={activityItems} />
-            </Panel>
-          )}
-          <Panel title="Navigation">
-            <Link to="/quality/ncrs" className="text-xs text-accent hover:underline">
-              ← Back to NCRs
-            </Link>
-          </Panel>
-        </div>
-      </div>
+ <div className="space-y-4">
+ {linkedGroups.length > 0 && (
+ <Panel title="Linked records">
+ <LinkedRecords groups={linkedGroups} />
+ </Panel>
+ )}
+ {activityItems.length > 0 && (
+ <Panel title="Activity">
+ <ActivityStream items={activityItems} />
+ </Panel>
+ )}
+ <Panel title="Navigation">
+ <Link to="/quality/ncrs" className="text-xs text-accent hover:underline">
+ ← Back to NCRs
+ </Link>
+ </Panel>
+ </div>
+ </div>
 
-      <ConfirmDialog
-        isOpen={confirmClose}
-        title="Close NCR?"
-        description={
-          data.disposition === 'scrap'
-            ? 'On scrap from outgoing inspection, a replacement work order will be auto-created.'
-            : data.disposition === 'return_to_supplier'
-            ? 'Purchasing will be notified to coordinate the supplier return.'
-            : 'This will lock the NCR. Actions can no longer be added after closure.'
-        }
-        confirmLabel="Close NCR"
-        onConfirm={() => close.mutate()}
-        onClose={() => setConfirmClose(false)}
-        pending={close.isPending}
-      />
-      <ReasonDialog
-        isOpen={confirmCancel}
-        title="Cancel NCR?"
-        description="The reason will be appended to the corrective action notes."
-        confirmLabel="Cancel NCR"
-        onConfirm={(reason) => cancel.mutate(reason)}
-        onClose={() => setConfirmCancel(false)}
-        pending={cancel.isPending}
-      />
-    </div>
-  );
+ <ConfirmDialog
+ isOpen={confirmClose}
+ title="Close NCR?"
+ description={
+ data.disposition === 'scrap'
+ ? 'On scrap from outgoing inspection, a replacement work order will be auto-created.'
+ : data.disposition === 'return_to_supplier'
+ ? 'Purchasing will be notified to coordinate the supplier return.'
+ : 'This will lock the NCR. Actions can no longer be added after closure.'
+ }
+ confirmLabel="Close NCR"
+ onConfirm={() => close.mutate()}
+ onClose={() => setConfirmClose(false)}
+ pending={close.isPending}
+ />
+ <ReasonDialog
+ isOpen={confirmCancel}
+ title="Cancel NCR?"
+ description="The reason will be appended to the corrective action notes."
+ confirmLabel="Cancel NCR"
+ onConfirm={(reason) => cancel.mutate(reason)}
+ onClose={() => setConfirmCancel(false)}
+ pending={cancel.isPending}
+ />
+ </div>
+ );
 }

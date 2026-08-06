@@ -22,9 +22,9 @@ class DepartmentController
         return DepartmentResource::collection($this->service->list($request->query()));
     }
 
-    public function tree(): AnonymousResourceCollection
+    public function tree(Request $request): AnonymousResourceCollection
     {
-        return DepartmentResource::collection($this->service->tree());
+        return DepartmentResource::collection($this->service->tree($request->query()));
     }
 
     public function store(StoreDepartmentRequest $request): JsonResponse
@@ -51,5 +51,11 @@ class DepartmentController
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return response()->json(null, 204);
+    }
+
+    public function restore(Department $department): JsonResponse
+    {
+        $department->restore();
+        return response()->json(['message' => 'Department restored.']);
     }
 }

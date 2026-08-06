@@ -12,136 +12,136 @@ import { usePermission } from '@/hooks/usePermission';
 import { formatPeso } from '@/lib/formatNumber';
 
 export default function ProductDetailPage() {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-  const { can } = usePermission();
-  const canManage = can('crm.products.manage');
+ const { id } = useParams<{ id: string }>();
+ const navigate = useNavigate();
+ const { can } = usePermission();
+ const canManage = can('crm.products.manage');
 
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['crm', 'products', 'detail', id],
-    queryFn: () => productsApi.show(id!),
-    enabled: !!id,
-  });
+ const { data, isLoading, isError, refetch } = useQuery({
+ queryKey: ['crm', 'products', 'detail', id],
+ queryFn: () => productsApi.show(id!),
+ enabled: !!id,
+ });
 
-  if (isLoading) {
-    return (
-      <div>
-        <PageHeader title="Product" backTo="/crm/products" backLabel="Products"
-          breadcrumbs={[
-            { label: 'CRM' },
-            { label: 'Products', href: '/crm/products' },
-            { label: 'Product' },
-          ]} />
-        <SkeletonDetail />
-      </div>
-    );
-  }
-  if (isError || !data) {
-    return (
-      <div>
-        <PageHeader title="Product" backTo="/crm/products" backLabel="Products"
-          breadcrumbs={[
-            { label: 'CRM' },
-            { label: 'Products', href: '/crm/products' },
-            { label: 'Product' },
-          ]} />
-        <EmptyState
-          icon="alert-circle"
-          title="Failed to load product"
-          action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
-        />
-      </div>
-    );
-  }
+ if (isLoading) {
+ return (
+ <div>
+ <PageHeader title="Product" backTo="/crm/products" backLabel="Products"
+ breadcrumbs={[
+ { label: 'CRM' },
+ { label: 'Products', href: '/crm/products' },
+ { label: 'Product' },
+ ]} />
+ <SkeletonDetail />
+ </div>
+ );
+ }
+ if (isError || !data) {
+ return (
+ <div>
+ <PageHeader title="Product" backTo="/crm/products" backLabel="Products"
+ breadcrumbs={[
+ { label: 'CRM' },
+ { label: 'Products', href: '/crm/products' },
+ { label: 'Product' },
+ ]} />
+ <EmptyState
+ icon="alert-circle"
+ title="Failed to load product"
+ action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
+ />
+ </div>
+ );
+ }
 
-  return (
-    <div>
-      <PageHeader
-        title={
-          <div className="flex items-center gap-3">
-            <span className="font-mono">{data.part_number}</span>
-            {data.is_active
-              ? <Chip variant="success">Active</Chip>
-              : <Chip variant="neutral">Inactive</Chip>}
-            {data.has_bom && <Chip variant="info">BOM</Chip>}
-          </div>
-        }
-        subtitle={data.name}
-        backTo="/crm/products"
-        backLabel="Products"
-        breadcrumbs={[
-          { label: 'CRM' },
-          { label: 'Products', href: '/crm/products' },
-          { label: data.part_number },
-        ]}
-        actions={canManage && (
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={<Pencil size={14} />}
-            onClick={() => navigate(`/crm/products/${data.id}/edit`)}
-          >
-            Edit
-          </Button>
-        )}
-      />
+ return (
+ <div>
+ <PageHeader
+ title={
+ <div className="flex items-center gap-3">
+ <span className="font-mono">{data.part_number}</span>
+ {data.is_active
+ ? <Chip variant="success">Active</Chip>
+ : <Chip variant="neutral">Inactive</Chip>}
+ {data.has_bom && <Chip variant="info">BOM</Chip>}
+ </div>
+ }
+ subtitle={data.name}
+ backTo="/crm/products"
+ backLabel="Products"
+ breadcrumbs={[
+ { label: 'CRM' },
+ { label: 'Products', href: '/crm/products' },
+ { label: data.part_number },
+ ]}
+ actions={canManage && (
+ <Button
+ variant="secondary"
+ size="sm"
+ icon={<Pencil size={14} />}
+ onClick={() => navigate(`/crm/products/${data.id}/edit`)}
+ >
+ Edit
+ </Button>
+ )}
+ />
 
-      <div className="px-5 py-4 grid gap-4 lg:grid-cols-3">
-        <div className="lg:col-span-2 space-y-4">
-          <Panel title="Overview">
-            <dl className="grid grid-cols-3 gap-x-4 gap-y-3 text-sm">
-              <dt className="text-muted">Part number</dt>
-              <dd className="col-span-2 font-mono">{data.part_number}</dd>
-              <dt className="text-muted">Name</dt>
-              <dd className="col-span-2 font-medium">{data.name}</dd>
-              <dt className="text-muted">UOM</dt>
-              <dd className="col-span-2 font-mono">{data.unit_of_measure}</dd>
-              <dt className="text-muted">Standard cost</dt>
-              <dd className="col-span-2 font-mono tabular-nums">{formatPeso(data.standard_cost)}</dd>
-              <dt className="text-muted">Description</dt>
-              <dd className="col-span-2">{data.description ?? <span className="text-muted">—</span>}</dd>
-            </dl>
-          </Panel>
+ <div className="px-5 py-4 grid gap-4 lg:grid-cols-3">
+ <div className="lg:col-span-2 space-y-4">
+ <Panel title="Overview">
+ <dl className="grid grid-cols-3 gap-x-4 gap-y-3 text-sm">
+ <dt className="text-muted">Part number</dt>
+ <dd className="col-span-2 font-mono">{data.part_number}</dd>
+ <dt className="text-muted">Name</dt>
+ <dd className="col-span-2 font-medium">{data.name}</dd>
+ <dt className="text-muted">UOM</dt>
+ <dd className="col-span-2 font-mono">{data.unit_of_measure}</dd>
+ <dt className="text-muted">Standard cost</dt>
+ <dd className="col-span-2 font-mono tabular-nums">{formatPeso(data.standard_cost)}</dd>
+ <dt className="text-muted">Description</dt>
+ <dd className="col-span-2">{data.description ?? <span className="text-muted">—</span>}</dd>
+ </dl>
+ </Panel>
 
-          <Panel title="Bill of materials">
-            {data.active_bom ? (
-              <div className="text-sm text-muted">
-                Active BOM version {data.active_bom.version}.{' '}
-                <Link to={`/mrp/boms/${data.active_bom.id}`} className="text-accent hover:underline">View BOM →</Link>
-              </div>
-            ) : (
-              <div className="text-sm text-muted">No BOM yet — material planning is unavailable until one is created.</div>
-            )}
-          </Panel>
-        </div>
+ <Panel title="Bill of materials">
+ {data.active_bom ? (
+ <div className="text-sm text-muted">
+ Active BOM version {data.active_bom.version}.{' '}
+ <Link to={`/mrp/boms/${data.active_bom.id}`} className="text-accent hover:underline">View BOM →</Link>
+ </div>
+ ) : (
+ <div className="text-sm text-muted">No BOM yet — material planning is unavailable until one is created.</div>
+ )}
+ </Panel>
+ </div>
 
-        <div className="space-y-4">
-          <Panel title="Quick links">
-            <div className="space-y-2 text-sm">
-              <Link
-                to={`/crm/sales-orders?product_id=${data.id}`}
-                className="block text-accent hover:underline"
-              >
-                Recent sales orders →
-              </Link>
-              <Link
-                to={`/crm/price-agreements?product_id=${data.id}`}
-                className="block text-accent hover:underline"
-              >
-                Price agreements →
-              </Link>
-              <Link
-                to={`/quality/inspection-specs/${data.id}`}
-                className="block text-accent hover:underline"
-              >
-                {data.inspection_spec
-                  ? `Inspection spec v${data.inspection_spec.version} →`
-                  : 'Create inspection spec →'}
-              </Link>
-            </div>
-          </Panel>
-        </div>
-      </div>
-    </div>
-  );
+ <div className="space-y-4">
+ <Panel title="Quick links">
+ <div className="space-y-2 text-sm">
+ <Link
+ to={`/crm/sales-orders?product_id=${data.id}`}
+ className="block text-accent hover:underline"
+ >
+ Recent sales orders →
+ </Link>
+ <Link
+ to={`/crm/price-agreements?product_id=${data.id}`}
+ className="block text-accent hover:underline"
+ >
+ Price agreements →
+ </Link>
+ <Link
+ to={`/quality/inspection-specs/${data.id}`}
+ className="block text-accent hover:underline"
+ >
+ {data.inspection_spec
+ ? `Inspection spec v${data.inspection_spec.version} →`
+ : 'Create inspection spec →'}
+ </Link>
+ </div>
+ </Panel>
+ </div>
+ </div>
+ </div>
+ );
 }

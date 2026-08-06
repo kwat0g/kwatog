@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\MRP\Services;
 
 use App\Common\Support\SearchOperator;
+use App\Common\Support\TrashedFilter;
 use App\Modules\MRP\Enums\MachineStatus;
 use App\Modules\MRP\Exceptions\IllegalStatusTransitionException;
 use App\Modules\MRP\Models\Machine;
@@ -36,6 +37,8 @@ class MachineService
     public function list(array $filters): LengthAwarePaginator
     {
         $q = Machine::query()->withCount('compatibleMolds');
+
+        TrashedFilter::apply($q, $filters);
 
         if (! empty($filters['status'])) {
             $q->where('status', $filters['status']);

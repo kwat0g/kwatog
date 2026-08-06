@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Resources;
 
+use App\Modules\HR\Enums\ProfileUpdateStatus;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 class ProfileUpdateRequestResource extends JsonResource
@@ -13,6 +14,7 @@ class ProfileUpdateRequestResource extends JsonResource
         return [
             'id'      => $this->hash_id,
             'status'  => $this->status,
+            'status_label' => ProfileUpdateStatus::tryFrom((string) $this->status)?->label() ?? (string) $this->status,
             'requires_finance' => (bool) $this->requires_finance,
             'changes' => $this->changes,
             'note'    => $this->note,

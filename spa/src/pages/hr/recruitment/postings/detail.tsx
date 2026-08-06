@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Edit, Trash2 } from 'lucide-react';
+import { Edit, Trash2, ArchiveRestore } from 'lucide-react';
 import { recruitmentApi } from '@/api/recruitment';
+import { ArchiveFilter, type ArchiveScope } from '@/components/ui/ArchiveFilter';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -18,226 +19,257 @@ import toast from 'react-hot-toast';
 import type { JobPostingStatus, JobApplication, ApplicationStage } from '@/types/recruitment';
 
 const STATUS_CHIP: Record<JobPostingStatus, 'neutral' | 'success' | 'warning' | 'info'> = {
-  draft: 'neutral',
-  open: 'success',
-  closed: 'warning',
-  filled: 'info',
+ draft: 'neutral',
+ open: 'success',
+ closed: 'warning',
+ filled: 'info',
 };
 
 const STAGE_CHIP: Record<ApplicationStage, 'neutral' | 'info' | 'warning' | 'success' | 'danger'> = {
-  new: 'neutral',
-  screening: 'info',
-  interview: 'warning',
-  offer: 'info',
-  hired: 'success',
-  rejected: 'danger',
+ new: 'neutral',
+ screening: 'info',
+ interview: 'warning',
+ offer: 'info',
+ hired: 'success',
+ rejected: 'danger',
 };
 
 export default function PostingDetailPage() {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const { can } = usePermission();
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+ const { id } = useParams<{ id: string }>();
+ const navigate = useNavigate();
+ const queryClient = useQueryClient();
+ const { can } = usePermission();
+ const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+ const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
+ const [scope, setScope] = useState<ArchiveScope>('active');
 
-  const { data: posting, isLoading, isError, refetch } = useQuery({
-    queryKey: ['recruitment-posting', id],
-    queryFn: () => recruitmentApi.showPosting(id!).then((r) => r.data.data),
-    enabled: !!id,
-  });
+ const { data: posting, isLoading, isError, refetch } = useQuery({
+ queryKey: ['recruitment-posting', id],
+ queryFn: () => recruitmentApi.showPosting(id!).then((r) => r.data.data),
+ enabled: !!id,
+ });
 
-  const { data: appsData } = useQuery({
-    queryKey: ['recruitment-applications', { job_posting_id: id }],
-    queryFn: () => recruitmentApi.listApplications({ job_posting_id: id }).then((r) => r.data),
-    enabled: !!id,
-  });
-  const { data: recruitmentOptions } = useQuery({
-    queryKey: ['recruitment', 'options'],
-    queryFn: () => recruitmentApi.options().then((r) => r.data.data),
-    staleTime: 5 * 60 * 1000,
-  });
-  const stageLabel = new Map((recruitmentOptions?.application_stages ?? []).map((stage) => [stage.value, stage.label]));
-  const postingStatusLabel = new Map((recruitmentOptions?.posting_statuses ?? []).map((status) => [status.value, status.label]));
+ const { data: appsData } = useQuery({
+ queryKey: ['recruitment-applications', { job_posting_id: id }],
+ queryFn: () => recruitmentApi.listApplications({ job_posting_id: id }).then((r) => r.data),
+ enabled: !!id,
+ });
+ const { data: recruitmentOptions } = useQuery({
+ queryKey: ['recruitment', 'options'],
+ queryFn: () => recruitmentApi.options().then((r) => r.data.data),
+ staleTime: 5 * 60 * 1000,
+ });
+ const stageLabel = new Map((recruitmentOptions?.application_stages ?? []).map((stage) => [stage.value, stage.label]));
+ const postingStatusLabel = new Map((recruitmentOptions?.posting_statuses ?? []).map((status) => [status.value, status.label]));
 
-  const statusMutation = useMutation({
-    mutationFn: (status: string) => recruitmentApi.changePostingStatus(id!, status),
-    onSuccess: () => {
-      toast.success('Status updated.');
-      queryClient.invalidateQueries({ queryKey: ['recruitment-posting', id] });
-    },
-    onError: () => toast.error('Failed to update status.'),
-  });
+ const statusMutation = useMutation({
+ mutationFn: (status: string) => recruitmentApi.changePostingStatus(id!, status),
+ onSuccess: () => {
+ toast.success('Status updated.');
+ queryClient.invalidateQueries({ queryKey: ['recruitment-posting', id] });
+ },
+ onError: () => toast.error('Failed to update status.'),
+ });
 
-  const deleteMutation = useMutation({
-    mutationFn: () => recruitmentApi.deletePosting(id!),
-    onSuccess: () => {
-      toast.success('Posting deleted.');
-      navigate('/hr/recruitment/postings');
-    },
-    onError: () => toast.error('Failed to delete posting.'),
-  });
+ const deleteMutation = useMutation({
+  mutationFn: () => recruitmentApi.deletePosting(id!),
+  onSuccess: () => {
+  toast.success('Posting archived.');
+  navigate('/hr/recruitment/postings');
+  },
+  onError: () => toast.error('Failed to archive posting.'),
+ });
 
-  const appColumns: Column<JobApplication>[] = [
-    { key: 'full_name', header: 'Applicant', cell: (r) => <span className="font-medium">{r.full_name}</span> },
-    { key: 'stage', header: 'Stage', cell: (r) => <Chip variant={STAGE_CHIP[r.stage]}>{stageLabel.get(r.stage) ?? r.stage}</Chip> },
-    { key: 'applied_at', header: 'Applied', cell: (r) => <span className="font-mono text-xs tabular-nums">{formatDate(r.applied_at)}</span> },
-  ];
+ const restoreMutation = useMutation({
+  mutationFn: (postingId: string) => recruitmentApi.restorePosting(postingId),
+  onSuccess: () => {
+  queryClient.invalidateQueries({ queryKey: ['recruitment-posting', id] });
+  toast.success('Posting restored.');
+  setShowRestoreConfirm(false);
+  setScope('active');
+  },
+  onError: () => toast.error('Failed to restore posting.'),
+ });
 
-  if (isLoading) return <SkeletonDetail />;
-  if (isError || !posting) {
-    return (
-      <EmptyState
-        icon="alert-circle"
-        title="Posting not found"
-        description="The record may have been deleted or you don't have access."
-        action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
-      />
-    );
-  }
+ const appColumns: Column<JobApplication>[] = [
+ { key: 'full_name', header: 'Applicant', cell: (r) => <span className="font-medium">{r.full_name}</span> },
+ { key: 'stage', header: 'Stage', cell: (r) => <Chip variant={STAGE_CHIP[r.stage]}>{stageLabel.get(r.stage) ?? r.stage}</Chip> },
+ { key: 'applied_at', header: 'Applied', cell: (r) => <span className="font-mono text-xs tabular-nums">{formatDate(r.applied_at)}</span> },
+ ];
 
-  return (
-    <div>
-      <PageHeader
-        title={
-          <span className="flex items-center gap-2">
-            {posting.title}
-            <Chip variant={STATUS_CHIP[posting.status]}>{posting.status_label ?? postingStatusLabel.get(posting.status) ?? posting.status}</Chip>
-          </span>
-        }
-        subtitle={<span className="font-mono">{posting.posting_number} · {posting.department?.name ?? ''}</span>}
-        backTo="/hr/recruitment/postings"
-        backLabel="Postings"
-        breadcrumbs={[
-          { label: 'HR', href: '/hr' },
-          { label: 'Recruitment', href: '/hr/recruitment' },
-          { label: 'Postings', href: '/hr/recruitment/postings' },
-          { label: posting.title },
-        ]}
-        actions={
-          can('hr.recruitment.manage') ? (
-            <>
-              <Button variant="secondary" size="sm" icon={<Edit size={12} />} onClick={() => navigate(`/hr/recruitment/postings/${id}/edit`)}>
-                Edit
-              </Button>
-              {posting.status === 'draft' && (
-                <Button size="sm" onClick={() => statusMutation.mutate('open')} disabled={statusMutation.isPending} loading={statusMutation.isPending}>
-                  Publish
-                </Button>
-              )}
-              {posting.status === 'open' && (
-                <Button variant="secondary" size="sm" onClick={() => statusMutation.mutate('closed')}>
-                  Close
-                </Button>
-              )}
-              {posting.status === 'draft' && (
-                <Button variant="danger" size="sm" icon={<Trash2 size={12} />} onClick={() => setShowDeleteConfirm(true)}>
-                  Delete
-                </Button>
-              )}
-            </>
-          ) : undefined
-        }
-      />
+ if (isLoading) return <SkeletonDetail />;
+ if (isError || !posting) {
+ return (
+ <EmptyState
+ icon="alert-circle"
+ title="Posting not found"
+ description="The record may have been deleted or you don't have access."
+ action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
+ />
+ );
+ }
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 px-5 py-4">
-        <div className="space-y-4">
-          <Panel title="Description">
-            <p className="whitespace-pre-line text-sm">{posting.description}</p>
-          </Panel>
-          <Panel title="Requirements">
-            <div className="flex flex-wrap gap-2">
-              {posting.requirements
-                .split('\n')
-                .map((r: string) => r.trim())
-                .filter(Boolean)
-                .map((req: string, i: number) => (
-                  <span
-                    key={i}
-                    className="inline-flex items-center rounded-md border border-default bg-elevated px-3 py-1.5 text-sm"
-                  >
-                    {req}
-                  </span>
-                ))}
-            </div>
-          </Panel>
+ return (
+ <div>
+ <PageHeader
+ title={
+ <span className="flex items-center gap-2">
+ {posting.title}
+ <Chip variant={STATUS_CHIP[posting.status]}>{posting.status_label ?? postingStatusLabel.get(posting.status) ?? posting.status}</Chip>
+ </span>
+ }
+ subtitle={<span className="font-mono">{posting.posting_number} · {posting.department?.name ?? ''}</span>}
+ backTo="/hr/recruitment/postings"
+ backLabel="Postings"
+ breadcrumbs={[
+ { label: 'HR', href: '/hr' },
+ { label: 'Recruitment', href: '/hr/recruitment' },
+ { label: 'Postings', href: '/hr/recruitment/postings' },
+ { label: posting.title },
+ ]}
+ actions={
+ can('hr.recruitment.manage') ? (
+ <>
+ <Button variant="secondary" size="sm" icon={<Edit size={12} />} onClick={() => navigate(`/hr/recruitment/postings/${id}/edit`)}>
+ Edit
+ </Button>
+ {posting.status === 'draft' && (
+ <Button size="sm" onClick={() => statusMutation.mutate('open')} disabled={statusMutation.isPending} loading={statusMutation.isPending}>
+ Publish
+ </Button>
+ )}
+ {posting.status === 'open' && (
+ <Button variant="secondary" size="sm" onClick={() => statusMutation.mutate('closed')}>
+ Close
+ </Button>
+ )}
+ {scope === 'only' ? (
+  <Button variant="secondary" size="sm" icon={<ArchiveRestore size={12} />} onClick={() => setShowRestoreConfirm(true)}>
+  Restore
+  </Button>
+ ) : posting.status === 'draft' ? (
+  <Button variant="danger" size="sm" icon={<Trash2 size={12} />} onClick={() => setShowDeleteConfirm(true)}>
+  Delete
+  </Button>
+ ) : null}
+ </>
+ ) : undefined
+ }
+ />
 
-          <Panel
-            title={`Applications (${appsData?.data?.length ?? 0})`}
-            noPadding
-          >
-            {appsData?.data?.length ? (
-              <DataTable
-            onRowClick={(row) => navigate(`/hr/recruitment/applications/${row.id}`)}
-            columns={appColumns}
-                data={appsData.data}
-              />
-            ) : (
-              <EmptyState
-                icon="inbox"
-                title="No applications yet"
-                description="Applications for this posting will appear here."
-              />
-            )}
-          </Panel>
-        </div>
+ <div className="flex items-center gap-2 px-5 pt-4">
+  <ArchiveFilter value={scope} onChange={setScope} />
+ </div>
 
-        <div className="space-y-4">
-          <Panel title="At a glance">
-            <dl className="text-sm space-y-2">
-              <DetailItem label="Status">
-            <Chip variant={STATUS_CHIP[posting.status]}>{posting.status_label ?? postingStatusLabel.get(posting.status) ?? posting.status}</Chip>
-              </DetailItem>
-              <DetailItem label="Employment">
-                <span className="capitalize">{posting.employment_type_label ?? posting.employment_type?.replace('_', ' ') ?? '—'}</span>
-              </DetailItem>
-              <DetailItem label="Slots">
-                <span className="font-mono tabular-nums">{posting.slots}</span>
-              </DetailItem>
-              <DetailItem label="Applications">
-                <span className="font-mono tabular-nums">{posting.application_count ?? 0}</span>
-              </DetailItem>
-              {posting.salary_range_min && (
-                <DetailItem label="Salary">
-                  <span className="font-mono tabular-nums">
-                    {formatPeso(posting.salary_range_min)}
-                    {posting.salary_range_max ? ` – ${formatPeso(posting.salary_range_max)}` : ''}
-                  </span>
-                </DetailItem>
-              )}
-              {posting.posted_at && (
-                <DetailItem label="Posted">
-                  <span className="font-mono tabular-nums">{formatDate(posting.posted_at)}</span>
-                </DetailItem>
-              )}
-              {posting.closes_at && (
-                <DetailItem label="Closes">
-                  <span className="font-mono tabular-nums">{formatDate(posting.closes_at)}</span>
-                </DetailItem>
-              )}
-            </dl>
-          </Panel>
-        </div>
-      </div>
+ <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 px-5 py-4">
+ <div className="space-y-4">
+ <Panel title="Description">
+ <p className="whitespace-pre-line text-sm">{posting.description}</p>
+ </Panel>
+ <Panel title="Requirements">
+ <div className="flex flex-wrap gap-2">
+ {posting.requirements
+ .split('\n')
+ .map((r: string) => r.trim())
+ .filter(Boolean)
+ .map((req: string, i: number) => (
+ <span
+ key={i}
+ className="inline-flex items-center rounded-md border border-default bg-elevated px-3 py-1.5 text-sm"
+ >
+ {req}
+ </span>
+ ))}
+ </div>
+ </Panel>
 
-      <ConfirmDialog
-        isOpen={showDeleteConfirm}
-        onClose={() => setShowDeleteConfirm(false)}
-        onConfirm={() => { deleteMutation.mutate(); setShowDeleteConfirm(false); }}
-        title="Delete this posting?"
-        description="This job posting will be permanently removed."
-        variant="danger"
-        confirmLabel="Delete"
-        pending={deleteMutation.isPending}
-      />
-    </div>
-  );
+ <Panel
+ title={`Applications (${appsData?.data?.length ?? 0})`}
+ noPadding
+ >
+ {appsData?.data?.length ? (
+ <DataTable
+ onRowClick={(row) => navigate(`/hr/recruitment/applications/${row.id}`)}
+ columns={appColumns}
+ data={appsData.data}
+ />
+ ) : (
+ <EmptyState
+ icon="inbox"
+ title="No applications yet"
+ description="Applications for this posting will appear here."
+ />
+ )}
+ </Panel>
+ </div>
+
+ <div className="space-y-4">
+ <Panel title="At a glance">
+ <dl className="text-sm space-y-2">
+ <DetailItem label="Status">
+ <Chip variant={STATUS_CHIP[posting.status]}>{posting.status_label ?? postingStatusLabel.get(posting.status) ?? posting.status}</Chip>
+ </DetailItem>
+ <DetailItem label="Employment">
+ <span className="capitalize">{posting.employment_type_label ?? posting.employment_type?.replace('_', ' ') ?? '—'}</span>
+ </DetailItem>
+ <DetailItem label="Slots">
+ <span className="font-mono tabular-nums">{posting.slots}</span>
+ </DetailItem>
+ <DetailItem label="Applications">
+ <span className="font-mono tabular-nums">{posting.application_count ?? 0}</span>
+ </DetailItem>
+ {posting.salary_range_min && (
+ <DetailItem label="Salary">
+ <span className="font-mono tabular-nums">
+ {formatPeso(posting.salary_range_min)}
+ {posting.salary_range_max ? ` – ${formatPeso(posting.salary_range_max)}` : ''}
+ </span>
+ </DetailItem>
+ )}
+ {posting.posted_at && (
+ <DetailItem label="Posted">
+ <span className="font-mono tabular-nums">{formatDate(posting.posted_at)}</span>
+ </DetailItem>
+ )}
+ {posting.closes_at && (
+ <DetailItem label="Closes">
+ <span className="font-mono tabular-nums">{formatDate(posting.closes_at)}</span>
+ </DetailItem>
+ )}
+ </dl>
+ </Panel>
+ </div>
+ </div>
+
+ <ConfirmDialog
+  isOpen={showDeleteConfirm}
+  onClose={() => setShowDeleteConfirm(false)}
+  onConfirm={() => { deleteMutation.mutate(); setShowDeleteConfirm(false); }}
+  title="Archive this posting?"
+  description="This job posting will be archived and can be restored later."
+  variant="danger"
+  confirmLabel="Archive"
+  pending={deleteMutation.isPending}
+  />
+
+ <ConfirmDialog
+  isOpen={showRestoreConfirm}
+  onClose={() => setShowRestoreConfirm(false)}
+  onConfirm={() => restoreMutation.mutate(id!)}
+  title="Restore this posting?"
+  description={<>Restore <span className="font-medium">{posting.title}</span>? It will reappear in active lists.</>}
+  confirmLabel="Restore"
+  pending={restoreMutation.isPending}
+  />
+ </div>
+ );
 }
 
 function DetailItem({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <dt className="text-2xs uppercase tracking-wider text-muted font-medium">{label}</dt>
-      <dd className="mt-0.5">{children}</dd>
-    </div>
-  );
+ return (
+ <div>
+ <dt className="text-2xs uppercase tracking-wider text-muted font-medium">{label}</dt>
+ <dd className="mt-0.5">{children}</dd>
+ </div>
+ );
 }

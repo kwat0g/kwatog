@@ -23,218 +23,218 @@ interface JeRow { id: string; entry_number: string; date: string; status: string
 type Role = 'plantManager' | 'hr' | 'ppc' | 'accounting';
 
 const TITLES: Record<Role, string> = {
-  plantManager: 'Plant Manager Dashboard',
-  hr: 'HR Dashboard',
-  ppc: 'PPC Dashboard',
-  accounting: 'Accounting Dashboard',
+ plantManager: 'Plant Manager Dashboard',
+ hr: 'HR Dashboard',
+ ppc: 'PPC Dashboard',
+ accounting: 'Accounting Dashboard',
 };
 
 export function RoleDashboard({ role }: { role: Role }) {
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['dashboard', role],
-    queryFn: () => dashboardsApi[role](),
-    refetchInterval: 60_000,
-  });
+ const { data, isLoading, isError, refetch } = useQuery({
+ queryKey: ['dashboard', role],
+ queryFn: () => dashboardsApi[role](),
+ refetchInterval: 60_000,
+ });
 
-  if (isLoading) {
-    return (
-      <div className="px-5 py-4 space-y-4">
-        <div className="grid grid-cols-4 gap-2">
-          {[1, 2, 3, 4].map((i) => <SkeletonBlock key={i} className="h-16 rounded-md" />)}
-        </div>
-        <SkeletonBlock className="h-64 rounded-md" />
-      </div>
-    );
-  }
-  if (isError || !data) {
-    return (
-      <div className="px-5 py-4">
-        <EmptyState icon="alert-circle" title="Failed to load dashboard"
-          action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />
-      </div>
-    );
-  }
+ if (isLoading) {
+ return (
+ <div className="px-5 py-4 space-y-4">
+ <div className="grid grid-cols-4 gap-2">
+ {[1, 2, 3, 4].map((i) => <SkeletonBlock key={i} className="h-16 rounded-md" />)}
+ </div>
+ <SkeletonBlock className="h-64 rounded-md" />
+ </div>
+ );
+ }
+ if (isError || !data) {
+ return (
+ <div className="px-5 py-4">
+ <EmptyState icon="alert-circle" title="Failed to load dashboard"
+ action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />
+ </div>
+ );
+ }
 
-  return (
-    <div>
-      <PageHeader title={TITLES[role]} subtitle="Live · refreshes every 60s" />
-      <div className="px-5 py-4 space-y-4">
-        <section className="grid grid-cols-4 gap-2">
-          {data.kpis.map((k) => (
-            <StatCard
-              key={k.label}
-              label={k.label}
-              value={/^[A-Z]{3}$/.test(k.unit) ? `${k.unit} ${k.value}` : k.value}
-              helper={!/^[A-Z]{3}$/.test(k.unit) && k.unit !== 'count' ? k.unit : undefined}
-              linkTo={kpiLink(k.label)}
-            />
-          ))}
-        </section>
-        <RolePanels envelope={data} />
-      </div>
-    </div>
-  );
+ return (
+ <div>
+ <PageHeader title={TITLES[role]} subtitle="Live · refreshes every 60s" />
+ <div className="px-5 py-4 space-y-4">
+ <section className="grid grid-cols-4 gap-2">
+ {data.kpis.map((k) => (
+ <StatCard
+ key={k.label}
+ label={k.label}
+ value={/^[A-Z]{3}$/.test(k.unit) ? `${k.unit} ${k.value}` : k.value}
+ helper={!/^[A-Z]{3}$/.test(k.unit) && k.unit !== 'count' ? k.unit : undefined}
+ linkTo={kpiLink(k.label)}
+ />
+ ))}
+ </section>
+ <RolePanels envelope={data} />
+ </div>
+ </div>
+ );
 }
 
 function RolePanels({ envelope }: { envelope: DashboardEnvelope }) {
-  const p = envelope.panels;
+ const p = envelope.panels;
 
-  return (
-    <div className="grid grid-cols-2 gap-4">
-      {Array.isArray(p.chain_stages) && (
-        <Panel title="Active orders by chain stage">
-          <ul className="space-y-2">
-            {p.chain_stages.map((s: ChainStage) => {
-              const href = chainStageLink(s.key);
-              const inner = (
-                <>
-                  <div className="flex items-center justify-between text-sm mb-1">
-                    <span>{s.label}</span>
-                    <span className="font-mono tabular-nums">{s.count}</span>
-                  </div>
-                  <div className="h-1 bg-subtle rounded-full overflow-hidden">
-                    <div className={stageFillClass(s.color)} style={{ width: `${s.percent}%` }} />
-                  </div>
-                </>
-              );
-              return (
-                <li key={s.label}>
-                  {href ? (
-                    <Link
-                      to={href}
-                      className="block rounded-sm px-1 -mx-1 hover:bg-subtle transition-colors duration-fast"
-                    >
-                      {inner}
-                    </Link>
-                  ) : (
-                    inner
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </Panel>
-      )}
+ return (
+ <div className="grid grid-cols-2 gap-4">
+ {Array.isArray(p.chain_stages) && (
+ <Panel title="Active orders by chain stage">
+ <ul className="space-y-2">
+ {p.chain_stages.map((s: ChainStage) => {
+ const href = chainStageLink(s.key);
+ const inner = (
+ <>
+ <div className="flex items-center justify-between text-sm mb-1">
+ <span>{s.label}</span>
+ <span className="font-mono tabular-nums">{s.count}</span>
+ </div>
+ <div className="h-1 bg-subtle rounded-full overflow-hidden">
+ <div className={stageFillClass(s.color)} style={{ width: `${s.percent}%` }} />
+ </div>
+ </>
+ );
+ return (
+ <li key={s.label}>
+ {href ? (
+ <Link
+ to={href}
+ className="block rounded-sm px-1 -mx-1 hover:bg-subtle transition-colors duration-fast"
+ >
+ {inner}
+ </Link>
+ ) : (
+ inner
+ )}
+ </li>
+ );
+ })}
+ </ul>
+ </Panel>
+ )}
 
-      {Array.isArray(p.alerts) && (
-        <Panel title="Alerts" meta={p.alerts.reduce((a: number, x: AlertItem) => a + (x.count ?? 0), 0).toString()}>
-          <ul className="divide-y divide-subtle">
-            {p.alerts.map((a: AlertItem) => {
-              const href = alertLink(a.kind);
-              const row = (
-                <span className="flex items-center justify-between w-full text-sm">
-                  <span className="flex items-center gap-2">
-                    <span className={alertDotClass(a.severity)} />
-                    {a.label}
-                  </span>
-                  <span className="font-mono tabular-nums">{a.count}</span>
-                </span>
-              );
-              return (
-                <li key={a.kind} className="py-2">
-                  {href ? (
-                    <Link to={href} className="block rounded-sm px-1 -mx-1 hover:bg-subtle transition-colors duration-fast">
-                      {row}
-                    </Link>
-                  ) : (
-                    row
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </Panel>
-      )}
+ {Array.isArray(p.alerts) && (
+ <Panel title="Alerts" meta={p.alerts.reduce((a: number, x: AlertItem) => a + (x.count ?? 0), 0).toString()}>
+ <ul className="divide-y divide-subtle">
+ {p.alerts.map((a: AlertItem) => {
+ const href = alertLink(a.kind);
+ const row = (
+ <span className="flex items-center justify-between w-full text-sm">
+ <span className="flex items-center gap-2">
+ <span className={alertDotClass(a.severity)} />
+ {a.label}
+ </span>
+ <span className="font-mono tabular-nums">{a.count}</span>
+ </span>
+ );
+ return (
+ <li key={a.kind} className="py-2">
+ {href ? (
+ <Link to={href} className="block rounded-sm px-1 -mx-1 hover:bg-subtle transition-colors duration-fast">
+ {row}
+ </Link>
+ ) : (
+ row
+ )}
+ </li>
+ );
+ })}
+ </ul>
+ </Panel>
+ )}
 
-      {Array.isArray(p.machine_util) && (
-        <Panel title="Machine utilisation">
-          <table className={tableCls}>
-            <thead>
-              <tr className={theadTrCls}>
-                <Th>Code</Th>
-                <Th>Name</Th>
-                <Th>Status</Th>
-                <Th align="right">Active WO</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {p.machine_util.map((m: MachineRow) => (
-                <tr key={m.id} className={trCls}>
-                  <Td mono>{m.code}</Td>
-                  <Td className="text-muted">{m.name}</Td>
-                  <Td><Chip variant={chipVariantForStatus(m.status)}>{m.status_label ?? m.status}</Chip></Td>
-                  <Td align="right" mono>{m.has_active_wo ? '✓' : '—'}</Td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Panel>
-      )}
+ {Array.isArray(p.machine_util) && (
+ <Panel title="Machine utilisation">
+ <table className={tableCls}>
+ <thead>
+ <tr className={theadTrCls}>
+ <Th>Code</Th>
+ <Th>Name</Th>
+ <Th>Status</Th>
+ <Th align="right">Active WO</Th>
+ </tr>
+ </thead>
+ <tbody>
+ {p.machine_util.map((m: MachineRow) => (
+ <tr key={m.id} className={trCls}>
+ <Td mono>{m.code}</Td>
+ <Td className="text-muted">{m.name}</Td>
+ <Td><Chip variant={chipVariantForStatus(m.status)}>{m.status_label ?? m.status}</Chip></Td>
+ <Td align="right" mono>{m.has_active_wo ? '✓' : '—'}</Td>
+ </tr>
+ ))}
+ </tbody>
+ </table>
+ </Panel>
+ )}
 
-      {Array.isArray(p.defect_pareto) && p.defect_pareto.length > 0 && (
-        <Panel title="Defect Pareto · top 8">
-          <ul className="space-y-1.5">
-            {(p.defect_pareto as DefectRow[]).map((d: DefectRow) => {
-              const max = Math.max(1, ...(p.defect_pareto as DefectRow[]).map((x: DefectRow) => x.count));
-              return (
-                <li key={d.code}>
-                  <div className="flex justify-between text-sm">
-                    <span><span className="font-mono">{d.code}</span> {d.name}</span>
-                    <span className="font-mono tabular-nums">{d.count}</span>
-                  </div>
-                  <div className="h-1 bg-subtle rounded-full overflow-hidden">
-                    <div className="h-full bg-accent" style={{ width: `${(d.count / max) * 100}%` }} />
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </Panel>
-      )}
+ {Array.isArray(p.defect_pareto) && p.defect_pareto.length > 0 && (
+ <Panel title="Defect Pareto · top 8">
+ <ul className="space-y-1.5">
+ {(p.defect_pareto as DefectRow[]).map((d: DefectRow) => {
+ const max = Math.max(1, ...(p.defect_pareto as DefectRow[]).map((x: DefectRow) => x.count));
+ return (
+ <li key={d.code}>
+ <div className="flex justify-between text-sm">
+ <span><span className="font-mono">{d.code}</span> {d.name}</span>
+ <span className="font-mono tabular-nums">{d.count}</span>
+ </div>
+ <div className="h-1 bg-subtle rounded-full overflow-hidden">
+ <div className="h-full bg-accent" style={{ width: `${(d.count / max) * 100}%` }} />
+ </div>
+ </li>
+ );
+ })}
+ </ul>
+ </Panel>
+ )}
 
-      {Array.isArray(p.by_department) && (
-        <Panel title="Headcount by department">
-          <ul className="divide-y divide-subtle">
-            {p.by_department.map((row: DeptRow) => (
-              <li key={row.label} className="flex items-center justify-between py-1.5 text-sm">
-                <span>{row.label}</span>
-                <span className="font-mono tabular-nums">{row.count}</span>
-              </li>
-            ))}
-          </ul>
-        </Panel>
-      )}
+ {Array.isArray(p.by_department) && (
+ <Panel title="Headcount by department">
+ <ul className="divide-y divide-subtle">
+ {p.by_department.map((row: DeptRow) => (
+ <li key={row.label} className="flex items-center justify-between py-1.5 text-sm">
+ <span>{row.label}</span>
+ <span className="font-mono tabular-nums">{row.count}</span>
+ </li>
+ ))}
+ </ul>
+ </Panel>
+ )}
 
-      {Array.isArray(p.recent_jes) && (
-        <Panel title="Recent journal entries">
-          <ul className="divide-y divide-subtle">
-            {p.recent_jes.map((je: JeRow) => (
-              <li key={je.id} className="flex items-center justify-between py-1.5 text-sm">
-                <span><span className="font-mono">{je.entry_number}</span> · <span className="text-muted">{je.date}</span></span>
-                <span className="flex items-center gap-2">
-                  <Chip variant={chipVariantForStatus(je.status)}>{je.status_label ?? je.status}</Chip>
-                  <span className="font-mono tabular-nums">{formatPeso(je.total_debit)}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
-        </Panel>
-      )}
-    </div>
-  );
+ {Array.isArray(p.recent_jes) && (
+ <Panel title="Recent journal entries">
+ <ul className="divide-y divide-subtle">
+ {p.recent_jes.map((je: JeRow) => (
+ <li key={je.id} className="flex items-center justify-between py-1.5 text-sm">
+ <span><span className="font-mono">{je.entry_number}</span> · <span className="text-muted">{je.date}</span></span>
+ <span className="flex items-center gap-2">
+ <Chip variant={chipVariantForStatus(je.status)}>{je.status_label ?? je.status}</Chip>
+ <span className="font-mono tabular-nums">{formatPeso(je.total_debit)}</span>
+ </span>
+ </li>
+ ))}
+ </ul>
+ </Panel>
+ )}
+ </div>
+ );
 }
 
 function stageFillClass(color?: string): string {
-  if (color === 'danger') return 'h-full bg-danger';
-  if (color === 'warning') return 'h-full bg-warning';
-  if (color === 'info') return 'h-full bg-info';
-  return 'h-full bg-success';
+ if (color === 'danger') return 'h-full bg-danger';
+ if (color === 'warning') return 'h-full bg-warning';
+ if (color === 'info') return 'h-full bg-info';
+ return 'h-full bg-success';
 }
 
 function alertDotClass(severity?: string): string {
-  const base = 'inline-block w-1.5 h-1.5 rounded-full';
-  if (severity === 'danger') return `${base} bg-danger`;
-  if (severity === 'warning') return `${base} bg-warning`;
-  if (severity === 'info') return `${base} bg-info`;
-  return `${base} bg-success`;
+ const base = 'inline-block w-1.5 h-1.5 rounded-full';
+ if (severity === 'danger') return `${base} bg-danger`;
+ if (severity === 'warning') return `${base} bg-warning`;
+ if (severity === 'info') return `${base} bg-info`;
+ return `${base} bg-success`;
 }

@@ -41,9 +41,9 @@ use Throwable;
  */
 class DemoDataSeeder extends Seeder
 {
-    private const TARGET_EMPLOYEES = 5;
-    private const TARGET_VENDORS   = 4;
-    private const TARGET_SOS       = 5;
+    private const TARGET_EMPLOYEES = 50;
+    private const TARGET_VENDORS   = 10;
+    private const TARGET_SOS       = 12;
 
     public function run(): void
     {
@@ -56,66 +56,115 @@ class DemoDataSeeder extends Seeder
     }
 
     /**
-     * Five employees across the existing departments. Encrypted gov IDs use
-     * obviously-fake values so they're easy to spot in a demo screenshot.
+     * 50 employees across 12 departments (35 factory/daily + 15 office/monthly).
      */
     private function seedEmployees(): void
     {
         if (Employee::count() >= self::TARGET_EMPLOYEES) {
+            $this->backfillDemoEmployeeProfiles();
             $this->command?->info('Employees already seeded.');
             return;
         }
 
         $resolve = function (string $deptCode): ?array {
-            $dept = Department::where('code', $deptCode)->first();
+            $dept = Department::where('code', $deptCode)->first() ?? Department::first();
             if (! $dept) return null;
-            $pos = Position::where('department_id', $dept->id)->orderBy('id')->first();
+            $pos = Position::where('department_id', $dept->id)->orderBy('id')->first() ?? Position::first();
             if (! $pos) return null;
             return ['dept' => $dept->id, 'pos' => $pos->id];
         };
 
-        $samples = [
-            ['no' => 'EMP-0001', 'first' => 'Maria',  'last' => 'Santos',    'gender' => 'female', 'dept' => 'HR',   'salary' => 65000, 'pay' => 'monthly', 'hired' => '2023-01-15'],
-            ['no' => 'EMP-0002', 'first' => 'Juan',   'last' => 'Dela Cruz', 'gender' => 'male',   'dept' => 'PROD', 'salary' => null,  'pay' => 'daily',   'hired' => '2024-03-10', 'daily' => 750],
-            ['no' => 'EMP-0003', 'first' => 'Ana',    'last' => 'Reyes',     'gender' => 'female', 'dept' => 'QC',   'salary' => 32000, 'pay' => 'monthly', 'hired' => '2023-08-01'],
-            ['no' => 'EMP-0004', 'first' => 'Pedro',  'last' => 'Garcia',    'gender' => 'male',   'dept' => 'WH',   'salary' => null,  'pay' => 'daily',   'hired' => '2024-06-20', 'daily' => 700],
-            ['no' => 'EMP-0005', 'first' => 'Liza',   'last' => 'Mendoza',   'gender' => 'female', 'dept' => 'FIN',  'salary' => 38000, 'pay' => 'monthly', 'hired' => '2024-01-05'],
-        ];
+        $firstNames = ['Maria', 'Juan', 'Ana', 'Pedro', 'Liza', 'Carlo', 'Grace', 'Mark', 'Elena', 'Joseph',
+                       'Rhea', 'Gabriel', 'Patricia', 'Daniel', 'Angelica', 'Francis', 'Joy', 'Michael', 'Rose', 'Alexander',
+                       'Christine', 'Dennis', 'Janice', 'Ramon', 'Sheryl', 'Victor', 'Michelle', 'Eduardo', 'Catherine', 'Paul',
+                       'Jennifer', 'Anthony', 'Kristine', 'Richard', 'Maricar', 'Christopher', 'Bernadette', 'Benjamin', 'Dianne', 'Emmanuel',
+                       'Rowena', 'Ferdinand', 'Jasmine', 'Gilbert', 'Stephanie', 'Harold', 'Vanessa', 'Ian', 'Clarissa', 'Jason'];
+
+        $lastNames = ['Santos', 'Dela Cruz', 'Reyes', 'Garcia', 'Mendoza', 'Torres', 'Aquino', 'Bautista', 'Ramos', 'Gonzales',
+                      'Villanueva', 'Castillo', 'Cruz', 'Navarro', 'Salazar', 'Mercado', 'De Leon', 'Valenzuela', 'Pineda', 'Abad',
+                      'Santiago', 'Soriano', 'Aguilar', 'Perez', 'Tolentino', 'Corpuz', 'Ocampo', 'Manalo', 'Rivera', 'Del Rosario',
+                      'Alvarez', 'Fernandez', 'Pascual', 'Sarmiento', 'Velasco', 'Gutierrez', 'Espiritu', 'Dizon', 'Domingo', 'Miranda',
+                      'Sison', 'Roxas', 'Valencia', 'Cabrera', 'Padilla', 'Bello', 'Adriano', 'Enriquez', 'Flores', 'Lapuz'];
+
+        $depts = ['HR', 'PROD', 'QC', 'WH', 'FIN', 'PROD', 'PROD', 'PPC', 'PUR', 'MAINT',
+                  'MOLD', 'IMPEX', 'ADMIN', 'PROD', 'PROD', 'QC', 'PROD', 'FIN', 'HR', 'WH',
+                  'PROD', 'PROD', 'PPC', 'PUR', 'MAINT', 'MOLD', 'IMPEX', 'ADMIN', 'PROD', 'PROD',
+                  'QC', 'PROD', 'FIN', 'HR', 'WH', 'PROD', 'PROD', 'PPC', 'PUR', 'MAINT',
+                  'MOLD', 'IMPEX', 'ADMIN', 'PROD', 'PROD', 'QC', 'PROD', 'FIN', 'EXEC', 'EXEC'];
 
         $created = 0;
-        foreach ($samples as $i => $s) {
-            if (Employee::where('employee_no', $s['no'])->exists()) continue;
-            $ids = $resolve($s['dept']);
+        for ($i = 0; $i < 50; $i++) {
+            $empNo = 'EMP-' . str_pad((string) ($i + 1), 4, '0', STR_PAD_LEFT);
+            if (Employee::where('employee_no', $empNo)->exists()) continue;
+
+            $deptCode = $depts[$i % count($depts)];
+            $ids = $resolve($deptCode);
             if (! $ids) continue;
 
+            $isMonthly = in_array($deptCode, ['HR', 'FIN', 'EXEC', 'ADMIN', 'PUR', 'IMPEX']);
+            $first = $firstNames[$i % count($firstNames)];
+            $last  = $lastNames[$i % count($lastNames)];
+            $gender = $i % 2 === 0 ? 'female' : 'male';
+            $hired = Carbon::parse('2023-01-15')->addDays($i * 18)->toDateString();
+
             Employee::create([
-                'employee_no'          => $s['no'],
-                'first_name'           => $s['first'],
-                'last_name'            => $s['last'],
-                'birth_date'           => Carbon::parse($s['hired'])->subYears(28)->toDateString(),
-                'gender'               => $s['gender'],
-                'civil_status'         => 'single',
+                'employee_no'          => $empNo,
+                'first_name'           => $first,
+                'last_name'            => $last,
+                'birth_date'           => Carbon::parse($hired)->subYears(22 + ($i % 15))->toDateString(),
+                'gender'               => $gender,
+                'civil_status'         => $i % 3 === 0 ? 'married' : 'single',
                 'nationality'          => 'Filipino',
                 'mobile_number'        => '+639' . str_pad((string) (170000000 + $i), 9, '0', STR_PAD_LEFT),
-                'email'                => strtolower($s['first']) . '.' . strtolower(str_replace(' ', '', $s['last'])) . '@demo.local',
+                'email'                => strtolower($first) . '.' . strtolower(str_replace(' ', '', $last)) . str_pad((string)($i+1), 2, '0', STR_PAD_LEFT) . '@demo.local',
+                'street_address'       => (100 + $i) . ' Governor Drive',
+                'barangay'             => 'Langkaan I',
+                'city'                 => 'Dasmariñas City',
+                'province'             => 'Cavite',
+                'zip_code'             => '4114',
+                'emergency_contact_name'     => $first . ' ' . $last . ' Sr.',
+                'emergency_contact_relation' => 'Parent',
+                'emergency_contact_phone'    => '+639' . str_pad((string) (180000000 + $i), 9, '0', STR_PAD_LEFT),
                 'sss_no'               => '34-' . str_pad((string) (1000000 + $i), 7, '0', STR_PAD_LEFT) . '-1',
                 'philhealth_no'        => '12-' . str_pad((string) (100000000 + $i), 9, '0', STR_PAD_LEFT) . '-2',
                 'pagibig_no'           => '1234-5678-' . str_pad((string) (1000 + $i), 4, '0', STR_PAD_LEFT),
                 'tin'                  => '123-456-' . str_pad((string) (700 + $i), 3, '0', STR_PAD_LEFT) . '-000',
                 'department_id'        => $ids['dept'],
                 'position_id'          => $ids['pos'],
-                'employment_type'      => $s['pay'] === 'monthly' ? 'regular' : 'contractual',
-                'pay_type'             => $s['pay'],
-                'date_hired'           => $s['hired'],
-                'date_regularized'     => $s['pay'] === 'monthly' ? Carbon::parse($s['hired'])->addMonths(6)->toDateString() : null,
-                'basic_monthly_salary' => $s['salary'],
-                'daily_rate'           => $s['daily'] ?? null,
+                'employment_type'      => $isMonthly ? 'regular' : ($i % 4 === 0 ? 'probationary' : 'regular'),
+                'pay_type'             => $isMonthly ? 'monthly' : 'semi_monthly',
+                'date_hired'           => $hired,
+                'date_regularized'     => $isMonthly ? Carbon::parse($hired)->addMonths(6)->toDateString() : null,
+                'basic_monthly_salary' => $isMonthly ? (32000 + ($i % 8) * 4500) : null,
+                'semi_monthly_rate'    => $isMonthly ? null : (680 + ($i % 6) * 45) * 11,
+                'bank_name'            => 'BDO Unibank',
+                'bank_account_no'      => '00123456' . str_pad((string) $i, 4, '0', STR_PAD_LEFT),
                 'status'               => EmployeeStatus::Active->value,
             ]);
             $created++;
         }
 
         $this->command?->info("Seeded {$created} demo employees.");
+    }
+
+    /** Populate legacy demo rows created before profile fields were seeded. */
+    private function backfillDemoEmployeeProfiles(): void
+    {
+        Employee::query()->where('email', 'like', '%@demo.local')->get()->each(function (Employee $employee): void {
+            $index = max(0, ((int) preg_replace('/\D+/', '', (string) $employee->employee_no)) - 1);
+            $employee->forceFill([
+                'street_address' => $employee->street_address ?: (100 + $index) . ' Governor Drive',
+                'barangay' => $employee->barangay ?: 'Langkaan I',
+                'city' => $employee->city ?: 'Dasmariñas City',
+                'province' => $employee->province ?: 'Cavite',
+                'zip_code' => $employee->zip_code ?: '4114',
+                'emergency_contact_name' => $employee->emergency_contact_name ?: trim($employee->first_name . ' ' . $employee->last_name . ' Sr.'),
+                'emergency_contact_relation' => $employee->emergency_contact_relation ?: 'Parent',
+                'emergency_contact_phone' => $employee->emergency_contact_phone ?: '+639' . str_pad((string) (180000000 + $index), 9, '0', STR_PAD_LEFT),
+                'bank_name' => $employee->bank_name ?: 'BDO Unibank',
+                'bank_account_no' => $employee->bank_account_no ?: '00123456' . str_pad((string) $index, 4, '0', STR_PAD_LEFT),
+            ])->save();
+        });
     }
 
     /** Demo vendors used by the Procure-to-Pay chain. */
@@ -131,6 +180,12 @@ class DemoDataSeeder extends Seeder
             ['name' => 'Asia Pacific Polymers, Inc.',    'tin' => '111-222-444-000', 'email' => 'orders@apolymers.ph',    'phone' => '+632-8222-3344', 'terms' => 45],
             ['name' => 'Tooling Pro Manufacturing',      'tin' => '111-222-555-000', 'email' => 'hello@toolingpro.ph',    'phone' => '+632-8345-1122', 'terms' => 30],
             ['name' => 'Pacific Logistics Solutions',    'tin' => '111-222-666-000', 'email' => 'support@paclogistics.ph','phone' => '+632-8456-2244', 'terms' => 60],
+            ['name' => 'Nippon Mold Steel Phils.',       'tin' => '111-222-777-000', 'email' => 'info@nipponsteel.ph',   'phone' => '+632-8567-3355', 'terms' => 30],
+            ['name' => 'Sumitomo Resin Trading Corp.',  'tin' => '111-222-888-000', 'email' => 'sales@sumiresin.ph',    'phone' => '+632-8678-4466', 'terms' => 30],
+            ['name' => 'Denso Auto Components Asia',     'tin' => '111-222-999-000', 'email' => 'supply@denso.ph',       'phone' => '+632-8789-5577', 'terms' => 45],
+            ['name' => 'Cavite Precision Tools & Dies',  'tin' => '222-333-111-000', 'email' => 'contact@cavitetools.ph','phone' => '+6346-412-8899', 'terms' => 15],
+            ['name' => 'Manila Industrial Packaging',   'tin' => '222-333-222-000', 'email' => 'orders@manilapack.ph',   'phone' => '+632-8890-6688', 'terms' => 30],
+            ['name' => 'Oriental Chemical Corp.',        'tin' => '222-333-333-000', 'email' => 'sales@orichem.ph',      'phone' => '+632-8901-7799', 'terms' => 30],
         ];
 
         $created = 0;

@@ -7,6 +7,8 @@ namespace App\Modules\Leave\Controllers;
 use App\Common\Support\HashIdFilter;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Leave\Models\LeaveRequest;
+use App\Modules\Leave\Enums\LeaveRequestStatus;
+use App\Modules\Leave\Enums\LeaveHalfDayPeriod;
 use App\Modules\Leave\Requests\ApproveLeaveRequest;
 use App\Modules\Leave\Requests\RejectLeaveRequest;
 use App\Modules\Leave\Requests\StoreLeaveRequestRequest;
@@ -20,6 +22,17 @@ use Illuminate\Support\Facades\Validator;
 class LeaveRequestController
 {
     public function __construct(private readonly LeaveRequestService $service) {}
+
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'statuses' => array_map(static fn (LeaveRequestStatus $status): array => ['value' => $status->value, 'label' => str_replace('_', ' ', ucfirst($status->value))], LeaveRequestStatus::cases()),
+            'half_day_periods' => array_map(
+                static fn (LeaveHalfDayPeriod $period): array => ['value' => $period->value, 'label' => $period->label()],
+                LeaveHalfDayPeriod::cases(),
+            ),
+        ]]);
+    }
 
     public function index(Request $request): AnonymousResourceCollection
     {

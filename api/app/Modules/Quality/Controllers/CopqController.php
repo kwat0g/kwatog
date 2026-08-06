@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Quality\Controllers;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Quality\Models\CopqSnapshot;
 use App\Modules\Quality\Services\CopqService;
 use Carbon\Carbon;
@@ -12,11 +13,15 @@ use Illuminate\Http\Request;
 
 class CopqController
 {
-    public function __construct(private readonly CopqService $service) {}
+    public function __construct(
+        private readonly CopqService $service,
+        private readonly SettingsService $settings,
+    ) {}
 
     public function trend(Request $request): JsonResponse
     {
-        $requested = (int) $request->query('months', 12);
+        $defaultMonths = $this->settings->requiredInt('quality.copq.default_history_months', 1, 36);
+        $requested = (int) $request->query('months', $defaultMonths);
         $months    = max(1, min(36, $requested));
 
         $rows = CopqSnapshot::query()
@@ -43,6 +48,15 @@ class CopqController
                 'computed_at'              => optional($r->computed_at)->toIso8601String(),
             ])->values(),
         ]);
+    }
+
+    public function policy(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'default_months' => $this->settings->requiredInt('quality.copq.default_history_months', 1, 36),
+            'minimum_months' => 1,
+            'maximum_months' => 36,
+        ]]);
     }
 
     public function summary(): JsonResponse

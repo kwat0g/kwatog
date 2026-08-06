@@ -87,7 +87,7 @@ class UpdateEmployeeRequest extends FormRequest
             'date_hired'           => ['sometimes', 'date', 'before_or_equal:today', 'after:1980-01-01'],
             'date_regularized'     => ['sometimes', 'nullable', 'date', 'before_or_equal:today'],
             'basic_monthly_salary' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:9999999.99'],
-            'daily_rate'           => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:99999.99'],
+            'semi_monthly_rate'    => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:9999999.99'],
 
             'bank_name'       => ['sometimes', 'nullable', 'string', 'max:100'],
             'bank_account_no' => ['sometimes', 'nullable', 'string', 'max:50', 'regex:/^[A-Za-z0-9\\-\\s]+$/'],

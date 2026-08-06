@@ -6,8 +6,10 @@ namespace App\Modules\Dashboard\Services;
 
 use App\Common\Models\Alert;
 use App\Common\Services\ApprovalBoardService;
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Dashboard\Models\ActionCenterTask;
+use App\Modules\Dashboard\Enums\ActionCategory;
 use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Quality\Models\Inspection;
@@ -25,7 +27,19 @@ use Throwable;
  */
 class ActionCenterService
 {
-    public function __construct(private readonly ApprovalBoardService $approvals) {}
+    public function __construct(
+        private readonly ApprovalBoardService $approvals,
+        private readonly SettingsService $settings,
+    ) {}
+
+    /** @return array<int, array{value:string,label:string}> */
+    public function categoryOptions(): array
+    {
+        return array_map(
+            static fn (ActionCategory $category): array => ['value' => $category->value, 'label' => $category->label()],
+            ActionCategory::cases(),
+        );
+    }
 
     /** @return array{items: array<int, array<string, mixed>>, summary: array<string, mixed>, generated_at: string} */
     public function for(User $user): array
@@ -49,7 +63,7 @@ class ActionCenterService
                 <=> [$rank[$b['priority']], $b['is_overdue'] ? 0 : 1, $b['created_at'] ?? ''];
         });
 
-        $items = array_slice($items, 0, 100);
+        $items = array_slice($items, 0, $this->settings->requiredInt('dashboard.action_center.max_items', 1, 1000));
         $byCategory = [];
         foreach ($items as $item) {
             $byCategory[$item['category']] = ($byCategory[$item['category']] ?? 0) + 1;
@@ -67,6 +81,7 @@ class ActionCenterService
                 'by_category' => $byCategory,
             ],
             'generated_at' => now()->toIso8601String(),
+            'category_options' => $this->categoryOptions(),
         ];
     }
 
@@ -92,7 +107,7 @@ class ActionCenterService
             if ($task?->due_at) {
                 $item['due_at'] = $task->due_at->toIso8601String();
             } elseif (! $item['due_at'] && $item['created_at']) {
-                $hours = (int) config("action_center.sla_hours.{$item['category']}", 24);
+                $hours = $this->actionCenterSlaHours((string) $item['category']);
                 $item['due_at'] = Carbon::parse($item['created_at'])->addHours($hours)->toIso8601String();
             }
             if ($item['due_at']) {
@@ -100,6 +115,7 @@ class ActionCenterService
             }
 
             $item['task_state'] = $task?->state ?? 'open';
+            $item['task_state_label'] = $this->humanize((string) $item['task_state']);
             $item['assigned_to'] = $task?->assignee ? [
                 'id' => $task->assignee->hash_id,
                 'name' => $task->assignee->name,
@@ -128,7 +144,9 @@ class ActionCenterService
     /** @return array<int, array<string, mixed>> */
     private function approvalItems(User $user): array
     {
-        return array_map(function (array $card): array {
+        $overdueHours = $this->settings->requiredInt('approvals.reminder_hours', 1);
+        $criticalHours = $this->settings->requiredInt('approvals.escalation_hours', $overdueHours);
+        return array_map(function (array $card) use ($overdueHours, $criticalHours): array {
             $age = (int) $card['age_hours'];
 
             return $this->item(
@@ -138,12 +156,12 @@ class ActionCenterService
                 title: 'Approve '.$this->approvalLabel((string) $card['type']).' '.$card['number'],
                 description: (string) ($card['summary'] ?: 'Approval is waiting for your role.'),
                 reference: (string) $card['number'],
-                priority: $age >= 48 ? 'critical' : ($age >= 24 ? 'high' : 'medium'),
+                priority: $age >= $criticalHours ? 'critical' : ($age >= $overdueHours ? 'high' : 'medium'),
                 status: 'Waiting for you',
                 link: (string) $card['link'],
                 createdAt: (string) $card['since'],
                 dueAt: null,
-                overdue: $age >= 24,
+                overdue: $age >= $overdueHours,
                 owner: $card['requester']['name'] ?? null,
             );
         }, $this->approvals->board($user)['my_action']);
@@ -152,7 +170,7 @@ class ActionCenterService
     /** @return array<int, array<string, mixed>> */
     private function alertItems(): array
     {
-        return Alert::query()->active()->latest()->limit(30)->get()->map(function (Alert $alert): array {
+        return Alert::query()->active()->latest()->limit($this->sourceLimit())->get()->map(function (Alert $alert): array {
             $severity = $this->enumValue($alert->severity);
 
             return $this->item(
@@ -176,9 +194,10 @@ class ActionCenterService
     /** @return array<int, array<string, mixed>> */
     private function inspectionItems(): array
     {
+        $slaHours = $this->actionCenterSlaHours('quality');
         return Inspection::query()->with(['item:id,name', 'product:id,name', 'inspector:id,name'])
-            ->whereIn('status', ['draft', 'in_progress'])->oldest()->limit(30)->get()
-            ->map(function (Inspection $inspection): array {
+            ->whereIn('status', ['draft', 'in_progress'])->oldest()->limit($this->sourceLimit())->get()
+            ->map(function (Inspection $inspection) use ($slaHours): array {
                 $age = $inspection->created_at?->diffInHours(now()) ?? 0;
                 $stage = $this->enumValue($inspection->stage);
                 $subject = $inspection->item?->name ?? $inspection->product?->name ?? 'inspection lot';
@@ -189,11 +208,11 @@ class ActionCenterService
                     title: 'Complete '.$this->humanize($stage).' inspection',
                     description: $subject.' · sample size '.(int) $inspection->sample_size,
                     reference: $inspection->inspection_number,
-                    priority: $stage === 'incoming' || $age >= 24 ? 'high' : 'medium',
+                    priority: $stage === 'incoming' || $age >= $slaHours ? 'high' : 'medium',
                     status: $this->humanize($this->enumValue($inspection->status)),
                     link: '/quality/inspections/'.$inspection->hash_id,
                     createdAt: $inspection->created_at?->toIso8601String(), dueAt: null,
-                    overdue: $age >= 24,
+                    overdue: $age >= $slaHours,
                     owner: $inspection->inspector?->name,
                 );
             })->all();
@@ -203,10 +222,16 @@ class ActionCenterService
     private function ncrItems(): array
     {
         return NonConformanceReport::query()->with(['product:id,name', 'assignee:id,name'])
-            ->whereNotIn('status', ['closed', 'cancelled'])->oldest()->limit(30)->get()
+            ->whereNotIn('status', ['closed', 'cancelled'])->oldest()->limit($this->sourceLimit())->get()
             ->map(function (NonConformanceReport $ncr): array {
                 $priority = $this->enumValue($ncr->severity);
-                $sla = ['critical' => 8, 'high' => 24, 'medium' => 72, 'low' => 120][$priority] ?? 72;
+                $sla = match ($priority) {
+                    'critical' => $this->settings->requiredInt('quality.ncr.sla_critical_hours', 1),
+                    'high' => $this->settings->requiredInt('quality.ncr.sla_high_hours', 1),
+                    'medium' => $this->settings->requiredInt('quality.ncr.sla_medium_hours', 1),
+                    'low' => $this->settings->requiredInt('quality.ncr.sla_low_hours', 1),
+                    default => $this->settings->requiredInt('quality.ncr.sla_medium_hours', 1),
+                };
                 $age = $ncr->created_at?->diffInHours(now()) ?? 0;
 
                 return $this->item(
@@ -229,7 +254,7 @@ class ActionCenterService
     /** @return array<int, array<string, mixed>> */
     private function maintenanceItems(): array
     {
-        return MaintenanceWorkOrder::query()->with('assignee')->open()->oldest()->limit(30)->get()
+        return MaintenanceWorkOrder::query()->with('assignee')->open()->oldest()->limit($this->sourceLimit())->get()
             ->map(function (MaintenanceWorkOrder $workOrder): array {
                 $priority = $this->enumValue($workOrder->priority);
                 $age = $workOrder->created_at?->diffInHours(now()) ?? 0;
@@ -244,18 +269,30 @@ class ActionCenterService
                     status: $this->humanize($this->enumValue($workOrder->status)),
                     link: '/maintenance/work-orders/'.$workOrder->hash_id,
                     createdAt: $workOrder->created_at?->toIso8601String(), dueAt: null,
-                    overdue: $age >= ($priority === 'critical' ? 8 : 72),
+                    overdue: $age >= ($priority === 'critical'
+                        ? $this->settings->requiredInt('action_center.production.critical_sla_hours', 1)
+                        : $this->settings->requiredInt('action_center.production.default_sla_hours', 1)),
                     owner: $workOrder->assignee?->full_name,
                 );
             })->all();
     }
 
+    private function actionCenterSlaHours(string $category): int
+    {
+        return match ($category) {
+            'maintenance' => $this->settings->requiredInt('action_center.maintenance.default_sla_hours', 1),
+            'production' => $this->settings->requiredInt('action_center.production.default_sla_hours', 1),
+            default => $this->settings->requiredInt('action_center.default_sla_hours', 1),
+        };
+    }
+
     /** @return array<int, array<string, mixed>> */
     private function productionItems(): array
     {
+        $criticalHours = $this->settings->requiredInt('action_center.production.critical_sla_hours', 1);
         return WorkOrder::query()->with('product:id,name')->whereIn('status', ['confirmed', 'in_progress'])
-            ->whereNotNull('planned_end')->where('planned_end', '<', now())->oldest('planned_end')->limit(30)->get()
-            ->map(function (WorkOrder $workOrder): array {
+            ->whereNotNull('planned_end')->where('planned_end', '<', now())->oldest('planned_end')->limit($this->sourceLimit())->get()
+            ->map(function (WorkOrder $workOrder) use ($criticalHours): array {
                 $hours = $workOrder->planned_end?->diffInHours(now()) ?? 0;
 
                 return $this->item(
@@ -264,7 +301,7 @@ class ActionCenterService
                     title: 'Recover overdue work order '.$workOrder->wo_number,
                     description: ($workOrder->product?->name ?? 'Production order').' · '.round($workOrder->progress_percentage, 1).'% complete',
                     reference: $workOrder->wo_number,
-                    priority: $hours >= 48 ? 'critical' : 'high',
+                    priority: $hours >= $criticalHours ? 'critical' : 'high',
                     status: $this->humanize($this->enumValue($workOrder->status)),
                     link: '/production/work-orders/'.$workOrder->hash_id,
                     createdAt: $workOrder->created_at?->toIso8601String(),
@@ -277,7 +314,7 @@ class ActionCenterService
     private function deliveryItems(): array
     {
         return Delivery::query()->with('driver:id,name')->whereIn('status', ['loading', 'in_transit', 'delivered'])
-            ->oldest('scheduled_date')->limit(30)->get()->map(function (Delivery $delivery): array {
+            ->oldest('scheduled_date')->limit($this->sourceLimit())->get()->map(function (Delivery $delivery): array {
                 $status = $this->enumValue($delivery->status);
                 $overdue = $delivery->scheduled_date?->lt(today()) && $status !== 'delivered';
 
@@ -296,6 +333,11 @@ class ActionCenterService
             })->all();
     }
 
+    private function sourceLimit(): int
+    {
+        return $this->settings->requiredInt('dashboard.action_center.source_limit', 1, 500);
+    }
+
     /** @return array<string, mixed> */
     private function item(string $id, string $category, string $kind, string $title, string $description,
         ?string $reference, string $priority, string $status, string $link, ?string $createdAt,
@@ -306,6 +348,7 @@ class ActionCenterService
         return [
             'id' => $id, 'category' => $category, 'kind' => $kind, 'title' => $title,
             'description' => $description, 'reference' => $reference, 'priority' => $priority,
+            'priority_label' => $this->humanize($priority),
             'status_label' => $status, 'link' => $link, 'created_at' => $createdAt,
             'due_at' => $dueAt, 'age_hours' => $created ? (int) $created->diffInHours(now()) : null,
             'is_overdue' => $overdue, 'owner_label' => $owner,

@@ -8,6 +8,7 @@ use App\Common\Traits\HasHashId;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
  * OGAMI-004 — canonical Unit-of-Measure catalog (KG, BAG, PALLET, …).
@@ -18,7 +19,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class Uom extends Model
 {
-    use HasFactory, HasHashId;
+    use HasFactory, HasHashId, SoftDeletes;
 
     protected $table = 'uoms';
 

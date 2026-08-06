@@ -13,21 +13,21 @@
 // return.
 //
 // Usage:
-//   const { isDirty } = formState;
-//   useUnsavedChangesGuard(isDirty && !mutation.isSuccess);
+// const { isDirty } = formState;
+// useUnsavedChangesGuard(isDirty && !mutation.isSuccess);
 
 import { useEffect } from 'react';
 
 export function useUnsavedChangesGuard(when: boolean): void {
-  useEffect(() => {
-    if (!when) return;
-    const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      // Modern browsers ignore the returnValue string but require it to be
-      // set for the prompt to show.
-      e.returnValue = '';
-    };
-    window.addEventListener('beforeunload', onBeforeUnload);
-    return () => window.removeEventListener('beforeunload', onBeforeUnload);
-  }, [when]);
+ useEffect(() => {
+ if (!when) return;
+ const onBeforeUnload = (e: BeforeUnloadEvent) => {
+ e.preventDefault();
+ // Modern browsers ignore the returnValue string but require it to be
+ // set for the prompt to show.
+ e.returnValue = '';
+ };
+ window.addEventListener('beforeunload', onBeforeUnload);
+ return () => window.removeEventListener('beforeunload', onBeforeUnload);
+ }, [when]);
 }

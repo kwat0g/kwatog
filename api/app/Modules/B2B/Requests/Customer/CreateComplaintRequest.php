@@ -6,7 +6,9 @@ namespace App\Modules\B2B\Requests\Customer;
 
 use App\Common\Support\HashIdFilter;
 use App\Modules\CRM\Models\SalesOrder;
+use App\Modules\Quality\Enums\NcrSeverity;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class CreateComplaintRequest extends FormRequest
 {
@@ -32,7 +34,7 @@ class CreateComplaintRequest extends FormRequest
                     }
                 },
             ],
-            'severity'          => ['required', 'string', 'in:minor,major,critical'],
+            'severity'          => ['required', Rule::enum(NcrSeverity::class)],
             'description'       => ['required', 'string', 'max:2000'],
             'affected_quantity' => ['required', 'integer', 'min:1'],
         ];

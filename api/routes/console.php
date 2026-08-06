@@ -52,6 +52,15 @@ Schedule::command('alerts:run')
     ->withoutOverlapping(10)
     ->onOneServer();
 
+// OGAMI-001 — Auto-relock reopened accounting periods that have been open for > 48h
+Schedule::call(function () {
+    app(\App\Modules\Accounting\Services\AccountingPeriodService::class)->relockStaleReopenedPeriods(48);
+})
+    ->hourly()
+    ->name('accounting:relock-periods')
+    ->withoutOverlapping()
+    ->onOneServer();
+
 // A3 — Auto payroll period creation
 //   On the 14th at 23:00 → create period for 16th–end-of-month
 //   On the last day at 23:00 → create period for 1st–15th of next month
@@ -60,6 +69,14 @@ Schedule::command('payroll:auto-create-period --half=second')
     ->onOneServer();
 Schedule::command('payroll:auto-create-period --half=first')
     ->lastDayOfMonth('23:00')
+    ->onOneServer();
+
+// Hourly reaper for payroll periods wedged at Processing by a crashed compute
+// worker (OOM, SIGKILL, container restart). Puts them back on Computed/Draft so
+// the list and pipeline views self-heal. Idempotent — re-runs are no-ops.
+Schedule::command('payroll:reap-stale-runs')
+    ->hourly()
+    ->withoutOverlapping()
     ->onOneServer();
 
 // A5 — Preventive maintenance evaluation runs the existing Sprint 8

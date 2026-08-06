@@ -6,6 +6,7 @@ namespace App\Modules\Quality\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Str;
 
 class SpcControlChartResource extends JsonResource
 {
@@ -15,6 +16,7 @@ class SpcControlChartResource extends JsonResource
             'id'                  => $this->hash_id,
             'chart_type'          => $this->chart_type instanceof \BackedEnum ? $this->chart_type->value : $this->chart_type,
             'status'              => $this->status instanceof \BackedEnum ? $this->status->value : $this->status,
+            'status_label'        => Str::headline((string) ($this->status instanceof \BackedEnum ? $this->status->value : $this->status)),
             'subgroup_size'       => (int) $this->subgroup_size,
             'center_line'         => $this->center_line,
             'ucl'                 => $this->ucl,

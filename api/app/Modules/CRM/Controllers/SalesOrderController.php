@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\CRM\Controllers;
 
 use App\Modules\CRM\Models\SalesOrder;
+use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Requests\CancelSalesOrderRequest;
 use App\Modules\CRM\Requests\StoreSalesOrderRequest;
 use App\Modules\CRM\Requests\UpdateSalesOrderRequest;
@@ -22,6 +23,20 @@ class SalesOrderController
     public function index(Request $request): AnonymousResourceCollection
     {
         return SalesOrderResource::collection($this->service->list($request->query()));
+    }
+
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'statuses' => array_map(static fn (SalesOrderStatus $status): array => [
+                'value' => $status->value,
+                'label' => $status->label(),
+                'next_statuses' => array_map(
+                    static fn (string $next): array => ['value' => $next, 'label' => SalesOrderStatus::tryFrom($next)?->label() ?? $next],
+                    SalesOrderService::allowedTransitions()[$status->value] ?? [],
+                ),
+            ], SalesOrderStatus::cases()),
+        ]]);
     }
 
     public function show(SalesOrder $salesOrder): SalesOrderResource
@@ -53,6 +68,12 @@ class SalesOrderController
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return response()->json(null, 204);
+    }
+
+    public function restore(SalesOrder $salesOrder): JsonResponse
+    {
+        $salesOrder->restore();
+        return response()->json(['message' => 'Sales order restored.']);
     }
 
     public function confirm(SalesOrder $salesOrder): SalesOrderResource|JsonResponse

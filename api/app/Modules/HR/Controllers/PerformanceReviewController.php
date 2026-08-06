@@ -4,7 +4,13 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Controllers;
 
+use App\Common\Services\SettingsService;
 use App\Common\Support\HashIdFilter;
+use App\Modules\HR\Enums\ReviewCycleType;
+use App\Modules\HR\Enums\ReviewCycleStatus;
+use App\Modules\HR\Enums\ReviewStatus;
+use App\Modules\HR\Enums\PerformanceRatingCategory;
+use App\Modules\HR\Enums\PerformanceOverallRating;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\PerformanceReview;
 use App\Modules\HR\Models\ReviewCycle;
@@ -16,21 +22,52 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Routing\Controller;
+use Illuminate\Validation\Rule;
 
 class PerformanceReviewController extends Controller
 {
-    public function __construct(private readonly PerformanceReviewService $service) {}
+    public function __construct(private readonly PerformanceReviewService $service, private readonly SettingsService $settings) {}
 
     public function cycles(Request $request): AnonymousResourceCollection
     {
         return ReviewCycleResource::collection($this->service->listCycles($request->all()));
     }
 
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'review_statuses' => array_map(
+                static fn (ReviewStatus $status): array => ['value' => $status->value, 'label' => str_replace('_', ' ', ucfirst($status->value))],
+                ReviewStatus::cases(),
+            ),
+            'statuses' => array_map(
+                static fn (ReviewCycleStatus $status): array => ['value' => $status->value, 'label' => ucfirst($status->value)],
+                ReviewCycleStatus::cases(),
+            ),
+            'cycle_types' => array_map(
+                static fn (ReviewCycleType $type): array => [
+                    'value' => $type->value,
+                    'label' => str_replace('_', ' ', ucfirst($type->value)),
+                ],
+                ReviewCycleType::cases(),
+            ),
+            'rating_scale' => array_values(array_filter((array) $this->settings->get('hr.performance.rating_scale', []), static fn ($score): bool => is_array($score) && isset($score['value'], $score['label']))),
+            'rating_categories' => array_map(
+                static fn (PerformanceRatingCategory $category): array => ['value' => $category->value, 'label' => $category->label()],
+                PerformanceRatingCategory::cases(),
+            ),
+            'overall_ratings' => array_map(
+                static fn (PerformanceOverallRating $rating): array => ['value' => $rating->value, 'label' => $rating->label()],
+                PerformanceOverallRating::cases(),
+            ),
+        ]]);
+    }
+
     public function storeCycle(Request $request): JsonResponse
     {
         $data = $request->validate([
             'name'        => ['required', 'string', 'max:100'],
-            'cycle_type'  => ['required', 'string'],
+            'cycle_type'  => ['required', Rule::enum(ReviewCycleType::class)],
             'start_date'  => ['required', 'date'],
             'end_date'    => ['required', 'date', 'after:start_date'],
             'description' => ['nullable', 'string', 'max:2000'],
@@ -112,13 +149,26 @@ class PerformanceReviewController extends Controller
         $employeeId = $request->user()->employee?->id;
         abort_unless($employeeId && $employeeId === $review->reviewer_id, 403, 'Only the assigned reviewer may submit.');
 
+        // Accept the stable API slug used by older clients while persisting the
+        // canonical enum value used by the HR domain.
+        if (is_string($request->input('overall_rating'))) {
+            $slug = strtolower(str_replace([' ', '-'], '_', $request->input('overall_rating')));
+            $canonical = collect(PerformanceOverallRating::cases())
+                ->first(fn (PerformanceOverallRating $rating): bool => strtolower(str_replace([' ', '-'], '_', $rating->value)) === $slug)
+                ?->value;
+            if ($canonical !== null) {
+                $request->merge(['overall_rating' => $canonical]);
+            }
+        }
+
         $data = $request->validate([
             'ratings'        => ['required', 'array'],
+            'ratings.*'      => ['required', 'numeric', 'min:1', 'max:5'],
             'strengths'      => ['nullable', 'string', 'max:5000'],
             'improvements'   => ['nullable', 'string', 'max:5000'],
             'goals'          => ['nullable', 'string', 'max:5000'],
             'overall_score'  => ['required', 'decimal:0,2', 'min:1', 'max:5'],
-            'overall_rating' => ['required', 'string', 'max:30'],
+            'overall_rating' => ['required', Rule::in(PerformanceOverallRating::values())],
         ]);
 
         return response()->json(['data' => new PerformanceReviewResource($this->withRefs($this->service->submitReview($review, $data)))]);

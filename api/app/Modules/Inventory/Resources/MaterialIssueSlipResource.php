@@ -17,6 +17,7 @@ class MaterialIssueSlipResource extends JsonResource
             'work_order_id'  => $this->work_order_id,
             'issued_date'    => optional($this->issued_date)->toDateString(),
             'status'         => (string) $this->status?->value,
+            'status_label'   => $this->status?->label() ?? (string) $this->status,
             'total_value'    => (string) $this->total_value,
             'reference_text' => $this->reference_text,
             'remarks'        => $this->remarks,

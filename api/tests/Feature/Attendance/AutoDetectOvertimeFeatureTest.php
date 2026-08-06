@@ -16,6 +16,20 @@ class AutoDetectOvertimeFeatureTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * Migration 0322_seed_default_shift seeds an active "Day Shift" with
+     * is_default = true, and 0283 adds the partial unique index
+     * `shifts_one_default_idx ON shifts (is_default) WHERE is_default = true` —
+     * so exactly one default may exist. RefreshDatabase runs migrations, which
+     * means a test can no longer assume the table is empty: inserting a second
+     * default violates the index, and "no default configured" is never true by
+     * default. Demote the seeded row first in both cases.
+     */
+    private function clearDefaultShifts(): void
+    {
+        Shift::query()->where('is_default', true)->update(['is_default' => false]);
+    }
+
     private function makeShift(array $overrides = []): Shift
     {
         return Shift::create(array_merge([
@@ -126,6 +140,9 @@ class AutoDetectOvertimeFeatureTest extends TestCase
     public function test_unassigned_employee_uses_persisted_default_shift(): void
     {
         $employee = Employee::factory()->create();
+        // Only one row may hold is_default — demote the seeded Day Shift so this
+        // test's own default can take the slot.
+        $this->clearDefaultShifts();
         $default = $this->makeShift([
             'name' => 'Configured Default',
             'start_time' => '07:00:00',
@@ -152,6 +169,9 @@ class AutoDetectOvertimeFeatureTest extends TestCase
     public function test_missing_default_shift_fails_instead_of_inventing_schedule(): void
     {
         $employee = Employee::factory()->create();
+        // The seeded Day Shift is an active default, so without this the "no
+        // default configured" branch is unreachable and nothing was ever thrown.
+        $this->clearDefaultShifts();
 
         $this->expectException(BusinessRuleException::class);
         $this->expectExceptionMessage('No active default shift is configured');

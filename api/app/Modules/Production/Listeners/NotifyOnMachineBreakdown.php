@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Production\Listeners;
 
 use App\Common\Services\NotificationService;
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Production\Events\MachineBreakdownDetected;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -12,14 +13,18 @@ use Illuminate\Support\Facades\Log;
 
 class NotifyOnMachineBreakdown implements ShouldQueue
 {
-    public function __construct(private readonly NotificationService $notifications) {}
+    public function __construct(
+        private readonly NotificationService $notifications,
+        private readonly SettingsService $settings,
+    ) {}
 
     public function handle(MachineBreakdownDetected $event): void
     {
         try {
             $machine = $event->machine;
 
-            $audience = User::whereHas('role', fn ($q) => $q->whereIn('slug', ['maintenance_tech', 'production_manager']))
+            $roles = array_values(array_filter((array) $this->settings->get('maintenance.machine_breakdown.notification_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
+            $audience = User::whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                 ->where('is_active', true)
                 ->get();
 

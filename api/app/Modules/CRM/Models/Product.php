@@ -59,7 +59,7 @@ class Product extends Model
     /**
      * C-1 — optional override for the GL revenue account used by the delivery
      * auto-invoice flow. Falls back to the setting
-     * `accounting.default_sales_revenue_account_code` (default '4010') when null.
+     * `accounting.default_sales_revenue_account_code` when null.
      */
     public function revenueAccount(): BelongsTo
     {

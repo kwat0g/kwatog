@@ -6,7 +6,9 @@ use App\Modules\HR\Controllers\DepartmentController;
 use App\Modules\HR\Controllers\EmployeeAccountController;
 use App\Modules\HR\Controllers\EmployeeController;
 use App\Modules\HR\Controllers\EmployeeDirectoryController;
+use App\Modules\HR\Controllers\EmployeeDocumentController;
 use App\Modules\HR\Controllers\EmployeeOnboardingController;
+use App\Modules\HR\Controllers\EmployeePropertyController;
 use App\Modules\HR\Controllers\EmployeeSkillController;
 use App\Modules\HR\Controllers\EmployeeTrainingController;
 use App\Modules\HR\Controllers\PerformanceReviewController;
@@ -39,6 +41,9 @@ Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function 
         Route::get('/{department}', [DepartmentController::class, 'show'])->middleware('permission:hr.departments.view');
         Route::put('/{department}', [DepartmentController::class, 'update'])->middleware('permission:hr.departments.manage');
         Route::delete('/{department}', [DepartmentController::class, 'destroy'])->middleware('permission:hr.departments.manage');
+        Route::patch('/{department}/restore', [DepartmentController::class, 'restore'])
+            ->middleware('permission:hr.departments.manage')
+            ->withTrashed();
     });
 
     // Positions
@@ -48,10 +53,14 @@ Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function 
         Route::get('/{position}', [PositionController::class, 'show'])->middleware('permission:hr.positions.view');
         Route::put('/{position}', [PositionController::class, 'update'])->middleware('permission:hr.positions.manage');
         Route::delete('/{position}', [PositionController::class, 'destroy'])->middleware('permission:hr.positions.manage');
+        Route::patch('/{position}/restore', [PositionController::class, 'restore'])
+            ->middleware('permission:hr.positions.manage')
+            ->withTrashed();
     });
 
     // Employees
     Route::prefix('employees')->group(function () {
+        Route::get('/options', [EmployeeController::class, 'options'])->middleware('permission:hr.employees.view');
         Route::get('/', [EmployeeController::class, 'index'])->middleware('permission:hr.employees.view');
         Route::post('/', [EmployeeController::class, 'store'])->middleware('permission:hr.employees.create');
 
@@ -61,8 +70,19 @@ Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function 
 
         Route::get('/{employee}', [EmployeeController::class, 'show'])->middleware('permission:hr.employees.view');
         Route::put('/{employee}', [EmployeeController::class, 'update'])->middleware('permission:hr.employees.edit');
-        Route::delete('/{employee}', [EmployeeController::class, 'destroy'])->middleware('permission:hr.employees.delete');
-        Route::patch('/{employee}/separate', [EmployeeController::class, 'separate'])->middleware('permission:hr.employees.separate');
+Route::delete('/{employee}', [EmployeeController::class, 'destroy'])->middleware('permission:hr.employees.delete');
+Route::patch('/{employee}/restore', [EmployeeController::class, 'restore'])
+    ->middleware('permission:hr.employees.delete')
+    ->withTrashed();
+Route::patch('/{employee}/separate', [EmployeeController::class, 'separate'])->middleware('permission:hr.employees.separate');
+Route::post('/{employee}/photo', [EmployeeController::class, 'uploadPhoto'])->middleware('permission:hr.employees.edit');
+// Photos are low-sensitivity directory assets: the directory itself is open
+// to all internal roles via hr.directory.view, and self-service shows the
+// employee's own photo with only session auth. Both consumers must be able
+// to load the image, so the gate mirrors the loosest legitimate consumer.
+Route::get('/{employee}/photo', [EmployeeController::class, 'photo'])
+    ->middleware('permission_any:hr.employees.view,hr.directory.view');
+Route::delete('/{employee}/photo', [EmployeeController::class, 'deletePhoto'])->middleware('permission:hr.employees.edit');
 
         // U1 — system account lifecycle.
         Route::get('/{employee}/account-status', [EmployeeAccountController::class, 'status'])
@@ -83,10 +103,45 @@ Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function 
         // Sprint 8 — Task 71: separation + clearance flow
         Route::post('/{employee}/separation', [SeparationController::class, 'initiate'])
             ->middleware('permission:hr.separation.initiate');
+
+        // Employee property management
+        Route::prefix('{employee}/property')->group(function () {
+            Route::get('/', [EmployeePropertyController::class, 'index'])
+                ->middleware('permission:hr.employees.view');
+            Route::post('/', [EmployeePropertyController::class, 'store'])
+                ->middleware('permission:hr.employees.edit');
+            Route::get('/{employeeProperty}', [EmployeePropertyController::class, 'show'])
+                ->middleware('permission:hr.employees.view');
+            Route::put('/{employeeProperty}', [EmployeePropertyController::class, 'update'])
+                ->middleware('permission:hr.employees.edit');
+            Route::delete('/{employeeProperty}', [EmployeePropertyController::class, 'destroy'])
+                ->middleware('permission:hr.employees.edit');
+            Route::patch('/{employeeProperty}/restore', [EmployeePropertyController::class, 'restore'])
+                ->middleware('permission:hr.employees.edit')
+                ->withTrashed();
+        });
+
+        // Employee document management
+        Route::prefix('{employee}/documents')->group(function () {
+            Route::get('/', [EmployeeDocumentController::class, 'index'])
+                ->middleware('permission:hr.employees.documents.view');
+            Route::post('/', [EmployeeDocumentController::class, 'store'])
+                ->middleware('permission:hr.employees.documents.view');
+            Route::delete('/{employeeDocument}', [EmployeeDocumentController::class, 'destroy'])
+                ->middleware('permission:hr.employees.edit');
+            Route::patch('/{employeeDocument}/restore', [EmployeeDocumentController::class, 'restore'])
+                ->middleware('permission:hr.employees.edit')
+                ->withTrashed();
+        });
+        // Document download — outside {employee} prefix so URL is clean
+        Route::get('/employee-documents/{employeeDocument}/download', [EmployeeDocumentController::class, 'download'])
+            ->middleware('permission:hr.employees.documents.view');
     });
 
     // REC-03 — salary-adjustment maker-checker gate. Salary changes flow through
     // approval; direct employee edits can no longer change pay.
+    Route::get('/salary-adjustments/options', [SalaryAdjustmentController::class, 'options'])
+        ->middleware('permission:hr.salary_adjustments.view');
     Route::get('/salary-adjustments', [SalaryAdjustmentController::class, 'index'])
         ->middleware('permission:hr.salary_adjustments.view');
     Route::get('/salary-adjustments/{salaryAdjustment}', [SalaryAdjustmentController::class, 'show'])
@@ -122,6 +177,9 @@ Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function 
             ->middleware('permission:hr.trainings.manage');
         Route::delete('/{training}', [TrainingController::class, 'destroy'])
             ->middleware('permission:hr.trainings.manage');
+        Route::patch('/{training}/restore', [TrainingController::class, 'restore'])
+            ->middleware('permission:hr.trainings.manage')
+            ->withTrashed();
     });
 
     // Skills Matrix (IATF 16949 operator competence tracking).
@@ -157,11 +215,16 @@ Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function 
             ->middleware('permission:hr.employees.trainings.manage');
         Route::delete('/{employeeSkill}', [EmployeeSkillController::class, 'destroy'])
             ->middleware('permission:hr.employees.trainings.manage');
+        Route::patch('/{employeeSkill}/restore', [EmployeeSkillController::class, 'restore'])
+            ->middleware('permission:hr.employees.trainings.manage')
+            ->withTrashed();
     });
 
     // U3 (HR side) — review queue for profile-update requests.
     Route::prefix('profile-update-requests')->group(function () {
         Route::get('/', [ProfileUpdateReviewController::class, 'index'])
+            ->middleware('permission:hr.employees.view');
+        Route::get('/options', [ProfileUpdateReviewController::class, 'options'])
             ->middleware('permission:hr.employees.view');
         Route::patch('/{profileUpdateRequest}/review', [ProfileUpdateReviewController::class, 'review'])
             ->middleware('permission:hr.employees.edit');
@@ -184,6 +247,7 @@ Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function 
         Route::get('/overtime', [SelfServiceController::class, 'overtime']);
         Route::post('/overtime', [SelfServiceController::class, 'applyOvertime']);
         Route::delete('/overtime/{id}', [SelfServiceController::class, 'cancelOvertime']);
+        Route::patch('/overtime/{id}/restore', [SelfServiceController::class, 'restoreOvertime'])->middleware('throttle:10,1');
 
         // Task SS3 — employee document downloads (auto-generated certificates).
         Route::get('/documents', [SelfServiceController::class, 'documents']);
@@ -196,11 +260,14 @@ Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function 
     });
 
     // Succession planning
+    Route::get('succession-plans/options', [SuccessionPlanController::class, 'options'])
+        ->middleware('permission:hr.succession.manage');
     Route::apiResource('succession-plans', SuccessionPlanController::class)
         ->middleware('permission:hr.succession.manage');
 
     // Performance reviews
     Route::prefix('performance-reviews')->middleware('permission:hr.performance.view')->group(function () {
+        Route::get('/options', [PerformanceReviewController::class, 'options']);
         Route::get('/cycles', [PerformanceReviewController::class, 'cycles']);
         Route::post('/cycles', [PerformanceReviewController::class, 'storeCycle'])->middleware('permission:hr.performance.manage');
         Route::post('/cycles/{cycle}/activate', [PerformanceReviewController::class, 'activateCycle'])->middleware('permission:hr.performance.manage');
@@ -218,6 +285,8 @@ Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function 
 
     // Sprint 8 — Task 71: clearance lifecycle
     Route::prefix('clearances')->group(function () {
+        Route::get('/options', [SeparationController::class, 'options'])
+            ->middleware('permission:hr.separation.view');
         Route::get('/', [SeparationController::class, 'index'])
             ->middleware('permission:hr.separation.view');
         Route::get('/{clearance}', [SeparationController::class, 'show'])
@@ -233,11 +302,15 @@ Route::middleware(['auth:sanctum', 'feature:hr'])->prefix('hr')->group(function 
     // Recruitment — HR-facing (authenticated)
     Route::middleware('feature:recruitment')->prefix('recruitment')->group(function () {
         Route::prefix('postings')->group(function () {
+            Route::get('/options', [RecruitmentPostingController::class, 'options'])->middleware('permission:hr.recruitment.view');
             Route::get('/', [RecruitmentPostingController::class, 'index'])->middleware('permission:hr.recruitment.view');
             Route::post('/', [RecruitmentPostingController::class, 'store'])->middleware('permission:hr.recruitment.manage');
             Route::get('/{jobPosting}', [RecruitmentPostingController::class, 'show'])->middleware('permission:hr.recruitment.view');
             Route::put('/{jobPosting}', [RecruitmentPostingController::class, 'update'])->middleware('permission:hr.recruitment.manage');
             Route::delete('/{jobPosting}', [RecruitmentPostingController::class, 'destroy'])->middleware('permission:hr.recruitment.manage');
+            Route::patch('/{jobPosting}/restore', [RecruitmentPostingController::class, 'restore'])
+                ->middleware('permission:hr.recruitment.manage')
+                ->withTrashed();
             Route::patch('/{jobPosting}/status', [RecruitmentPostingController::class, 'changeStatus'])->middleware('permission:hr.recruitment.manage');
         });
 

@@ -8,6 +8,7 @@ use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\SearchOperator;
+use App\Common\Support\TrashedFilter;
 use App\Modules\Auth\Models\User;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\SupplyChain\Enums\ShipmentDocumentType;
@@ -41,6 +42,8 @@ class ShipmentService
             'purchaseOrder:id,po_number,vendor_id',
             'creator:id,name,role_id',
         ]);
+
+        TrashedFilter::apply($q, $filters);
 
         foreach (['status'] as $f) {
             if (! empty($filters[$f])) {

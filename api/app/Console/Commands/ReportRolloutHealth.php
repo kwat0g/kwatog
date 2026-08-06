@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Dashboard\Services\RolloutHealthService;
 use Illuminate\Console\Command;
@@ -14,10 +15,11 @@ class ReportRolloutHealth extends Command
 
     protected $description = 'Report quality-plan, QC-trigger, scanner, and Action Center rollout health';
 
-    public function handle(RolloutHealthService $health): int
+    public function handle(RolloutHealthService $health, SettingsService $settings): int
     {
+        $roles = array_values(array_filter((array) $settings->get('system.automation.actor_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
         $user = User::query()->where('is_active', true)
-            ->whereHas('role', fn ($role) => $role->where('slug', 'system_admin'))->first();
+            ->whereHas('role', fn ($role) => $role->whereIn('slug', $roles))->first();
         if (! $user) {
             $this->error('No active system administrator is available for permission-aware health metrics.');
 

@@ -7,11 +7,13 @@ namespace App\Modules\HR\Controllers;
 use App\Common\Services\ApprovalService;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\SalaryAdjustment;
+use App\Modules\HR\Enums\SalaryAdjustmentStatus;
 use App\Modules\HR\Requests\ActSalaryAdjustmentRequest;
 use App\Modules\HR\Requests\RequestSalaryAdjustmentRequest;
 use App\Modules\HR\Resources\SalaryAdjustmentResource;
 use App\Modules\HR\Services\SalaryAdjustmentService;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 /**
@@ -25,6 +27,13 @@ class SalaryAdjustmentController
         private readonly SalaryAdjustmentService $service,
         private readonly ApprovalService $approvals,
     ) {}
+
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'statuses' => array_map(static fn (SalaryAdjustmentStatus $status): array => ['value' => $status->value, 'label' => ucfirst($status->value)], SalaryAdjustmentStatus::cases()),
+        ]]);
+    }
 
     public function index(Request $request): AnonymousResourceCollection
     {

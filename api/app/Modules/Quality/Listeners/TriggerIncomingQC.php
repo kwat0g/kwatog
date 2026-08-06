@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Quality\Listeners;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Events\GoodsReceiptNoteCreated;
 use App\Modules\Quality\Enums\InspectionEntityType;
@@ -32,6 +33,7 @@ class TriggerIncomingQC implements ShouldQueue
     public function __construct(
         private readonly InspectionService $inspections,
         private readonly ItemQualityPlanService $qualityPlans,
+        private readonly ?SettingsService $settings = null,
     ) {}
 
     public function handle(GoodsReceiptNoteCreated $event): void
@@ -62,6 +64,11 @@ class TriggerIncomingQC implements ShouldQueue
                     continue;
                 }
 
+                $batchQuantity = (int) (float) $line->quantity_received;
+                if ($batchQuantity < 1) {
+                    continue;
+                }
+
                 $plan = $this->qualityPlans->activeFor(
                     $line->item,
                     $grn->vendor_id,
@@ -73,7 +80,7 @@ class TriggerIncomingQC implements ShouldQueue
                 } else {
                     $this->inspections->createIncomingForItem(
                         $line->item,
-                        max(1, (int) (float) $line->quantity_received),
+                        $batchQuantity,
                         $grn->id,
                         $grn->receiver,
                         "No active quality plan; fallback verdict for GRN {$grn->grn_number}.",
@@ -88,8 +95,9 @@ class TriggerIncomingQC implements ShouldQueue
             }
 
             try {
+                $roles = array_values(array_filter((array) ($this->settings ?? app(SettingsService::class))->get('quality.incoming_qc.notification_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
                 User::query()
-                    ->whereHas('role', fn ($q) => $q->where('slug', 'qc_inspector'))
+                    ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                     ->where('is_active', true)
                     ->get()
                     ->each(function (User $user) use ($grn) {

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\CRM\Services;
 
 use App\Common\Services\NotificationService;
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Enums\ComplaintStatus;
 use App\Modules\CRM\Models\CustomerComplaint;
@@ -29,21 +30,21 @@ class Complaint8dEscalationService
         'd3' => [
             'due_field'        => 'd3_due_at',
             'block_when_field' => 'd3_containment',
-            'subject'          => '8D D3 containment overdue',
         ],
         'd4' => [
             'due_field'        => 'd4_due_at',
             'block_when_field' => 'd4_root_cause',
-            'subject'          => '8D D4 root cause overdue',
         ],
         'finalize' => [
             'due_field'        => 'finalize_due_at',
             'block_when_field' => null, // gate is "finalized_at is null"
-            'subject'          => '8D finalisation overdue',
         ],
     ];
 
-    public function __construct(private readonly NotificationService $notifications) {}
+    public function __construct(
+        private readonly NotificationService $notifications,
+        private readonly SettingsService $settings,
+    ) {}
 
     /**
      * @return array{d3:int, d4:int, finalize:int}
@@ -66,8 +67,10 @@ class Complaint8dEscalationService
             })
             ->get();
 
+        $roleSlugs = array_values(array_filter((array) $this->settings->get('crm.complaint_8d.notification_roles', []), 'is_string'));
+        $subjects = (array) $this->settings->get('crm.complaint_8d.escalation_subjects', []);
         $recipients = User::query()
-            ->whereHas('role', fn ($q) => $q->whereIn('slug', ['quality', 'qc_inspector']))
+            ->whereHas('role', fn ($q) => $q->whereIn('slug', $roleSlugs))
             ->where('is_active', true)
             ->get();
 
@@ -97,9 +100,13 @@ class Complaint8dEscalationService
                     if ($c->assignee && $c->assignee->is_active) {
                         $audience[] = $c->assignee;
                     }
+                    $subject = (string) ($subjects[$key] ?? '');
+                    if ($subject === '') {
+                        throw new \App\Common\Exceptions\BusinessRuleException("8D escalation subject for {$key} is not configured.");
+                    }
                     foreach ($audience as $u) {
                         $this->notifications->send($u, '8d.sla', [
-                            'title'   => $cfg['subject'],
+                            'title'   => $subject,
                             'message' => "Complaint {$c->complaint_number} has missed the {$key} SLA window. Review the 8D and act now.",
                             'link_to' => "/crm/complaints/{$c->hash_id}",
                         ]);

@@ -12,19 +12,19 @@ import logoUrl from '@/assets/brand-logo.png';
 import { cn } from '@/lib/cn';
 
 interface BrandLogoProps {
-  className?: string;
-  /** Flip to white under [data-theme="dark"] (app shell surfaces). */
-  invertOnDark?: boolean;
-  alt?: string;
+ className?: string;
+ /** Flip to white under [data-theme="dark"] (app shell surfaces). */
+ invertOnDark?: boolean;
+ alt?: string;
 }
 
 export function BrandLogo({ className, invertOnDark = false, alt = 'Company' }: BrandLogoProps) {
-  return (
-    <img
-      src={logoUrl}
-      alt={alt}
-      draggable={false}
-      className={cn('w-auto select-none', invertOnDark && 'dark:invert', className)}
-    />
-  );
+ return (
+ <img
+ src={logoUrl}
+ alt={alt}
+ draggable={false}
+ className={cn('w-auto select-none', invertOnDark && 'dark:invert', className)}
+ />
+ );
 }

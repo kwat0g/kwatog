@@ -6,6 +6,7 @@ namespace App\Modules\Maintenance\Services;
 
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\NotificationService;
+use App\Common\Services\SettingsService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\SearchOperator;
 use App\Modules\Auth\Models\User;
@@ -35,6 +36,7 @@ class MaintenanceWorkOrderService
         private readonly DocumentSequenceService $sequences,
         private readonly MaintenanceScheduleService $schedules,
         private readonly NotificationService $notifications,
+        private readonly SettingsService $settings,
     ) {}
 
     public function list(array $filters): LengthAwarePaginator
@@ -106,8 +108,8 @@ class MaintenanceWorkOrderService
                 'schedule_id'       => $fromSchedule?->id,
                 'type'              => $fromSchedule
                     ? MaintenanceWorkOrderType::Preventive->value
-                    : MaintenanceWorkOrderType::from((string) ($data['type'] ?? 'corrective'))->value,
-                'priority'          => MaintenancePriority::from((string) ($data['priority'] ?? 'medium'))->value,
+                    : MaintenanceWorkOrderType::from((string) ($data['type'] ?? $this->settings->get('maintenance.work_order.default_type', '')))->value,
+                'priority'          => MaintenancePriority::from((string) ($data['priority'] ?? $this->settings->get('maintenance.work_order.default_priority', '')))->value,
                 'description'       => $fromSchedule?->description ?? $data['description'],
                 'status'            => MaintenanceWorkOrderStatus::Open->value,
                 'created_by'        => $by->id,
@@ -226,7 +228,7 @@ class MaintenanceWorkOrderService
                 if ($schedule) $this->schedules->recomputeNextDueAt($schedule, now());
             }
 
-            $this->log($wo, 'Maintenance completed.'.($cost > 0 ? ' Spare parts cost ₱'.$cost.'.' : ''), $by);
+            $this->log($wo, 'Maintenance completed.'.($cost > 0 ? ' Spare parts cost '.app(\App\Common\Services\CurrencyDisplayService::class)->format($cost).'.' : ''), $by);
             return $this->show($wo);
         });
     }

@@ -6,6 +6,7 @@ namespace App\Modules\Accounting\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Str;
 
 class FxRateResource extends JsonResource
 {
@@ -18,6 +19,7 @@ class FxRateResource extends JsonResource
             'rate_date'          => optional($this->rate_date)->toDateString(),
             'rate_to_functional' => (string) $this->rate_to_functional,
             'source'             => $this->source,
+            'source_label'       => Str::headline((string) $this->source),
             'created_at'         => optional($this->created_at)->toIso8601String(),
         ];
     }

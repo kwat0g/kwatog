@@ -13,65 +13,65 @@ import { CompanyName } from '@/components/brand/CompanyName';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 export default function SupplierPurchaseOrdersPage() {
-  const navigate = useNavigate();
-  const { data: pos, isLoading, isError, refetch } = useQuery({
-    queryKey: ['portal', 'supplier', 'pos'],
-    queryFn: () => supplierPortalApi.listPos(),
-    placeholderData: (prev) => prev });
+ const navigate = useNavigate();
+ const { data: pos, isLoading, isError, refetch } = useQuery({
+ queryKey: ['portal', 'supplier', 'pos'],
+ queryFn: () => supplierPortalApi.listPos(),
+ placeholderData: (prev) => prev });
 
-  return (
-    <div>
-      <PageHeader title="Purchase Orders" subtitle={<>Orders issued to you by <CompanyName /></>} />
+ return (
+ <div>
+ <PageHeader title="Purchase Orders" subtitle={<>Orders issued to you by <CompanyName /></>} />
 
-      {/* One padded body holds every state, so loading and loaded agree on width. */}
-      <div className="px-5 py-4 max-w-5xl">
-        {isLoading && <SkeletonBlock className="h-64 rounded-md" />}
+ {/* One padded body holds every state, so loading and loaded agree on width. */}
+ <div className="px-5 py-4 max-w-5xl">
+ {isLoading && <SkeletonBlock className="h-64 rounded-md" />}
 
-        {isError && (
-          <EmptyState
-            icon="alert-circle"
-            title="Failed to load purchase orders"
-            action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
-          />
-        )}
+ {isError && (
+ <EmptyState
+ icon="alert-circle"
+ title="Failed to load purchase orders"
+ action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
+ />
+ )}
 
-        {!isLoading && !isError && (
-          <Panel noPadding>
-            {pos && pos.length > 0 ? (
-              <table className={tableCls}>
-                <thead>
-                  <tr className={theadTrCls}>
-                    <Th>PO #</Th>
-                    <Th>Date</Th>
-                    <Th align="right">Amount</Th>
-                    <Th>Expected Delivery</Th>
-                    <Th align="right">Status</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pos.map((po) => (
-                    <tr key={po.id} className={cn(trCls, "cursor-pointer")} onClick={() => navigate(`/portal/supplier/purchase-orders/${po.id}`)}>
-                      <Td>
-                        
-                          {po.po_number}
-                        
-                      </Td>
-                      <Td className="text-muted">{po.date ?? '—'}</Td>
-                      <Td align="right" mono>{formatPeso(po.total_amount)}</Td>
-                      <Td className="text-muted">{po.expected_delivery_date ?? '—'}</Td>
-                      <Td align="right" mono>
-                        <Chip variant={chipVariantForStatus(po.status)}>{po.status_label ?? po.status.replace(/_/g, ' ')}</Chip>
-                      </Td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <EmptyState icon="file-text" title="No purchase orders" description="Purchase orders from your customers will appear here." />
-            )}
-          </Panel>
-        )}
-      </div>
-    </div>
-  );
+ {!isLoading && !isError && (
+ <Panel noPadding>
+ {pos && pos.length > 0 ? (
+ <table className={tableCls}>
+ <thead>
+ <tr className={theadTrCls}>
+ <Th>PO #</Th>
+ <Th>Date</Th>
+ <Th align="right">Amount</Th>
+ <Th>Expected Delivery</Th>
+ <Th align="right">Status</Th>
+ </tr>
+ </thead>
+ <tbody>
+ {pos.map((po) => (
+ <tr key={po.id} className={cn(trCls, "cursor-pointer")} onClick={() => navigate(`/portal/supplier/purchase-orders/${po.id}`)}>
+ <Td>
+ 
+ {po.po_number}
+ 
+ </Td>
+ <Td className="text-muted">{po.date ?? '—'}</Td>
+ <Td align="right" mono>{formatPeso(po.total_amount)}</Td>
+ <Td className="text-muted">{po.expected_delivery_date ?? '—'}</Td>
+ <Td align="right" mono>
+ <Chip variant={chipVariantForStatus(po.status)}>{po.status_label ?? po.status.replace(/_/g, ' ')}</Chip>
+ </Td>
+ </tr>
+ ))}
+ </tbody>
+ </table>
+ ) : (
+ <EmptyState icon="file-text" title="No purchase orders" description="Purchase orders from your customers will appear here." />
+ )}
+ </Panel>
+ )}
+ </div>
+ </div>
+ );
 }

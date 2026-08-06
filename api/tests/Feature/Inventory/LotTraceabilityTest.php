@@ -229,7 +229,7 @@ class LotTraceabilityTest extends TestCase
         ];
 
         // Default tolerance 0 → hard block.
-        config()->set('inventory.over_receipt_tolerance_pct', '0');
+        app(\App\Common\Services\SettingsService::class)->set('inventory.over_receipt_tolerance_pct', 0);
         try {
             $this->grnSvc->create($po, [$line], [], $this->user);
             $this->fail('Over-receipt should be blocked at 0% tolerance.');
@@ -238,7 +238,7 @@ class LotTraceabilityTest extends TestCase
         }
 
         // 1% tolerance → 1002 (0.2% over) is accepted.
-        config()->set('inventory.over_receipt_tolerance_pct', '1');
+        app(\App\Common\Services\SettingsService::class)->set('inventory.over_receipt_tolerance_pct', 1);
         $grn = $this->grnSvc->create($po, [$line], [], $this->user);
         $this->assertSame('1002.000', (string) $grn->items->first()->quantity_received);
     }

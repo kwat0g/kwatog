@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Auth\Notifications;
 
+use App\Common\Services\SettingsService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -30,15 +31,16 @@ class WelcomeNotification extends Notification
     {
         $appUrl = config('app.frontend_url', config('app.url'));
         $email = $notifiable->email ?? '';
+        $company = app(SettingsService::class)->requiredString('company.legal_name');
 
         return (new MailMessage)
-            ->subject('Welcome to Ogami ERP — Your Account is Ready')
+            ->subject("Welcome to {$company} ERP — Your Account is Ready")
             ->greeting('Hi '.($notifiable->name ?? 'there').',')
-            ->line('Your Ogami ERP account has been created.')
+            ->line("Your {$company} ERP account has been created.")
             ->line('Login URL: '.$appUrl)
             ->line('Email: '.$email)
             ->line('Temporary Password: '.$this->tempPassword)
             ->line('You will be required to change your password on first login.')
-            ->salutation('— Ogami HR Department');
+            ->salutation("— {$company} HR Department");
     }
 }

@@ -22,224 +22,224 @@ import { formatDate } from '@/lib/formatDate';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 export default function LoanDetailPage() {
-  const { id = '' } = useParams<{ id: string }>();
-  const qc = useQueryClient();
-  const { can } = usePermission();
-  const [reject, setReject] = useState(false);
-  const [reason, setReason] = useState('');
-  const [confirmApprove, setConfirmApprove] = useState(false);
-  const [confirmCancel, setConfirmCancel] = useState(false);
+ const { id = '' } = useParams<{ id: string }>();
+ const qc = useQueryClient();
+ const { can } = usePermission();
+ const [reject, setReject] = useState(false);
+ const [reason, setReason] = useState('');
+ const [confirmApprove, setConfirmApprove] = useState(false);
+ const [confirmCancel, setConfirmCancel] = useState(false);
 
-  const { data: loan, isLoading, isError, refetch } = useQuery({
-    queryKey: ['loans', 'show', id],
-    queryFn: () => loansApi.show(id),
-  });
+ const { data: loan, isLoading, isError, refetch } = useQuery({
+ queryKey: ['loans', 'show', id],
+ queryFn: () => loansApi.show(id),
+ });
 
-  const approve = useMutation({
-    mutationFn: () => loansApi.approve(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['loans'] }); toast.success('Approved.'); },
-    onError: () => toast.error('Approve failed.'),
-  });
-  const rejectMut = useMutation({
-    mutationFn: () => loansApi.reject(id, reason),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['loans'] }); toast.success('Rejected.'); setReject(false); setReason(''); },
-    onError: () => toast.error('Reject failed.'),
-  });
-  const cancel = useMutation({
-    mutationFn: () => loansApi.cancel(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['loans'] }); toast.success('Cancelled.'); },
-    onError: () => toast.error('Cancel failed.'),
-  });
+ const approve = useMutation({
+ mutationFn: () => loansApi.approve(id),
+ onSuccess: () => { qc.invalidateQueries({ queryKey: ['loans'] }); toast.success('Approved.'); },
+ onError: () => toast.error('Approve failed.'),
+ });
+ const rejectMut = useMutation({
+ mutationFn: () => loansApi.reject(id, reason),
+ onSuccess: () => { qc.invalidateQueries({ queryKey: ['loans'] }); toast.success('Rejected.'); setReject(false); setReason(''); },
+ onError: () => toast.error('Reject failed.'),
+ });
+ const cancel = useMutation({
+ mutationFn: () => loansApi.cancel(id),
+ onSuccess: () => { qc.invalidateQueries({ queryKey: ['loans'] }); toast.success('Cancelled.'); },
+ onError: () => toast.error('Cancel failed.'),
+ });
 
-  if (isLoading) return <SkeletonDetail />;
-  if (isError || !loan) {
-    return <EmptyState icon="alert-circle" title="Loan not found" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />;
-  }
+ if (isLoading) return <SkeletonDetail />;
+ if (isError || !loan) {
+ return <EmptyState icon="alert-circle" title="Loan not found" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />;
+ }
 
-  const isPending = loan.status === 'pending';
+ const isPending = loan.status === 'pending';
 
-  const loanChain = buildLoanChain(loan);
-  const remainingPercent = parseFloat(loan.principal) > 0
-    ? Math.min(100, (parseFloat(loan.total_paid) / parseFloat(loan.principal)) * 100)
-    : 0;
+ const loanChain = buildLoanChain(loan);
+ const remainingPercent = parseFloat(loan.principal) > 0
+ ? Math.min(100, (parseFloat(loan.total_paid) / parseFloat(loan.principal)) * 100)
+ : 0;
 
-  return (
-    <div>
-      <PageHeader
-        title={
-          <span className="flex items-center gap-2">
-            <span className="font-mono">{loan.loan_no}</span>
-            <Chip variant={chipVariantForStatus(loan.status)}>{loan.status_label ?? loan.status}</Chip>
-          </span>
-        }
-        subtitle={`${loan.employee?.full_name} · ${loan.loan_type_label ?? loan.loan_type}`}
-        backTo="/hr/loans"
-        backLabel="Loans"
-        breadcrumbs={[
-          { label: 'HR', href: '/hr' },
-          { label: 'Loans', href: '/hr/loans' },
-          { label: loan.loan_no },
-        ]}
-        actions={
-          <>
-            {isPending && can('loans.approve') && (
-              <>
-                <Button variant="primary" size="sm" icon={<Check size={12} />} disabled={approve.isPending} loading={approve.isPending} onClick={() => setConfirmApprove(true)}>Approve</Button>
-                <Button variant="danger" size="sm" icon={<X size={12} />} onClick={() => setReject(true)}>Reject</Button>
-              </>
-            )}
-            {(isPending || loan.status === 'active') && can('loans.approve') && (
-              <Button variant="secondary" size="sm" onClick={() => setConfirmCancel(true)} disabled={cancel.isPending}>Cancel</Button>
-            )}
-          </>
-        }
-      />
+ return (
+ <div>
+ <PageHeader
+ title={
+ <span className="flex items-center gap-2">
+ <span className="font-mono">{loan.loan_no}</span>
+ <Chip variant={chipVariantForStatus(loan.status)}>{loan.status_label ?? loan.status}</Chip>
+ </span>
+ }
+ subtitle={`${loan.employee?.full_name} · ${loan.loan_type_label ?? loan.loan_type}`}
+ backTo="/hr/loans"
+ backLabel="Loans"
+ breadcrumbs={[
+ { label: 'HR', href: '/hr' },
+ { label: 'Loans', href: '/hr/loans' },
+ { label: loan.loan_no },
+ ]}
+ actions={
+ <>
+ {isPending && can('loans.approve') && (
+ <>
+ <Button variant="primary" size="sm" icon={<Check size={12} />} disabled={approve.isPending} loading={approve.isPending} onClick={() => setConfirmApprove(true)}>Approve</Button>
+ <Button variant="danger" size="sm" icon={<X size={12} />} onClick={() => setReject(true)}>Reject</Button>
+ </>
+ )}
+ {(isPending || loan.status === 'active') && can('loans.approve') && (
+ <Button variant="secondary" size="sm" onClick={() => setConfirmCancel(true)} disabled={cancel.isPending}>Cancel</Button>
+ )}
+ </>
+ }
+ />
 
-      <div className="px-5 pt-4">
-        <Panel title="Loan lifecycle">
-          <ChainHeader steps={loanChain} />
-        </Panel>
-      </div>
+ <div className="px-5 pt-4">
+ <Panel title="Loan lifecycle">
+ <ChainHeader steps={loanChain} />
+ </Panel>
+ </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 px-5 py-4">
-        <div className="space-y-4">
-          <Panel title="Loan summary">
-            <div className="grid grid-cols-3 gap-3">
-              <Stat label="Principal" value={formatPeso(loan.principal)} />
-              <Stat label="Total paid" value={formatPeso(loan.total_paid)} variant="success" />
-              <Stat label="Balance" value={formatPeso(loan.balance)} variant="warning" />
-            </div>
-            <div className="mt-3">
-              <div className="flex items-center justify-between text-xs text-muted mb-1">
-                <span>Repayment progress</span>
-                <span className="font-mono tabular-nums">{remainingPercent.toFixed(1)}%</span>
-              </div>
-              <div className="h-1.5 bg-elevated rounded-sm overflow-hidden">
-                <div className="h-full bg-success" style={{ width: `${remainingPercent}%` }} />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4 mt-4 text-sm">
-              <Item label="Pay periods" value={`${loan.pay_periods_remaining}/${loan.pay_periods_total}`} mono />
-              <Item label="Per period" value={formatPeso(loan.monthly_amortization)} mono />
-              <Item label="Start date" value={loan.start_date ? formatDate(loan.start_date) : '—'} mono />
-              <Item label="End date" value={loan.end_date ? formatDate(loan.end_date) : '—'} mono />
-              <Item label="Interest rate" value={`${loan.interest_rate}%`} mono />
-              <Item label="Approval chain" value={`${loan.approval_chain_size} steps`} />
-            </div>
-            {loan.purpose && (
-              <div className="mt-3">
-                <div className="text-2xs uppercase tracking-wider text-muted font-medium mb-1">Purpose</div>
-                <p className="text-sm">{loan.purpose}</p>
-              </div>
-            )}
-          </Panel>
+ <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 px-5 py-4">
+ <div className="space-y-4">
+ <Panel title="Loan summary">
+ <div className="grid grid-cols-3 gap-3">
+ <Stat label="Principal" value={formatPeso(loan.principal)} />
+ <Stat label="Total paid" value={formatPeso(loan.total_paid)} variant="success" />
+ <Stat label="Balance" value={formatPeso(loan.balance)} variant="warning" />
+ </div>
+ <div className="mt-3">
+ <div className="flex items-center justify-between text-xs text-muted mb-1">
+ <span>Repayment progress</span>
+ <span className="font-mono tabular-nums">{remainingPercent.toFixed(1)}%</span>
+ </div>
+ <div className="h-1.5 bg-elevated rounded-sm overflow-hidden">
+ <div className="h-full bg-success" style={{ width: `${remainingPercent}%` }} />
+ </div>
+ </div>
+ <div className="grid grid-cols-2 gap-4 mt-4 text-sm">
+ <Item label="Pay periods" value={`${loan.pay_periods_remaining}/${loan.pay_periods_total}`} mono />
+ <Item label="Per period" value={formatPeso(loan.monthly_amortization)} mono />
+ <Item label="Start date" value={loan.start_date ? formatDate(loan.start_date) : '—'} mono />
+ <Item label="End date" value={loan.end_date ? formatDate(loan.end_date) : '—'} mono />
+ <Item label="Interest rate" value={`${loan.interest_rate}%`} mono />
+ <Item label="Approval chain" value={`${loan.approval_chain_size} steps`} />
+ </div>
+ {loan.purpose && (
+ <div className="mt-3">
+ <div className="text-2xs uppercase tracking-wider text-muted font-medium mb-1">Purpose</div>
+ <p className="text-sm">{loan.purpose}</p>
+ </div>
+ )}
+ </Panel>
 
-          <Panel title={`Payments (${loan.payments?.length ?? 0})`} noPadding>
-            {(loan.payments?.length ?? 0) === 0 ? (
-              <p className="text-xs text-muted px-4 py-4 text-center">No payments yet.</p>
-            ) : (
-              <table className={tableCls}>
-                <thead>
-                  <tr className={theadTrCls}>
-                    <Th>Date</Th>
-                    <Th align="right">Amount</Th>
-                    <Th>Type</Th>
-                    <Th>Remarks</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {loan.payments!.map((p) => (
-                    <tr key={p.id} className={trCls}>
-                      <Td mono>{formatDate(p.payment_date)}</Td>
-                      <Td align="right" mono className="font-medium">{formatPeso(p.amount)}</Td>
-                      <Td>{p.payment_type_label ?? p.payment_type}</Td>
-                      <Td className="text-muted">{p.remarks ?? '—'}</Td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </Panel>
-        </div>
+ <Panel title={`Payments (${loan.payments?.length ?? 0})`} noPadding>
+ {(loan.payments?.length ?? 0) === 0 ? (
+ <p className="text-xs text-muted px-4 py-4 text-center">No payments yet.</p>
+ ) : (
+ <table className={tableCls}>
+ <thead>
+ <tr className={theadTrCls}>
+ <Th>Date</Th>
+ <Th align="right">Amount</Th>
+ <Th>Type</Th>
+ <Th>Remarks</Th>
+ </tr>
+ </thead>
+ <tbody>
+ {loan.payments!.map((p) => (
+ <tr key={p.id} className={trCls}>
+ <Td mono>{formatDate(p.payment_date)}</Td>
+ <Td align="right" mono className="font-medium">{formatPeso(p.amount)}</Td>
+ <Td>{p.payment_type_label ?? p.payment_type}</Td>
+ <Td className="text-muted">{p.remarks ?? '—'}</Td>
+ </tr>
+ ))}
+ </tbody>
+ </table>
+ )}
+ </Panel>
+ </div>
 
-        <div className="space-y-4">
-          <Panel title="Approval chain">
-            {loan.approval_records && loan.approval_records.length > 0 ? (
-              <ApprovalTimeline steps={fromApprovalRecords(loan.approval_records)} />
-            ) : (
-              <>
-                <p className="text-sm text-muted mb-2">{loan.approval_chain_size}-step workflow.</p>
-                <p className="text-xs text-muted">
-                  {loan.loan_type === 'company_loan'
-                    ? 'Dept Head → Manager → Accounting → VP'
-                    : 'Dept Head → Accounting → VP'}
-                </p>
-                <p className="text-xs text-muted mt-2">
-                  Status: <Chip variant={chipVariantForStatus(loan.status)}>{loan.status_label ?? loan.status}</Chip>
-                </p>
-              </>
-            )}
-          </Panel>
-          <Panel title="Employee">
-            <div className="text-sm">
-              <div className="font-medium">{loan.employee?.full_name}</div>
-              <div className="text-xs text-muted font-mono">{loan.employee?.employee_no}</div>
-            </div>
-          </Panel>
-        </div>
-      </div>
+ <div className="space-y-4">
+ <Panel title="Approval chain">
+ {loan.approval_records && loan.approval_records.length > 0 ? (
+ <ApprovalTimeline steps={fromApprovalRecords(loan.approval_records)} />
+ ) : (
+ <>
+ <p className="text-sm text-muted mb-2">{loan.approval_chain_size}-step workflow.</p>
+ <p className="text-xs text-muted">
+ {loan.loan_type === 'company_loan'
+ ? 'Dept Head → Manager → Accounting → VP'
+ : 'Dept Head → Accounting → VP'}
+ </p>
+ <p className="text-xs text-muted mt-2">
+ Status: <Chip variant={chipVariantForStatus(loan.status)}>{loan.status_label ?? loan.status}</Chip>
+ </p>
+ </>
+ )}
+ </Panel>
+ <Panel title="Employee">
+ <div className="text-sm">
+ <div className="font-medium">{loan.employee?.full_name}</div>
+ <div className="text-xs text-muted font-mono">{loan.employee?.employee_no}</div>
+ </div>
+ </Panel>
+ </div>
+ </div>
 
-      {reject && (
-        <Modal isOpen onClose={() => { setReject(false); setReason(''); }} size="sm" title="Reject loan request">
-          <Textarea label="Reason for rejection" required value={reason} onChange={(e) => setReason(e.target.value)} rows={3} />
-          <div className="flex justify-end gap-2 pt-3 mt-3 border-t border-default">
-            <Button variant="secondary" onClick={() => { setReject(false); setReason(''); }}>Cancel</Button>
-            <Button variant="danger" disabled={!reason.trim() || rejectMut.isPending} loading={rejectMut.isPending} onClick={() => rejectMut.mutate()}>
-              {rejectMut.isPending ? 'Rejecting…' : 'Confirm reject'}
-            </Button>
-          </div>
-        </Modal>
-      )}
+ {reject && (
+ <Modal isOpen onClose={() => { setReject(false); setReason(''); }} size="sm" title="Reject loan request">
+ <Textarea label="Reason for rejection" required value={reason} onChange={(e) => setReason(e.target.value)} rows={3} />
+ <div className="flex justify-end gap-2 pt-3 mt-3 border-t border-default">
+ <Button variant="secondary" onClick={() => { setReject(false); setReason(''); }}>Cancel</Button>
+ <Button variant="danger" disabled={!reason.trim() || rejectMut.isPending} loading={rejectMut.isPending} onClick={() => rejectMut.mutate()}>
+ {rejectMut.isPending ? 'Rejecting…' : 'Confirm reject'}
+ </Button>
+ </div>
+ </Modal>
+ )}
 
-      <ConfirmDialog
-        isOpen={confirmApprove}
-        onClose={() => setConfirmApprove(false)}
-        onConfirm={() => { approve.mutate(); setConfirmApprove(false); }}
-        title="Approve loan request?"
-        description="This will approve and disburse the loan."
-        confirmLabel="Approve"
-        variant="warning"
-        pending={approve.isPending}
-      />
+ <ConfirmDialog
+ isOpen={confirmApprove}
+ onClose={() => setConfirmApprove(false)}
+ onConfirm={() => { approve.mutate(); setConfirmApprove(false); }}
+ title="Approve loan request?"
+ description="This will approve and disburse the loan."
+ confirmLabel="Approve"
+ variant="warning"
+ pending={approve.isPending}
+ />
 
-      <ConfirmDialog
-        isOpen={confirmCancel}
-        onClose={() => setConfirmCancel(false)}
-        onConfirm={() => { cancel.mutate(); setConfirmCancel(false); }}
-        title="Cancel loan request?"
-        confirmLabel="Yes, cancel"
-        variant="danger"
-        pending={cancel.isPending}
-      />
-    </div>
-  );
+ <ConfirmDialog
+ isOpen={confirmCancel}
+ onClose={() => setConfirmCancel(false)}
+ onConfirm={() => { cancel.mutate(); setConfirmCancel(false); }}
+ title="Cancel loan request?"
+ confirmLabel="Yes, cancel"
+ variant="danger"
+ pending={cancel.isPending}
+ />
+ </div>
+ );
 }
 
 function Stat({ label, value, variant = 'neutral' }: { label: string; value: string; variant?: 'success' | 'warning' | 'danger' | 'neutral' }) {
-  const colour = variant === 'success' ? 'text-success-fg' : variant === 'warning' ? 'text-warning-fg' : variant === 'danger' ? 'text-danger-fg' : 'text-primary';
-  return (
-    <div className="p-3 border border-default rounded-md bg-surface">
-      <div className="text-2xs uppercase tracking-wider text-muted font-medium mb-1">{label}</div>
-      <div className={`text-xl font-medium font-mono tabular-nums ${colour}`}>{value}</div>
-    </div>
-  );
+ const colour = variant === 'success' ? 'text-success-fg' : variant === 'warning' ? 'text-warning-fg' : variant === 'danger' ? 'text-danger-fg' : 'text-primary';
+ return (
+ <div className="p-3 border border-default rounded-md bg-surface">
+ <div className="text-2xs uppercase tracking-wider text-muted font-medium mb-1">{label}</div>
+ <div className={`text-xl font-medium font-mono tabular-nums ${colour}`}>{value}</div>
+ </div>
+ );
 }
 
 function Item({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
-  return (
-    <div>
-      <dt className="text-2xs uppercase tracking-wider text-muted font-medium">{label}</dt>
-      <dd className={mono ? 'font-mono tabular-nums' : ''}>{value}</dd>
-    </div>
-  );
+ return (
+ <div>
+ <dt className="text-2xs uppercase tracking-wider text-muted font-medium">{label}</dt>
+ <dd className={mono ? 'font-mono tabular-nums' : ''}>{value}</dd>
+ </div>
+ );
 }

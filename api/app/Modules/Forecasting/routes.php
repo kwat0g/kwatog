@@ -14,8 +14,13 @@ use Illuminate\Support\Facades\Route;
  */
 
 Route::middleware(['auth:sanctum', 'feature:forecasting'])->prefix('forecasting')->group(function () {
+    Route::get('/demand-forecasts/options', [DemandForecastController::class, 'options'])
+        ->middleware('permission:forecasting.view');
 
     /* ─── Demand forecasts ─── */
+    Route::get('/settings',
+        [DemandForecastController::class, 'settings'])
+        ->middleware('permission:forecasting.view');
     Route::get('/demand-forecasts',
         [DemandForecastController::class, 'index'])
         ->middleware('permission:forecasting.view');

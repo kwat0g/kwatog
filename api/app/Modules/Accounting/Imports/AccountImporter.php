@@ -12,7 +12,7 @@ use RuntimeException;
 
 /**
  * REC-03 — Chart of Accounts importer.
- * CSV columns: code, name, type, normal_balance, [description], [parent_code].
+ * CSV columns: code, name, type, normal_balance, [description], [parent_code], [is_active].
  */
 class AccountImporter implements EntityImporter
 {
@@ -55,14 +55,20 @@ class AccountImporter implements EntityImporter
             }
         }
 
-        return Account::create([
+        $payload = [
             'code'           => $code,
             'name'           => $name,
             'type'           => $type,
             'normal_balance' => $normal,
             'description'    => trim($row['description'] ?? '') ?: null,
             'parent_id'      => $parentId,
-            'is_active'      => true,
-        ]);
+        ];
+        $active = trim($row['is_active'] ?? '');
+        if ($active !== '') {
+            $payload['is_active'] = filter_var($active, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            if ($payload['is_active'] === null) throw new RuntimeException('is_active must be true or false.');
+        }
+
+        return Account::create($payload);
     }
 }

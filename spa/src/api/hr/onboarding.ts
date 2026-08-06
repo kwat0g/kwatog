@@ -13,13 +13,13 @@ type Wrapped<T> = { data: T } & Partial<T>;
 const unwrap = <T,>(payload: Wrapped<T>): T => (payload?.data ?? (payload as unknown as T));
 
 export const onboardingApi = {
-  show: (employeeId: string) =>
-    client
-      .get<Wrapped<EmployeeOnboarding>>(`/hr/employees/${employeeId}/onboarding`)
-      .then((r) => unwrap<EmployeeOnboarding>(r.data)),
+ show: (employeeId: string) =>
+ client
+ .get<Wrapped<EmployeeOnboarding>>(`/hr/employees/${employeeId}/onboarding`)
+ .then((r) => unwrap<EmployeeOnboarding>(r.data)),
 
-  recompute: (employeeId: string) =>
-    client
-      .post<Wrapped<EmployeeOnboarding>>(`/hr/employees/${employeeId}/onboarding/recompute`)
-      .then((r) => unwrap<EmployeeOnboarding>(r.data)),
+ recompute: (employeeId: string) =>
+ client
+ .post<Wrapped<EmployeeOnboarding>>(`/hr/employees/${employeeId}/onboarding/recompute`)
+ .then((r) => unwrap<EmployeeOnboarding>(r.data)),
 };

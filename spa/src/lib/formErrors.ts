@@ -9,53 +9,53 @@ import type { ApiValidationError } from '@/types';
  * root messages (like `defects.root.message`).
  */
 function collectMessages(errors: Record<string, unknown>): string[] {
-  const msgs: string[] = [];
+ const msgs: string[] = [];
 
-  for (const val of Object.values(errors)) {
-    if (!val || typeof val !== 'object') continue;
-    const node = val as Record<string, unknown>;
+ for (const val of Object.values(errors)) {
+ if (!val || typeof val !== 'object') continue;
+ const node = val as Record<string, unknown>;
 
-    // Leaf error: { message: "..." }
-    if (typeof node.message === 'string' && node.message) {
-      msgs.push(node.message);
-      continue;
-    }
+ // Leaf error: { message: "..." }
+ if (typeof node.message === 'string' && node.message) {
+ msgs.push(node.message);
+ continue;
+ }
 
-    // Array root error: { root: { message: "..." } }
-    const root = node.root as Record<string, unknown> | undefined;
-    if (root && typeof root.message === 'string' && root.message) {
-      msgs.push(root.message);
-    }
+ // Array root error: { root: { message: "..." } }
+ const root = node.root as Record<string, unknown> | undefined;
+ if (root && typeof root.message === 'string' && root.message) {
+ msgs.push(root.message);
+ }
 
-    // Recurse into nested objects / array items
-    msgs.push(...collectMessages(node));
-  }
+ // Recurse into nested objects / array items
+ msgs.push(...collectMessages(node));
+ }
 
-  // Deduplicate
-  return [...new Set(msgs)];
+ // Deduplicate
+ return [...new Set(msgs)];
 }
 
 export function onFormInvalid<T extends FieldValues>(
-  _labels?: Partial<Record<keyof T & string, string>>,
+ _labels?: Partial<Record<keyof T & string, string>>,
 ): (errors: FieldErrors<T>) => void {
-  return (errors) => {
-    const messages = collectMessages(errors as Record<string, unknown>);
+ return (errors) => {
+ const messages = collectMessages(errors as Record<string, unknown>);
 
-    if (messages.length === 0) {
-      toast.error('Please fix the highlighted fields before submitting.', { duration: 5000 });
-      return;
-    }
+ if (messages.length === 0) {
+ toast.error('Please fix the highlighted fields before submitting.', { duration: 5000 });
+ return;
+ }
 
-    if (messages.length === 1) {
-      toast.error(messages[0], { duration: 5000 });
-      return;
-    }
+ if (messages.length === 1) {
+ toast.error(messages[0], { duration: 5000 });
+ return;
+ }
 
-    // Multiple: show up to 3 specific messages, then "and N more"
-    const head = messages.slice(0, 3);
-    const more = messages.length > 3 ? `\n• …and ${messages.length - 3} more` : '';
-    toast.error(`Please fix the following:\n• ${head.join('\n• ')}${more}`, { duration: 6000 });
-  };
+ // Multiple: show up to 3 specific messages, then "and N more"
+ const head = messages.slice(0, 3);
+ const more = messages.length > 3 ? `\n• …and ${messages.length - 3} more` : '';
+ toast.error(`Please fix the following:\n• ${head.join('\n• ')}${more}`, { duration: 6000 });
+ };
 }
 
 
@@ -65,24 +65,24 @@ export function onFormInvalid<T extends FieldValues>(
  * fall back to a generic toast).
  */
 export function applyServerValidationErrors<T extends FieldValues>(
-  err: unknown,
-  setError: UseFormSetError<T>,
-  fallbackMessage = 'Failed to save. Please try again.',
+ err: unknown,
+ setError: UseFormSetError<T>,
+ fallbackMessage = 'Failed to save. Please try again.',
 ): boolean {
-  if (err instanceof AxiosError && err.response?.status === 422) {
-    const data = err.response.data as ApiValidationError;
-    if (data.errors) {
-      Object.entries(data.errors).forEach(([field, msgs]) => {
-        setError(field as Path<T>, { type: 'server', message: msgs[0] });
-      });
-      toast.error('The server flagged some fields. Please review and try again.');
-      return true;
-    }
-    if (data.message) {
-      toast.error(data.message);
-      return true;
-    }
-  }
-  toast.error(fallbackMessage);
-  return false;
+ if (err instanceof AxiosError && err.response?.status === 422) {
+ const data = err.response.data as ApiValidationError;
+ if (data.errors) {
+ Object.entries(data.errors).forEach(([field, msgs]) => {
+ setError(field as Path<T>, { type: 'server', message: msgs[0] });
+ });
+ toast.error('The server flagged some fields. Please review and try again.');
+ return true;
+ }
+ if (data.message) {
+ toast.error(data.message);
+ return true;
+ }
+ }
+ toast.error(fallbackMessage);
+ return false;
 }

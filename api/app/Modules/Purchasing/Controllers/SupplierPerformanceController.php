@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Purchasing\Controllers;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Purchasing\Services\SupplierPerformanceService;
 use Illuminate\Http\JsonResponse;
@@ -15,14 +16,18 @@ use Illuminate\Support\Carbon;
  */
 class SupplierPerformanceController
 {
-    public function __construct(private readonly SupplierPerformanceService $service) {}
+    public function __construct(
+        private readonly SupplierPerformanceService $service,
+        private readonly SettingsService $settings,
+    ) {}
 
     /**
-     * GET /api/v1/purchasing/vendors/{vendor}/performance?months=6
+     * GET /api/v1/purchasing/vendors/{vendor}/performance?months=optional
      */
     public function show(Request $request, Vendor $vendor): JsonResponse
     {
-        $months = (int) max(1, min(24, (int) $request->query('months', 6)));
+        $defaultMonths = $this->settings->requiredInt('purchasing.supplier_score.trend_months', 1, 36);
+        $months = (int) max(1, min(36, (int) $request->query('months', $defaultMonths)));
         $snapshots = $this->service->trendForVendor($vendor, $months);
 
         $latest = $snapshots->last();
@@ -45,14 +50,23 @@ class SupplierPerformanceController
                     'price_variance_pct'      => $latest->price_variance_pct,
                     'lead_time_variance_days' => $latest->lead_time_variance_days,
                     'overall_score'           => $latest->overall_score,
+                    'tier'                    => $latest->tier,
                     'po_count'                => $latest->po_count,
                     'grn_count'               => $latest->grn_count,
                     'computed_at'             => $latest->computed_at?->toIso8601String(),
                 ] : null,
+                'policy' => [
+                    'trend_months' => $defaultMonths,
+                    'on_time_target' => $this->settings->requiredFloat('purchasing.supplier_score.on_time_target', 0, 100),
+                    'quality_target' => $this->settings->requiredFloat('purchasing.supplier_score.quality_target', 0, 100),
+                    'price_variance_target' => $this->settings->requiredFloat('purchasing.supplier_score.price_variance_target', 0),
+                    'lead_time_variance_target' => $this->settings->requiredFloat('purchasing.supplier_score.lead_time_variance_target', 0),
+                ],
                 'trend' => $snapshots->map(fn ($s) => [
                     'period_year'           => $s->period_year,
                     'period_month'          => $s->period_month,
                     'overall_score'         => $s->overall_score,
+                    'tier'                  => $s->tier,
                     'on_time_delivery_rate' => $s->on_time_delivery_rate,
                     'quality_pass_rate'     => $s->quality_pass_rate,
                     'incoming_quality_rate' => $s->incoming_quality_rate,

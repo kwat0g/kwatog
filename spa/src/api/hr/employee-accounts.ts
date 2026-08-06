@@ -1,8 +1,8 @@
 import { client } from '../client';
 import type {
-  EmployeeAccountStatus,
-  ProvisionAccountPayload,
-  BulkProvisionResponse,
+ EmployeeAccountStatus,
+ ProvisionAccountPayload,
+ BulkProvisionResponse,
 } from '@/types/hr';
 
 /**
@@ -11,38 +11,38 @@ import type {
  * IDs are HashID strings on the wire.
  */
 export const employeeAccountsApi = {
-  status: (employeeId: string) =>
-    // Laravel wraps a JsonResource in `{ data: ... }`; unwrap one level so
-    // the consumer gets a flat EmployeeAccountStatus.
-    client
-      .get<{ data?: EmployeeAccountStatus } & EmployeeAccountStatus>(
-        `/hr/employees/${employeeId}/account-status`,
-      )
-      .then((r) => r.data?.data ?? (r.data as unknown as EmployeeAccountStatus)),
+ status: (employeeId: string) =>
+ // Laravel wraps a JsonResource in `{ data: ... }`; unwrap one level so
+ // the consumer gets a flat EmployeeAccountStatus.
+ client
+ .get<{ data?: EmployeeAccountStatus } & EmployeeAccountStatus>(
+ `/hr/employees/${employeeId}/account-status`,
+ )
+ .then((r) => r.data?.data ?? (r.data as unknown as EmployeeAccountStatus)),
 
-  provision: (employeeId: string, payload?: ProvisionAccountPayload) =>
-    client
-      .post<{ message: string; data: { id: string; email: string; name: string } }>(
-        `/hr/employees/${employeeId}/provision-account`,
-        payload ?? {},
-      )
-      .then((r) => r.data),
+ provision: (employeeId: string, payload?: ProvisionAccountPayload) =>
+ client
+ .post<{ message: string; data: { id: string; email: string; name: string } }>(
+ `/hr/employees/${employeeId}/provision-account`,
+ payload ?? {},
+ )
+ .then((r) => r.data),
 
-  deactivate: (employeeId: string) =>
-    client.post(`/hr/employees/${employeeId}/deactivate-account`),
+ deactivate: (employeeId: string) =>
+ client.post(`/hr/employees/${employeeId}/deactivate-account`),
 
-  resetPassword: (employeeId: string) =>
-    client
-      .patch<{ message: string; sent_to: string | null }>(
-        `/hr/employees/${employeeId}/reset-password`,
-      )
-      .then((r) => r.data),
+ resetPassword: (employeeId: string) =>
+ client
+ .patch<{ message: string; sent_to: string | null }>(
+ `/hr/employees/${employeeId}/reset-password`,
+ )
+ .then((r) => r.data),
 
-  bulkProvision: (employeeIds: string[], sendWelcome = true) =>
-    client
-      .post<BulkProvisionResponse>('/hr/employees/bulk-provision-accounts', {
-        employee_ids: employeeIds,
-        send_welcome: sendWelcome,
-      })
-      .then((r) => r.data),
+ bulkProvision: (employeeIds: string[], sendWelcome = true) =>
+ client
+ .post<BulkProvisionResponse>('/hr/employees/bulk-provision-accounts', {
+ employee_ids: employeeIds,
+ send_welcome: sendWelcome,
+ })
+ .then((r) => r.data),
 };

@@ -46,6 +46,12 @@ class RoleController
         return response()->json(null, 204);
     }
 
+    public function restore(Role $role): JsonResponse
+    {
+        $role->restore();
+        return response()->json(['message' => 'Role restored.']);
+    }
+
     public function syncPermissions(SyncRolePermissionsRequest $request, Role $role): RoleResource
     {
         $role = $this->service->syncPermissions($role, $request->validated('permission_slugs'));

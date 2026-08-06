@@ -6,6 +6,7 @@ namespace App\Modules\Quality\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Str;
 
 class NcrActionResource extends JsonResource
 {
@@ -14,6 +15,7 @@ class NcrActionResource extends JsonResource
         return [
             'id'           => $this->hash_id,
             'action_type'  => $this->action_type instanceof \BackedEnum ? $this->action_type->value : $this->action_type,
+            'action_type_label' => Str::headline((string) ($this->action_type instanceof \BackedEnum ? $this->action_type->value : $this->action_type)),
             'description'  => $this->description,
             'performed_at' => optional($this->performed_at)?->toISOString(),
             'performer'    => $this->whenLoaded('performer', fn () => $this->performer ? [

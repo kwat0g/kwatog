@@ -53,6 +53,12 @@ class BomController
         return response()->json(null, 204);
     }
 
+    public function restore(Bom $bom): JsonResponse
+    {
+        $bom->restore();
+        return response()->json(['message' => 'BOM restored.']);
+    }
+
     /** GET /products/{product}/bom — used by product detail page. */
     public function forProduct(Product $product): JsonResponse|BomResource
     {

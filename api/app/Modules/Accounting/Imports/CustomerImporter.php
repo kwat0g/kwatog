@@ -13,7 +13,7 @@ use RuntimeException;
 /**
  * REC-03 — customer master importer.
  * CSV columns: name (required); optional code, contact_person, email, phone,
- * address, tin, credit_limit, payment_terms_days.
+ * address, tin, credit_limit, payment_terms_days, is_active.
  */
 class CustomerImporter implements EntityImporter
 {
@@ -47,7 +47,7 @@ class CustomerImporter implements EntityImporter
         $terms = trim($row['payment_terms_days'] ?? '');
         $credit = trim($row['credit_limit'] ?? '');
 
-        return Customer::create([
+        $payload = [
             'name'               => $name,
             'code'               => $code,
             'contact_person'     => trim($row['contact_person'] ?? '') ?: null,
@@ -57,7 +57,13 @@ class CustomerImporter implements EntityImporter
             'tin'                => trim($row['tin'] ?? '') ?: null,
             'credit_limit'       => $credit !== '' ? $credit : null,
             'payment_terms_days' => $terms !== '' ? (int) $terms : $this->policies->customerPaymentTermsDays(),
-            'is_active'          => true,
-        ]);
+        ];
+        $active = trim($row['is_active'] ?? '');
+        if ($active !== '') {
+            $payload['is_active'] = filter_var($active, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            if ($payload['is_active'] === null) throw new RuntimeException('is_active must be true or false.');
+        }
+
+        return Customer::create($payload);
     }
 }

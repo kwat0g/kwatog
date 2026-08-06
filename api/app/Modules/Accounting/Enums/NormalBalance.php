@@ -14,4 +14,12 @@ enum NormalBalance: string
     {
         return array_map(fn (self $c) => $c->value, self::cases());
     }
+
+    public function label(): string
+    {
+        return match ($this) {
+            self::Debit => 'Debit',
+            self::Credit => 'Credit',
+        };
+    }
 }

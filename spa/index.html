@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="description" content="Ogami ERP — Manufacturing operations for Philippine Ogami Corporation" />
+    <meta name="description" content="Manufacturing operations and enterprise resource planning" />
     <!--
       Canonical CSP is enforced via nginx headers. This meta tag is defense-in-depth
       for misconfigured static hosting / dev servers. It intentionally omits
@@ -12,7 +12,7 @@
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:; connect-src 'self' ws: wss:;"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: https://*.tile.openstreetmap.org; connect-src 'self' ws: wss:;"
     />
 
     <!-- Geist + Geist Mono — self-hosted fonts (woff2) for production independence. -->
@@ -21,14 +21,14 @@
          manifest at runtime based on URL path. The default link below is the
          factory/shop-floor manifest; it is swapped via JS for /driver paths. -->
     <link rel="manifest" href="/factory-manifest.webmanifest" />
-    <meta name="theme-color" content="#4f46e5" />
+    <meta name="theme-color" content="#ffffff" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="Ogami SF" />
+    <meta name="apple-mobile-web-app-title" content="ERP" />
     <link rel="apple-touch-icon" href="/ogami-icon-192.png" />
 
-    <title>Ogami ERP</title>
+    <title>ERP</title>
   </head>
   <body>
     <div id="root"></div>

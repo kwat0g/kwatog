@@ -29,7 +29,15 @@ class AutoReplenishmentAttributionTest extends TestCase
         $admin = User::factory()->create(['role_id' => $role->id]);
 
         // Item below reorder point with no stock → available (0) <= reorder.
-        $item = Item::factory()->create(['is_active' => true, 'reorder_point' => 100, 'safety_stock' => 10]);
+        // standard_cost must be > 0: AutoReplenishmentService refuses to raise a
+        // replenishment request with a zero-valued estimate ("master data must be
+        // completed first"), and ItemFactory defaults the column to 0.
+        $item = Item::factory()->create([
+            'is_active'     => true,
+            'reorder_point' => 100,
+            'safety_stock'  => 10,
+            'standard_cost' => '25.00',
+        ]);
 
         $pr = app(AutoReplenishmentService::class)->checkAndReplenish($item->id);
 

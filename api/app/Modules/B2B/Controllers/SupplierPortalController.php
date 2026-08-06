@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace App\Modules\B2B\Controllers;
 
 use App\Modules\Accounting\Models\Bill;
+use App\Modules\Accounting\Enums\BillStatus;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Resources\BillResource;
 use App\Modules\Accounting\Services\PdfService;
 use App\Modules\B2B\Models\SupplierPortalUser;
+use App\Modules\B2B\Enums\SupplierShippingDocumentType;
 use App\Modules\B2B\Requests\Supplier\AcknowledgePoRequest;
 use App\Modules\B2B\Requests\Supplier\ShipmentUpdateRequest;
 use App\Modules\B2B\Requests\Supplier\StoreDeliveryScheduleRequest;
@@ -38,6 +40,16 @@ class SupplierPortalController extends Controller
         /** @var SupplierPortalUser $user */
         $user = $request->user('supplier_portal');
         return $user;
+    }
+
+    public function shippingDocumentOptions(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'document_types' => array_map(
+                static fn (SupplierShippingDocumentType $type): array => ['value' => $type->value, 'label' => $type->label()],
+                SupplierShippingDocumentType::cases(),
+            ),
+        ]]);
     }
 
     /**
@@ -186,6 +198,7 @@ class SupplierPortalController extends Controller
                 'bill_number'  => $bill->bill_number,
                 'total_amount' => (string) $bill->total_amount,
                 'status'       => (string) $bill->status?->value,
+                'status_label' => BillStatus::tryFrom((string) $bill->status?->value)?->label() ?? (string) $bill->status,
             ],
             'message' => $result['message'],
         ], 201);

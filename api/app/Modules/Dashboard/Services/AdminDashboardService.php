@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace App\Modules\Dashboard\Services;
 
 use App\Modules\Auth\Models\User;
+use App\Common\Services\SettingsService;
+use App\Modules\Admin\Enums\LoginHistoryStatus;
 use App\Modules\Dashboard\Services\Concerns\DashboardQueries;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 /**
  * System Administrator dashboard — system health and security monitoring.
@@ -23,6 +26,8 @@ class AdminDashboardService
     use DashboardQueries;
 
     private const CACHE_TTL = 30;
+
+    public function __construct(private readonly SettingsService $settings) {}
 
     public function admin(User $user): array
     {
@@ -45,9 +50,9 @@ class AdminDashboardService
 
     private function systemKpis(): array
     {
-        // Active sessions in last 30 minutes
+        $activeWindowMinutes = $this->activeWindowMinutes();
         $activeSessions = $this->safeCount('sessions', fn ($q) =>
-            $q->where('last_activity', '>=', now()->subMinutes(30)->timestamp)
+            $q->where('last_activity', '>=', now()->subMinutes($activeWindowMinutes)->timestamp)
         );
 
         // Locked accounts right now
@@ -57,10 +62,11 @@ class AdminDashboardService
               ->whereNull('deleted_at')
         );
 
-        // Failed login attempts in last 24h
+        $authWindowHours = $this->authHistoryWindowHours();
+        // Failed login attempts in the configured history window.
         $failedLogins = $this->safeCount('login_history', fn ($q) =>
-            $q->whereIn('status', ['failed_credentials', 'failed_locked', 'failed_inactive', 'failed_password_expired'])
-              ->where('created_at', '>=', now()->subHours(24))
+            $q->whereIn('status', LoginHistoryStatus::failureValues())
+              ->where('created_at', '>=', now()->subHours($authWindowHours))
         );
 
         // Failed background jobs
@@ -69,7 +75,7 @@ class AdminDashboardService
         return [
             $this->kpi('Active Sessions',     (string) $activeSessions, 'sessions'),
             $this->kpi('Locked Accounts',     (string) $lockedAccounts, 'accounts'),
-            $this->kpi('Failed Logins (24h)', (string) $failedLogins,   'attempts'),
+            $this->kpi("Failed Logins ({$authWindowHours}h)", (string) $failedLogins,   'attempts'),
             $this->kpi('Failed Jobs',         (string) $failedJobs,     'jobs'),
         ];
     }
@@ -78,11 +84,12 @@ class AdminDashboardService
 
     private function activeSessions(): array
     {
+        $activeWindowMinutes = $this->activeWindowMinutes();
         if (! Schema::hasTable('sessions') || ! Schema::hasTable('users')) {
-            return ['sessions' => [], 'total' => 0, 'unique_users' => 0];
+            return ['sessions' => [], 'total' => 0, 'unique_users' => 0, 'active_window_minutes' => $activeWindowMinutes];
         }
 
-        $cutoff = now()->subMinutes(30)->timestamp;
+        $cutoff = now()->subMinutes($activeWindowMinutes)->timestamp;
 
         $rows = DB::table('sessions as s')
             ->leftJoin('users as u', 'u.id', '=', 's.user_id')
@@ -117,7 +124,16 @@ class AdminDashboardService
             'sessions'     => $sessions,
             'total'        => (int) $total,
             'unique_users' => (int) $uniqueUsers,
+            'active_window_minutes' => $activeWindowMinutes,
         ];
+    }
+
+    private function activeWindowMinutes(): int
+    {
+        return max(
+            $this->settings->requiredInt('security.session_timeout_employee', 5),
+            $this->settings->requiredInt('security.session_timeout_default', 5),
+        );
     }
 
     // ── Account Security ─────────────────────────────────────────────────────
@@ -190,11 +206,12 @@ class AdminDashboardService
 
     private function authEvents(): array
     {
-        // 24h breakdown by status
+        $windowHours = $this->authHistoryWindowHours();
+        // Configured-window breakdown by status.
         $breakdown = [];
         if (Schema::hasTable('login_history')) {
             $rows = DB::table('login_history')
-                ->where('created_at', '>=', now()->subHours(24))
+                ->where('created_at', '>=', now()->subHours($windowHours))
                 ->select('status', DB::raw('COUNT(*) as total'))
                 ->groupBy('status')
                 ->get();
@@ -204,18 +221,18 @@ class AdminDashboardService
             }
         }
 
-        // 24h hourly trend (successful logins)
+        // Hourly trend (successful logins) across the configured window.
         $successTrend = [];
         if (Schema::hasTable('login_history')) {
             $hourRows = DB::table('login_history')
                 ->where('status', 'success')
-                ->where('created_at', '>=', now()->subHours(23)->startOfHour())
+                ->where('created_at', '>=', now()->subHours($windowHours - 1)->startOfHour())
                 ->selectRaw("date_trunc('hour', created_at) as hour, COUNT(*) as total")
                 ->groupByRaw("date_trunc('hour', created_at)")
                 ->pluck('total', 'hour')
                 ->toArray();
 
-            for ($i = 23; $i >= 0; $i--) {
+            for ($i = $windowHours - 1; $i >= 0; $i--) {
                 $hour = now()->subHours($i)->startOfHour()->toISOString();
                 $successTrend[] = (int) ($hourRows[$hour] ?? 0);
             }
@@ -226,8 +243,8 @@ class AdminDashboardService
         if (Schema::hasTable('login_history')) {
             $rows = DB::table('login_history as lh')
                 ->leftJoin('users as u', 'u.id', '=', 'lh.user_id')
-                ->whereIn('lh.status', ['failed_credentials', 'failed_locked', 'failed_inactive', 'failed_password_expired'])
-                ->where('lh.created_at', '>=', now()->subHours(24))
+                ->whereIn('lh.status', LoginHistoryStatus::failureValues())
+                ->where('lh.created_at', '>=', now()->subHours($windowHours))
                 ->orderByDesc('lh.created_at')
                 ->limit(20)
                 ->select(['lh.email_attempted', 'lh.status', 'lh.reason', 'lh.ip_address', 'lh.created_at'])
@@ -247,8 +264,18 @@ class AdminDashboardService
         return [
             'breakdown_24h'   => $breakdown,
             'success_trend_24h' => $successTrend,
+            'window_hours' => $windowHours,
             'recent_failures' => $recentFailed,
+            'status_options' => array_map(
+                static fn (LoginHistoryStatus $status): array => ['value' => $status->value, 'label' => $status->label()],
+                LoginHistoryStatus::cases(),
+            ),
         ];
+    }
+
+    private function authHistoryWindowHours(): int
+    {
+        return $this->settings->requiredInt('security.auth_history_window_hours', 24);
     }
 
     // ── Queue Health ─────────────────────────────────────────────────────────
@@ -282,7 +309,7 @@ class AdminDashboardService
             'pending_jobs'   => $pendingJobs,
             'failed_jobs'    => $failedJobs,
             'recent_failed'  => $recentFailed,
-            'healthy'        => $failedJobs === 0 && $pendingJobs < 100,
+            'healthy'        => $failedJobs === 0 && $pendingJobs < $this->settings->requiredInt('dashboard.admin.pending_jobs_warning_threshold', 0),
         ];
     }
 
@@ -340,6 +367,7 @@ class AdminDashboardService
                 'id'         => app('hashids')->encode((int) $row->id),
                 'type'       => $row->type,
                 'severity'   => $row->severity,
+                'severity_label' => Str::headline((string) $row->severity),
                 'title'      => $row->title,
                 'message'    => $row->message,
                 'created_at' => $row->created_at,

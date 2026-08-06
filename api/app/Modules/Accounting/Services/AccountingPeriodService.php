@@ -81,9 +81,9 @@ class AccountingPeriodService
      * Reopen a closed period with an audit reason. Sets status=reopened and
      * records who/why. Posting into a reopened period is allowed again.
      *
-     * TODO(OGAMI-001): time-boxed relock — auto-close a reopened period after
-     * an admin-defined window (e.g. 48h) so a reopen can't be left open
-     * indefinitely. Out of scope for the initial lock; tracked as a follow-up.
+     * (OGAMI-001): time-boxed relock — the `accounting:relock-periods` cron
+     * automatically closes these after a defined window (48h default) to prevent
+     * indefinite reopens.
      */
     public function reopen(int $year, int $month, User $by, string $reason): AccountingPeriod
     {
@@ -141,5 +141,33 @@ class AccountingPeriodService
         if ($month < 1 || $month > 12) {
             throw new RuntimeException("Invalid month {$month}; expected 1-12.");
         }
+    }
+
+    /**
+     * Auto-relock reopened periods that have been open longer than $hours.
+     * Run by the scheduler to ensure periods aren't left reopened indefinitely.
+     */
+    public function relockStaleReopenedPeriods(int $hours = 48): int
+    {
+        $stalePeriods = AccountingPeriod::query()
+            ->where('status', AccountingPeriodStatus::Reopened)
+            ->whereNotNull('reopened_at')
+            ->where('reopened_at', '<', now()->subHours($hours))
+            ->get();
+
+        $count = 0;
+        foreach ($stalePeriods as $period) {
+            $period->status = AccountingPeriodStatus::Closed;
+            $period->closed_at = now();
+            // We preserve the last closed_by since it was an automated systemic close,
+            // or we could null it. Preserving the historical closer is fine.
+            $period->reopened_at = null;
+            $period->reopened_by = null;
+            $period->reopen_reason = null;
+            $period->save();
+            $count++;
+        }
+
+        return $count;
     }
 }

@@ -6,6 +6,7 @@ namespace App\Modules\Quality\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Str;
 
 /**
  * @mixin \App\Modules\Quality\Models\CalibrationRecord
@@ -23,6 +24,7 @@ class CalibrationRecordResource extends JsonResource
             'next_calibration_date' => optional($this->next_calibration_date)->toDateString(),
             'frequency_days'        => $this->frequency_days,
             'status'                => $this->status instanceof \BackedEnum ? $this->status->value : $this->status,
+            'status_label'          => Str::headline((string) ($this->status instanceof \BackedEnum ? $this->status->value : $this->status)),
             'responsible'           => $this->responsible,
             'remarks'               => $this->remarks,
             'created_at'            => optional($this->created_at)->toIso8601String(),

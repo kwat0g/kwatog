@@ -5,11 +5,16 @@ declare(strict_types=1);
 namespace App\Modules\Quality\Controllers;
 
 use App\Modules\Quality\Models\Inspection;
+use App\Modules\Quality\Enums\InspectionStage;
+use App\Modules\Quality\Enums\InspectionStatus;
+use App\Modules\Quality\Enums\InspectionEntityType;
+use App\Modules\Quality\Enums\QualityPlanSamplingMethod;
 use App\Modules\Quality\Requests\CreateInspectionRequest;
 use App\Modules\Quality\Requests\RecordMeasurementsRequest;
 use App\Modules\Quality\Resources\InspectionResource;
 use App\Modules\Quality\Services\CoCService;
 use App\Modules\Quality\Services\InspectionService;
+use App\Common\Services\SettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -17,7 +22,10 @@ use Illuminate\Http\Response;
 
 class InspectionController
 {
-    public function __construct(private readonly InspectionService $service) {}
+    public function __construct(
+        private readonly InspectionService $service,
+        private readonly SettingsService $settings,
+    ) {}
 
     /**
      * @OA\Get(
@@ -39,6 +47,36 @@ class InspectionController
         return InspectionResource::collection($this->service->list($request->query()));
     }
 
+    public function options(): JsonResponse
+    {
+        $aqlLevel = (string) $this->settings->requiredString('quality.aql.default_level');
+        $aqlLabel = 'AQL '.ucwords(str_replace('_', ' ', $aqlLevel));
+
+        return response()->json(['data' => [
+            'stages' => array_map(
+                static fn (InspectionStage $stage): array => ['value' => $stage->value, 'label' => $stage->label()],
+                InspectionStage::cases(),
+            ),
+            'entity_types' => array_map(
+                static fn (InspectionEntityType $type): array => ['value' => $type->value, 'label' => str_replace('_', ' ', ucfirst($type->value))],
+                InspectionEntityType::cases(),
+            ),
+            'statuses' => array_map(
+                static fn (InspectionStatus $status): array => ['value' => $status->value, 'label' => str_replace('_', ' ', ucfirst($status->value))],
+                InspectionStatus::cases(),
+            ),
+            'measurement_results' => [
+                ['value' => 'pass', 'label' => 'Pass'],
+                ['value' => 'fail', 'label' => 'Fail'],
+            ],
+            'sampling_methods' => [
+                ['stage' => InspectionStage::Incoming->value, 'value' => QualityPlanSamplingMethod::Full->value, 'label' => QualityPlanSamplingMethod::Full->label()],
+                ['stage' => InspectionStage::InProcess->value, 'value' => QualityPlanSamplingMethod::Full->value, 'label' => QualityPlanSamplingMethod::Full->label()],
+                ['stage' => InspectionStage::Outgoing->value, 'value' => QualityPlanSamplingMethod::Aql->value, 'label' => $aqlLabel],
+            ],
+        ]]);
+    }
+
     /**
      * @OA\Get(
      *     path="/quality/inspections/{id}",
@@ -54,6 +92,23 @@ class InspectionController
     public function show(Inspection $inspection): InspectionResource
     {
         return new InspectionResource($this->service->show($inspection));
+    }
+
+    public function chain(Inspection $inspection): JsonResponse
+    {
+        $status = $inspection->status instanceof \BackedEnum
+            ? $inspection->status->value
+            : (string) $inspection->status;
+        $created = optional($inspection->created_at)?->toISOString();
+        $completed = optional($inspection->completed_at)?->toISOString();
+        $isTerminal = in_array($status, [InspectionStatus::Passed->value, InspectionStatus::Failed->value, InspectionStatus::Cancelled->value], true);
+
+        return response()->json(['data' => [
+            ['key' => 'opened', 'label' => 'Opened', 'state' => 'done', 'date' => $created],
+            ['key' => 'in_progress', 'label' => 'In progress', 'state' => $isTerminal ? 'done' : ($status === InspectionStatus::InProgress->value ? 'active' : 'pending'), 'date' => null],
+            ['key' => 'completed', 'label' => 'Completed', 'state' => in_array($status, [InspectionStatus::Passed->value, InspectionStatus::Failed->value], true) ? 'done' : 'pending', 'date' => $completed],
+            ['key' => 'cancelled', 'label' => 'Cancelled', 'state' => $status === InspectionStatus::Cancelled->value ? 'done' : 'pending', 'date' => $status === InspectionStatus::Cancelled->value ? ($completed ?? optional($inspection->updated_at)?->toISOString()) : null],
+        ]]);
     }
 
     /**

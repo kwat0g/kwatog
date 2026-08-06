@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Accounting\Controllers;
 
 use App\Modules\Accounting\Models\Invoice;
+use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Requests\StoreCollectionRequest;
 use App\Modules\Accounting\Requests\StoreInvoiceRequest;
 use App\Modules\Accounting\Resources\CollectionResource;
@@ -21,6 +22,16 @@ class InvoiceController
     public function index(Request $request): AnonymousResourceCollection
     {
         return InvoiceResource::collection($this->service->list($request->query()));
+    }
+
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'statuses' => array_map(static fn (InvoiceStatus $status): array => [
+                'value' => $status->value,
+                'label' => ucfirst($status->value),
+            ], InvoiceStatus::cases()),
+        ]]);
     }
 
     public function show(Invoice $invoice): InvoiceResource

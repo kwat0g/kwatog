@@ -9,6 +9,8 @@ use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use Illuminate\Foundation\Http\FormRequest;
+use App\Modules\SupplyChain\Enums\Incoterm;
+use Illuminate\Validation\Rule;
 
 class StorePurchaseOrderRequest extends FormRequest
 {
@@ -36,7 +38,7 @@ class StorePurchaseOrderRequest extends FormRequest
             'date'                   => ['nullable', 'date'],
             'expected_delivery_date' => ['nullable', 'date', 'after_or_equal:date'],
             'is_vatable'             => ['nullable', 'boolean'],
-            'incoterm'               => ['nullable', 'string', 'in:EXW,FCA,FAS,FOB,CFR,CIF,CPT,CIP,DAP,DPU,DDP'],
+            'incoterm'               => ['nullable', Rule::enum(Incoterm::class)],
             'remarks'                => ['nullable', 'string', 'max:1000'],
             'items'                  => ['required', 'array', 'min:1'],
             'items.*.item_id'        => ['required', 'integer', 'exists:items,id'],

@@ -20,6 +20,11 @@ class OvertimeController
 {
     public function __construct(private readonly OvertimeService $service) {}
 
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => $this->service->options()]);
+    }
+
     public function index(Request $request): AnonymousResourceCollection
     {
         return OvertimeRequestResource::collection($this->service->list($request->query(), $request->user()));
@@ -71,6 +76,43 @@ class OvertimeController
     {
         try {
             $ot = $this->service->reject($overtime, $request->user(), $request->input('reason'));
+        } catch (\RuntimeException $e) {
+            abort(422, $e->getMessage());
+        }
+
+        return new OvertimeRequestResource($ot);
+    }
+
+    /**
+     * Cancel a pending overtime request. The owning employee may withdraw
+     * their own; admins and OT approvers may cancel any pending one. Renders
+     * the same authorization shape as show() — department-scoped for approvers.
+     */
+    public function cancel(Request $request, OvertimeRequest $overtime): OvertimeRequestResource
+    {
+        $user = $request->user();
+        $isAdmin = $user?->role?->slug === 'system_admin';
+        $isOwner = (int) $user?->employee_id === (int) $overtime->employee_id;
+        $canCancel = $isAdmin || $isOwner;
+
+        if (! $canCancel && $user?->hasPermission('attendance.ot.approve') && $user->employee_id) {
+            $ownDepartment = Employee::query()
+                ->whereKey($user->employee_id)
+                ->value('department_id');
+            $recordDepartment = Employee::query()
+                ->whereKey($overtime->employee_id)
+                ->value('department_id');
+            $canCancel = $ownDepartment && (int) $ownDepartment === (int) $recordDepartment;
+        }
+
+        abort_unless($canCancel, 403, 'You do not have permission to cancel this overtime request.');
+
+        $reason = $request->input('reason')
+            ? 'Cancelled: '.trim((string) $request->input('reason'))
+            : 'Cancelled.';
+
+        try {
+            $ot = $this->service->cancel($overtime, $user, $reason);
         } catch (\RuntimeException $e) {
             abort(422, $e->getMessage());
         }

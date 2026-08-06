@@ -9,8 +9,10 @@ use App\Common\Services\ChainBroadcaster;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
+use App\Common\Services\TaxPolicyService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\SearchOperator;
+use App\Common\Support\TrashedFilter;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Services\InvoiceService;
 use App\Modules\Auth\Models\User;
@@ -50,6 +52,7 @@ class DeliveryService
         private readonly SettingsService $settings,
         private readonly NotificationService $notifications,
         private readonly CoCService $coc,
+        private readonly TaxPolicyService $taxPolicy,
     ) {}
 
     public function list(array $filters): LengthAwarePaginator
@@ -59,6 +62,8 @@ class DeliveryService
             'vehicle:id,plate_number,name',
             'driver:id,name,role_id',
         ]);
+
+        TrashedFilter::apply($q, $filters);
 
         foreach (['status'] as $f) {
             if (! empty($filters[$f])) {
@@ -533,7 +538,7 @@ class DeliveryService
         $invoice = $svc->create([
             'customer_id' => $customerHashId,
             'date' => now()->toDateString(),
-            'is_vatable' => true,
+            'is_vatable' => $this->taxPolicy->isVatRegistered(),
             'items' => $items,
             'remarks' => "Auto-generated from delivery {$d->delivery_number}",
             // C-2 — link the invoice back to the parent SO + this delivery so

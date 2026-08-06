@@ -29,6 +29,7 @@ class DeliveryProofResource extends JsonResource
                 'name' => $this->uploader->name,
             ] : null),
             'uploaded_at' => optional($this->created_at)?->toISOString(),
+            'deleted_at' => optional($this->deleted_at)?->toIso8601String(),
         ];
     }
 }

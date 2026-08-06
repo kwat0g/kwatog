@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Console\Commands;
 
 use App\Common\Services\NotificationService;
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\MRP\Enums\MrpRunTrigger;
 use App\Modules\MRP\Services\MrpEngineService;
@@ -21,7 +22,7 @@ class RunDailyMrp extends Command
     protected $signature   = 'mrp:run-daily';
     protected $description = 'Re-run MRP across all active sales orders (Task A1)';
 
-    public function handle(MrpEngineService $engine): int
+    public function handle(MrpEngineService $engine, SettingsService $settings): int
     {
         $this->info('Starting daily MRP run...');
 
@@ -37,10 +38,11 @@ class RunDailyMrp extends Command
             $run->duration_ms ?? 0,
         ));
 
-        // Notify PPC Head role.
+        // Notify configured MRP audience.
         try {
+            $roles = array_values(array_filter((array) $settings->get('mrp.daily_run.notification_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
             $ppcHeads = User::query()
-                ->whereHas('role', fn ($q) => $q->where('slug', 'ppc_head'))
+                ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                 ->where('is_active', true)
                 ->get();
 

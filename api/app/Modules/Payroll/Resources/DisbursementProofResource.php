@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Payroll\Resources;
 
+use App\Modules\Payroll\Enums\DisbursementProofType;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -17,6 +18,7 @@ class DisbursementProofResource extends JsonResource
         return [
             'id'                   => $this->hash_id,
             'proof_type'           => $this->proof_type,
+            'proof_type_label'     => DisbursementProofType::tryFrom((string) $this->proof_type)?->label(),
             'file_name'            => $this->file_name,
             'bank_name'            => $this->bank_name,
             'transaction_reference' => $this->transaction_reference,
@@ -28,6 +30,7 @@ class DisbursementProofResource extends JsonResource
                 'name' => $this->uploader?->name,
             ]),
             'created_at'           => optional($this->created_at)->toIso8601String(),
+            'deleted_at'           => optional($this->deleted_at)?->toIso8601String(),
         ];
     }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Inventory\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Support\TrashedFilter;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Models\WarehouseLocation;
@@ -28,9 +29,11 @@ class WarehouseService
             ->get();
     }
 
-    public function listWarehouses(): Collection
+    public function listWarehouses(array $filters = []): Collection
     {
-        return Warehouse::query()->orderBy('name')->get();
+        $q = Warehouse::query();
+        TrashedFilter::apply($q, $filters);
+        return $q->orderBy('name')->get();
     }
 
     public function createWarehouse(array $data): Warehouse

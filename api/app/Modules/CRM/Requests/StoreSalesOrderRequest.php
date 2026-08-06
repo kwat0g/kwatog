@@ -7,6 +7,8 @@ namespace App\Modules\CRM\Requests;
 use App\Common\Concerns\ResolvesHashIds;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\CRM\Models\Product;
+use App\Modules\SupplyChain\Enums\Incoterm;
+use Illuminate\Validation\Rule;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreSalesOrderRequest extends FormRequest
@@ -33,7 +35,7 @@ class StoreSalesOrderRequest extends FormRequest
             'date'                     => ['required', 'date'],
             'payment_terms_days'       => ['nullable', 'integer', 'min:0', 'max:365'],
             'delivery_terms'           => ['nullable', 'string', 'max:50'],
-            'incoterm'                 => ['nullable', 'string', 'in:EXW,FCA,FAS,FOB,CFR,CIF,CPT,CIP,DAP,DPU,DDP'],
+            'incoterm'                 => ['nullable', Rule::enum(Incoterm::class)],
             'notes'                    => ['nullable', 'string', 'max:2000'],
             'items'                    => ['required', 'array', 'min:1'],
             'items.*.product_id'       => ['required', 'integer', 'exists:products,id'],

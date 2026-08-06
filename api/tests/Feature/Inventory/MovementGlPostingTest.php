@@ -1,0 +1,198 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Feature\Inventory;
+
+use App\Common\Services\SettingsService;
+use App\Modules\Accounting\Models\Account;
+use App\Modules\Auth\Models\User;
+use App\Modules\Inventory\Enums\StockMovementType;
+use App\Modules\Inventory\Models\Item;
+use App\Modules\Inventory\Models\StockMovement;
+use App\Modules\Inventory\Models\WarehouseLocation;
+use App\Modules\Inventory\Services\StockMovementService;
+use App\Modules\Inventory\Support\StockMovementInput;
+use Database\Seeders\ChartOfAccountsSeeder;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
+use Tests\TestCase;
+
+/**
+ * F-05 — every value-changing stock movement posts a balanced JE.
+ *
+ * Before the fix, only GRN receipts posted to the GL (GrnGlPostingService).
+ * Adjustments, material issues, scrap, supplier returns and production
+ * receipts moved the inventory ledger without ever reaching the GL, so the
+ * inventory balance drifted silently from the accounting books. MovementGlPostingService
+ * (wired into StockMovementService::move()) closes the gap.
+ */
+class MovementGlPostingTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Event::fake([\App\Modules\Inventory\Events\StockMovementCompleted::class]);
+
+        $this->seed(ChartOfAccountsSeeder::class);
+        app(SettingsService::class)->set('modules.accounting', true, 'modules');
+
+        $this->movements = app(StockMovementService::class);
+        $this->item = Item::factory()->create(['is_active' => true]);
+        $this->location = WarehouseLocation::factory()->create();
+    }
+
+    private StockMovementService $movements;
+    private Item $item;
+    private WarehouseLocation $location;
+
+    /** @return array<string, int> code → account id */
+    private function accountIds(): array
+    {
+        return Account::query()->pluck('id', 'code')->all();
+    }
+
+    private function assertMovementPosted(StockMovement $movement, string $drCode, string $drAmount, string $crCode, string $crAmount): void
+    {
+        $this->assertNotNull($movement->journal_entry_id, 'movement must be back-linked to its JE');
+
+        $je = DB::table('journal_entries')->where('id', $movement->journal_entry_id)->firstOrFail();
+        $this->assertSame('posted', $je->status);
+        $this->assertSame('stock_movement', $je->reference_type);
+        $this->assertSame((string) $je->total_debit, (string) $je->total_credit, 'JE must balance');
+
+        $ids = $this->accountIds();
+        $this->assertSame($drAmount, (string) DB::table('journal_entry_lines')
+            ->where('journal_entry_id', $je->id)->where('account_id', $ids[$drCode])->value('debit'));
+        $this->assertSame($crAmount, (string) DB::table('journal_entry_lines')
+            ->where('journal_entry_id', $je->id)->where('account_id', $ids[$crCode])->value('credit'));
+    }
+
+    public function test_adjustment_in_debits_inventory_credits_cogs(): void
+    {
+        $m = $this->movements->move(new StockMovementInput(
+            type: StockMovementType::AdjustmentIn,
+            itemId: $this->item->id,
+            toLocationId: $this->location->id,
+            quantity: '10.000',
+            unitCost: '5.00',
+            referenceType: 'adjustment',
+            createdBy: User::factory()->create()->id,
+        ));
+
+        $this->assertMovementPosted($m, '1200', '50.00', '5000', '50.00');
+    }
+
+    public function test_material_issue_debits_material_consumption_credits_inventory(): void
+    {
+        $this->movements->move(new StockMovementInput(
+            type: StockMovementType::AdjustmentIn,
+            itemId: $this->item->id,
+            toLocationId: $this->location->id,
+            quantity: '10.000',
+            unitCost: '5.00',
+            referenceType: 'opening',
+        ));
+
+        $m = $this->movements->move(new StockMovementInput(
+            type: StockMovementType::MaterialIssue,
+            itemId: $this->item->id,
+            fromLocationId: $this->location->id,
+            toLocationId: null,
+            quantity: '4.000',
+            unitCost: '5.00',
+            referenceType: 'work_order',
+        ));
+
+        $this->assertMovementPosted($m, '5010', '20.00', '1200', '20.00');
+    }
+
+    public function test_return_to_vendor_debits_grni_credits_inventory(): void
+    {
+        $this->movements->move(new StockMovementInput(
+            type: StockMovementType::AdjustmentIn,
+            itemId: $this->item->id,
+            toLocationId: $this->location->id,
+            quantity: '10.000',
+            unitCost: '5.00',
+            referenceType: 'opening',
+        ));
+
+        $m = $this->movements->move(new StockMovementInput(
+            type: StockMovementType::ReturnToVendor,
+            itemId: $this->item->id,
+            fromLocationId: $this->location->id,
+            toLocationId: null,
+            quantity: '2.000',
+            unitCost: '5.00',
+            referenceType: 'return_request',
+        ));
+
+        $this->assertMovementPosted($m, '2110', '10.00', '1200', '10.00');
+    }
+
+    public function test_transfer_posts_no_journal_entry(): void
+    {
+        $other = WarehouseLocation::factory()->create();
+
+        $this->movements->move(new StockMovementInput(
+            type: StockMovementType::AdjustmentIn,
+            itemId: $this->item->id,
+            toLocationId: $this->location->id,
+            quantity: '10.000',
+            unitCost: '5.00',
+            referenceType: 'opening',
+        ));
+
+        $m = $this->movements->move(new StockMovementInput(
+            type: StockMovementType::Transfer,
+            itemId: $this->item->id,
+            fromLocationId: $this->location->id,
+            toLocationId: $other->id,
+            quantity: '3.000',
+            unitCost: '5.00',
+            referenceType: 'transfer_order',
+        ));
+
+        $this->assertNull($m->journal_entry_id, 'location moves have no ledger impact');
+        // Only the seeding adjustment posted a JE; the transfer added none.
+        $this->assertDatabaseCount('journal_entries', 1);
+    }
+
+    public function test_zero_value_movement_is_not_posted(): void
+    {
+        $m = $this->movements->move(new StockMovementInput(
+            type: StockMovementType::AdjustmentIn,
+            itemId: $this->item->id,
+            toLocationId: $this->location->id,
+            quantity: '5.000',
+            unitCost: '0.00',
+            referenceType: 'return_request',
+        ));
+
+        $this->assertNull($m->journal_entry_id);
+        $this->assertDatabaseCount('journal_entries', 0);
+    }
+
+    public function test_grn_receipt_is_not_posted_by_movement_service(): void
+    {
+        // GRN receipts are owned by GrnGlPostingService; the movement-level
+        // service must not double-post them.
+        $m = $this->movements->move(new StockMovementInput(
+            type: StockMovementType::GrnReceipt,
+            itemId: $this->item->id,
+            fromLocationId: null,
+            toLocationId: $this->location->id,
+            quantity: '10.000',
+            unitCost: '5.00',
+            referenceType: 'goods_receipt_note',
+        ));
+
+        $this->assertNull($m->journal_entry_id);
+        $this->assertDatabaseCount('journal_entries', 0);
+    }
+}

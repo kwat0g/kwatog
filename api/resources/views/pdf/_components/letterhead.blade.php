@@ -1,35 +1,40 @@
 {{--
-    Series E (E1) shared letterhead. Reads from `$company` (injected by
-    PdfRenderService). Per-document Blades just `@include` this and focus
-    on body content.
+    Series E (E1) shared letterhead component — executive corporate layout.
+    Reads from `$company` (injected by PdfRenderService).
 --}}
-<div class="header">
-  <div class="left">
-    <h1 style="margin:0; font-size:14px;">{{ $company['name'] ?? 'Philippine Ogami Corporation' }}</h1>
-    @if (!empty($company['address']))
-      <div style="font-size:9px; color:#555;">{{ $company['address'] }}</div>
-    @endif
-    @if (!empty($company['phone']) || !empty($company['email']))
-      <div style="font-size:9px; color:#555;">
-        @if (!empty($company['phone'])) Tel: {{ $company['phone'] }} @endif
-        @if (!empty($company['phone']) && !empty($company['email'])) &middot; @endif
-        @if (!empty($company['email'])) {{ $company['email'] }} @endif
+<div class="brand-bar"></div>
+<table class="header-table">
+  <tr>
+    <td style="width: 58%;">
+      <div class="company-title">{{ $company['name'] ?? 'PHILIPPINE OGAMI CORPORATION' }}</div>
+      <div class="company-sub">
+        @if (!empty($company['address']))
+          {{ $company['address'] }}<br>
+        @else
+          First Cavite Industrial Estate (FCIE), Dasmariñas, Cavite, Philippines<br>
+        @endif
+        @if (!empty($company['phone']) || !empty($company['email']))
+          @if (!empty($company['phone'])) Tel: {{ $company['phone'] }} @endif
+          @if (!empty($company['phone']) && !empty($company['email'])) &middot; @endif
+          @if (!empty($company['email'])) {{ $company['email'] }} @endif
+          <br>
+        @endif
+        @if (!empty($company['tin']))
+          TIN: {{ $company['tin'] }}
+          @if (!empty($company['vat_status'])) &middot; {{ $company['vat_status'] }} @endif
+          &middot;
+        @endif
+        <span style="font-weight:600; color:#475569;">IATF 16949 Certified</span>
       </div>
-    @endif
-    @if (!empty($company['tin']))
-      <div style="font-size:9px; color:#555;">
-        TIN: {{ $company['tin'] }}
-        @if (!empty($company['vat_status'])) &middot; {{ $company['vat_status'] }} @endif
+    </td>
+    <td style="width: 42%;" class="doc-badge-box">
+      @if (!empty($docTitle))
+        <div class="doc-title">{{ $docTitle }}</div>
+      @endif
+      <div class="doc-meta">
+        Issued: <span class="val">{{ $generated['at_text'] ?? now()->format('M d, Y H:i') }}</span><br>
+        Issued By: <span class="val">{{ $generated['by'] ?? 'System' }}</span>
       </div>
-    @endif
-  </div>
-  <div class="right" style="text-align:right; font-size:9px; color:#555;">
-    @if (!empty($docTitle))
-      <div style="font-size:13px; font-weight:bold; color:#09090B; text-transform:uppercase; letter-spacing:0.5px;">
-        {{ $docTitle }}
-      </div>
-    @endif
-    Generated: {{ $generated['at_text'] ?? now()->format('M d, Y H:i') }}<br>
-    By: {{ $generated['by'] ?? 'system' }}
-  </div>
-</div>
+    </td>
+  </tr>
+</table>

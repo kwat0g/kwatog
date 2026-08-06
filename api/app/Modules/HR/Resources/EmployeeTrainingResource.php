@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Resources;
 
+use Illuminate\Support\Str;
+
 use Illuminate\Http\Resources\Json\JsonResource;
 
 class EmployeeTrainingResource extends JsonResource
@@ -25,6 +27,7 @@ class EmployeeTrainingResource extends JsonResource
             'completed_at'     => $this->completed_at?->toDateString(),
             'expires_at'       => $this->expires_at?->toDateString(),
             'status'           => $this->status?->value,
+            'status_label'     => Str::headline((string) ($this->status?->value ?? $this->status)),
             'certificate_path' => $this->certificate_path,
             'notes'            => $this->notes,
             'last_alert_level' => $this->last_alert_level?->value,

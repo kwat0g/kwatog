@@ -62,4 +62,10 @@ class UserPermissionOverrideController
 
         return response()->json(null, 204);
     }
+
+    public function restore(UserPermissionOverride $override): JsonResponse
+    {
+        $override->restore();
+        return response()->json(['message' => 'User permission override restored.']);
+    }
 }

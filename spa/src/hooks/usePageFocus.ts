@@ -8,23 +8,23 @@ import { useLocation } from 'react-router-dom';
  * Mounted once in AppLayout — fires on every pathname change.
  */
 export function usePageFocus() {
-  const { pathname } = useLocation();
+ const { pathname } = useLocation();
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      const main = document.getElementById('main-content');
-      if (!main) return;
+ useEffect(() => {
+ const timer = setTimeout(() => {
+ const main = document.getElementById('main-content');
+ if (!main) return;
 
-      const heading = main.querySelector<HTMLElement>('h1');
-      const target = heading ?? main;
+ const heading = main.querySelector<HTMLElement>('h1');
+ const target = heading ?? main;
 
-      // Ensure the target is programmatically focusable
-      if (!target.hasAttribute('tabindex')) {
-        target.setAttribute('tabindex', '-1');
-      }
-      target.focus({ preventScroll: true });
-    }, 50);
+ // Ensure the target is programmatically focusable
+ if (!target.hasAttribute('tabindex')) {
+ target.setAttribute('tabindex', '-1');
+ }
+ target.focus({ preventScroll: true });
+ }, 50);
 
-    return () => clearTimeout(timer);
-  }, [pathname]);
+ return () => clearTimeout(timer);
+ }, [pathname]);
 }

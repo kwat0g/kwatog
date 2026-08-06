@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Maintenance\Controllers;
 
 use App\Common\Support\HashIdFilter;
+use App\Common\Services\SettingsService;
 use App\Modules\Maintenance\Models\MachineConditionReading;
 use App\Modules\Maintenance\Resources\MachineConditionReadingResource;
 use App\Modules\Maintenance\Services\PredictiveMaintenanceService;
@@ -13,6 +14,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 
 /**
  * ADV8 — Maintenance Automation.
@@ -22,6 +24,7 @@ class MachineConditionReadingController
 {
     public function __construct(
         private readonly PredictiveMaintenanceService $predictive,
+        private readonly SettingsService $settings,
     ) {}
 
     /**
@@ -44,7 +47,7 @@ class MachineConditionReadingController
         $this->decodeMachineId($request);
         $request->validate([
             'machine_id' => ['required', 'integer', 'exists:machines,id'],
-            'metric'     => ['nullable', 'string', 'in:temperature,vibration,pressure,current,oil_quality'],
+            'metric'     => ['nullable', Rule::in(array_column($this->predictive->metricOptions(), 'value'))],
         ]);
 
         $q = MachineConditionReading::query()
@@ -60,16 +63,39 @@ class MachineConditionReadingController
         );
     }
 
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'metrics' => $this->predictive->metricOptions(),
+            'sources' => $this->sourceOptions(),
+            'default_source' => (string) $this->settings->get('maintenance.predictive.default_source', ''),
+        ]]);
+    }
+
+    /** @return list<string> */
+    private function sourceValues(): array
+    {
+        return array_column($this->sourceOptions(), 'value');
+    }
+
+    /** @return list<array{value:string,label:string}> */
+    private function sourceOptions(): array
+    {
+        $sources = $this->settings->get('maintenance.predictive.sources', []);
+        return array_values(array_filter(is_array($sources) ? $sources : [], static fn ($source): bool => is_array($source)
+            && is_string($source['value'] ?? null) && is_string($source['label'] ?? null)));
+    }
+
     public function store(Request $request): JsonResponse
     {
         $this->decodeMachineId($request);
         $data = $request->validate([
             'machine_id'  => ['required', 'integer', 'exists:machines,id'],
-            'metric'      => ['required', 'string', 'in:temperature,vibration,pressure,current,oil_quality'],
+            'metric'      => ['required', Rule::in(array_column($this->predictive->metricOptions(), 'value'))],
             'value'       => ['required', 'numeric'],
             'unit'        => ['nullable', 'string', 'max:20'],
             'recorded_at' => ['nullable', 'date'],
-            'source'      => ['nullable', 'string', 'in:manual,iot_sensor,plc,api'],
+            'source'      => ['nullable', Rule::in($this->sourceValues())],
             'notes'       => ['nullable', 'string', 'max:2000'],
         ]);
 

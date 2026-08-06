@@ -7,6 +7,7 @@ namespace App\Modules\HR\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\NotificationService;
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Enums\ApplicationStage;
 use App\Modules\HR\Enums\JobPostingStatus;
@@ -28,6 +29,7 @@ class RecruitmentService
     public function __construct(
         private DocumentSequenceService $sequences,
         private NotificationService $notifications,
+        private SettingsService $settings,
     ) {}
 
     public function createPosting(array $data): JobPosting
@@ -201,6 +203,10 @@ class RecruitmentService
             'position' => $app->jobPosting->title,
             'applied_at' => $app->applied_at->toIso8601String(),
             'status' => $statusLabel,
+            'stage_steps' => array_values(array_map(
+                static fn (ApplicationStage $stage): array => ['value' => $stage->value, 'label' => $stage->publicLabel()],
+                array_filter(ApplicationStage::cases(), static fn (ApplicationStage $stage): bool => ! $stage->isTerminal()),
+            )),
             'interview' => $interview ? [
                 'scheduled_at' => $interview->scheduled_at->toIso8601String(),
                 'location' => $interview->location,
@@ -256,8 +262,9 @@ class RecruitmentService
 
     private function notifyHrNewApplication(JobApplication $application, JobPosting $posting): void
     {
-        $hrUsers = User::whereHas('role', function ($q) {
-            $q->whereIn('slug', ['hr_officer', 'system_admin']);
+        $roles = array_values(array_filter((array) $this->settings->get('hr.recruitment.notification_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
+        $hrUsers = User::whereHas('role', function ($q) use ($roles) {
+            $q->whereIn('slug', $roles);
         })->where('is_active', true)->get();
 
         if ($hrUsers->isEmpty()) {

@@ -8,37 +8,39 @@ use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use RuntimeException;
 
 class AdminUserSeeder extends Seeder
 {
-    /**
-     * Fixed demo password. Idempotent — running the seeder multiple times keeps
-     * the same credentials, never rotates them. Production deployments should
-     * either change the constant or rotate via the admin profile page on first
-     * login.
-     */
-    private const DEFAULT_PASSWORD = 'password';
-    private const EMAIL            = 'admin@ogami.test';
-
     public function run(): void
     {
+        $email = trim((string) env('ADMIN_EMAIL', ''));
+        $name = trim((string) env('ADMIN_NAME', ''));
+        $password = (string) env('ADMIN_PASSWORD', '');
+        if ($email === '' || $name === '' || $password === '') {
+            $this->command?->warn('Admin bootstrap skipped: set ADMIN_EMAIL, ADMIN_NAME, and ADMIN_PASSWORD to create the initial administrator.');
+            return;
+        }
+        if (! filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($password) < 12) {
+            throw new RuntimeException('ADMIN_EMAIL must be valid and ADMIN_PASSWORD must be at least 12 characters.');
+        }
         $role = Role::where('slug', 'system_admin')->firstOrFail();
 
-        $hash = Hash::make(self::DEFAULT_PASSWORD);
+        $hash = Hash::make($password);
 
         $user = User::updateOrCreate(
-            ['email' => self::EMAIL],
+            ['email' => $email],
             [
-                'name'                  => 'System Administrator',
+                'name'                  => $name,
                 'password'              => $hash,
                 'role_id'               => $role->id,
                 'is_active'             => true,
-                'must_change_password'  => false, // demo seed: skip the forced rotation flow
+                'must_change_password'  => false,
                 'password_changed_at'   => now(),
                 'theme_mode'            => 'system',
             ],
         );
 
-        $this->command?->info("System Admin {$user->email} ready (password: " . self::DEFAULT_PASSWORD . ').');
+        $this->command?->info("System Admin {$user->email} ready.");
     }
 }

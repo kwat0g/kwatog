@@ -26,6 +26,7 @@ Route::middleware(['auth:sanctum', 'feature:crm'])->prefix('crm')->group(functio
     Route::post('/customers',            [CustomerController::class, 'store'])  ->middleware('permission:accounting.customers.manage');
     Route::put('/customers/{customer}',  [CustomerController::class, 'update']) ->middleware('permission:accounting.customers.manage');
     Route::delete('/customers/{customer}', [CustomerController::class, 'destroy'])->middleware('permission:accounting.customers.manage');
+    Route::patch('/customers/{customer}/restore', [CustomerController::class, 'restore'])->middleware('permission:accounting.customers.manage');
 
     /* ─── Products ─── */
     Route::get('/products',           [ProductController::class, 'index']) ->middleware('permission:crm.products.view');
@@ -33,6 +34,7 @@ Route::middleware(['auth:sanctum', 'feature:crm'])->prefix('crm')->group(functio
     Route::post('/products',          [ProductController::class, 'store']) ->middleware('permission:crm.products.manage');
     Route::put('/products/{product}', [ProductController::class, 'update'])->middleware('permission:crm.products.manage');
     Route::delete('/products/{product}', [ProductController::class, 'destroy'])->middleware('permission:crm.products.manage');
+    Route::patch('/products/{product}/restore', [ProductController::class, 'restore'])->middleware('permission:crm.products.manage');
 
     /* ─── Price agreements ─── */
     Route::get('/price-agreements',                    [PriceAgreementController::class, 'index']) ->middleware('permission:crm.price_agreements.view');
@@ -40,17 +42,20 @@ Route::middleware(['auth:sanctum', 'feature:crm'])->prefix('crm')->group(functio
     Route::post('/price-agreements',                   [PriceAgreementController::class, 'store']) ->middleware('permission:crm.price_agreements.manage');
     Route::put('/price-agreements/{priceAgreement}',   [PriceAgreementController::class, 'update'])->middleware('permission:crm.price_agreements.manage');
     Route::delete('/price-agreements/{priceAgreement}', [PriceAgreementController::class, 'destroy'])->middleware('permission:crm.price_agreements.manage');
+    Route::patch('/price-agreements/{priceAgreement}/restore', [PriceAgreementController::class, 'restore'])->middleware('permission:crm.price_agreements.manage');
 
     Route::get('/customers/{customer}/price-agreements', [PriceAgreementController::class, 'forCustomer'])
         ->middleware('permission:crm.price_agreements.view');
 
     /* ─── Sales orders (Task 48) ─── */
+    Route::get('/sales-orders/options',            [SalesOrderController::class, 'options'])->middleware('permission:crm.sales_orders.view');
     Route::get('/sales-orders',                    [SalesOrderController::class, 'index']) ->middleware('permission:crm.sales_orders.view');
     Route::get('/sales-orders/{salesOrder}',       [SalesOrderController::class, 'show'])  ->middleware('permission:crm.sales_orders.view');
     Route::get('/sales-orders/{salesOrder}/chain', [SalesOrderController::class, 'chain']) ->middleware('permission:crm.sales_orders.view');
     Route::post('/sales-orders',                   [SalesOrderController::class, 'store']) ->middleware('permission:crm.sales_orders.create');
     Route::put('/sales-orders/{salesOrder}',       [SalesOrderController::class, 'update'])->middleware('permission:crm.sales_orders.update');
     Route::delete('/sales-orders/{salesOrder}',    [SalesOrderController::class, 'destroy'])->middleware('permission:crm.sales_orders.delete');
+    Route::patch('/sales-orders/{salesOrder}/restore', [SalesOrderController::class, 'restore'])->middleware('permission:crm.sales_orders.delete');
     Route::post('/sales-orders/{salesOrder}/confirm', [SalesOrderController::class, 'confirm'])->middleware('permission:crm.sales_orders.confirm');
     Route::post('/sales-orders/{salesOrder}/cancel',  [SalesOrderController::class, 'cancel']) ->middleware('permission:crm.sales_orders.cancel');
 
@@ -64,6 +69,7 @@ Route::middleware(['auth:sanctum', 'feature:crm'])->prefix('crm')->group(functio
     Route::post('/leads/{lead}/convert',          [LeadController::class, 'convert'])     ->middleware('permission:crm.leads.manage');
 
     /* ─── Opportunities (Sales Pipeline) ─── */
+    Route::get('/opportunities/options',                       [OpportunityController::class, 'options'])   ->middleware('permission:crm.opportunities.view');
     Route::get('/opportunities',                                [OpportunityController::class, 'index'])       ->middleware('permission:crm.opportunities.view');
     Route::get('/opportunities/{opportunity}',                  [OpportunityController::class, 'show'])        ->middleware('permission:crm.opportunities.view');
     Route::post('/opportunities',                               [OpportunityController::class, 'store'])       ->middleware('permission:crm.opportunities.manage');
@@ -84,6 +90,8 @@ Route::middleware(['auth:sanctum', 'feature:crm'])->prefix('crm')->group(functio
     Route::post('/quotes/{quote}/convert',    [QuoteController::class, 'convert'])     ->middleware('permission:crm.quotes.manage');
 
     /* ─── Customer complaints + 8D (Task 68) ─── */
+    Route::get('/complaints/options', [ComplaintController::class, 'options'])
+        ->middleware('permission:crm.complaints.manage');
     Route::get('/complaints',                              [ComplaintController::class, 'index'])
         ->middleware('permission:crm.complaints.manage');
     Route::get('/complaints/{complaint}',                  [ComplaintController::class, 'show'])
@@ -104,6 +112,7 @@ Route::middleware(['auth:sanctum', 'feature:crm'])->prefix('crm')->group(functio
     /* ─── Commission tracking ─── */
     Route::prefix('commissions')->group(function () {
         Route::get('/',           [CommissionController::class, 'index'])->middleware('permission:crm.commissions.view');
+        Route::get('/options',    [CommissionController::class, 'options'])->middleware('permission:crm.commissions.view');
         Route::get('/rates',      [CommissionController::class, 'rates'])->middleware('permission:crm.commissions.view');
         Route::post('/rates',     [CommissionController::class, 'setRate'])->middleware('permission:crm.commissions.manage');
         Route::post('/{earning}/approve', [CommissionController::class, 'approve'])->middleware('permission:crm.commissions.manage');

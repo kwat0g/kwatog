@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Attendance\Controllers;
 
 use App\Modules\Attendance\Models\Holiday;
+use App\Modules\Attendance\Enums\HolidayType;
 use App\Modules\Attendance\Requests\StoreHolidayRequest;
 use App\Modules\Attendance\Requests\UpdateHolidayRequest;
 use App\Modules\Attendance\Resources\HolidayResource;
@@ -20,6 +21,16 @@ class HolidayController
     public function index(Request $request): AnonymousResourceCollection
     {
         return HolidayResource::collection($this->service->list($request->query()));
+    }
+
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'types' => array_map(
+                static fn (HolidayType $type): array => ['value' => $type->value, 'label' => $type->label()],
+                HolidayType::cases(),
+            ),
+        ]]);
     }
 
     public function store(StoreHolidayRequest $request): JsonResponse
@@ -42,5 +53,11 @@ class HolidayController
     {
         $this->service->delete($holiday);
         return response()->json(null, 204);
+    }
+
+    public function restore(Holiday $holiday): JsonResponse
+    {
+        $holiday->restore();
+        return response()->json(['message' => 'Holiday restored.']);
     }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\HR\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Support\TrashedFilter;
 use App\Modules\HR\Models\Department;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
@@ -18,6 +19,7 @@ class DepartmentService
             ->with(['parent', 'headEmployee'])
             ->withCount(['positions', 'employees']);
 
+        TrashedFilter::apply($query, $filters);
         if (!empty($filters['search'])) {
             $term = $filters['search'];
             $query->where(function ($q) use ($term) {
@@ -46,13 +48,16 @@ class DepartmentService
     }
 
     /** @return Collection<int, Department> */
-    public function tree(): Collection
+    public function tree(array $filters = []): Collection
     {
-        return Department::query()
+        $query = Department::query()
             ->with(['headEmployee'])
             ->withCount(['positions', 'employees'])
-            ->orderBy('name')
-            ->get();
+            ->orderBy('name');
+
+        TrashedFilter::apply($query, $filters);
+
+        return $query->get();
     }
 
     public function show(Department $department): Department

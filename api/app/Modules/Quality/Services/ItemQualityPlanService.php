@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Quality\Services;
 
 use App\Modules\Accounting\Models\Vendor;
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Quality\Models\ItemQualityPlan;
@@ -13,6 +14,8 @@ use Illuminate\Support\Facades\DB;
 
 class ItemQualityPlanService
 {
+    public function __construct(private readonly SettingsService $settings) {}
+
     /** @return Collection<int, ItemQualityPlan> */
     public function revisions(Item $item): Collection
     {
@@ -50,7 +53,9 @@ class ItemQualityPlanService
                 'stage' => 'incoming',
                 'sampling_method' => $data['sampling_method'],
                 'fixed_sample_size' => $data['sampling_method'] === 'fixed' ? $data['fixed_sample_size'] : null,
-                'aql_level' => $data['sampling_method'] === 'aql' ? ($data['aql_level'] ?? 'general_ii') : null,
+                'aql_level' => $data['sampling_method'] === 'aql'
+                    ? ($data['aql_level'] ?? (string) $this->settings->get('quality.aql.default_level', ''))
+                    : null,
                 'parameters' => array_values($data['parameters']),
                 'effective_from' => $data['effective_from'] ?? now()->toDateString(),
                 'effective_to' => $data['effective_to'] ?? null,

@@ -17,7 +17,9 @@ class PurchaseRequestResource extends JsonResource
             'date'                    => optional($this->date)->toDateString(),
             'reason'                  => $this->reason,
             'priority'                => (string) $this->priority?->value,
+            'priority_label'         => $this->priority?->label(),
             'status'                  => (string) $this->status?->value,
+            'status_label'            => $this->status?->label(),
             'is_auto_generated'       => (bool) $this->is_auto_generated,
             'auto_generated_reason'   => $this->auto_generated_reason,
             'is_urgent'               => (bool) $this->is_urgent,
@@ -63,11 +65,13 @@ class PurchaseRequestResource extends JsonResource
                 'id'        => $po->hash_id,
                 'po_number' => $po->po_number,
                 'status'    => (string) $po->status?->value,
+                'status_label' => $po->status?->label(),
                 'vendor'    => $po->vendor ? ['id' => $po->vendor->hash_id, 'name' => $po->vendor->name] : null,
                 'total_amount' => (string) $po->total_amount,
             ])->all()),
             'created_at'              => optional($this->created_at)->toIso8601String(),
             'updated_at'              => optional($this->updated_at)->toIso8601String(),
+            'deleted_at'              => optional($this->deleted_at)?->toIso8601String(),
         ];
     }
 }

@@ -16,79 +16,79 @@ import { onFormInvalid } from '@/lib/formErrors';
 import type { ApiValidationError } from '@/types';
 
 const schema = z.object({
-  maintainable_type: z.string().min(1, 'Target type is required'),
-  maintainable_id: z.coerce.number().int().min(1, 'Target ID required'),
-  type: z.string().min(1, 'Work order type is required'),
-  priority: z.string().min(1, 'Priority is required'),
-  description: z.string().min(1, 'Description is required').max(5000),
+ maintainable_type: z.string().min(1, 'Target type is required'),
+ maintainable_id: z.coerce.number().int().min(1, 'Target ID required'),
+ type: z.string().min(1, 'Work order type is required'),
+ priority: z.string().min(1, 'Priority is required'),
+ description: z.string().min(1, 'Description is required').max(5000),
 });
 type FormValues = z.infer<typeof schema>;
 
 export default function CreateMaintenanceWorkOrderPage() {
-  const navigate = useNavigate();
-  const qc = useQueryClient();
-  const { data: options } = useQuery({ queryKey: ['maintenance', 'work-order-options'], queryFn: () => workOrdersApi.options() });
+ const navigate = useNavigate();
+ const qc = useQueryClient();
+ const { data: options } = useQuery({ queryKey: ['maintenance', 'work-order-options'], queryFn: () => workOrdersApi.options() });
 
-  const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<FormValues>({
-    resolver: zodResolver(schema),
-    defaultValues: { maintainable_type: '', type: '', priority: '' },
-  });
+ const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<FormValues>({
+ resolver: zodResolver(schema),
+ defaultValues: { maintainable_type: '', type: '', priority: '' },
+ });
 
-  const mutation = useMutation({
-    mutationFn: (data: FormValues) => workOrdersApi.create(data as Parameters<typeof workOrdersApi.create>[0]),
-    onSuccess: (wo) => {
-      qc.invalidateQueries({ queryKey: ['maintenance', 'work-orders'] });
-      toast.success(`Work order ${wo.mwo_number} created.`);
-      navigate(`/maintenance/work-orders/${wo.id}`);
-    },
-    onError: (error: AxiosError<ApiValidationError>) => {
-      if (error.response?.status === 422 && error.response.data.errors) {
-        Object.entries(error.response.data.errors).forEach(([field, messages]) => {
-          setError(field as keyof FormValues, { type: 'server', message: messages[0] });
-        });
-        toast.error(error.response?.data?.message || 'Validation failed.');
-      }
-    },
-  });
+ const mutation = useMutation({
+ mutationFn: (data: FormValues) => workOrdersApi.create(data as Parameters<typeof workOrdersApi.create>[0]),
+ onSuccess: (wo) => {
+ qc.invalidateQueries({ queryKey: ['maintenance', 'work-orders'] });
+ toast.success(`Work order ${wo.mwo_number} created.`);
+ navigate(`/maintenance/work-orders/${wo.id}`);
+ },
+ onError: (error: AxiosError<ApiValidationError>) => {
+ if (error.response?.status === 422 && error.response.data.errors) {
+ Object.entries(error.response.data.errors).forEach(([field, messages]) => {
+ setError(field as keyof FormValues, { type: 'server', message: messages[0] });
+ });
+ toast.error(error.response?.data?.message || 'Validation failed.');
+ }
+ },
+ });
 
-  return (
-    <div>
-      <PageHeader title="New maintenance work order" backTo="/maintenance/work-orders" backLabel="Work orders" breadcrumbs={[{ label: 'Maintenance', href: '/maintenance' }, { label: 'Work Orders', href: '/maintenance/work-orders' }, { label: 'New' }]} />
+ return (
+ <div>
+ <PageHeader title="New maintenance work order" backTo="/maintenance/work-orders" backLabel="Work orders" breadcrumbs={[{ label: 'Maintenance', href: '/maintenance' }, { label: 'Work Orders', href: '/maintenance/work-orders' }, { label: 'New' }]} />
 
-      <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-2xl mx-auto px-5 py-4">
-        <fieldset className="mb-6">
-          <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">Target</legend>
-          <div className="grid grid-cols-2 gap-3">
-            <Select label="Type" {...register('maintainable_type')} error={errors.maintainable_type?.message} required>
-              <option value="">— Select —</option>
-              {(options?.maintainable_types ?? []).map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
-            </Select>
-            <Input label="Target ID" type="number" {...register('maintainable_id')} error={errors.maintainable_id?.message} required />
-          </div>
-        </fieldset>
+ <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-2xl mx-auto px-5 py-4">
+ <fieldset className="mb-6">
+ <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">Target</legend>
+ <div className="grid grid-cols-2 gap-3">
+ <Select label="Type" {...register('maintainable_type')} error={errors.maintainable_type?.message} required>
+ <option value="">— Select —</option>
+ {(options?.maintainable_types ?? []).map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
+ </Select>
+ <Input label="Target ID" type="number" {...register('maintainable_id')} error={errors.maintainable_id?.message} required />
+ </div>
+ </fieldset>
 
-        <fieldset className="mb-6">
-          <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">Work order</legend>
-          <div className="grid grid-cols-2 gap-3 mb-3">
-            <Select label="Type" {...register('type')} error={errors.type?.message} required>
-              <option value="">— Select —</option>
-              {(options?.types ?? []).map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
-            </Select>
-            <Select label="Priority" {...register('priority')} error={errors.priority?.message} required>
-              <option value="">— Select —</option>
-              {(options?.priorities ?? []).map((priority) => <option key={priority.value} value={priority.value}>{priority.label}</option>)}
-            </Select>
-          </div>
-          <Textarea label="Description" {...register('description')} rows={5} error={errors.description?.message} required />
-        </fieldset>
+ <fieldset className="mb-6">
+ <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">Work order</legend>
+ <div className="grid grid-cols-2 gap-3 mb-3">
+ <Select label="Type" {...register('type')} error={errors.type?.message} required>
+ <option value="">— Select —</option>
+ {(options?.types ?? []).map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
+ </Select>
+ <Select label="Priority" {...register('priority')} error={errors.priority?.message} required>
+ <option value="">— Select —</option>
+ {(options?.priorities ?? []).map((priority) => <option key={priority.value} value={priority.value}>{priority.label}</option>)}
+ </Select>
+ </div>
+ <Textarea label="Description" {...register('description')} rows={5} error={errors.description?.message} required />
+ </fieldset>
 
-        <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
-          <Button type="button" variant="secondary" onClick={() => navigate('/maintenance/work-orders')}>Cancel</Button>
-          <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending} loading={mutation.isPending}>
-            {mutation.isPending ? 'Creating…' : 'Create work order'}
-          </Button>
-        </div>
-      </form>
-    </div>
-  );
+ <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+ <Button type="button" variant="secondary" onClick={() => navigate('/maintenance/work-orders')}>Cancel</Button>
+ <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending} loading={mutation.isPending}>
+ {mutation.isPending ? 'Creating…' : 'Create work order'}
+ </Button>
+ </div>
+ </form>
+ </div>
+ );
 }

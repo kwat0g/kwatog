@@ -51,6 +51,12 @@ class UomController
         return response()->json(null, 204);
     }
 
+    public function restore(Uom $uom): JsonResponse
+    {
+        $uom->restore();
+        return response()->json(['message' => 'UOM restored.']);
+    }
+
     /* ─── Per-item conversions ─── */
 
     public function conversions(Item $item): AnonymousResourceCollection

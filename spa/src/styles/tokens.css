@@ -1,15 +1,7 @@
 /*
  * OGAMI ERP — Design tokens.
- * Source of truth: docs/DESIGN-SYSTEM.md.
- *
+ * A modern, monochromatic, and glassmorphic UI.
  * The canvas is grayscale. Color is for meaning.
- * Backgrounds, text, borders, sidebars — all pure white/gray/black.
- * Color appears ONLY on:
- *   • status chips
- *   • primary buttons
- *   • KPI deltas
- *   • alert dots
- *   • links + active nav indicator
  */
 
 @font-face {
@@ -47,20 +39,20 @@
 :root {
   /* ─── Canvas ─── */
   --bg-canvas: #ffffff;
-  --bg-surface: #fafafa;
-  --bg-elevated: #f4f4f5;
-  --bg-subtle: #f4f4f5;
+  --bg-surface: rgba(250, 250, 250, 0.85);
+  --bg-elevated: rgba(244, 244, 245, 0.95);
+  --bg-subtle: rgba(244, 244, 245, 0.6);
 
   /* ─── Table Zebra & Header Colors ─── */
-  --bg-zebra-odd: #ffffff;
-  --bg-zebra-even: #f1f3f5;
-  --bg-row-hover: #e4e7eb;
-  --bg-thead: #e9ecef;
+  --bg-zebra-odd: transparent;
+  --bg-zebra-even: rgba(244, 244, 245, 0.5);
+  --bg-row-hover: rgba(228, 228, 231, 0.6);
+  --bg-thead: rgba(244, 244, 245, 0.85);
 
   /* ─── Borders ─── */
-  --border-subtle: #f4f4f5;
-  --border-default: #e4e4e7;
-  --border-strong: #d4d4d8;
+  --border-subtle: rgba(244, 244, 245, 0.8);
+  --border-default: rgba(228, 228, 231, 0.9);
+  --border-strong: rgba(212, 212, 216, 1);
 
   /* ─── Text ─── */
   --text-primary: #09090b;
@@ -68,162 +60,149 @@
   --text-muted: #71717a;
   --text-subtle: #a1a1aa;
 
-  /* ─── Accent (indigo) ─── */
-  --accent: #4f46e5;
-  --accent-hover: #4338ca;
+  /* ─── Accent (Monochrome / Contrast) ─── */
+  --accent: #18181b;
+  --accent-hover: #27272a;
   --accent-fg: #ffffff;
 
-  /* Links — one of the few colored elements on the grayscale canvas. */
-  --text-link: #4f46e5;
-  --text-link-hover: #4338ca;
+  /* Links */
+  --text-link: #18181b;
+  --text-link-hover: #52525b;
 
   /* ─── Semantic — success / warning / danger / info ─── */
-  --success: #059669;
+  --success: #10b981;
   --success-bg: #d1fae5;
   --success-fg: #065f46;
 
-  --warning: #d97706;
+  --warning: #f59e0b;
   --warning-bg: #fef3c7;
   --warning-fg: #92400e;
 
-  --danger: #dc2626;
+  --danger: #ef4444;
   --danger-bg: #fee2e2;
   --danger-fg: #991b1b;
 
-  --info: #2563eb;
+  --info: #3b82f6;
   --info-bg: #dbeafe;
   --info-fg: #1e40af;
 
-  --purple: #7c3aed;
+  --purple: #8b5cf6;
   --purple-bg: #ede9fe;
   --purple-fg: #5b21b6;
 
   /* ─── Focus ring ─── */
-  --ring: #4f46e5;
-  --ring-offset: #ffffff;
+  --ring: rgba(24, 24, 27, 0.3);
+  --ring-offset: transparent;
 
-  /* ─── Shadows (almost none — flat surfaces) ─── */
-  --shadow-focus: 0 0 0 3px rgba(79, 70, 229, 0.15);
-  --shadow-menu: 0 4px 12px rgba(0, 0, 0, 0.08);
+  /* ─── Shadows ─── */
+  --shadow-focus: 0 0 0 4px rgba(24, 24, 27, 0.15);
+  --shadow-menu: 0 16px 32px -8px rgba(0, 0, 0, 0.12), 0 8px 16px -4px rgba(0, 0, 0, 0.08);
 
   /* ─── Type ─── */
   --font-sans: 'Geist', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   --font-mono: 'Geist Mono', 'SF Mono', Menlo, Monaco, Consolas, monospace;
+  --font-display: 'Bricolage Grotesque Variable', 'Geist', system-ui, sans-serif;
 
   /* ─── Radius ─── */
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
   --radius-full: 9999px;
 
   /* ─── Motion ─── */
-  --duration-fast: 100ms;
-  --duration-normal: 150ms;
-  --duration-slow: 200ms;
-  --ease-default: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 400ms;
+  --ease-default: cubic-bezier(0.16, 1, 0.3, 1);
 
-  /* ─── Landing page palette — warm monochrome, espresso ink, no chroma ───
-   * A precision engineering drawing on warm paper: stone-tinted greys and a
-   * near-black espresso ink that doubles as the single action colour. There is
-   * deliberately no chromatic accent — hierarchy comes from weight and contrast. */
-  --landing-canvas: #fafaf9;        /* warm paper (stone-50) */
-  --landing-surface: #f5f4f1;       /* raised panels */
-  --landing-elevated: #efedea;      /* cards */
-  --landing-subtle: #e7e5e1;        /* wells */
-  --landing-border: #e3e0db;        /* warm hairlines */
-  --landing-border-strong: #d6d3cd; /* emphasis rules */
-  --landing-text: #1c1917;          /* espresso ink */
+  /* ─── Landing page palette ─── */
+  --landing-canvas: #fafaf9;
+  --landing-surface: rgba(245, 244, 241, 0.85);
+  --landing-elevated: rgba(239, 237, 234, 0.95);
+  --landing-subtle: rgba(231, 229, 225, 0.7);
+  --landing-border: rgba(227, 224, 219, 0.8);
+  --landing-border-strong: rgba(214, 211, 205, 0.9);
+  --landing-text: #1c1917;
   --landing-text-secondary: #44403c;
   --landing-muted: #78716c;
   --landing-subtle-text: #a8a29e;
-
-  /* Action colour = the ink itself (warm graphite). Used on CTAs, links,
-   * key callouts — espresso fill with cream text, no blue anywhere. */
   --landing-accent: #1c1917;
   --landing-accent-hover: #0c0a09;
-  --landing-accent-soft: #efedea;   /* warm tint fills */
-  --landing-accent-fg: #fafaf9;     /* cream text on espresso */
+  --landing-accent-soft: rgba(239, 237, 234, 0.5);
+  --landing-accent-fg: #fafaf9;
   --landing-accent-glow: rgba(28, 25, 23, 0.08);
-
-  /* Engineering-drawing primitives (warm). */
-  --landing-ink: #1c1917;                    /* strong drawing stroke */
-  --landing-line: rgba(28, 25, 23, 0.14);    /* blueprint line on paper */
-  --landing-grid: rgba(28, 25, 23, 0.05);    /* faint grid fill */
-  --landing-grid-size: 32px;                 /* shared blueprint pitch */
-
-  /* ─── Landing display typeface (Fontsource, self-hosted → CSP-safe) ─── */
-  --font-display: 'Bricolage Grotesque Variable', 'Geist', -apple-system,
-    BlinkMacSystemFont, system-ui, sans-serif;
+  --landing-ink: #1c1917;
+  --landing-line: rgba(28, 25, 23, 0.14);
+  --landing-grid: rgba(28, 25, 23, 0.05);
+  --landing-grid-size: 32px;
 }
 
 [data-theme='dark'] {
   --bg-canvas: #0a0a0a;
-  --bg-surface: #111111;
-  --bg-elevated: #1a1a1a;
-  --bg-subtle: #1a1a1a;
+  --bg-surface: rgba(17, 17, 17, 0.7);
+  --bg-elevated: rgba(26, 26, 26, 0.85);
+  --bg-subtle: rgba(26, 26, 26, 0.4);
 
-  /* ─── Table Zebra & Header Colors (Dark) ─── */
-  --bg-zebra-odd: #121212;
-  --bg-zebra-even: #1e1e24;
-  --bg-row-hover: #282834;
-  --bg-thead: #18181f;
+  --bg-zebra-odd: transparent;
+  --bg-zebra-even: rgba(30, 30, 36, 0.4);
+  --bg-row-hover: rgba(40, 40, 52, 0.5);
+  --bg-thead: rgba(24, 24, 31, 0.8);
 
-  --border-subtle: #1a1a1a;
-  --border-default: #27272a;
-  --border-strong: #3f3f46;
+  --border-subtle: rgba(26, 26, 26, 0.8);
+  --border-default: rgba(39, 39, 42, 0.9);
+  --border-strong: rgba(63, 63, 70, 1);
 
   --text-primary: #fafafa;
   --text-secondary: #d4d4d8;
   --text-muted: #a1a1aa;
   --text-subtle: #71717a;
 
-  --accent: #6366f1;
-  --accent-hover: #818cf8;
-  --accent-fg: #ffffff;
+  --accent: #fafafa;
+  --accent-hover: #e4e4e7;
+  --accent-fg: #0a0a0a;
 
-  --text-link: #818cf8;
-  --text-link-hover: #a5b4fc;
+  --text-link: #fafafa;
+  --text-link-hover: #d4d4d8;
 
   --success: #10b981;
-  --success-bg: #064e3b;
+  --success-bg: rgba(6, 78, 59, 0.5);
   --success-fg: #6ee7b7;
 
   --warning: #f59e0b;
-  --warning-bg: #78350f;
+  --warning-bg: rgba(120, 53, 15, 0.5);
   --warning-fg: #fcd34d;
 
   --danger: #ef4444;
-  --danger-bg: #7f1d1d;
+  --danger-bg: rgba(127, 29, 29, 0.5);
   --danger-fg: #fca5a5;
 
   --info: #3b82f6;
-  --info-bg: #1e3a8a;
+  --info-bg: rgba(30, 58, 138, 0.5);
   --info-fg: #93c5fd;
 
   --purple: #a78bfa;
-  --purple-bg: #4c1d95;
+  --purple-bg: rgba(76, 29, 149, 0.5);
   --purple-fg: #ddd6fe;
 
-  --ring: #6366f1;
-  --ring-offset: #0a0a0a;
+  --ring: rgba(250, 250, 250, 0.4);
+  --ring-offset: transparent;
 
-  --shadow-focus: 0 0 0 3px rgba(99, 102, 241, 0.25);
-  --shadow-menu: 0 4px 12px rgba(0, 0, 0, 0.45);
+  --shadow-focus: 0 0 0 4px rgba(250, 250, 250, 0.2);
+  --shadow-menu: 0 10px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
 
-  /* Landing page — dark blueprint on espresso ink. */
   --landing-canvas: #1c1917;
-  --landing-surface: #292524;
-  --landing-elevated: #44403c;
-  --landing-subtle: #57534e;
-  --landing-border: #44403c;
-  --landing-border-strong: #57534e;
+  --landing-surface: rgba(41, 37, 36, 0.8);
+  --landing-elevated: rgba(68, 64, 60, 0.85);
+  --landing-subtle: rgba(87, 83, 78, 0.4);
+  --landing-border: rgba(68, 64, 60, 0.8);
+  --landing-border-strong: rgba(87, 83, 78, 0.9);
   --landing-text: #fafaf9;
   --landing-text-secondary: #d6d3d1;
   --landing-muted: #a8a29e;
   --landing-subtle-text: #78716c;
   --landing-accent: #fafaf9;
   --landing-accent-hover: #e7e5e4;
-  --landing-accent-soft: #44403c;
+  --landing-accent-soft: rgba(68, 64, 60, 0.5);
   --landing-accent-fg: #1c1917;
   --landing-accent-glow: rgba(250, 250, 249, 0.08);
   --landing-ink: #fafaf9;
@@ -231,8 +210,6 @@
   --landing-grid: rgba(250, 250, 249, 0.06);
 }
 
-/* Override browser autofill colors so saved credentials blend with the
-   warm auth theme instead of showing the default yellow/blue fill. */
 input:-webkit-autofill,
 input:-webkit-autofill:hover,
 input:-webkit-autofill:focus,
@@ -242,13 +219,12 @@ textarea:-webkit-autofill:focus,
 select:-webkit-autofill,
 select:-webkit-autofill:hover,
 select:-webkit-autofill:focus {
-  -webkit-box-shadow: 0 0 0px 1000px var(--landing-canvas) inset;
-  -webkit-text-fill-color: var(--landing-text);
-  caret-color: var(--landing-text);
+  -webkit-box-shadow: 0 0 0px 1000px var(--bg-canvas) inset;
+  -webkit-text-fill-color: var(--text-primary);
+  caret-color: var(--text-primary);
   transition: background-color 5000s ease-in-out 0s;
 }
 
-/* Hairline border helper — true 0.5px on retina, 1px elsewhere. */
 @media (min-resolution: 2dppx) {
   .border-hairline {
     border-width: 0.5px !important;

@@ -9,10 +9,11 @@ use App\Modules\HR\Models\Employee;
 use App\Modules\Payroll\Enums\DeMinimisBenefitType;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class DeMinimisBenefit extends Model
 {
-    use HasHashId;
+    use HasHashId, SoftDeletes;
 
     protected $table = 'de_minimis_benefits';
 

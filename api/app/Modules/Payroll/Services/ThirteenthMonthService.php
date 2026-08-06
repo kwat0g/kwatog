@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Payroll\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\SettingsService;
 use App\Common\Support\Money;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Enums\EmployeeStatus;
@@ -27,6 +28,8 @@ use Illuminate\Support\Facades\DB;
  */
 class ThirteenthMonthService
 {
+    public function __construct(private readonly SettingsService $settings) {}
+
     /**
      * Increment the running accrual for an employee + year by this payroll's
      * basic pay. Idempotent via UNIQUE (employee_id, year).
@@ -130,7 +133,10 @@ class ThirteenthMonthService
     public function computeAndPay(int $year, User $triggeredBy, ?string $payrollDate = null): PayrollPeriod
     {
         return DB::transaction(function () use ($year, $triggeredBy, $payrollDate) {
-            $payDate = $payrollDate ? CarbonImmutable::parse($payrollDate) : CarbonImmutable::create($year, 12, 15);
+            $payDay = $this->settings->requiredInt('payroll.thirteenth_month.default_pay_day', 1, 31);
+            $payDate = $payrollDate
+                ? CarbonImmutable::parse($payrollDate)
+                : CarbonImmutable::create($year, 12, $payDay);
 
             // One 13th-month period per year.
             $existing = PayrollPeriod::query()
@@ -210,14 +216,105 @@ class ThirteenthMonthService
                     'amount'         => $amount,
                 ]);
 
+                // The accrual is linked to its payroll row and its final amount
+                // is recorded, but it is NOT marked paid here.
+                //
+                // computeAndPay() used to flip is_paid on a period still sitting
+                // at Draft, so the year's 13th month read as settled before any
+                // checker had seen it — and nothing downstream would ever pay it
+                // again, since accrue() skips a paid accrual. Payment is now
+                // recognised only when the period is finalized (see
+                // markAccrualsPaidOnFinalize), which is the same maker-checker
+                // gate REC-04 puts on every other material batch.
                 $accrual->accrued_amount = $amount;
-                $accrual->is_paid        = true;
-                $accrual->paid_date      = $payDate->toDateString();
                 $accrual->payroll_id     = $payroll->id;
                 $accrual->save();
+
+                // Stake the year's 13th-month cycle so a second run cannot pay
+                // the same employee twice. Mirrors the guard the semi-monthly
+                // calculator applies; the unique index is what enforces it.
+                $this->claimThirteenthMonthCycle($payroll, $period, $emp);
             }
+
+            // Computed, NOT Draft: rows exist and are awaiting approval. Parking
+            // at Draft made a finished run indistinguishable from an untouched
+            // one — the same conflation the status split removed for the
+            // semi-monthly pipeline.
+            $period->forceFill([
+                'status'      => PayrollPeriodStatus::Computed->value,
+                'computed_by' => $triggeredBy->id,
+            ])->save();
 
             return $period->fresh();
         });
+    }
+
+    /**
+     * Recognise payment once a 13th-month period is finalized.
+     *
+     * Called by the PayrollPeriodFinalized listener path so is_paid flips only
+     * after approve() + finalize() have both run. Idempotent: an already-paid
+     * accrual is left alone.
+     */
+    public function markAccrualsPaidOnFinalize(PayrollPeriod $period): int
+    {
+        if (! $period->is_thirteenth_month) {
+            return 0;
+        }
+
+        $year = (int) $period->period_start->format('Y');
+        $paidDate = $period->payroll_date ?? $period->period_end;
+
+        return ThirteenthMonthAccrual::query()
+            ->where('year', $year)
+            ->where('is_paid', false)
+            ->whereNotNull('payroll_id')
+            ->whereIn('payroll_id', Payroll::where('payroll_period_id', $period->id)->select('id'))
+            ->update([
+                'is_paid'    => true,
+                'paid_date'  => $paidDate instanceof \DateTimeInterface
+                    ? $paidDate->format('Y-m-d')
+                    : (string) $paidDate,
+                'updated_at' => now(),
+            ]);
+    }
+
+    /**
+     * Claim the year's 13th-month cycle for this employee.
+     *
+     * The 13th month is its own cycle key ('YYYY-13TH'), so it never collides
+     * with a semi-monthly cutoff. Two 13th-month runs for one year would, which
+     * is exactly what this prevents.
+     */
+    private function claimThirteenthMonthCycle(Payroll $payroll, PayrollPeriod $period, Employee $employee): void
+    {
+        $cycleKey = $period->cycleKey();
+
+        $holder = \App\Modules\Payroll\Models\PayrollCycleClaim::query()
+            ->where('employee_id', $employee->id)
+            ->where('cycle_key', $cycleKey)
+            ->first();
+
+        if ($holder) {
+            // A re-run of the SAME period is legitimate: the wipe above deleted
+            // the old payroll rows, and claims cascade on payroll_id, so any
+            // surviving claim belongs to a different period.
+            if ((int) $holder->payroll_period_id === (int) $period->id) {
+                return;
+            }
+
+            throw new BusinessRuleException(sprintf(
+                'Employee %s has already received 13th-month pay for %s under another period.',
+                $employee->employee_no,
+                $period->period_start->format('Y'),
+            ));
+        }
+
+        \App\Modules\Payroll\Models\PayrollCycleClaim::create([
+            'employee_id'       => $employee->id,
+            'payroll_id'        => $payroll->id,
+            'payroll_period_id' => $period->id,
+            'cycle_key'         => $cycleKey,
+        ]);
     }
 }

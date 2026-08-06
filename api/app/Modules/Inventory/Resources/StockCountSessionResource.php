@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace App\Modules\Inventory\Resources;
 
 use App\Modules\Auth\Resources\UserResource;
+use App\Modules\Inventory\Enums\StockCountSessionStatus;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Str;
 
 class StockCountSessionResource extends JsonResource
 {
@@ -17,6 +19,7 @@ class StockCountSessionResource extends JsonResource
             'session_number'   => $this->session_number,
             'title'            => $this->title,
             'scope'            => $this->scope,
+            'scope_label'      => Str::headline((string) $this->scope),
             'warehouse'        => $this->whenLoaded('warehouse', fn () => [
                 'id'   => $this->warehouse?->hash_id,
                 'name' => $this->warehouse?->name,
@@ -27,7 +30,8 @@ class StockCountSessionResource extends JsonResource
                 'name' => $this->zone?->name,
                 'code' => $this->zone?->code,
             ]),
-            'status'           => $this->status,
+            'status'           => $this->status?->value,
+            'status_label'     => $this->status?->label(),
             'total_locations'  => $this->total_locations,
             'counted_locations' => $this->counted_locations,
             'variance_count'   => $this->variance_count,

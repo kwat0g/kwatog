@@ -38,6 +38,8 @@ Route::middleware(['auth:sanctum', 'feature:quality'])->prefix('quality')->group
         ->middleware('permission:quality.calibration.manage');
 
     /* ─── Inspection specs (Task 59) ─── */
+    Route::get('/inspection-specs/options',                 [InspectionSpecController::class, 'options'])
+        ->middleware('permission:quality.specs.view');
     Route::get('/inspection-specs',                       [InspectionSpecController::class, 'index'])
         ->middleware('permission:quality.specs.view');
     Route::get('/inspection-specs/{inspectionSpec}',      [InspectionSpecController::class, 'show'])
@@ -46,6 +48,8 @@ Route::middleware(['auth:sanctum', 'feature:quality'])->prefix('quality')->group
         ->middleware('permission:quality.specs.manage');
     Route::delete('/inspection-specs/{inspectionSpec}',   [InspectionSpecController::class, 'destroy'])
         ->middleware('permission:quality.specs.manage');
+    Route::patch('/inspection-specs/{inspectionSpec}/restore', [InspectionSpecController::class, 'restore'])
+        ->middleware('permission:quality.specs.manage');
     Route::get('/inspection-specs/{inspectionSpec}/spc', [InspectionSpecController::class, 'spcData'])
         ->middleware('permission:quality.specs.view');
 
@@ -53,11 +57,15 @@ Route::middleware(['auth:sanctum', 'feature:quality'])->prefix('quality')->group
         ->middleware('permission:quality.specs.view');
 
     /* ─── Inspections (Task 60) ─── */
+    Route::get('/inspections/options',                       [InspectionController::class, 'options'])
+        ->middleware('permission:quality.inspections.view');
     Route::get('/inspections',                                  [InspectionController::class, 'index'])
         ->middleware('permission:quality.inspections.view');
     Route::get('/inspections/aql-preview',                      [InspectionController::class, 'aqlPreview'])
         ->middleware('permission:quality.inspections.view');
     Route::get('/inspections/{inspection}',                     [InspectionController::class, 'show'])
+        ->middleware('permission:quality.inspections.view');
+    Route::get('/inspections/{inspection}/chain',                [InspectionController::class, 'chain'])
         ->middleware('permission:quality.inspections.view');
     Route::post('/inspections',                                 [InspectionController::class, 'store'])
         ->middleware('permission:quality.inspections.manage');
@@ -71,6 +79,10 @@ Route::middleware(['auth:sanctum', 'feature:quality'])->prefix('quality')->group
         ->middleware('permission:quality.inspections.view');
 
     /* ─── ADV7 — NCR templates ─── */
+    Route::get('/ncr-templates/options',                      [NcrTemplateController::class, 'options'])
+        ->middleware('permission:quality.ncr.view');
+    Route::get('/ncrs/options',                               [NcrController::class, 'options'])
+        ->middleware('permission:quality.ncr.view');
     Route::get('/ncr-templates/active',                        [NcrTemplateController::class, 'active'])
         ->middleware('permission:quality.ncr.view');
     Route::get('/ncr-templates',                                [NcrTemplateController::class, 'index'])
@@ -82,6 +94,8 @@ Route::middleware(['auth:sanctum', 'feature:quality'])->prefix('quality')->group
     Route::patch('/ncr-templates/{ncrTemplate}',                 [NcrTemplateController::class, 'update'])
         ->middleware('permission:quality.ncr.manage');
     Route::delete('/ncr-templates/{ncrTemplate}',               [NcrTemplateController::class, 'destroy'])
+        ->middleware('permission:quality.ncr.manage');
+    Route::patch('/ncr-templates/{ncrTemplate}/restore',        [NcrTemplateController::class, 'restore'])
         ->middleware('permission:quality.ncr.manage');
 
     /* ─── NCRs (Task 61) ─── */
@@ -123,6 +137,8 @@ Route::middleware(['auth:sanctum', 'feature:quality'])->prefix('quality')->group
     /* ─── T3.6.B — COPQ rollup trend ─── */
     Route::get('/copq/trend',                                   [CopqController::class, 'trend'])
         ->middleware('permission:quality.copq.view');
+    Route::get('/copq/policy',                                  [CopqController::class, 'policy'])
+        ->middleware('permission:quality.copq.view');
     Route::get('/copq/summary',                                 [CopqController::class, 'summary'])
         ->middleware('permission:quality.copq.view');
     Route::get('/copq/by-product',                              [CopqController::class, 'byProduct'])
@@ -147,7 +163,11 @@ Route::middleware(['auth:sanctum', 'feature:quality'])->prefix('quality')->group
         ->middleware('permission:quality.inspections.view');
 
     /* ─── T3.5 — Controlled documents (admin) ─── */
+    Route::get('/documents/options',                         [DocumentController::class, 'options'])
+        ->middleware('permission:quality.documents.view');
     Route::get('/documents',                                  [DocumentController::class, 'index'])
+        ->middleware('permission:quality.documents.view');
+    Route::get('/documents/assignee-roles',                   [DocumentController::class, 'assigneeRoles'])
         ->middleware('permission:quality.documents.view');
     Route::post('/documents',                                 [DocumentController::class, 'store'])
         ->middleware('permission:quality.documents.manage');
@@ -173,6 +193,7 @@ Route::middleware(['auth:sanctum', 'feature:quality'])->prefix('quality')->group
 
     /* ─── SPC — Statistical Process Control ─── */
     Route::get('/spc/charts',                      [SpcController::class, 'index'])           ->middleware('permission:quality.spc.view');
+    Route::get('/spc/charts/options',              [SpcController::class, 'options'])         ->middleware('permission:quality.spc.view');
     Route::post('/spc/charts',                     [SpcController::class, 'store'])           ->middleware('permission:quality.spc.manage');
     Route::get('/spc/charts/{chart}',              [SpcController::class, 'show'])            ->middleware('permission:quality.spc.view');
     Route::get('/spc/charts/{chart}/data',         [SpcController::class, 'data'])            ->middleware('permission:quality.spc.view');

@@ -9,10 +9,12 @@ use App\Common\Services\DocumentSequenceService;
 use App\Common\Support\HashIdFilter;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\MaterialIssueStatus;
+use App\Modules\Inventory\Enums\ReservationStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\MaterialIssueSlip;
 use App\Modules\Inventory\Models\MaterialIssueSlipItem;
+use App\Modules\Inventory\Models\MaterialReservation;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Support\StockMovementInput;
@@ -57,7 +59,7 @@ class MaterialIssueService
     {
         return DB::transaction(function () use ($data, $by) {
             $slip = MaterialIssueSlip::create([
-                'slip_number'   => $this->sequences->generate('grn'), // reuse GRN seq pad style; we add MIS prefix below
+                'slip_number'   => $this->sequences->generate('material_issue'),
                 'work_order_id' => $data['work_order_id'] ?? null,
                 'issued_date'   => $data['issued_date'],
                 'issued_by'     => $by->id,
@@ -67,9 +69,6 @@ class MaterialIssueService
                 'reference_text'=> $data['reference_text'] ?? null,
                 'remarks'       => $data['remarks'] ?? null,
             ]);
-            // Replace the GRN-style number with MIS prefix.
-            $slip->slip_number = 'MIS-'.now()->format('Ym').'-'.str_pad((string) $slip->id, 4, '0', STR_PAD_LEFT);
-            $slip->save();
 
             $totalValue = '0';
             foreach ($data['items'] as $row) {
@@ -105,8 +104,7 @@ class MaterialIssueService
                     ->lockForUpdate()->first();
                 if (! $level) {
                     throw new BusinessRuleException("No stock at item={$itemId} location={$locId}.");
-                }                $unitCost = (string) $level->weighted_avg_cost;
-                $lineTotal = bcmul($qty, $unitCost, 4);
+                }
 
                 $mvmt = $this->movements->move(new StockMovementInput(
                     type: StockMovementType::MaterialIssue,
@@ -114,12 +112,15 @@ class MaterialIssueService
                     fromLocationId: $locId,
                     toLocationId: null,
                     quantity: $qty,
-                    unitCost: $unitCost,
+                    unitCost: null,
                     referenceType: 'material_issue_slip',
                     referenceId: $slip->id,
                     remarks: "MIS {$slip->slip_number}",
                     createdBy: $by->id,
                 ));
+
+                $unitCost = (string) $mvmt->unit_cost;
+                $lineTotal = bcmul($qty, $unitCost, 4);
 
                 // OGAMI-012 — optional lot stamp so an issued lot is traceable
                 // back to the GRN lot it came from. Null-safe; existing callers
@@ -128,6 +129,16 @@ class MaterialIssueService
                     $mvmt,
                     isset($row['lot_number']) ? (string) $row['lot_number'] : null,
                 );
+
+                $reservationId = $row['material_reservation_id'] ?? null;
+                if ($reservationId) {
+                    $actualId = HashIdFilter::decode($reservationId, MaterialReservation::class) ?? (int) $reservationId;
+                    $res = MaterialReservation::query()->lockForUpdate()->find($actualId);
+                    if ($res) {
+                        $res->update(['status' => ReservationStatus::Issued, 'released_at' => now()]);
+                        $this->movements->release($itemId, $locId, $qty);
+                    }
+                }
 
                 MaterialIssueSlipItem::create([
                     'material_issue_slip_id'  => $slip->id,
@@ -149,11 +160,55 @@ class MaterialIssueService
         });
     }
 
-    public function cancel(MaterialIssueSlip $slip): void
+    /**
+     * Cancel a slip. F-18: previously dead code — create() landed slips in
+     * Issued, so the Draft-only guard meant no slip could ever be cancelled
+     * and issued stock was irreversible. Now:
+     *  - Draft slips: release any linked reservations, then mark cancelled.
+     *  - Issued slips: reverse every issued line back into inventory via an
+     *    AdjustmentIn movement at the original unit cost (GL posts through
+     *    MovementGlPostingService), then mark cancelled.
+     */
+    public function cancel(MaterialIssueSlip $slip, ?User $by = null): void
     {
-        if ($slip->status !== MaterialIssueStatus::Draft) {
-            throw new BusinessRuleException('Only draft slips can be cancelled.');
+        if ($slip->status === MaterialIssueStatus::Cancelled) {
+            throw new BusinessRuleException('Slip is already cancelled.');
         }
-        $slip->update(['status' => MaterialIssueStatus::Cancelled]);
+
+        DB::transaction(function () use ($slip, $by) {
+            if ($slip->status === MaterialIssueStatus::Issued) {
+                foreach ($slip->items as $item) {
+                    $this->movements->move(new StockMovementInput(
+                        type: StockMovementType::AdjustmentIn,
+                        itemId: $item->item_id,
+                        toLocationId: $item->location_id,
+                        quantity: (string) $item->quantity_issued,
+                        unitCost: (string) $item->unit_cost,
+                        referenceType: 'material_issue_slip',
+                        referenceId: $slip->id,
+                        remarks: "MIS {$slip->slip_number} cancel reversal",
+                        createdBy: $by?->id,
+                    ));
+                }
+            } else {
+                foreach ($slip->items as $item) {
+                    if ($item->material_reservation_id) {
+                        $res = MaterialReservation::query()
+                            ->lockForUpdate()
+                            ->find($item->material_reservation_id);
+                        if ($res && $res->status === ReservationStatus::Reserved) {
+                            $res->update(['status' => ReservationStatus::Released, 'released_at' => now()]);
+                            $this->movements->release(
+                                $item->item_id,
+                                $item->location_id,
+                                (string) $item->quantity_issued,
+                            );
+                        }
+                    }
+                }
+            }
+
+            $slip->update(['status' => MaterialIssueStatus::Cancelled]);
+        });
     }
 }

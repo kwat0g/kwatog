@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Accounting\Resources;
 
 use App\Common\Support\Money;
+use App\Common\Services\SettingsService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -22,6 +23,9 @@ class CustomerResource extends JsonResource
         $creditLimit  = (string) ($this->credit_limit ?? '0');
         $creditUsed   = (string) ($creditUsedRaw ?? '0');
         $creditAvail  = $creditLimit !== '0' ? Money::sub($creditLimit, $creditUsed) : null;
+        $warningRatio = app(SettingsService::class)->requiredFloat('accounting.customer_credit.warning_ratio', 0, 1);
+        $creditWarning = $creditUsedRaw !== null && $creditLimit !== '0'
+            && ((float) $creditUsed / (float) $creditLimit) >= $warningRatio;
 
         return [
             'id'                 => $this->hash_id,
@@ -35,11 +39,14 @@ class CustomerResource extends JsonResource
             'credit_limit'       => $this->credit_limit ? (string) $this->credit_limit : null,
             'credit_used'        => $creditUsedRaw !== null ? Money::round2($creditUsed) : null,
             'credit_available'   => $creditAvail,
+            'credit_warning_ratio' => $warningRatio,
+            'credit_warning'     => $creditWarning,
             'payment_terms_days' => (int) $this->payment_terms_days,
             'is_active'          => (bool) $this->is_active,
             'invoices_count'     => $this->whenCounted('invoices'),
             'created_at'         => optional($this->created_at)->toIso8601String(),
             'updated_at'         => optional($this->updated_at)->toIso8601String(),
+            'deleted_at'         => optional($this->deleted_at)?->toIso8601String(),
         ];
     }
 

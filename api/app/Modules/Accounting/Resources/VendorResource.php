@@ -32,6 +32,7 @@ class VendorResource extends JsonResource
             'bills_count'        => $this->whenCounted('bills'),
             'created_at'         => optional($this->created_at)->toIso8601String(),
             'updated_at'         => optional($this->updated_at)->toIso8601String(),
+            'deleted_at'         => optional($this->deleted_at)?->toIso8601String(),
         ];
     }
 

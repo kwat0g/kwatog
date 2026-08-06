@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Services;
 
+use App\Common\Services\SettingsService;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Accounting\Models\Budget;
 use Illuminate\Database\Eloquent\Model;
@@ -12,11 +13,13 @@ use RuntimeException;
 
 class BudgetEnforcementService
 {
+    public function __construct(private readonly SettingsService $settings) {}
+
     /**
      * Check if a department has remaining budget for a given amount.
      * Returns [bool $canProceed, string $level, string $message].
      *
-     * Level: 'ok' | 'warning' (80%+) | 'critical' (95%+) | 'exhausted' (100%+) | 'overdrawn' (120%+)
+     * Levels are determined by the configured budget ratios.
      */
     public function checkAvailability(int $departmentId, float $amount, ?int $fiscalYearId = null): array
     {
@@ -41,31 +44,35 @@ class BudgetEnforcementService
             : 0;
 
         if ($available <= 0) {
-            return [false, 'exhausted', "Budget exhausted. No remaining available funds (₱0.00 available)."];
+            return [false, 'exhausted', 'Budget exhausted. No remaining available funds ('.app(\App\Common\Services\CurrencyDisplayService::class)->format(0).' available).'];
         }
 
         if ($amount > $available) {
-            return [false, 'overdrawn', "Insufficient budget. Requested: ₱" . number_format($amount, 2)
-                . ", Available: ₱" . number_format($available, 2) . "."];
+            return [false, 'overdrawn', 'Insufficient budget. Requested: '.app(\App\Common\Services\CurrencyDisplayService::class)->format($amount)
+                . ', Available: '.app(\App\Common\Services\CurrencyDisplayService::class)->format($available).'.'];
         }
 
-        if ($pct >= 120) {
+        $warning = $this->settings->requiredFloat('budget.warning_ratio', 0, 1);
+        $critical = $this->settings->requiredFloat('budget.critical_ratio', $warning, 1);
+        $exhausted = $this->settings->requiredFloat('budget.exhausted_ratio', $critical, null);
+        $overdrawn = $this->settings->requiredFloat('budget.overdrawn_ratio', $exhausted, null);
+        if ($pct / 100 >= $overdrawn) {
             return [false, 'overdrawn', "Budget {$pct}% consumed. VP approval required."];
         }
 
-        if ($pct >= 100) {
-            return [false, 'exhausted', "Budget 100% consumed. Finance acknowledgment required."];
+        if ($pct / 100 >= $exhausted) {
+            return [false, 'exhausted', "Budget {$pct}% consumed. Finance acknowledgment required."];
         }
 
-        if ($pct >= 95) {
+        if ($pct / 100 >= $critical) {
             return [false, 'critical', "Budget {$pct}% consumed. Finance acknowledgment required."];
         }
 
-        if ($pct >= 80) {
+        if ($pct / 100 >= $warning) {
             return [true, 'warning', "Budget {$pct}% consumed. Warning sent to department head."];
         }
 
-        return [true, 'ok', "Budget within limits ({$pct}% consumed). ₱" . number_format($available, 2) . " available."];
+        return [true, 'ok', "Budget within limits ({$pct}% consumed). ".app(\App\Common\Services\CurrencyDisplayService::class)->format($available)." available."];
     }
 
     public function assess(Model $document, int $departmentId, float $amount, ?int $fiscalYearId = null): array
@@ -80,7 +87,7 @@ class BudgetEnforcementService
             'budget_acknowledged_at'  => null,
         ])->save();
 
-        if ((string) config('budgeting.enforcement_mode', 'warn') === 'block' && ! $canProceed) {
+        if ($this->enforcementMode() === 'block' && ! $canProceed) {
             throw new RuntimeException($message);
         }
 
@@ -135,7 +142,7 @@ class BudgetEnforcementService
      */
     public function enforce(int $departmentId, float $amount, ?int $fiscalYearId = null): void
     {
-        $mode = (string) config('budgeting.enforcement_mode', 'off');
+        $mode = $this->enforcementMode();
         if ($mode === 'off') {
             return;
         }
@@ -161,5 +168,14 @@ class BudgetEnforcementService
         if ($mode === 'block') {
             throw new RuntimeException($message);
         }
+    }
+
+    private function enforcementMode(): string
+    {
+        $mode = $this->settings->requiredString('budgeting.enforcement_mode');
+        if (! in_array($mode, ['off', 'warn', 'block'], true)) {
+            throw new BusinessRuleException('Invalid budgeting enforcement mode.');
+        }
+        return $mode;
     }
 }

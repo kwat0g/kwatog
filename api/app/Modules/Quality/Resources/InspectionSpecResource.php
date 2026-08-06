@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Quality\Resources;
 
+use App\Modules\Quality\Enums\InspectionParameterType;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -31,6 +32,7 @@ class InspectionSpecResource extends JsonResource
                     'id'              => $it->hash_id,
                     'parameter_name'  => $it->parameter_name,
                     'parameter_type'  => (string) ($it->parameter_type?->value ?? $it->parameter_type),
+                    'parameter_type_label' => InspectionParameterType::tryFrom((string) ($it->parameter_type?->value ?? $it->parameter_type))?->label(),
                     'unit_of_measure' => $it->unit_of_measure,
                     'nominal_value'   => $it->nominal_value !== null ? (string) $it->nominal_value : null,
                     'tolerance_min'   => $it->tolerance_min  !== null ? (string) $it->tolerance_min  : null,
@@ -42,6 +44,7 @@ class InspectionSpecResource extends JsonResource
             ),
             'created_at' => optional($this->created_at)->toIso8601String(),
             'updated_at' => optional($this->updated_at)->toIso8601String(),
+            'deleted_at' => optional($this->deleted_at)?->toIso8601String(),
         ];
     }
 }

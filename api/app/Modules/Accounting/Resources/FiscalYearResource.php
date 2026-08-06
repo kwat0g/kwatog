@@ -6,6 +6,7 @@ namespace App\Modules\Accounting\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Str;
 
 class FiscalYearResource extends JsonResource
 {
@@ -17,6 +18,7 @@ class FiscalYearResource extends JsonResource
             'start_date' => $this->start_date?->format('Y-m-d'),
             'end_date'   => $this->end_date?->format('Y-m-d'),
             'status'     => $this->status,
+            'status_label' => Str::headline((string) $this->status),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

@@ -25,6 +25,8 @@ Route::prefix('admin')
     ->group(function (): void {
 
         // Series F / Task F7 — Company-wide activity feed.
+        Route::get('activity/options', [ActivityFeedController::class, 'options'])
+            ->middleware('permission:admin.activity.view');
         Route::get('activity', [ActivityFeedController::class, 'index'])
             ->middleware('permission:admin.activity.view');
 
@@ -38,6 +40,7 @@ Route::prefix('admin')
             Route::get('roles/{role}', [RoleController::class, 'show'])->middleware('permission:admin.roles.manage');
             Route::put('roles/{role}', [RoleController::class, 'update'])->middleware('permission:admin.roles.manage');
             Route::delete('roles/{role}', [RoleController::class, 'destroy'])->middleware('permission:admin.roles.manage');
+            Route::patch('roles/{role}/restore', [RoleController::class, 'restore'])->middleware('permission:admin.roles.manage');
             Route::put('roles/{role}/permissions', [RoleController::class, 'syncPermissions'])->middleware('permission:admin.roles.manage');
             // Series R — Task R1: clone an existing role into a new custom role.
             Route::post('roles/{role}/clone', [RoleController::class, 'clone'])->middleware('permission:admin.roles.manage');
@@ -52,6 +55,7 @@ Route::prefix('admin')
                 Route::get('/', [UserPermissionOverrideController::class, 'index']);
                 Route::post('/', [UserPermissionOverrideController::class, 'store']);
                 Route::delete('{override}', [UserPermissionOverrideController::class, 'destroy']);
+                Route::patch('{override}/restore', [UserPermissionOverrideController::class, 'restore']);
             });
 
         // U2 — central user-management surface.
@@ -59,6 +63,7 @@ Route::prefix('admin')
             ->middleware('permission:admin.users.manage')
             ->group(function (): void {
                 Route::get('/', [UserAdminController::class, 'index']);
+                Route::get('/options', [UserAdminController::class, 'options']);
                 Route::post('/', [UserAdminController::class, 'store']);
                 // ADV — bulk role update. MUST be declared before `{user}` wildcard routes
                 // or the literal string `bulk-role` gets captured as a hash ID and 404s.
@@ -76,6 +81,8 @@ Route::prefix('admin')
 Route::prefix('admin')
     ->middleware(['auth:sanctum', 'session.timeout', 'password.expired', 'permission:admin.audit_logs.view'])
     ->group(function (): void {
+        Route::get('audit-logs/options', [AuditLogController::class, 'options'])
+            ->middleware('permission:admin.audit_logs.view');
         Route::get('audit-logs', [AuditLogController::class, 'index'])
             ->middleware('permission:admin.audit_logs.view');
         // Entity-scoped trail — "show all changes to PO-202604-0015".

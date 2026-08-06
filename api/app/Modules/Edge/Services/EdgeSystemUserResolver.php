@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Edge\Services;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use Illuminate\Support\Facades\Auth;
@@ -22,8 +23,9 @@ use Illuminate\Support\Str;
  */
 class EdgeSystemUserResolver
 {
-    public const SYSTEM_USER_EMAIL = 'edge-system@ogami.internal';
     public const CACHE_KEY         = 'edge:system_user_id';
+
+    public function __construct(private readonly SettingsService $settings) {}
 
     /**
      * Resolve (or lazily provision) the edge-system user id. Cached forever
@@ -31,18 +33,21 @@ class EdgeSystemUserResolver
      */
     public function id(): int
     {
+        $email = $this->settings->requiredString('edge.system_user.email');
+        $name = $this->settings->requiredString('edge.system_user.name');
         $cached = Cache::get(self::CACHE_KEY);
         if (is_int($cached) && User::query()->whereKey($cached)->exists()) {
             return $cached;
         }
 
-        $user = User::query()->where('email', self::SYSTEM_USER_EMAIL)->first();
+        $user = User::query()->where('email', $email)->first();
         if (! $user) {
-            $roleId = Role::query()->where('slug', 'employee')->value('id')
+            $defaultRoleSlug = $this->settings->requiredString('hr.default_user_role_slug');
+            $roleId = Role::query()->where('slug', $defaultRoleSlug)->value('id')
                 ?? Role::query()->orderBy('id')->value('id');
             $user = User::create([
-                'name'                => 'Edge System',
-                'email'               => self::SYSTEM_USER_EMAIL,
+                'name'                => $name,
+                'email'               => $email,
                 'password'            => bcrypt(Str::random(40)),
                 'role_id'             => $roleId,
                 'is_active'           => true,

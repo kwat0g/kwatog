@@ -6,71 +6,71 @@ import type { ApiSuccess } from '@/types';
  */
 
 export interface DashboardWidgetMeta {
-  key: string;
-  name: string;
-  description: string | null;
-  module: string;
-  permission: string | null;
-  default_w: number;
-  default_h: number;
+ key: string;
+ name: string;
+ description: string | null;
+ module: string;
+ permission: string | null;
+ default_w: number;
+ default_h: number;
 }
 
 export interface DashboardLayoutItem {
-  key: string;
-  name: string;
-  description: string | null;
-  module: string;
-  permission: string | null;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  /** 'role' = inherited from role default, 'user' = saved by this user. */
-  source: 'role' | 'user';
+ key: string;
+ name: string;
+ description: string | null;
+ module: string;
+ permission: string | null;
+ x: number;
+ y: number;
+ w: number;
+ h: number;
+ /** 'role' = inherited from role default, 'user' = saved by this user. */
+ source: 'role' | 'user';
 }
 
 export interface SavedLayoutWidget {
-  key: string;
-  x?: number;
-  y?: number;
-  w?: number;
-  h?: number;
+ key: string;
+ x?: number;
+ y?: number;
+ w?: number;
+ h?: number;
 }
 
 export interface DashboardWidgetSummary {
-  key: string;
-  value: string | null;
-  kind: 'number' | 'decimal' | 'currency' | 'percent' | 'hours' | 'date';
-  helper: string | null;
-  available: boolean;
-  updated_at: string;
+ key: string;
+ value: string | null;
+ kind: 'number' | 'decimal' | 'currency' | 'percent' | 'hours' | 'date';
+ helper: string | null;
+ available: boolean;
+ updated_at: string;
 }
 
 export const dashboardLayoutApi = {
-  widgets: () =>
-    client
-      .get<ApiSuccess<DashboardWidgetMeta[]>>('/dashboard/widgets')
-      .then((r) => r.data.data),
+ widgets: () =>
+ client
+ .get<ApiSuccess<DashboardWidgetMeta[]>>('/dashboard/widgets')
+ .then((r) => r.data.data),
 
-  layout: () =>
-    client
-      .get<ApiSuccess<DashboardLayoutItem[]>>('/dashboard/layout')
-      .then((r) => r.data.data),
+ layout: () =>
+ client
+ .get<ApiSuccess<DashboardLayoutItem[]>>('/dashboard/layout')
+ .then((r) => r.data.data),
 
-  data: (keys: string[]) =>
-    client
-      .get<ApiSuccess<Record<string, DashboardWidgetSummary>>>('/dashboard/widget-data', {
-        params: { keys },
-      })
-      .then((r) => r.data.data),
+ data: (keys: string[]) =>
+ client
+ .get<ApiSuccess<Record<string, DashboardWidgetSummary>>>('/dashboard/widget-data', {
+ params: { keys },
+ })
+ .then((r) => r.data.data),
 
-  save: (widgets: SavedLayoutWidget[]) =>
-    client
-      .put<ApiSuccess<DashboardLayoutItem[]>>('/dashboard/layout', { widgets })
-      .then((r) => r.data.data),
+ save: (widgets: SavedLayoutWidget[]) =>
+ client
+ .put<ApiSuccess<DashboardLayoutItem[]>>('/dashboard/layout', { widgets })
+ .then((r) => r.data.data),
 
-  reset: () =>
-    client
-      .post<ApiSuccess<DashboardLayoutItem[]>>('/dashboard/layout/reset')
-      .then((r) => r.data.data),
+ reset: () =>
+ client
+ .post<ApiSuccess<DashboardLayoutItem[]>>('/dashboard/layout/reset')
+ .then((r) => r.data.data),
 };

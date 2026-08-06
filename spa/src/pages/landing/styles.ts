@@ -19,7 +19,7 @@
 import { cn } from '@/lib/cn';
 
 /** Page max-width + horizontal centering. Pair with `sectionPadX` on the section. */
-export const container = 'mx-auto w-full max-w-6xl';
+export const container = 'mx-auto w-full max-w-7xl';
 
 /** Horizontal page gutter — identical on every section. */
 export const sectionPadX = 'px-5 sm:px-5';
@@ -63,9 +63,9 @@ export function card(
   className?: string,
 ): string {
   return cn(
-    'relative rounded-md border border-landing-border bg-landing-surface p-5 sm:p-7',
+    'relative rounded-2xl border border-landing-border bg-landing-surface p-6 sm:p-8',
     variant === 'interactive' &&
-      'transition-colors duration-300 hover:border-landing-accent/40',
+      'transition-all duration-500 hover:-translate-y-1.5 hover:border-landing-accent/50 hover:shadow-2xl hover:shadow-landing-accent/20',
     className,
   );
 }

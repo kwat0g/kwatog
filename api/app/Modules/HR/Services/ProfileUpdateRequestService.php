@@ -7,6 +7,7 @@ namespace App\Modules\HR\Services;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\ProfileUpdateRequest;
+use App\Modules\HR\Enums\ProfileUpdateStatus;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -61,7 +62,7 @@ class ProfileUpdateRequestService
         return DB::transaction(fn () => ProfileUpdateRequest::create([
             'employee_id'      => $employee->id,
             'requested_by'     => $requester->id,
-            'status'           => 'pending',
+            'status'           => ProfileUpdateStatus::Pending->value,
             'requires_finance' => $requiresFinance,
             'changes'          => $filtered,
             'note'             => $note,
@@ -88,7 +89,7 @@ class ProfileUpdateRequestService
             ->with(['employee.department', 'requester']);
 
         $status = $filters['status'] ?? 'pending';
-        if (in_array($status, ['pending', 'pending_finance', 'approved', 'rejected'], true)) {
+        if (in_array($status, ProfileUpdateStatus::values(), true)) {
             $query->where('status', $status);
         }
 
@@ -102,7 +103,7 @@ class ProfileUpdateRequestService
      */
     public function approve(ProfileUpdateRequest $request, User $reviewer, ?string $remarks = null): ProfileUpdateRequest
     {
-        abort_unless($request->status === 'pending', 422, 'Request is not awaiting HR review.');
+        abort_unless($request->status === ProfileUpdateStatus::Pending->value, 422, 'Request is not awaiting HR review.');
         // REC-02 — a reviewer cannot approve a request they submitted.
         $this->assertNotSelfReviewing($request, $reviewer);
 
@@ -115,12 +116,12 @@ class ProfileUpdateRequestService
 
             if ($request->requires_finance) {
                 // Defer application until Finance signs off.
-                $request->update(['status' => 'pending_finance']);
+                $request->update(['status' => ProfileUpdateStatus::PendingFinance->value]);
                 return $request->fresh(['employee', 'reviewer']);
             }
 
             $this->applyChanges($request);
-            $request->update(['status' => 'approved']);
+            $request->update(['status' => ProfileUpdateStatus::Approved->value]);
 
             return $request->fresh(['employee', 'reviewer']);
         });
@@ -132,7 +133,7 @@ class ProfileUpdateRequestService
     public function financeApprove(ProfileUpdateRequest $request, User $reviewer, ?string $remarks = null): ProfileUpdateRequest
     {
         abort_unless($request->requires_finance, 422, 'This request does not require Finance review.');
-        abort_unless($request->status === 'pending_finance', 422, 'Request is not awaiting Finance review.');
+        abort_unless($request->status === ProfileUpdateStatus::PendingFinance->value, 422, 'Request is not awaiting Finance review.');
         // REC-02 — a Finance reviewer cannot approve a request they submitted.
         $this->assertNotSelfReviewing($request, $reviewer);
 
@@ -140,7 +141,7 @@ class ProfileUpdateRequestService
             $this->applyChanges($request);
 
             $request->update([
-                'status'              => 'approved',
+                'status'              => ProfileUpdateStatus::Approved->value,
                 'finance_reviewed_by' => $reviewer->id,
                 'finance_reviewed_at' => now(),
                 'finance_remarks'     => $remarks,
@@ -152,17 +153,17 @@ class ProfileUpdateRequestService
 
     public function reject(ProfileUpdateRequest $request, User $reviewer, ?string $remarks = null): ProfileUpdateRequest
     {
-        abort_unless(in_array($request->status, ['pending', 'pending_finance'], true), 422, 'Request is not pending.');
+        abort_unless(in_array($request->status, [ProfileUpdateStatus::Pending->value, ProfileUpdateStatus::PendingFinance->value], true), 422, 'Request is not pending.');
 
         // Record the rejection on whichever leg is acting.
-        $financeStage = $request->status === 'pending_finance';
+        $financeStage = $request->status === ProfileUpdateStatus::PendingFinance->value;
         $request->update($financeStage ? [
-            'status'              => 'rejected',
+            'status'              => ProfileUpdateStatus::Rejected->value,
             'finance_reviewed_by' => $reviewer->id,
             'finance_reviewed_at' => now(),
             'finance_remarks'     => $remarks,
         ] : [
-            'status'         => 'rejected',
+            'status'         => ProfileUpdateStatus::Rejected->value,
             'reviewed_by'    => $reviewer->id,
             'reviewed_at'    => now(),
             'review_remarks' => $remarks,

@@ -4,8 +4,17 @@ declare(strict_types=1);
 
 namespace App\Modules\Dashboard\Services\Concerns;
 
+use App\Common\Services\SettingsService;
+use App\Modules\CRM\Enums\SalesOrderStatus;
+use App\Modules\MRP\Enums\MrpPlanStatus;
+use App\Modules\Accounting\Enums\JournalEntryStatus;
+use App\Modules\Quality\Enums\InspectionStage;
+use App\Modules\Quality\Enums\InspectionStatus;
+use App\Modules\Quality\Enums\NcrStatus;
+use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 /**
  * Shared query helpers used across multiple role dashboards.
@@ -13,6 +22,11 @@ use Illuminate\Support\Facades\Schema;
  */
 trait DashboardQueries
 {
+    private function functionalCurrency(): string
+    {
+        return app(SettingsService::class)->requiredString('accounting.functional_currency_code');
+    }
+
     private function kpi(string $label, string $value, string $unit): array
     {
         return ['label' => $label, 'value' => $value, 'unit' => $unit];
@@ -40,8 +54,12 @@ trait DashboardQueries
         $row = DB::table('journal_entry_lines')
             ->join('journal_entries', 'journal_entry_lines.journal_entry_id', '=', 'journal_entries.id')
             ->join('accounts', 'journal_entry_lines.account_id', '=', 'accounts.id')
-            ->whereIn('accounts.code', ['1010', '1020', '1030'])
-            ->where('journal_entries.status', 'posted')
+            ->whereIn('accounts.code', array_values(array_filter([
+                app(SettingsService::class)->get('accounting.accounts.cash_code'),
+                app(SettingsService::class)->get('accounting.accounts.payroll_cash_code'),
+                app(SettingsService::class)->get('accounting.accounts.asset_cash_code'),
+            ], static fn ($code) => is_string($code) && $code !== '')))
+            ->where('journal_entries.status', JournalEntryStatus::Posted->value)
             ->select(DB::raw('COALESCE(SUM(debit), 0) - COALESCE(SUM(credit), 0) AS bal'))
             ->first();
         return number_format((float) ($row->bal ?? 0), 2, '.', '');
@@ -59,19 +77,19 @@ trait DashboardQueries
         ];
 
         if (Schema::hasTable('sales_orders')) {
-            $stages['order_entered']['count']    = (int) DB::table('sales_orders')->where('status', 'confirmed')->count();
-            $stages['in_production']['count']    = (int) DB::table('sales_orders')->where('status', 'in_production')->count();
-            $stages['delivered_unpaid']['count'] = (int) DB::table('sales_orders')->where('status', 'delivered')->count();
+            $stages['order_entered']['count']    = (int) DB::table('sales_orders')->where('status', SalesOrderStatus::Confirmed->value)->count();
+            $stages['in_production']['count']    = (int) DB::table('sales_orders')->where('status', SalesOrderStatus::InProduction->value)->count();
+            $stages['delivered_unpaid']['count'] = (int) DB::table('sales_orders')->where('status', SalesOrderStatus::Delivered->value)->count();
         }
         if (Schema::hasTable('mrp_plans')) {
-            $stages['mrp_planned']['count'] = (int) DB::table('mrp_plans')->whereIn('status', ['draft', 'approved'])->count();
+            $stages['mrp_planned']['count'] = (int) DB::table('mrp_plans')->where('status', MrpPlanStatus::Active->value)->count();
         }
         if (Schema::hasTable('inspections')) {
             $stages['qc_pending']['count'] = (int) DB::table('inspections')
-                ->where('stage', 'outgoing')->where('status', 'in_progress')->count();
+                ->where('stage', InspectionStage::Outgoing->value)->where('status', InspectionStatus::InProgress->value)->count();
         }
         if (Schema::hasTable('deliveries')) {
-            $stages['ready_to_ship']['count'] = (int) DB::table('deliveries')->where('status', 'scheduled')->count();
+            $stages['ready_to_ship']['count'] = (int) DB::table('deliveries')->where('status', DeliveryStatus::Scheduled->value)->count();
         }
 
         $max = max(1, max(array_column($stages, 'count')));
@@ -114,7 +132,7 @@ trait DashboardQueries
 
         if (Schema::hasTable('non_conformance_reports')) {
             $ncrs = DB::table('non_conformance_reports')
-                ->whereIn('status', ['open', 'in_progress'])
+                ->whereIn('status', [NcrStatus::Open->value, NcrStatus::InProgress->value])
                 ->orderByRaw("CASE severity WHEN 'critical' THEN 0 WHEN 'major' THEN 1 ELSE 2 END")
                 ->limit(5)
                 ->get(['id', 'ncr_number', 'severity']);
@@ -130,8 +148,10 @@ trait DashboardQueries
         }
 
         if (Schema::hasTable('molds')) {
+            $warningRatio = app(\App\Common\Services\SettingsService::class)
+                ->requiredFloat('alerts.mold.warning_ratio', 0, 1);
             $molds = DB::table('molds')
-                ->whereRaw('current_shot_count >= (max_shots_before_maintenance * 0.8)')
+                ->whereRaw('current_shot_count >= (max_shots_before_maintenance * CAST(? AS numeric))', [$warningRatio])
                 ->orderByRaw('(current_shot_count * 1.0 / NULLIF(max_shots_before_maintenance, 0)) DESC')
                 ->limit(5)
                 ->get(['id', 'mold_code', 'current_shot_count', 'max_shots_before_maintenance']);
@@ -176,6 +196,7 @@ trait DashboardQueries
                 'code'       => $m->machine_code,
                 'name'       => $m->name,
                 'status'     => $m->status,
+                'status_label' => Str::headline((string) $m->status),
                 'has_active_wo' => (bool) $m->current_work_order_id,
             ])->all();
     }

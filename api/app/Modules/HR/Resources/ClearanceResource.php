@@ -8,6 +8,7 @@ use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\HR\Models\Clearance;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Str;
 
 /**
  * @mixin Clearance
@@ -53,6 +54,7 @@ class ClearanceResource extends JsonResource
                 return $je ? ['id' => $je->hash_id, 'entry_number' => $je->entry_number] : null;
             })() : null,
             'status'              => $this->status instanceof \BackedEnum ? $this->status->value : $this->status,
+            'status_label'        => Str::headline((string) ($this->status instanceof \BackedEnum ? $this->status->value : $this->status)),
             'initiator'           => $this->whenLoaded('initiator', fn () => $this->initiator ? [
                 'id' => $this->initiator->hash_id, 'name' => $this->initiator->name,
             ] : null),

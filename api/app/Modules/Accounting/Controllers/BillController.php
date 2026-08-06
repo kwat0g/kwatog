@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Accounting\Controllers;
 
 use App\Modules\Accounting\Models\Bill;
+use App\Modules\Accounting\Enums\BillStatus;
 use App\Modules\Accounting\Requests\StoreBillPaymentRequest;
 use App\Modules\Accounting\Requests\StoreBillRequest;
 use App\Modules\Accounting\Resources\BillPaymentResource;
@@ -21,6 +22,16 @@ class BillController
     public function index(Request $request): AnonymousResourceCollection
     {
         return BillResource::collection($this->service->list($request->query()));
+    }
+
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'statuses' => array_map(static fn (BillStatus $status): array => [
+                'value' => $status->value,
+                'label' => ucfirst($status->value),
+            ], BillStatus::cases()),
+        ]]);
     }
 
     public function show(Bill $bill): BillResource

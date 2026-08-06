@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Auth\Notifications;
 
+use App\Common\Services\SettingsService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -17,7 +18,10 @@ class PasswordResetLinkNotification extends Notification
 {
     use Queueable;
 
-    public function __construct(private readonly string $resetUrl) {}
+    public function __construct(
+        private readonly string $resetUrl,
+        private readonly int $expiryMinutes,
+    ) {}
 
     /**
      * @return array<int, string>
@@ -29,13 +33,14 @@ class PasswordResetLinkNotification extends Notification
 
     public function toMail(mixed $notifiable): MailMessage
     {
+        $company = app(SettingsService::class)->requiredString('company.legal_name');
         return (new MailMessage)
-            ->subject('Reset Your Ogami ERP Password')
+            ->subject("Reset Your {$company} ERP Password")
             ->greeting('Hi '.($notifiable->name ?? 'there').',')
-            ->line('We received a request to reset the password for your Ogami ERP account.')
+            ->line("We received a request to reset the password for your {$company} ERP account.")
             ->action('Reset Password', $this->resetUrl)
-            ->line('This link will expire in 60 minutes and can be used only once.')
+            ->line("This link will expire in {$this->expiryMinutes} minutes and can be used only once.")
             ->line('If you did not request a password reset, no action is required — your password will stay the same.')
-            ->salutation('— Ogami IT Department');
+            ->salutation("— {$company} IT Department");
     }
 }

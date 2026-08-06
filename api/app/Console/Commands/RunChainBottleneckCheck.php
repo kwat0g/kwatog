@@ -9,6 +9,7 @@ use App\Common\Enums\AlertType;
 use App\Common\Models\Alert;
 use App\Common\Services\AlertEngineService;
 use App\Common\Services\ChainBottleneckService;
+use App\Common\Services\SettingsService;
 use Illuminate\Console\Command;
 
 /**
@@ -21,7 +22,7 @@ class RunChainBottleneckCheck extends Command
     protected $signature   = 'chain:check-bottlenecks';
     protected $description = 'Scan for chain bottlenecks and raise alerts (Series C — Task C5)';
 
-    public function handle(ChainBottleneckService $detector, AlertEngineService $alerts): int
+    public function handle(ChainBottleneckService $detector, AlertEngineService $alerts, SettingsService $settings): int
     {
         $start = microtime(true);
         $all = $detector->detectAll();
@@ -43,11 +44,12 @@ class RunChainBottleneckCheck extends Command
                 // Use a fake-entity Alert pinned by metadata: we don't load
                 // the actual model here (avoids cross-module dependencies).
                 // AlertEngineService::raise() de-dups by (type, entity_type,
-                // entity_id) within the last 24h.
+                // entity_id) within the configured deduplication window.
+                $dedupWindowHours = $settings->requiredInt('alerts.dedup_window_hours', 1);
                 $alert = Alert::query()
                     ->where('type', AlertType::ChainBottleneck->value)
                     ->where('is_dismissed', false)
-                    ->where('created_at', '>=', now()->subHours(24))
+                    ->where('created_at', '>=', now()->subHours($dedupWindowHours))
                     ->where('entity_type', $row['entity_type'])
                     ->where('entity_id', $entityId)
                     ->first();

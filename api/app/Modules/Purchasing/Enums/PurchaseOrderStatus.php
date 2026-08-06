@@ -19,4 +19,18 @@ enum PurchaseOrderStatus: string
     {
         return array_map(fn (self $c) => $c->value, self::cases());
     }
+
+    public function label(): string
+    {
+        return match ($this) {
+            self::Draft => 'Draft',
+            self::PendingApproval => 'Pending approval',
+            self::Approved => 'Approved',
+            self::Sent => 'Sent',
+            self::PartiallyReceived => 'Partially received',
+            self::Received => 'Received',
+            self::Closed => 'Closed',
+            self::Cancelled => 'Cancelled',
+        };
+    }
 }

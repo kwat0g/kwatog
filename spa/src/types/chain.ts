@@ -1,47 +1,47 @@
 export type ChainStepState = 'done' | 'active' | 'pending';
 
 export interface ChainStep {
-  key: string;
-  label: string;
-  date?: string | null;
-  state: ChainStepState;
-  href?: string;
-  onClick?: (step: ChainStep) => void;
-  description?: string;
-  is_overdue?: boolean;
-  sla_label?: string;
+ key: string;
+ label: string;
+ date?: string | null;
+ state: ChainStepState;
+ href?: string;
+ onClick?: (step: ChainStep) => void;
+ description?: string;
+ is_overdue?: boolean;
+ sla_label?: string;
 }
 
 export type StageColor = 'success' | 'info' | 'warning' | 'danger' | 'neutral';
 
 export interface StageRow {
-  label: string;
-  count: number;
-  /** 0–100; controls the fill width of the progress bar. */
-  percent: number;
-  color?: StageColor;
+ label: string;
+ count: number;
+ /** 0–100; controls the fill width of the progress bar. */
+ percent: number;
+ color?: StageColor;
 }
 
 export type LinkedDot = 'success' | 'info' | 'warning' | 'danger' | 'neutral';
 
 export interface LinkedItem {
-  id: string;
-  href?: string;
-  meta?: string;
-  chip?: { variant: 'success' | 'warning' | 'danger' | 'info' | 'neutral' | 'purple'; text: string };
+ id: string;
+ href?: string;
+ meta?: string;
+ chip?: { variant: 'success' | 'warning' | 'danger' | 'info' | 'neutral' | 'purple'; text: string };
 }
 
 export interface LinkedGroup {
-  label: string;
-  items: LinkedItem[];
+ label: string;
+ items: LinkedItem[];
 }
 
 import type { ReactNode } from 'react';
 
 export interface ActivityItem {
-  dot: LinkedDot;
-  text: ReactNode;
-  time: string;
+ dot: LinkedDot;
+ text: ReactNode;
+ time: string;
 }
 
 /**
@@ -53,20 +53,20 @@ export interface ActivityItem {
 export type ApprovalAction = 'pending' | 'approved' | 'rejected' | 'skipped';
 
 export interface ApprovalStep {
-  /** 1-based step index. */
-  step_order: number;
-  /** Human-readable role label (e.g. "Department head"). */
-  role: string;
-  /** Approver display name once acted, otherwise null. */
-  approver_name: string | null;
-  action: ApprovalAction;
-  /** ISO 8601 timestamp when the step was acted on. */
-  acted_at: string | null;
-  remarks: string | null;
-  /** True if the step is pending and the SLA (24h) has elapsed. */
-  is_overdue?: boolean;
-  /** Hours since pending was raised — populated when is_overdue=true. */
-  overdue_hours?: number | null;
+ /** 1-based step index. */
+ step_order: number;
+ /** Human-readable role label (e.g. "Department head"). */
+ role: string;
+ /** Approver display name once acted, otherwise null. */
+ approver_name: string | null;
+ action: ApprovalAction;
+ /** ISO 8601 timestamp when the step was acted on. */
+ acted_at: string | null;
+ remarks: string | null;
+ /** True if the step is pending and the SLA (24h) has elapsed. */
+ is_overdue?: boolean;
+ /** Hours since pending was raised — populated when is_overdue=true. */
+ overdue_hours?: number | null;
 }
 
 /* ──────────────────────────────────────────────────────────────────
@@ -75,20 +75,20 @@ export interface ApprovalStep {
  * ────────────────────────────────────────────────────────────────── */
 
 export type ChainEntityType =
-  | 'sales_order'
-  | 'work_order'
-  | 'purchase_order'
-  | 'delivery'
-  | 'grn';
+ | 'sales_order'
+ | 'work_order'
+ | 'purchase_order'
+ | 'delivery'
+ | 'grn';
 
 export interface ChainStepEvent {
-  entity_type: ChainEntityType;
-  entity_id: string;
-  doc_number: string;
-  new_status: string;
-  active_step: string;
-  completed_steps: string[];
-  actor_name: string | null;
+ entity_type: ChainEntityType;
+ entity_id: string;
+ doc_number: string;
+ new_status: string;
+ active_step: string;
+ completed_steps: string[];
+ actor_name: string | null;
 }
 
 /* ──────────────────────────────────────────────────────────────────
@@ -97,26 +97,26 @@ export interface ChainStepEvent {
  * ────────────────────────────────────────────────────────────────── */
 
 export interface ChainBottleneckRow {
-  key: string;
-  label: string;
-  audience: string;
-  entity_type: string;
-  entity_id: string;
-  doc_number: string;
-  status: string;
-  stuck_since: string | null;
-  hours_stuck: number | null;
+ key: string;
+ label: string;
+ audience: string;
+ entity_type: string;
+ entity_id: string;
+ doc_number: string;
+ status: string;
+ stuck_since: string | null;
+ hours_stuck: number | null;
 }
 
 export interface ChainBottleneckGroup {
-  key: string;
-  label: string;
-  audience: string | null;
-  count: number;
-  rows: ChainBottleneckRow[];
+ key: string;
+ label: string;
+ audience: string | null;
+ count: number;
+ rows: ChainBottleneckRow[];
 }
 
 export interface ChainBottlenecks {
-  total: number;
-  groups: ChainBottleneckGroup[];
+ total: number;
+ groups: ChainBottleneckGroup[];
 }

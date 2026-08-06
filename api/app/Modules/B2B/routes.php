@@ -22,7 +22,7 @@ Route::prefix('b2b/supplier')->group(function () {
     Route::post('logout', [SupplierAuthController::class, 'logout'])->middleware('throttle:auth');
 
     // Authenticated
-    Route::middleware(['auth:supplier_portal', 'portal:supplier_portal', 'feature:b2b_portals'])->group(function () {
+    Route::middleware(['auth:supplier_portal', 'portal:supplier_portal', 'feature:b2b_portals', \App\Modules\B2B\Middleware\B2BTenancyScopeMiddleware::class])->group(function () {
         Route::get('me', [SupplierAuthController::class, 'me']);
         Route::get('dashboard', [SupplierPortalController::class, 'dashboard']);
         Route::get('purchase-orders', [SupplierPortalController::class, 'purchaseOrders']);
@@ -32,6 +32,7 @@ Route::prefix('b2b/supplier')->group(function () {
         Route::post('purchase-orders/{purchaseOrder}/shipment-update', [SupplierPortalController::class, 'updateShipment']);
         Route::post('purchase-orders/{purchaseOrder}/shipping-documents', [SupplierPortalController::class, 'uploadShippingDocuments']);
         Route::get('purchase-orders/{purchaseOrder}/shipping-documents', [SupplierPortalController::class, 'shippingDocuments']);
+        Route::get('purchase-orders/shipping-documents/options', [SupplierPortalController::class, 'shippingDocumentOptions']);
         Route::post('purchase-orders/{purchaseOrder}/submit-invoice', [SupplierPortalController::class, 'submitInvoice']);
         Route::get('shipping-documents/{id}/download', [SupplierPortalController::class, 'downloadShippingDocument']);
         Route::get('invoices', [SupplierPortalController::class, 'invoices']);
@@ -54,7 +55,7 @@ Route::prefix('b2b/customer')->group(function () {
     Route::post('logout', [CustomerAuthController::class, 'logout'])->middleware('throttle:auth');
 
     // Authenticated
-    Route::middleware(['auth:customer_portal', 'portal:customer_portal', 'feature:b2b_portals'])->group(function () {
+    Route::middleware(['auth:customer_portal', 'portal:customer_portal', 'feature:b2b_portals', \App\Modules\B2B\Middleware\B2BTenancyScopeMiddleware::class])->group(function () {
         Route::get('me', [CustomerAuthController::class, 'me']);
         Route::get('dashboard', [CustomerPortalController::class, 'dashboard']);
         Route::get('orders', [CustomerPortalController::class, 'salesOrders']);
@@ -67,6 +68,7 @@ Route::prefix('b2b/customer')->group(function () {
         Route::get('deliveries/{delivery}', [CustomerPortalController::class, 'deliveryDetail']);
         Route::get('deliveries/{delivery}/proofs/{proof}/view', [CustomerPortalController::class, 'deliveryProof']);
         Route::get('complaints', [CustomerPortalController::class, 'complaints']);
+        Route::get('complaints/options', [CustomerPortalController::class, 'complaintOptions']);
         Route::post('complaints', [CustomerPortalController::class, 'createComplaint']);
         Route::get('complaints/{complaint}/8d-report', [CustomerPortalController::class, 'complaint8dReport']);
         Route::get('statement-of-account', [CustomerPortalController::class, 'statementOfAccount']);

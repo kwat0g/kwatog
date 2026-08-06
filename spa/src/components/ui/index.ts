@@ -6,14 +6,14 @@ export { Chip, chipVariantForStatus, type ChipVariant } from './Chip';
 export { BottomSheet } from './BottomSheet';
 export { ConfirmDialog, type ConfirmVariant } from './ConfirmDialog';
 export {
-  DataTable,
-  NumCell,
-  StackedCell,
-  type Column,
-  type DataTableProps,
-  type Density,
-  type BulkAction,
-  type ColumnAlign,
+ DataTable,
+ NumCell,
+ StackedCell,
+ type Column,
+ type DataTableProps,
+ type Density,
+ type BulkAction,
+ type ColumnAlign,
 } from './DataTable';
 export { EmptyState } from './EmptyState';
 export { FileInput, type FileInputProps } from './FileInput';
@@ -39,3 +39,7 @@ export type { BreadcrumbSegment } from './Breadcrumb';
 export { Tooltip } from './Tooltip';
 export { SpecToleranceBar, type SpecToleranceBarProps } from './SpecToleranceBar';
 export { Th, Td, thCls, tdCls, trCls, theadTrCls, tableCls } from './table-cells';
+export { ChainHeader, type ChainStep } from './ChainHeader';
+export { StageBreakdown, type StageData } from './StageBreakdown';
+export { LinkedRecords, type LinkedRecordGroup, type LinkedRecordItem } from './LinkedRecords';
+export { ActivityStream, type ActivityItem } from './ActivityStream';

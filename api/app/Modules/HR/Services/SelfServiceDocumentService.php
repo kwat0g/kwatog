@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\HR\Services;
 
 use App\Common\Services\Pdf\PdfRenderService;
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Payroll\Models\Payroll;
@@ -23,7 +24,10 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class SelfServiceDocumentService
 {
-    public function __construct(private readonly PdfRenderService $renderer) {}
+    public function __construct(
+        private readonly PdfRenderService $renderer,
+        private readonly SettingsService $settings,
+    ) {}
 
     /* ─── Employment certificate ─────────────────────────────────────── */
 
@@ -35,12 +39,12 @@ class SelfServiceDocumentService
         $salaryText = null;
         $salaryBasis = 'salary';
         if ($withSalary) {
-            if ($employee->pay_type?->value === 'monthly' && $employee->basic_monthly_salary !== null) {
-                $salaryText = '₱ '.number_format((float) $employee->basic_monthly_salary, 2).' per month';
+            if ($employee->pay_type === \App\Modules\HR\Enums\PayType::SemiMonthly && $employee->semi_monthly_rate !== null) {
+                $salaryText = $this->currency().' '.number_format((float) $employee->semi_monthly_rate, 2).' per cutoff';
+                $salaryBasis = 'semi-monthly rate';
+            } elseif ($employee->basic_monthly_salary !== null) {
+                $salaryText = $this->currency().' '.number_format((float) $employee->basic_monthly_salary, 2).' per month';
                 $salaryBasis = 'monthly salary';
-            } elseif ($employee->daily_rate !== null) {
-                $salaryText = '₱ '.number_format((float) $employee->daily_rate, 2).' per day';
-                $salaryBasis = 'daily rate';
             }
         }
 
@@ -50,7 +54,9 @@ class SelfServiceDocumentService
             'position'          => $employee->position?->title ?? '—',
             'department'        => $employee->department?->name ?? '—',
             'date_hired'        => optional($employee->date_hired)->format('F j, Y') ?? '—',
-            'employment_status' => strtoupper($employee->employment_type?->label() ?? 'REGULAR'),
+            'employment_status' => $employee->employment_type?->label()
+                ? strtoupper($employee->employment_type->label())
+                : null,
             'show_salary'       => $withSalary && $salaryText !== null,
             'salary_text'       => $salaryText,
             'salary_basis'      => $salaryBasis,
@@ -63,6 +69,11 @@ class SelfServiceDocumentService
         ]);
 
         return $this->streamInline($bytes, "Employment-Certificate-{$employee->employee_no}.pdf");
+    }
+
+    private function currency(): string
+    {
+        return strtoupper($this->settings->requiredString('accounting.functional_currency_code'));
     }
 
     /* ─── Government contribution certificates ───────────────────────── */

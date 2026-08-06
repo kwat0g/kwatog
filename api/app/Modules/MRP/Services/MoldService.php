@@ -13,6 +13,7 @@ use App\Modules\MRP\Enums\MoldStatus;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\MRP\Models\Mold;
 use App\Modules\MRP\Models\MoldHistory;
+use App\Common\Support\TrashedFilter;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
@@ -25,6 +26,8 @@ class MoldService
         $q = Mold::query()
             ->with('product:id,part_number,name,unit_of_measure')
             ->withCount('compatibleMachines');
+
+        TrashedFilter::apply($q, $filters);
 
         if (! empty($filters['product_id'])) {
             $pid = HashIdFilter::decode($filters['product_id'], Product::class);

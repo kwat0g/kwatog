@@ -24,6 +24,7 @@ class TrainingResource extends JsonResource
             ] : null),
             'created_at'        => $this->created_at?->toISOString(),
             'updated_at'        => $this->updated_at?->toISOString(),
+            'deleted_at'        => optional($this->deleted_at)?->toIso8601String(),
         ];
     }
 }

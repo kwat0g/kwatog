@@ -6,6 +6,7 @@ namespace App\Modules\MRP\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Str;
 
 class MrpRunResource extends JsonResource
 {
@@ -15,6 +16,7 @@ class MrpRunResource extends JsonResource
             'id'                     => $this->hash_id,
             'run_at'                 => optional($this->run_at)->toIso8601String(),
             'triggered_by'           => $this->triggered_by instanceof \BackedEnum ? $this->triggered_by->value : (string) $this->triggered_by,
+            'triggered_by_label'     => Str::headline((string) ($this->triggered_by instanceof \BackedEnum ? $this->triggered_by->value : $this->triggered_by)),
             'triggered_by_user'      => $this->whenLoaded('user', fn () => $this->user ? [
                 'id'   => $this->user->hash_id,
                 'name' => $this->user->name,
@@ -26,6 +28,7 @@ class MrpRunResource extends JsonResource
             'plans_generated'        => (int) $this->plans_generated,
             'duration_ms'            => $this->duration_ms !== null ? (int) $this->duration_ms : null,
             'status'                 => $this->status instanceof \BackedEnum ? $this->status->value : (string) $this->status,
+            'status_label'           => Str::headline((string) ($this->status instanceof \BackedEnum ? $this->status->value : $this->status)),
             'error_message'          => $this->error_message,
             'summary'                => $this->summary ?? [],
             'created_at'             => optional($this->created_at)->toIso8601String(),

@@ -28,200 +28,200 @@ import type { SchedulerConflict, SchedulerProposalRow } from '@/types/mrp';
 
 /** ISO date string offset from today. */
 function isoDate(offset = 0): string {
-  const d = new Date();
-  d.setDate(d.getDate() + offset);
-  return d.toISOString().slice(0, 10);
+ const d = new Date();
+ d.setDate(d.getDate() + offset);
+ return d.toISOString().slice(0, 10);
 }
 
 export default function ProductionSchedulePage() {
-  const navigate = useNavigate();
-  const qc = useQueryClient();
-  const { can } = usePermission();
-  const canRun = can('mrp.schedule');
-  const canConfirm = can('production.schedule.confirm');
+ const navigate = useNavigate();
+ const qc = useQueryClient();
+ const { can } = usePermission();
+ const canRun = can('mrp.schedule');
+ const canConfirm = can('production.schedule.confirm');
 
-  const [viewMode, setViewMode] = useState<'Day' | 'Week' | 'Month'>('Week');
-  const [dateFrom, setDateFrom] = useState<string>();
-  const [dateTo, setDateTo] = useState<string>();
-  const [machineFilter, setMachineFilter] = useState<string[]>([]);
-  const [latestProposal, setLatestProposal] = useState<SchedulerProposalRow[]>([]);
-  const [latestConflicts, setLatestConflicts] = useState<SchedulerConflict[]>([]);
+ const [viewMode, setViewMode] = useState<'Day' | 'Week' | 'Month'>('Week');
+ const [dateFrom, setDateFrom] = useState<string>();
+ const [dateTo, setDateTo] = useState<string>();
+ const [machineFilter, setMachineFilter] = useState<string[]>([]);
+ const [latestProposal, setLatestProposal] = useState<SchedulerProposalRow[]>([]);
+ const [latestConflicts, setLatestConflicts] = useState<SchedulerConflict[]>([]);
 
-  // Fetch machines for filter dropdown
-  const { data: machinesData } = useQuery({
-    queryKey: ['mrp', 'machines', 'all'],
-    queryFn: () => machinesApi.list({ per_page: 200 }),
-    staleTime: 300_000,
-  });
-  const allMachines = machinesData?.data ?? [];
+ // Fetch machines for filter dropdown
+ const { data: machinesData } = useQuery({
+ queryKey: ['mrp', 'machines', 'all'],
+ queryFn: () => machinesApi.list({ per_page: 200 }),
+ staleTime: 300_000,
+ });
+ const allMachines = machinesData?.data ?? [];
 
-  const options = useQuery({
-    queryKey: ['mrp', 'scheduler', 'options'],
-    queryFn: () => schedulerApi.options(),
-    staleTime: 300_000,
-  });
+ const options = useQuery({
+ queryKey: ['mrp', 'scheduler', 'options'],
+ queryFn: () => schedulerApi.options(),
+ staleTime: 300_000,
+ });
 
-  useEffect(() => {
-    if (dateFrom === undefined && options.data) {
-      setDateFrom(isoDate(0));
-      setDateTo(isoDate(options.data.default_horizon_days));
-    }
-  }, [dateFrom, options.data]);
+ useEffect(() => {
+ if (dateFrom === undefined && options.data) {
+ setDateFrom(isoDate(0));
+ setDateTo(isoDate(options.data.default_horizon_days));
+ }
+ }, [dateFrom, options.data]);
 
-  const snapshot = useQuery({
-    queryKey: ['mrp', 'scheduler', 'snapshot', dateFrom, dateTo, machineFilter],
-    queryFn: () => schedulerApi.snapshot(dateFrom, dateTo),
-    enabled: dateFrom !== undefined && dateTo !== undefined,
-    refetchInterval: 60_000,
-    placeholderData: (prev) => prev,
-  });
+ const snapshot = useQuery({
+ queryKey: ['mrp', 'scheduler', 'snapshot', dateFrom, dateTo, machineFilter],
+ queryFn: () => schedulerApi.snapshot(dateFrom, dateTo),
+ enabled: dateFrom !== undefined && dateTo !== undefined,
+ refetchInterval: 60_000,
+ placeholderData: (prev) => prev,
+ });
 
-  const run = useMutation({
-    mutationFn: () => schedulerApi.run(),
-    onSuccess: (data) => {
-      setLatestProposal(data.scheduled);
-      setLatestConflicts(data.conflicts);
-      qc.invalidateQueries({ queryKey: ['mrp', 'scheduler', 'snapshot'] });
-      toast.success(`Scheduler proposed ${data.scheduled.length} schedules (${data.conflicts.length} conflicts).`);
-    },
-    onError: (e: AxiosError<{ message?: string }>) => {
-      toast.error(e.response?.data?.message ?? 'Scheduler run failed.');
-    },
-  });
+ const run = useMutation({
+ mutationFn: () => schedulerApi.run(),
+ onSuccess: (data) => {
+ setLatestProposal(data.scheduled);
+ setLatestConflicts(data.conflicts);
+ qc.invalidateQueries({ queryKey: ['mrp', 'scheduler', 'snapshot'] });
+ toast.success(`Scheduler proposed ${data.scheduled.length} schedules (${data.conflicts.length} conflicts).`);
+ },
+ onError: (e: AxiosError<{ message?: string }>) => {
+ toast.error(e.response?.data?.message ?? 'Scheduler run failed.');
+ },
+ });
 
-  const confirm = useMutation({
-    mutationFn: (ids: string[]) => schedulerApi.confirm(ids),
-    onSuccess: (res) => {
-      toast.success(`Confirmed ${res.confirmed_count} schedules.`);
-      setLatestProposal([]);
-      qc.invalidateQueries({ queryKey: ['mrp', 'scheduler', 'snapshot'] });
-      qc.invalidateQueries({ queryKey: ['production', 'work-orders'] });
-    },
-  });
+ const confirm = useMutation({
+ mutationFn: (ids: string[]) => schedulerApi.confirm(ids),
+ onSuccess: (res) => {
+ toast.success(`Confirmed ${res.confirmed_count} schedules.`);
+ setLatestProposal([]);
+ qc.invalidateQueries({ queryKey: ['mrp', 'scheduler', 'snapshot'] });
+ qc.invalidateQueries({ queryKey: ['production', 'work-orders'] });
+ },
+ });
 
-  // Filter rows by selected machines (client-side filter after fetch)
-  const filteredRows = useMemo(() => {
-    const rows = snapshot.data?.rows ?? [];
-    if (machineFilter.length === 0) return rows;
-    return rows.filter((r) => machineFilter.includes(r.machine_id));
-  }, [snapshot.data, machineFilter]);
+ // Filter rows by selected machines (client-side filter after fetch)
+ const filteredRows = useMemo(() => {
+ const rows = snapshot.data?.rows ?? [];
+ if (machineFilter.length === 0) return rows;
+ return rows.filter((r) => machineFilter.includes(r.machine_id));
+ }, [snapshot.data, machineFilter]);
 
-  return (
-    <div>
-      <PageHeader
-        title="Production schedule"
-        actions={
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {/* Date range */}
-            <Input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="font-mono"
-              aria-label="From date"
-            />
-            <span className="text-muted text-xs">→</span>
-            <Input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="font-mono"
-              aria-label="To date"
-            />
-            <SegmentedControl
-              label="View mode"
-              value={viewMode}
-              onChange={setViewMode}
-              options={[
-                { value: 'Day', label: 'Day' },
-                { value: 'Week', label: 'Week' },
-                { value: 'Month', label: 'Month' },
-              ]}
-            />
-            {canRun && (
-              <Button size="sm" variant="secondary" icon={<Play size={14} />}
-                onClick={() => run.mutate()} loading={run.isPending}>
-                Run scheduler
-              </Button>
-            )}
-            {canConfirm && latestProposal.length > 0 && (
-              <>
-                <Button size="sm" variant="primary" icon={<Check size={14} />}
-                  onClick={() => confirm.mutate(latestProposal.map((p) => p.id))} loading={confirm.isPending}>
-                  Confirm {latestProposal.length} schedule{latestProposal.length === 1 ? '' : 's'}
-                </Button>
-                <Button size="sm" variant="ghost" icon={<X size={14} />}
-                  onClick={() => { setLatestProposal([]); setLatestConflicts([]); }}>
-                  Discard
-                </Button>
-              </>
-            )}
-          </div>
-        }
-      />
+ return (
+ <div>
+ <PageHeader
+ title="Production schedule"
+ actions={
+ <div className="flex items-center gap-1.5 flex-wrap">
+ {/* Date range */}
+ <Input
+ type="date"
+ value={dateFrom}
+ onChange={(e) => setDateFrom(e.target.value)}
+ className="font-mono"
+ aria-label="From date"
+ />
+ <span className="text-muted text-xs">→</span>
+ <Input
+ type="date"
+ value={dateTo}
+ onChange={(e) => setDateTo(e.target.value)}
+ className="font-mono"
+ aria-label="To date"
+ />
+ <SegmentedControl
+ label="View mode"
+ value={viewMode}
+ onChange={setViewMode}
+ options={[
+ { value: 'Day', label: 'Day' },
+ { value: 'Week', label: 'Week' },
+ { value: 'Month', label: 'Month' },
+ ]}
+ />
+ {canRun && (
+ <Button size="sm" variant="secondary" icon={<Play size={14} />}
+ onClick={() => run.mutate()} loading={run.isPending}>
+ Run scheduler
+ </Button>
+ )}
+ {canConfirm && latestProposal.length > 0 && (
+ <>
+ <Button size="sm" variant="primary" icon={<Check size={14} />}
+ onClick={() => confirm.mutate(latestProposal.map((p) => p.id))} loading={confirm.isPending}>
+ Confirm {latestProposal.length} schedule{latestProposal.length === 1 ? '' : 's'}
+ </Button>
+ <Button size="sm" variant="ghost" icon={<X size={14} />}
+ onClick={() => { setLatestProposal([]); setLatestConflicts([]); }}>
+ Discard
+ </Button>
+ </>
+ )}
+ </div>
+ }
+ />
 
-      <div className="px-5 py-4 space-y-4">
-        {latestConflicts.length > 0 && (
-          <Panel
-            title="Unscheduled work orders"
-            meta={`${latestConflicts.length} conflict${latestConflicts.length === 1 ? '' : 's'}`}
-          >
-            <div className="space-y-2">
-              {latestConflicts.map((c) => (
-                <div key={c.work_order_id} className="flex items-start gap-2 text-xs">
-                  <AlertTriangle size={14} className="text-danger mt-0.5" />
-                  <div>
-                    <span className="font-mono">{c.wo_number}</span>
-                    <span className="ml-2 text-muted">— {c.reasons.join('; ')}</span>
-                  </div>
-                  <Chip variant="danger">stuck</Chip>
-                </div>
-              ))}
-            </div>
-          </Panel>
-        )}
+ <div className="px-5 py-4 space-y-4">
+ {latestConflicts.length > 0 && (
+ <Panel
+ title="Unscheduled work orders"
+ meta={`${latestConflicts.length} conflict${latestConflicts.length === 1 ? '' : 's'}`}
+ >
+ <div className="space-y-2">
+ {latestConflicts.map((c) => (
+ <div key={c.work_order_id} className="flex items-start gap-2 text-xs">
+ <AlertTriangle size={14} className="text-danger mt-0.5" />
+ <div>
+ <span className="font-mono">{c.wo_number}</span>
+ <span className="ml-2 text-muted">— {c.reasons.join('; ')}</span>
+ </div>
+ <Chip variant="danger">stuck</Chip>
+ </div>
+ ))}
+ </div>
+ </Panel>
+ )}
 
-        {/* Machine filter */}
-        {allMachines.length > 0 && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-muted">Filter machines:</span>
-            {allMachines.map((m) => (
-              <ToggleChip
-                key={m.id}
-                active={machineFilter.includes(m.id)}
-                onClick={() =>
-                  setMachineFilter((prev) =>
-                    prev.includes(m.id) ? prev.filter((x) => x !== m.id) : [...prev, m.id],
-                  )
-                }
-              >
-                {m.machine_code ?? m.name}
-              </ToggleChip>
-            ))}
-            {machineFilter.length > 0 && (
-              <LinkButton tone="muted" className="text-xs" onClick={() => setMachineFilter([])}>
-                Clear
-              </LinkButton>
-            )}
-          </div>
-        )}
+ {/* Machine filter */}
+ {allMachines.length > 0 && (
+ <div className="flex items-center gap-2 flex-wrap">
+ <span className="text-xs text-muted">Filter machines:</span>
+ {allMachines.map((m) => (
+ <ToggleChip
+ key={m.id}
+ active={machineFilter.includes(m.id)}
+ onClick={() =>
+ setMachineFilter((prev) =>
+ prev.includes(m.id) ? prev.filter((x) => x !== m.id) : [...prev, m.id],
+ )
+ }
+ >
+ {m.machine_code ?? m.name}
+ </ToggleChip>
+ ))}
+ {machineFilter.length > 0 && (
+ <LinkButton tone="muted" className="text-xs" onClick={() => setMachineFilter([])}>
+ Clear
+ </LinkButton>
+ )}
+ </div>
+ )}
 
-        <Panel title="Gantt" noPadding>
-          {snapshot.isLoading && !snapshot.data && <SkeletonTable columns={4} rows={6} />}
-          {snapshot.isError && (
-            <EmptyState icon="alert-circle" title="Failed to load schedule"
-              action={<Button variant="secondary" onClick={() => snapshot.refetch()}>Retry</Button>} />
-          )}
-          {snapshot.data && (
-            <GanttChart
-              rows={filteredRows}
-              viewMode={viewMode}
-              emptyWindowDays={options.data?.default_horizon_days}
-              onBarClick={(woId) => navigate(`/production/work-orders/${woId}`)}
-            />
-          )}
-        </Panel>
-      </div>
-    </div>
-  );
+ <Panel title="Gantt" noPadding>
+ {snapshot.isLoading && !snapshot.data && <SkeletonTable columns={4} rows={6} />}
+ {snapshot.isError && (
+ <EmptyState icon="alert-circle" title="Failed to load schedule"
+ action={<Button variant="secondary" onClick={() => snapshot.refetch()}>Retry</Button>} />
+ )}
+ {snapshot.data && (
+ <GanttChart
+ rows={filteredRows}
+ viewMode={viewMode}
+ emptyWindowDays={options.data?.default_horizon_days}
+ onBarClick={(woId) => navigate(`/production/work-orders/${woId}`)}
+ />
+ )}
+ </Panel>
+ </div>
+ </div>
+ );
 }

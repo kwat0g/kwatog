@@ -24,9 +24,6 @@ use Illuminate\Support\Facades\DB;
  */
 class CalendarAggregatorService
 {
-    /** Maximum days that may be requested in a single call. */
-    public const MAX_RANGE_DAYS = 90;
-
     /** Layer key => permission slug required to read that layer. */
     private const LAYER_PERMISSIONS = [
         'holiday'     => null, // public to any authenticated user
@@ -69,6 +66,19 @@ class CalendarAggregatorService
         if (in_array('wo_due', $allowedLayers, true)) {
             array_push($events, ...$this->workOrders($from, $to));
         }
+
+        $typeLabels = [
+            'holiday' => 'Holiday',
+            'leave' => 'Leave',
+            'delivery' => 'Delivery',
+            'maintenance' => 'Maintenance',
+            'payroll' => 'Payroll',
+            'wo_due' => 'Work order due',
+        ];
+        $events = array_map(static function (array $event) use ($typeLabels): array {
+            $event['type_label'] = $typeLabels[$event['type']] ?? \Illuminate\Support\Str::headline((string) $event['type']);
+            return $event;
+        }, $events);
 
         usort($events, fn ($a, $b) => strcmp((string) $a['start'], (string) $b['start']));
 

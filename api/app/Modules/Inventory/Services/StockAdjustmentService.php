@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace App\Modules\Inventory\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\StockAdjustmentReason;
+use App\Modules\Inventory\Enums\StockAdjustmentStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Models\StockAdjustment;
 use App\Modules\Inventory\Models\StockLevel;
@@ -17,7 +19,7 @@ use RuntimeException;
 
 class StockAdjustmentService
 {
-    public function __construct(private readonly StockMovementService $movements) {}
+    public function __construct(private readonly StockMovementService $movements, private readonly SettingsService $settings) {}
 
     /**
      * Legacy entry point — applies an inbound adjustment IMMEDIATELY and
@@ -38,7 +40,7 @@ class StockAdjustmentService
     ): StockMovement {
         return DB::transaction(function () use ($itemId, $locationId, $qty, $unitCost, $reason, $by, $reasonCode, $bypassCountFreeze) {
             $mvmt = $this->applyMovement('in', $itemId, $locationId, $qty, $unitCost, $reason, $by, $bypassCountFreeze);
-            $this->recordAdjustment('in', $itemId, $locationId, $qty, $unitCost, $reason, $reasonCode, $by, $mvmt, 'approved');
+            $this->recordAdjustment('in', $itemId, $locationId, $qty, $unitCost, $reason, $reasonCode, $by, $mvmt, StockAdjustmentStatus::Approved);
             return $mvmt;
         });
     }
@@ -57,9 +59,9 @@ class StockAdjustmentService
         bool $bypassCountFreeze = false,
     ): StockMovement {
         return DB::transaction(function () use ($itemId, $locationId, $qty, $reason, $by, $reasonCode, $bypassCountFreeze) {
-            $cost = $this->currentWac($itemId, $locationId);
-            $mvmt = $this->applyMovement('out', $itemId, $locationId, $qty, $cost, $reason, $by, $bypassCountFreeze);
-            $this->recordAdjustment('out', $itemId, $locationId, $qty, $cost, $reason, $reasonCode, $by, $mvmt, 'approved');
+            $mvmt = $this->applyMovement('out', $itemId, $locationId, $qty, null, $reason, $by, $bypassCountFreeze);
+            $cost = (string) $mvmt->unit_cost;
+            $this->recordAdjustment('out', $itemId, $locationId, $qty, $cost, $reason, $reasonCode, $by, $mvmt, StockAdjustmentStatus::Approved);
             return $mvmt;
         });
     }
@@ -69,8 +71,8 @@ class StockAdjustmentService
      * + value-threshold approval gate.
      *
      * If the absolute adjustment value (|qty * unit_cost|) EXCEEDS
-     * config('inventory.adjustment_approval_threshold', '0') the adjustment is
-     * created `pending` and NO stock movement posts until approve() is called.
+     * the configured threshold, the adjustment is created `pending` and NO
+     * stock movement posts until approve() is called.
      * A threshold of '0' (default) disables the gate → immediate apply.
      *
      * @param  string  $direction  'in' | 'out'
@@ -93,7 +95,7 @@ class StockAdjustmentService
         return DB::transaction(function () use ($itemId, $locationId, $direction, $qty, $unitCost, $reason, $by, $reasonCode) {
             $cost = $direction === 'out'
                 ? $this->currentWac($itemId, $locationId)
-                : (string) ($unitCost ?? '0');
+                : $this->requiredInboundCost($unitCost);
 
             $value = $this->absValue($qty, $cost);
             $gated = $this->exceedsThreshold($value);
@@ -112,16 +114,17 @@ class StockAdjustmentService
 
             if ($gated) {
                 // Above threshold — hold for approval; no ledger movement yet.
-                $adj->forceFill(['status' => 'pending'])->save();
+                $adj->forceFill(['status' => StockAdjustmentStatus::Pending->value])->save();
                 return $adj;
             }
 
             // Sub-threshold — apply immediately and link the movement.
-            $mvmt = $this->applyMovement($direction, $itemId, $locationId, $qty, $cost, $reason, $by);
+            $mvmt = $this->applyMovement($direction, $itemId, $locationId, $qty, $direction === 'out' ? null : $cost, $reason, $by);
+            $adj->unit_cost = (string) $mvmt->unit_cost;
             $adj->stock_movement_id = $mvmt->id;
             $adj->approved_by = $by->id;
             $adj->approved_at = now();
-            $adj->forceFill(['status' => 'approved']);
+            $adj->forceFill(['status' => StockAdjustmentStatus::Approved->value]);
             $adj->save();
 
             return $adj;
@@ -137,7 +140,7 @@ class StockAdjustmentService
         if (! ($by->hasPermission('inventory.adjust.approve'))) {
             throw new BusinessRuleException('You are not authorized to approve stock adjustments.');
         }
-        if ($adj->getRawOriginal('status') === 'approved' || $adj->stock_movement_id) {
+        if ($adj->status === StockAdjustmentStatus::Approved || $adj->stock_movement_id) {
             throw new BusinessRuleException('Adjustment is already approved.');
         }
 
@@ -154,7 +157,7 @@ class StockAdjustmentService
             $adj->stock_movement_id = $mvmt->id;
             $adj->approved_by = $by->id;
             $adj->approved_at = now();
-            $adj->forceFill(['status' => 'approved']);
+            $adj->forceFill(['status' => StockAdjustmentStatus::Approved->value]);
             $adj->save();
 
             return $adj->fresh();
@@ -200,7 +203,7 @@ class StockAdjustmentService
         StockAdjustmentReason|string|null $reasonCode,
         User $by,
         StockMovement $mvmt,
-        string $status,
+        StockAdjustmentStatus $status,
     ): StockAdjustment {
         $adj = new StockAdjustment([
             'item_id'           => $itemId,
@@ -216,7 +219,7 @@ class StockAdjustmentService
             'approved_by'       => $by->id,
             'approved_at'       => now(),
         ]);
-        $adj->forceFill(['status' => $status])->save();
+        $adj->forceFill(['status' => $status->value])->save();
 
         return $adj;
     }
@@ -227,7 +230,19 @@ class StockAdjustmentService
             ->where('item_id', $itemId)
             ->where('location_id', $locationId)
             ->first();
-        return (string) ($level?->weighted_avg_cost ?? '0');
+        if ($level === null || $level->weighted_avg_cost === null) {
+            throw new BusinessRuleException('No authoritative weighted-average cost exists for this stock level.');
+        }
+        return (string) $level->weighted_avg_cost;
+    }
+
+    private function requiredInboundCost(?string $unitCost): string
+    {
+        if ($unitCost === null || trim($unitCost) === '') {
+            throw new BusinessRuleException('A unit cost is required for an inbound stock adjustment.');
+        }
+
+        return $unitCost;
     }
 
     private function absValue(string $qty, string $unitCost): string
@@ -238,7 +253,7 @@ class StockAdjustmentService
 
     private function exceedsThreshold(string $value): bool
     {
-        $threshold = (string) config('inventory.adjustment_approval_threshold', '0');
+        $threshold = (string) $this->settings->requiredFloat('inventory.adjustment_approval_threshold', 0);
         if (bccomp($threshold, '0', 2) <= 0) {
             return false; // gate disabled
         }

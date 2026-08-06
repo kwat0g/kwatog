@@ -28,6 +28,7 @@ class StockLevelResource extends JsonResource
             'available'         => $this->available,
             'weighted_avg_cost' => (string) $this->weighted_avg_cost,
             'total_value'       => $this->total_value,
+            'lock_version'      => (int) $this->lock_version,
             'last_counted_at'   => optional($this->last_counted_at)->toIso8601String(),
         ];
     }

@@ -8,14 +8,15 @@ use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 
 /**
- * Password policy: min 8 + at least one uppercase + one lowercase + one digit + one special.
+ * Password policy reads its minimum length from persisted security settings.
  */
 class StrongPassword implements ValidationRule
 {
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
-        if (! is_string($value) || mb_strlen($value) < 8) {
-            $fail('The :attribute must be at least 8 characters.');
+        $minimum = app(\App\Common\Services\SettingsService::class)->requiredInt('security.password_min_length', 1);
+        if (! is_string($value) || mb_strlen($value) < $minimum) {
+            $fail("The :attribute must be at least {$minimum} characters.");
             return;
         }
         if (! preg_match('/[A-Z]/', $value)) {

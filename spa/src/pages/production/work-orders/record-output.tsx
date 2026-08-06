@@ -27,199 +27,199 @@ import { formatInt } from '@/lib/formatNumber';
 import type { DefectType } from '@/types/production';
 
 const schema = z.object({
-  good_count:   z.string().regex(/^\d+$/, 'Good count must be a non-negative integer'),
-  shift:        z.string().optional().or(z.literal('')),
-  remarks:      z.string().max(500).optional().or(z.literal('')),
-  defects:      z.array(z.object({
-    defect_type_id: z.string().min(1, 'Defect type required'),
-    count:          z.string().regex(/^\d+$/, 'Use a positive integer').refine((v) => Number(v) > 0, 'Must be > 0'),
-  })),
+ good_count: z.string().regex(/^\d+$/, 'Good count must be a non-negative integer'),
+ shift: z.string().optional().or(z.literal('')),
+ remarks: z.string().max(500).optional().or(z.literal('')),
+ defects: z.array(z.object({
+ defect_type_id: z.string().min(1, 'Defect type required'),
+ count: z.string().regex(/^\d+$/, 'Use a positive integer').refine((v) => Number(v) > 0, 'Must be > 0'),
+ })),
 });
 type FormValues = z.infer<typeof schema>;
 
 export default function RecordOutputPage() {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-  const qc = useQueryClient();
-  const [liveCumulative, setLiveCumulative] = useState<{ produced: number; good: number; reject: number; scrap: string } | null>(null);
+ const { id } = useParams<{ id: string }>();
+ const navigate = useNavigate();
+ const qc = useQueryClient();
+ const [liveCumulative, setLiveCumulative] = useState<{ produced: number; good: number; reject: number; scrap: string } | null>(null);
 
-  const wo = useQuery({
-    queryKey: ['production', 'work-orders', 'detail', id],
-    queryFn: () => workOrdersApi.show(id!),
-    enabled: !!id,
-  });
+ const wo = useQuery({
+ queryKey: ['production', 'work-orders', 'detail', id],
+ queryFn: () => workOrdersApi.show(id!),
+ enabled: !!id,
+ });
 
-  const defects = useQuery({
-    queryKey: ['production', 'defect-types'],
-    queryFn: () => client.get<{ data: DefectType[] }>('/production/defect-types').then((r) => r.data.data),
-  });
-  const shifts = useQuery({
-    queryKey: ['attendance', 'shifts', 'production-output'],
-    queryFn: () => shiftsApi.list({ per_page: 200 }),
-    staleTime: 300_000,
-  });
+ const defects = useQuery({
+ queryKey: ['production', 'defect-types'],
+ queryFn: () => client.get<{ data: DefectType[] }>('/production/defect-types').then((r) => r.data.data),
+ });
+ const shifts = useQuery({
+ queryKey: ['attendance', 'shifts', 'production-output'],
+ queryFn: () => shiftsApi.list({ per_page: 200 }),
+ staleTime: 300_000,
+ });
 
-  // Subscribe to live updates so the cumulative panel reflects every recording.
-  useEcho<{ total_quantity_produced: number; total_quantity_good: number; total_quantity_rejected: number; scrap_rate: string }>(
-    `production.wo.${id}`,
-    '.output.recorded',
-    (p) => {
-      setLiveCumulative({
-        produced: p.total_quantity_produced,
-        good:     p.total_quantity_good,
-        reject:   p.total_quantity_rejected,
-        scrap:    p.scrap_rate,
-      });
-      qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'detail', id] });
-    },
-  );
+ // Subscribe to live updates so the cumulative panel reflects every recording.
+ useEcho<{ total_quantity_produced: number; total_quantity_good: number; total_quantity_rejected: number; scrap_rate: string }>(
+ `production.wo.${id}`,
+ '.output.recorded',
+ (p) => {
+ setLiveCumulative({
+ produced: p.total_quantity_produced,
+ good: p.total_quantity_good,
+ reject: p.total_quantity_rejected,
+ scrap: p.scrap_rate,
+ });
+ qc.invalidateQueries({ queryKey: ['production', 'work-orders', 'detail', id] });
+ },
+ );
 
-  const { register, control, handleSubmit, setError, reset, formState: { errors, isSubmitting } } = useForm<FormValues>({
-    resolver: zodResolver(schema),
-    defaultValues: { good_count: '', shift: '', remarks: '', defects: [] },
-  });
-  const { fields, append, remove } = useFieldArray({ control, name: 'defects' });
+ const { register, control, handleSubmit, setError, reset, formState: { errors, isSubmitting } } = useForm<FormValues>({
+ resolver: zodResolver(schema),
+ defaultValues: { good_count: '', shift: '', remarks: '', defects: [] },
+ });
+ const { fields, append, remove } = useFieldArray({ control, name: 'defects' });
 
-  // Live-compute reject count from defect rows.
-  const watchedDefects = useWatch({ control, name: 'defects' });
-  const rejectCount = useMemo(
-    () => (watchedDefects ?? []).reduce((sum, d) => sum + Number(d?.count || 0), 0),
-    [watchedDefects],
-  );
+ // Live-compute reject count from defect rows.
+ const watchedDefects = useWatch({ control, name: 'defects' });
+ const rejectCount = useMemo(
+ () => (watchedDefects ?? []).reduce((sum, d) => sum + Number(d?.count || 0), 0),
+ [watchedDefects],
+ );
 
-  const submit = useMutation({
-    mutationFn: async (values: FormValues) => {
-      // Generate a UUID-ish idempotency key.
-      const key = `${id}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-      const computedReject = values.defects.reduce((sum, d) => sum + Number(d.count || 0), 0);
-      return workOrdersApi.recordOutput(id!, {
-        good_count: Number(values.good_count),
-        reject_count: computedReject,
-        shift: values.shift || undefined,
-        remarks: values.remarks || undefined,
-        defects: values.defects.map((d) => ({ defect_type_id: d.defect_type_id, count: Number(d.count) })),
-      }, key);
-    },
-    onSuccess: (output) => {
-      toast.success(`Output ${output.batch_code ?? ''} recorded.`);
-      reset({ good_count: '', shift: '', remarks: '', defects: [] });
-      navigate(`/production/work-orders/${id}`);
-    },
-    onError: (e: AxiosError<{ message?: string; errors?: Record<string, string[]> }>) => {
-      if (e.response?.status === 422 && e.response.data.errors) {
-        Object.entries(e.response.data.errors).forEach(([field, msgs]) => {
-          setError(field as never, { type: 'server', message: msgs[0] });
-        });
-        toast.error(e.response?.data?.message || 'Validation failed.');
-      } else {
-        toast.error(e.response?.data?.message ?? 'Failed to record output.');
-      }
-    },
-  });
+ const submit = useMutation({
+ mutationFn: async (values: FormValues) => {
+ // Generate a UUID-ish idempotency key.
+ const key = `${id}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+ const computedReject = values.defects.reduce((sum, d) => sum + Number(d.count || 0), 0);
+ return workOrdersApi.recordOutput(id!, {
+ good_count: Number(values.good_count),
+ reject_count: computedReject,
+ shift: values.shift || undefined,
+ remarks: values.remarks || undefined,
+ defects: values.defects.map((d) => ({ defect_type_id: d.defect_type_id, count: Number(d.count) })),
+ }, key);
+ },
+ onSuccess: (output) => {
+ toast.success(`Output ${output.batch_code ?? ''} recorded.`);
+ reset({ good_count: '', shift: '', remarks: '', defects: [] });
+ navigate(`/production/work-orders/${id}`);
+ },
+ onError: (e: AxiosError<{ message?: string; errors?: Record<string, string[]> }>) => {
+ if (e.response?.status === 422 && e.response.data.errors) {
+ Object.entries(e.response.data.errors).forEach(([field, msgs]) => {
+ setError(field as never, { type: 'server', message: msgs[0] });
+ });
+ toast.error(e.response?.data?.message || 'Validation failed.');
+ } else {
+ toast.error(e.response?.data?.message ?? 'Failed to record output.');
+ }
+ },
+ });
 
-  const cumulative = liveCumulative ?? (wo.data ? {
-    produced: wo.data.quantity_produced,
-    good:     wo.data.quantity_good,
-    reject:   wo.data.quantity_rejected,
-    scrap:    wo.data.scrap_rate,
-  } : { produced: 0, good: 0, reject: 0, scrap: '0' });
+ const cumulative = liveCumulative ?? (wo.data ? {
+ produced: wo.data.quantity_produced,
+ good: wo.data.quantity_good,
+ reject: wo.data.quantity_rejected,
+ scrap: wo.data.scrap_rate,
+ } : { produced: 0, good: 0, reject: 0, scrap: '0' });
 
-  return (
-    <div>
-      <PageHeader
-        title={`Record output${wo.data ? ` — ${wo.data.wo_number}` : ''}`}
-        backTo={`/production/work-orders/${id}`}
-        backLabel="Work order"
-      />
-      <div className="px-5 py-4 grid gap-4 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <form onSubmit={handleSubmit((v) => submit.mutate(v), onFormInvalid<FormValues>())}>
-            <Panel title="New recording">
-              <div className="grid grid-cols-2 gap-3">
-                <Input label="Good count" required type="number" min={0} {...register('good_count')}
-                  error={errors.good_count?.message} className="font-mono text-right" />
-                <div className="flex flex-col gap-1">
-                  <span className="text-xs text-muted font-medium">Reject count <span className="text-2xs">(auto-calculated)</span></span>
-                  <div className="flex items-center h-8 px-3 rounded-md border border-default bg-elevated text-sm font-mono text-right tabular-nums">
-                    {rejectCount}
-                  </div>
-                </div>
-                <Select label="Shift" {...register('shift')}>
-                  <option value="">—</option>
-                  {(shifts.data?.data ?? []).map((shift) => (
-                    <option key={shift.id} value={shift.name}>{shift.name}</option>
-                  ))}
-                </Select>
-                <div className="col-span-2">
-                  <Textarea label="Remarks" rows={2} {...register('remarks')} error={errors.remarks?.message} />
-                </div>
-              </div>
+ return (
+ <div>
+ <PageHeader
+ title={`Record output${wo.data ? ` — ${wo.data.wo_number}` : ''}`}
+ backTo={`/production/work-orders/${id}`}
+ backLabel="Work order"
+ />
+ <div className="px-5 py-4 grid gap-4 lg:grid-cols-3">
+ <div className="lg:col-span-2">
+ <form onSubmit={handleSubmit((v) => submit.mutate(v), onFormInvalid<FormValues>())}>
+ <Panel title="New recording">
+ <div className="grid grid-cols-2 gap-3">
+ <Input label="Good count" required type="number" min={0} {...register('good_count')}
+ error={errors.good_count?.message} className="font-mono text-right" />
+ <div className="flex flex-col gap-1">
+ <span className="text-xs text-muted font-medium">Reject count <span className="text-2xs">(auto-calculated)</span></span>
+ <div className="flex items-center h-8 px-3 rounded-md border border-default bg-elevated text-sm font-mono text-right tabular-nums">
+ {rejectCount}
+ </div>
+ </div>
+ <Select label="Shift" {...register('shift')}>
+ <option value="">—</option>
+ {(shifts.data?.data ?? []).map((shift) => (
+ <option key={shift.id} value={shift.name}>{shift.name}</option>
+ ))}
+ </Select>
+ <div className="col-span-2">
+ <Textarea label="Remarks" rows={2} {...register('remarks')} error={errors.remarks?.message} />
+ </div>
+ </div>
 
-              <div className="mt-4 border-t border-default pt-3">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="text-2xs uppercase tracking-wider text-muted font-medium">Defect breakdown</div>
-                  <Button type="button" variant="secondary" size="sm" icon={<Plus size={14} />}
-                    onClick={() => append({ defect_type_id: '', count: '' })}>
-                    Add defect
-                  </Button>
-                </div>
-                {fields.length === 0 && <div className="text-xs text-muted">No rejects — click "Add defect" to classify rejected units.</div>}
-                {fields.map((f, i) => (
-                  <div key={f.id} className="flex items-end gap-2 mt-2">
-                    <div className="flex-1">
-                      <Select label={i === 0 ? 'Defect type' : ''} {...register(`defects.${i}.defect_type_id`)} error={errors.defects?.[i]?.defect_type_id?.message}>
-                        <option value="">Select…</option>
-                        {(defects.data ?? []).map((d) => (
-                          <option key={d.id} value={d.id}>{d.code} — {d.name}</option>
-                        ))}
-                      </Select>
-                    </div>
-                    <Input
-                      label={i === 0 ? 'Count' : ''} type="number" min={1}
-                      {...register(`defects.${i}.count`)} error={errors.defects?.[i]?.count?.message}
-                      className="w-24 font-mono text-right"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      iconOnly
-                      icon={<Trash2 size={14} />}
-                      aria-label="Remove line"
-                      onClick={() => remove(i)}
-                      className="text-muted hover:text-danger"
-                    />
-                  </div>
-                ))}
-              </div>
+ <div className="mt-4 border-t border-default pt-3">
+ <div className="flex items-center justify-between mb-2">
+ <div className="text-2xs uppercase tracking-wider text-muted font-medium">Defect breakdown</div>
+ <Button type="button" variant="secondary" size="sm" icon={<Plus size={14} />}
+ onClick={() => append({ defect_type_id: '', count: '' })}>
+ Add defect
+ </Button>
+ </div>
+ {fields.length === 0 && <div className="text-xs text-muted">No rejects — click "Add defect" to classify rejected units.</div>}
+ {fields.map((f, i) => (
+ <div key={f.id} className="flex items-end gap-2 mt-2">
+ <div className="flex-1">
+ <Select label={i === 0 ? 'Defect type' : ''} {...register(`defects.${i}.defect_type_id`)} error={errors.defects?.[i]?.defect_type_id?.message}>
+ <option value="">Select…</option>
+ {(defects.data ?? []).map((d) => (
+ <option key={d.id} value={d.id}>{d.code} — {d.name}</option>
+ ))}
+ </Select>
+ </div>
+ <Input
+ label={i === 0 ? 'Count' : ''} type="number" min={1}
+ {...register(`defects.${i}.count`)} error={errors.defects?.[i]?.count?.message}
+ className="w-24 font-mono text-right"
+ />
+ <Button
+ type="button"
+ variant="ghost"
+ size="sm"
+ iconOnly
+ icon={<Trash2 size={14} />}
+ aria-label="Remove line"
+ onClick={() => remove(i)}
+ className="text-muted hover:text-danger"
+ />
+ </div>
+ ))}
+ </div>
 
-              <div className="mt-6 flex items-center justify-end gap-2 pt-3 border-t border-default">
-                <Button type="button" variant="secondary" onClick={() => navigate(`/production/work-orders/${id}`)}>Back</Button>
-                <Button type="submit" variant="primary" disabled={isSubmitting || submit.isPending} loading={submit.isPending}>
-                  {submit.isPending ? 'Recording…' : 'Record'}
-                </Button>
-              </div>
-            </Panel>
-          </form>
-        </div>
+ <div className="mt-6 flex items-center justify-end gap-2 pt-3 border-t border-default">
+ <Button type="button" variant="secondary" onClick={() => navigate(`/production/work-orders/${id}`)}>Back</Button>
+ <Button type="submit" variant="primary" disabled={isSubmitting || submit.isPending} loading={submit.isPending}>
+ {submit.isPending ? 'Recording…' : 'Record'}
+ </Button>
+ </div>
+ </Panel>
+ </form>
+ </div>
 
-        <div className="space-y-4">
-          <Panel title="Live cumulative" meta="updated via WebSocket">
-            <dl className="space-y-2 text-sm">
-              <div className="flex justify-between"><dt className="text-muted">Produced</dt><dd className="font-mono tabular-nums">{formatInt(cumulative.produced)}</dd></div>
-              <div className="flex justify-between"><dt className="text-muted">Good</dt><dd className="font-mono tabular-nums text-success-fg">{formatInt(cumulative.good)}</dd></div>
-              <div className="flex justify-between"><dt className="text-muted">Reject</dt><dd className="font-mono tabular-nums text-warning-fg">{formatInt(cumulative.reject)}</dd></div>
-              <div className="flex justify-between"><dt className="text-muted">Scrap rate</dt><dd className="font-mono tabular-nums">{Number(cumulative.scrap).toFixed(2)}%</dd></div>
-              {wo.data && (
-                <div className="flex justify-between border-t border-default pt-2 mt-2">
-                  <dt className="text-muted">Target</dt>
-                  <dd className="font-mono tabular-nums">{formatInt(wo.data.quantity_target)}</dd>
-                </div>
-              )}
-            </dl>
-          </Panel>
-        </div>
-      </div>
-    </div>
-  );
+ <div className="space-y-4">
+ <Panel title="Live cumulative" meta="updated via WebSocket">
+ <dl className="space-y-2 text-sm">
+ <div className="flex justify-between"><dt className="text-muted">Produced</dt><dd className="font-mono tabular-nums">{formatInt(cumulative.produced)}</dd></div>
+ <div className="flex justify-between"><dt className="text-muted">Good</dt><dd className="font-mono tabular-nums text-success-fg">{formatInt(cumulative.good)}</dd></div>
+ <div className="flex justify-between"><dt className="text-muted">Reject</dt><dd className="font-mono tabular-nums text-warning-fg">{formatInt(cumulative.reject)}</dd></div>
+ <div className="flex justify-between"><dt className="text-muted">Scrap rate</dt><dd className="font-mono tabular-nums">{Number(cumulative.scrap).toFixed(2)}%</dd></div>
+ {wo.data && (
+ <div className="flex justify-between border-t border-default pt-2 mt-2">
+ <dt className="text-muted">Target</dt>
+ <dd className="font-mono tabular-nums">{formatInt(wo.data.quantity_target)}</dd>
+ </div>
+ )}
+ </dl>
+ </Panel>
+ </div>
+ </div>
+ </div>
+ );
 }

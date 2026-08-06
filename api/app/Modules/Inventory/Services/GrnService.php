@@ -8,10 +8,12 @@ use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\ChainBroadcaster;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Support\HashIdFilter;
+use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Models\Product;
 use App\Modules\Inventory\Enums\GrnStatus;
+use App\Modules\Inventory\Enums\ItemType;
 use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Events\GoodsReceiptNoteCreated;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
@@ -22,11 +24,13 @@ use App\Modules\Inventory\Support\StockMovementInput;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
+use App\Modules\Quality\Listeners\TriggerIncomingQC;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Models\InspectionMeasurement;
 use App\Modules\Quality\Services\InspectionService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 class GrnService
@@ -35,6 +39,7 @@ class GrnService
         private readonly DocumentSequenceService $sequences,
         private readonly StockMovementService $movements,
         private readonly GrnGlPostingService $gl,
+        private readonly SettingsService $settings,
     ) {}
 
     public function list(array $filters): LengthAwarePaginator
@@ -148,7 +153,7 @@ class GrnService
                     // drums often lands slightly above the ordered quantity; a
                     // configurable tolerance (% of the ORDERED line qty, default 0)
                     // accepts the overage instead of hard-blocking the whole GRN.
-                    $tolerancePct = (string) config('inventory.over_receipt_tolerance_pct', '0');
+                    $tolerancePct = (string) $this->settings->requiredFloat('inventory.over_receipt_tolerance_pct', 0);
                     $allowance = bcmul((string) $poi->quantity, bcdiv($tolerancePct, '100', 6), 3);
                     $maxReceivable = bcadd($remaining, $allowance, 3);
                     if (bccomp($qtyReceived, $maxReceivable, 3) > 0) {
@@ -159,6 +164,11 @@ class GrnService
                     }
                 }
 
+                $unitCost = $row['unit_cost'] ?? $poi->unit_price;
+                if ($unitCost === null || trim((string) $unitCost) === '') {
+                    throw new BusinessRuleException("PO line {$poi->id} has no authoritative unit cost; receive pricing must be recorded first.");
+                }
+
                 GrnItem::create([
                     'goods_receipt_note_id' => $grn->id,
                     'purchase_order_item_id' => $poi->id,
@@ -166,7 +176,7 @@ class GrnService
                     'location_id' => $locationId,
                     'quantity_received' => $qtyReceived,
                     'quantity_accepted' => 0,
-                    'unit_cost' => $row['unit_cost'] ?? $poi->unit_price,
+                    'unit_cost' => $unitCost,
                     'remarks' => $row['remarks'] ?? null,
                     // OGAMI-012 — optional lot capture per received line. The
                     // existing ADV3 `material_lot_number` column is the lot of
@@ -186,6 +196,20 @@ class GrnService
             }
 
             $this->refreshPoStatus($po);
+
+            // F-06 — create incoming-QC inspections SYNCHRONOUSLY so the QC
+            // gate can never fail open when the queue worker is down or the
+            // Quality module boots late. The afterCommit event below is kept
+            // for the async/retry path; TriggerIncomingQC is idempotent and
+            // skips the records created here.
+            try {
+                app(TriggerIncomingQC::class)->handle(new GoodsReceiptNoteCreated($grn->fresh()));
+            } catch (\Throwable $e) {
+                Log::warning('Synchronous incoming-QC trigger failed', [
+                    'grn_id' => $grn->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
 
             // Series C — Task C2. Domain event for chain listeners
             // (TriggerIncomingQC). Fires after commit so the row is visible.
@@ -257,6 +281,17 @@ class GrnService
             throw new BusinessRuleException('Only pending_qc GRNs can be partially accepted.');
         }
         $this->assertQcGate($grn);
+
+        $hasNonZero = false;
+        foreach ($itemAcceptedMap as $qty) {
+            if (bccomp((string) ($qty ?? '0'), '0', 3) > 0) {
+                $hasNonZero = true;
+                break;
+            }
+        }
+        if (! $hasNonZero) {
+            throw new BusinessRuleException('At least one line must have a non-zero accepted quantity.');
+        }
 
         return DB::transaction(function () use ($grn, $itemAcceptedMap, $by) {
             $allFull = true;
@@ -335,8 +370,12 @@ class GrnService
      *
      * If the GRN has been linked to an inspection (qc_inspection_id),
      * accepting the GRN requires that inspection to be in `passed` status.
-     * GRNs without a linked inspection bypass this gate (back-compat with
-     * Sprint 5 flows where QC was not yet enforced).
+     * F-06: the gate FAILS CLOSED — a GRN whose QC-eligible lines have no
+     * inspection record at all means QC was skipped or failed to materialize,
+     * and must not be accepted. Inspection rows are created synchronously at
+     * GRN creation, so their absence is an anomaly, not a back-compat state.
+     * Only GRNs with no QC-eligible lines (no raw-material items, no active
+     * quality plan) bypass the gate.
      */
     private function assertQcGate(GoodsReceiptNote $grn): void
     {
@@ -345,17 +384,42 @@ class GrnService
             ->where('entity_id', $grn->id)
             ->pluck('status');
         if ($statuses->isEmpty() && ! $grn->qc_inspection_id) {
+            if ($this->hasQcEligibleLines($grn)) {
+                throw new RuntimeException(
+                    "GRN {$grn->grn_number} has no incoming inspection records; "
+                    .'incoming QC must be completed before acceptance.'
+                );
+            }
             return;
         }
         if ($statuses->isEmpty()) {
             $statuses = collect([DB::table('inspections')->where('id', $grn->qc_inspection_id)->value('status')]);
         }
-        $blocking = $statuses->first(fn ($status) => $status !== 'passed');
+        // F-12 — a cancelled inspection (logistics rejection, P3.6) is a
+        // completed decision; it must not block acceptance forever.
+        $blocking = $statuses->first(fn ($status) => ! in_array($status, ['passed', 'cancelled'], true));
         if ($blocking !== null) {
             throw new RuntimeException(
                 "GRN {$grn->grn_number} cannot be accepted until every incoming inspection passes (current: {$blocking})."
             );
         }
+    }
+
+    private function hasQcEligibleLines(GoodsReceiptNote $grn): bool
+    {
+        $grn->loadMissing('items.item');
+        foreach ($grn->items as $line) {
+            if (! $line->item) {
+                continue;
+            }
+            if ($line->item->item_type === ItemType::RawMaterial) {
+                return true;
+            }
+            if ($line->item->qualityPlans()->effective(now()->toDateString())->exists()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -382,7 +446,24 @@ class GrnService
             $inspection = null;
             $inspectionService = $this->resolveInspectionService();
 
-            if ($inspectionService && ! empty($qcData)) {
+            // F-06 — GrnService::create() now creates the incoming inspections
+            // synchronously. If they already exist (the normal case), reuse
+            // them and apply the operator verdict to all of them instead of
+            // double-creating (which trips the per-GRN unique constraint).
+            $existingInspections = $inspectionService
+                ? Inspection::query()
+                    ->where('entity_type', 'grn')
+                    ->where('entity_id', $grn->id)
+                    ->get()
+                : collect();
+
+            if ($existingInspections->isNotEmpty()) {
+                // The single-screen verdict lands on the first inspection of
+                // record; the fast-complete loop below applies it to all.
+                $inspection = $existingInspections->first();
+            }
+
+            if ($inspectionService && ! empty($qcData) && $existingInspections->isEmpty()) {
                 $inspectorId = null;
                 if (! empty($qcData['inspector_id'])) {
                     $inspectorId = HashIdFilter::decode($qcData['inspector_id'], User::class)
@@ -401,6 +482,9 @@ class GrnService
                 // the full inspection record and still process the GRN result.
                 if ($productId) {
                     $totalQty = collect($items)->sum(fn ($r) => (float) $r['quantity_received']);
+                    if ($totalQty < 1) {
+                        throw new BusinessRuleException('Incoming inspection requires a positive received quantity.');
+                    }
                     $inspector = $inspectorId
                         ? User::query()->findOrFail($inspectorId)
                         : $by;
@@ -409,7 +493,7 @@ class GrnService
                         $inspection = $inspectionService->create([
                             'stage' => 'incoming',
                             'product_id' => $productId,
-                            'batch_quantity' => max(1, (int) $totalQty),
+                            'batch_quantity' => (int) $totalQty,
                             'entity_type' => 'grn',
                             'entity_id' => $grn->id,
                             'notes' => $qcData['remarks'] ?? null,
@@ -428,7 +512,7 @@ class GrnService
                         if ($line) {
                             $inspection = $inspectionService->createIncomingForItem(
                                 Item::query()->findOrFail($line->item_id),
-                                max(1, (int) $totalQty),
+                                (int) $totalQty,
                                 $grn->id,
                                 $inspector,
                                 $qcData['remarks'] ?? null,
@@ -446,7 +530,7 @@ class GrnService
                             : $by;
                         $inspection = $inspectionService->createIncomingForItem(
                             Item::query()->findOrFail($line->item_id),
-                            max(1, (int) collect($items)->sum(fn ($row) => (float) $row['quantity_received'])),
+                            (int) collect($items)->sum(fn ($row) => (float) $row['quantity_received']),
                             $grn->id,
                             $inspector,
                             $qcData['remarks'] ?? null,
@@ -457,25 +541,38 @@ class GrnService
             }
 
             // 3. Based on QC result, accept or leave pending
-            $qcResult = $qcData['result'] ?? 'passed';
+            // Never infer a passed inspection when QC data is absent. A
+            // missing verdict remains pending until an inspector records it.
+            $qcResult = $qcData['result'] ?? (string) $this->settings->get('inventory.grn.default_qc_result', '');
             $disposition = null;
 
             if ($qcResult === 'passed' || $qcResult === 'passed_with_remarks') {
-                // If an inspection was created, fast-complete it as passed
-                // so the QC gate in acceptInternal() does not block.
+                // F-06 — the verdict applies to every inspection on the GRN
+                // (synchronously created at GRN creation), not just the one
+                // created by this single-screen flow.
+                $inspectionsToComplete = $existingInspections->isNotEmpty()
+                    ? $existingInspections
+                    : collect([$inspection])->filter();
+                foreach ($inspectionsToComplete as $insp) {
+                    $this->fastCompleteInspection($insp, true, $by);
+                }
                 if ($inspection) {
-                    $this->fastCompleteInspection($inspection, true, $by);
                     $inspection = $inspection->fresh();
                 }
                 $grn = $this->acceptInternal($grn, $by);
             } elseif ($qcResult === 'failed') {
-                $disposition = $qcData['disposition'] ?? 'return_to_supplier';
+                $disposition = $qcData['disposition'] ?? null;
                 // Distinguish between a genuine quality failure (triggers NCR)
                 // and a logistics rejection such as wrong part number or short
                 // shipment (must NOT open an NCR — P3.6 audit fix).
                 $isQualityFailure = ($qcData['is_quality_failure'] ?? true) !== false;
+                $inspectionsToComplete = $existingInspections->isNotEmpty()
+                    ? $existingInspections
+                    : collect([$inspection])->filter();
+                foreach ($inspectionsToComplete as $insp) {
+                    $this->fastCompleteInspection($insp, false, $by, $isQualityFailure);
+                }
                 if ($inspection) {
-                    $this->fastCompleteInspection($inspection, false, $by, $isQualityFailure);
                     $inspection = $inspection->fresh();
                 }
                 $grn = $this->rejectInternal(

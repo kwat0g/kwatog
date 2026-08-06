@@ -18,13 +18,6 @@ class DatabaseSeeder extends Seeder
             SettingsSeeder::class,         // Task 12
             SodConflictRuleSeeder::class,  // REC-01 — SoD conflict matrix
 
-            // Sprint 2 — Hire to Retire (Part 1).
-            DepartmentSeeder::class,       // Task 13
-            PositionSeeder::class,         // Task 13
-            ShiftSeeder::class,            // Task 16
-            HolidaySeeder::class,          // Task 17
-            LeaveTypeSeeder::class,        // Task 20
-
             // Sprint 3 — Hire to Retire (Part 2: Payroll).
             GovernmentTableSeeder::class,      // Task 23 (2024 schedule)
             GovernmentTable2025Seeder::class,  // OGAMI-101 (2025 schedule)
@@ -35,39 +28,6 @@ class DatabaseSeeder extends Seeder
             ChartOfAccountsSeeder::class,      // Task 31 (full ~45-account COA)
             PayrollChartAccountsSeeder::class, // Task 29 — idempotent upsert; preserved for back-compat.
 
-            // Sprint 5 — Procure to Pay (Part 1).
-            UomSeeder::class,                  // OGAMI-004 — UOMs before items/conversions
-            InventoryItemSeeder::class,        // Task 39
-            WarehouseSeeder::class,            // Task 40
-
-            // Sprint 6 — Order to Cash (Part 1: CRM + MRP + Production).
-            CustomerSeeder::class,             // Task 47 (upstream of CRM)
-            ProductSeeder::class,              // Task 47
-            PriceAgreementSeeder::class,       // Task 47
-            BomSeeder::class,                  // Task 49 (depends on products + items)
-            MachineSeeder::class,              // Task 50
-            MoldSeeder::class,                 // Task 50 (depends on products)
-            MoldCompatibilitySeeder::class,    // Task 50 (depends on machines + molds)
-            DefectTypeSeeder::class,           // Task 51
-
-            // Sprint 7 — Supply Chain
-            VehicleSeeder::class,              // Task 66
-
-            // Demo transactional data — employees, stock levels, a confirmed
-            // sales order (Order to Cash chain), and an open customer
-            // complaint. Idempotent: skips on re-run if rows already exist.
-            DemoDataSeeder::class,
-            DemoAccountSeeder::class,
-
-            // Sprint 8 — supplements demo data with maintenance schedules,
-            // sample maintenance work orders, and the asset register.
-            Sprint8DemoSeeder::class,
-
-            // Series E — seeds document-vault rows (payslips + invoices),
-            // scheduled exports, and column preferences so the new admin
-            // pages and Documents tabs aren't empty after migrate --seed.
-            SeriesEDemoSeeder::class,
-
             // Series R — Task R4. Catalog must run before role-default
             // layouts so widget keys exist when layouts reference them.
             DashboardWidgetSeeder::class,
@@ -76,20 +36,45 @@ class DatabaseSeeder extends Seeder
             // KPI Scorecard — definition catalog for the KPI snapshot engine.
             KpiDefinitionSeeder::class,
 
-            // Comprehensive demo data — fills all 24 modules so every
-            // feature page has realistic records to browse and test.
-            ComprehensiveDemoSeeder::class,
-
-            // OGAMI-010 — realistic VOLUME on top of the demo scaffold. Runs
-            // LAST: ComprehensiveDemoSeeder truncates payroll/NCR/etc., so this
-            // must follow it to own the demo-critical volume (200 employees,
-            // 12mo attendance, 6 finalized payroll cycles, 45 NCRs, forecasts).
-            // Deterministic + idempotent.
-            RealisticDataSeeder::class,
-
-            // Adviser-defense fixtures and external portal credentials. Runs
-            // after all base/volume rows because it links real chain records.
-            GoldenPathDemoSeeder::class,
         ]);
+
+        // Operational master data is deliberately opt-in. A production or ordinary
+        // fresh install receives only reference configuration and must obtain
+        // employees, customers, inventory, transactions, and profiles from
+        // imports or live user/API workflows.
+        if (config('app.seed_reference_data')) {
+            $this->call([
+                DepartmentSeeder::class,
+                PositionSeeder::class,
+                ShiftSeeder::class,
+                HolidaySeeder::class,
+                LeaveTypeSeeder::class,
+                UomSeeder::class,
+                InventoryItemSeeder::class,
+                WarehouseSeeder::class,
+                CustomerSeeder::class,
+                ProductSeeder::class,
+                PriceAgreementSeeder::class,
+                BomSeeder::class,
+                MachineSeeder::class,
+                MoldSeeder::class,
+                MoldCompatibilitySeeder::class,
+                DefectTypeSeeder::class,
+                VehicleSeeder::class,
+            ]);
+        }
+
+        // Demo records are deliberately opt-in.
+        if (config('app.seed_demo_data')) {
+            $this->call([
+                DemoDataSeeder::class,
+                DemoAccountSeeder::class,
+                Sprint8DemoSeeder::class,
+                SeriesEDemoSeeder::class,
+                ComprehensiveDemoSeeder::class,
+                RealisticDataSeeder::class,
+                GoldenPathDemoSeeder::class,
+            ]);
+        }
     }
 }

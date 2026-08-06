@@ -1,6 +1,6 @@
 {{-- ImpEx Commercial Invoice — customs clearance document for inbound resin shipments.
 
-     Shipper (Japanese vendor) → Consignee (Ogami Philippines).
+     Shipper → Consignee import/export document.
      Lists PO line items with unit prices, totals, payment terms, and incoterms.
      Pattern follows purchase-request.blade.php layout style. --}}
 <!DOCTYPE html>
@@ -212,7 +212,7 @@
 
 <div class="footer">
     Generated on {{ $now->format('M d, Y · H:i') }} ·
-    {{ $company['name'] }} · OGAMI ERP
+    {{ $company['name'] }}
 </div>
 
 </body>

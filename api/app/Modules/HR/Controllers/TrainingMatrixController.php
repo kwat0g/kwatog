@@ -11,6 +11,7 @@ use App\Modules\HR\Models\Skill;
 use App\Modules\HR\Models\Department;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
+use App\Modules\HR\Enums\TrainingMatrixStatus;
 use Illuminate\Http\Request;
 
 class TrainingMatrixController
@@ -101,6 +102,10 @@ class TrainingMatrixController
                     'gap_count'       => $totalGaps,
                     'expired_count'   => $totalExpired,
                 ],
+                'status_options' => array_map(
+                    static fn (TrainingMatrixStatus $status): array => ['value' => $status->value, 'label' => $status->label()],
+                    TrainingMatrixStatus::cases(),
+                ),
             ],
         ]);
     }

@@ -231,12 +231,14 @@ class QuarantineMrbTest extends TestCase
 
         $this->assertSame(MrbStatus::Scrapped, $mrb->status);
         $this->assertSame('scrap', $mrb->disposition);
-        $this->assertSame($this->scrapLoc->id, $mrb->release_location_id);
+        // F-07: scrap removes from the source (quarantine), does NOT transfer
+        // to scrap-zone. release_location_id is the source location.
+        $this->assertSame($this->quarantineLoc->id, $mrb->release_location_id);
 
         $quar  = StockLevel::where('item_id', $this->item->id)->where('location_id', $this->quarantineLoc->id)->first();
         $scrap = StockLevel::where('item_id', $this->item->id)->where('location_id', $this->scrapLoc->id)->first();
         $this->assertSame('0.000', (string) $quar->quantity);
-        $this->assertSame('15.000', (string) $scrap->quantity);
+        $this->assertNull($scrap, 'Scrap write-off removes stock from ledger; no stock at scrap zone');
     }
 
     // ── 6. releasing an already-released MRB throws ─────────────────────────────

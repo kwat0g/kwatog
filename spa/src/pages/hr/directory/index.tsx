@@ -20,246 +20,246 @@ import { focusRing } from '@/lib/focus';
 type ViewMode = 'grid' | 'list' | 'org';
 
 export default function EmployeeDirectoryPage() {
-  const navigate = useNavigate();
-  const { can } = usePermission();
-  const [search, setSearch] = useState('');
-  const [view, setView] = useState<ViewMode>('grid');
+ const navigate = useNavigate();
+ const { can } = usePermission();
+ const [search, setSearch] = useState('');
+ const [view, setView] = useState<ViewMode>('grid');
 
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['hr', 'directory', search],
-    queryFn: () => directoryApi.list({ search: search || undefined, per_page: 200 }),
-    placeholderData: (prev) => prev,
-  });
+ const { data, isLoading, isError, refetch } = useQuery({
+ queryKey: ['hr', 'directory', search],
+ queryFn: () => directoryApi.list({ search: search || undefined, per_page: 200 }),
+ placeholderData: (prev) => prev,
+ });
 
-  const { data: orgData, isLoading: orgLoading } = useQuery({
-    queryKey: ['hr', 'directory', 'org-chart'],
-    queryFn: () => directoryApi.orgChart(),
-    enabled: view === 'org',
-    staleTime: 60_000,
-  });
+ const { data: orgData, isLoading: orgLoading } = useQuery({
+ queryKey: ['hr', 'directory', 'org-chart'],
+ queryFn: () => directoryApi.orgChart(),
+ enabled: view === 'org',
+ staleTime: 60_000,
+ });
 
-  // Group by department for grid view (visual grouping only).
-  const grouped = useMemo(() => {
-    const map = new Map<string, DirectoryEmployee[]>();
-    for (const e of data?.data ?? []) {
-      const key = e.department?.name ?? 'Unassigned';
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(e);
-    }
-    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
-  }, [data]);
+ // Group by department for grid view (visual grouping only).
+ const grouped = useMemo(() => {
+ const map = new Map<string, DirectoryEmployee[]>();
+ for (const e of data?.data ?? []) {
+ const key = e.department?.name ?? 'Unassigned';
+ if (!map.has(key)) map.set(key, []);
+ map.get(key)!.push(e);
+ }
+ return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
+ }, [data]);
 
-  const canViewFull = can('hr.employees.view');
+ const canViewFull = can('hr.employees.view');
 
-  return (
-    <div>
-      <PageHeader
-        title="Employee directory"
-        subtitle={data ? `${data.meta.total} employee${data.meta.total === 1 ? '' : 's'}` : undefined}
-        actions={
-          <SegmentedControl
-            size="sm"
-            label="Directory view"
-            value={view}
-            onChange={setView}
-            options={[
-              { value: 'grid', label: <LayoutGrid size={14} />, ariaLabel: 'Grid view' },
-              { value: 'list', label: <ListIcon size={14} />, ariaLabel: 'List view' },
-              { value: 'org', label: <GitBranch size={14} />, ariaLabel: 'Org chart view' },
-            ]}
-          />
-        }
-      />
+ return (
+ <div>
+ <PageHeader
+ title="Employee directory"
+ subtitle={data ? `${data.meta.total} employee${data.meta.total === 1 ? '' : 's'}` : undefined}
+ actions={
+ <SegmentedControl
+ size="sm"
+ label="Directory view"
+ value={view}
+ onChange={setView}
+ options={[
+ { value: 'grid', label: <LayoutGrid size={14} />, ariaLabel: 'Grid view' },
+ { value: 'list', label: <ListIcon size={14} />, ariaLabel: 'List view' },
+ { value: 'org', label: <GitBranch size={14} />, ariaLabel: 'Org chart view' },
+ ]}
+ />
+ }
+ />
 
-      {/* Search */}
-      <div className="px-5 py-3 border-b border-default">
-        <Input
-          placeholder="Search name, position, employee no…"
-          aria-label="Search directory"
-          value={search}
-          onChange={(e: { target: { value: string } }) => setSearch(e.target.value)}
-          prefix={<Search size={12} />}
-          containerClassName="max-w-md"
-        />
-      </div>
+ {/* Search */}
+ <div className="px-5 py-3 border-b border-default">
+ <Input
+ placeholder="Search name, position, employee no…"
+ aria-label="Search directory"
+ value={search}
+ onChange={(e: { target: { value: string } }) => setSearch(e.target.value)}
+ prefix={<Search size={12} />}
+ containerClassName="max-w-md"
+ />
+ </div>
 
-      {isLoading && !data && (
-        <div className="px-5 py-4 grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="h-32 bg-elevated rounded-md animate-pulse" />
-          ))}
-        </div>
-      )}
+ {isLoading && !data && (
+ <div className="px-5 py-4 grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3">
+ {Array.from({ length: 8 }).map((_, i) => (
+ <div key={i} className="h-32 bg-elevated rounded-md animate-pulse" />
+ ))}
+ </div>
+ )}
 
-      {isError && (
-        <EmptyState
-          icon="alert-circle"
-          title="Failed to load directory"
-          description="Something went wrong."
-          action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
-        />
-      )}
+ {isError && (
+ <EmptyState
+ icon="alert-circle"
+ title="Failed to load directory"
+ description="Something went wrong."
+ action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
+ />
+ )}
 
-      {data && data.data.length === 0 && (
-        <EmptyState
-          icon="users"
-          title={search ? `No matches for “${search}”` : 'No employees yet'}
-          description={search ? 'Try a different name or department.' : 'Once HR adds employees, they appear here.'}
-        />
-      )}
+ {data && data.data.length === 0 && (
+ <EmptyState
+ icon="users"
+ title={search ? `No matches for “${search}”` : 'No employees yet'}
+ description={search ? 'Try a different name or department.' : 'Once HR adds employees, they appear here.'}
+ />
+ )}
 
-      {data && data.data.length > 0 && view === 'grid' && (
-        <div className="px-5 py-4 space-y-6">
-          {grouped.map(([deptName, employees]) => (
-            <section key={deptName}>
-              <h2 className="text-2xs uppercase tracking-wider text-muted font-medium mb-2">
-                {deptName} <span className="text-text-subtle font-mono tabular-nums">({employees.length})</span>
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                {employees.map((e) => (
-                  <button
-                    key={e.id}
-                    type="button"
-                    onClick={() => canViewFull && navigate(`/hr/employees/${e.id}`)}
-                    className={cn(
-                      'bg-canvas border border-default rounded-md p-3 text-left transition-colors',
-                focusRing,
-                      canViewFull ? 'hover:bg-elevated cursor-pointer' : 'cursor-default',
-                    )}
-                  >
-                    <div className="flex items-start gap-3">
-                      <Avatar name={e.full_name} src={e.photo_path ?? undefined} size="lg" />
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm truncate">{e.full_name}</div>
-                        <div className="text-xs text-muted truncate">{e.position?.title ?? '—'}</div>
-                        <div className="mt-1.5 flex items-center gap-1.5">
-                          {e.status && (
-                            <Chip variant={chipVariantForStatus(e.status)}>
-                              {e.status_label ?? e.status}
-                            </Chip>
-                          )}
-                          <span className="text-2xs font-mono tabular-nums text-muted">{e.employee_no}</span>
-                        </div>
-                        {e.email && (
-                          <div className="text-2xs text-muted mt-1 truncate">{e.email}</div>
-                        )}
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </section>
-          ))}
-        </div>
-      )}
+ {data && data.data.length > 0 && view === 'grid' && (
+ <div className="px-5 py-4 space-y-6">
+ {grouped.map(([deptName, employees]) => (
+ <section key={deptName}>
+ <h2 className="text-2xs uppercase tracking-wider text-muted font-medium mb-2">
+ {deptName} <span className="text-text-subtle font-mono tabular-nums">({employees.length})</span>
+ </h2>
+ <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+ {employees.map((e) => (
+ <button
+ key={e.id}
+ type="button"
+ onClick={() => canViewFull && navigate(`/hr/employees/${e.id}`)}
+ className={cn(
+ 'bg-canvas border border-default rounded-md p-3 text-left transition-colors',
+ focusRing,
+ canViewFull ? 'hover:bg-elevated cursor-pointer' : 'cursor-default',
+ )}
+ >
+ <div className="flex items-start gap-3">
+ <Avatar name={e.full_name} src={e.photo_url ?? undefined} size="lg" />
+ <div className="flex-1 min-w-0">
+ <div className="font-medium text-sm truncate">{e.full_name}</div>
+ <div className="text-xs text-muted truncate">{e.position?.title ?? '—'}</div>
+ <div className="mt-1.5 flex items-center gap-1.5">
+ {e.status && (
+ <Chip variant={chipVariantForStatus(e.status)}>
+ {e.status_label ?? e.status}
+ </Chip>
+ )}
+ <span className="text-2xs font-mono tabular-nums text-muted">{e.employee_no}</span>
+ </div>
+ {e.email && (
+ <div className="text-2xs text-muted mt-1 truncate">{e.email}</div>
+ )}
+ </div>
+ </div>
+ </button>
+ ))}
+ </div>
+ </section>
+ ))}
+ </div>
+ )}
 
-      {data && data.data.length > 0 && view === 'list' && (
-        <div className="px-5 py-4">
-          <div className="border border-default rounded-md overflow-hidden">
-            <table className={tableCls}>
-              <thead>
-                <tr className={theadTrCls}>
-                  <Th>Name</Th>
-                  <Th>Position</Th>
-                  <Th>Department</Th>
-                  <Th>Email</Th>
-                  <Th>Mobile</Th>
-                  <Th>Status</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.data.map((e) => (
-                  <tr
-                    key={e.id}
-                    onClick={() => canViewFull && navigate(`/hr/employees/${e.id}`)}
-                    className={cn(trCls, canViewFull && 'cursor-pointer')}
-                  >
-                    <Td>
-                      <div className="font-medium">{e.full_name}</div>
-                      <div className="text-2xs text-muted font-mono">{e.employee_no}</div>
-                    </Td>
-                    <Td className="text-secondary">{e.position?.title ?? '—'}</Td>
-                    <Td className="text-secondary">{e.department?.name ?? '—'}</Td>
-                    <Td mono>{e.email ?? '—'}</Td>
-                    <Td mono>{e.mobile_number ?? '—'}</Td>
-                    <Td>
-                      {e.status && (
-                        <Chip variant={chipVariantForStatus(e.status)}>
-                          {e.status_label ?? e.status}
-                        </Chip>
-                      )}
-                    </Td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+ {data && data.data.length > 0 && view === 'list' && (
+ <div className="px-5 py-4">
+ <div className="border border-default rounded-md overflow-hidden">
+ <table className={tableCls}>
+ <thead>
+ <tr className={theadTrCls}>
+ <Th>Name</Th>
+ <Th>Position</Th>
+ <Th>Department</Th>
+ <Th>Email</Th>
+ <Th>Mobile</Th>
+ <Th>Status</Th>
+ </tr>
+ </thead>
+ <tbody>
+ {data.data.map((e) => (
+ <tr
+ key={e.id}
+ onClick={() => canViewFull && navigate(`/hr/employees/${e.id}`)}
+ className={cn(trCls, canViewFull && 'cursor-pointer')}
+ >
+ <Td>
+ <div className="font-medium">{e.full_name}</div>
+ <div className="text-2xs text-muted font-mono">{e.employee_no}</div>
+ </Td>
+ <Td className="text-secondary">{e.position?.title ?? '—'}</Td>
+ <Td className="text-secondary">{e.department?.name ?? '—'}</Td>
+ <Td mono>{e.email ?? '—'}</Td>
+ <Td mono>{e.mobile_number ?? '—'}</Td>
+ <Td>
+ {e.status && (
+ <Chip variant={chipVariantForStatus(e.status)}>
+ {e.status_label ?? e.status}
+ </Chip>
+ )}
+ </Td>
+ </tr>
+ ))}
+ </tbody>
+ </table>
+ </div>
+ </div>
+ )}
 
-      {view === 'org' && (
-        <div className="px-5 py-4">
-          {orgLoading && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <SkeletonBlock key={i} className="h-40 rounded-md" />
-              ))}
-            </div>
-          )}
-          {!orgLoading && (!orgData || orgData.length === 0) && (
-            <EmptyState icon="git-branch" title="No org chart data" description="Add employees to departments to see the org chart." />
-          )}
-          {orgData && orgData.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {orgData.map((group) => (
-                <OrgDeptCard key={group.department?.id ?? 'unassigned'} group={group} canViewFull={canViewFull} onNavigate={(id) => navigate(`/hr/employees/${id}`)} />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
+ {view === 'org' && (
+ <div className="px-5 py-4">
+ {orgLoading && (
+ <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+ {Array.from({ length: 6 }).map((_, i) => (
+ <SkeletonBlock key={i} className="h-40 rounded-md" />
+ ))}
+ </div>
+ )}
+ {!orgLoading && (!orgData || orgData.length === 0) && (
+ <EmptyState icon="git-branch" title="No org chart data" description="Add employees to departments to see the org chart." />
+ )}
+ {orgData && orgData.length > 0 && (
+ <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+ {orgData.map((group) => (
+ <OrgDeptCard key={group.department?.id ?? 'unassigned'} group={group} canViewFull={canViewFull} onNavigate={(id) => navigate(`/hr/employees/${id}`)} />
+ ))}
+ </div>
+ )}
+ </div>
+ )}
+ </div>
+ );
 }
 
 function OrgDeptCard({
-  group,
-  canViewFull,
-  onNavigate,
+ group,
+ canViewFull,
+ onNavigate,
 }: {
-  group: OrgChartGroup;
-  canViewFull: boolean;
-  onNavigate: (id: string) => void;
+ group: OrgChartGroup;
+ canViewFull: boolean;
+ onNavigate: (id: string) => void;
 }) {
-  return (
-    <div className="border border-default rounded-md overflow-hidden">
-      <div className="px-3 py-2 bg-subtle border-b border-default flex items-center justify-between">
-        <span className="text-sm font-medium">{group.department?.name ?? 'Unassigned'}</span>
-        <span className="text-2xs text-muted font-mono tabular-nums">{group.employees.length}</span>
-      </div>
-      <ul className="divide-y divide-subtle">
-        {group.employees.map((e) => (
-          <li
-            key={e.id}
-            className={cn(
-              'flex items-center gap-2.5 px-3 py-2',
-              canViewFull ? 'hover:bg-elevated cursor-pointer' : '',
-            )}
-            onClick={() => canViewFull && onNavigate(e.id)}
-          >
-            <Avatar name={e.full_name} src={e.photo_path ?? undefined} size="sm" />
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium truncate">{e.full_name}</div>
-              <div className="text-2xs text-muted truncate">{e.position?.title ?? '—'}</div>
-            </div>
-            {e.status && (
-              <Chip variant={chipVariantForStatus(e.status)}>
-                {e.status_label ?? e.status}
-              </Chip>
-            )}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
+ return (
+ <div className="border border-default rounded-md overflow-hidden">
+ <div className="px-3 py-2 bg-subtle border-b border-default flex items-center justify-between">
+ <span className="text-sm font-medium">{group.department?.name ?? 'Unassigned'}</span>
+ <span className="text-2xs text-muted font-mono tabular-nums">{group.employees.length}</span>
+ </div>
+ <ul className="divide-y divide-subtle">
+ {group.employees.map((e) => (
+ <li
+ key={e.id}
+ className={cn(
+ 'flex items-center gap-2.5 px-3 py-2',
+ canViewFull ? 'hover:bg-elevated cursor-pointer' : '',
+ )}
+ onClick={() => canViewFull && onNavigate(e.id)}
+ >
+ <Avatar name={e.full_name} src={e.photo_url ?? undefined} size="sm" />
+ <div className="flex-1 min-w-0">
+ <div className="text-sm font-medium truncate">{e.full_name}</div>
+ <div className="text-2xs text-muted truncate">{e.position?.title ?? '—'}</div>
+ </div>
+ {e.status && (
+ <Chip variant={chipVariantForStatus(e.status)}>
+ {e.status_label ?? e.status}
+ </Chip>
+ )}
+ </li>
+ ))}
+ </ul>
+ </div>
+ );
 }

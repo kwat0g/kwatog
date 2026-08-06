@@ -109,13 +109,17 @@ class LoanService
         return $loan->load(['employee', 'payments', 'approvalRecords.approver:id,name']);
     }
 
-    /** @return array{principal_max:string, has_active:bool} */
+    /** @return array{principal_max:string, has_active:bool, max_pay_periods:int} */
     public function limitsFor(Employee $employee, LoanType $type): array
     {
         $multiplier = (float) $this->requiredSetting("loans.{$type->value}.max_salary_multiplier");
-        $base = $employee->basic_monthly_salary
-            ? (float) $employee->basic_monthly_salary
-            : (float) ($employee->daily_rate ?? 0) * $this->settings->requiredInt('payroll.work_days_per_month', 1);
+        // Monthly equivalent, whichever pay type: the model reconciles the two so
+        // a semi-monthly employee's cap is not computed off a half-month figure.
+        $monthly = $employee->monthlyEquivalentSalary();
+        $base = $monthly !== null ? (float) $monthly : null;
+        if ($base === null || $base <= 0) {
+            throw new BusinessRuleException('An authoritative employee pay rate is required before loan limits can be calculated.');
+        }
         $max = $base * $multiplier;
         $hasActive = EmployeeLoan::query()
             ->where('employee_id', $employee->id)
@@ -123,7 +127,11 @@ class LoanService
             ->whereIn('status', [LoanStatus::Pending->value, LoanStatus::Active->value])
             ->exists();
 
-        return ['principal_max' => number_format($max, 2, '.', ''), 'has_active' => $hasActive];
+        return [
+            'principal_max' => number_format($max, 2, '.', ''),
+            'has_active' => $hasActive,
+            'max_pay_periods' => $this->settings->requiredInt('loans.max_pay_periods', 1, 120),
+        ];
     }
 
     public function request(int $employeeId, LoanType $type, array $data): EmployeeLoan
@@ -144,7 +152,7 @@ class LoanService
             // Cap check.
             $limits = $this->limitsFor($employee, $type);
             if (bccomp((string) $data['principal'], $limits['principal_max'], 2) > 0) {
-                throw new BusinessRuleException("Principal exceeds maximum of ₱{$limits['principal_max']} for {$type->value}.");
+                throw new BusinessRuleException('Principal exceeds maximum of '.app(\App\Common\Services\CurrencyDisplayService::class)->format($limits['principal_max'])." for {$type->value}.");
             }
 
             $sequenceKey = $type === LoanType::CashAdvance ? 'cash_advance' : 'loan';

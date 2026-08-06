@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth:sanctum', 'feature:loans'])->prefix('loans')->group(function () {
     Route::get('/', [LoanController::class, 'index'])->middleware('permission:loans.view');
+    Route::get('/options', [LoanController::class, 'options'])->middleware('permission:loans.view');
     Route::get('/types', [LoanController::class, 'types'])->middleware('permission:loans.create');
     Route::post('/', [LoanController::class, 'store'])->middleware('permission:loans.create');
     // Pure calculation used by the employee self-service form; it reads no

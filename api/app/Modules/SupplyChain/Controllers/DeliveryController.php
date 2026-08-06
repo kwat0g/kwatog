@@ -25,6 +25,26 @@ class DeliveryController
         return DeliveryResource::collection($this->service->list($request->query()));
     }
 
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'statuses' => array_map(static fn (DeliveryStatus $status): array => [
+                'value' => $status->value,
+                'label' => str_replace('_', ' ', ucfirst($status->value)),
+                'next_status' => self::nextStatus($status)?->value,
+                'is_terminal' => $status->isTerminal(),
+            ], DeliveryStatus::cases()),
+        ]]);
+    }
+
+    private static function nextStatus(DeliveryStatus $status): ?DeliveryStatus
+    {
+        foreach (DeliveryStatus::cases() as $candidate) {
+            if ($status->canTransitionTo($candidate)) return $candidate;
+        }
+        return null;
+    }
+
     public function show(Delivery $delivery): DeliveryResource
     {
         return new DeliveryResource($this->service->show($delivery));
@@ -101,5 +121,11 @@ class DeliveryController
     {
         $this->service->delete($delivery);
         return response()->json([], 204);
+    }
+
+    public function restore(Delivery $delivery): JsonResponse
+    {
+        $delivery->restore();
+        return response()->json(['message' => 'Delivery restored.']);
     }
 }

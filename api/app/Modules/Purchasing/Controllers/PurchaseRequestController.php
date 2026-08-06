@@ -6,6 +6,7 @@ namespace App\Modules\Purchasing\Controllers;
 
 use App\Common\Support\HashIdFilter;
 use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
+use App\Modules\Purchasing\Enums\PurchaseRequestPriority;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Purchasing\Requests\ConvertPrToPoRequest;
 use App\Modules\Purchasing\Requests\RejectPurchaseRequestRequest;
@@ -22,6 +23,7 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Validator;
 use Symfony\Component\HttpFoundation\Response;
 use RuntimeException;
+use App\Common\Services\SettingsService;
 
 class PurchaseRequestController
 {
@@ -29,6 +31,7 @@ class PurchaseRequestController
         private readonly PurchaseRequestService $service,
         private readonly PurchaseOrderService $poService,
         private readonly PurchaseRequestPdfService $pdf,
+        private readonly SettingsService $settings,
     ) {}
 
     /** Sprint P9 — printable PR with 4-tier approval signature block. */
@@ -40,6 +43,25 @@ class PurchaseRequestController
     public function index(Request $request): AnonymousResourceCollection
     {
         return PurchaseRequestResource::collection($this->service->list($request->query(), $request->user()));
+    }
+
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'statuses' => array_map(
+                static fn (PurchaseRequestStatus $status): array => ['value' => $status->value, 'label' => ucfirst($status->value)],
+                PurchaseRequestStatus::cases(),
+            ),
+            'priorities' => array_map(
+                static fn (PurchaseRequestPriority $priority): array => [
+                    'value' => $priority->value,
+                    'label' => $priority->label(),
+                ],
+                PurchaseRequestPriority::cases(),
+            ),
+            'approval_sla_hours' => $this->settings->requiredInt('approvals.reminder_hours', 1),
+            'default_priority' => (string) $this->settings->get('purchasing.purchase_request.default_priority', ''),
+        ]]);
     }
 
     public function show(PurchaseRequest $purchaseRequest): PurchaseRequestResource
@@ -68,6 +90,12 @@ class PurchaseRequestController
         try { $this->service->delete($purchaseRequest); }
         catch (RuntimeException $e) { return response()->json(['message' => $e->getMessage()], 422); }
         return response()->json(null, 204);
+    }
+
+    public function restore(PurchaseRequest $purchaseRequest): JsonResponse
+    {
+        $purchaseRequest->restore();
+        return response()->json(['message' => 'Purchase request restored.']);
     }
 
     public function submit(PurchaseRequest $purchaseRequest): PurchaseRequestResource

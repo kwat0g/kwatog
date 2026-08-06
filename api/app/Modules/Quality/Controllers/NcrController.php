@@ -6,11 +6,15 @@ namespace App\Modules\Quality\Controllers;
 
 use App\Modules\Quality\Enums\NcrActionType;
 use App\Modules\Quality\Enums\NcrDisposition;
+use App\Modules\Quality\Enums\NcrSeverity;
+use App\Modules\Quality\Enums\NcrSource;
+use App\Modules\Quality\Enums\NcrStatus;
 use App\Modules\Quality\Models\NonConformanceReport;
 use App\Modules\Quality\Requests\CreateNcrRequest;
 use App\Modules\Quality\Resources\NcrActionResource;
 use App\Modules\Quality\Resources\NcrResource;
 use App\Modules\Quality\Services\NcrService;
+use App\Common\Services\SettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -20,7 +24,28 @@ use Throwable;
 
 class NcrController
 {
-    public function __construct(private readonly NcrService $service) {}
+    public function __construct(
+        private readonly NcrService $service,
+        private readonly SettingsService $settings,
+    ) {}
+
+    public function options(): JsonResponse
+    {
+        $label = static fn (string $value): string => ucwords(str_replace('_', ' ', $value));
+        $map = static fn (array $cases) => array_map(
+            fn ($case) => ['value' => $case->value, 'label' => method_exists($case, 'label') ? $case->label() : $label($case->value)],
+            $cases,
+        );
+        return response()->json(['data' => [
+            'sources' => $map(NcrSource::cases()),
+            'severities' => $map(NcrSeverity::cases()),
+            'statuses' => $map(NcrStatus::cases()),
+            'actions' => $map(NcrActionType::cases()),
+            'dispositions' => $map(NcrDisposition::cases()),
+            'escalation_roles' => array_values(array_filter((array) $this->settings->get('quality.ncr.escalation_roles', []), 'is_string')),
+            'default_disposition' => (string) $this->settings->get('quality.ncr.default_disposition', ''),
+        ]]);
+    }
 
     public function index(Request $request): AnonymousResourceCollection
     {
@@ -122,7 +147,7 @@ class NcrController
                     if (is_string($note) && $note !== '' && $ncr->corrective_action === null) {
                         $this->service->setDisposition(
                             $ncr,
-                            $ncr->disposition?->value ?? 'rework',
+                            $ncr->disposition?->value ?? (string) $this->settings->get('quality.ncr.default_disposition', ''),
                             $ncr->root_cause,
                             $note,
                         );

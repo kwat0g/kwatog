@@ -35,7 +35,7 @@ class SalaryAdjustmentService
     public function __construct(private readonly ApprovalService $approvals) {}
 
     /**
-     * @param  array{to_basic_monthly_salary?: string|float|null, to_daily_rate?: string|float|null, effective_date: string, reason?: string|null}  $data
+     * @param  array{to_basic_monthly_salary?: string|float|null, to_semi_monthly_rate?: string|float|null, effective_date: string, reason?: string|null}  $data
      */
     public function request(Employee $employee, array $data, User $requester): SalaryAdjustment
     {
@@ -43,15 +43,15 @@ class SalaryAdjustmentService
             $adjustment = SalaryAdjustment::create([
                 'employee_id'               => $employee->id,
                 'from_basic_monthly_salary' => $employee->basic_monthly_salary,
-                'from_daily_rate'           => $employee->daily_rate,
+                'from_semi_monthly_rate'           => $employee->semi_monthly_rate,
                 'to_basic_monthly_salary'   => $data['to_basic_monthly_salary'] ?? null,
-                'to_daily_rate'             => $data['to_daily_rate'] ?? null,
+                'to_semi_monthly_rate'             => $data['to_semi_monthly_rate'] ?? null,
                 'effective_date'            => $data['effective_date'],
                 'reason'                    => $data['reason'] ?? null,
                 'requested_by'              => $requester->id,
             ]);
 
-            $amount = $data['to_basic_monthly_salary'] ?? $data['to_daily_rate'] ?? null;
+            $amount = $data['to_basic_monthly_salary'] ?? $data['to_semi_monthly_rate'] ?? null;
             $this->approvals->submit($adjustment, self::WORKFLOW_TYPE, $amount !== null ? (float) $amount : null);
 
             // status is excluded from $fillable (mass-assignment hardening); the DB
@@ -98,17 +98,27 @@ class SalaryAdjustmentService
         if ($adjustment->to_basic_monthly_salary !== null) {
             $changes['basic_monthly_salary'] = $adjustment->to_basic_monthly_salary;
         }
-        if ($adjustment->to_daily_rate !== null) {
-            $changes['daily_rate'] = $adjustment->to_daily_rate;
+        if ($adjustment->to_semi_monthly_rate !== null) {
+            $changes['semi_monthly_rate'] = $adjustment->to_semi_monthly_rate;
         }
         if (! empty($changes)) {
             $employee->update($changes);
         }
 
+        // basic_monthly_salary is NOT NULL on this table and is what the payroll
+        // calculator prorates against, so a semi-monthly adjustment must store
+        // the MONTHLY EQUIVALENT (rate x 2) alongside the per-cutoff rate. Left
+        // null, the insert fails outright; left at the employee's own (null)
+        // monthly salary, proration across the raise would read zero.
+        $historyMonthly = $adjustment->to_basic_monthly_salary
+            ?? ($adjustment->to_semi_monthly_rate !== null
+                ? bcmul((string) $adjustment->to_semi_monthly_rate, '2', 2)
+                : $employee->monthlyEquivalentSalary());
+
         EmployeeSalaryHistory::create([
             'employee_id'          => $employee->id,
-            'basic_monthly_salary' => $adjustment->to_basic_monthly_salary ?? $employee->basic_monthly_salary,
-            'daily_rate'           => $adjustment->to_daily_rate,
+            'basic_monthly_salary' => $historyMonthly,
+            'semi_monthly_rate'    => $adjustment->to_semi_monthly_rate,
             'effective_date'       => $adjustment->effective_date,
             'created_by'           => $adjustment->requested_by,
         ]);
@@ -118,11 +128,11 @@ class SalaryAdjustmentService
             'change_type'    => EmploymentChangeType::SalaryAdjusted->value,
             'from_value'     => [
                 'basic_monthly_salary' => $adjustment->from_basic_monthly_salary,
-                'daily_rate'           => $adjustment->from_daily_rate,
+                'semi_monthly_rate'           => $adjustment->from_semi_monthly_rate,
             ],
             'to_value'       => [
                 'basic_monthly_salary' => $adjustment->to_basic_monthly_salary,
-                'daily_rate'           => $adjustment->to_daily_rate,
+                'semi_monthly_rate'           => $adjustment->to_semi_monthly_rate,
             ],
             'effective_date' => $adjustment->effective_date->toDateString(),
             'approved_by'    => $adjustment->requested_by,

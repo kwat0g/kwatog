@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Assets\Controllers;
 
 use App\Modules\Assets\Models\AssetTransfer;
+use App\Modules\Assets\Enums\TransferStatus;
 use App\Modules\Assets\Requests\StoreAssetTransferRequest;
 use App\Modules\Assets\Resources\AssetTransferResource;
 use App\Modules\Assets\Services\AssetTransferService;
@@ -22,6 +23,16 @@ class AssetTransferController extends Controller
         return AssetTransferResource::collection(
             $this->service->list($request->all())
         );
+    }
+
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'statuses' => array_map(static fn (TransferStatus $status): array => [
+                'value' => $status->value,
+                'label' => ucfirst($status->value),
+            ], TransferStatus::cases()),
+        ]]);
     }
 
     public function store(StoreAssetTransferRequest $request): \Illuminate\Http\JsonResponse

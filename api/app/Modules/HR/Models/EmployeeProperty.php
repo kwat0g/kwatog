@@ -8,10 +8,11 @@ use App\Common\Traits\HasHashId;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class EmployeeProperty extends Model
 {
-    use HasFactory, HasHashId;
+    use HasFactory, HasHashId, SoftDeletes;
 
     protected $table = 'employee_property';
     protected $fillable = ['employee_id', 'item_name', 'description', 'quantity', 'replacement_unit_cost', 'date_issued', 'date_returned', 'status'];

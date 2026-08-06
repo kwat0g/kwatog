@@ -6,11 +6,22 @@ namespace App\Modules\Inventory\Controllers;
 
 use App\Modules\Edge\Services\EdgeScanResolverService;
 use App\Modules\Inventory\Models\WarehouseScanEvent;
+use App\Modules\Inventory\Enums\WarehouseScanContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class WarehouseScanController
 {
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'contexts' => array_map(
+                static fn (WarehouseScanContext $context): array => ['value' => $context->value, 'label' => $context->label()],
+                WarehouseScanContext::cases(),
+            ),
+        ]]);
+    }
     public function __construct(private readonly EdgeScanResolverService $resolver) {}
 
     public function resolve(Request $request): JsonResponse
@@ -24,6 +35,9 @@ class WarehouseScanController
             'context.stock_count_session_id' => ['nullable'],
         ]);
         $result = $this->resolver->resolve($data['barcode'], $data['context'] ?? []);
+        $result['type_label'] = $result['type'] === 'unknown'
+            ? '—'
+            : Str::headline((string) $result['type']);
         WarehouseScanEvent::query()->create([
             'user_id' => $request->user()->id,
             'barcode' => strtoupper(trim($data['barcode'])),

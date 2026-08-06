@@ -18,6 +18,7 @@ class PublicJobPostingResource extends JsonResource
             'description'     => $this->description,
             'requirements'    => $this->requirements,
             'employment_type' => $this->employment_type?->value,
+            'employment_type_label' => $this->employment_type?->label(),
             'salary_range'    => $this->show_salary ? [
                 'min' => $this->salary_range_min,
                 'max' => $this->salary_range_max,

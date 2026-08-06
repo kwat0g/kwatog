@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\HR\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Support\TrashedFilter;
 use App\Modules\HR\Models\Position;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -16,6 +17,8 @@ class PositionService
         $query = Position::query()
             ->with('department')
             ->withCount('employees');
+
+        TrashedFilter::apply($query, $filters);
 
         if (!empty($filters['search'])) {
             $term = $filters['search'];

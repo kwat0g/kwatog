@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Loans\Requests;
 
 use App\Modules\HR\Models\Employee;
+use App\Common\Services\CurrencyDisplayService;
+use App\Common\Services\SettingsService;
 use App\Modules\Loans\Enums\LoanType;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -25,21 +27,23 @@ class StoreLoanRequest extends FormRequest
 
     public function rules(): array
     {
+        $maxPeriods = app(SettingsService::class)->requiredInt('loans.max_pay_periods', 1, 120);
         return [
             'employee_id' => ['required', 'string'],
             'loan_type'   => ['required', Rule::in(LoanType::values())],
-            'principal'   => ['required', 'numeric', 'min:1', 'max:9999999.99'],
-            'pay_periods' => ['required', 'integer', 'min:1', 'max:60'],
+            'principal'   => ['required', 'numeric', 'min:1'],
+            'pay_periods' => ['required', 'integer', 'min:1', 'max:'.$maxPeriods],
             'purpose'     => ['nullable', 'string', 'max:1000'],
         ];
     }
 
     public function messages(): array
     {
+        $minimum = app(CurrencyDisplayService::class)->format(1);
+
         return [
-            'principal.min'  => 'Principal must be at least ₱1.',
-            'principal.max'  => 'Principal cannot exceed ₱9,999,999.99.',
-            'pay_periods.max' => 'Maximum is 60 pay periods.',
+            'principal.min'  => "Principal must be at least {$minimum}.",
+            'pay_periods.max' => 'Pay periods exceed the configured maximum.',
         ];
     }
 

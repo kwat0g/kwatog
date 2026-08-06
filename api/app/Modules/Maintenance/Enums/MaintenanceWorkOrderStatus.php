@@ -22,4 +22,12 @@ enum MaintenanceWorkOrderStatus: string
     {
         return array_map(fn (self $c) => $c->value, self::cases());
     }
+
+    public function label(): string
+    {
+        return match ($this) {
+            self::Open => 'Open', self::Assigned => 'Assigned', self::InProgress => 'In progress',
+            self::Completed => 'Completed', self::Cancelled => 'Cancelled',
+        };
+    }
 }

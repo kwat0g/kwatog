@@ -4,7 +4,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { SkeletonLoginPage } from '@/components/ui/Skeleton';
 
 interface GuestGuardProps {
-  children: ReactNode;
+ children: ReactNode;
 }
 
 /**
@@ -15,19 +15,19 @@ interface GuestGuardProps {
  * guard checks that existing session and sends them straight back to the ERP.
  */
 export function GuestGuard({ children }: GuestGuardProps) {
-  const { isAuthenticated, isLoading, user, bootstrap } = useAuthStore();
+ const { isAuthenticated, isLoading, user, bootstrap } = useAuthStore();
 
-  useEffect(() => {
-    if (!isAuthenticated && !user && isLoading) {
-      void bootstrap();
-    }
-  }, [isAuthenticated, user, isLoading, bootstrap]);
+ useEffect(() => {
+ if (!isAuthenticated && !user && isLoading) {
+ void bootstrap();
+ }
+ }, [isAuthenticated, user, isLoading, bootstrap]);
 
-  if (isLoading) return <SkeletonLoginPage />;
+ if (isLoading) return <SkeletonLoginPage />;
 
-  if (isAuthenticated) {
-    return <Navigate to={user?.must_change_password ? '/change-password' : '/dashboard'} replace />;
-  }
+ if (isAuthenticated) {
+ return <Navigate to={user?.must_change_password ? '/change-password' : '/dashboard'} replace />;
+ }
 
-  return <>{children}</>;
+ return <>{children}</>;
 }

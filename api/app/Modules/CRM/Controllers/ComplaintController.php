@@ -9,10 +9,12 @@ use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\CRM\Models\CustomerComplaint;
+use App\Modules\CRM\Enums\ComplaintStatus;
 use App\Modules\CRM\Models\Product;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Resources\CustomerComplaintResource;
 use App\Modules\CRM\Services\ComplaintService;
+use App\Modules\Quality\Enums\NcrSeverity;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -32,6 +34,20 @@ class ComplaintController
         return CustomerComplaintResource::collection($this->service->list($f));
     }
 
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'severities' => array_map(
+                static fn (NcrSeverity $severity): array => ['value' => $severity->value, 'label' => ucfirst($severity->value)],
+                NcrSeverity::cases(),
+            ),
+            'statuses' => array_map(
+                static fn (ComplaintStatus $status): array => ['value' => $status->value, 'label' => ucfirst($status->value)],
+                ComplaintStatus::cases(),
+            ),
+        ]]);
+    }
+
     public function show(CustomerComplaint $complaint): CustomerComplaintResource
     {
         return new CustomerComplaintResource($this->service->show($complaint));
@@ -44,7 +60,7 @@ class ComplaintController
             'product_id'        => ['nullable', 'string'],
             'sales_order_id'    => ['nullable', 'string'],
             'received_date'     => ['required', 'date'],
-            'severity'          => ['required', Rule::in(['low', 'medium', 'high', 'critical'])],
+            'severity'          => ['required', Rule::enum(NcrSeverity::class)],
             'description'       => ['required', 'string', 'max:5000'],
             'affected_quantity' => ['nullable', 'integer', 'min:0'],
             'assigned_to'       => ['nullable', 'string'],

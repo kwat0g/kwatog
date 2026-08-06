@@ -16,6 +16,8 @@ use Illuminate\Support\Facades\Route;
 Route::middleware(['auth:sanctum', 'feature:maintenance'])->prefix('maintenance')->group(function () {
 
     /* ── Schedules ─────────────────────────────────────────── */
+    Route::get('/schedules/options',          [MaintenanceScheduleController::class, 'options'])
+        ->middleware('permission:maintenance.view');
     Route::get('/schedules',                 [MaintenanceScheduleController::class, 'index'])
         ->middleware('permission:maintenance.view');
     Route::get('/schedules/{schedule}',      [MaintenanceScheduleController::class, 'show'])
@@ -26,8 +28,12 @@ Route::middleware(['auth:sanctum', 'feature:maintenance'])->prefix('maintenance'
         ->middleware('permission:maintenance.schedules.manage');
     Route::delete('/schedules/{schedule}',   [MaintenanceScheduleController::class, 'destroy'])
         ->middleware('permission:maintenance.schedules.manage');
+    Route::patch('/schedules/{schedule}/restore', [MaintenanceScheduleController::class, 'restore'])
+        ->middleware('permission:maintenance.schedules.manage');
 
     /* ── Work orders ───────────────────────────────────────── */
+    Route::get('/work-orders/options',                 [MaintenanceWorkOrderController::class, 'options'])
+        ->middleware('permission:maintenance.view');
     Route::get('/work-orders',                          [MaintenanceWorkOrderController::class, 'index'])
         ->middleware('permission:maintenance.view');
     Route::get('/work-orders/{workOrder}',              [MaintenanceWorkOrderController::class, 'show'])
@@ -49,6 +55,8 @@ Route::middleware(['auth:sanctum', 'feature:maintenance'])->prefix('maintenance'
 
     /* ── Condition readings (predictive maintenance) ─────────── */
     // Non-parameterised routes must come BEFORE the {reading} wildcard.
+    Route::get('/condition-readings/options', [MachineConditionReadingController::class, 'options'])
+        ->middleware('permission:maintenance.view');
     Route::get('/condition-readings', [MachineConditionReadingController::class, 'index'])
         ->middleware('permission:maintenance.view');
     Route::post('/condition-readings', [MachineConditionReadingController::class, 'store'])
@@ -62,6 +70,8 @@ Route::middleware(['auth:sanctum', 'feature:maintenance'])->prefix('maintenance'
 
     /* ── Downtime analytics ──────────────────────────────────── */
     Route::get('/downtime-analytics/summary', [DowntimeAnalyticsController::class, 'summary'])
+        ->middleware('permission:maintenance.view');
+    Route::get('/downtime-analytics/policy', [DowntimeAnalyticsController::class, 'policy'])
         ->middleware('permission:maintenance.view');
     Route::get('/downtime-analytics/daily-trend', [DowntimeAnalyticsController::class, 'dailyTrend'])
         ->middleware('permission:maintenance.view');

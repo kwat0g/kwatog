@@ -6,6 +6,7 @@ namespace App\Modules\Quality\Controllers;
 
 use App\Modules\CRM\Models\Product;
 use App\Modules\Quality\Models\InspectionSpec;
+use App\Modules\Quality\Enums\InspectionParameterType;
 use App\Modules\Quality\Requests\UpsertInspectionSpecRequest;
 use App\Modules\Quality\Resources\InspectionSpecResource;
 use App\Modules\Quality\Services\InspectionSpecService;
@@ -24,6 +25,16 @@ class InspectionSpecController
     public function index(Request $request): AnonymousResourceCollection
     {
         return InspectionSpecResource::collection($this->service->list($request->query()));
+    }
+
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'parameter_types' => array_map(
+                static fn (InspectionParameterType $type): array => ['value' => $type->value, 'label' => $type->label()],
+                InspectionParameterType::cases(),
+            ),
+        ]]);
     }
 
     public function show(InspectionSpec $inspectionSpec): InspectionSpecResource
@@ -58,6 +69,12 @@ class InspectionSpecController
     public function destroy(InspectionSpec $inspectionSpec): InspectionSpecResource
     {
         return new InspectionSpecResource($this->service->deactivate($inspectionSpec));
+    }
+
+    public function restore(InspectionSpec $inspectionSpec): JsonResponse
+    {
+        $inspectionSpec->restore();
+        return response()->json(['message' => 'Inspection spec restored.']);
     }
 
     /**

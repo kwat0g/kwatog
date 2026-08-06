@@ -107,7 +107,7 @@ class ProductionRoutingService
             ]);
 
             // Sync operations: delete existing, create new.
-            $routing->operations()->delete();
+            $routing->operations()->forceDelete();
 
             $totalCycleTime = '0';
             foreach ($data['operations'] as $opData) {

@@ -156,7 +156,10 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
           : 'border-b border-transparent bg-transparent',
       )}
     >
-      <nav className="mx-auto flex h-16 max-w-7xl items-center justify-between px-5 sm:px-5">
+      <nav className={cn(
+        "mx-auto flex h-16 w-full items-center justify-between transition-all duration-500 ease-out",
+        scrolled ? "max-w-full px-4 sm:px-8 lg:px-12" : "max-w-[1440px] px-5 sm:px-5"
+      )}>
         {/* Brand */}
         <a
           href={isLanding ? '#top' : '/'}
@@ -166,14 +169,14 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
               navigate('/');
             }
           }}
-          className="group flex items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas"
+          className="group flex shrink-0 items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas"
         >
-          <BrandLogo alt={legalName} className="h-9 transition-transform duration-500 group-hover:scale-105" />
-          <div className="flex flex-col text-left">
-            <span className="font-display text-sm font-semibold tracking-tight text-landing-text leading-tight">
+          <BrandLogo alt={legalName} className="h-9 shrink-0 transition-transform duration-500 group-hover:scale-105" />
+          <div className="hidden flex-col text-left sm:flex">
+            <span className="font-display text-sm font-semibold tracking-tight text-landing-text leading-tight whitespace-nowrap">
               {legalName}
             </span>
-            <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-landing-muted">
+            <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-landing-muted whitespace-nowrap">
               Ogami ERP · {locationCountry}
             </span>
           </div>

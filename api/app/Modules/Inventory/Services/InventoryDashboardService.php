@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Services;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Inventory\Enums\GrnStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
@@ -15,9 +16,12 @@ use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class InventoryDashboardService
 {
+    public function __construct(private readonly SettingsService $settings) {}
+
     public function summary(): array
     {
         return Cache::remember('inv:dashboard:summary', 30, fn () => $this->compute());
@@ -80,8 +84,8 @@ class InventoryDashboardService
                     'lead_time_days' => (int) $item->lead_time_days,
                     'is_critical' => (bool) $item->is_critical,
                     'severity' => $available <= $safety ? 'critical' : 'low',
-                    'open_pr' => $openPr ? ['number' => $openPr->pr_number, 'status' => $openPr->status?->value] : null,
-                    'open_po' => $openPo ? ['number' => $openPo->po_number, 'status' => $openPo->status?->value] : null,
+                    'open_pr' => $openPr ? ['number' => $openPr->pr_number, 'status' => $openPr->status?->value, 'status_label' => $openPr->status?->label()] : null,
+                    'open_po' => $openPo ? ['number' => $openPo->po_number, 'status' => $openPo->status?->value, 'status_label' => $openPo->status?->label()] : null,
                 ];
             }
         }
@@ -103,7 +107,8 @@ class InventoryDashboardService
             ->orderByDesc('created_at')
             ->limit(20)->get();
 
-        $thirtyDaysAgo = now()->subDays(30);
+        $historyDays = $this->settings->requiredInt('inventory.dashboard.consumption_history_days', 1);
+        $thirtyDaysAgo = now()->subDays($historyDays);
         $topConsumed = DB::table('stock_movements')
             ->join('items', 'items.id', '=', 'stock_movements.item_id')
             ->where('stock_movements.movement_type', StockMovementType::MaterialIssue->value)
@@ -117,6 +122,7 @@ class InventoryDashboardService
             ->limit(10)->get();
 
         return [
+            'consumption_history_days' => $historyDays,
             'total_stock_value' => number_format($totalStockValue, 2, '.', ''),
             'items_below_reorder' => $belowReorder,
             'items_critical' => $critical,
@@ -126,6 +132,7 @@ class InventoryDashboardService
                 'id' => $m->hash_id,
                 'created_at' => $m->created_at?->toIso8601String(),
                 'movement_type' => $m->movement_type?->value,
+                'movement_type_label' => Str::headline((string) $m->movement_type?->value),
                 'item' => $m->item ? ['code' => $m->item->code, 'name' => $m->item->name] : null,
                 'quantity' => (string) $m->quantity,
                 'unit_cost' => (string) $m->unit_cost,

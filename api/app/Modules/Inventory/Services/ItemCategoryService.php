@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Inventory\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Support\TrashedFilter;
 use App\Modules\Inventory\Models\ItemCategory;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
@@ -32,9 +33,11 @@ class ItemCategoryService
         return new Collection($roots->all());
     }
 
-    public function list(): Collection
+    public function list(array $filters = []): Collection
     {
-        return ItemCategory::query()->with('parent')->orderBy('name')->get();
+        $q = ItemCategory::query()->with('parent');
+        TrashedFilter::apply($q, $filters);
+        return $q->orderBy('name')->get();
     }
 
     public function create(array $data): ItemCategory

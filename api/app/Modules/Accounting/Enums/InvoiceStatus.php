@@ -17,4 +17,15 @@ enum InvoiceStatus: string
     {
         return array_map(fn (self $c) => $c->value, self::cases());
     }
+
+    public function label(): string
+    {
+        return match ($this) {
+            self::Draft => 'Draft',
+            self::Finalized => 'Finalized',
+            self::Partial => 'Partially paid',
+            self::Paid => 'Paid',
+            self::Cancelled => 'Cancelled',
+        };
+    }
 }

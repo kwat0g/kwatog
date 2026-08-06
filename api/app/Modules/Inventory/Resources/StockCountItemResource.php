@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace App\Modules\Inventory\Resources;
 
 use App\Modules\Auth\Resources\UserResource;
+use App\Modules\Inventory\Enums\StockCountItemStatus;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Str;
 
 class StockCountItemResource extends JsonResource
 {
@@ -31,7 +33,8 @@ class StockCountItemResource extends JsonResource
             'variance'         => $this->variance,
             'variance_percent' => $this->variance_percent,
             'lot_number'       => $this->lot_number,
-            'status'           => $this->status,
+            'status'           => $this->status?->value,
+            'status_label'     => $this->status?->label(),
             'counted_by'       => $this->whenLoaded('counter', fn () => new UserResource($this->counter)),
             'counted_at'       => $this->counted_at?->toISOString(),
             'notes'            => $this->notes,

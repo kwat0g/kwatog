@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Admin\Services;
 
 use App\Common\Models\AuditLog;
+use App\Common\Support\TrashedFilter;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -19,6 +20,8 @@ class RoleService
     {
         $query = Role::query()
             ->withCount(['users', 'permissions']);
+
+        TrashedFilter::apply($query, $filters);
 
         if (! empty($filters['search'])) {
             $query->where(function ($q) use ($filters) {

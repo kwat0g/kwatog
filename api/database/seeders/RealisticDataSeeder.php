@@ -145,7 +145,7 @@ class RealisticDataSeeder extends Seeder
 
             // Shop-floor depts skew daily-rated; office depts monthly.
             $shopFloor = in_array($deptCode, ['PROD', 'WH', 'MOLD', 'MAINT'], true);
-            $isDaily = $shopFloor ? ($this->rand(0, 100) < 80) : ($this->rand(0, 100) < 15);
+            $isSemiMonthly = $shopFloor ? ($this->rand(0, 100) < 80) : ($this->rand(0, 100) < 15);
 
             // Hired across the past ~4 years so 12 months of attendance is valid.
             $hired = $now->subDays($this->rand(120, 1460));
@@ -160,18 +160,29 @@ class RealisticDataSeeder extends Seeder
                 'nationality'          => 'Filipino',
                 'mobile_number'        => '+639' . str_pad((string) (100000000 + $n), 9, '0', STR_PAD_LEFT),
                 'email'                => strtolower($first) . '.' . strtolower(str_replace([' ', "'"], '', $last)) . $n . '@ogami.local',
+                'street_address'       => 'Governor Drive '.$n,
+                'barangay'             => 'Langkaan I',
+                'city'                 => 'Dasmarinas',
+                'province'             => 'Cavite',
+                'zip_code'             => '4114',
+                'emergency_contact_name' => 'Emergency Contact '.$n,
+                'emergency_contact_relation' => 'Parent',
+                'emergency_contact_phone' => '+639' . str_pad((string) (200000000 + $n), 9, '0', STR_PAD_LEFT),
+                'bank_name'            => 'BDO Unibank',
+                'bank_account_no'      => '000'.str_pad((string) $n, 8, '0', STR_PAD_LEFT),
                 'sss_no'               => '34-' . str_pad((string) (1000000 + $n), 7, '0', STR_PAD_LEFT) . '-1',
                 'philhealth_no'        => '12-' . str_pad((string) (100000000 + $n), 9, '0', STR_PAD_LEFT) . '-2',
                 'pagibig_no'           => '1234-5678-' . str_pad((string) (1000 + $n), 4, '0', STR_PAD_LEFT),
                 'tin'                  => '123-456-' . str_pad((string) ($n), 3, '0', STR_PAD_LEFT) . '-000',
                 'department_id'        => $ids['dept'],
                 'position_id'          => $ids['pos'],
-                'employment_type'      => $isDaily ? 'contractual' : 'regular',
-                'pay_type'             => $isDaily ? PayType::Daily->value : PayType::Monthly->value,
+                'employment_type'      => $isSemiMonthly ? 'contractual' : 'regular',
+                'pay_type'             => $isSemiMonthly ? PayType::SemiMonthly->value : PayType::Monthly->value,
                 'date_hired'           => $hired->toDateString(),
-                'date_regularized'     => $isDaily ? null : $hired->addMonths(6)->toDateString(),
-                'basic_monthly_salary' => $isDaily ? null : (string) ($this->rand(18, 65) * 1000),
-                'daily_rate'           => $isDaily ? (string) $this->rand(610, 950) : null,
+                'date_regularized'     => $isSemiMonthly ? null : $hired->addMonths(6)->toDateString(),
+                'basic_monthly_salary' => $isSemiMonthly ? null : (string) ($this->rand(18, 65) * 1000),
+                // Per cutoff — roughly the old daily band × 11 working days.
+                'semi_monthly_rate'    => $isSemiMonthly ? (string) ($this->rand(610, 950) * 11) : null,
                 'status'               => EmployeeStatus::Active->value,
                 'created_at'           => $hired,
                 'updated_at'           => $now,
@@ -309,9 +320,9 @@ class RealisticDataSeeder extends Seeder
             ?? DB::table('leave_types')->where('is_paid', true)->value('id');
         if (! $vlTypeId) return;
 
-        // Daily-rated workers are the ones whose pay actually changes with leave.
-        $dailyEmployees = Employee::where('status', EmployeeStatus::Active->value)
-            ->where('pay_type', PayType::Daily->value)
+        // Shop-floor (semi-monthly) staff carry most of the leave volume.
+        $leaveEmployees = Employee::where('status', EmployeeStatus::Active->value)
+            ->where('pay_type', PayType::SemiMonthly->value)
             ->inRandomOrder()
             ->limit(30)
             ->get(['id']);
@@ -321,7 +332,7 @@ class RealisticDataSeeder extends Seeder
         $windowEnd   = CarbonImmutable::now()->subMonthNoOverflow()->endOfMonth();
 
         $created = 0;
-        foreach ($dailyEmployees as $idx => $emp) {
+        foreach ($leaveEmployees as $idx => $emp) {
             // Pick a Mon-Fri start inside the window; 1-2 day leave.
             $offset = $this->rand(0, max(1, (int) $windowStart->diffInDays($windowEnd) - 3));
             $start  = $windowStart->addDays($offset);

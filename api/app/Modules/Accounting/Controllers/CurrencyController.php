@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Accounting\Controllers;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\FxRate;
 use App\Modules\Accounting\Requests\StoreFxRateRequest;
 use App\Modules\Accounting\Resources\FxRateResource;
@@ -18,7 +19,10 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
  */
 class CurrencyController
 {
-    public function __construct(private readonly CurrencyTranslationService $service) {}
+    public function __construct(
+        private readonly CurrencyTranslationService $service,
+        private readonly SettingsService $settings,
+    ) {}
 
     public function listRates(Request $request): AnonymousResourceCollection
     {
@@ -41,7 +45,7 @@ class CurrencyController
             ['currency_code' => strtoupper($data['currency_code']), 'rate_date' => $data['rate_date']],
             [
                 'rate_to_functional' => $data['rate_to_functional'],
-                'source'             => $data['source'] ?? 'manual',
+                'source'             => $data['source'] ?? null,
                 'created_by'         => $request->user()?->id,
             ],
         );
@@ -74,7 +78,10 @@ class CurrencyController
 
     private function currency(Request $request): string
     {
-        return strtoupper((string) $request->query('currency', 'JPY'));
+        return strtoupper((string) $request->query(
+            'currency',
+            $this->settings->requiredString('accounting.reporting_currency_code'),
+        ));
     }
 
     /** @return array{0: Carbon, 1: Carbon} */

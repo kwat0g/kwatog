@@ -26,7 +26,7 @@ use Tests\TestCase;
  *
  * What is tested:
  *   1. Final-period salary from live payroll/DTR records
- *   2. Unused convertible leave value conversion (days × daily_rate)
+ *   2. Unused convertible leave value conversion (days × derived daily rate)
  *   3. Outstanding loan balance deducted from final pay
  *   4. Negative-total clamped to 0.00 via max(0, plus−less)
  *   5. postJournalEntry() produces a balanced, posted JE (total_debit == total_credit)
@@ -168,11 +168,13 @@ class FinalPayTest extends TestCase
             '₱22,000 / 22 × 2.5 persisted DTR day-equivalents must be paid.');
     }
 
-    public function test_final_period_salary_daily_uses_live_dtr_day_equivalents(): void
+    public function test_final_period_salary_semi_monthly_uses_live_dtr_day_equivalents(): void
     {
+        // 7,150 per cutoff → 14,300 monthly → 650.00/day at the 22-day divisor,
+        // the same effective rate the old daily-paid fixture used.
         $employee  = $this->makeEmployee([
-            'pay_type'             => 'daily',
-            'daily_rate'           => '650.00',
+            'pay_type'             => 'semi_monthly',
+            'semi_monthly_rate'    => '7150.00',
             'basic_monthly_salary' => null,
         ]);
         $clearance = $this->makeClearance($employee);
@@ -231,8 +233,8 @@ class FinalPayTest extends TestCase
     // ──────────────────────────────────────────────────────────────────────
 
     /**
-     * Leave value = SUM(remaining × conversion_rate) days × daily_rate.
-     * For monthly employees: daily_rate = basic_monthly_salary / 22.
+     * Leave value = SUM(remaining × conversion_rate) days × derived daily rate,
+     * where the daily rate is monthly-equivalent salary ÷ 22.
      */
     public function test_unused_convertible_leave_converts_at_daily_rate(): void
     {

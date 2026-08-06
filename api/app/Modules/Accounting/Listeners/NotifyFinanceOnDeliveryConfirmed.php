@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Accounting\Listeners;
 
 use App\Common\Services\NotificationService;
+use App\Common\Services\SettingsService;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Auth\Models\User;
 use App\Modules\SupplyChain\Events\DeliveryConfirmed;
@@ -13,7 +14,7 @@ use Illuminate\Support\Facades\Log;
 
 class NotifyFinanceOnDeliveryConfirmed implements ShouldQueue
 {
-    public function __construct(private readonly NotificationService $notifications) {}
+    public function __construct(private readonly NotificationService $notifications, private readonly ?SettingsService $settings = null) {}
 
     public function handle(DeliveryConfirmed $event): void
     {
@@ -29,8 +30,9 @@ class NotifyFinanceOnDeliveryConfirmed implements ShouldQueue
                 ? "/accounting/invoices/{$invoice->hash_id}"
                 : "/supply-chain/deliveries/{$event->delivery->hash_id}";
 
+            $roles = array_values(array_filter((array) ($this->settings ?? app(SettingsService::class))->get('accounting.delivery_confirmed.notification_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
             $financeUsers = User::query()
-                ->whereHas('role', fn ($q) => $q->where('slug', 'finance_officer'))
+                ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                 ->where('is_active', true)
                 ->get();
 

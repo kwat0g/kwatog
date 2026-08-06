@@ -17,10 +17,20 @@ final class ThreeWayMatchResult
 
     public function toArray(): array
     {
+        $lineLabels = [
+            'matched' => 'Matched',
+            'qty_variance' => 'Qty variance',
+            'price_variance' => 'Price variance',
+            'both' => 'Qty + price',
+            'grn_short' => 'GRN short',
+        ];
         return [
             'po_id'          => $this->poId,
             'po_number'      => $this->poNumber,
-            'lines'          => $this->lines,
+            'lines'          => array_map(
+                static fn (array $line): array => $line + ['status_label' => $lineLabels[$line['status'] ?? ''] ?? ($line['status'] ?? '')],
+                $this->lines,
+            ),
             'overall_status' => $this->overallStatus,
             'tolerances'     => $this->tolerances,
         ];

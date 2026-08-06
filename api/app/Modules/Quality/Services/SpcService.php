@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Quality\Services;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Quality\Enums\SpcAlertRule;
 use App\Modules\Quality\Enums\SpcChartStatus;
 use App\Modules\Quality\Enums\SpcChartType;
@@ -25,19 +26,47 @@ use Illuminate\Support\Facades\DB;
  * Cpl = (x̄  - LSL) / (3σ)           — lower one-sided capability
  * Cpk = min(Cpu, Cpl)               — worst-case capability (process centring)
  *
- * IATF 16949 interpretation:
- *   Cpk ≥ 1.67 → new-product launch requirement
- *   Cpk ≥ 1.33 → ongoing production target
- *   Cpk  1.0–1.33 → marginal, requires action plan
- *   Cpk < 1.0  → not capable, escalate
+ * Capability interpretation is supplied by the live quality SPC policy settings.
  */
 class SpcService
 {
-    private const MIN_SAMPLES = 5;
+    public function __construct(private readonly ?SettingsService $settings = null) {}
+
+    private function settings(): SettingsService
+    {
+        return $this->settings ?? app(SettingsService::class);
+    }
+
+    private function minimumCapabilitySamples(): int
+    {
+        // Pure unit callers may construct this mathematical service without
+        // the application container; production paths always receive settings
+        // through dependency injection.
+        return $this->settings === null
+            ? 5
+            : $this->settings()->requiredInt('quality.spc.minimum_capability_samples', 2, 1000);
+    }
+
+    /** @return array{launch: float, ongoing: float, action: float, minimum_samples: int} */
+    public function capabilityThresholds(): array
+    {
+        $launch = $this->settings()->requiredFloat('quality.spc.cpk_launch_threshold', 0, 10);
+        $ongoing = $this->settings()->requiredFloat('quality.spc.cpk_ongoing_threshold', 0, 10);
+        $action = $this->settings()->requiredFloat('quality.spc.cpk_action_threshold', 0, 10);
+        if (! ($launch > $ongoing && $ongoing > $action)) {
+            throw new \App\Common\Exceptions\BusinessRuleException('SPC Cpk thresholds must be strictly descending.');
+        }
+        return [
+            'launch' => $launch,
+            'ongoing' => $ongoing,
+            'action' => $action,
+            'minimum_samples' => $this->minimumCapabilitySamples(),
+        ];
+    }
 
     /**
      * Compute Cp and Cpk for a set of measurements against bilateral spec limits.
-     * Returns null if fewer than MIN_SAMPLES or sigma is effectively zero.
+     * Returns null if fewer than the configured minimum sample count or sigma is effectively zero.
      *
      * @param  float[]  $measurements
      * @return array{cp:float,cpk:float,cpu:float,cpl:float,mean:float,std_dev:float,sample_count:int,usl:float,lsl:float}|null
@@ -46,7 +75,7 @@ class SpcService
     {
         $measurements = array_values(array_filter($measurements, fn ($v) => $v !== null && is_numeric($v)));
         $n = count($measurements);
-        if ($n < self::MIN_SAMPLES) {
+        if ($n < $this->minimumCapabilitySamples()) {
             return null;
         }
 
@@ -79,7 +108,7 @@ class SpcService
      * Compute SPC for all items of an InspectionSpec across all completed inspections.
      *
      * Only items with both tolerance_min and tolerance_max populated (bilateral
-     * spec) are included. Items with fewer than MIN_SAMPLES measurements are
+     * spec) are included. Items with fewer than the configured minimum sample count are
      * silently skipped — the UI should convey "not enough data" where absent.
      *
      * @return array<string, array>  Keyed by inspection_spec_item hash_id
@@ -113,21 +142,15 @@ class SpcService
         return $results;
     }
 
-    /**
-     * X-bar/R control limit constants (A2, D3, D4) keyed by subgroup size.
-     * Source: ASTM E2587 / Montgomery "Introduction to SPC" Table VI.
-     */
-    private const XBAR_R_CONSTANTS = [
-        2 => ['A2' => 1.880, 'D3' => 0.000, 'D4' => 3.267, 'd2' => 1.128],
-        3 => ['A2' => 1.023, 'D3' => 0.000, 'D4' => 2.574, 'd2' => 1.693],
-        4 => ['A2' => 0.729, 'D3' => 0.000, 'D4' => 2.282, 'd2' => 2.059],
-        5 => ['A2' => 0.577, 'D3' => 0.000, 'D4' => 2.114, 'd2' => 2.326],
-        6 => ['A2' => 0.483, 'D3' => 0.000, 'D4' => 2.004, 'd2' => 2.534],
-        7 => ['A2' => 0.419, 'D3' => 0.076, 'D4' => 1.924, 'd2' => 2.704],
-        8 => ['A2' => 0.373, 'D3' => 0.136, 'D4' => 1.864, 'd2' => 2.847],
-        9 => ['A2' => 0.337, 'D3' => 0.184, 'D4' => 1.816, 'd2' => 2.970],
-        10 => ['A2' => 0.308, 'D3' => 0.223, 'D4' => 1.777, 'd2' => 3.078],
-    ];
+    /** @return array<int, array{A2: float, D3: float, D4: float, d2: float}> */
+    private function xbarRConstants(): array
+    {
+        $constants = $this->settings()->get('quality.spc.xbar_r_constants');
+        if (! is_array($constants) || $constants === []) {
+            throw new \App\Common\Exceptions\BusinessRuleException('Required quality.spc.xbar_r_constants setting is missing or invalid.');
+        }
+        return $constants;
+    }
 
     public function createChart(int $productId, int $specItemId, SpcChartType $type, int $subgroupSize = 5): SpcControlChart
     {
@@ -141,6 +164,14 @@ class SpcService
     }
 
     public function recordDataPoint(SpcControlChart $chart, array $measurements, array $inspectionIds = []): SpcDataPoint
+    {
+        // Point create + run-rule alerts + limit recalc are one logical
+        // write; a mid-sequence failure must not leave a point without its
+        // alerts or an un-recalculated chart (silent SPC corruption).
+        return DB::transaction(fn () => $this->recordDataPointInner($chart, $measurements, $inspectionIds));
+    }
+
+    private function recordDataPointInner(SpcControlChart $chart, array $measurements, array $inspectionIds = []): SpcDataPoint
     {
         $nextSubgroup = ($chart->dataPoints()->max('subgroup_number') ?? 0) + 1;
 
@@ -190,7 +221,9 @@ class SpcService
 
         if (!$chart->limits_locked) {
             $totalPoints = $chart->dataPoints()->count();
-            if ($totalPoints >= 25 && ($totalPoints % 5 === 0 || $chart->center_line === null)) {
+            $start = $this->settings()->requiredInt('quality.spc.recalculate_after_points', 2, 1000);
+            $interval = $this->settings()->requiredInt('quality.spc.recalculate_interval_points', 1, 1000);
+            if ($totalPoints >= $start && ($totalPoints % $interval === 0 || $chart->center_line === null)) {
                 $this->recalculateLimits($chart);
             }
         }
@@ -200,13 +233,16 @@ class SpcService
 
     public function recalculateLimits(SpcControlChart $chart): void
     {
-        $points = $chart->dataPoints()->orderBy('subgroup_number', 'desc')->limit(50)->get();
-        if ($points->count() < 20) {
+        $history = $this->settings()->requiredInt('quality.spc.display_history_points', 1, 1000);
+        $minimum = $this->settings()->requiredInt('quality.spc.minimum_control_points', 2, 1000);
+        $points = $chart->dataPoints()->orderBy('subgroup_number', 'desc')->limit($history)->get();
+        if ($points->count() < $minimum) {
             return;
         }
 
         if ($chart->chart_type === SpcChartType::XbarR) {
-            $constants = self::XBAR_R_CONSTANTS[$chart->subgroup_size] ?? self::XBAR_R_CONSTANTS[5];
+            $constantsMap = $this->xbarRConstants();
+            $constants = $constantsMap[$chart->subgroup_size] ?? $constantsMap[5] ?? reset($constantsMap);
             $grandMean = $points->avg('subgroup_mean');
             $avgRange = $points->avg('subgroup_range');
 

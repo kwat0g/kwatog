@@ -30,6 +30,16 @@ class GovernmentTableController
         return GovernmentTableResource::collection($rows);
     }
 
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'agencies' => array_map(static fn (ContributionAgency $agency): array => [
+                'value' => $agency->value,
+                'label' => $agency->label(),
+            ], ContributionAgency::cases()),
+        ]]);
+    }
+
     public function update(UpdateGovTableBracketRequest $request, GovernmentContributionTable $govTable): GovernmentTableResource
     {
         return new GovernmentTableResource($this->service->update($govTable, $request->validated()));
@@ -50,6 +60,12 @@ class GovernmentTableController
         // Hard delete only allowed for unused rows (defensive — check audit log usage in service later if needed).
         $govTable->delete();
         return response()->json(null, 204);
+    }
+
+    public function restore(GovernmentContributionTable $govTable): JsonResponse
+    {
+        $govTable->restore();
+        return response()->json(['message' => 'Government contribution table restored.']);
     }
 
     /**

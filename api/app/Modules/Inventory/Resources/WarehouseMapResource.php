@@ -41,6 +41,7 @@ class WarehouseMapResource extends JsonResource
                             'current_quantity'    => $loc->current_quantity,
                             'current_lot_number'  => $loc->current_lot_number,
                             'stock_status'        => $this->getStockStatus($loc),
+                            'stock_status_label'  => $this->getStockStatusLabel($loc),
                             'stock_quantity'      => $this->getStockQuantity($loc),
                             'last_movement_at'    => $loc->last_movement_at,
                         ])->values()
@@ -58,6 +59,17 @@ class WarehouseMapResource extends JsonResource
         if ($loc->capacity_kg && $qty < $loc->capacity_kg * 0.2) return 'low';
         if ($loc->capacity_kg && $qty >= $loc->capacity_kg * 0.9) return 'full';
         return 'ok';
+    }
+
+    private function getStockStatusLabel($loc): string
+    {
+        return match ($this->getStockStatus($loc)) {
+            'empty' => 'Empty',
+            'ok' => 'Stocked',
+            'low' => 'Low',
+            'full' => 'Full',
+            'blocked' => 'Blocked',
+        };
     }
 
     private function getStockQuantity($loc): float|string

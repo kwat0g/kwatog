@@ -31,6 +31,7 @@ class InvoiceResource extends JsonResource
             'serial_range'   => $this->serial_range,
             'is_original'    => (bool) $this->is_original,
             'status'         => $this->status?->value,
+            'status_label'   => $this->status?->label(),
             // Display-friendly status: surface "unpaid" alias when finalized + zero collected
             'display_status' => $this->status === InvoiceStatus::Finalized && (string) $this->amount_paid === '0.00'
                 ? 'unpaid'
@@ -47,6 +48,7 @@ class InvoiceResource extends JsonResource
                 'id'           => $this->journalEntry->hash_id,
                 'entry_number' => $this->journalEntry->entry_number,
                 'status'       => $this->journalEntry->status?->value,
+                'status_label' => $this->journalEntry->status?->label(),
             ] : null),
             'created_at'     => optional($this->created_at)->toIso8601String(),
             'updated_at'     => optional($this->updated_at)->toIso8601String(),

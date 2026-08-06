@@ -48,6 +48,30 @@ class ShiftAssignmentService
     }
 
     /**
+     * Assign a single employee to a shift, closing any open assignments.
+     */
+    public function assignToEmployee(int $employeeId, int $shiftId, string $effectiveDate, ?string $endDate = null): void
+    {
+        DB::transaction(function () use ($employeeId, $shiftId, $effectiveDate, $endDate) {
+            $effective = Carbon::parse($effectiveDate);
+            $closeOn = $effective->copy()->subDay()->toDateString();
+
+            EmployeeShiftAssignment::query()
+                ->where('employee_id', $employeeId)
+                ->whereNull('end_date')
+                ->update(['end_date' => $closeOn]);
+
+            EmployeeShiftAssignment::create([
+                'employee_id'    => $employeeId,
+                'shift_id'       => $shiftId,
+                'effective_date' => $effective->toDateString(),
+                'end_date'       => $endDate,
+                'created_at'     => now(),
+            ]);
+        });
+    }
+
+    /**
      * Resolve the current shift for an employee on a given date.
      * Returns the most recent assignment whose [effective_date, end_date|∞] interval contains $date.
      */

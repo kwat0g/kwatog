@@ -75,4 +75,10 @@ class DeMinimisController
 
         return response()->json(['message' => 'Deleted.']);
     }
+
+    public function restore(DeMinimisBenefit $deMinimisBenefit): JsonResponse
+    {
+        $deMinimisBenefit->restore();
+        return response()->json(['message' => 'De minimis benefit restored.']);
+    }
 }

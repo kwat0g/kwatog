@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Production\Controllers;
 
 use App\Modules\Production\Enums\MachineDowntimeCategory;
+use App\Modules\Production\Enums\WorkOrderStatus;
+use App\Modules\Production\Enums\WoOperationStatus;
 use App\Modules\Production\Models\WorkOrder;
 use App\Modules\Production\Requests\CancelWorkOrderRequest;
 use App\Modules\Production\Requests\ConfirmWorkOrderRequest;
@@ -39,6 +41,21 @@ class WorkOrderController
     public function index(Request $request): AnonymousResourceCollection
     {
         return WorkOrderResource::collection($this->service->list($request->query()));
+    }
+
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'statuses' => array_map(static fn (WorkOrderStatus $status): array => [
+                'value' => $status->value,
+                'label' => $status->label(),
+                'next_statuses' => array_map(
+                    static fn (string $next): array => ['value' => $next, 'label' => WorkOrderStatus::tryFrom($next)?->label() ?? $next],
+                    WorkOrderService::allowedTransitions()[$status->value] ?? [],
+                ),
+            ], WorkOrderStatus::cases()),
+            'operation_statuses' => array_map(static fn (WoOperationStatus $status): array => ['value' => $status->value, 'label' => $status->label()], WoOperationStatus::cases()),
+        ]]);
     }
 
     /**
@@ -94,6 +111,12 @@ class WorkOrderController
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return response()->json(null, 204);
+    }
+
+    public function restore(WorkOrder $workOrder): JsonResponse
+    {
+        $workOrder->restore();
+        return response()->json(['message' => 'Work order restored.']);
     }
 
     /**

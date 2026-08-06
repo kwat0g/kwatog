@@ -10,7 +10,6 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Services\JournalEntryService;
 use App\Modules\Auth\Models\User;
-use App\Modules\HR\Enums\PayType;
 use App\Modules\HR\Models\Clearance;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Attendance\Models\Attendance;
@@ -109,10 +108,10 @@ class FinalPayService
         $advance   = (float) ($b['less_advance']      ?? 0);
         $property  = (float) ($b['less_unreturned_property_value'] ?? 0);
 
-        $salariesExp = Account::where('code', '6010')->orWhere('code', '5050')->orderBy('code')->firstOrFail();
-        $cashInBank  = Account::where('code', '1020')->firstOrFail();
-        $loansPayable= Account::where('code', '2100')->firstOrFail();
-        $accrued     = Account::where('code', '2070')->firstOrFail();
+        $salariesExp = Account::where('code', $this->settings->requiredString('accounting.accounts.final_pay_salary_expense_code'))->firstOrFail();
+        $cashInBank  = Account::where('code', $this->settings->requiredString('accounting.accounts.cash_code'))->firstOrFail();
+        $loansPayable= Account::where('code', $this->settings->requiredString('accounting.accounts.loans_payable_code'))->firstOrFail();
+        $accrued     = Account::where('code', $this->settings->requiredString('accounting.accounts.accrued_expense_code'))->firstOrFail();
 
         $lines = [
             ['account_id' => $salariesExp->id, 'debit' => number_format($plus, 2, '.', ''), 'credit' => '0.00', 'description' => 'Final pay components'],
@@ -183,30 +182,41 @@ class FinalPayService
             ->get(['regular_hours'])
             ->sum(fn (Attendance $attendance): float => min(1.0, max(0.0, (float) $attendance->regular_hours / $this->hoursPerDay())));
 
-        $dailyRate = $e->pay_type === PayType::Daily
-            ? (float) ($e->daily_rate ?? 0)
-            : (float) ($e->basic_monthly_salary ?? 0) / $this->workDaysPerMonth();
+        $dailyRate = $this->authoritativeDailyRate($e);
 
         return max(0.0, round($dayEquivalents * $dailyRate, 2));
     }
 
     private function unusedConvertibleLeaveValue(Employee $e): float
     {
-        // Conservative fallback when leave module tables are unreachable: 0.
-        try {
-            $rows = DB::table('employee_leave_balances as elb')
-                ->join('leave_types as lt', 'elb.leave_type_id', '=', 'lt.id')
-                ->where('elb.employee_id', $e->id)
-                ->where('lt.is_convertible_on_separation', true)
-                ->select(DB::raw('SUM(elb.remaining * lt.conversion_rate) as v'))
-                ->value('v');
-            $days = (float) ($rows ?? 0);
-        } catch (\Throwable $ex) {
-            $days = 0.0;
+        // A missing/failed leave query must not silently become zero final pay.
+        // Database errors propagate so the separation remains visibly pending
+        // until the authoritative leave data source is available.
+        $rows = DB::table('employee_leave_balances as elb')
+            ->join('leave_types as lt', 'elb.leave_type_id', '=', 'lt.id')
+            ->where('elb.employee_id', $e->id)
+            ->where('lt.is_convertible_on_separation', true)
+            ->select(DB::raw('SUM(elb.remaining * lt.conversion_rate) as v'))
+            ->value('v');
+        $days = (float) ($rows ?? 0);
+
+        $rate = $this->authoritativeDailyRate($e);
+        return max(0.0, $days * $rate);
+    }
+
+    private function authoritativeDailyRate(Employee $employee): float
+    {
+        // Monthly equivalent reconciles both pay types (see Employee model), so
+        // a semi-monthly employee's separation pay is not computed off half a
+        // month's figure.
+        $monthly = $employee->monthlyEquivalentSalary();
+        $rate = $monthly !== null ? (float) $monthly / $this->workDaysPerMonth() : 0.0;
+
+        if ($rate <= 0) {
+            throw new BusinessRuleException("Employee {$employee->employee_no} has no authoritative pay rate for final-pay calculation.");
         }
 
-        $rate = (float) ($e->daily_rate ?: ((float) ($e->basic_monthly_salary ?? 0) / $this->workDaysPerMonth()));
-        return max(0.0, $days * $rate);
+        return $rate;
     }
 
     private function workDaysPerMonth(): float

@@ -6,6 +6,7 @@ namespace App\Modules\SupplyChain\Controllers;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\SupplyChain\Models\Delivery;
+use App\Modules\SupplyChain\Enums\DeliveryProofType;
 use App\Modules\SupplyChain\Models\DeliveryProof;
 use App\Modules\SupplyChain\Resources\DeliveryProofResource;
 use Illuminate\Http\JsonResponse;
@@ -27,6 +28,15 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class DeliveryProofController
 {
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'proof_types' => array_map(
+                static fn (DeliveryProofType $type): array => ['value' => $type->value, 'label' => $type->label()],
+                DeliveryProofType::cases(),
+            ),
+        ]]);
+    }
     /** GET /supply-chain/deliveries/{delivery}/proofs */
     public function index(Delivery $delivery): AnonymousResourceCollection
     {
@@ -41,7 +51,7 @@ class DeliveryProofController
     public function store(Request $request, Delivery $delivery): JsonResponse
     {
         $validated = $request->validate([
-            'proof_type' => ['required', 'string', Rule::in(['signed_dr', 'photo', 'customer_po_confirmation', 'coc', 'other'])],
+            'proof_type' => ['required', Rule::enum(DeliveryProofType::class)],
             'file' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png,heic,webp', 'max:10240'],
             'notes' => ['nullable', 'string', 'max:500'],
         ]);
@@ -128,5 +138,16 @@ class DeliveryProofController
         });
 
         return response()->json([], 204);
+    }
+
+    /** POST /supply-chain/deliveries/{delivery}/proofs/{proof}/restore */
+    public function restore(Delivery $delivery, DeliveryProof $proof): JsonResponse
+    {
+        if ($proof->delivery_id !== $delivery->id) {
+            throw new RuntimeException('Proof does not belong to this delivery.');
+        }
+
+        $proof->restore();
+        return response()->json(['message' => 'Delivery proof restored.']);
     }
 }

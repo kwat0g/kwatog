@@ -27,19 +27,14 @@ use RuntimeException;
 
 class InvoiceService
 {
-    private const AR_CODE    = '1100';
-    private const VAT_OUTPUT = '2060';
     // OGAMI-008 — contra-revenue account debited for Senior/PWD discounts.
-    // No dedicated COA row is seeded, so we debit Sales Revenue (4010) by
-    // default; override via the 'accounting.sales_discount_account_code'
-    // setting if a dedicated contra-revenue account is later added.
-    private const DISCOUNT_CODE = '4010';
 
     public function __construct(
         private readonly DocumentSequenceService $sequences,
         private readonly JournalEntryService $journals,
         private readonly AccountingPeriodService $periods,
         private readonly TaxPolicyService $taxPolicy,
+        private readonly AccountingAccountPolicyService $accounts,
     ) {}
 
     public function list(array $filters): LengthAwarePaginator
@@ -169,7 +164,7 @@ class InvoiceService
                 'remarks'      => $data['remarks'] ?? $invoice->remarks,
             ]);
 
-            InvoiceItem::where('invoice_id', $invoice->id)->delete();
+            InvoiceItem::where('invoice_id', $invoice->id)->forceDelete();
             foreach ($items as $row) {
                 InvoiceItem::create(array_merge($row, ['invoice_id' => $invoice->id]));
             }
@@ -190,8 +185,8 @@ class InvoiceService
 
             $invoice->loadMissing(['items', 'customer']);
 
-            $arId        = $this->accountId(self::AR_CODE);
-            $vatOutputId = $this->accountId(self::VAT_OUTPUT);
+            $arId        = $this->accountId($this->accounts->ar());
+            $vatOutputId = $this->accountId($this->accounts->vatOutput());
 
             $lines = [];
             $lines[] = [
@@ -310,7 +305,7 @@ class InvoiceService
                 'created_by'       => $by->id,
             ]);
 
-            $arId = $this->accountId(self::AR_CODE);
+            $arId = $this->accountId($this->accounts->ar());
             $je = $this->journals->create([
                 'date'           => $coll->collection_date->toDateString(),
                 'description'    => "Collection for Invoice {$invoice->invoice_number}",
@@ -476,8 +471,6 @@ class InvoiceService
     /** OGAMI-008 — account debited for the Senior/PWD discount contra-revenue line. */
     private function discountAccountId(): int
     {
-        $code = (string) app(\App\Common\Services\SettingsService::class)
-            ->get('accounting.sales_discount_account_code', self::DISCOUNT_CODE);
-        return $this->accountId($code !== '' ? $code : self::DISCOUNT_CODE);
+        return $this->accountId($this->accounts->discount());
     }
 }

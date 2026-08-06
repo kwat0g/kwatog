@@ -35,47 +35,6 @@ enum DeMinimisBenefitType: string
     }
 
     /**
-     * Statutory monthly limit in pesos as a decimal string.
-     *
-     * Annual-type benefits return the monthly pro-rated equivalent
-     * (annual limit / 12) for per-period comparison.
-     */
-    public function monthlyLimit(): string
-    {
-        return match ($this) {
-            self::RiceSubsidy              => '2000.00',
-            self::UniformAllowance         => '500.00',   // 6,000/yr / 12
-            self::MedicalCashAllowance     => '1500.00',
-            self::LaundryAllowance         => '300.00',
-            self::EmployeeAchievementAward => '833.33',   // 10,000/yr / 12
-            self::Gifts                    => '416.67',   // 5,000/yr / 12
-            self::MealAllowancePerOt       => '0.00',     // Flag-only; computed per OT day
-        };
-    }
-
-    /**
-     * Annual cap — meaningful only for annual-type benefits.
-     * Returns null for strictly monthly benefits.
-     */
-    public function annualLimit(): ?string
-    {
-        return match ($this) {
-            self::UniformAllowance         => '6000.00',
-            self::EmployeeAchievementAward => '10000.00',
-            self::Gifts                    => '5000.00',
-            default                        => null,
-        };
-    }
-
-    /**
-     * Whether the benefit is tracked on an annual (year-to-date) basis.
-     */
-    public function isAnnual(): bool
-    {
-        return $this->annualLimit() !== null;
-    }
-
-    /**
      * Whether this benefit type is a non-cash or flag-only type
      * that uses a different computation (e.g., meal_allowance_per_ot).
      */

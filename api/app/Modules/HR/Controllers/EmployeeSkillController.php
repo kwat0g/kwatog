@@ -46,6 +46,12 @@ class EmployeeSkillController
         return response()->json(null, 204);
     }
 
+    public function restore(EmployeeSkill $employeeSkill): JsonResponse
+    {
+        $employeeSkill->restore();
+        return response()->json(['message' => 'Employee skill restored.']);
+    }
+
     public function matrix(Request $request): JsonResponse
     {
         $data = $this->service->matrix(

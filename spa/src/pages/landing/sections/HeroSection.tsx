@@ -126,7 +126,7 @@ export function HeroSection() {
         }}
       />
 
-      <div className="mx-auto grid w-full max-w-6xl items-center gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:gap-10">
+      <div className="mx-auto grid w-full max-w-[1440px] items-center gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:gap-10">
         {/* ── Text column ───────────────────────────────────────── */}
         <div>
           <p
@@ -137,7 +137,7 @@ export function HeroSection() {
             <ScrambleText text={address} trigger="mount" />
           </p>
 
-          <h1 className="mt-6 font-display text-[clamp(2.5rem,6vw,4.75rem)] font-medium leading-[0.98] tracking-[-0.03em] text-landing-text">
+          <h1 className="mt-8 font-display text-[clamp(3rem,8vw,5.5rem)] font-semibold leading-[0.94] tracking-[-0.04em] text-transparent bg-clip-text bg-gradient-to-br from-landing-text via-landing-text to-landing-text-secondary pb-2">
             <span data-hero-line className="block overflow-hidden">
               <span className="block">{heroCopy?.line_one ?? '—'}</span>
             </span>
@@ -151,32 +151,34 @@ export function HeroSection() {
 
           <p
             data-hero="sub"
-            className="mt-7 max-w-xl font-sans text-[15px] leading-relaxed text-landing-text-secondary sm:text-lg"
+            className="mt-8 max-w-2xl font-sans text-base font-light tracking-wide leading-relaxed text-landing-text-secondary sm:text-xl"
           >
             {heroDescription}
           </p>
 
-          <div data-hero="cta" className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div data-hero="cta" className="mt-10 flex flex-col gap-4 sm:flex-row sm:items-center">
             <a
               ref={quoteRef}
               href={heroCta?.quote_href ?? '#'}
-              className="group inline-flex items-center justify-center gap-2 rounded-full bg-landing-accent px-7 py-4 font-sans text-sm font-medium text-landing-accent-fg transition-colors duration-300 hover:bg-landing-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas"
+              className="group relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-full bg-landing-accent px-8 py-4 font-sans text-[15px] font-semibold text-landing-accent-fg shadow-[0_0_40px_-10px_var(--landing-accent)] transition-all duration-300 hover:scale-105 hover:bg-landing-accent-hover hover:shadow-[0_0_60px_-15px_var(--landing-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas"
             >
-              {heroCta?.quote_label ?? '—'}
-              <ArrowRight size={16} className="transition-transform duration-300 group-hover:translate-x-1" />
+              <span className="relative z-10 flex items-center gap-2">
+                {heroCta?.quote_label ?? '—'}
+                <ArrowRight size={18} className="transition-transform duration-300 group-hover:translate-x-1.5" />
+              </span>
             </a>
             <a
               ref={exploreRef}
               href={heroCta?.explore_href ?? '#'}
-              className="inline-flex items-center justify-center gap-2 rounded-full border border-landing-border-strong px-7 py-4 font-sans text-sm font-medium text-landing-text transition-colors duration-300 hover:border-landing-text hover:bg-landing-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas"
+              className="inline-flex items-center justify-center gap-2 rounded-full border border-landing-border-strong px-8 py-4 font-sans text-[15px] font-medium text-landing-text transition-all duration-300 hover:scale-105 hover:border-landing-text hover:bg-landing-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas"
             >
               {heroCta?.explore_label ?? '—'}
             </a>
             <Link
               to={heroCta?.careers_href ?? '/'}
-              className="inline-flex items-center justify-center gap-2 rounded-full border border-landing-border-strong px-7 py-4 font-sans text-sm font-medium text-landing-text transition-colors duration-300 hover:border-landing-text hover:bg-landing-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas"
+              className="inline-flex items-center justify-center gap-2 rounded-full border border-landing-border-strong px-8 py-4 font-sans text-[15px] font-medium text-landing-text transition-all duration-300 hover:scale-105 hover:border-landing-text hover:bg-landing-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas"
             >
-              <Briefcase size={15} />
+              <Briefcase size={16} />
               {heroCta?.careers_label ?? '—'}
             </Link>
           </div>

@@ -66,4 +66,10 @@ class ContainerController
         $this->service->delete($container);
         return response()->json([], 204);
     }
+
+    public function restore(Container $container): JsonResponse
+    {
+        $container->restore();
+        return response()->json(['message' => 'Container restored.']);
+    }
 }

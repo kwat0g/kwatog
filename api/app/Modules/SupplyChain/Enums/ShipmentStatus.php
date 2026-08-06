@@ -15,6 +15,15 @@ enum ShipmentStatus: string
     case Received  = 'received';
     case Cancelled = 'cancelled';
 
+    public function label(): string
+    {
+        return match ($this) {
+            self::Ordered => 'Ordered', self::Shipped => 'Shipped', self::InTransit => 'In transit',
+            self::Customs => 'Customs', self::Cleared => 'Cleared', self::Received => 'Received',
+            self::Cancelled => 'Cancelled',
+        };
+    }
+
     /** Allowed forward transitions (cancellation is allowed from any non-terminal). */
     public function canTransitionTo(self $next): bool
     {

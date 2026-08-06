@@ -10,29 +10,29 @@
 import { create } from 'zustand';
 
 interface ShortcutScopeState {
-  modalStack: string[];
-  pushModal: (id: string) => void;
-  popModal: (id: string) => void;
-  /** Convenience: depth of the modal stack. */
-  modalDepth: () => number;
-  /** Returns true if the given id is the topmost modal (and thus owns Esc). */
-  isTopmost: (id: string) => boolean;
+ modalStack: string[];
+ pushModal: (id: string) => void;
+ popModal: (id: string) => void;
+ /** Convenience: depth of the modal stack. */
+ modalDepth: () => number;
+ /** Returns true if the given id is the topmost modal (and thus owns Esc). */
+ isTopmost: (id: string) => boolean;
 }
 
 export const useShortcutScopeStore = create<ShortcutScopeState>((set, get) => ({
-  modalStack: [],
-  pushModal: (id) => set((s) => ({ modalStack: [...s.modalStack, id] })),
-  popModal: (id) =>
-    set((s) => {
-      const idx = s.modalStack.lastIndexOf(id);
-      if (idx === -1) return s;
-      const next = [...s.modalStack];
-      next.splice(idx, 1);
-      return { modalStack: next };
-    }),
-  modalDepth: () => get().modalStack.length,
-  isTopmost: (id) => {
-    const stack = get().modalStack;
-    return stack.length > 0 && stack[stack.length - 1] === id;
-  },
+ modalStack: [],
+ pushModal: (id) => set((s) => ({ modalStack: [...s.modalStack, id] })),
+ popModal: (id) =>
+ set((s) => {
+ const idx = s.modalStack.lastIndexOf(id);
+ if (idx === -1) return s;
+ const next = [...s.modalStack];
+ next.splice(idx, 1);
+ return { modalStack: next };
+ }),
+ modalDepth: () => get().modalStack.length,
+ isTopmost: (id) => {
+ const stack = get().modalStack;
+ return stack.length > 0 && stack[stack.length - 1] === id;
+ },
 }));

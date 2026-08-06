@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Common\Services\CurrencyDisplayService;
 use App\Modules\Quality\Services\CopqService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
@@ -26,7 +27,7 @@ class SnapCopqMonthly extends Command
 
     protected $description = 'Persist a COPQ snapshot row for the previous calendar month (idempotent).';
 
-    public function handle(CopqService $copq): int
+    public function handle(CopqService $copq, CurrencyDisplayService $currency): int
     {
         $yearOpt  = $this->option('year');
         $monthOpt = $this->option('month');
@@ -43,7 +44,7 @@ class SnapCopqMonthly extends Command
 
         $snap = $copq->snapshot($target->year, $target->month);
 
-        $this->info("Snapped COPQ for {$target->format('Y-m')} — total ₱{$snap->total_cost}");
+        $this->info("Snapped COPQ for {$target->format('Y-m')} — total ".$currency->format($snap->total_cost));
 
         return self::SUCCESS;
     }

@@ -12,6 +12,7 @@ use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseRequest;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
+use App\Common\Services\SettingsService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -35,7 +36,7 @@ class BudgetEnforcementWiringTest extends TestCase
 
     public function test_po_creation_persists_warning_without_blocking_when_budget_exhausted(): void
     {
-        config(['budgeting.enforcement_mode' => 'warn']);
+        app(SettingsService::class)->set('budgeting.enforcement_mode', 'warn');
 
         $dept = Department::factory()->create();
         $fy   = FiscalYear::factory()->create(['status' => 'active']);
@@ -72,7 +73,7 @@ class BudgetEnforcementWiringTest extends TestCase
 
     public function test_po_creation_is_blocked_in_explicit_block_mode(): void
     {
-        config(['budgeting.enforcement_mode' => 'block']);
+        app(SettingsService::class)->set('budgeting.enforcement_mode', 'block');
 
         $dept = Department::factory()->create();
         $fy   = FiscalYear::factory()->create(['status' => 'active']);

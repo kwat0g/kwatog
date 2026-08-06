@@ -11,7 +11,7 @@
 <p style="font-size:11px; line-height:1.8; margin: 0 0 12px; text-align: justify;">
   This is to certify that <strong>{{ $employee_name }}</strong>, bearing Employee No.
   <strong>{{ $employee_no }}</strong>, is a bona fide employee of
-  {{ $company['name'] ?? 'Philippine Ogami Corporation' }}, holding the position of
+  {{ $company['name'] ?? '' }}, holding the position of
   <strong>{{ $position }}</strong> in the {{ $department }} Department since
   <strong>{{ $date_hired }}</strong>, with employment status of
   <strong>{{ $employment_status }}</strong>.
@@ -37,7 +37,7 @@
     <div class="line">{{ $hr_signatory ?? 'HR Officer / HR Manager' }}</div>
   </div>
   <div class="sig">
-    <div class="line">{{ $company['name'] ?? 'Philippine Ogami Corporation' }}</div>
+    <div class="line">{{ $company['name'] ?? '' }}</div>
   </div>
 </div>
 

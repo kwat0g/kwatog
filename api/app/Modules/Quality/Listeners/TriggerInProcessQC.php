@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Quality\Listeners;
 
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Production\Events\WorkOrderStatusChanged;
 use App\Modules\Quality\Enums\InspectionEntityType;
@@ -28,6 +29,7 @@ class TriggerInProcessQC implements ShouldQueue
 {
     public function __construct(
         private readonly InspectionService $inspections,
+        private readonly SettingsService $settings,
     ) {}
 
     public function handle(WorkOrderStatusChanged $event): void
@@ -44,16 +46,18 @@ class TriggerInProcessQC implements ShouldQueue
                 ->exists();
             if ($existing) return;
 
-            $batchQty = (int) ($wo->quantity_target ?: 100);
+            // quantity_target is required for new work orders. Legacy rows can
+            // still be incomplete; never invent a production batch quantity.
+            $batchQty = (int) $wo->quantity_target;
             $productId = $wo->product_id;
-            if (! $productId) return;
+            if (! $productId || $batchQty < 1) return;
 
             // Use the InspectionService to create a properly scaffolded inspection.
             // The service loads the active spec and seeds measurement rows.
             $this->inspections->create([
                 'stage'         => InspectionStage::InProcess->value,
                 'product_id'    => (int) $productId,
-                'batch_quantity' => max(1, $batchQty),
+                'batch_quantity' => $batchQty,
                 'entity_type'   => InspectionEntityType::WorkOrder->value,
                 'entity_id'     => $wo->id,
                 'notes'         => "Auto-created from WO {$wo->wo_number} start.",
@@ -61,8 +65,9 @@ class TriggerInProcessQC implements ShouldQueue
 
             // Notify QC team.
             try {
+                $roles = array_values(array_filter((array) $this->settings->get('quality.in_process_qc.notification_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
                 User::query()
-                    ->whereHas('role', fn ($q) => $q->whereIn('slug', ['qc_inspector', 'production_manager']))
+                    ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                     ->where('is_active', true)
                     ->get()
                     ->each(function (User $user) use ($wo) {

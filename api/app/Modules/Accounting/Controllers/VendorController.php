@@ -54,4 +54,10 @@ class VendorController
         }
         return response()->json(null, 204);
     }
+
+    public function restore(Vendor $vendor): JsonResponse
+    {
+        $vendor->restore();
+        return response()->json(['message' => 'Vendor restored.']);
+    }
 }

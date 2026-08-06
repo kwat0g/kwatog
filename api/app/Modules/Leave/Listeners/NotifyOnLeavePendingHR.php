@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Leave\Listeners;
 
 use App\Common\Services\NotificationService;
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Leave\Events\LeaveRequestPendingHR;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -12,7 +13,7 @@ use Illuminate\Support\Facades\Log;
 
 class NotifyOnLeavePendingHR implements ShouldQueue
 {
-    public function __construct(private readonly NotificationService $notifications) {}
+    public function __construct(private readonly NotificationService $notifications, private readonly ?SettingsService $settings = null) {}
 
     public function handle(LeaveRequestPendingHR $event): void
     {
@@ -20,8 +21,9 @@ class NotifyOnLeavePendingHR implements ShouldQueue
             $req = $event->leaveRequest->loadMissing(['employee', 'leaveType']);
             $emp = $req->employee;
 
+            $roles = array_values(array_filter((array) ($this->settings ?? app(SettingsService::class))->get('leave.pending_hr.notification_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
             $audience = User::query()
-                ->whereHas('role', fn ($q) => $q->where('slug', 'hr_officer'))
+                ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                 ->where('is_active', true)
                 ->get();
 

@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * OGAMI-011 — records each effective-dated salary change for an employee.
  * Used by PayrollCalculatorService to prorate basic pay when a raise lands
  * mid-period. When no rows exist for an employee, payroll falls back to the
- * employee's current basic_monthly_salary / daily_rate (legacy behaviour).
+ * employee's current basic_monthly_salary / semi_monthly_rate (legacy behaviour).
  */
 class EmployeeSalaryHistory extends Model
 {
@@ -24,14 +24,14 @@ class EmployeeSalaryHistory extends Model
     protected $fillable = [
         'employee_id',
         'basic_monthly_salary',
-        'daily_rate',
+        'semi_monthly_rate',
         'effective_date',
         'created_by',
     ];
 
     protected $casts = [
         'basic_monthly_salary' => 'decimal:2',
-        'daily_rate'           => 'decimal:2',
+        'semi_monthly_rate'           => 'decimal:2',
         'effective_date'       => 'date',
     ];
 

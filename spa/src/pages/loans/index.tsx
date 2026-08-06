@@ -16,86 +16,86 @@ import { formatDate } from '@/lib/formatDate';
 import type { EmployeeLoan } from '@/types/loans';
 
 export default function LoansPage() {
-  const navigate = useNavigate();
-  const { can } = usePermission();
-  const [filters, setFilters] = useState<LoanListParams>({ page: 1, per_page: 25, sort: 'created_at', direction: 'desc' });
+ const navigate = useNavigate();
+ const { can } = usePermission();
+ const [filters, setFilters] = useState<LoanListParams>({ page: 1, per_page: 25, sort: 'created_at', direction: 'desc' });
 
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['loans', filters],
-    queryFn: () => loansApi.list(filters),
-    placeholderData: (prev) => prev });
-  const { data: loanOptions } = useQuery({
-    queryKey: ['loan-options'],
-    queryFn: loansApi.options,
-    staleTime: 5 * 60 * 1000 });
+ const { data, isLoading, isError, refetch } = useQuery({
+ queryKey: ['loans', filters],
+ queryFn: () => loansApi.list(filters),
+ placeholderData: (prev) => prev });
+ const { data: loanOptions } = useQuery({
+ queryKey: ['loan-options'],
+ queryFn: loansApi.options,
+ staleTime: 5 * 60 * 1000 });
 
-  const columns: Column<EmployeeLoan>[] = [
-    { key: 'loan_no', header: 'Loan no', cell: (r) => <span className="font-mono">{r.loan_no}</span> },
-    { key: 'employee', header: 'Employee', cell: (r) => <StackedCell primary={r.employee?.full_name ?? '—'} secondary={<span className="font-mono">{r.employee?.employee_no}</span>} /> },
-    { key: 'loan_type', header: 'Type', cell: (r) => <Chip variant="neutral">{r.loan_type_label ?? r.loan_type}</Chip> },
-    { key: 'principal', header: 'Principal', align: 'right', cell: (r) => <NumCell>{formatPeso(r.principal)}</NumCell> },
-    { key: 'balance', header: 'Balance', align: 'right', cell: (r) => <NumCell className="font-medium">{formatPeso(r.balance)}</NumCell> },
-    { key: 'pay_periods', header: 'Periods', align: 'right', cell: (r) => <NumCell>{r.pay_periods_remaining}/{r.pay_periods_total}</NumCell> },
-    { key: 'start_date', header: 'Start', align: 'left', cell: (r) => <NumCell>{r.start_date ? formatDate(r.start_date) : '—'}</NumCell> },
-    { key: 'status', header: 'Status', cell: (r) => (
-      <span className="flex items-center gap-1.5">
-        <Chip variant={chipVariantForStatus(r.status)}>{r.status_label ?? r.status}</Chip>
-        {r.has_overdue_approval && (
-          <span title={`Approval pending beyond ${loanOptions?.approval_sla_hours ?? 'configured'} hours`}><Chip variant="danger">overdue</Chip></span>
-        )}
-      </span>
-    ) },
-  ];
+ const columns: Column<EmployeeLoan>[] = [
+ { key: 'loan_no', header: 'Loan no', cell: (r) => <span className="font-mono">{r.loan_no}</span> },
+ { key: 'employee', header: 'Employee', cell: (r) => <StackedCell primary={r.employee?.full_name ?? '—'} secondary={<span className="font-mono">{r.employee?.employee_no}</span>} /> },
+ { key: 'loan_type', header: 'Type', cell: (r) => <Chip variant="neutral">{r.loan_type_label ?? r.loan_type}</Chip> },
+ { key: 'principal', header: 'Principal', align: 'right', cell: (r) => <NumCell>{formatPeso(r.principal)}</NumCell> },
+ { key: 'balance', header: 'Balance', align: 'right', cell: (r) => <NumCell className="font-medium">{formatPeso(r.balance)}</NumCell> },
+ { key: 'pay_periods', header: 'Periods', align: 'right', cell: (r) => <NumCell>{r.pay_periods_remaining}/{r.pay_periods_total}</NumCell> },
+ { key: 'start_date', header: 'Start', align: 'left', cell: (r) => <NumCell>{r.start_date ? formatDate(r.start_date) : '—'}</NumCell> },
+ { key: 'status', header: 'Status', cell: (r) => (
+ <span className="flex items-center gap-1.5">
+ <Chip variant={chipVariantForStatus(r.status)}>{r.status_label ?? r.status}</Chip>
+ {r.has_overdue_approval && (
+ <span title={`Approval pending beyond ${loanOptions?.approval_sla_hours ?? 'configured'} hours`}><Chip variant="danger">overdue</Chip></span>
+ )}
+ </span>
+ ) },
+ ];
 
-  const filterConfig: FilterConfig[] = [
-    {
-      key: 'loan_type', label: 'Type', type: 'select',
-      options: [
-        { value: '', label: 'All types' },
-        ...(loanOptions?.types ?? []).map((type) => ({ value: type.value, label: type.label })),
-      ] },
-    {
-      key: 'status', label: 'Status', type: 'select',
-      options: [
-        { value: '', label: 'All' },
-        ...(loanOptions?.statuses ?? []),
-      ] },
-  ];
+ const filterConfig: FilterConfig[] = [
+ {
+ key: 'loan_type', label: 'Type', type: 'select',
+ options: [
+ { value: '', label: 'All types' },
+ ...(loanOptions?.types ?? []).map((type) => ({ value: type.value, label: type.label })),
+ ] },
+ {
+ key: 'status', label: 'Status', type: 'select',
+ options: [
+ { value: '', label: 'All' },
+ ...(loanOptions?.statuses ?? []),
+ ] },
+ ];
 
-  return (
-    <div>
-      <PageHeader
-        title="Loans & Cash Advance"
-        subtitle={data ? `${data.meta.total} records` : undefined}
-        actions={can('loans.create') ? (
-          <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/hr/loans/create')}>
-            New request
-          </Button>
-        ) : null}
-      />
+ return (
+ <div>
+ <PageHeader
+ title="Loans & Cash Advance"
+ subtitle={data ? `${data.meta.total} records` : undefined}
+ actions={can('loans.create') ? (
+ <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/hr/loans/create')}>
+ New request
+ </Button>
+ ) : null}
+ />
 
-      <FilterBar
-        filters={filterConfig}
-        values={filters}
-        onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
-        onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
-        searchPlaceholder="Search loan no or employee…"
-      />
+ <FilterBar
+ filters={filterConfig}
+ values={filters}
+ onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
+ onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
+ searchPlaceholder="Search loan no or employee…"
+ />
 
-      {isLoading && !data && <SkeletonTable columns={8} rows={6} />}
-      {isError && <EmptyState icon="alert-circle" title="Failed to load loans" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />}
-      {data && data.data.length === 0 && (
-        <EmptyState
-          icon="inbox"
-          title="No loan records"
-          description={can('loans.create') ? 'Submit a request to get started.' : 'Nothing here yet.'}
-          action={can('loans.create') ? <Button variant="primary" onClick={() => navigate('/hr/loans/create')}>New request</Button> : undefined}
-        />
-      )}
-      {data && data.data.length > 0 && (
-        <div className="px-5 py-4"><DataTable
-            onRowClick={(r) => navigate(`/hr/loans/${r.id}`)} columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters((f) => ({ ...f, page }))} /></div>
-      )}
-    </div>
-  );
+ {isLoading && !data && <SkeletonTable columns={8} rows={6} />}
+ {isError && <EmptyState icon="alert-circle" title="Failed to load loans" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />}
+ {data && data.data.length === 0 && (
+ <EmptyState
+ icon="inbox"
+ title="No loan records"
+ description={can('loans.create') ? 'Submit a request to get started.' : 'Nothing here yet.'}
+ action={can('loans.create') ? <Button variant="primary" onClick={() => navigate('/hr/loans/create')}>New request</Button> : undefined}
+ />
+ )}
+ {data && data.data.length > 0 && (
+ <div className="px-5 py-4"><DataTable
+ onRowClick={(r) => navigate(`/hr/loans/${r.id}`)} columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters((f) => ({ ...f, page }))} /></div>
+ )}
+ </div>
+ );
 }

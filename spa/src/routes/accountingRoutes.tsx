@@ -4,116 +4,116 @@ import { ModuleGuard } from '@/components/guards/ModuleGuard';
 import { PermissionGuard } from '@/components/guards/PermissionGuard';
 
 // Accounting (Sprint 4 — Tasks 31-37)
-const ChartOfAccountsPage    = lazy(() => import('@/pages/accounting/coa'));
-const CreateAccountPage      = lazy(() => import('@/pages/accounting/coa/create'));
-const EditAccountPage        = lazy(() => import('@/pages/accounting/coa/edit'));
-const JournalEntriesPage     = lazy(() => import('@/pages/accounting/journal-entries'));
+const ChartOfAccountsPage = lazy(() => import('@/pages/accounting/coa'));
+const CreateAccountPage = lazy(() => import('@/pages/accounting/coa/create'));
+const EditAccountPage = lazy(() => import('@/pages/accounting/coa/edit'));
+const JournalEntriesPage = lazy(() => import('@/pages/accounting/journal-entries'));
 const CreateJournalEntryPage = lazy(() => import('@/pages/accounting/journal-entries/create'));
 const JournalEntryDetailPage = lazy(() => import('@/pages/accounting/journal-entries/detail'));
-const VendorsPage            = lazy(() => import('@/pages/accounting/vendors'));
-const CreateVendorPage       = lazy(() => import('@/pages/accounting/vendors/create'));
-const EditVendorPage         = lazy(() => import('@/pages/accounting/vendors/edit'));
-const VendorDetailPage       = lazy(() => import('@/pages/accounting/vendors/detail'));
-const BillsPage              = lazy(() => import('@/pages/accounting/bills'));
-const CreateBillPage         = lazy(() => import('@/pages/accounting/bills/create'));
-const BillDetailPage         = lazy(() => import('@/pages/accounting/bills/detail'));
-const CustomersPage          = lazy(() => import('@/pages/accounting/customers'));
-const CreateCustomerPage     = lazy(() => import('@/pages/accounting/customers/create'));
-const EditCustomerPage       = lazy(() => import('@/pages/accounting/customers/edit'));
-const CustomerDetailPage     = lazy(() => import('@/pages/accounting/customers/detail'));
-const InvoicesPage           = lazy(() => import('@/pages/accounting/invoices'));
-const CreateInvoicePage      = lazy(() => import('@/pages/accounting/invoices/create'));
-const InvoiceDetailPage      = lazy(() => import('@/pages/accounting/invoices/detail'));
-const TrialBalancePage       = lazy(() => import('@/pages/accounting/trial-balance'));
-const IncomeStatementPage    = lazy(() => import('@/pages/accounting/income-statement'));
-const BalanceSheetPage       = lazy(() => import('@/pages/accounting/balance-sheet'));
-const ArAgingPage            = lazy(() => import('@/pages/accounting/ar-aging'));
-const ApAgingPage            = lazy(() => import('@/pages/accounting/ap-aging'));
+const VendorsPage = lazy(() => import('@/pages/accounting/vendors'));
+const CreateVendorPage = lazy(() => import('@/pages/accounting/vendors/create'));
+const EditVendorPage = lazy(() => import('@/pages/accounting/vendors/edit'));
+const VendorDetailPage = lazy(() => import('@/pages/accounting/vendors/detail'));
+const BillsPage = lazy(() => import('@/pages/accounting/bills'));
+const CreateBillPage = lazy(() => import('@/pages/accounting/bills/create'));
+const BillDetailPage = lazy(() => import('@/pages/accounting/bills/detail'));
+const CustomersPage = lazy(() => import('@/pages/accounting/customers'));
+const CreateCustomerPage = lazy(() => import('@/pages/accounting/customers/create'));
+const EditCustomerPage = lazy(() => import('@/pages/accounting/customers/edit'));
+const CustomerDetailPage = lazy(() => import('@/pages/accounting/customers/detail'));
+const InvoicesPage = lazy(() => import('@/pages/accounting/invoices'));
+const CreateInvoicePage = lazy(() => import('@/pages/accounting/invoices/create'));
+const InvoiceDetailPage = lazy(() => import('@/pages/accounting/invoices/detail'));
+const TrialBalancePage = lazy(() => import('@/pages/accounting/trial-balance'));
+const IncomeStatementPage = lazy(() => import('@/pages/accounting/income-statement'));
+const BalanceSheetPage = lazy(() => import('@/pages/accounting/balance-sheet'));
+const ArAgingPage = lazy(() => import('@/pages/accounting/ar-aging'));
+const ApAgingPage = lazy(() => import('@/pages/accounting/ap-aging'));
 // REC-05 — go-live opening balances
-const OpeningBalancesPage    = lazy(() => import('@/pages/accounting/opening-balances'));
+const OpeningBalancesPage = lazy(() => import('@/pages/accounting/opening-balances'));
 // REC-14 — accounting period close/reopen
-const AccountingPeriodsPage  = lazy(() => import('@/pages/accounting/periods'));
+const AccountingPeriodsPage = lazy(() => import('@/pages/accounting/periods'));
 // REC-13 — AR/AP credit notes
-const CreditNotesPage        = lazy(() => import('@/pages/accounting/credit-notes'));
-const CreditNoteDetailPage   = lazy(() => import('@/pages/accounting/credit-notes/detail'));
+const CreditNotesPage = lazy(() => import('@/pages/accounting/credit-notes'));
+const CreditNoteDetailPage = lazy(() => import('@/pages/accounting/credit-notes/detail'));
 // REC-12 — multi-currency (FX rates + JPY parent-pack translation)
-const FxRatesPage            = lazy(() => import('@/pages/accounting/fx-rates'));
-const ParentPackPage         = lazy(() => import('@/pages/accounting/parent-pack'));
+const FxRatesPage = lazy(() => import('@/pages/accounting/fx-rates'));
+const ParentPackPage = lazy(() => import('@/pages/accounting/parent-pack'));
 
 export const accountingRoutes = (
-  <>
-    {/* Accounting module (Sprint 4) */}
-    <Route element={<ModuleGuard module="accounting" />}>
-      <Route path="/accounting" element={<Navigate to="/accounting/journal-entries" replace />} />
+ <>
+ {/* Accounting module (Sprint 4) */}
+ <Route element={<ModuleGuard module="accounting" />}>
+ <Route path="/accounting" element={<Navigate to="/accounting/journal-entries" replace />} />
 
-      <Route path="/accounting/coa"
-        element={<PermissionGuard permission="accounting.coa.view"><ChartOfAccountsPage /></PermissionGuard>} />
-      <Route path="/accounting/coa/create"
-        element={<PermissionGuard permission="accounting.coa.manage"><CreateAccountPage /></PermissionGuard>} />
-      <Route path="/accounting/coa/:id/edit"
-        element={<PermissionGuard permission="accounting.coa.manage"><EditAccountPage /></PermissionGuard>} />
+ <Route path="/accounting/coa"
+ element={<PermissionGuard permission="accounting.coa.view"><ChartOfAccountsPage /></PermissionGuard>} />
+ <Route path="/accounting/coa/create"
+ element={<PermissionGuard permission="accounting.coa.manage"><CreateAccountPage /></PermissionGuard>} />
+ <Route path="/accounting/coa/:id/edit"
+ element={<PermissionGuard permission="accounting.coa.manage"><EditAccountPage /></PermissionGuard>} />
 
-      <Route path="/accounting/journal-entries"
-        element={<PermissionGuard permission="accounting.journal.view"><JournalEntriesPage /></PermissionGuard>} />
-      <Route path="/accounting/journal-entries/create"
-        element={<PermissionGuard permission="accounting.journal.create"><CreateJournalEntryPage /></PermissionGuard>} />
-      <Route path="/accounting/journal-entries/:id"
-        element={<PermissionGuard permission="accounting.journal.view"><JournalEntryDetailPage /></PermissionGuard>} />
+ <Route path="/accounting/journal-entries"
+ element={<PermissionGuard permission="accounting.journal.view"><JournalEntriesPage /></PermissionGuard>} />
+ <Route path="/accounting/journal-entries/create"
+ element={<PermissionGuard permission="accounting.journal.create"><CreateJournalEntryPage /></PermissionGuard>} />
+ <Route path="/accounting/journal-entries/:id"
+ element={<PermissionGuard permission="accounting.journal.view"><JournalEntryDetailPage /></PermissionGuard>} />
 
-      <Route path="/accounting/vendors"
-        element={<PermissionGuard permission="accounting.vendors.view"><VendorsPage /></PermissionGuard>} />
-      <Route path="/accounting/vendors/create"
-        element={<PermissionGuard permission="accounting.vendors.manage"><CreateVendorPage /></PermissionGuard>} />
-      <Route path="/accounting/vendors/:id"
-        element={<PermissionGuard permission="accounting.vendors.view"><VendorDetailPage /></PermissionGuard>} />
-      <Route path="/accounting/vendors/:id/edit"
-        element={<PermissionGuard permission="accounting.vendors.manage"><EditVendorPage /></PermissionGuard>} />
+ <Route path="/accounting/vendors"
+ element={<PermissionGuard permission="accounting.vendors.view"><VendorsPage /></PermissionGuard>} />
+ <Route path="/accounting/vendors/create"
+ element={<PermissionGuard permission="accounting.vendors.manage"><CreateVendorPage /></PermissionGuard>} />
+ <Route path="/accounting/vendors/:id"
+ element={<PermissionGuard permission="accounting.vendors.view"><VendorDetailPage /></PermissionGuard>} />
+ <Route path="/accounting/vendors/:id/edit"
+ element={<PermissionGuard permission="accounting.vendors.manage"><EditVendorPage /></PermissionGuard>} />
 
-      <Route path="/accounting/bills"
-        element={<PermissionGuard permission="accounting.bills.view"><BillsPage /></PermissionGuard>} />
-      <Route path="/accounting/bills/create"
-        element={<PermissionGuard permission="accounting.bills.create"><CreateBillPage /></PermissionGuard>} />
-      <Route path="/accounting/bills/:id"
-        element={<PermissionGuard permission="accounting.bills.view"><BillDetailPage /></PermissionGuard>} />
+ <Route path="/accounting/bills"
+ element={<PermissionGuard permission="accounting.bills.view"><BillsPage /></PermissionGuard>} />
+ <Route path="/accounting/bills/create"
+ element={<PermissionGuard permission="accounting.bills.create"><CreateBillPage /></PermissionGuard>} />
+ <Route path="/accounting/bills/:id"
+ element={<PermissionGuard permission="accounting.bills.view"><BillDetailPage /></PermissionGuard>} />
 
-      <Route path="/accounting/customers"
-        element={<PermissionGuard permission="accounting.customers.view"><CustomersPage /></PermissionGuard>} />
-      <Route path="/accounting/customers/create"
-        element={<PermissionGuard permission="accounting.customers.manage"><CreateCustomerPage /></PermissionGuard>} />
-      <Route path="/accounting/customers/:id"
-        element={<PermissionGuard permission="accounting.customers.view"><CustomerDetailPage /></PermissionGuard>} />
-      <Route path="/accounting/customers/:id/edit"
-        element={<PermissionGuard permission="accounting.customers.manage"><EditCustomerPage /></PermissionGuard>} />
+ <Route path="/accounting/customers"
+ element={<PermissionGuard permission="accounting.customers.view"><CustomersPage /></PermissionGuard>} />
+ <Route path="/accounting/customers/create"
+ element={<PermissionGuard permission="accounting.customers.manage"><CreateCustomerPage /></PermissionGuard>} />
+ <Route path="/accounting/customers/:id"
+ element={<PermissionGuard permission="accounting.customers.view"><CustomerDetailPage /></PermissionGuard>} />
+ <Route path="/accounting/customers/:id/edit"
+ element={<PermissionGuard permission="accounting.customers.manage"><EditCustomerPage /></PermissionGuard>} />
 
-      <Route path="/accounting/invoices"
-        element={<PermissionGuard permission="accounting.invoices.view"><InvoicesPage /></PermissionGuard>} />
-      <Route path="/accounting/invoices/create"
-        element={<PermissionGuard permission="accounting.invoices.create"><CreateInvoicePage /></PermissionGuard>} />
-      <Route path="/accounting/invoices/:id"
-        element={<PermissionGuard permission="accounting.invoices.view"><InvoiceDetailPage /></PermissionGuard>} />
+ <Route path="/accounting/invoices"
+ element={<PermissionGuard permission="accounting.invoices.view"><InvoicesPage /></PermissionGuard>} />
+ <Route path="/accounting/invoices/create"
+ element={<PermissionGuard permission="accounting.invoices.create"><CreateInvoicePage /></PermissionGuard>} />
+ <Route path="/accounting/invoices/:id"
+ element={<PermissionGuard permission="accounting.invoices.view"><InvoiceDetailPage /></PermissionGuard>} />
 
-      <Route path="/accounting/trial-balance"
-        element={<PermissionGuard permission="accounting.statements.view"><TrialBalancePage /></PermissionGuard>} />
-      <Route path="/accounting/income-statement"
-        element={<PermissionGuard permission="accounting.statements.view"><IncomeStatementPage /></PermissionGuard>} />
-      <Route path="/accounting/balance-sheet"
-        element={<PermissionGuard permission="accounting.statements.view"><BalanceSheetPage /></PermissionGuard>} />
-      <Route path="/accounting/ar-aging"
-        element={<PermissionGuard permission="accounting.statements.view"><ArAgingPage /></PermissionGuard>} />
-      <Route path="/accounting/ap-aging"
-        element={<PermissionGuard permission="accounting.statements.view"><ApAgingPage /></PermissionGuard>} />
-      <Route path="/accounting/opening-balances"
-        element={<PermissionGuard permission="accounting.opening_balance.manage"><OpeningBalancesPage /></PermissionGuard>} />
-      <Route path="/accounting/periods"
-        element={<PermissionGuard permission="accounting.periods.view"><AccountingPeriodsPage /></PermissionGuard>} />
-      <Route path="/accounting/credit-notes"
-        element={<PermissionGuard permission="accounting.credit_notes.view"><CreditNotesPage /></PermissionGuard>} />
-      <Route path="/accounting/credit-notes/:id"
-        element={<PermissionGuard permission="accounting.credit_notes.view"><CreditNoteDetailPage /></PermissionGuard>} />
-      <Route path="/accounting/fx-rates"
-        element={<PermissionGuard permission="accounting.currency.view"><FxRatesPage /></PermissionGuard>} />
-      <Route path="/accounting/parent-pack"
-        element={<PermissionGuard permission="accounting.currency.view"><ParentPackPage /></PermissionGuard>} />
-    </Route>
-  </>
+ <Route path="/accounting/trial-balance"
+ element={<PermissionGuard permission="accounting.statements.view"><TrialBalancePage /></PermissionGuard>} />
+ <Route path="/accounting/income-statement"
+ element={<PermissionGuard permission="accounting.statements.view"><IncomeStatementPage /></PermissionGuard>} />
+ <Route path="/accounting/balance-sheet"
+ element={<PermissionGuard permission="accounting.statements.view"><BalanceSheetPage /></PermissionGuard>} />
+ <Route path="/accounting/ar-aging"
+ element={<PermissionGuard permission="accounting.statements.view"><ArAgingPage /></PermissionGuard>} />
+ <Route path="/accounting/ap-aging"
+ element={<PermissionGuard permission="accounting.statements.view"><ApAgingPage /></PermissionGuard>} />
+ <Route path="/accounting/opening-balances"
+ element={<PermissionGuard permission="accounting.opening_balance.manage"><OpeningBalancesPage /></PermissionGuard>} />
+ <Route path="/accounting/periods"
+ element={<PermissionGuard permission="accounting.periods.view"><AccountingPeriodsPage /></PermissionGuard>} />
+ <Route path="/accounting/credit-notes"
+ element={<PermissionGuard permission="accounting.credit_notes.view"><CreditNotesPage /></PermissionGuard>} />
+ <Route path="/accounting/credit-notes/:id"
+ element={<PermissionGuard permission="accounting.credit_notes.view"><CreditNoteDetailPage /></PermissionGuard>} />
+ <Route path="/accounting/fx-rates"
+ element={<PermissionGuard permission="accounting.currency.view"><FxRatesPage /></PermissionGuard>} />
+ <Route path="/accounting/parent-pack"
+ element={<PermissionGuard permission="accounting.currency.view"><ParentPackPage /></PermissionGuard>} />
+ </Route>
+ </>
 );

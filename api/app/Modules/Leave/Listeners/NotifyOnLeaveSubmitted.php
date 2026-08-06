@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Leave\Listeners;
 
 use App\Common\Services\NotificationService;
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Leave\Events\LeaveRequestSubmitted;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -12,7 +13,7 @@ use Illuminate\Support\Facades\Log;
 
 class NotifyOnLeaveSubmitted implements ShouldQueue
 {
-    public function __construct(private readonly NotificationService $notifications) {}
+    public function __construct(private readonly NotificationService $notifications, private readonly ?SettingsService $settings = null) {}
 
     public function handle(LeaveRequestSubmitted $event): void
     {
@@ -27,8 +28,9 @@ class NotifyOnLeaveSubmitted implements ShouldQueue
             // Only notify the department head(s) of the requester's own department.
             // User→Employee is via the employee_id FK on users; we filter through
             // that relationship so a head from Department A never sees Department B's requests.
+            $roles = array_values(array_filter((array) ($this->settings ?? app(SettingsService::class))->get('leave.submitted.notification_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
             $audience = User::query()
-                ->whereHas('role', fn ($q) => $q->where('slug', 'department_head'))
+                ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                 ->where('is_active', true)
                 ->when($deptId, fn ($q) => $q->whereHas('employee', fn ($eq) => $eq->where('department_id', $deptId)))
                 ->get();

@@ -74,25 +74,42 @@ class StockCountService
             $locations = $query->get();
             $items = [];
             foreach ($locations as $loc) {
-                // Get current stock at this location
-                $stockLevel = StockLevel::query()
+                $stockLevels = StockLevel::query()
                     ->where('location_id', $loc->id)
                     ->where('quantity', '>', 0)
-                    ->first();
+                    ->get();
 
-                $items[] = [
-                    'session_id'      => $session->id,
-                    'location_id'     => $loc->id,
-                    'item_id'         => $stockLevel?->item_id ?? $loc->current_item_id,
-                    'system_quantity' => $stockLevel?->quantity ?? $loc->current_quantity ?? 0,
-                    'counted_quantity' => null,
-                    'variance'        => 0,
-                    'variance_percent' => 0,
-                    'lot_number'      => $stockLevel ? null : $loc->current_lot_number,
-                    'status'          => StockCountItemStatus::Pending->value,
-                    'created_at'      => now(),
-                    'updated_at'      => now(),
-                ];
+                if ($stockLevels->isNotEmpty()) {
+                    foreach ($stockLevels as $sl) {
+                        $items[] = [
+                            'session_id'      => $session->id,
+                            'location_id'     => $loc->id,
+                            'item_id'         => $sl->item_id,
+                            'system_quantity' => $sl->quantity,
+                            'counted_quantity' => null,
+                            'variance'        => 0,
+                            'variance_percent' => 0,
+                            'lot_number'      => null,
+                            'status'          => StockCountItemStatus::Pending->value,
+                            'created_at'      => now(),
+                            'updated_at'      => now(),
+                        ];
+                    }
+                } elseif ($loc->current_item_id) {
+                    $items[] = [
+                        'session_id'      => $session->id,
+                        'location_id'     => $loc->id,
+                        'item_id'         => $loc->current_item_id,
+                        'system_quantity' => $loc->current_quantity ?? 0,
+                        'counted_quantity' => null,
+                        'variance'        => 0,
+                        'variance_percent' => 0,
+                        'lot_number'      => $loc->current_lot_number,
+                        'status'          => StockCountItemStatus::Pending->value,
+                        'created_at'      => now(),
+                        'updated_at'      => now(),
+                    ];
+                }
             }
 
             StockCountItem::insert($items);
@@ -176,7 +193,7 @@ class StockCountService
     public function completeSession(int $id, User $user): StockCountSession
     {
         return DB::transaction(function () use ($id, $user) {
-            $session = StockCountSession::with('items')->findOrFail($id);
+            $session = StockCountSession::with('items')->lockForUpdate()->findOrFail($id);
             if ($session->status !== StockCountSessionStatus::InProgress) {
                 throw new BusinessRuleException('Session must be in progress to complete.');
             }

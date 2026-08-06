@@ -112,7 +112,7 @@ class EmployeeDataScopeTest extends TestCase
             ->getJson("/api/v1/hr/employees/{$peer->hash_id}")
             ->assertOk()
             ->assertJsonPath('data.basic_monthly_salary', null)
-            ->assertJsonPath('data.daily_rate', null)
+            ->assertJsonPath('data.semi_monthly_rate', null)
             ->assertJsonMissingPath('data.documents');
 
         $this->actingAs($head, 'sanctum')

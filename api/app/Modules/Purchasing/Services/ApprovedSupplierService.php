@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Purchasing\Services;
 
 use App\Common\Support\HashIdFilter;
+use App\Common\Support\TrashedFilter;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Models\ApprovedSupplier;
@@ -16,6 +17,7 @@ class ApprovedSupplierService
     public function list(array $filters): LengthAwarePaginator
     {
         $q = ApprovedSupplier::query()->with(['item:id,code,name', 'vendor:id,name']);
+        TrashedFilter::apply($q, $filters);
         if (! empty($filters['item_id'])) {
             $iid = HashIdFilter::decode($filters['item_id'], Item::class);
             if ($iid) $q->where('item_id', $iid);
@@ -40,7 +42,7 @@ class ApprovedSupplierService
                 ['item_id' => $itemId, 'vendor_id' => $vendorId],
                 [
                     'is_preferred'   => $data['is_preferred'] ?? false,
-                    'lead_time_days' => $data['lead_time_days'] ?? 0,
+                    'lead_time_days' => $data['lead_time_days'] ?? null,
                     'last_price'     => $data['last_price'] ?? null,
                 ]
             );

@@ -6,6 +6,7 @@ namespace App\Modules\HR\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use App\Modules\HR\Enums\SeparationReason;
 
 class SeparateEmployeeRequest extends FormRequest
 {
@@ -17,7 +18,7 @@ class SeparateEmployeeRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'separation_reason' => ['required', Rule::in(['resigned', 'terminated', 'retired', 'end_of_contract'])],
+            'separation_reason' => ['required', Rule::enum(SeparationReason::class)],
             'separation_date'   => ['required', 'date'],
             'remarks'           => ['nullable', 'string', 'max:2000'],
         ];

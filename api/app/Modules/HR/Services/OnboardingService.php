@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Services;
 
+use App\Common\Services\SettingsService;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\EmployeeOnboarding;
 use Illuminate\Support\Facades\DB;
@@ -17,6 +18,8 @@ use Illuminate\Support\Facades\Schema;
  */
 class OnboardingService
 {
+    public function __construct(private readonly SettingsService $settings) {}
+
     /** Idempotent: called from EmployeeService::create after the row exists. */
     public function initialize(Employee $employee): EmployeeOnboarding
     {
@@ -129,13 +132,15 @@ class OnboardingService
     }
 
     /**
-     * Daily job — notify HR for any onboarding open > 3 days without completion.
+     * Daily job — notify HR for any onboarding open beyond the configured
+     * stale window without completion.
      * Returns the number of reminders sent.
      */
     public function sendRemindersForStaleOnboardings(): int
     {
         $count = 0;
-        $threshold = now()->subDays(3);
+        $staleDays = $this->settings->requiredInt('hr.onboarding.stale_days', 1, 365);
+        $threshold = now()->subDays($staleDays);
 
         $stale = EmployeeOnboarding::query()
             ->whereNull('completed_at')
@@ -158,8 +163,9 @@ class OnboardingService
                         $svc->notifyRole('hr_officer', [
                             'title'   => 'Onboarding incomplete',
                             'message' => sprintf(
-                                'Employee %s onboarding has been open for more than 3 days.',
+                                'Employee %s onboarding has been open for more than %d days.',
                                 $onboarding->employee?->full_name ?? '#'.$onboarding->employee_id,
+                                $staleDays,
                             ),
                             'link'    => '/hr/employees/'.($onboarding->employee?->hash_id ?? ''),
                         ]);

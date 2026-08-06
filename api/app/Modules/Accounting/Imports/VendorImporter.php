@@ -13,7 +13,7 @@ use RuntimeException;
 /**
  * REC-03 — vendor/supplier master importer.
  * CSV columns: name (required); optional contact_person, email, phone,
- * address, tin, payment_terms_days.
+ * address, tin, payment_terms_days, is_active.
  */
 class VendorImporter implements EntityImporter
 {
@@ -41,7 +41,7 @@ class VendorImporter implements EntityImporter
 
         $terms = trim($row['payment_terms_days'] ?? '');
 
-        return Vendor::create([
+        $payload = [
             'name'               => $name,
             'contact_person'     => trim($row['contact_person'] ?? '') ?: null,
             'email'              => trim($row['email'] ?? '') ?: null,
@@ -49,7 +49,13 @@ class VendorImporter implements EntityImporter
             'address'            => trim($row['address'] ?? '') ?: null,
             'tin'                => trim($row['tin'] ?? '') ?: null,
             'payment_terms_days' => $terms !== '' ? (int) $terms : $this->policies->vendorPaymentTermsDays(),
-            'is_active'          => true,
-        ]);
+        ];
+        $active = trim($row['is_active'] ?? '');
+        if ($active !== '') {
+            $payload['is_active'] = filter_var($active, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            if ($payload['is_active'] === null) throw new RuntimeException('is_active must be true or false.');
+        }
+
+        return Vendor::create($payload);
     }
 }

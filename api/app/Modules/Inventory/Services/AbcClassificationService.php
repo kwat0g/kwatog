@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Services;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Inventory\Models\Item;
 use Illuminate\Support\Facades\DB;
 
@@ -11,13 +12,13 @@ use Illuminate\Support\Facades\DB;
  * ABC inventory classification based on annual usage value.
  *
  * Computes the total usage value (quantity × unit_cost) for each active item
- * over the trailing 12 months, then classifies:
- *   - A: items whose cumulative value accounts for the top 70% of total
- *   - B: next 20% of cumulative value
- *   - C: bottom 10% (or zero-usage items)
+ * over the configured trailing usage window, then classifies using the live
+ * cumulative A/B ratios from the settings table.
  */
 class AbcClassificationService
 {
+    public function __construct(private readonly SettingsService $settings) {}
+
     /**
      * Compute and persist ABC classifications for all active items.
      *
@@ -26,7 +27,13 @@ class AbcClassificationService
     public function compute(): array
     {
         return DB::transaction(function () {
-            $cutoff = now()->subMonths(12)->startOfDay();
+            $historyMonths = $this->settings->requiredInt('inventory.abc.history_months', 1, 120);
+            $aRatio = $this->settings->requiredFloat('inventory.abc.a_ratio', 0, 1);
+            $bRatio = $this->settings->requiredFloat('inventory.abc.b_ratio', 0, 1);
+            if ($aRatio >= $bRatio) {
+                throw new \App\Common\Exceptions\BusinessRuleException('ABC A ratio must be lower than B ratio.');
+            }
+            $cutoff = now()->subMonths($historyMonths)->startOfDay();
 
             // Fetch annual usage value per active item from outbound movements.
             // Outbound movement types that consume inventory value.
@@ -82,9 +89,9 @@ class AbcClassificationService
                 $runningCumulative += $value;
                 $cumPct = $runningCumulative / $totalValue;
 
-                if ($cumPct <= 0.70) {
+                if ($cumPct <= $aRatio) {
                     $aIds[] = $id;
-                } elseif ($cumPct <= 0.90) {
+                } elseif ($cumPct <= $bRatio) {
                     $bIds[] = $id;
                 } else {
                     $cIds[] = $id;

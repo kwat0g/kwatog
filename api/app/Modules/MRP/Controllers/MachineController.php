@@ -58,6 +58,12 @@ class MachineController
         return response()->json(null, 204);
     }
 
+    public function restore(Machine $machine): JsonResponse
+    {
+        $machine->restore();
+        return response()->json(['message' => 'Machine restored.']);
+    }
+
     public function transitionStatus(TransitionMachineStatusRequest $request, Machine $machine): MachineResource
     {
         $to = MachineStatus::from($request->input('to'));

@@ -7,6 +7,7 @@ namespace App\Modules\SupplyChain\Resources;
 use App\Modules\Production\Models\WorkOrder;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Str;
 
 class ShipmentLotResource extends JsonResource
 {
@@ -35,6 +36,7 @@ class ShipmentLotResource extends JsonResource
                 'id'              => $this->delivery->hash_id,
                 'delivery_number' => $this->delivery->delivery_number,
                 'status'          => (string) ($this->delivery->status?->value ?? $this->delivery->status),
+                'status_label'    => Str::headline((string) ($this->delivery->status?->value ?? $this->delivery->status)),
             ] : null),
             'customer'   => $this->whenLoaded('customer', fn () => $this->customer ? [
                 'id'   => $this->customer->hash_id,

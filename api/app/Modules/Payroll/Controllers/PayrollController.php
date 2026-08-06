@@ -89,9 +89,6 @@ class PayrollController
     public function payslip(Payroll $payroll, Request $request)
     {
         $this->authorizePayroll($payroll, $request);
-        if (! class_exists(\App\Modules\Payroll\Services\PayslipPdfService::class)) {
-            return response()->json(['message' => 'Payslip service not yet available.'], 503);
-        }
         /** @var \App\Modules\Payroll\Services\PayslipPdfService $svc */
         $svc = app(\App\Modules\Payroll\Services\PayslipPdfService::class);
         return $svc->stream($payroll, $request->user());

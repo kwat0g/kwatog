@@ -7,6 +7,7 @@ namespace Tests\Feature\Dashboard;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Quality\Models\CopqSnapshot;
+use App\Common\Services\SettingsService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -120,6 +121,9 @@ class CopqWidgetTest extends TestCase
     public function test_copq_widget_limits_months(): void
     {
         $user = $this->qcUser();
+        // Keep this boundary assertion independent of the runtime default;
+        // administrators can change the configured history window.
+        app(SettingsService::class)->set('quality.copq.default_history_months', 6);
         $tenMonthsAgo = now()->startOfMonth()->subMonths(10);
 
         // Seed a snapshot 10 months ago — should be outside the default 6-month window

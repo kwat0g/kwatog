@@ -281,10 +281,12 @@ export function PartShowcase3D({ part, exploded }: PartShowcase3DProps) {
         g.children.forEach((child) => {
           const off = (child.userData.explode as number) ?? 0;
           const targetY = explodeNow ? off * EXPLODE_DIST : 0;
-          child.position.y = MathUtils.lerp(child.position.y, targetY, 0.12);
+          // Lower lerp factor (from 0.12) makes it noticeably smoother and more deliberate
+          child.position.y = MathUtils.lerp(child.position.y, targetY, 0.03);
         });
         const targetScale = explodeNow ? SCALE_EXPLODED : SCALE_ASSEMBLED;
-        const s = MathUtils.lerp(g.scale.x, targetScale, 0.1);
+        // Lower lerp factor (from 0.1) for smoother scaling
+        const s = MathUtils.lerp(g.scale.x, targetScale, 0.025);
         g.scale.setScalar(s);
 
         // Fade-in materials of the freshly built part.

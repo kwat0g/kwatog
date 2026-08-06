@@ -6,6 +6,7 @@ namespace App\Modules\Payroll\Controllers;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Payroll\Models\DisbursementProof;
+use App\Modules\Payroll\Enums\DisbursementProofType;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Payroll\Resources\DisbursementProofResource;
 use Illuminate\Http\JsonResponse;
@@ -19,6 +20,15 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class DisbursementProofController extends Controller
 {
+    public function options(PayrollPeriod $period): JsonResponse
+    {
+        return response()->json(['data' => [
+            'proof_types' => array_map(
+                static fn (DisbursementProofType $type): array => ['value' => $type->value, 'label' => $type->label()],
+                DisbursementProofType::cases(),
+            ),
+        ]]);
+    }
     /**
      * List all disbursement proofs for a period.
      */
@@ -37,7 +47,7 @@ class DisbursementProofController extends Controller
         $this->authorizeFinance($request);
 
         $validated = $request->validate([
-            'proof_type' => ['required', 'string', Rule::in(['deposit_slip', 'bank_confirmation', 'transfer_receipt', 'other'])],
+            'proof_type' => ['required', Rule::enum(DisbursementProofType::class)],
             'file' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:10240'],
             'bank_name' => ['nullable', 'string', 'max:100'],
             'transaction_reference' => ['nullable', 'string', 'max:100'],
@@ -153,6 +163,12 @@ class DisbursementProofController extends Controller
         });
 
         return response()->json(['message' => 'Proof deleted.']);
+    }
+
+    public function restore(DisbursementProof $proof): JsonResponse
+    {
+        $proof->restore();
+        return response()->json(['message' => 'Proof restored.']);
     }
 
     private function authorizeFinance(Request $request): void

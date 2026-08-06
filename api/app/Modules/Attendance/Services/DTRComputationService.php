@@ -157,7 +157,9 @@ class DTRComputationService
         // ── No time_out: still on the clock; only tardiness applies.
         if (empty($input['time_out'])) {
             $graceEnd = $shiftStart->addMinutes($graceMin);
-            $tardyMin = $timeIn->gt($graceEnd) ? (int) min(480, $graceEnd->diffInMinutes($timeIn)) : 0;
+            $tardyMin = $timeIn->gt($graceEnd)
+                ? (int) min($this->settings->requiredInt('attendance.tardiness.maximum_minutes', 1), $graceEnd->diffInMinutes($timeIn))
+                : 0;
             return [
                 'regular_hours'      => 0.00,
                 'overtime_hours'     => 0.00,

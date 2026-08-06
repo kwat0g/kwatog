@@ -175,7 +175,7 @@ export function ProcessSection() {
                   <div className="flex items-center justify-between">
                     <span
                       className={cn(
-                        'font-mono text-5xl font-medium tabular-nums transition-colors duration-500',
+                        'font-mono text-6xl font-medium tabular-nums transition-all duration-500',
                         'text-landing-accent/55 group-hover:text-landing-accent',
                         // Full accent when card is active
                         'group-data-[active=true]:text-landing-accent',
@@ -188,10 +188,10 @@ export function ProcessSection() {
                     </div>
                   </div>
 
-                  <h3 className="mt-8 font-display text-xl font-medium tracking-tight text-landing-text">
+                  <h3 className="mt-10 font-display text-2xl font-semibold tracking-[-0.02em] text-landing-text">
                     {step.title}
                   </h3>
-                  <p className="mt-3 font-sans text-[14px] leading-relaxed text-landing-text-secondary">
+                  <p className="mt-4 font-sans text-base font-light leading-relaxed text-landing-text-secondary">
                     {step.body}
                   </p>
                 </article>

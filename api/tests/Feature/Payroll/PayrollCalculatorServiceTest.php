@@ -207,21 +207,65 @@ class PayrollCalculatorServiceTest extends TestCase
         $this->assertSame('0.00', $payroll->withholding_tax);
     }
 
-    public function test_daily_rate_employee(): void
+    /**
+      * A semi-monthly employee's basic is the FLAT cutoff rate — it does not
+      * scale with days worked. That decoupling is the whole point of migration
+      * 0437: basic pay and the government-contribution basis now agree about
+      * what a month is, so an absence can no longer produce a full month of
+      * deductions against a partial month of pay.
+      */
+    public function test_semi_monthly_employee_basic_is_the_flat_cutoff_rate(): void
     {
         $emp = $this->makeEmployee([
-            'pay_type'             => 'daily',
+            'pay_type'             => 'semi_monthly',
             'basic_monthly_salary' => null,
-            'daily_rate'           => '600.00',
+            'semi_monthly_rate'    => '6600.00',
         ]);
         $period = $this->makePeriod(true, '2026-04-01', '2026-04-15');
         $this->attendanceFor($emp, '2026-04-01', '2026-04-15');
 
         $payroll = $this->calc->computeForEmployee($period, $emp);
 
-        // 13 working days (Apr 1-15 minus 2 Sundays Apr 5, 12) × 600 = 7800
+        // Attendance is still recorded (it drives OT / tardiness), but basic is flat.
         $this->assertSame('13.0', (string) $payroll->days_worked);
-        $this->assertSame('7800.00', $payroll->basic_pay);
+        $this->assertSame('6600.00', $payroll->basic_pay);
+    }
+
+    /**
+     * The bug migration 0437 exists to kill.
+     *
+     * Under the old daily pay type, government contributions were computed from
+     * a projected MONTHLY basis while basic pay was days_worked × daily_rate.
+     * An employee who missed days therefore had a whole month of
+     * SSS/PhilHealth/Pag-IBIG/BIR withheld from a partial month of pay — net
+     * clamped to zero, and PayrollAnomalyService raised zero_pay +
+     * high_deduction, which blocks finalize().
+     *
+     * With a flat cutoff rate the deduction load is proportionate no matter how
+     * many days were worked.
+     */
+    public function test_semi_monthly_absences_do_not_produce_a_zero_net_with_full_deductions(): void
+    {
+        $emp = $this->makeEmployee([
+            'pay_type'             => 'semi_monthly',
+            'basic_monthly_salary' => null,
+            'semi_monthly_rate'    => '6600.00',
+        ]);
+        // First half → government deductions ARE withheld (PH convention).
+        $period = $this->makePeriod(true, '2026-04-01', '2026-04-15');
+        // Only three days attended out of thirteen.
+        $this->attendanceFor($emp, '2026-04-01', '2026-04-03');
+
+        $payroll = $this->calc->computeForEmployee($period, $emp);
+
+        $this->assertSame('6600.00', $payroll->basic_pay, 'basic must not shrink with attendance');
+        $this->assertGreaterThan(0, (float) $payroll->total_deductions, 'gov deductions still apply on the first half');
+        $this->assertGreaterThan(0, (float) $payroll->net_pay, 'net must not clamp to zero');
+        $this->assertLessThan(
+            (float) $payroll->gross_pay,
+            (float) $payroll->total_deductions,
+            'deductions must never exceed gross for a full-rate cutoff',
+        );
     }
 
     public function test_mid_period_hire_pro_rates_basic(): void
@@ -313,9 +357,9 @@ class PayrollCalculatorServiceTest extends TestCase
     {
         // Tiny salary, mandatory loan that wipes out basic
         $emp = $this->makeEmployee([
-            'pay_type'             => 'daily',
+            'pay_type'             => 'semi_monthly',
             'basic_monthly_salary' => null,
-            'daily_rate'           => '50.00',
+            'semi_monthly_rate'    => '650.00',
         ]);
         $period = $this->makePeriod(true, '2026-04-01', '2026-04-15');
         $this->attendanceFor($emp, '2026-04-01', '2026-04-15');
@@ -383,21 +427,26 @@ class PayrollCalculatorServiceTest extends TestCase
     }
 
     /**
-     * Daily-rated employee with OT and night-diff stacking on the same day.
+     * Semi-monthly employee with OT and night-diff stacking on the same day.
      *
-     * Rates (800 daily):
-     *   hourly  = 800 / 8 = 100.00
+     * The hourly divisor is derived from the MONTHLY equivalent, so a
+     * semi-monthly employee and a monthly one on the same annual pay earn
+     * identical overtime — the divergence that broke daily pay is gone.
+     *
+     * Rates (8,800 per cutoff → 17,600 monthly):
+     *   daily   = 17600 / 22 = 800.00
+     *   hourly  = 800 / 8    = 100.00
      *   ot_pay  = 2 × 100 × 1.25 × 1.0 = 250.00
      *   nd_pay  = 3 × 100 × 0.10        =  30.00
-     *   basic   = 1 day × 800            = 800.00
-     *   gross   = 800 + 250 + 30         = 1080.00
+     *   basic   = flat cutoff rate       = 8800.00
+     *   gross   = 8800 + 250 + 30        = 9080.00
      */
-    public function test_daily_rate_ot_and_night_diff_stack_on_same_day(): void
+    public function test_semi_monthly_ot_and_night_diff_stack_on_same_day(): void
     {
         $emp = $this->makeEmployee([
-            'pay_type'             => 'daily',
+            'pay_type'             => 'semi_monthly',
             'basic_monthly_salary' => null,
-            'daily_rate'           => '800.00',
+            'semi_monthly_rate'    => '8800.00',
         ]);
         $period = $this->makePeriod(false, '2026-04-16', '2026-04-30');
 
@@ -420,32 +469,32 @@ class PayrollCalculatorServiceTest extends TestCase
 
         $this->assertSame('250.00', $payroll->overtime_pay);
         $this->assertSame('30.00',  $payroll->night_diff_pay);
-        $this->assertSame('800.00', $payroll->basic_pay);
-        $this->assertSame('1080.00', $payroll->gross_pay);
+        $this->assertSame('8800.00', $payroll->basic_pay);
+        $this->assertSame('9080.00', $payroll->gross_pay);
     }
 
     /**
-     * Daily-rated employee works on a regular holiday (200% rule).
+     * Semi-monthly employee works on a regular holiday (200% rule).
      *
      * The DTR engine sets day_type_rate = 2.0 for a regular holiday.
      * aggregateAttendance() calculates:
      *   holiday_pay = (2.0 − 1.0) × regular_hours × hourly_rate
      *
-     * Rates (600 daily):
-     *   hourly      = 600 / 8 = 75.00
+     * Rates (6,600 per cutoff → 13,200 monthly):
+     *   daily       = 13200 / 22 = 600.00
+     *   hourly      = 600 / 8    = 75.00
      *   holiday_pay = 1.0 × 8 × 75 = 600.00   (the "premium" bit above 100%)
-     *   basic_pay   = 1 day × 600  = 600.00   (the base 100%)
-     *   gross_pay   = 600 + 600    = 1200.00
+     *   basic_pay   = flat cutoff   = 6600.00
      *
      * Note: per service comments, holiday_pay captures only the EXTRA earned above
-     * regular pay so basic_pay stays clean. Together they total 200% as required.
+     * regular pay so basic_pay stays clean.
      */
-    public function test_daily_rate_regular_holiday_200_percent_rule(): void
+    public function test_semi_monthly_regular_holiday_200_percent_rule(): void
     {
         $emp = $this->makeEmployee([
-            'pay_type'             => 'daily',
+            'pay_type'             => 'semi_monthly',
             'basic_monthly_salary' => null,
-            'daily_rate'           => '600.00',
+            'semi_monthly_rate'    => '6600.00',
         ]);
         $period = $this->makePeriod(false, '2026-04-16', '2026-04-30');
 
@@ -468,8 +517,8 @@ class PayrollCalculatorServiceTest extends TestCase
 
         // holiday_pay = extra 100% on top of the base 100% already in basic_pay
         $this->assertSame('600.00', $payroll->holiday_pay);
-        $this->assertSame('600.00', $payroll->basic_pay);
-        $this->assertSame('1200.00', $payroll->gross_pay);
+        $this->assertSame('6600.00', $payroll->basic_pay);
+        $this->assertSame('7200.00', $payroll->gross_pay);
 
         // No OT or ND on this day
         $this->assertSame('0.00', $payroll->overtime_pay);
@@ -571,21 +620,21 @@ class PayrollCalculatorServiceTest extends TestCase
     }
 
     /**
-     * OGAMI-003 — a daily-rated worker on approved PAID leave is paid for those days.
+     * Paid leave for a semi-monthly employee is already inside the flat cutoff
+     * basic, so leave_pay stays zero — adding it would double-pay.
      *
-     * Setup (600 daily): work Apr 1-3, paid leave Apr 6-8 (Mon-Wed).
-     *   days_worked = 3 (Apr 1,2,3) → basic = 3 × 600 = 1800
-     *   paid leave  = 3 days (Apr 6,7,8) → leave_pay = 3 × 600 = 1800
-     *   gross       = 1800 + 1800 = 3600
+     * This is the behaviour OGAMI-003's daily-only leave_pay existed to work
+     * around: a days-worked basic paid nothing for leave days, so leave had to
+     * be added back separately. A flat rate needs no such correction.
      */
-    public function test_daily_rate_paid_leave_is_compensated(): void
+    public function test_semi_monthly_paid_leave_is_inside_flat_basic(): void
     {
         $emp = $this->makeEmployee([
-            'pay_type'             => 'daily',
+            'pay_type'             => 'semi_monthly',
             'basic_monthly_salary' => null,
-            'daily_rate'           => '600.00',
+            'semi_monthly_rate'    => '6600.00',
         ]);
-        $period = $this->makePeriod(false, '2026-04-01', '2026-04-15'); // 2nd half-style window, no gov noise
+        $period = $this->makePeriod(false, '2026-04-01', '2026-04-15'); // 2nd-half flag → no gov noise
 
         $this->attendanceFor($emp, '2026-04-01', '2026-04-03'); // 3 worked days
         $this->markLeave($emp, '2026-04-06', '2026-04-08', isPaid: true); // 3 paid-leave days
@@ -593,20 +642,22 @@ class PayrollCalculatorServiceTest extends TestCase
         $payroll = $this->calc->computeForEmployee($period, $emp);
 
         $this->assertSame('3.0', (string) $payroll->days_worked, 'leave days must not count as days_worked');
-        $this->assertSame('1800.00', $payroll->basic_pay);
-        $this->assertSame('1800.00', $payroll->leave_pay);
-        $this->assertSame('3600.00', $payroll->gross_pay);
+        $this->assertSame('6600.00', $payroll->basic_pay);
+        $this->assertSame('0.00', $payroll->leave_pay, 'flat basic already covers paid leave');
+        $this->assertSame('6600.00', $payroll->gross_pay);
     }
 
     /**
-     * OGAMI-003 — UNPAID leave (LeaveType.is_paid = false) earns nothing.
+     * Unpaid leave must not silently top the employee up either — the flat rate
+     * is unchanged and leave_pay stays zero. (Unpaid absence is handled by HR
+     * via a payroll adjustment, not by the calculator.)
      */
-    public function test_daily_rate_unpaid_leave_is_not_compensated(): void
+    public function test_semi_monthly_unpaid_leave_adds_no_leave_pay(): void
     {
         $emp = $this->makeEmployee([
-            'pay_type'             => 'daily',
+            'pay_type'             => 'semi_monthly',
             'basic_monthly_salary' => null,
-            'daily_rate'           => '600.00',
+            'semi_monthly_rate'    => '6600.00',
         ]);
         $period = $this->makePeriod(false, '2026-04-01', '2026-04-15');
 
@@ -615,9 +666,9 @@ class PayrollCalculatorServiceTest extends TestCase
 
         $payroll = $this->calc->computeForEmployee($period, $emp);
 
-        $this->assertSame('1800.00', $payroll->basic_pay);
+        $this->assertSame('6600.00', $payroll->basic_pay);
         $this->assertSame('0.00', $payroll->leave_pay, 'unpaid leave must not be compensated');
-        $this->assertSame('1800.00', $payroll->gross_pay);
+        $this->assertSame('6600.00', $payroll->gross_pay);
     }
 
     /**

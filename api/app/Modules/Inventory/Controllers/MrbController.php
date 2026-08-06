@@ -9,6 +9,8 @@ use App\Modules\Inventory\Requests\ReleaseMrbRequest;
 use App\Modules\Inventory\Requests\StoreMrbRequest;
 use App\Modules\Inventory\Resources\MaterialReviewRecordResource;
 use App\Modules\Inventory\Services\QuarantineService;
+use App\Modules\Quality\Enums\NcrDisposition;
+use App\Modules\Inventory\Enums\MrbStatus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -20,6 +22,14 @@ use RuntimeException;
 class MrbController
 {
     public function __construct(private readonly QuarantineService $service) {}
+
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'dispositions' => array_map(static fn (NcrDisposition $disposition): array => ['value' => $disposition->value, 'label' => $disposition->label()], NcrDisposition::cases()),
+            'statuses' => array_map(static fn (MrbStatus $status): array => ['value' => $status->value, 'label' => $status->label()], MrbStatus::cases()),
+        ]]);
+    }
 
     public function index(Request $request): AnonymousResourceCollection
     {

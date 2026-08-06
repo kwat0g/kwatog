@@ -18,92 +18,92 @@ import { formatPeso } from '@/lib/formatNumber';
  * pages in a follow-up; this index is the global lookup view.
  */
 export default function PriceAgreementsListPage() {
-  const navigate = useNavigate();
-  const [filters, setFilters] = useState<PriceAgreementListParams>({ page: 1, per_page: 25 });
+ const navigate = useNavigate();
+ const [filters, setFilters] = useState<PriceAgreementListParams>({ page: 1, per_page: 25 });
 
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['crm', 'price-agreements', filters],
-    queryFn: () => priceAgreementsApi.list(filters),
-    placeholderData: (prev) => prev,
-  });
+ const { data, isLoading, isError, refetch } = useQuery({
+ queryKey: ['crm', 'price-agreements', filters],
+ queryFn: () => priceAgreementsApi.list(filters),
+ placeholderData: (prev) => prev,
+ });
 
-  const columns: Column<PriceAgreement>[] = [
-    {
-      key: 'product', header: 'Product',
-      cell: (r) => r.product
-        ? <div><span className="font-mono">{r.product.part_number}</span> — {r.product.name}</div>
-        : <span className="text-muted">—</span>,
-    },
-    { key: 'customer', header: 'Customer', cell: (r) => r.customer?.name ?? '—' },
-    {
-      key: 'price', header: 'Price', align: 'right',
-      cell: (r) => <NumCell>{formatPeso(r.price)}</NumCell>,
-    },
-    {
-      key: 'effective_from', header: 'From', align: 'right',
-      cell: (r) => <NumCell>{r.effective_from}</NumCell>,
-    },
-    {
-      key: 'effective_to', header: 'To', align: 'right',
-      cell: (r) => <NumCell>{r.effective_to}</NumCell>,
-    },
-    {
-      key: 'status', header: 'Status',
-      cell: (r) => r.is_currently_active
-        ? <Chip variant="success">Active</Chip>
-        : <Chip variant="neutral">Expired</Chip>,
-    },
-    {
-      key: 'actions', header: '',
-      cell: (r) => (
-        <Link
-          to={`/crm/price-agreements/${r.id}/edit`}
-          className="p-1 rounded text-muted hover:text-primary hover:bg-elevated transition-colors inline-flex items-center justify-center"
-          aria-label="Edit agreement"
-        >
-          <Pencil size={14} />
-        </Link>
-      ),
-    },
-  ];
+ const columns: Column<PriceAgreement>[] = [
+ {
+ key: 'product', header: 'Product',
+ cell: (r) => r.product
+ ? <div><span className="font-mono">{r.product.part_number}</span> — {r.product.name}</div>
+ : <span className="text-muted">—</span>,
+ },
+ { key: 'customer', header: 'Customer', cell: (r) => r.customer?.name ?? '—' },
+ {
+ key: 'price', header: 'Price', align: 'right',
+ cell: (r) => <NumCell>{formatPeso(r.price)}</NumCell>,
+ },
+ {
+ key: 'effective_from', header: 'From', align: 'right',
+ cell: (r) => <NumCell>{r.effective_from}</NumCell>,
+ },
+ {
+ key: 'effective_to', header: 'To', align: 'right',
+ cell: (r) => <NumCell>{r.effective_to}</NumCell>,
+ },
+ {
+ key: 'status', header: 'Status',
+ cell: (r) => r.is_currently_active
+ ? <Chip variant="success">Active</Chip>
+ : <Chip variant="neutral">Expired</Chip>,
+ },
+ {
+ key: 'actions', header: '',
+ cell: (r) => (
+ <Link
+ to={`/crm/price-agreements/${r.id}/edit`}
+ className="p-1 rounded text-muted hover:text-primary hover:bg-elevated transition-colors inline-flex items-center justify-center"
+ aria-label="Edit agreement"
+ >
+ <Pencil size={14} />
+ </Link>
+ ),
+ },
+ ];
 
-  return (
-    <div>
-      <PageHeader
-        title="Price agreements"
-        subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'agreement' : 'agreements'}` : undefined}
-        actions={
-          <Button variant="primary" onClick={() => navigate('/crm/price-agreements/create')}>
-            New price agreement
-          </Button>
-        }
-      />
-      {isLoading && !data && <SkeletonTable columns={6} rows={8} />}
-      {isError && (
-        <EmptyState
-          icon="alert-circle"
-          title="Failed to load price agreements"
-          action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
-        />
-      )}
-      {data && data.data.length === 0 && (
-        <EmptyState
-          icon="dollar-sign"
-          title="No price agreements yet"
-          description="Create your first price agreement to set customer-specific pricing."
-          action={<Button variant="primary" onClick={() => navigate('/crm/price-agreements/create')}>New price agreement</Button>}
-        />
-      )}
-      {data && data.data.length > 0 && (
-        <div className="px-5 py-4">
-          <DataTable
-            columns={columns}
-            data={data.data}
-            meta={data.meta}
-            onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
-          />
-        </div>
-      )}
-    </div>
-  );
+ return (
+ <div>
+ <PageHeader
+ title="Price agreements"
+ subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'agreement' : 'agreements'}` : undefined}
+ actions={
+ <Button variant="primary" onClick={() => navigate('/crm/price-agreements/create')}>
+ New price agreement
+ </Button>
+ }
+ />
+ {isLoading && !data && <SkeletonTable columns={6} rows={8} />}
+ {isError && (
+ <EmptyState
+ icon="alert-circle"
+ title="Failed to load price agreements"
+ action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
+ />
+ )}
+ {data && data.data.length === 0 && (
+ <EmptyState
+ icon="dollar-sign"
+ title="No price agreements yet"
+ description="Create your first price agreement to set customer-specific pricing."
+ action={<Button variant="primary" onClick={() => navigate('/crm/price-agreements/create')}>New price agreement</Button>}
+ />
+ )}
+ {data && data.data.length > 0 && (
+ <div className="px-5 py-4">
+ <DataTable
+ columns={columns}
+ data={data.data}
+ meta={data.meta}
+ onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+ />
+ </div>
+ )}
+ </div>
+ );
 }

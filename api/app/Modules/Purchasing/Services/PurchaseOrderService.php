@@ -8,11 +8,13 @@ use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\ApprovalService;
 use App\Common\Services\BusinessPolicyService;
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\SettingsService;
 use App\Common\Services\TaxPolicyService;
 use App\Common\Support\HashIdFilter;
-use App\Modules\Accounting\Services\BudgetEnforcementService;
 use App\Common\Support\Money;
+use App\Common\Support\TrashedFilter;
 use App\Modules\Accounting\Models\Vendor;
+use App\Modules\Accounting\Services\BudgetEnforcementService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
@@ -34,6 +36,7 @@ class PurchaseOrderService
         private readonly BusinessPolicyService $businessPolicy,
         private readonly BudgetEnforcementService $budget,
         private readonly TaxPolicyService $taxPolicy,
+        private readonly SettingsService $settings,
     ) {}
 
     private function resolveDepartmentId(array $data): ?int
@@ -57,6 +60,8 @@ class PurchaseOrderService
             'purchaseRequest:id,pr_number',
             'approvalRecords',
         ]);
+        TrashedFilter::apply($q, $filters);
+
         if (! empty($filters['status']))   $q->where('status', $filters['status']);
         if (! empty($filters['vendor_id'])) {
             $vid = HashIdFilter::decode($filters['vendor_id'], Vendor::class);
@@ -64,6 +69,14 @@ class PurchaseOrderService
         }
         if (isset($filters['requires_vp_approval']) && $filters['requires_vp_approval'] !== '') {
             $q->where('requires_vp_approval', filter_var($filters['requires_vp_approval'], FILTER_VALIDATE_BOOLEAN));
+        }
+        if (filter_var($filters['overdue'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+            $q->where('expected_delivery_date', '<', now()->toDateString())
+                ->whereIn('status', [
+                    PurchaseOrderStatus::Approved->value,
+                    PurchaseOrderStatus::Sent->value,
+                    PurchaseOrderStatus::PartiallyReceived->value,
+                ]);
         }
         if (! empty($filters['from'])) $q->whereDate('date', '>=', $filters['from']);
         if (! empty($filters['to']))   $q->whereDate('date', '<=', $filters['to']);
@@ -118,7 +131,7 @@ class PurchaseOrderService
         return DB::transaction(function () use ($data, $by) {
             $vendorId = HashIdFilter::decode($data['vendor_id'], Vendor::class)
                 ?? (int) $data['vendor_id'];
-            $isVatable = (bool) ($data['is_vatable'] ?? true);
+            $isVatable = (bool) ($data['is_vatable'] ?? $this->taxPolicy->isVatRegistered());
 
             [$lines, $subtotal] = $this->normalizeLines($data['items'] ?? []);
             $vat = $isVatable ? Money::mul($subtotal, $this->taxPolicy->vatRate()) : Money::zero();
@@ -175,7 +188,10 @@ class PurchaseOrderService
             foreach ($byVendor as $vendorId => $lines) {
                 $itemPayload = [];
                 foreach ($lines as $line) {
-                    $unitPrice = $line->estimated_unit_price ?? '0.00';
+                    $unitPrice = $line->estimated_unit_price;
+                    if ($unitPrice === null || (float) $unitPrice <= 0) {
+                        throw new BusinessRuleException("PR line {$line->id} has no authoritative unit price.");
+                    }
                     $itemPayload[] = [
                         'item_id'                  => $line->item_id,
                         'purchase_request_item_id' => $line->id,
@@ -188,7 +204,7 @@ class PurchaseOrderService
                 $po = $this->create([
                     'vendor_id'           => $vendorId,
                     'date'                => now()->toDateString(),
-                    'is_vatable'          => true,
+                    'is_vatable'          => $this->taxPolicy->isVatRegistered(),
                     'remarks'             => "Auto-converted from PR {$pr->pr_number}",
                     'items'               => $itemPayload,
                     'purchase_request_id' => $pr->id,
@@ -223,7 +239,7 @@ class PurchaseOrderService
                 'remarks'              => $data['remarks'] ?? $po->remarks,
             ]);
 
-            $po->items()->delete();
+            $po->items()->forceDelete();
             foreach ($lines as $row) {
                 PurchaseOrderItem::create(array_merge($row, ['purchase_order_id' => $po->id]));
             }
@@ -266,10 +282,10 @@ class PurchaseOrderService
             $this->budget->enforce($deptId, (float) $po->total_amount);
         }
 
-        // PPAP gate (opt-in via quality.ppap_gate_enabled; default off = no-op).
+        // PPAP gate is controlled by the persisted quality.ppap_gate_enabled setting.
         // Block approval if any line item's vendor has a registered-but-unapproved
         // PPAP. Items never put under PPAP control pass through.
-        if (config('quality.ppap_gate_enabled', false)
+        if ($this->settings->requiredBool('quality.ppap_gate_enabled')
             && class_exists(\App\Modules\Quality\Services\PpapService::class)) {
             $ppap = app(\App\Modules\Quality\Services\PpapService::class);
             foreach ($po->items()->get() as $line) {
@@ -437,8 +453,17 @@ class PurchaseOrderService
             if (! $itemId) {
                 throw new RuntimeException('Each PO line must reference an item.');
             }
-            $qty   = (string) ($r['quantity']   ?? '0');
-            $price = (string) ($r['unit_price'] ?? '0');
+            if (! array_key_exists('quantity', $r) || trim((string) $r['quantity']) === '') {
+                throw new RuntimeException('Each PO line must include a quantity.');
+            }
+            if (! array_key_exists('unit_price', $r) || trim((string) $r['unit_price']) === '') {
+                throw new RuntimeException('Each PO line must include an authoritative unit price.');
+            }
+            $qty   = (string) $r['quantity'];
+            $price = (string) $r['unit_price'];
+            if (Money::lte($qty, '0') || Money::lt($price, '0')) {
+                throw new RuntimeException('Quantity must be > 0, unit price must be ≥ 0.');
+            }
             $total = Money::mul($qty, $price);
             $lines[] = [
                 'item_id'                  => $itemId,

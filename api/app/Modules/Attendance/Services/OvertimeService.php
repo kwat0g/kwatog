@@ -124,6 +124,14 @@ class OvertimeService
             );
             if ($empId) $q->where('employee_id', $empId);
         }
+        if (!empty($filters['search'])) {
+            $term = trim((string) $filters['search']);
+            $q->where(fn ($qq) => $qq
+                ->whereHas('employee', fn ($e) => $e->where('employee_no', 'ilike', "%{$term}%")
+                    ->orWhere('first_name', 'ilike', "%{$term}%")
+                    ->orWhere('middle_name', 'ilike', "%{$term}%")
+                    ->orWhere('last_name', 'ilike', "%{$term}%")));
+        }
         if (!empty($filters['status'])) $q->where('status', $filters['status']);
         if (!empty($filters['from'])) $q->where('date', '>=', $filters['from']);
         if (!empty($filters['to'])) $q->where('date', '<=', $filters['to']);
@@ -237,5 +245,49 @@ class OvertimeService
         event(new OvertimeRequestDecided($result, false));
 
         return $result;
+    }
+
+    /**
+     * Cancel a pending overtime request. The owning employee may withdraw
+     * their own request; admins and OT approvers may cancel any pending one
+     * (e.g. the work was already covered). Reuses the rejected-state columns
+     * so the employee sees the withdrawal reason in their history.
+     */
+    public function cancel(OvertimeRequest $ot, User $user, string $reason = 'Cancelled.'): OvertimeRequest
+    {
+        $result = DB::transaction(function () use ($ot, $user, $reason) {
+            if ($ot->status !== OvertimeStatus::Pending) {
+                throw new BusinessRuleException('Only pending overtime requests can be cancelled.');
+            }
+            $ot->update([
+                'status'           => OvertimeStatus::Rejected->value,
+                'approved_by'      => $user->id,
+                'approved_at'      => now(),
+                'rejection_reason' => $reason,
+            ]);
+            return $ot->fresh(['employee', 'approver']);
+        });
+
+        event(new OvertimeRequestDecided($result, false));
+
+        return $result;
+    }
+
+    /**
+     * Settings-driven request constraints shared by the SPA create form.
+     * Mirrors the self-service payload shape (minimum_hours, maximum_hours,
+     * premium_multiplier) and adds the date window so the form can render
+     * matching min/max attributes and hints.
+     */
+    public function options(): array
+    {
+        return [
+            'minimum_hours'      => (float) $this->settings->requiredInt('attendance.ot.minimum_minutes', 30) / 60,
+            'maximum_hours'      => $this->settings->requiredFloat('attendance.ot.admin_max_hours', 4),
+            'request_min_hours'  => $this->settings->requiredFloat('attendance.ot.request_min_hours', 0.5),
+            'request_future_days'=> $this->settings->requiredInt('attendance.ot.request_future_days', 0),
+            'request_past_days'  => $this->settings->requiredInt('attendance.ot.request_past_days', 0),
+            'premium_multiplier' => $this->settings->requiredFloat('payroll.overtime.ordinary_multiplier', 1),
+        ];
     }
 }

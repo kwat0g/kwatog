@@ -42,16 +42,18 @@ class PdfRenderService
         $title        = $opts['title']         ?? null;
         $watermark    = $opts['watermark_text'] ?? ($confidential ? 'CONFIDENTIAL' : null);
 
+        $companyCtx = $this->companyContext();
+
         $merged = array_merge($data, [
-            'company'      => $this->companyContext(),
-            'generated'    => $this->generatedContext($generator),
-            'confidential' => $confidential,
-            'watermark'    => $watermark,
-            'docTitle'     => $title,
+            'company'        => $companyCtx,
+            'generated'      => $this->generatedContext($generator),
+            'confidential'   => $confidential,
+            'watermark'      => $watermark,
+            'docTitle'       => $title,
             // Legacy keys still consumed by some Blades.
-            'companyName'    => $this->settings->requiredString('company.legal_name'),
-            'companyAddress' => $this->settings->requiredString('company.address'),
-            'companyTin'     => $this->settings->requiredString('company.tin'),
+            'companyName'    => $companyCtx['name'],
+            'companyAddress' => $companyCtx['address'],
+            'companyTin'     => $companyCtx['tin'],
             'user'           => $generator?->name,
         ]);
 
@@ -93,16 +95,26 @@ class PdfRenderService
     private function companyContext(): array
     {
         return [
-            'name'       => $this->settings->requiredString('company.legal_name'),
-            'address'    => $this->settings->requiredString('company.address'),
-            'phone'      => $this->settings->requiredString('company.phone', true),
-            'email'      => $this->settings->requiredString('company.email', true),
-            'tin'        => $this->settings->requiredString('company.tin'),
-            'vat_status' => $this->settings->requiredString('company.vat_status'),
-            'logo_path'  => $this->settings->requiredString('company.logo_path', true),
-            'public_url' => $this->settings->requiredString('company.public_url', true),
-            'disclaimer' => $this->settings->requiredString('pdf.footer_disclaimer', true),
+            'name'       => $this->setting('company.legal_name', 'PHILIPPINE OGAMI CORPORATION'),
+            'address'    => $this->setting('company.address', 'First Cavite Industrial Estate (FCIE), Dasmariñas, Cavite, Philippines'),
+            'phone'      => $this->setting('company.phone', '+63 46 402 1234'),
+            'email'      => $this->setting('company.email', 'info@ogami.com.ph'),
+            'tin'        => $this->setting('company.tin', '000-123-456-0000'),
+            'vat_status' => $this->setting('company.vat_status', 'VAT Registered'),
+            'logo_path'  => $this->setting('company.logo_path', ''),
+            'public_url' => $this->setting('company.public_url', 'https://ogami.com.ph'),
+            'disclaimer' => $this->setting('pdf.footer_disclaimer', 'This is a system-generated document. Philippine Ogami Corporation — IATF 16949 Certified.'),
         ];
+    }
+
+    private function setting(string $key, string $default = ''): string
+    {
+        try {
+            $val = $this->settings->get($key);
+            return is_string($val) && trim($val) !== '' ? $val : $default;
+        } catch (\Throwable) {
+            return $default;
+        }
     }
 
     /**

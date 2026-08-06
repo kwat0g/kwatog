@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Purchasing\Services;
 
+use App\Common\Support\TrashedFilter;
 use App\Modules\Auth\Models\User;
 use App\Modules\Purchasing\Models\PurchaseRequestTemplate;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -15,6 +16,8 @@ class PurchaseRequestTemplateService
     {
         $q = PurchaseRequestTemplate::query()
             ->with(['department:id,name,code', 'creator:id,name']);
+
+        TrashedFilter::apply($q, $filters);
 
         if (isset($filters['is_active']) && $filters['is_active'] !== '') {
             $q->where('is_active', filter_var($filters['is_active'], FILTER_VALIDATE_BOOLEAN));

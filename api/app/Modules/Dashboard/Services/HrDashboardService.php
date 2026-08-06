@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace App\Modules\Dashboard\Services;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Dashboard\Services\Concerns\DashboardQueries;
 use App\Modules\Dashboard\Services\ForecastingDashboardService;
+use App\Modules\Payroll\Enums\PayrollPeriodStatus;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 /**
  * P4.1 extraction — HR Officer + Employee Self-Service dashboards.
@@ -25,6 +28,7 @@ class HrDashboardService
 
     public function __construct(
         private readonly ForecastingDashboardService $forecastingService,
+        private readonly SettingsService $settings,
     ) {}
 
     public function hr(User $user): array
@@ -43,6 +47,7 @@ class HrDashboardService
             $pendingSeparation = $this->safeCount('clearances',     fn ($q) => $q->whereIn('status', ['pending', 'in_progress', 'completed']));
 
             $panels = [
+                'probation_horizon_days' => $this->settings->requiredInt('dashboard.widgets.probation_horizon_days', 0),
                 'by_department'      => $this->headcountByDepartment(),
                 'recent_hires'       => $this->recentHires(),
                 'pending_leaves'     => $this->pendingLeaves(),
@@ -91,6 +96,7 @@ class HrDashboardService
                     'id'           => app('hashids')->encode((int) $row->id),
                     'label'        => trim(($row->period_start ?? '').' – '.($row->period_end ?? '')),
                     'status'       => (string) $row->status,
+                    'status_label' => PayrollPeriodStatus::tryFrom((string) $row->status)?->label() ?? (string) $row->status,
                     'payroll_date' => $row->payroll_date ?? null,
                 ];
 
@@ -192,7 +198,9 @@ class HrDashboardService
     {
         if (! Schema::hasTable('employees')) return [];
 
-        $thirtyDays = now()->addDays(30)->toDateString();
+        $probationDays = app(SettingsService::class)->requiredInt('dashboard.widgets.probation_horizon_days', 0);
+        $probationMonths = app(SettingsService::class)->requiredInt('hr.probation.period_months', 1, 60);
+        $thirtyDays = now()->addDays($probationDays)->toDateString();
         $today = today()->toDateString();
 
         return DB::table('employees')
@@ -201,8 +209,8 @@ class HrDashboardService
             ->where('employees.employment_type', 'probationary')
             ->whereNull('employees.date_regularized')
             ->whereBetween('employees.date_hired', [
-                now()->subMonths(6)->toDateString(),
-                now()->addDays(30)->subMonths(6)->toDateString(),
+                now()->subMonths($probationMonths)->toDateString(),
+                now()->addDays($probationDays)->subMonths($probationMonths)->toDateString(),
             ])
             ->select(
                 'employees.id',
@@ -234,7 +242,7 @@ class HrDashboardService
         if (! Schema::hasTable('leave_requests')) return [];
 
         $today   = today()->toDateString();
-        $weekEnd = now()->addDays(7)->toDateString();
+        $weekEnd = now()->addDays($this->settings->requiredInt('dashboard.widgets.leave_calendar_horizon_days', 0))->toDateString();
 
         return DB::table('leave_requests')
             ->join('employees', 'leave_requests.employee_id', '=', 'employees.id')
@@ -282,6 +290,7 @@ class HrDashboardService
                     'name' => $h->name,
                     'date' => $h->date,
                     'type' => $h->type,
+                    'type_label' => Str::headline((string) $h->type),
                 ])
                 ->all();
         }
@@ -372,6 +381,7 @@ class HrDashboardService
                 'id'               => app('hashids')->encode((int) $r->id),
                 'leave_request_no' => $r->leave_request_no ?? null,
                 'status'           => $r->status,
+                'status_label'     => Str::headline((string) $r->status),
                 'days'             => (string) ($r->days ?? '0'),
             ])->all();
     }

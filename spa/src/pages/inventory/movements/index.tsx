@@ -1,6 +1,5 @@
-import { useState } from 'react';
+import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useSearchParams } from 'react-router-dom';
 import { stockMovementsApi } from '@/api/inventory/stock';
 import { Chip } from '@/components/ui/Chip';
 import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
@@ -9,7 +8,9 @@ import { Button } from '@/components/ui/Button';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 import { formatDateTime } from '@/lib/formatDate';
+import type { ListParams } from '@/types';
 import type { StockMovement } from '@/types/inventory';
 
 const chip = (t: string): 'success' | 'info' | 'warning' | 'danger' | 'neutral' => {
@@ -20,63 +21,89 @@ const chip = (t: string): 'success' | 'info' | 'warning' | 'danger' | 'neutral' 
   return 'neutral';
 };
 
+interface StockMovementListParams extends ListParams {
+  item_id?: string;
+  movement_type?: string;
+  type?: string;
+  pending?: boolean | string;
+  from?: string;
+  to?: string;
+  reference_type?: string;
+}
+
+const DEFAULT_FILTERS: StockMovementListParams = {
+  page: 1, per_page: 50,
+};
+
 export default function StockMovementsPage() {
-  const [search] = useSearchParams();
-  const [filters, setFilters] = useState<Record<string, unknown>>({
-    page: 1, per_page: 50, item_id: search.get('item_id') ?? undefined,
-  });
+  const [filters, setFilters] = useUrlFilters<StockMovementListParams>(DEFAULT_FILTERS);
 
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['inventory', 'movements', filters],
-    queryFn: () => stockMovementsApi.list(filters),
-    placeholderData: (prev) => prev,
-  });
-  const { data: movementOptions } = useQuery({
-    queryKey: ['inventory', 'movements', 'options'],
-    queryFn: stockMovementsApi.options,
-    staleTime: 5 * 60 * 1000,
-  });
-  const labels = new Map((movementOptions?.movement_types ?? []).map((option) => [option.value, option.label]));
+  // Dashboard KPI links to ?type=transfer&pending=1 — map `type` to the
+  // backend's movement_type key. `pending` is dropped: stock movements are
+  // recorded at execution time, so there is no pending state to filter on.
+  useEffect(() => {
+    if (filters.type !== undefined || filters.pending !== undefined) {
+      setFilters((f) => {
+        const next: StockMovementListParams = { ...f };
+        if (next.type) next.movement_type = next.type;
+        delete next.type;
+        delete next.pending;
+        return next;
+      });
+    }
+  }, [filters.type, filters.pending, setFilters]);
 
-  const columns: Column<StockMovement>[] = [
-    { key: 'created_at', header: 'When', cell: (r) => <span className="font-mono">{formatDateTime(r.created_at)}</span> },
-    { key: 'type', header: 'Type', cell: (r) => <Chip variant={chip(r.movement_type)}>{r.movement_type_label ?? labels.get(r.movement_type) ?? r.movement_type.replace(/_/g, ' ')}</Chip> },
-    { key: 'item', header: 'Item', cell: (r) => (
-      <div>
-        <span className="font-mono">{r.item?.code}</span>
-        <div className="text-xs text-muted">{r.item?.name}</div>
-      </div>
-    ) },
-    { key: 'from', header: 'From', cell: (r) => <span className="font-mono">{r.from_location?.code ?? '—'}</span> },
-    { key: 'to',   header: 'To',   cell: (r) => <span className="font-mono">{r.to_location?.code ?? '—'}</span> },
-    { key: 'qty', header: 'Qty', align: 'right', cell: (r) => <NumCell>{Number(r.quantity).toFixed(3)}</NumCell> },
-    { key: 'cost', header: 'Unit cost', align: 'right', cell: (r) => <NumCell>{Number(r.unit_cost).toFixed(4)}</NumCell> },
-    { key: 'total', header: 'Total cost', align: 'right', cell: (r) => <NumCell className="font-medium">{Number(r.total_cost).toFixed(2)}</NumCell> },
-    { key: 'ref', header: 'Reference', cell: (r) => r.reference_type ? <span className="text-xs">{r.reference_type} #{r.reference_id}</span> : '—' },
-  ];
+ const { data, isLoading, isError, refetch } = useQuery({
+ queryKey: ['inventory', 'movements', filters],
+ queryFn: () => stockMovementsApi.list(filters),
+ placeholderData: (prev) => prev,
+ });
+ const { data: movementOptions } = useQuery({
+ queryKey: ['inventory', 'movements', 'options'],
+ queryFn: stockMovementsApi.options,
+ staleTime: 5 * 60 * 1000,
+ });
+ const labels = new Map((movementOptions?.movement_types ?? []).map((option) => [option.value, option.label]));
 
-  const filterConfig: FilterConfig[] = [
-    { key: 'movement_type', label: 'Type', type: 'select', options: [
-      { value: '', label: 'All' },
-      ...(movementOptions?.movement_types ?? []),
-    ]},
-  ];
+ const columns: Column<StockMovement>[] = [
+ { key: 'created_at', header: 'When', cell: (r) => <span className="font-mono">{formatDateTime(r.created_at)}</span> },
+ { key: 'type', header: 'Type', cell: (r) => <Chip variant={chip(r.movement_type)}>{r.movement_type_label ?? labels.get(r.movement_type) ?? r.movement_type.replace(/_/g, ' ')}</Chip> },
+ { key: 'item', header: 'Item', cell: (r) => (
+ <div>
+ <span className="font-mono">{r.item?.code}</span>
+ <div className="text-xs text-muted">{r.item?.name}</div>
+ </div>
+ ) },
+ { key: 'from', header: 'From', cell: (r) => <span className="font-mono">{r.from_location?.code ?? '—'}</span> },
+ { key: 'to', header: 'To', cell: (r) => <span className="font-mono">{r.to_location?.code ?? '—'}</span> },
+ { key: 'qty', header: 'Qty', align: 'right', cell: (r) => <NumCell>{Number(r.quantity).toFixed(3)}</NumCell> },
+ { key: 'cost', header: 'Unit cost', align: 'right', cell: (r) => <NumCell>{Number(r.unit_cost).toFixed(4)}</NumCell> },
+ { key: 'total', header: 'Total cost', align: 'right', cell: (r) => <NumCell className="font-medium">{Number(r.total_cost).toFixed(2)}</NumCell> },
+ { key: 'ref', header: 'Reference', cell: (r) => r.reference_type ? <span className="text-xs">{r.reference_type} #{r.reference_id}</span> : '—' },
+ ];
 
-  return (
-    <div>
-      <PageHeader title="Stock movements" backTo="/inventory/items" backLabel="Items" subtitle={data ? `${data.meta.total} movements` : undefined} />
-      <FilterBar filters={filterConfig} values={filters}
-        onSearch={() => undefined}
-        onFilter={(k, v) => setFilters(f => ({ ...f, [k]: v, page: 1 }))}
-        searchPlaceholder="" />
-      {isLoading && !data && <SkeletonTable columns={9} rows={10} />}
-      {isError && <EmptyState icon="alert-circle" title="Failed to load movements" action={<Button onClick={() => refetch()}>Retry</Button>} />}
-      {data && data.data.length === 0 && <EmptyState icon="inbox" title="No movements yet" />}
-      {data && data.data.length > 0 && (
-        <div className="px-5 py-4">
-          <DataTable columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters(f => ({ ...f, page }))} />
-        </div>
-      )}
-    </div>
-  );
+ const filterConfig: FilterConfig[] = [
+ { key: 'movement_type', label: 'Type', type: 'select', options: [
+ { value: '', label: 'All' },
+ ...(movementOptions?.movement_types ?? []),
+ ]},
+ ];
+
+ return (
+ <div>
+ <PageHeader title="Stock movements" backTo="/inventory/items" backLabel="Items" subtitle={data ? `${data.meta.total} movements` : undefined} />
+ <FilterBar filters={filterConfig} values={filters}
+ onSearch={() => undefined}
+ onFilter={(k, v) => setFilters(f => ({ ...f, [k]: v, page: 1 }))}
+ searchPlaceholder="" />
+ {isLoading && !data && <SkeletonTable columns={9} rows={10} />}
+ {isError && <EmptyState icon="alert-circle" title="Failed to load movements" action={<Button onClick={() => refetch()}>Retry</Button>} />}
+ {data && data.data.length === 0 && <EmptyState icon="inbox" title="No movements yet" />}
+ {data && data.data.length > 0 && (
+ <div className="px-5 py-4">
+  <DataTable tableKey="stock-movements" columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters(f => ({ ...f, page }))} />
+ </div>
+ )}
+ </div>
+ );
 }

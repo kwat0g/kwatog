@@ -7,6 +7,7 @@ namespace Tests\Feature\Accounting;
 use App\Modules\Accounting\Enums\JournalEntryStatus;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Services\JournalEntryService;
+use App\Common\Services\SettingsService;
 use App\Modules\Admin\Models\UserPermissionOverride;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
@@ -30,7 +31,7 @@ class JournalEntryMakerCheckerTest extends TestCase
         $this->seed(RolePermissionSeeder::class);
         $this->seed(ChartOfAccountsSeeder::class);
         // Default behaviour: maker !== checker always required.
-        config()->set('accounting.je_self_post_limit', '0');
+        app(SettingsService::class)->set('accounting.je_self_post_limit', 0);
     }
 
     /** Non-admin user so hasPermission() does not short-circuit the override. */
@@ -115,7 +116,7 @@ class JournalEntryMakerCheckerTest extends TestCase
     public function test_self_post_allowed_below_configured_limit(): void
     {
         // Below-threshold self-post escape hatch.
-        config()->set('accounting.je_self_post_limit', '10000.00');
+        app(SettingsService::class)->set('accounting.je_self_post_limit', 10000.00);
         $svc = app(JournalEntryService::class);
         $maker = $this->financeUser();
 

@@ -11,8 +11,8 @@ use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Payroll\Services\PayrollCalculatorService;
 use App\Modules\Payroll\Services\PayrollPeriodService;
+use App\Modules\Payroll\Services\PayrollProgressTracker;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
@@ -37,29 +37,38 @@ use Throwable;
  * Terminal status is Computed (never Draft) so the UI can tell "computed,
  * awaiting approval" apart from "never computed" — that conflation is what let
  * the Compute button stay live and silently re-run finished payroll.
+ *
+ * Deliberately NOT ShouldBeUnique. The DB claim above is an atomic conditional
+ * UPDATE and therefore a strictly stronger gate. The unique lock added a real
+ * failure mode on top of it: a worker killed mid-run leaves the lock behind for
+ * uniqueFor seconds, and dispatch() then returns silently without enqueuing
+ * anything. The period sat at Processing with no worker and no error — Compute
+ * appeared to do nothing at all.
  */
-class ProcessPayrollJob implements ShouldQueue, ShouldBeUnique
+class ProcessPayrollJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    /** Allow up to 30 minutes for ~200-employee runs. */
-    public int $timeout = 1800;
+    /**
+     * Allow up to 30 minutes for ~200-employee runs.
+     *
+     * Exposed as a const so PayrollPeriodService::staleAfterMinutes() can floor
+     * the stale-claim threshold above it — a healthy long run must never be
+     * reclaimed out from under its own worker.
+     */
+    public const TIMEOUT_SECONDS = 1800;
 
-    public int $uniqueFor = 1800;
+    public int $timeout = self::TIMEOUT_SECONDS;
 
     public function __construct(
         public PayrollPeriod $period,
         public ?int $triggeredBy = null,
     ) {}
 
-    public function uniqueId(): string
-    {
-        return "payroll-period-{$this->period->id}";
-    }
-
     public function handle(
         PayrollCalculatorService $calculator,
         PayrollPeriodService $periods,
+        PayrollProgressTracker $progress,
     ): void {
         $period = $this->period->fresh();
         if (! $period) {
@@ -91,10 +100,22 @@ class ProcessPayrollJob implements ShouldQueue, ShouldBeUnique
         $processed = 0;
         $failures  = 0;
 
+        // Publish 0/total immediately so the page shows a real bar the moment
+        // the worker picks the job up, rather than an indeterminate spinner
+        // until the first ten employees are done.
+        $emit = function () use ($progress, &$period, &$processed, &$total, &$failures): void {
+            $progress->put($period, $processed, $total, $failures);
+            PayrollProgressEvent::dispatch($period, $processed, $total, $failures);
+        };
+        $emit();
+
         try {
             foreach ($employees as $emp) {
                 try {
-                    $calculator->computeForEmployee($period, $emp);
+                    // internal: true — the period is legitimately Processing
+                    // because WE claimed it. External callers are refused that
+                    // status (see PayrollCalculatorService::computeForEmployee).
+                    $calculator->computeForEmployee($period, $emp, internal: true);
                 } catch (Throwable $e) {
                     $failures++;
                     Log::error('Payroll computation failed for employee', [
@@ -104,6 +125,16 @@ class ProcessPayrollJob implements ShouldQueue, ShouldBeUnique
                     ]);
 
                     // Stamp a failure row so the UI knows about it.
+                    //
+                    // A ₱0 error row is a diagnostic marker, NOT payment: it
+                    // deliberately takes no pay-cycle claim. That matters most
+                    // for the one failure mode that is itself about claims — an
+                    // employee another period already paid for this cutoff. The
+                    // marker records why they were skipped here while their real
+                    // payroll stays where it was actually computed.
+                    //
+                    // approve() blocks on any row with an error_message, so
+                    // these cannot be signed off or posted to the GL.
                     Payroll::updateOrCreate(
                         ['payroll_period_id' => $period->id, 'employee_id' => $emp->id],
                         [
@@ -120,7 +151,7 @@ class ProcessPayrollJob implements ShouldQueue, ShouldBeUnique
 
                 $processed++;
                 if ($processed % 10 === 0 || $processed === $total) {
-                    PayrollProgressEvent::dispatch($period, $processed, $total, $failures);
+                    $emit();
                 }
             }
         } finally {
@@ -128,13 +159,13 @@ class ProcessPayrollJob implements ShouldQueue, ShouldBeUnique
             // checker's approval. Parking back at Draft (the old behaviour)
             // made a finished run indistinguishable from an untouched one.
             // Draft is only correct when there is genuinely nothing to show.
-            $period->forceFill([
-                'status' => $period->payrolls()->exists()
-                    ? PayrollPeriodStatus::Computed->value
-                    : PayrollPeriodStatus::Draft->value,
-                'processing_started_at' => null,
-            ])->save();
-            PayrollProgressEvent::dispatch($period, $processed, $total, $failures);
+            // releaseClaim() is shared with force-unlock and the stale reaper
+            // so all three agree on what "finished" means.
+            $periods->releaseClaim($period);
+            $period = $period->fresh() ?? $period;
+            // Final emit carries the terminal status, so a subscribed page
+            // flips out of the processing state without waiting for a poll.
+            $emit();
 
             // Task A9 — detect anomalies on completed period.
             try {
@@ -153,14 +184,14 @@ class ProcessPayrollJob implements ShouldQueue, ShouldBeUnique
         // If the whole job died (queue infra issue), release the claim so the
         // period is computable again. Computed when partial rows survived,
         // Draft when nothing was written.
+        //
+        // Resolved via app() rather than injected: Laravel calls this hook as
+        // a plain `$command->failed($e)` (CallQueuedHandler::failed) with no
+        // container resolution, so a constructor-style injected argument would
+        // arrive null and fatal exactly when we most need this to work.
         $period = $this->period->fresh();
         if ($period && $period->status === PayrollPeriodStatus::Processing) {
-            $period->forceFill([
-                'status' => $period->payrolls()->exists()
-                    ? PayrollPeriodStatus::Computed->value
-                    : PayrollPeriodStatus::Draft->value,
-                'processing_started_at' => null,
-            ])->save();
+            app(PayrollPeriodService::class)->releaseClaim($period);
         }
         Log::error('ProcessPayrollJob failed catastrophically', [
             'period_id' => $this->period->id,

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Production\Services;
 
+use App\Common\Services\SettingsService;
 use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\MRP\Enums\MachineStatus;
@@ -15,6 +16,7 @@ use App\Modules\Production\Models\WorkOrderDefect;
 use App\Modules\Production\Models\WorkOrderOutput;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
 
 /**
  * Sprint 6 — Task 58. Plant-manager dashboard payload.
@@ -27,7 +29,10 @@ class ProductionDashboardService
     private const CACHE_KEY = 'dashboard:production';
     private const CACHE_TTL_SECONDS = 30;
 
-    public function __construct(private readonly OeeService $oee) {}
+    public function __construct(
+        private readonly OeeService $oee,
+        private readonly SettingsService $settings,
+    ) {}
 
     public function payload(): array
     {
@@ -35,16 +40,27 @@ class ProductionDashboardService
             $today = Carbon::today();
             $start = $today->copy();
             $end   = $today->copy()->endOfDay();
+            $defectHistoryDays = $this->settings->requiredInt('production.dashboard.defect_history_days', 1);
 
             return [
                 'kpis'                   => $this->kpis($start, $end),
                 'chain_stage_breakdown'  => $this->chainStageBreakdown(),
                 'machine_utilization'    => $this->oee->calculateForAllMachines($start, $end),
+                'display_policy'         => $this->displayPolicy(),
                 'alerts'                 => $this->alerts(),
-                'defect_pareto'          => $this->defectPareto($start->copy()->subDays(7), $end), // 7-day window
+                'defect_history_days'    => $defectHistoryDays,
+                'defect_pareto'          => $this->defectPareto($start->copy()->subDays($defectHistoryDays), $end),
                 'generated_at'           => Carbon::now()->toIso8601String(),
             ];
         });
+    }
+
+    private function displayPolicy(): array
+    {
+        return [
+            'world_class_ratio' => $this->settings->requiredFloat('production.oee.world_class_ratio', 0, 1),
+            'on_track_ratio' => $this->settings->requiredFloat('production.oee.on_track_ratio', 0, 1),
+        ];
     }
 
     private function kpis(Carbon $from, Carbon $to): array
@@ -71,7 +87,8 @@ class ProductionDashboardService
 
         // Average OEE today across active machines.
         $oeeRows = $this->oee->calculateForAllMachines($from, $to);
-        $avgOee = $oeeRows->isEmpty() ? 0 : round((float) $oeeRows->avg('oee'), 4);
+        // No machine activity is an unknown OEE, not a measured 0% result.
+        $avgOee = $oeeRows->isEmpty() ? null : round((float) $oeeRows->avg('oee'), 4);
 
         return [
             'today_output_total' => $todayGood + $todayReject,
@@ -119,7 +136,10 @@ class ProductionDashboardService
                 $so->status === SalesOrderStatus::Confirmed     => $so->mrp_plan_id ? 'MRP Planned' : 'Order Entered',
                 $so->status === SalesOrderStatus::InProduction  => 'In Production',
                 $so->status === SalesOrderStatus::PartiallyDelivered => 'Ready to Ship',
-                default => 'In Production',
+                // The query above excludes every terminal status. Keep this
+                // mapping exhaustive so an unknown status cannot be silently
+                // reported as active production.
+                default => throw new \UnexpectedValueException('Unsupported sales-order status in chain stage breakdown.'),
             };
             $stages[$key]++;
         }
@@ -152,6 +172,7 @@ class ProductionDashboardService
             ->each(function ($m) use (&$alerts) {
                 $alerts[] = [
                     'type'     => 'breakdown',
+                    'type_label' => Str::headline('breakdown'),
                     'severity' => 'danger',
                     'message'  => "{$m->machine_code} is in breakdown.",
                     'link'     => "/mrp/machines/{$m->hash_id}",
@@ -159,13 +180,15 @@ class ProductionDashboardService
             });
 
         // Molds nearing or past their shot threshold.
+        $warningRatio = $this->settings->requiredFloat('production.dashboard.mold_warning_ratio', 0, 1);
         Mold::query()
-            ->whereRaw('current_shot_count >= max_shots_before_maintenance * 0.80')
+            ->whereRaw('current_shot_count >= max_shots_before_maintenance * ?', [$warningRatio])
             ->get()
             ->each(function ($mold) use (&$alerts) {
                 $pct = $mold->shot_percentage;
                 $alerts[] = [
                     'type'     => 'mold_limit',
+                    'type_label' => Str::headline('mold_limit'),
                     'severity' => $pct >= 100 ? 'danger' : 'warning',
                     'message'  => sprintf(
                         '%s at %.1f%% of maintenance threshold (%d / %d shots).',
@@ -185,6 +208,7 @@ class ProductionDashboardService
             ->each(function ($wo) use (&$alerts) {
                 $alerts[] = [
                     'type'     => 'wo_paused',
+                    'type_label' => Str::headline('wo_paused'),
                     'severity' => 'warning',
                     'message'  => "{$wo->wo_number} is paused" . ($wo->pause_reason ? " — {$wo->pause_reason}" : ''),
                     'link'     => "/production/work-orders/{$wo->hash_id}",

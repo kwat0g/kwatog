@@ -94,8 +94,13 @@ class SelfServiceHomeTest extends TestCase
             'philhealth_no' => '12-200000006-2',
             'pagibig_no' => '1234-5678-2006',
             'tin' => '123-456-106-000',
+            'nationality' => 'Filipino',
+            'gender' => 'female',
+            'civil_status' => 'married',
+            'date_regularized' => '2025-01-15',
         ]);
-        $user = User::factory()->create(['employee_id' => $employee->id]);
+        $employee->forceFill(['email' => null])->save();
+        $user = User::factory()->create(['employee_id' => $employee->id, 'email' => 'selfservice@example.test']);
 
         $this->actingAs($user)
             ->getJson('/api/v1/hr/self-service/profile')
@@ -114,6 +119,12 @@ class SelfServiceHomeTest extends TestCase
             ->assertJsonPath('data.philhealth_no_last4', '••••06-2')
             ->assertJsonPath('data.pagibig_no_last4', '••••2006')
             ->assertJsonPath('data.tin_last4', '••••-000')
+            ->assertJsonPath('data.nationality', 'Filipino')
+            ->assertJsonPath('data.email', 'selfservice@example.test')
+            ->assertJsonPath('data.gender_label', 'Female')
+            ->assertJsonPath('data.civil_status_label', 'Married')
+            ->assertJsonPath('data.date_regularized', '2025-01-15')
+            ->assertJsonStructure(['data' => ['profile_completeness' => ['percent', 'missing_fields']]])
             ->assertJsonMissing(['bank_account_no' => '001234560006'])
             ->assertJsonMissing(['sss_no' => '34-2000006-1']);
     }

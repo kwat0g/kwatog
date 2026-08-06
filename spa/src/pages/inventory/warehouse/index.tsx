@@ -4,9 +4,10 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { AxiosError } from 'axios';
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { ArchiveRestore, Pencil, Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { warehouseApi } from '@/api/inventory/warehouse';
+import { ArchiveFilter, archiveToTrashed, type ArchiveScope } from '@/components/ui/ArchiveFilter';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -33,25 +34,25 @@ import { focusRingInset } from '@/lib/focus';
 const codeRegex = /^[A-Z0-9-]+$/;
 
 const warehouseSchema = z.object({
-  name: z.string().trim().min(2, 'Name must be at least 2 characters.').max(100),
-  code: z.string().trim().min(1).max(20).regex(codeRegex, 'Use uppercase letters, digits, hyphens.'),
-  address: z.string().max(500).optional().or(z.literal('')),
-  is_active: z.boolean().default(true),
+ name: z.string().trim().min(2, 'Name must be at least 2 characters.').max(100),
+ code: z.string().trim().min(1).max(20).regex(codeRegex, 'Use uppercase letters, digits, hyphens.'),
+ address: z.string().max(500).optional().or(z.literal('')),
+ is_active: z.boolean().default(true),
 });
 type WarehouseFormValues = z.infer<typeof warehouseSchema>;
 
 const zoneSchema = z.object({
-  name: z.string().trim().min(2).max(50),
-  code: z.string().trim().min(1).max(10).regex(codeRegex, 'Use uppercase letters, digits, hyphens.'),
-  zone_type: z.string().min(1, 'Zone type is required'),
+ name: z.string().trim().min(2).max(50),
+ code: z.string().trim().min(1).max(10).regex(codeRegex, 'Use uppercase letters, digits, hyphens.'),
+ zone_type: z.string().min(1, 'Zone type is required'),
 });
 type ZoneFormValues = z.infer<typeof zoneSchema>;
 
 const locationSchema = z.object({
-  code: z.string().trim().min(1).max(20).regex(codeRegex, 'Use uppercase letters, digits, hyphens.'),
-  rack: z.string().max(10).optional().or(z.literal('')),
-  bin: z.string().max(10).optional().or(z.literal('')),
-  is_active: z.boolean().default(true),
+ code: z.string().trim().min(1).max(20).regex(codeRegex, 'Use uppercase letters, digits, hyphens.'),
+ rack: z.string().max(10).optional().or(z.literal('')),
+ bin: z.string().max(10).optional().or(z.literal('')),
+ is_active: z.boolean().default(true),
 });
 type LocationFormValues = z.infer<typeof locationSchema>;
 
@@ -60,292 +61,362 @@ type LocationFormValues = z.infer<typeof locationSchema>;
 // ──────────────────────────────────────────────────────────────────────────────
 
 type DeleteTarget =
-  | { kind: 'warehouse'; id: string; name: string }
-  | { kind: 'zone'; id: string; name: string }
-  | { kind: 'location'; id: string; code: string };
+ | { kind: 'warehouse'; id: string; name: string }
+ | { kind: 'zone'; id: string; name: string }
+ | { kind: 'location'; id: string; code: string };
 
 export default function WarehousePage() {
-  const qc = useQueryClient();
-  const { can } = usePermission();
-  const canManage = can('inventory.warehouse.manage');
+ const qc = useQueryClient();
+ const { can } = usePermission();
+ const canManage = can('inventory.warehouse.manage');
 
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['inventory', 'warehouse', 'tree'],
-    queryFn: () => warehouseApi.tree(),
-    placeholderData: (prev) => prev,
-  });
+ const [scope, setScope] = useState<ArchiveScope>('active');
 
-  const [activeWh, setActiveWh] = useState<string | null>(null);
-  const [activeZone, setActiveZone] = useState<string | null>(null);
+ const { data, isLoading, isError, refetch } = useQuery({
+ queryKey: ['inventory', 'warehouse', 'tree', { trashed: archiveToTrashed(scope) }],
+ queryFn: () => warehouseApi.tree({ trashed: archiveToTrashed(scope) }),
+ placeholderData: (prev) => prev,
+ });
 
-  const [whModal, setWhModal] = useState<{ mode: 'create' | 'edit'; existing: Warehouse | null } | null>(null);
-  const [zoneModal, setZoneModal] = useState<{ mode: 'create' | 'edit'; existing: WarehouseZone | null } | null>(null);
-  const [locModal, setLocModal] = useState<{ mode: 'create' | 'edit'; existing: WarehouseLocation | null } | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<DeleteTarget | null>(null);
+ const [activeWh, setActiveWh] = useState<string | null>(null);
+ const [activeZone, setActiveZone] = useState<string | null>(null);
 
-  const wh = data?.find((w) => w.id === activeWh) ?? data?.[0];
-  const zones = wh?.zones ?? [];
-  const zone = zones.find((z) => z.id === activeZone) ?? zones[0];
-  const locations = zone?.locations ?? [];
+ const [whModal, setWhModal] = useState<{ mode: 'create' | 'edit'; existing: Warehouse | null } | null>(null);
+ const [zoneModal, setZoneModal] = useState<{ mode: 'create' | 'edit'; existing: WarehouseZone | null } | null>(null);
+ const [locModal, setLocModal] = useState<{ mode: 'create' | 'edit'; existing: WarehouseLocation | null } | null>(null);
+ const [confirmDelete, setConfirmDelete] = useState<DeleteTarget | null>(null);
+ const [confirmRestore, setConfirmRestore] = useState<DeleteTarget | null>(null);
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['inventory', 'warehouse'] });
+ const wh = data?.find((w) => w.id === activeWh) ?? data?.[0];
+ const zones = wh?.zones ?? [];
+ const zone = zones.find((z) => z.id === activeZone) ?? zones[0];
+ const locations = zone?.locations ?? [];
 
-  const delWh = useMutation({
-    mutationFn: (id: string) => warehouseApi.deleteWarehouse(id),
-    onSuccess: () => { invalidate(); toast.success('Warehouse deleted.'); setConfirmDelete(null); },
-    onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Failed to delete warehouse.'),
-  });
-  const delZone = useMutation({
-    mutationFn: (id: string) => warehouseApi.deleteZone(id),
-    onSuccess: () => { invalidate(); toast.success('Zone deleted.'); setConfirmDelete(null); },
-    onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Failed to delete zone.'),
-  });
-  const delLoc = useMutation({
-    mutationFn: (id: string) => warehouseApi.deleteLocation(id),
-    onSuccess: () => { invalidate(); toast.success('Location deleted.'); setConfirmDelete(null); },
-    onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Failed to delete location.'),
-  });
+ const invalidate = () => qc.invalidateQueries({ queryKey: ['inventory', 'warehouse'] });
 
-  return (
-    <div>
-      <PageHeader
-        title="Warehouse structure"
-        backTo="/inventory/items"
-        backLabel="Items"
-        subtitle={data ? `${data.length} ${data.length === 1 ? 'warehouse' : 'warehouses'}` : undefined}
-        actions={
-          canManage ? (
-            <Button
-              variant="primary"
-              size="sm"
-              icon={<Plus size={14} />}
-              onClick={() => setWhModal({ mode: 'create', existing: null })}
-            >
-              New warehouse
-            </Button>
-          ) : null
-        }
-      />
+ const delWh = useMutation({
+ mutationFn: (id: string) => warehouseApi.deleteWarehouse(id),
+ onSuccess: () => { invalidate(); toast.success('Warehouse archived.'); setConfirmDelete(null); },
+ onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Failed to delete warehouse.'),
+ });
+ const delZone = useMutation({
+ mutationFn: (id: string) => warehouseApi.deleteZone(id),
+ onSuccess: () => { invalidate(); toast.success('Zone archived.'); setConfirmDelete(null); },
+ onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Failed to delete zone.'),
+ });
+ const delLoc = useMutation({
+ mutationFn: (id: string) => warehouseApi.deleteLocation(id),
+ onSuccess: () => { invalidate(); toast.success('Location archived.'); setConfirmDelete(null); },
+ onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Failed to delete location.'),
+ });
 
-      <div className="px-5 py-4 space-y-4">
-        {isLoading && !data && <SkeletonTree />}
-        {isError && (
-          <EmptyState
-            icon="alert-circle"
-            title="Failed to load warehouse"
-            action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
-          />
-        )}
-        {data && data.length === 0 && (
-          <EmptyState
-            icon="inbox"
-            title="No warehouses configured"
-            description={canManage ? 'Add your first warehouse to start managing stock locations.' : 'Nothing here yet.'}
-            action={canManage ? (
-              <Button variant="primary" onClick={() => setWhModal({ mode: 'create', existing: null })}>
-                New warehouse
-              </Button>
-            ) : undefined}
-          />
-        )}
-        {data && data.length > 0 && wh && (
-          <div className="grid grid-cols-12 gap-4">
-            {/* Warehouses column */}
-            <Panel title="Warehouses" className="col-span-3">
-              <ul className="text-sm">
-                {data.map((w) => (
-                  <li key={w.id} className="group">
-                    <div className={`flex items-center gap-1 rounded-sm transition-colors ${wh.id === w.id ? 'bg-elevated' : 'hover:bg-elevated'}`}>
-                      <button
-                        type="button"
-                        onClick={() => { setActiveWh(w.id); setActiveZone(null); }}
-                        className={cn('flex-1 text-left py-1.5 px-2 cursor-pointer', focusRingInset)}
-                      >
-                        <div className="font-mono text-xs">{w.code}</div>
-                        <div className="text-2xs text-muted">{w.name}</div>
-                      </button>
-                      {canManage && (
-                        <div className="hidden group-hover:flex pr-1 gap-0.5">
-                          <IconBtn label={`Edit ${w.name}`} onClick={() => setWhModal({ mode: 'edit', existing: w })}>
-                            <Pencil size={12} />
-                          </IconBtn>
-                          <IconBtn label={`Delete ${w.name}`} danger onClick={() => setConfirmDelete({ kind: 'warehouse', id: w.id, name: w.name })}>
-                            <Trash2 size={12} />
-                          </IconBtn>
-                        </div>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </Panel>
+ const restoreWh = useMutation({
+ mutationFn: (id: string) => warehouseApi.restoreWarehouse(id),
+ onSuccess: () => { invalidate(); toast.success('Warehouse restored.'); setConfirmRestore(null); },
+ onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Failed to restore warehouse.'),
+ });
+ const restoreZone = useMutation({
+ mutationFn: (id: string) => warehouseApi.restoreZone(id),
+ onSuccess: () => { invalidate(); toast.success('Zone restored.'); setConfirmRestore(null); },
+ onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Failed to restore zone.'),
+ });
+ const restoreLoc = useMutation({
+ mutationFn: (id: string) => warehouseApi.restoreLocation(id),
+ onSuccess: () => { invalidate(); toast.success('Location restored.'); setConfirmRestore(null); },
+ onError: (e: AxiosError<{ message?: string }>) => toast.error(e.response?.data?.message ?? 'Failed to restore location.'),
+ });
 
-            {/* Zones column */}
-            <Panel
-              title={`Zones — ${wh.name}`}
-              className="col-span-4"
-              actions={canManage ? (
-                <Button size="sm" variant="secondary" icon={<Plus size={12} />} onClick={() => setZoneModal({ mode: 'create', existing: null })}>
-                  Zone
-                </Button>
-              ) : null}
-            >
-              {zones.length === 0 ? (
-                <div className="text-sm text-muted">No zones yet.</div>
-              ) : (
-                <ul className="text-sm divide-y divide-subtle">
-                  {zones.map((z) => (
-                    <li key={z.id} className="group">
-                      <div className={`flex items-center gap-1 rounded-sm transition-colors ${zone?.id === z.id ? 'bg-elevated' : 'hover:bg-elevated'}`}>
-                        <button
-                          type="button"
-                          onClick={() => setActiveZone(z.id)}
-                          className={cn('flex-1 text-left py-2 px-2 flex items-center gap-2 cursor-pointer', focusRingInset)}
-                        >
-                          <span className="font-mono text-xs">{z.code}</span>
-                          <span className="flex-1 truncate">{z.name}</span>
-                          <Chip variant="neutral">{z.zone_type_label ?? z.zone_type}</Chip>
-                        </button>
-                        {canManage && (
-                          <div className="hidden group-hover:flex pr-1 gap-0.5">
-                            <IconBtn label={`Edit ${z.name}`} onClick={() => setZoneModal({ mode: 'edit', existing: z })}>
-                              <Pencil size={12} />
-                            </IconBtn>
-                            <IconBtn label={`Delete ${z.name}`} danger onClick={() => setConfirmDelete({ kind: 'zone', id: z.id, name: z.name })}>
-                              <Trash2 size={12} />
-                            </IconBtn>
-                          </div>
-                        )}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Panel>
+ return (
+ <div>
+ <PageHeader
+ title="Warehouse structure"
+ backTo="/inventory/items"
+ backLabel="Items"
+ subtitle={data ? `${data.length} ${data.length === 1 ? 'warehouse' : 'warehouses'}` : undefined}
+ actions={
+ canManage ? (
+ <Button
+ variant="primary"
+ size="sm"
+ icon={<Plus size={14} />}
+ onClick={() => setWhModal({ mode: 'create', existing: null })}
+ >
+ New warehouse
+ </Button>
+ ) : null
+ }
+ />
 
-            {/* Locations column */}
-            <Panel
-              title={`Locations — ${zone?.name ?? '—'}`}
-              className="col-span-5"
-              actions={canManage && zone ? (
-                <Button size="sm" variant="secondary" icon={<Plus size={12} />} onClick={() => setLocModal({ mode: 'create', existing: null })}>
-                  Location
-                </Button>
-              ) : null}
-            >
-              {!zone || locations.length === 0 ? (
-                <div className="text-sm text-muted">No locations yet.</div>
-              ) : (
-                <table className={tableCls}>
-                  <thead>
-                    <tr className={theadTrCls}>
-                      <Th>Code</Th>
-                      <Th>Rack</Th>
-                      <Th>Bin</Th>
-                      <Th>Status</Th>
-                      <Th />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {locations.map((l) => (
-                      <tr key={l.id} className={cn(trCls, 'group')}>
-                        <Td mono>{l.code}</Td>
-                        <Td>{l.rack ?? <span className="text-muted">—</span>}</Td>
-                        <Td>{l.bin ?? <span className="text-muted">—</span>}</Td>
-                        <Td>
-                          <Chip variant={l.is_active ? 'success' : 'neutral'}>{l.is_active ? 'active' : 'inactive'}</Chip>
-                        </Td>
-                        <Td align="right" mono>
-                          {canManage && (
-                            <div className="hidden group-hover:flex justify-end gap-0.5">
-                              <IconBtn label={`Edit ${l.code}`} onClick={() => setLocModal({ mode: 'edit', existing: l })}>
-                                <Pencil size={12} />
-                              </IconBtn>
-                              <IconBtn label={`Delete ${l.code}`} danger onClick={() => setConfirmDelete({ kind: 'location', id: l.id, code: l.code })}>
-                                <Trash2 size={12} />
-                              </IconBtn>
-                            </div>
-                          )}
-                        </Td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </Panel>
-          </div>
-        )}
-      </div>
+ <div className="px-5 py-4 space-y-4">
+ <div className="flex justify-end">
+ <ArchiveFilter value={scope} onChange={setScope} />
+ </div>
+ {isLoading && !data && <SkeletonTree />}
+ {isError && (
+ <EmptyState
+ icon="alert-circle"
+ title="Failed to load warehouse"
+ action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
+ />
+ )}
+ {data && data.length === 0 && (
+ <EmptyState
+ icon="inbox"
+ title="No warehouses configured"
+ description={canManage ? 'Add your first warehouse to start managing stock locations.' : 'Nothing here yet.'}
+ action={canManage ? (
+ <Button variant="primary" onClick={() => setWhModal({ mode: 'create', existing: null })}>
+ New warehouse
+ </Button>
+ ) : undefined}
+ />
+ )}
+ {data && data.length > 0 && wh && (
+ <div className="grid grid-cols-12 gap-4">
+ {/* Warehouses column */}
+ <Panel title="Warehouses" className="col-span-3">
+ <ul className="text-sm">
+ {data.map((w) => (
+ <li key={w.id} className="group">
+ <div className={`flex items-center gap-1 rounded-sm transition-colors ${wh.id === w.id ? 'bg-elevated' : 'hover:bg-elevated'}`}>
+ <button
+ type="button"
+ onClick={() => { setActiveWh(w.id); setActiveZone(null); }}
+ className={cn('flex-1 text-left py-1.5 px-2 cursor-pointer', focusRingInset)}
+ >
+ <div className="font-mono text-xs">{w.code}</div>
+ <div className="text-2xs text-muted">{w.name}</div>
+ </button>
+ {canManage && (
+ <div className="hidden group-hover:flex pr-1 gap-0.5">
+ <IconBtn label={`Edit ${w.name}`} onClick={() => setWhModal({ mode: 'edit', existing: w })}>
+ <Pencil size={12} />
+ </IconBtn>
+ {scope === 'only' ? (
+ <IconBtn label={`Restore ${w.name}`} onClick={() => setConfirmRestore({ kind: 'warehouse', id: w.id, name: w.name })}>
+ <ArchiveRestore size={12} />
+ </IconBtn>
+ ) : (
+ <IconBtn label={`Delete ${w.name}`} danger onClick={() => setConfirmDelete({ kind: 'warehouse', id: w.id, name: w.name })}>
+ <Trash2 size={12} />
+ </IconBtn>
+ )}
+ </div>
+ )}
+ </div>
+ </li>
+ ))}
+ </ul>
+ </Panel>
 
-      {/* Warehouse modal */}
-      <Modal isOpen={!!whModal} onClose={() => setWhModal(null)} title={whModal?.mode === 'edit' ? `Edit ${whModal.existing?.name}` : 'New warehouse'} size="sm">
-        {whModal && (
-          <WarehouseForm
-            mode={whModal.mode}
-            existing={whModal.existing}
-            onClose={() => setWhModal(null)}
-            onSaved={() => { invalidate(); setWhModal(null); }}
-          />
-        )}
-      </Modal>
+ {/* Zones column */}
+ <Panel
+ title={`Zones — ${wh.name}`}
+ className="col-span-4"
+ actions={canManage ? (
+ <Button size="sm" variant="secondary" icon={<Plus size={12} />} onClick={() => setZoneModal({ mode: 'create', existing: null })}>
+ Zone
+ </Button>
+ ) : null}
+ >
+ {zones.length === 0 ? (
+ <div className="text-sm text-muted">No zones yet.</div>
+ ) : (
+ <ul className="text-sm divide-y divide-subtle">
+ {zones.map((z) => (
+ <li key={z.id} className="group">
+ <div className={`flex items-center gap-1 rounded-sm transition-colors ${zone?.id === z.id ? 'bg-elevated' : 'hover:bg-elevated'}`}>
+ <button
+ type="button"
+ onClick={() => setActiveZone(z.id)}
+ className={cn('flex-1 text-left py-2 px-2 flex items-center gap-2 cursor-pointer', focusRingInset)}
+ >
+ <span className="font-mono text-xs">{z.code}</span>
+ <span className="flex-1 truncate">{z.name}</span>
+ <Chip variant="neutral">{z.zone_type_label ?? z.zone_type}</Chip>
+ </button>
+ {canManage && (
+ <div className="hidden group-hover:flex pr-1 gap-0.5">
+ <IconBtn label={`Edit ${z.name}`} onClick={() => setZoneModal({ mode: 'edit', existing: z })}>
+ <Pencil size={12} />
+ </IconBtn>
+ {scope === 'only' ? (
+ <IconBtn label={`Restore ${z.name}`} onClick={() => setConfirmRestore({ kind: 'zone', id: z.id, name: z.name })}>
+ <ArchiveRestore size={12} />
+ </IconBtn>
+ ) : (
+ <IconBtn label={`Delete ${z.name}`} danger onClick={() => setConfirmDelete({ kind: 'zone', id: z.id, name: z.name })}>
+ <Trash2 size={12} />
+ </IconBtn>
+ )}
+ </div>
+ )}
+ </div>
+ </li>
+ ))}
+ </ul>
+ )}
+ </Panel>
 
-      {/* Zone modal */}
-      <Modal isOpen={!!zoneModal} onClose={() => setZoneModal(null)} title={zoneModal?.mode === 'edit' ? `Edit ${zoneModal.existing?.name}` : 'New zone'} size="sm">
-        {zoneModal && wh && (
-          <ZoneForm
-            mode={zoneModal.mode}
-            existing={zoneModal.existing}
-            warehouseId={wh.id}
-            onClose={() => setZoneModal(null)}
-            onSaved={() => { invalidate(); setZoneModal(null); }}
-          />
-        )}
-      </Modal>
+ {/* Locations column */}
+ <Panel
+ title={`Locations — ${zone?.name ?? '—'}`}
+ className="col-span-5"
+ actions={canManage && zone ? (
+ <Button size="sm" variant="secondary" icon={<Plus size={12} />} onClick={() => setLocModal({ mode: 'create', existing: null })}>
+ Location
+ </Button>
+ ) : null}
+ >
+ {!zone || locations.length === 0 ? (
+ <div className="text-sm text-muted">No locations yet.</div>
+ ) : (
+ <table className={tableCls}>
+ <thead>
+ <tr className={theadTrCls}>
+ <Th>Code</Th>
+ <Th>Rack</Th>
+ <Th>Bin</Th>
+ <Th>Status</Th>
+ <Th />
+ </tr>
+ </thead>
+ <tbody>
+ {locations.map((l) => (
+ <tr key={l.id} className={cn(trCls, 'group')}>
+ <Td mono>{l.code}</Td>
+ <Td>{l.rack ?? <span className="text-muted">—</span>}</Td>
+ <Td>{l.bin ?? <span className="text-muted">—</span>}</Td>
+ <Td>
+ <Chip variant={l.is_active ? 'success' : 'neutral'}>{l.is_active ? 'active' : 'inactive'}</Chip>
+ </Td>
+ <Td align="right" mono>
+ {canManage && (
+ <div className="hidden group-hover:flex justify-end gap-0.5">
+ <IconBtn label={`Edit ${l.code}`} onClick={() => setLocModal({ mode: 'edit', existing: l })}>
+ <Pencil size={12} />
+ </IconBtn>
+ {scope === 'only' ? (
+ <IconBtn label={`Restore ${l.code}`} onClick={() => setConfirmRestore({ kind: 'location', id: l.id, code: l.code })}>
+ <ArchiveRestore size={12} />
+ </IconBtn>
+ ) : (
+ <IconBtn label={`Delete ${l.code}`} danger onClick={() => setConfirmDelete({ kind: 'location', id: l.id, code: l.code })}>
+ <Trash2 size={12} />
+ </IconBtn>
+ )}
+ </div>
+ )}
+ </Td>
+ </tr>
+ ))}
+ </tbody>
+ </table>
+ )}
+ </Panel>
+ </div>
+ )}
+ </div>
 
-      {/* Location modal */}
-      <Modal isOpen={!!locModal} onClose={() => setLocModal(null)} title={locModal?.mode === 'edit' ? `Edit ${locModal.existing?.code}` : 'New location'} size="sm">
-        {locModal && zone && (
-          <LocationForm
-            mode={locModal.mode}
-            existing={locModal.existing}
-            zoneId={zone.id}
-            onClose={() => setLocModal(null)}
-            onSaved={() => { invalidate(); setLocModal(null); }}
-          />
-        )}
-      </Modal>
+ {/* Warehouse modal */}
+ <Modal isOpen={!!whModal} onClose={() => setWhModal(null)} title={whModal?.mode === 'edit' ? `Edit ${whModal.existing?.name}` : 'New warehouse'} size="sm">
+ {whModal && (
+ <WarehouseForm
+ mode={whModal.mode}
+ existing={whModal.existing}
+ onClose={() => setWhModal(null)}
+ onSaved={() => { invalidate(); setWhModal(null); }}
+ />
+ )}
+ </Modal>
 
-      {/* Delete confirmation */}
-      <ConfirmDialog
-        isOpen={!!confirmDelete}
-        onClose={() => setConfirmDelete(null)}
-        onConfirm={() => {
-          if (!confirmDelete) return;
-          if (confirmDelete.kind === 'warehouse') delWh.mutate(confirmDelete.id);
-          else if (confirmDelete.kind === 'zone') delZone.mutate(confirmDelete.id);
-          else delLoc.mutate(confirmDelete.id);
-        }}
-        title={
-          confirmDelete?.kind === 'warehouse' ? 'Delete warehouse?'
-          : confirmDelete?.kind === 'zone' ? 'Delete zone?'
-          : 'Delete location?'
-        }
-        description={
-          confirmDelete ? (
-            <>
-              <span className="font-medium text-primary">
-                {confirmDelete.kind === 'location' ? confirmDelete.code : confirmDelete.name}
-              </span>
-              {' will be permanently removed. Deletion fails if there are dependent records (zones, locations, or stock).'}
-            </>
-          ) : null
-        }
-        confirmLabel="Delete"
-        variant="danger"
-        pending={delWh.isPending || delZone.isPending || delLoc.isPending}
-      />
-    </div>
-  );
+ {/* Zone modal */}
+ <Modal isOpen={!!zoneModal} onClose={() => setZoneModal(null)} title={zoneModal?.mode === 'edit' ? `Edit ${zoneModal.existing?.name}` : 'New zone'} size="sm">
+ {zoneModal && wh && (
+ <ZoneForm
+ mode={zoneModal.mode}
+ existing={zoneModal.existing}
+ warehouseId={wh.id}
+ onClose={() => setZoneModal(null)}
+ onSaved={() => { invalidate(); setZoneModal(null); }}
+ />
+ )}
+ </Modal>
+
+ {/* Location modal */}
+ <Modal isOpen={!!locModal} onClose={() => setLocModal(null)} title={locModal?.mode === 'edit' ? `Edit ${locModal.existing?.code}` : 'New location'} size="sm">
+ {locModal && zone && (
+ <LocationForm
+ mode={locModal.mode}
+ existing={locModal.existing}
+ zoneId={zone.id}
+ onClose={() => setLocModal(null)}
+ onSaved={() => { invalidate(); setLocModal(null); }}
+ />
+ )}
+ </Modal>
+
+ {/* Delete confirmation */}
+ <ConfirmDialog
+ isOpen={!!confirmDelete}
+ onClose={() => setConfirmDelete(null)}
+ onConfirm={() => {
+ if (!confirmDelete) return;
+ if (confirmDelete.kind === 'warehouse') delWh.mutate(confirmDelete.id);
+ else if (confirmDelete.kind === 'zone') delZone.mutate(confirmDelete.id);
+ else delLoc.mutate(confirmDelete.id);
+ }}
+ title={
+ confirmDelete?.kind === 'warehouse' ? 'Delete warehouse?'
+ : confirmDelete?.kind === 'zone' ? 'Delete zone?'
+ : 'Delete location?'
+ }
+ description={
+ confirmDelete ? (
+ <>
+ <span className="font-medium text-primary">
+ {confirmDelete.kind === 'location' ? confirmDelete.code : confirmDelete.name}
+ </span>
+ {' will be archived and can be restored later. Deletion fails if there are dependent records (zones, locations, or stock).'}
+ </>
+ ) : null
+ }
+ confirmLabel="Delete"
+ variant="danger"
+ pending={delWh.isPending || delZone.isPending || delLoc.isPending}
+ />
+
+ {/* Restore confirmation */}
+ <ConfirmDialog
+ isOpen={!!confirmRestore}
+ onClose={() => setConfirmRestore(null)}
+ onConfirm={() => {
+ if (!confirmRestore) return;
+ if (confirmRestore.kind === 'warehouse') restoreWh.mutate(confirmRestore.id);
+ else if (confirmRestore.kind === 'zone') restoreZone.mutate(confirmRestore.id);
+ else restoreLoc.mutate(confirmRestore.id);
+ }}
+ title={
+ confirmRestore?.kind === 'warehouse' ? 'Restore warehouse?'
+ : confirmRestore?.kind === 'zone' ? 'Restore zone?'
+ : 'Restore location?'
+ }
+ description={
+ confirmRestore ? (
+ <>
+ <span className="font-medium text-primary">
+ {confirmRestore.kind === 'location' ? confirmRestore.code : confirmRestore.name}
+ </span>
+ {' will be restored and available for use again.'}
+ </>
+ ) : null
+ }
+ confirmLabel="Restore"
+ variant="primary"
+ pending={restoreWh.isPending || restoreZone.isPending || restoreLoc.isPending}
+ />
+ </div>
+ );
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -353,28 +424,28 @@ export default function WarehousePage() {
 // ──────────────────────────────────────────────────────────────────────────────
 
 function IconBtn({ children, label, danger, onClick }: { children: React.ReactNode; label: string; danger?: boolean; onClick: () => void }) {
-  return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="sm"
-      iconOnly
-      icon={children}
-      aria-label={label}
-      onClick={onClick}
-      className={danger ? 'text-muted hover:text-danger' : 'text-muted hover:text-primary'}
-    />
-  );
+ return (
+ <Button
+ type="button"
+ variant="ghost"
+ size="sm"
+ iconOnly
+ icon={children}
+ aria-label={label}
+ onClick={onClick}
+ className={danger ? 'text-muted hover:text-danger' : 'text-muted hover:text-primary'}
+ />
+ );
 }
 
 function SkeletonTree() {
-  return (
-    <div className="grid grid-cols-12 gap-4">
-      <SkeletonBlock className="col-span-3 h-64" />
-      <SkeletonBlock className="col-span-4 h-64" />
-      <SkeletonBlock className="col-span-5 h-64" />
-    </div>
-  );
+ return (
+ <div className="grid grid-cols-12 gap-4">
+ <SkeletonBlock className="col-span-3 h-64" />
+ <SkeletonBlock className="col-span-4 h-64" />
+ <SkeletonBlock className="col-span-5 h-64" />
+ </div>
+ );
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -382,153 +453,153 @@ function SkeletonTree() {
 // ──────────────────────────────────────────────────────────────────────────────
 
 function applyServerErrors<T extends Record<string, unknown>>(
-  e: AxiosError<ApiValidationError>,
-  setError: (field: keyof T, opts: { type: string; message: string }) => void,
-  fallback: string,
+ e: AxiosError<ApiValidationError>,
+ setError: (field: keyof T, opts: { type: string; message: string }) => void,
+ fallback: string,
 ) {
-  if (e.response?.status === 422 && e.response.data?.errors) {
-    Object.entries(e.response.data.errors).forEach(([field, msgs]) => {
-      setError(field as keyof T, {
-        type: 'server',
-        message: Array.isArray(msgs) ? (msgs as string[])[0] : String(msgs),
-      });
-    });
-    toast.error('Please fix the highlighted fields.');
-  } else {
-    toast.error(e.response?.data?.message ?? fallback);
-  }
+ if (e.response?.status === 422 && e.response.data?.errors) {
+ Object.entries(e.response.data.errors).forEach(([field, msgs]) => {
+ setError(field as keyof T, {
+ type: 'server',
+ message: Array.isArray(msgs) ? (msgs as string[])[0] : String(msgs),
+ });
+ });
+ toast.error('Please fix the highlighted fields.');
+ } else {
+ toast.error(e.response?.data?.message ?? fallback);
+ }
 }
 
 function WarehouseForm({ mode, existing, onClose, onSaved }: {
-  mode: 'create' | 'edit'; existing: Warehouse | null; onClose: () => void; onSaved: () => void;
+ mode: 'create' | 'edit'; existing: Warehouse | null; onClose: () => void; onSaved: () => void;
 }) {
-  const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<WarehouseFormValues>({
-    resolver: zodResolver(warehouseSchema),
-    defaultValues: {
-      name: existing?.name ?? '',
-      code: existing?.code ?? '',
-      address: existing?.address ?? '',
-      is_active: existing?.is_active ?? true,
-    },
-  });
+ const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<WarehouseFormValues>({
+ resolver: zodResolver(warehouseSchema),
+ defaultValues: {
+ name: existing?.name ?? '',
+ code: existing?.code ?? '',
+ address: existing?.address ?? '',
+ is_active: existing?.is_active ?? true,
+ },
+ });
 
-  const m = useMutation({
-    mutationFn: (d: WarehouseFormValues) => {
-      const payload = { ...d, address: d.address?.trim() || null };
-      return mode === 'create'
-        ? warehouseApi.createWarehouse(payload)
-        : warehouseApi.updateWarehouse(existing!.id, payload);
-    },
-    onSuccess: () => { toast.success(mode === 'create' ? 'Warehouse created.' : 'Warehouse updated.'); onSaved(); },
-    onError: (e: AxiosError<ApiValidationError>) => applyServerErrors<WarehouseFormValues>(e, setError, 'Failed to save warehouse.'),
-  });
+ const m = useMutation({
+ mutationFn: (d: WarehouseFormValues) => {
+ const payload = { ...d, address: d.address?.trim() || null };
+ return mode === 'create'
+ ? warehouseApi.createWarehouse(payload)
+ : warehouseApi.updateWarehouse(existing!.id, payload);
+ },
+ onSuccess: () => { toast.success(mode === 'create' ? 'Warehouse created.' : 'Warehouse updated.'); onSaved(); },
+ onError: (e: AxiosError<ApiValidationError>) => applyServerErrors<WarehouseFormValues>(e, setError, 'Failed to save warehouse.'),
+ });
 
-  return (
-    <form onSubmit={handleSubmit((d) => m.mutate(d), onFormInvalid<WarehouseFormValues>())} className="py-3">
-      <div className="space-y-3">
-        <Input label="Name" required maxLength={100} autoFocus {...register('name')} error={errors.name?.message} />
-        <Input label="Code" required maxLength={20} {...register('code')} error={errors.code?.message}
-               className="font-mono uppercase" placeholder="Warehouse code" />
-        <Input label="Address" maxLength={500} {...register('address')} error={errors.address?.message} />
-        <Switch label="Active" {...register('is_active')} />
-      </div>
-      <div className="flex justify-end gap-2 pt-3 mt-4 border-t border-default">
-        <Button type="button" variant="secondary" onClick={onClose} disabled={m.isPending}>Cancel</Button>
-        <Button type="submit" variant="primary" loading={m.isPending} disabled={m.isPending || isSubmitting}>
-          {mode === 'create' ? 'Create' : 'Save changes'}
-        </Button>
-      </div>
-    </form>
-  );
+ return (
+ <form onSubmit={handleSubmit((d) => m.mutate(d), onFormInvalid<WarehouseFormValues>())} className="py-3">
+ <div className="space-y-3">
+ <Input label="Name" required maxLength={100} autoFocus {...register('name')} error={errors.name?.message} />
+ <Input label="Code" required maxLength={20} {...register('code')} error={errors.code?.message}
+ className="font-mono uppercase" placeholder="Warehouse code" />
+ <Input label="Address" maxLength={500} {...register('address')} error={errors.address?.message} />
+ <Switch label="Active" {...register('is_active')} />
+ </div>
+ <div className="flex justify-end gap-2 pt-3 mt-4 border-t border-default">
+ <Button type="button" variant="secondary" onClick={onClose} disabled={m.isPending}>Cancel</Button>
+ <Button type="submit" variant="primary" loading={m.isPending} disabled={m.isPending || isSubmitting}>
+ {mode === 'create' ? 'Create' : 'Save changes'}
+ </Button>
+ </div>
+ </form>
+ );
 }
 
 function ZoneForm({ mode, existing, warehouseId, onClose, onSaved }: {
-  mode: 'create' | 'edit'; existing: WarehouseZone | null; warehouseId: string; onClose: () => void; onSaved: () => void;
+ mode: 'create' | 'edit'; existing: WarehouseZone | null; warehouseId: string; onClose: () => void; onSaved: () => void;
 }) {
-  const { data: warehouseOptions } = useQuery({
-    queryKey: ['inventory', 'warehouse-options'],
-    queryFn: warehouseApi.options,
-    staleTime: 5 * 60 * 1000,
-  });
-  const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<ZoneFormValues>({
-    resolver: zodResolver(zoneSchema),
-    defaultValues: {
-      name: existing?.name ?? '',
-      code: existing?.code ?? '',
-      zone_type: existing?.zone_type ?? warehouseOptions?.zone_types?.[0]?.value ?? '',
-    },
-  });
+ const { data: warehouseOptions } = useQuery({
+ queryKey: ['inventory', 'warehouse-options'],
+ queryFn: warehouseApi.options,
+ staleTime: 5 * 60 * 1000,
+ });
+ const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<ZoneFormValues>({
+ resolver: zodResolver(zoneSchema),
+ defaultValues: {
+ name: existing?.name ?? '',
+ code: existing?.code ?? '',
+ zone_type: existing?.zone_type ?? warehouseOptions?.zone_types?.[0]?.value ?? '',
+ },
+ });
 
-  const m = useMutation({
-    mutationFn: (d: ZoneFormValues) =>
-      mode === 'create'
-        ? warehouseApi.createZone({ warehouse_id: warehouseId, ...d })
-        : warehouseApi.updateZone(existing!.id, d),
-    onSuccess: () => { toast.success(mode === 'create' ? 'Zone created.' : 'Zone updated.'); onSaved(); },
-    onError: (e: AxiosError<ApiValidationError>) => applyServerErrors<ZoneFormValues>(e, setError, 'Failed to save zone.'),
-  });
+ const m = useMutation({
+ mutationFn: (d: ZoneFormValues) =>
+ mode === 'create'
+ ? warehouseApi.createZone({ warehouse_id: warehouseId, ...d })
+ : warehouseApi.updateZone(existing!.id, d),
+ onSuccess: () => { toast.success(mode === 'create' ? 'Zone created.' : 'Zone updated.'); onSaved(); },
+ onError: (e: AxiosError<ApiValidationError>) => applyServerErrors<ZoneFormValues>(e, setError, 'Failed to save zone.'),
+ });
 
-  return (
-    <form onSubmit={handleSubmit((d) => m.mutate(d), onFormInvalid<ZoneFormValues>())} className="py-3">
-      <div className="space-y-3">
-        <Input label="Name" required maxLength={50} autoFocus {...register('name')} error={errors.name?.message} />
-        <Input label="Code" required maxLength={10} {...register('code')} error={errors.code?.message}
-               className="font-mono uppercase" placeholder="Zone code" />
-        <Select label="Type" required {...register('zone_type')} error={errors.zone_type?.message}>
-          {(warehouseOptions?.zone_types ?? []).map((z) => <option key={z.value} value={z.value}>{z.label}</option>)}
-        </Select>
-      </div>
-      <div className="flex justify-end gap-2 pt-3 mt-4 border-t border-default">
-        <Button type="button" variant="secondary" onClick={onClose} disabled={m.isPending}>Cancel</Button>
-        <Button type="submit" variant="primary" loading={m.isPending} disabled={m.isPending || isSubmitting}>
-          {mode === 'create' ? 'Create' : 'Save changes'}
-        </Button>
-      </div>
-    </form>
-  );
+ return (
+ <form onSubmit={handleSubmit((d) => m.mutate(d), onFormInvalid<ZoneFormValues>())} className="py-3">
+ <div className="space-y-3">
+ <Input label="Name" required maxLength={50} autoFocus {...register('name')} error={errors.name?.message} />
+ <Input label="Code" required maxLength={10} {...register('code')} error={errors.code?.message}
+ className="font-mono uppercase" placeholder="Zone code" />
+ <Select label="Type" required {...register('zone_type')} error={errors.zone_type?.message}>
+ {(warehouseOptions?.zone_types ?? []).map((z) => <option key={z.value} value={z.value}>{z.label}</option>)}
+ </Select>
+ </div>
+ <div className="flex justify-end gap-2 pt-3 mt-4 border-t border-default">
+ <Button type="button" variant="secondary" onClick={onClose} disabled={m.isPending}>Cancel</Button>
+ <Button type="submit" variant="primary" loading={m.isPending} disabled={m.isPending || isSubmitting}>
+ {mode === 'create' ? 'Create' : 'Save changes'}
+ </Button>
+ </div>
+ </form>
+ );
 }
 
 function LocationForm({ mode, existing, zoneId, onClose, onSaved }: {
-  mode: 'create' | 'edit'; existing: WarehouseLocation | null; zoneId: string; onClose: () => void; onSaved: () => void;
+ mode: 'create' | 'edit'; existing: WarehouseLocation | null; zoneId: string; onClose: () => void; onSaved: () => void;
 }) {
-  const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<LocationFormValues>({
-    resolver: zodResolver(locationSchema),
-    defaultValues: {
-      code: existing?.code ?? '',
-      rack: existing?.rack ?? '',
-      bin: existing?.bin ?? '',
-      is_active: existing?.is_active ?? true,
-    },
-  });
+ const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<LocationFormValues>({
+ resolver: zodResolver(locationSchema),
+ defaultValues: {
+ code: existing?.code ?? '',
+ rack: existing?.rack ?? '',
+ bin: existing?.bin ?? '',
+ is_active: existing?.is_active ?? true,
+ },
+ });
 
-  const m = useMutation({
-    mutationFn: (d: LocationFormValues) => {
-      const payload = { ...d, rack: d.rack?.trim() || null, bin: d.bin?.trim() || null };
-      return mode === 'create'
-        ? warehouseApi.createLocation({ zone_id: zoneId, ...payload })
-        : warehouseApi.updateLocation(existing!.id, payload);
-    },
-    onSuccess: () => { toast.success(mode === 'create' ? 'Location created.' : 'Location updated.'); onSaved(); },
-    onError: (e: AxiosError<ApiValidationError>) => applyServerErrors<LocationFormValues>(e, setError, 'Failed to save location.'),
-  });
+ const m = useMutation({
+ mutationFn: (d: LocationFormValues) => {
+ const payload = { ...d, rack: d.rack?.trim() || null, bin: d.bin?.trim() || null };
+ return mode === 'create'
+ ? warehouseApi.createLocation({ zone_id: zoneId, ...payload })
+ : warehouseApi.updateLocation(existing!.id, payload);
+ },
+ onSuccess: () => { toast.success(mode === 'create' ? 'Location created.' : 'Location updated.'); onSaved(); },
+ onError: (e: AxiosError<ApiValidationError>) => applyServerErrors<LocationFormValues>(e, setError, 'Failed to save location.'),
+ });
 
-  return (
-    <form onSubmit={handleSubmit((d) => m.mutate(d), onFormInvalid<LocationFormValues>())} className="py-3">
-      <div className="space-y-3">
-        <Input label="Code" required maxLength={20} autoFocus {...register('code')} error={errors.code?.message}
-               className="font-mono uppercase" placeholder="Location code" />
-        <div className="grid grid-cols-2 gap-3">
-          <Input label="Rack" maxLength={10} {...register('rack')} error={errors.rack?.message} />
-          <Input label="Bin" maxLength={10} {...register('bin')} error={errors.bin?.message} />
-        </div>
-        <Switch label="Active" {...register('is_active')} />
-      </div>
-      <div className="flex justify-end gap-2 pt-3 mt-4 border-t border-default">
-        <Button type="button" variant="secondary" onClick={onClose} disabled={m.isPending}>Cancel</Button>
-        <Button type="submit" variant="primary" loading={m.isPending} disabled={m.isPending || isSubmitting}>
-          {mode === 'create' ? 'Create' : 'Save changes'}
-        </Button>
-      </div>
-    </form>
-  );
+ return (
+ <form onSubmit={handleSubmit((d) => m.mutate(d), onFormInvalid<LocationFormValues>())} className="py-3">
+ <div className="space-y-3">
+ <Input label="Code" required maxLength={20} autoFocus {...register('code')} error={errors.code?.message}
+ className="font-mono uppercase" placeholder="Location code" />
+ <div className="grid grid-cols-2 gap-3">
+ <Input label="Rack" maxLength={10} {...register('rack')} error={errors.rack?.message} />
+ <Input label="Bin" maxLength={10} {...register('bin')} error={errors.bin?.message} />
+ </div>
+ <Switch label="Active" {...register('is_active')} />
+ </div>
+ <div className="flex justify-end gap-2 pt-3 mt-4 border-t border-default">
+ <Button type="button" variant="secondary" onClick={onClose} disabled={m.isPending}>Cancel</Button>
+ <Button type="submit" variant="primary" loading={m.isPending} disabled={m.isPending || isSubmitting}>
+ {mode === 'create' ? 'Create' : 'Save changes'}
+ </Button>
+ </div>
+ </form>
+ );
 }

@@ -6,6 +6,7 @@ namespace App\Modules\Admin\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use App\Modules\Admin\Enums\AdminUserStatus;
 
 class ListUsersRequest extends FormRequest
 {
@@ -20,7 +21,7 @@ class ListUsersRequest extends FormRequest
             'search'        => ['nullable', 'string', 'max:120'],
             'role_id'       => ['nullable', 'string'],
             'department_id' => ['nullable', 'string'],
-            'status'        => ['nullable', Rule::in(['active', 'inactive', 'locked'])],
+            'status'        => ['nullable', Rule::in(AdminUserStatus::values())],
             'sort'          => ['nullable', Rule::in(['name', 'email', 'last_activity', 'created_at'])],
             'direction'     => ['nullable', Rule::in(['asc', 'desc'])],
             'page'          => ['nullable', 'integer', 'min:1'],

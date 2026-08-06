@@ -6,6 +6,14 @@ namespace App\Modules\CRM\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use App\Modules\CRM\Enums\SalesOrderStatus;
+use App\Modules\CRM\Services\SalesOrderService;
+use App\Modules\MRP\Enums\MrpPlanStatus;
+use App\Modules\Production\Enums\WorkOrderStatus;
+use App\Modules\Quality\Enums\InspectionStage;
+use App\Modules\Quality\Enums\InspectionStatus;
+use App\Modules\SupplyChain\Enums\DeliveryStatus;
+use App\Modules\Accounting\Enums\InvoiceStatus;
 
 class SalesOrderResource extends JsonResource
 {
@@ -20,6 +28,13 @@ class SalesOrderResource extends JsonResource
             'total_amount'       => (string) $this->total_amount,
             'status'             => (string) $this->status?->value,
             'status_label'       => $this->status?->label(),
+            'next_statuses'      => array_map(
+                static fn (string $next): array => [
+                    'value' => $next,
+                    'label' => SalesOrderStatus::tryFrom($next)?->label() ?? $next,
+                ],
+                SalesOrderService::allowedTransitions()[$this->status?->value ?? ''] ?? [],
+            ),
             'payment_terms_days' => (int) $this->payment_terms_days,
             'delivery_terms'     => $this->delivery_terms,
             'incoterm'           => $this->incoterm?->value,
@@ -46,6 +61,7 @@ class SalesOrderResource extends JsonResource
                 'mrp_plan_no'     => $this->mrpPlan->mrp_plan_no,
                 'version'         => (int) $this->mrpPlan->version,
                 'status'          => (string) ($this->mrpPlan->status?->value ?? $this->mrpPlan->status),
+                'status_label'    => MrpPlanStatus::tryFrom((string) ($this->mrpPlan->status?->value ?? $this->mrpPlan->status))?->label(),
                 'shortages_found' => (int) $this->mrpPlan->shortages_found,
                 'auto_pr_count'   => (int) $this->mrpPlan->auto_pr_count,
                 'draft_wo_count'  => (int) $this->mrpPlan->draft_wo_count,
@@ -55,6 +71,7 @@ class SalesOrderResource extends JsonResource
                     'id'                => $wo->hash_id,
                     'wo_number'         => $wo->wo_number,
                     'status'            => (string) ($wo->status?->value ?? $wo->status),
+                    'status_label'      => WorkOrderStatus::tryFrom((string) ($wo->status?->value ?? $wo->status))?->label(),
                     'quantity_target'   => (int) $wo->quantity_target,
                     'quantity_produced' => (int) $wo->quantity_produced,
                     'planned_start'     => optional($wo->planned_start)->toIso8601String(),
@@ -71,7 +88,9 @@ class SalesOrderResource extends JsonResource
                         'id' => $inspection->hash_id,
                         'inspection_number' => $inspection->inspection_number,
                         'stage' => (string) ($inspection->stage?->value ?? $inspection->stage),
+                        'stage_label' => InspectionStage::tryFrom((string) ($inspection->stage?->value ?? $inspection->stage))?->label(),
                         'status' => (string) ($inspection->status?->value ?? $inspection->status),
+                        'status_label' => InspectionStatus::tryFrom((string) ($inspection->status?->value ?? $inspection->status))?->label(),
                         'completed_at' => optional($inspection->completed_at)->toIso8601String(),
                     ])
                     : collect())
@@ -82,6 +101,7 @@ class SalesOrderResource extends JsonResource
                     'id' => $delivery->hash_id,
                     'delivery_number' => $delivery->delivery_number,
                     'status' => (string) ($delivery->status?->value ?? $delivery->status),
+                    'status_label' => DeliveryStatus::tryFrom((string) ($delivery->status?->value ?? $delivery->status))?->label(),
                     'scheduled_date' => optional($delivery->scheduled_date)->toDateString(),
                 ])->values()
             ),
@@ -90,12 +110,14 @@ class SalesOrderResource extends JsonResource
                     'id' => $invoice->hash_id,
                     'invoice_number' => $invoice->invoice_number,
                     'status' => (string) ($invoice->status?->value ?? $invoice->status),
+                    'status_label' => InvoiceStatus::tryFrom((string) ($invoice->status?->value ?? $invoice->status))?->label(),
                     'total_amount' => (string) $invoice->total_amount,
                     'balance' => (string) $invoice->balance,
                 ])->values()
             ),
             'created_at'         => optional($this->created_at)->toIso8601String(),
             'updated_at'         => optional($this->updated_at)->toIso8601String(),
+            'deleted_at'         => optional($this->deleted_at)?->toIso8601String(),
         ];
     }
 }

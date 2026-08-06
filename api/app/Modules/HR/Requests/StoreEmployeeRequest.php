@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\HR\Requests;
 
 use App\Common\Support\PhFormat;
+use App\Modules\Attendance\Models\Shift;
 use App\Modules\HR\Enums\CivilStatus;
 use App\Modules\HR\Enums\EmploymentType;
 use App\Modules\HR\Enums\Gender;
@@ -90,12 +91,13 @@ class StoreEmployeeRequest extends FormRequest
             'date_hired'           => ['required', 'date', 'before_or_equal:today', 'after:1980-01-01'],
             'date_regularized'     => ['nullable', 'date', 'after_or_equal:date_hired', 'before_or_equal:today'],
             'basic_monthly_salary' => ['required_if:pay_type,monthly', 'nullable', 'numeric', 'min:0', 'max:9999999.99'],
-            'daily_rate'           => ['required_if:pay_type,daily', 'nullable', 'numeric', 'min:0', 'max:99999.99'],
+            'semi_monthly_rate'    => ['required_if:pay_type,semi_monthly', 'nullable', 'numeric', 'min:0', 'max:9999999.99'],
 
             'bank_name'       => ['nullable', 'string', 'max:100'],
             'bank_account_no' => ['nullable', 'string', 'max:50', 'regex:/^[A-Za-z0-9\\-\\s]+$/'],
 
             'from_application' => ['nullable', 'string'],
+            'shift_id'         => ['nullable', 'string'],
         ];
     }
 
@@ -109,8 +111,8 @@ class StoreEmployeeRequest extends FormRequest
             'date_hired.before_or_equal' => 'Hire date cannot be in the future.',
             'basic_monthly_salary.required_if' => 'Monthly salary is required for monthly-paid employees.',
             'basic_monthly_salary.numeric' => 'Monthly salary must be a number.',
-            'daily_rate.required_if'  => 'Daily rate is required for daily-paid employees.',
-            'daily_rate.numeric' => 'Daily rate must be a number.',
+            'semi_monthly_rate.required_if'  => 'Semi-monthly rate is required for semi-monthly-paid employees.',
+            'semi_monthly_rate.numeric' => 'Semi-monthly rate must be a number.',
             'mobile_number.digits' => 'Mobile number must be 11 digits.',
             'mobile_number.regex'  => 'Mobile number must start with 09 (e.g. 09171234567).',
             'sss_no.digits'        => 'SSS must be exactly 10 digits.',
@@ -136,6 +138,13 @@ class StoreEmployeeRequest extends FormRequest
         // Cross-rule: position must belong to department.
         $position = Position::find($posId);
         abort_if(!$position || $position->department_id !== $deptId, 422, 'Selected position does not belong to the chosen department.');
+
+        // Decode shift hash if provided.
+        if (! empty($data['shift_id'])) {
+            $shiftId = Shift::tryDecodeHash($data['shift_id']);
+            abort_if($shiftId === null, 422, 'Invalid shift.');
+            $data['shift_id'] = $shiftId;
+        }
 
         return $data;
     }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Payroll\Resources;
 
+use App\Common\Services\SettingsService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -22,7 +23,9 @@ class DeMinimisBenefitResource extends JsonResource
             ]),
             'benefit_type'        => $this->benefit_type?->value,
             'benefit_type_label'  => $this->benefit_type?->label(),
-            'monthly_limit'       => $this->benefit_type?->monthlyLimit(),
+            'monthly_limit'       => $this->benefit_type
+                ? number_format(app(SettingsService::class)->requiredFloat('payroll.de_minimis.'.$this->benefit_type->value.'.monthly_limit', 0), 2, '.', '')
+                : null,
             'amount'              => $this->amount,
             'period_year'         => $this->period_year,
             'period_month'        => $this->period_month,

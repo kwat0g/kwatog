@@ -17,6 +17,7 @@ class CollectionResource extends JsonResource
             'collection_date'  => optional($this->collection_date)->toDateString(),
             'amount'           => (string) $this->amount,
             'payment_method'   => $this->payment_method?->value,
+            'payment_method_label' => $this->payment_method?->label(),
             'reference_number' => $this->reference_number,
             'cash_account'     => $this->whenLoaded('cashAccount', fn () => $this->cashAccount ? [
                 'id' => $this->cashAccount->hash_id, 'code' => $this->cashAccount->code, 'name' => $this->cashAccount->name,

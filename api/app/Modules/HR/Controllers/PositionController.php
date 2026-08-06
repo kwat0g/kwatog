@@ -47,4 +47,10 @@ class PositionController
         }
         return response()->json(null, 204);
     }
+
+    public function restore(Position $position): JsonResponse
+    {
+        $position->restore();
+        return response()->json(['message' => 'Position restored.']);
+    }
 }

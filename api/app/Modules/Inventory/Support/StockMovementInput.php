@@ -23,5 +23,7 @@ final class StockMovementInput
         public readonly ?string $remarks = null,
         public readonly ?int $createdBy = null,
         public readonly bool $bypassCountFreeze = false,
+        public readonly ?int $expectedFromVersion = null,
+        public readonly ?int $expectedToVersion = null,
     ) {}
 }

@@ -10,10 +10,11 @@ use App\Modules\HR\Enums\EmployeeSkillLevel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class EmployeeSkill extends Model
 {
-    use HasFactory, HasHashId;
+    use HasFactory, HasHashId, SoftDeletes;
 
     protected $fillable = [
         'employee_id',

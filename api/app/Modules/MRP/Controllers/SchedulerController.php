@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\MRP\Controllers;
 
+use App\Common\Services\SettingsService;
 use App\Common\Support\HashIdFilter;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\MRP\Models\Mold;
@@ -17,7 +18,10 @@ use Illuminate\Support\Carbon;
 
 class SchedulerController
 {
-    public function __construct(private readonly CapacityPlanningService $service) {}
+    public function __construct(
+        private readonly CapacityPlanningService $service,
+        private readonly SettingsService $settings,
+    ) {}
 
     public function run(RunSchedulerRequest $request): JsonResponse
     {
@@ -61,10 +65,18 @@ class SchedulerController
         return response()->json(['message' => 'Reassigned.']);
     }
 
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'default_horizon_days' => $this->settings->requiredInt('mrp.schedule.default_horizon_days', 0),
+        ]]);
+    }
+
     public function snapshot(Request $request): JsonResponse
     {
         $from = Carbon::parse($request->query('from', Carbon::today()->toDateString()));
-        $to   = Carbon::parse($request->query('to', Carbon::today()->copy()->addDays(14)->toDateString()));
+        $horizon = $this->settings->requiredInt('mrp.schedule.default_horizon_days', 0);
+        $to   = Carbon::parse($request->query('to', Carbon::today()->copy()->addDays($horizon)->toDateString()));
         return response()->json(['data' => $this->service->snapshot($from, $to)]);
     }
 }

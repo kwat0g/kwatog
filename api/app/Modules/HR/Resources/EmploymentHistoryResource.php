@@ -17,7 +17,7 @@ class EmploymentHistoryResource extends JsonResource
             (int) $user->employee_id === (int) $this->employee_id
             || $user->hasPermission('hr.employees.view_sensitive')
         );
-        $sensitiveKeys = ['basic_monthly_salary', 'daily_rate', 'salary'];
+        $sensitiveKeys = ['basic_monthly_salary', 'semi_monthly_rate', 'salary'];
 
         return [
             'id' => $this->hash_id,

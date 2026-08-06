@@ -3,30 +3,30 @@
 export type InspectionParameterType = 'dimensional' | 'visual' | 'functional';
 
 export interface InspectionSpecItem {
-  id: string;
-  parameter_name: string;
-  parameter_type: InspectionParameterType;
-  parameter_type_label?: string;
-  unit_of_measure: string | null;
-  nominal_value: string | null;
-  tolerance_min: string | null;
-  tolerance_max: string | null;
-  is_critical: boolean;
-  sort_order: number;
-  notes: string | null;
+ id: string;
+ parameter_name: string;
+ parameter_type: InspectionParameterType;
+ parameter_type_label?: string;
+ unit_of_measure: string | null;
+ nominal_value: string | null;
+ tolerance_min: string | null;
+ tolerance_max: string | null;
+ is_critical: boolean;
+ sort_order: number;
+ notes: string | null;
 }
 
 export interface InspectionSpec {
-  id: string;
-  version: number;
-  is_active: boolean;
-  notes: string | null;
-  item_count: number;
-  product?: { id: string; part_number: string; name: string } | null;
-  creator?: { id: string; name: string } | null;
-  items?: InspectionSpecItem[];
-  created_at: string;
-  updated_at: string;
+ id: string;
+ version: number;
+ is_active: boolean;
+ notes: string | null;
+ item_count: number;
+ product?: { id: string; part_number: string; name: string } | null;
+ creator?: { id: string; name: string } | null;
+ items?: InspectionSpecItem[];
+ created_at: string;
+ updated_at: string;
 }
 
 // ─── Sprint 7 Task 60 — Inspections ───────────────────────────────────
@@ -36,71 +36,71 @@ export type InspectionStatus = 'draft' | 'in_progress' | 'passed' | 'failed' | '
 export type InspectionEntityType = 'grn' | 'work_order' | 'delivery';
 
 export interface InspectionMeasurement {
-  id: string;
-  sample_index: number;
-  parameter_name: string;
-  parameter_type: InspectionParameterType;
-  parameter_type_label?: string;
-  unit_of_measure: string | null;
-  nominal_value: number | null;
-  tolerance_min: number | null;
-  tolerance_max: number | null;
-  measured_value: number | null;
-  is_critical: boolean;
-  is_pass: boolean | null;
-  notes: string | null;
+ id: string;
+ sample_index: number;
+ parameter_name: string;
+ parameter_type: InspectionParameterType;
+ parameter_type_label?: string;
+ unit_of_measure: string | null;
+ nominal_value: number | null;
+ tolerance_min: number | null;
+ tolerance_max: number | null;
+ measured_value: number | null;
+ is_critical: boolean;
+ is_pass: boolean | null;
+ notes: string | null;
 }
 
 export interface Inspection {
-  id: string;
-  inspection_number: string;
-  stage: InspectionStage;
-  stage_label?: string;
-  status: InspectionStatus;
-  status_label?: string;
-  entity_type: InspectionEntityType | null;
-  entity_hash_id: string | null;
-  batch_quantity: number;
-  sample_size: number;
-  aql_code: string | null;
-  accept_count: number;
-  reject_count: number;
-  defect_count: number;
-  started_at: string | null;
-  completed_at: string | null;
-  notes: string | null;
-  product?: { id: string; part_number: string; name: string } | null;
-  item?: { id: string; code: string; name: string } | null;
-  inspector?: { id: string; name: string } | null;
-  spec?: { id: string; version: number; is_active: boolean } | null;
-  measurements?: InspectionMeasurement[];
-  created_at: string;
-  updated_at: string;
+ id: string;
+ inspection_number: string;
+ stage: InspectionStage;
+ stage_label?: string;
+ status: InspectionStatus;
+ status_label?: string;
+ entity_type: InspectionEntityType | null;
+ entity_hash_id: string | null;
+ batch_quantity: number;
+ sample_size: number;
+ aql_code: string | null;
+ accept_count: number;
+ reject_count: number;
+ defect_count: number;
+ started_at: string | null;
+ completed_at: string | null;
+ notes: string | null;
+ product?: { id: string; part_number: string; name: string } | null;
+ item?: { id: string; code: string; name: string } | null;
+ inspector?: { id: string; name: string } | null;
+ spec?: { id: string; version: number; is_active: boolean } | null;
+ measurements?: InspectionMeasurement[];
+ created_at: string;
+ updated_at: string;
 }
 
 export interface CreateInspectionData {
-  stage: InspectionStage;
-  product_id: string;
-  batch_quantity: number;
-  entity_type?: InspectionEntityType | null;
-  entity_id?: string | null;
-  notes?: string;
+ stage: InspectionStage;
+ product_id: string;
+ batch_quantity: number;
+ entity_type?: InspectionEntityType | null;
+ entity_id?: string | null;
+ notes?: string;
 }
 
 export interface RecordMeasurementsData {
-  measurements: Array<{
-    id: string;
-    measured_value?: number | null;
-    is_pass?: boolean | null;
-    notes?: string | null;
-  }>;
+ measurements: Array<{
+ id: string;
+ measured_value?: number | null;
+ is_pass?: boolean | null;
+ notes?: string | null;
+ }>;
 }
 
 export interface AqlPlan {
-  code: string;
-  sample_size: number;
-  accept: number;
-  reject: number;
+ code: string;
+ sample_size: number;
+ accept: number;
+ reject: number;
 }
 
 // ─── Sprint 7 Task 61 — NCR ────────────────────────────────────────────
@@ -112,108 +112,108 @@ export type NcrDisposition = 'scrap' | 'rework' | 'use_as_is' | 'return_to_suppl
 export type NcrActionType = 'containment' | 'corrective' | 'preventive';
 
 export interface NcrAction {
-  id: string;
-  action_type: NcrActionType;
-  action_type_label?: string;
-  description: string;
-  performed_at: string | null;
-  performer?: { id: string; name: string } | null;
+ id: string;
+ action_type: NcrActionType;
+ action_type_label?: string;
+ description: string;
+ performed_at: string | null;
+ performer?: { id: string; name: string } | null;
 }
 
 export interface Ncr {
-  id: string;
-  ncr_number: string;
-  source: NcrSource;
-  source_label?: string;
-  severity: NcrSeverity;
-  severity_label?: string;
-  status: NcrStatus;
-  status_label?: string;
-  disposition: NcrDisposition | null;
-  disposition_label?: string;
-  defect_description: string;
-  affected_quantity: number;
-  is_auto_generated: boolean;
-  root_cause: string | null;
-  corrective_action: string | null;
-  closed_at: string | null;
-  product?: { id: string; part_number: string; name: string } | null;
-  inspection?: { id: string; inspection_number: string; stage: string; stage_label?: string; status: string; status_label?: string } | null;
-  creator?: { id: string; name: string } | null;
-  assignee?: { id: string; name: string } | null;
-  closer?: { id: string; name: string } | null;
-  replacement_work_order?: { id: string; wo_number: string; status: string; status_label?: string; quantity_target: number } | null;
-  actions?: NcrAction[];
-  created_at: string;
-  updated_at: string;
+ id: string;
+ ncr_number: string;
+ source: NcrSource;
+ source_label?: string;
+ severity: NcrSeverity;
+ severity_label?: string;
+ status: NcrStatus;
+ status_label?: string;
+ disposition: NcrDisposition | null;
+ disposition_label?: string;
+ defect_description: string;
+ affected_quantity: number;
+ is_auto_generated: boolean;
+ root_cause: string | null;
+ corrective_action: string | null;
+ closed_at: string | null;
+ product?: { id: string; part_number: string; name: string } | null;
+ inspection?: { id: string; inspection_number: string; stage: string; stage_label?: string; status: string; status_label?: string } | null;
+ creator?: { id: string; name: string } | null;
+ assignee?: { id: string; name: string } | null;
+ closer?: { id: string; name: string } | null;
+ replacement_work_order?: { id: string; wo_number: string; status: string; status_label?: string; quantity_target: number } | null;
+ actions?: NcrAction[];
+ created_at: string;
+ updated_at: string;
 }
 
 export interface CreateNcrData {
-  source: NcrSource;
-  severity: NcrSeverity;
-  product_id?: string | null;
-  inspection_id?: string | null;
-  defect_description: string;
-  affected_quantity?: number;
-  assigned_to?: string | null;
+ source: NcrSource;
+ severity: NcrSeverity;
+ product_id?: string | null;
+ inspection_id?: string | null;
+ defect_description: string;
+ affected_quantity?: number;
+ assigned_to?: string | null;
 }
 
 // ─── Sprint 7 Task 63 — Defect Pareto ──────────────────────────────────
 
 export interface ParetoRow {
-  parameter_name: string;
-  defect_count: number;
-  percentage: number;
-  cumulative_percentage: number;
-  is_critical: boolean;
+ parameter_name: string;
+ defect_count: number;
+ percentage: number;
+ cumulative_percentage: number;
+ is_critical: boolean;
 }
 
 export interface ParetoResult {
-  from: string;
-  to: string;
-  total_defects: number;
-  rows: ParetoRow[];
+ from: string;
+ to: string;
+ total_defects: number;
+ rows: ParetoRow[];
 }
 
 // ─── ADV7 — NCR Templates ────────────────────────────────────────────
 
 export interface NcrTemplate {
-  id: string;
-  name: string;
-  source: NcrSource;
-  source_label?: string;
-  severity: NcrSeverity;
-  severity_label?: string;
-  defect_description: string | null;
-  notes: string | null;
-  is_active: boolean;
-  product?: { id: string; part_number: string; name: string } | null;
-  creator?: { id: string; name: string } | null;
-  created_at: string;
-  updated_at: string;
+ id: string;
+ name: string;
+ source: NcrSource;
+ source_label?: string;
+ severity: NcrSeverity;
+ severity_label?: string;
+ defect_description: string | null;
+ notes: string | null;
+ is_active: boolean;
+ product?: { id: string; part_number: string; name: string } | null;
+ creator?: { id: string; name: string } | null;
+ created_at: string;
+ updated_at: string;
 }
 
 export interface CreateNcrTemplateData {
-  name: string;
-  source: NcrSource;
-  severity: NcrSeverity;
-  product_id?: string | null;
-  defect_description?: string;
-  notes?: string;
+ name: string;
+ source: NcrSource;
+ severity: NcrSeverity;
+ product_id?: string | null;
+ defect_description?: string;
+ notes?: string;
 }
 
 export interface UpsertInspectionSpecData {
-  product_id: string;
-  notes?: string;
-  items: Array<{
-    parameter_name: string;
-    parameter_type: InspectionParameterType;
-    unit_of_measure?: string;
-    nominal_value?: string;
-    tolerance_min?: string;
-    tolerance_max?: string;
-    is_critical?: boolean;
-    sort_order?: number;
-    notes?: string;
-  }>;
+ product_id: string;
+ notes?: string;
+ items: Array<{
+ parameter_name: string;
+ parameter_type: InspectionParameterType;
+ unit_of_measure?: string;
+ nominal_value?: string;
+ tolerance_min?: string;
+ tolerance_max?: string;
+ is_critical?: boolean;
+ sort_order?: number;
+ notes?: string;
+ }>;
 }

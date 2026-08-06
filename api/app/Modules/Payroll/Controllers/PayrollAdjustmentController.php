@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Payroll\Controllers;
 
 use App\Modules\Payroll\Models\PayrollAdjustment;
+use App\Modules\Payroll\Enums\PayrollAdjustmentType;
+use App\Modules\Payroll\Enums\PayrollAdjustmentStatus;
 use App\Modules\Payroll\Requests\CreatePayrollAdjustmentRequest;
 use App\Modules\Payroll\Requests\RejectPayrollAdjustmentRequest;
 use App\Modules\Payroll\Resources\PayrollAdjustmentResource;
@@ -20,6 +22,20 @@ class PayrollAdjustmentController
     public function index(Request $request): AnonymousResourceCollection
     {
         return PayrollAdjustmentResource::collection($this->service->list($request->query()));
+    }
+
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'statuses' => array_map(
+                static fn (PayrollAdjustmentStatus $status): array => ['value' => $status->value, 'label' => $status->label()],
+                PayrollAdjustmentStatus::cases(),
+            ),
+            'types' => array_map(
+                static fn (PayrollAdjustmentType $type): array => ['value' => $type->value, 'label' => $type->label()],
+                PayrollAdjustmentType::cases(),
+            ),
+        ]]);
     }
 
     public function show(PayrollAdjustment $adjustment): PayrollAdjustmentResource

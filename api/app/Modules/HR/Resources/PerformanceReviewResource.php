@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Resources;
 
+use App\Modules\HR\Enums\PerformanceOverallRating;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -23,12 +24,16 @@ class PerformanceReviewResource extends JsonResource
                 'last_name'  => $this->reviewer?->last_name,
             ]),
             'status'          => $this->status?->value,
+            'status_label'    => $this->status?->label(),
             'ratings'         => $this->ratings,
             'strengths'       => $this->strengths,
             'improvements'    => $this->improvements,
             'goals'           => $this->goals,
             'overall_score'   => $this->overall_score !== null ? (string) $this->overall_score : null,
             'overall_rating'  => $this->overall_rating,
+            'overall_rating_label' => $this->overall_rating !== null
+                ? PerformanceOverallRating::tryFrom((string) $this->overall_rating)?->label()
+                : null,
             'submitted_at'    => $this->submitted_at?->toIso8601String(),
             'acknowledged_at' => $this->acknowledged_at?->toIso8601String(),
             'created_at'      => $this->created_at?->toIso8601String(),

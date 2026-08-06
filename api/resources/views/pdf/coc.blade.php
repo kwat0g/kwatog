@@ -1,86 +1,84 @@
 @extends('pdf._layout')
 
-@section('title', 'Certificate of Conformance')
+@section('title', 'Certificate of Conformance ' . ($coc_number ?? ''))
 
 @section('content')
 
-<h1 class="doc-title">Certificate of Conformance</h1>
+<table class="info-grid">
+  <tr>
+    <td>
+      <div class="info-card">
+        <div class="info-card-title">Certificate & Quality Spec</div>
+        <div class="info-row"><span class="lbl">Certificate No:</span> <span class="val mono" style="font-weight:700;">{{ $coc_number }}</span></div>
+        <div class="info-row"><span class="lbl">Issued Date:</span> <span class="val mono">{{ $issued_at }}</span></div>
+        <div class="info-row"><span class="lbl">Inspection No:</span> <span class="val mono">{{ $inspection_number }}</span></div>
+        <div class="info-row"><span class="lbl">Quality Standard:</span> <span class="val font-semibold" style="color:#1E1B4B;">{{ $quality_standard ?? 'IATF 16949:2016' }}</span></div>
+      </div>
+    </td>
+    <td>
+      <div class="info-card last">
+        <div class="info-card-title">Product & Batch Traceability</div>
+        <div class="info-row"><span class="lbl">Part Number:</span> <span class="val mono font-semibold">{{ $product_part_number }}</span></div>
+        <div class="info-row"><span class="lbl">Description:</span> <span class="val">{{ $product_name }}</span></div>
+        @if (!empty($batch_number))
+          <div class="info-row"><span class="lbl">Batch No:</span> <span class="val mono font-semibold">{{ $batch_number }}</span></div>
+        @endif
+        @if (!empty($lot_number))
+          <div class="info-row"><span class="lbl">Shipment Lot:</span> <span class="val mono font-semibold">{{ $lot_number }}</span></div>
+        @endif
+      </div>
+    </td>
+  </tr>
+</table>
 
-<div class="meta-grid">
-  <div class="col">
-    <label>Certificate No.</label>
-    <div class="v">{{ $coc_number }}</div>
-    <label style="margin-top:8px;">Issued</label>
-    <div class="v">{{ $issued_at }}</div>
-  </div>
-  <div class="col">
-    <label>Inspection No.</label>
-    <div class="v">{{ $inspection_number }}</div>
-    <label style="margin-top:8px;">Stage</label>
-    <div class="v">{{ ucfirst(str_replace('_', '-', $stage)) }}</div>
-  </div>
-</div>
-
-<table class="lines" style="margin-bottom:12px;">
+<table class="lines">
   <thead>
     <tr>
-      <th>Field</th>
-      <th>Value</th>
+      <th>Inspection Parameter / Characteristic</th>
+      <th style="width: 90px;" class="r">Batch Qty</th>
+      <th style="width: 100px;" class="r">Sample Plan</th>
+      <th style="width: 80px;" class="r">Defects</th>
+      <th style="width: 100px;" class="c">Result</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td><strong>Product / Part Number</strong></td>
-      <td>{{ $product_part_number }} — {{ $product_name }}</td>
-    </tr>
-    <tr>
-      <td><strong>Batch Quantity</strong></td>
-      <td class="r">{{ number_format($batch_quantity) }}</td>
-    </tr>
-    <tr>
-      <td><strong>Sample Size</strong></td>
-      <td class="r">{{ number_format($sample_size) }} @if ($aql_code) (AQL Level II 0.65, code {{ $aql_code }}) @endif</td>
-    </tr>
-    <tr>
-      <td><strong>Defects Found / Accept</strong></td>
-      <td class="r">{{ $defect_count }} / {{ $accept_count }}</td>
-    </tr>
-    <tr>
-      <td><strong>Inspection Result</strong></td>
       <td>
+        <div style="font-weight:700; color:#0F172A;">{{ ucfirst(str_replace('_', ' ', $stage)) }} Inspection</div>
+        <div style="font-size:7.5pt; color:#64748B;">
+          Sampling per ANSI/ASQ Z1.4 General Level {{ $aql_level ?? 'II' }}
+        </div>
+      </td>
+      <td class="r mono font-semibold">{{ number_format($batch_quantity) }}</td>
+      <td class="r mono">{{ number_format($sample_size) }} @if ($aql_code)<span style="font-size:7.5pt; color:#64748B;">[{{ $aql_code }}]</span>@endif</td>
+      <td class="r mono" style="{{ $defect_count > 0 ? 'color:#DC2626; font-weight:700;' : '' }}">{{ $defect_count }}</td>
+      <td class="c">
         @php($__pass = !empty($inspection_passed))
-        <span class="chip" style="background: {{ $__pass ? '#DCFCE7' : '#FEE2E2' }}; color: {{ $__pass ? '#166534' : '#991B1B' }};">{{ $inspection_result ?? ($__pass ? 'PASSED' : 'FAILED') }}</span>
+        <span class="chip {{ $__pass ? 'chip-success' : 'chip-danger' }}">
+          {{ $inspection_result ?? ($__pass ? 'PASSED (AQL 0.65)' : 'REJECTED') }}
+        </span>
       </td>
     </tr>
+
     @if (!empty($delivery_number))
       <tr>
-        <td><strong>Delivery Note</strong></td>
-        <td>{{ $delivery_number }}</td>
+        <td><strong>Delivery Note Reference</strong></td>
+        <td colspan="4" class="mono font-semibold">{{ $delivery_number }}</td>
       </tr>
     @endif
-    {{-- ADV3 — IATF 16949 batch + lot traceability rows. --}}
-    @if (!empty($batch_number))
-      <tr>
-        <td><strong>Batch No.</strong></td>
-        <td><span style="font-family: 'DejaVuSansMono', monospace;">{{ $batch_number }}</span></td>
-      </tr>
-    @endif
-    @if (!empty($lot_number))
-      <tr>
-        <td><strong>Shipment Lot No.</strong></td>
-        <td><span style="font-family: 'DejaVuSansMono', monospace;">{{ $lot_number }}</span></td>
-      </tr>
-    @endif
+
     @if (!empty($material_lot_references) && is_array($material_lot_references))
       <tr>
-        <td><strong>Material Lot References</strong></td>
-        <td>
+        <td colspan="5">
+          <div style="font-weight:700; font-size:8pt; color:#475569; margin-bottom:4px; text-transform:uppercase;">
+            Traceable Raw Material Lots (IATF 16949 Chain Genealogy)
+          </div>
           @foreach ($material_lot_references as $ref)
-            <div style="font-size:10px;">
-              {{ $ref['item_code'] ?? '—' }}
-              @if (!empty($ref['grn_number'])) · GRN {{ $ref['grn_number'] }} @endif
-              @if (!empty($ref['material_lot_number'])) · Lot {{ $ref['material_lot_number'] }} @endif
-              @if (!empty($ref['supplier_lot_reference'])) · Supplier {{ $ref['supplier_lot_reference'] }} @endif
+            <div style="font-size:8pt; font-family:'DejaVu Sans Mono', monospace; color:#334155; margin-bottom:2px;">
+              &bull; {{ $ref['item_code'] ?? 'Resin' }}
+              @if (!empty($ref['grn_number'])) &middot; GRN: {{ $ref['grn_number'] }} @endif
+              @if (!empty($ref['material_lot_number'])) &middot; Resin Lot: {{ $ref['material_lot_number'] }} @endif
+              @if (!empty($ref['supplier_lot_reference'])) &middot; Supplier Lot: {{ $ref['supplier_lot_reference'] }} @endif
             </div>
           @endforeach
         </td>
@@ -90,28 +88,35 @@
 </table>
 
 @if (!empty($critical_measurements) && is_array($critical_measurements))
-  <h3 style="font-size:12px; margin:16px 0 6px;">Critical Dimension Measurements</h3>
-  <table>
+  <div style="font-size:8.5pt; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; color:#1E1B4B; margin: 14px 0 6px;">
+    Critical Dimension Inspection Results
+  </div>
+  <table class="lines">
     <thead>
       <tr>
-        <th>Characteristic</th>
-        <th class="r">Nominal</th>
-        <th class="r">Tolerance</th>
-        <th class="r">Measured (min–max)</th>
-        <th class="r">n</th>
-        <th>Result</th>
+        <th>Dimension Characteristic</th>
+        <th style="width: 70px;" class="r">Nominal</th>
+        <th style="width: 100px;" class="r">Tolerance</th>
+        <th style="width: 110px;" class="r">Actual Range</th>
+        <th style="width: 40px;" class="c">n</th>
+        <th style="width: 70px;" class="c">Status</th>
       </tr>
     </thead>
     <tbody>
       @foreach ($critical_measurements as $m)
         <tr>
-          <td>{{ $m['parameter'] }}@if (!empty($m['unit'])) <span style="color:#888;">({{ $m['unit'] }})</span>@endif</td>
-          <td class="r" style="font-family:'DejaVuSansMono',monospace;">{{ $m['nominal'] ?? '—' }}</td>
-          <td class="r" style="font-family:'DejaVuSansMono',monospace;">{{ $m['tol_min'] ?? '—' }} … {{ $m['tol_max'] ?? '—' }}</td>
-          <td class="r" style="font-family:'DejaVuSansMono',monospace;">{{ $m['min_actual'] ?? '—' }} … {{ $m['max_actual'] ?? '—' }}</td>
-          <td class="r">{{ $m['sample_n'] }}</td>
-          <td>
-            <span class="chip" style="background: {{ $m['pass'] ? '#DCFCE7' : '#FEE2E2' }}; color: {{ $m['pass'] ? '#166534' : '#991B1B' }};">{{ $m['pass'] ? 'PASS' : 'FAIL' }}</span>
+          <td style="font-weight:600;">
+            {{ $m['parameter'] }}
+            @if (!empty($m['unit'])) <span style="font-size:7.5pt; color:#64748B;">({{ $m['unit'] }})</span>@endif
+          </td>
+          <td class="r mono">{{ $m['nominal'] ?? '—' }}</td>
+          <td class="r mono" style="color:#64748B;">{{ $m['tol_min'] ?? '—' }} … {{ $m['tol_max'] ?? '—' }}</td>
+          <td class="r mono font-semibold">{{ $m['min_actual'] ?? '—' }} … {{ $m['max_actual'] ?? '—' }}</td>
+          <td class="c mono">{{ $m['sample_n'] }}</td>
+          <td class="c">
+            <span class="chip {{ $m['pass'] ? 'chip-success' : 'chip-danger' }}">
+              {{ $m['pass'] ? 'PASS' : 'FAIL' }}
+            </span>
           </td>
         </tr>
       @endforeach
@@ -119,24 +124,34 @@
   </table>
 @endif
 
-<p style="font-size:11px; line-height:1.6; margin: 16px 0;">
-  This certifies that the parts described above have been manufactured and
-  inspected in accordance with the customer's drawings and specifications,
-  and conform to all applicable quality requirements per IATF 16949
-  procedures. Sampling was performed in accordance with ANSI/ASQ Z1.4
-  General Inspection Level II at AQL 0.65.
-</p>
-
-<div class="signatures">
-  <div class="sig">
-    <div class="line">QC Inspector — {{ $inspector_name ?? '________________' }}</div>
-  </div>
-  <div class="sig">
-    <div class="line">QC Manager</div>
-  </div>
-  <div class="sig">
-    <div class="line">Customer Acknowledgement</div>
-  </div>
+<div style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:4px; padding:10px 12px; margin-top:16px; font-size:8pt; color:#475569; line-height:1.4;">
+  <strong>Quality Certification Statement:</strong> This certifies that the plastic injection molded components listed above have been manufactured, sampled, and tested in accordance with Philippine Ogami Corporation's IATF 16949 quality management system and approved customer engineering drawings.
 </div>
+
+<table class="signatures" style="margin-top:28px;">
+  <tr>
+    <td style="width: 33%;">
+      <div class="sig-card">
+        <div class="sig-title">QC Inspector</div>
+        <div class="sig-line">{{ $inspector_name ?? 'Rosa V. (Certified Inspector)' }}</div>
+        <div class="sig-meta">Quality Assurance Dept</div>
+      </div>
+    </td>
+    <td style="width: 33%;">
+      <div class="sig-card">
+        <div class="sig-title">Quality Manager</div>
+        <div class="sig-line">Kenji Sato / Head of QA</div>
+        <div class="sig-meta">IATF Management Rep</div>
+      </div>
+    </td>
+    <td style="width: 34%;">
+      <div class="sig-card">
+        <div class="sig-title">Customer Acknowledgement</div>
+        <div class="sig-line">Received & Inspected</div>
+        <div class="sig-meta">Date & Signature</div>
+      </div>
+    </td>
+  </tr>
+</table>
 
 @endsection

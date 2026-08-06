@@ -32,8 +32,6 @@ use Illuminate\Support\Collection;
  */
 class DocumentReviewService
 {
-    private const RECIPIENT_ROLES = ['system_admin', 'qc_inspector'];
-
     public function __construct(
         private readonly NotificationService $notifications,
         private readonly SettingsService $settings,
@@ -106,9 +104,18 @@ class DocumentReviewService
      */
     private function resolveRecipients(): Collection
     {
+        $roles = array_values(array_filter(
+            (array) $this->settings->get('quality.document_review.recipient_roles', []),
+            static fn ($role): bool => is_string($role) && $role !== '',
+        ));
+
+        if ($roles === []) {
+            return collect();
+        }
+
         return User::query()
             ->where('is_active', true)
-            ->whereHas('role', fn ($q) => $q->whereIn('slug', self::RECIPIENT_ROLES))
+            ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
             ->get()
             ->unique('id')
             ->values();

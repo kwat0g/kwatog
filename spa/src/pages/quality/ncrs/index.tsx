@@ -1,7 +1,6 @@
 /**
  * Sprint 7 — Task 64 — NCR list page.
  */
-import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
 import { Plus } from 'lucide-react';
@@ -14,13 +13,14 @@ import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';
 import { SkeletonTable } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { usePermission } from '@/hooks/usePermission';
+import { useUrlFilters } from '@/hooks/useUrlFilters';
 import type { Ncr, NcrSeverity, NcrStatus } from '@/types/quality';
 
 const STATUS_CHIP: Record<NcrStatus, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
-  open: 'warning',
-  in_progress: 'info',
-  closed: 'success',
-  cancelled: 'neutral' };
+ open: 'warning',
+ in_progress: 'info',
+ closed: 'success',
+ cancelled: 'neutral' };
 
 const SEVERITY_CHIP: Record<NcrSeverity, 'success' | 'danger' | 'warning' | 'neutral' | 'info'> = {
   low: 'neutral',
@@ -28,169 +28,174 @@ const SEVERITY_CHIP: Record<NcrSeverity, 'success' | 'danger' | 'warning' | 'neu
   high: 'danger',
   critical: 'danger' };
 
+const DEFAULT_FILTERS: NcrListParams = {
+  page: 1, per_page: 25,
+};
+
 export default function NcrsListPage() {
   const navigate = useNavigate();
   const { can } = usePermission();
-  const [filters, setFilters] = useState<NcrListParams>({ page: 1, per_page: 25 });
+  const [filters, setFilters] = useUrlFilters<NcrListParams>(DEFAULT_FILTERS);
 
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['quality', 'ncrs', filters],
-    queryFn: () => ncrsApi.list(filters),
-    placeholderData: (prev) => prev });
-  const { data: ncrOptions } = useQuery({
-    queryKey: ['quality', 'ncr-options'],
-    queryFn: ncrsApi.options,
-    staleTime: 5 * 60 * 1000 });
-  const labels = new Map([
-    ...(ncrOptions?.sources ?? []),
-    ...(ncrOptions?.severities ?? []),
-    ...(ncrOptions?.statuses ?? []),
-    ...(ncrOptions?.dispositions ?? []),
-  ].map((option) => [option.value, option.label]));
+ const { data, isLoading, isError, refetch } = useQuery({
+ queryKey: ['quality', 'ncrs', filters],
+ queryFn: () => ncrsApi.list(filters),
+ placeholderData: (prev) => prev });
+ const { data: ncrOptions } = useQuery({
+ queryKey: ['quality', 'ncr-options'],
+ queryFn: ncrsApi.options,
+ staleTime: 5 * 60 * 1000 });
+ const labels = new Map([
+ ...(ncrOptions?.sources ?? []),
+ ...(ncrOptions?.severities ?? []),
+ ...(ncrOptions?.statuses ?? []),
+ ...(ncrOptions?.dispositions ?? []),
+ ].map((option) => [option.value, option.label]));
 
-  const columns: Column<Ncr>[] = [
-    {
-      key: 'ncr_number',
-      header: 'NCR',
-      cell: (r) => (
-        <span className="flex items-center gap-2">
-          <span className="font-mono">
-            {r.ncr_number}
-          </span>
-          {r.is_auto_generated && (
-            <span title="Auto-generated from inspection failure">
-              <Chip variant="info">Auto</Chip>
-            </span>
-          )}
-        </span>
-      ) },
-    {
-      key: 'product',
-      header: 'Product',
-      cell: (r) =>
-        r.product ? (
-          <span>
-            <span className="font-mono">{r.product.part_number}</span>
-            <span className="ml-2 text-muted">{r.product.name}</span>
-          </span>
-        ) : (
-          <span className="text-muted">—</span>
-        ) },
-    {
-      key: 'source',
-      header: 'Source',
-      cell: (r) => <Chip variant="neutral">{r.source_label ?? labels.get(r.source) ?? r.source}</Chip> },
-    {
-      key: 'severity',
-      header: 'Severity',
-      cell: (r) => <Chip variant={SEVERITY_CHIP[r.severity]}>{r.severity_label ?? labels.get(r.severity) ?? r.severity}</Chip> },
-    {
-      key: 'affected_quantity',
-      header: 'Qty',
-      align: 'right',
-      cell: (r) => <NumCell>{r.affected_quantity}</NumCell> },
-    {
-      key: 'disposition',
-      header: 'Disposition',
-      cell: (r) =>
-        r.disposition ? (
-          <Chip variant="neutral">{r.disposition_label ?? labels.get(r.disposition) ?? r.disposition}</Chip>
-        ) : (
-          <span className="text-muted">—</span>
-        ) },
-    {
-      key: 'status',
-      header: 'Status',
-      cell: (r) => <Chip variant={STATUS_CHIP[r.status]}>{r.status_label ?? labels.get(r.status) ?? r.status}</Chip> },
-    {
-      key: 'closed',
-      header: 'Closed',
-      align: 'right',
-      cell: (r) => <NumCell>{r.closed_at?.slice(0, 10) ?? '—'}</NumCell> },
-  ];
+ const columns: Column<Ncr>[] = [
+ {
+ key: 'ncr_number',
+ header: 'NCR',
+ cell: (r) => (
+ <span className="flex items-center gap-2">
+ <span className="font-mono">
+ {r.ncr_number}
+ </span>
+ {r.is_auto_generated && (
+ <span title="Auto-generated from inspection failure">
+ <Chip variant="info">Auto</Chip>
+ </span>
+ )}
+ </span>
+ ) },
+ {
+ key: 'product',
+ header: 'Product',
+ cell: (r) =>
+ r.product ? (
+ <span>
+ <span className="font-mono">{r.product.part_number}</span>
+ <span className="ml-2 text-muted">{r.product.name}</span>
+ </span>
+ ) : (
+ <span className="text-muted">—</span>
+ ) },
+ {
+ key: 'source',
+ header: 'Source',
+ cell: (r) => <Chip variant="neutral">{r.source_label ?? labels.get(r.source) ?? r.source}</Chip> },
+ {
+ key: 'severity',
+ header: 'Severity',
+ cell: (r) => <Chip variant={SEVERITY_CHIP[r.severity]}>{r.severity_label ?? labels.get(r.severity) ?? r.severity}</Chip> },
+ {
+ key: 'affected_quantity',
+ header: 'Qty',
+ align: 'right',
+ cell: (r) => <NumCell>{r.affected_quantity}</NumCell> },
+ {
+ key: 'disposition',
+ header: 'Disposition',
+ cell: (r) =>
+ r.disposition ? (
+ <Chip variant="neutral">{r.disposition_label ?? labels.get(r.disposition) ?? r.disposition}</Chip>
+ ) : (
+ <span className="text-muted">—</span>
+ ) },
+ {
+ key: 'status',
+ header: 'Status',
+ cell: (r) => <Chip variant={STATUS_CHIP[r.status]}>{r.status_label ?? labels.get(r.status) ?? r.status}</Chip> },
+ {
+ key: 'closed',
+ header: 'Closed',
+ align: 'right',
+ cell: (r) => <NumCell>{r.closed_at?.slice(0, 10) ?? '—'}</NumCell> },
+ ];
 
-  const filterConfig: FilterConfig[] = [
-    {
-      key: 'status',
-      label: 'Status',
-      type: 'select',
-      options: [
-        { value: '', label: 'All' },
-        ...(ncrOptions?.statuses ?? []),
-      ] },
-    {
-      key: 'severity',
-      label: 'Severity',
-      type: 'select',
-      options: [
-        { value: '', label: 'All' },
-        ...(ncrOptions?.severities ?? []),
-      ] },
-    {
-      key: 'source',
-      label: 'Source',
-      type: 'select',
-      options: [
-        { value: '', label: 'All' },
-        ...(ncrOptions?.sources ?? []),
-      ] },
-  ];
+ const filterConfig: FilterConfig[] = [
+ {
+ key: 'status',
+ label: 'Status',
+ type: 'select',
+ options: [
+ { value: '', label: 'All' },
+ ...(ncrOptions?.statuses ?? []),
+ ] },
+ {
+ key: 'severity',
+ label: 'Severity',
+ type: 'select',
+ options: [
+ { value: '', label: 'All' },
+ ...(ncrOptions?.severities ?? []),
+ ] },
+ {
+ key: 'source',
+ label: 'Source',
+ type: 'select',
+ options: [
+ { value: '', label: 'All' },
+ ...(ncrOptions?.sources ?? []),
+ ] },
+ ];
 
-  return (
-    <div>
-      <PageHeader
-        title="Non-conformance reports"
-        subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'NCR' : 'NCRs'}` : undefined}
-        actions={
-          can('quality.ncr.manage') ? (
-            <Button
-              variant="primary"
-              size="sm"
-              icon={<Plus size={14} />}
-              onClick={() => navigate('/quality/ncrs/new')}
-            >
-              New NCR
-            </Button>
-          ) : undefined
-        }
-      />
-      <FilterBar
-        filters={filterConfig}
-        values={filters}
-        onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
-        onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
-        searchPlaceholder="Search NCR number or description…"
-      />
-      {isLoading && !data && <SkeletonTable columns={8} rows={6} />}
-      {isError && (
-        <EmptyState
-          icon="alert-circle"
-          title="Failed to load NCRs"
-          action={
-            <Button variant="secondary" onClick={() => refetch()}>
-              Retry
-            </Button>
-          }
-        />
-      )}
-      {data && data.data.length === 0 && (
-        <EmptyState
-          icon="alert-triangle"
-          title="No NCRs"
-          description="When an inspection fails or a customer complaint is filed, a non-conformance report will appear here."
-        />
-      )}
-      {data && data.data.length > 0 && (
-        <div className="px-5 py-4">
-          <DataTable
-            onRowClick={(r) => navigate(`/quality/ncrs/${r.id}`)}
-            columns={columns}
-            data={data.data}
-            meta={data.meta}
-            onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
-          />
-        </div>
-      )}
-    </div>
-  );
+ return (
+ <div>
+ <PageHeader
+ title="Non-conformance reports"
+ subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'NCR' : 'NCRs'}` : undefined}
+ actions={
+ can('quality.ncr.manage') ? (
+ <Button
+ variant="primary"
+ size="sm"
+ icon={<Plus size={14} />}
+ onClick={() => navigate('/quality/ncrs/new')}
+ >
+ New NCR
+ </Button>
+ ) : undefined
+ }
+ />
+ <FilterBar
+ filters={filterConfig}
+ values={filters}
+ onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
+ onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
+ searchPlaceholder="Search NCR number or description…"
+ />
+ {isLoading && !data && <SkeletonTable columns={8} rows={6} />}
+ {isError && (
+ <EmptyState
+ icon="alert-circle"
+ title="Failed to load NCRs"
+ action={
+ <Button variant="secondary" onClick={() => refetch()}>
+ Retry
+ </Button>
+ }
+ />
+ )}
+ {data && data.data.length === 0 && (
+ <EmptyState
+ icon="alert-triangle"
+ title="No NCRs"
+ description="When an inspection fails or a customer complaint is filed, a non-conformance report will appear here."
+ />
+ )}
+ {data && data.data.length > 0 && (
+ <div className="px-5 py-4">
+  <DataTable
+  tableKey="ncrs"
+  onRowClick={(r) => navigate(`/quality/ncrs/${r.id}`)}
+ columns={columns}
+ data={data.data}
+ meta={data.meta}
+ onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+ />
+ </div>
+ )}
+ </div>
+ );
 }

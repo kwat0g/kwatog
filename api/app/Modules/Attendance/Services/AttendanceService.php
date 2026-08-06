@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Attendance\Services;
 
+use App\Common\Support\TrashedFilter;
 use App\Modules\Attendance\Models\Attendance;
 use App\Modules\Auth\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -27,6 +28,8 @@ class AttendanceService
     public function list(array $filters, ?User $user = null): LengthAwarePaginator
     {
         $q = Attendance::query()->with(['employee:id,employee_no,first_name,middle_name,last_name,suffix,department_id', 'employee.department', 'shift']);
+
+        TrashedFilter::apply($q, $filters);
 
         if (!empty($filters['employee_id'])) {
             $empId = \App\Common\Support\HashIdFilter::decode(

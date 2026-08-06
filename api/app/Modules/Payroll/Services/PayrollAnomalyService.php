@@ -20,9 +20,9 @@ use Illuminate\Support\Facades\Log;
  * Rules (all percentages are versus the employee's previous (non-13th-month)
  * payroll, regardless of which period it came from):
  *
- *   - Net pay change > 30%        → large_change
- *   - OT hours > 80               → excessive_ot
- *   - Deductions > 50% of gross   → high_deduction
+ *   - Net pay change above the configured ratio → large_change
+ *   - OT hours above the configured threshold  → excessive_ot
+ *   - Deductions above the configured ratio     → high_deduction
  *   - No previous payroll exists  → first_payroll
  *   - Net pay = 0                 → zero_pay
  *

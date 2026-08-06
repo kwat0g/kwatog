@@ -24,199 +24,199 @@ import { formatPeso } from '@/lib/formatNumber';
 import { focusRingInset } from '@/lib/focus';
 
 export default function QualityDashboardPage() {
-  const [selectedDefect, setSelectedDefect] = useState<string | null>(null);
-  const pareto = useQuery({
-    queryKey: ['quality', 'pareto', 'default-window'],
-    queryFn: () => analyticsApi.defectPareto({ limit: 10 }),
-  });
+ const [selectedDefect, setSelectedDefect] = useState<string | null>(null);
+ const pareto = useQuery({
+ queryKey: ['quality', 'pareto', 'default-window'],
+ queryFn: () => analyticsApi.defectPareto({ limit: 10 }),
+ });
 
-  // The API applies the configured quality history window when dates are omitted.
-  const passRate = useQuery({
-    queryKey: ['quality', 'pass-rate'],
-    queryFn: () => analyticsApi.inspectionSummary(),
-  });
+ // The API applies the configured quality history window when dates are omitted.
+ const passRate = useQuery({
+ queryKey: ['quality', 'pass-rate'],
+ queryFn: () => analyticsApi.inspectionSummary(),
+ });
 
-  const openNcrs = useQuery({
-    queryKey: ['quality', 'ncrs', 'open'],
-    queryFn: () => ncrsApi.list({ status: 'open', per_page: 5 }),
-  });
+ const openNcrs = useQuery({
+ queryKey: ['quality', 'ncrs', 'open'],
+ queryFn: () => ncrsApi.list({ status: 'open', per_page: 5 }),
+ });
 
-  const qualityDashboard = useQuery({
-    queryKey: ['dashboards', 'quality'],
-    queryFn: () => dashboardsApi.quality(),
-  });
+ const qualityDashboard = useQuery({
+ queryKey: ['dashboards', 'quality'],
+ queryFn: () => dashboardsApi.quality(),
+ });
 
-  const copq = qualityDashboard.data?.panels?.copq as {
-    internal_failure: { scrap_units: number; rework_units: number; scrap_cost: number; rework_cost: number };
-    external_failure: { returns: number; complaints: number; return_cost: number };
-    total: number;
-    period_label: string;
-  } | undefined;
+ const copq = qualityDashboard.data?.panels?.copq as {
+ internal_failure: { scrap_units: number; rework_units: number; scrap_cost: number; rework_cost: number };
+ external_failure: { returns: number; complaints: number; return_cost: number };
+ total: number;
+ period_label: string;
+ } | undefined;
 
-  const drillDown = useQuery({
-    queryKey: ['quality', 'pareto', 'drill', selectedDefect],
-    queryFn: () => analyticsApi.paretoDrillDown(selectedDefect ?? '', pareto.data ? { from: pareto.data.from, to: pareto.data.to } : undefined),
-    enabled: Boolean(selectedDefect),
-  });
+ const drillDown = useQuery({
+ queryKey: ['quality', 'pareto', 'drill', selectedDefect],
+ queryFn: () => analyticsApi.paretoDrillDown(selectedDefect ?? '', pareto.data ? { from: pareto.data.from, to: pareto.data.to } : undefined),
+ enabled: Boolean(selectedDefect),
+ });
 
-  const paretoChartData = useMemo(
-    () =>
-      (pareto.data?.rows ?? []).map((r) => ({
-        category: r.parameter_name,
-        minutes: r.defect_count,
-        cumulative_pct: r.cumulative_percentage,
-      })),
-    [pareto.data],
-  );
+ const paretoChartData = useMemo(
+ () =>
+ (pareto.data?.rows ?? []).map((r) => ({
+ category: r.parameter_name,
+ minutes: r.defect_count,
+ cumulative_pct: r.cumulative_percentage,
+ })),
+ [pareto.data],
+ );
 
-  return (
-    <div>
-      <PageHeader title="Quality dashboard" subtitle={pareto.data ? `Quality window: ${pareto.data.from} — ${pareto.data.to}` : 'Configured quality history window'} />
+ return (
+ <div>
+ <PageHeader title="Quality dashboard" subtitle={pareto.data ? `Quality window: ${pareto.data.from} — ${pareto.data.to}` : 'Configured quality history window'} />
 
-      <div className="px-5 grid grid-cols-3 gap-4 mb-4">
-        <StatCard
-          label="Pass rate"
-          value={passRate.isLoading ? '—' : passRate.data?.pass_rate != null ? `${passRate.data.pass_rate.toFixed(1)}%` : '—'}
-          helper={passRate.data ? `${passRate.data.total} inspections` : '—'}
-        />
-        <StatCard
-          label="Open NCRs"
-          value={openNcrs.isLoading ? '—' : openNcrs.data?.meta.total != null ? String(openNcrs.data.meta.total) : '—'}
-          helper="awaiting disposition"
-        />
-        <StatCard
-          label="Total defects"
-          value={pareto.isLoading ? '—' : pareto.data?.total_defects != null ? String(pareto.data.total_defects) : '—'}
-          helper="across top 10 parameters"
-        />
-      </div>
+ <div className="px-5 grid grid-cols-3 gap-4 mb-4">
+ <StatCard
+ label="Pass rate"
+ value={passRate.isLoading ? '—' : passRate.data?.pass_rate != null ? `${passRate.data.pass_rate.toFixed(1)}%` : '—'}
+ helper={passRate.data ? `${passRate.data.total} inspections` : '—'}
+ />
+ <StatCard
+ label="Open NCRs"
+ value={openNcrs.isLoading ? '—' : openNcrs.data?.meta.total != null ? String(openNcrs.data.meta.total) : '—'}
+ helper="awaiting disposition"
+ />
+ <StatCard
+ label="Total defects"
+ value={pareto.isLoading ? '—' : pareto.data?.total_defects != null ? String(pareto.data.total_defects) : '—'}
+ helper="across top 10 parameters"
+ />
+ </div>
 
-      <div className="px-5 grid grid-cols-3 gap-4">
-        <Panel title="Defect Pareto" meta="Top 10 parameters" className="col-span-2">
-          {pareto.isLoading && <SkeletonBlock className="h-64" />}
-          {pareto.isError && (
-            <EmptyState
-              icon="alert-circle"
-              title="Failed to load defect data"
-              action={<Button variant="secondary" onClick={() => pareto.refetch()}>Retry</Button>}
-            />
-          )}
-          {pareto.data && pareto.data.rows.length === 0 && (
-            <EmptyState icon="check-circle" title="No defects in the period" description={pareto.data ? `All inspections passed from ${pareto.data.from} to ${pareto.data.to}.` : 'All inspections passed in the configured quality window.'} />
-          )}
-          {pareto.data && pareto.data.rows.length > 0 && (
-            <div>
-              <DowntimeParetoChart
-                data={paretoChartData}
-                height={240}
-                valueLabel="Defects"
-              />
-              <div className="mt-3 space-y-1">
-                {pareto.data.rows.map((row) => (
-                  <button
-                    key={row.parameter_name}
-                    onClick={() => setSelectedDefect(row.parameter_name)}
-                    className={`w-full text-left px-2 py-1 rounded-md hover:bg-subtle transition-colors flex items-center gap-2 text-xs cursor-pointer ${focusRingInset} ${
-                      selectedDefect === row.parameter_name ? 'bg-subtle' : ''
-                    }`}
-                  >
-                    <span className="flex-1 truncate">{row.parameter_name}</span>
-                    {row.is_critical && <Chip variant="danger">Critical</Chip>}
-                    <span className="font-mono tabular-nums text-muted">{row.defect_count} · {row.percentage.toFixed(1)}%</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </Panel>
+ <div className="px-5 grid grid-cols-3 gap-4">
+ <Panel title="Defect Pareto" meta="Top 10 parameters" className="col-span-2">
+ {pareto.isLoading && <SkeletonBlock className="h-64" />}
+ {pareto.isError && (
+ <EmptyState
+ icon="alert-circle"
+ title="Failed to load defect data"
+ action={<Button variant="secondary" onClick={() => pareto.refetch()}>Retry</Button>}
+ />
+ )}
+ {pareto.data && pareto.data.rows.length === 0 && (
+ <EmptyState icon="check-circle" title="No defects in the period" description={pareto.data ? `All inspections passed from ${pareto.data.from} to ${pareto.data.to}.` : 'All inspections passed in the configured quality window.'} />
+ )}
+ {pareto.data && pareto.data.rows.length > 0 && (
+ <div>
+ <DowntimeParetoChart
+ data={paretoChartData}
+ height={240}
+ valueLabel="Defects"
+ />
+ <div className="mt-3 space-y-1">
+ {pareto.data.rows.map((row) => (
+ <button
+ key={row.parameter_name}
+ onClick={() => setSelectedDefect(row.parameter_name)}
+ className={`w-full text-left px-2 py-1 rounded-md hover:bg-subtle transition-colors flex items-center gap-2 text-xs cursor-pointer ${focusRingInset} ${
+ selectedDefect === row.parameter_name ? 'bg-subtle' : ''
+ }`}
+ >
+ <span className="flex-1 truncate">{row.parameter_name}</span>
+ {row.is_critical && <Chip variant="danger">Critical</Chip>}
+ <span className="font-mono tabular-nums text-muted">{row.defect_count} · {row.percentage.toFixed(1)}%</span>
+ </button>
+ ))}
+ </div>
+ </div>
+ )}
+ </Panel>
 
-        <div className="space-y-4">
-          <Panel title="Open NCRs" meta={`${openNcrs.data?.meta.total ?? 0} total`} noPadding>
-            {openNcrs.isLoading && <div className="px-4 py-4"><SkeletonBlock className="h-32" /></div>}
-            {openNcrs.data && openNcrs.data.data.length === 0 && (
-              <div className="px-4 py-4 text-sm text-muted">No open NCRs.</div>
-            )}
-            {openNcrs.data && openNcrs.data.data.length > 0 && (
-              <ul className="divide-y divide-default">
-                {openNcrs.data.data.map((n) => (
-                  <li key={n.id} className="px-4 py-2.5">
-                    <Link to={`/quality/ncrs/${n.id}`} className="block hover:bg-subtle rounded-md -mx-1 px-1">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="font-mono text-xs text-accent">{n.ncr_number}</span>
-                        <Chip variant={n.severity === 'critical' || n.severity === 'high' ? 'danger' : n.severity === 'medium' ? 'warning' : 'info'}>
-                          {n.severity_label ?? n.severity}
-                        </Chip>
-                      </div>
-                      <div className="text-xs text-muted truncate">{n.defect_description}</div>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <div className="px-4 py-2 border-t border-default">
-              <Link to="/quality/ncrs" className="text-xs text-accent hover:underline">View all NCRs →</Link>
-            </div>
-          </Panel>
+ <div className="space-y-4">
+ <Panel title="Open NCRs" meta={`${openNcrs.data?.meta.total ?? 0} total`} noPadding>
+ {openNcrs.isLoading && <div className="px-4 py-4"><SkeletonBlock className="h-32" /></div>}
+ {openNcrs.data && openNcrs.data.data.length === 0 && (
+ <div className="px-4 py-4 text-sm text-muted">No open NCRs.</div>
+ )}
+ {openNcrs.data && openNcrs.data.data.length > 0 && (
+ <ul className="divide-y divide-default">
+ {openNcrs.data.data.map((n) => (
+ <li key={n.id} className="px-4 py-2.5">
+ <Link to={`/quality/ncrs/${n.id}`} className="block hover:bg-subtle rounded-md -mx-1 px-1">
+ <div className="flex items-center gap-2 mb-0.5">
+ <span className="font-mono text-xs text-accent">{n.ncr_number}</span>
+ <Chip variant={n.severity === 'critical' || n.severity === 'high' ? 'danger' : n.severity === 'medium' ? 'warning' : 'info'}>
+ {n.severity_label ?? n.severity}
+ </Chip>
+ </div>
+ <div className="text-xs text-muted truncate">{n.defect_description}</div>
+ </Link>
+ </li>
+ ))}
+ </ul>
+ )}
+ <div className="px-4 py-2 border-t border-default">
+ <Link to="/quality/ncrs" className="text-xs text-accent hover:underline">View all NCRs →</Link>
+ </div>
+ </Panel>
 
-          {selectedDefect && (
-            <Panel
-              title={`Inspections — ${selectedDefect}`}
-              meta={`${drillDown.data?.length ?? 0} found`}
-              noPadding
-            >
-              {drillDown.isLoading && <div className="px-4 py-4"><SkeletonBlock className="h-32" /></div>}
-              {drillDown.data && drillDown.data.length === 0 && (
-                <div className="px-4 py-4 text-sm text-muted">No inspections found.</div>
-              )}
-              {drillDown.data && drillDown.data.length > 0 && (
-                <ul className="divide-y divide-default max-h-72 overflow-y-auto">
-                  {drillDown.data.slice(0, 20).map((row: ParetoDrillRow) => (
-                    <li key={row.id} className="px-4 py-2 text-xs">
-                      <Link to={`/quality/inspections/${row.id}`} className="block hover:bg-subtle rounded-md -mx-1 px-1">
-                        <div className="font-mono text-accent">{row.inspection_number}</div>
-                        <div className="text-muted">
-                          {row.product?.part_number ?? '—'} · {row.stage} · {row.completed_at?.slice(0, 10)}
-                        </div>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Panel>
-          )}
-        </div>
-      </div>
+ {selectedDefect && (
+ <Panel
+ title={`Inspections — ${selectedDefect}`}
+ meta={`${drillDown.data?.length ?? 0} found`}
+ noPadding
+ >
+ {drillDown.isLoading && <div className="px-4 py-4"><SkeletonBlock className="h-32" /></div>}
+ {drillDown.data && drillDown.data.length === 0 && (
+ <div className="px-4 py-4 text-sm text-muted">No inspections found.</div>
+ )}
+ {drillDown.data && drillDown.data.length > 0 && (
+ <ul className="divide-y divide-default max-h-72 overflow-y-auto">
+ {drillDown.data.slice(0, 20).map((row: ParetoDrillRow) => (
+ <li key={row.id} className="px-4 py-2 text-xs">
+ <Link to={`/quality/inspections/${row.id}`} className="block hover:bg-subtle rounded-md -mx-1 px-1">
+ <div className="font-mono text-accent">{row.inspection_number}</div>
+ <div className="text-muted">
+ {row.product?.part_number ?? '—'} · {row.stage} · {row.completed_at?.slice(0, 10)}
+ </div>
+ </Link>
+ </li>
+ ))}
+ </ul>
+ )}
+ </Panel>
+ )}
+ </div>
+ </div>
 
-      {copq && (
-        <div className="px-5 mt-6">
-          <h2 className="text-sm font-medium text-muted mb-3">
-            Cost of Poor Quality (This Month)
-            {copq.period_label && <span className="ml-2 font-normal">— {copq.period_label}</span>}
-          </h2>
-          <div className="grid grid-cols-4 gap-4">
-            <StatCard
-              label="Scrap Units"
-              value={String(copq.internal_failure.scrap_units)}
-              helper={`${formatPeso(copq.internal_failure.scrap_cost)} est. cost`}
-            />
-            <StatCard
-              label="Rework Units"
-              value={String(copq.internal_failure.rework_units)}
-              helper={`${formatPeso(copq.internal_failure.rework_cost)} est. cost`}
-            />
-            <StatCard
-              label="Customer Returns"
-              value={String(copq.external_failure.returns)}
-              helper={`${copq.external_failure.complaints} complaints`}
-            />
-            <StatCard
-              label="Est. COPQ"
-              value={formatPeso(copq.total)}
-              helper="internal + external failure"
-            />
-          </div>
-        </div>
-      )}
-    </div>
-  );
+ {copq && (
+ <div className="px-5 mt-6">
+ <h2 className="text-sm font-medium text-muted mb-3">
+ Cost of Poor Quality (This Month)
+ {copq.period_label && <span className="ml-2 font-normal">— {copq.period_label}</span>}
+ </h2>
+ <div className="grid grid-cols-4 gap-4">
+ <StatCard
+ label="Scrap Units"
+ value={String(copq.internal_failure.scrap_units)}
+ helper={`${formatPeso(copq.internal_failure.scrap_cost)} est. cost`}
+ />
+ <StatCard
+ label="Rework Units"
+ value={String(copq.internal_failure.rework_units)}
+ helper={`${formatPeso(copq.internal_failure.rework_cost)} est. cost`}
+ />
+ <StatCard
+ label="Customer Returns"
+ value={String(copq.external_failure.returns)}
+ helper={`${copq.external_failure.complaints} complaints`}
+ />
+ <StatCard
+ label="Est. COPQ"
+ value={formatPeso(copq.total)}
+ helper="internal + external failure"
+ />
+ </div>
+ </div>
+ )}
+ </div>
+ );
 }

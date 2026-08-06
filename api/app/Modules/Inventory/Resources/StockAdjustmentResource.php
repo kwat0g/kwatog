@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace App\Modules\Inventory\Resources;
 
 use App\Modules\Inventory\Enums\StockAdjustmentReason;
+use App\Modules\Inventory\Enums\StockAdjustmentStatus;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Str;
 
 class StockAdjustmentResource extends JsonResource
 {
@@ -23,7 +25,8 @@ class StockAdjustmentResource extends JsonResource
             'reason_code'   => $code?->value,
             'reason_label'  => $code?->label(),
             'reason'        => $this->reason,
-            'status'        => $this->getRawOriginal('status'),
+            'status'        => $this->status?->value,
+            'status_label'  => $this->status?->label(),
             'item'          => $this->whenLoaded('item', fn () => [
                 'id'   => $this->item->hash_id,
                 'code' => $this->item->code,

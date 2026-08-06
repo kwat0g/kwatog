@@ -4,28 +4,37 @@ declare(strict_types=1);
 
 namespace App\Modules\Dashboard\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\WarehouseScanEvent;
 use App\Modules\Quality\Models\Inspection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class RolloutHealthService
 {
-    public function __construct(private readonly ActionCenterService $actions) {}
+    public function __construct(
+        private readonly ActionCenterService $actions,
+        private readonly SettingsService $settings,
+    ) {}
 
     /** @return array<string, mixed> */
     public function summary(User $user): array
     {
-        $eligible = Item::query()->active()
-            ->whereIn('item_type', config('quality_rollout.eligible_item_types', ['raw_material']));
+        $eligibleTypes = $this->settings->get('quality.rollout.eligible_item_types', '__missing_quality_rollout_types__');
+        if (! is_array($eligibleTypes) || $eligibleTypes === []) {
+            throw new BusinessRuleException('Required business setting quality.rollout.eligible_item_types is missing or invalid.');
+        }
+        $eligible = Item::query()->active()->whereIn('item_type', $eligibleTypes);
         $totalItems = (clone $eligible)->count();
         $missingItems = (clone $eligible)
             ->whereDoesntHave('qualityPlans', fn ($plan) => $plan->effective())
             ->orderBy('code')->get(['id', 'code', 'name', 'is_critical']);
 
-        $grace = (int) config('quality_rollout.pending_grn_grace_minutes', 15);
+        $grace = $this->settings->requiredInt('quality.rollout.pending_grn_grace_minutes', 0);
         $missingQc = GoodsReceiptNote::query()
             ->where('status', 'pending_qc')
             ->where('created_at', '<=', now()->subMinutes($grace))
@@ -51,6 +60,7 @@ class RolloutHealthService
 
         return [
             'status' => $attention ? 'attention' : 'healthy',
+            'status_label' => Str::headline($attention ? 'attention' : 'healthy'),
             'quality_plans' => [
                 'eligible_items' => $totalItems,
                 'covered_items' => $totalItems - $missingItems->count(),

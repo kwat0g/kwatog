@@ -47,6 +47,36 @@ class MasterDataImportService
         return array_keys(self::REGISTRY);
     }
 
+    /**
+     * Metadata used by the import UI. Keeping this beside the importer
+     * registry makes the API the single source of truth for supported CSV
+     * entities and their column hints.
+     *
+     * @return array<string, array{required: array<int, string>, optional: array<int, string>}>
+     */
+    public function entitySchemas(): array
+    {
+        $optional = [
+            'coa' => ['description', 'parent_code'],
+            'items' => ['standard_cost', 'description', 'reorder_point', 'lead_time_days'],
+            'customers' => ['code', 'contact_person', 'email', 'phone', 'address', 'tin', 'credit_limit', 'payment_terms_days'],
+            'vendors' => ['contact_person', 'email', 'phone', 'address', 'tin', 'payment_terms_days'],
+            'employees' => ['employee_no', 'middle_name', 'suffix', 'mobile_number', 'email', 'street_address', 'city', 'province', 'basic_monthly_salary', 'semi_monthly_rate', 'sss_no', 'philhealth_no', 'pagibig_no', 'tin', 'bank_name', 'bank_account_no', 'date_regularized'],
+        ];
+
+        $schemas = [];
+        foreach (self::REGISTRY as $key => $class) {
+            /** @var EntityImporter $importer */
+            $importer = app($class);
+            $schemas[$key] = [
+                'required' => $importer->requiredColumns(),
+                'optional' => $optional[$key] ?? [],
+            ];
+        }
+
+        return $schemas;
+    }
+
     private function importer(string $entityType): EntityImporter
     {
         $class = self::REGISTRY[$entityType] ?? null;

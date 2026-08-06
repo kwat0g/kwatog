@@ -149,7 +149,9 @@ class ComprehensiveDemoSeeder extends Seeder
             DB::table('payrolls')->insert([
                 'payroll_period_id' => $pastId,
                 'employee_id'       => $emp->id,
-                'pay_type'          => 'salary',
+                // Must be a real PayType backing value — 'salary' was never one,
+                // so demo payslips rendered a bogus pay type in the UI.
+                'pay_type'          => 'monthly',
                 'days_worked'       => 15,
                 'basic_pay'         => $pay,
                 'overtime_pay'      => 0,

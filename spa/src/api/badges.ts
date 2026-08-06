@@ -10,13 +10,13 @@ import { client } from './client';
 export type BadgeSeverity = 'warning' | 'danger' | 'neutral';
 
 export interface BadgePayload {
-  count: number;
-  severity: BadgeSeverity;
+ count: number;
+ severity: BadgeSeverity;
 }
 
 /** Map of nav-slot key → badge data. Only populated keys are present. */
 export type BadgesMap = Record<string, BadgePayload>;
 
 export const badgesApi = {
-  get: () => client.get<{ data: BadgesMap }>('/dashboards/badges').then((r) => r.data.data),
+ get: () => client.get<{ data: BadgesMap }>('/dashboards/badges').then((r) => r.data.data),
 };

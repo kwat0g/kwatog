@@ -23,8 +23,25 @@ class PayrollPeriodResource extends JsonResource
             'is_thirteenth_month' => (bool) $this->is_thirteenth_month,
             'status'              => $this->status?->value,
             'status_label'        => $this->status?->label(),
+            'lifecycle_steps'     => $this->lifecycleSteps(),
             'is_locked'           => $this->isLocked(),
             'label'               => $this->label(),
+
+            // Scope — which slice of the workforce this run pays. All null /
+            // empty means company-wide, which is what every pre-scoping period
+            // is. department ids are surfaced as hash ids only.
+            'is_company_wide'        => $this->isCompanyWide(),
+            'scope_label'            => $this->scopeLabel(),
+            'scope_employment_types' => $this->scope_employment_types ?? [],
+            'scope_pay_types'        => $this->scope_pay_types ?? [],
+            'scope_departments'      => $this->isCompanyWide() || empty($this->scope_department_ids)
+                ? []
+                : \App\Modules\HR\Models\Department::query()
+                    ->whereIn('id', (array) $this->scope_department_ids)
+                    ->orderBy('name')
+                    ->get(['id', 'name'])
+                    ->map(fn ($d) => ['id' => $d->hash_id, 'name' => $d->name])
+                    ->all(),
             'disbursement_status' => $this->disbursement_status ?? 'pending',
             'disbursed_at'        => optional($this->disbursed_at)->toIso8601String(),
             'disburser'           => $this->whenLoaded('disburser', fn () => [
@@ -34,6 +51,22 @@ class PayrollPeriodResource extends JsonResource
             'is_auto_created'     => (bool) $this->is_auto_created,
             'auto_created_at'     => optional($this->auto_created_at)->toIso8601String(),
             'employee_count'      => (int) ($this->payrolls_count ?? 0),
+
+            // Compute-run telemetry. processing_started_at lets the UI say how
+            // long a run has been going; is_compute_stale flags a claim whose
+            // worker is presumed dead, so the page can offer a retry instead of
+            // spinning forever. compute_progress is the last broadcast snapshot
+            // (PayrollProgressTracker) and backs the progress bar on first paint
+            // and whenever the websocket is unavailable.
+            //
+            // Both are short-circuited off the status so list endpoints do no
+            // per-row settings or cache lookups for the common non-running case.
+            'processing_started_at' => optional($this->processing_started_at)->toIso8601String(),
+            'is_compute_stale'      => $this->status === \App\Modules\Payroll\Enums\PayrollPeriodStatus::Processing
+                && app(\App\Modules\Payroll\Services\PayrollPeriodService::class)->claimIsStale($this->resource),
+            'compute_progress'      => $this->status === \App\Modules\Payroll\Enums\PayrollPeriodStatus::Processing
+                ? app(\App\Modules\Payroll\Services\PayrollProgressTracker::class)->get($this->resource)
+                : null,
 
             // REC-01 — void audit trail (populated once a finalized period is
             // voided). voider name is eager-loaded when available.
@@ -104,6 +137,7 @@ class PayrollPeriodResource extends JsonResource
                 $this->disbursementProofs->map(fn ($p) => [
                     'id'                   => $p->hash_id,
                     'proof_type'           => $p->proof_type,
+                    'proof_type_label'     => \App\Modules\Payroll\Enums\DisbursementProofType::tryFrom((string) $p->proof_type)?->label(),
                     'file_name'            => $p->file_name,
                     'bank_name'            => $p->bank_name,
                     'transaction_reference' => $p->transaction_reference,
@@ -114,11 +148,27 @@ class PayrollPeriodResource extends JsonResource
                         ? ['id' => $p->uploader->hash_id, 'name' => $p->uploader->name]
                         : null,
                     'created_at'           => optional($p->created_at)->toIso8601String(),
+                    'deleted_at'           => optional($p->deleted_at)?->toIso8601String(),
                 ])->all(),
             ),
 
             'created_at'          => optional($this->created_at)->toIso8601String(),
             'updated_at'          => optional($this->updated_at)->toIso8601String(),
+        ];
+    }
+
+    /** @return array<int, array{key:string,label:string,state:string}> */
+    private function lifecycleSteps(): array
+    {
+        $status = $this->status?->value ?? (string) $this->getRawOriginal('status');
+        $completed = static fn (array $statuses): string => in_array($status, $statuses, true) ? 'done' : 'pending';
+
+        return [
+            ['key' => 'draft', 'label' => 'Draft', 'state' => 'done'],
+            ['key' => 'processing', 'label' => 'Computed', 'state' => $status === 'draft' ? 'pending' : ($status === 'processing' ? 'active' : 'done')],
+            ['key' => 'approved', 'label' => 'Approved', 'state' => $completed(['approved', 'finalized', 'disbursed'])],
+            ['key' => 'finalized', 'label' => 'Finalized', 'state' => $completed(['finalized', 'disbursed'])],
+            ['key' => 'disbursed', 'label' => 'Disbursed', 'state' => $completed(['disbursed'])],
         ];
     }
 }

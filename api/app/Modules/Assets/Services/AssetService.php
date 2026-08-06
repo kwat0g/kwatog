@@ -6,6 +6,7 @@ namespace App\Modules\Assets\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\SettingsService;
 use App\Common\Support\SearchOperator;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Services\JournalEntryService;
@@ -23,6 +24,7 @@ class AssetService
     public function __construct(
         private readonly DocumentSequenceService $sequences,
         private readonly JournalEntryService $journals,
+        private readonly SettingsService $settings,
     ) {}
 
     public function list(array $filters): LengthAwarePaginator
@@ -59,7 +61,7 @@ class AssetService
                 'acquisition_cost'  => $data['acquisition_cost'],
                 'useful_life_years' => (int) $data['useful_life_years'],
                 'depreciation_method' => $data['depreciation_method'] ?? \App\Modules\Assets\Enums\DepreciationMethod::StraightLine->value,
-                'salvage_value'     => $data['salvage_value'] ?? '0',
+                'salvage_value'     => $data['salvage_value'] ?? null,
                 'status'            => AssetStatus::Active->value,
                 'location'          => $data['location'] ?? null,
                 'insurance_policy_no' => $data['insurance_policy_no'] ?? null,
@@ -107,11 +109,11 @@ class AssetService
             $accum          = (float) $asset->accumulated_depreciation;
             $bookValue      = max(0.0, $cost - $accum);
 
-            $cashAcct  = Account::where('code', '1010')->firstOrFail();
-            $accumAcct = Account::where('code', '1410')->firstOrFail();
-            $assetAcct = Account::where('code', '1400')->firstOrFail();
-            $lossAcct  = Account::where('code', '6120')->firstOrFail();
-            $gainAcct  = Account::where('code', '4030')->firstOrFail();
+            $cashAcct  = Account::where('code', $this->settings->requiredString('accounting.accounts.asset_cash_code'))->firstOrFail();
+            $accumAcct = Account::where('code', $this->settings->requiredString('accounting.accounts.asset_accumulated_depreciation_code'))->firstOrFail();
+            $assetAcct = Account::where('code', $this->settings->requiredString('accounting.accounts.asset_cost_code'))->firstOrFail();
+            $lossAcct  = Account::where('code', $this->settings->requiredString('accounting.accounts.asset_disposal_loss_code'))->firstOrFail();
+            $gainAcct  = Account::where('code', $this->settings->requiredString('accounting.accounts.asset_disposal_gain_code'))->firstOrFail();
 
             $lines = [
                 ['account_id' => $cashAcct->id,  'debit' => number_format($disposalAmount, 2, '.', ''), 'credit' => '0.00', 'description' => 'Disposal proceeds'],

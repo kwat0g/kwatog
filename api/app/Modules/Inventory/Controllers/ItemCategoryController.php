@@ -47,4 +47,10 @@ class ItemCategoryController
         }
         return response()->json(null, 204);
     }
+
+    public function restore(ItemCategory $itemCategory): JsonResponse
+    {
+        $itemCategory->restore();
+        return response()->json(['message' => 'Item category restored.']);
+    }
 }

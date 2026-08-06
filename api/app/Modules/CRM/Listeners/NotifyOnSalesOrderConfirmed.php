@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\CRM\Listeners;
 
 use App\Common\Services\NotificationService;
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\CRM\Events\SalesOrderConfirmed;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -12,15 +13,19 @@ use Illuminate\Support\Facades\Log;
 
 class NotifyOnSalesOrderConfirmed implements ShouldQueue
 {
-    public function __construct(private readonly NotificationService $notifications) {}
+    public function __construct(
+        private readonly NotificationService $notifications,
+        private readonly SettingsService $settings,
+    ) {}
 
     public function handle(SalesOrderConfirmed $event): void
     {
         try {
             $so = $event->salesOrder->loadMissing('customer:id,name');
 
+            $roles = array_values(array_filter((array) $this->settings->get('crm.sales_order_confirmed.notification_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
             $audience = User::query()
-                ->whereHas('role', fn ($q) => $q->whereIn('slug', ['ppc_head', 'production_manager']))
+                ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                 ->where('is_active', true)
                 ->get();
 

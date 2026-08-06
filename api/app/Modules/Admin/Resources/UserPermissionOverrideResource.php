@@ -7,6 +7,7 @@ namespace App\Modules\Admin\Resources;
 use App\Common\Enums\PermissionOverrideType;
 use App\Modules\Admin\Models\UserPermissionOverride;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Str;
 
 /**
  * @mixin UserPermissionOverride
@@ -22,6 +23,7 @@ class UserPermissionOverrideResource extends JsonResource
         return [
             'id'         => $this->hash_id,
             'type'       => $type,
+            'type_label' => Str::headline($type),
             'permission' => $this->whenLoaded('permission', fn () => [
                 'id'          => $this->permission->hash_id,
                 'slug'        => $this->permission->slug,

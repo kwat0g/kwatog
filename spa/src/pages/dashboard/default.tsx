@@ -29,92 +29,92 @@ import { usePermission } from '@/hooks/usePermission';
  * widget card.
  */
 export default function DashboardDefaultPage() {
-  const queryClient = useQueryClient();
-  const user = useAuthStore((s) => s.user);
-  const { can } = usePermission();
-  const canSeeFinance = can('accounting.dashboard.view');
-  const canResetLayout = can('dashboard.layout.reset');
+ const queryClient = useQueryClient();
+ const user = useAuthStore((s) => s.user);
+ const { can } = usePermission();
+ const canSeeFinance = can('accounting.dashboard.view');
+ const canResetLayout = can('dashboard.layout.reset');
 
-  const layout = useQuery({
-    queryKey: ['dashboard', 'layout'],
-    queryFn: () => dashboardLayoutApi.layout(),
-  });
+ const layout = useQuery({
+ queryKey: ['dashboard', 'layout'],
+ queryFn: () => dashboardLayoutApi.layout(),
+ });
 
-  const widgetKeys = layout.data?.map((widget) => widget.key) ?? [];
-  const widgetData = useQuery({
-    queryKey: ['dashboard', 'widget-data', widgetKeys],
-    queryFn: () => dashboardLayoutApi.data(widgetKeys),
-    enabled: widgetKeys.length > 0,
-    refetchInterval: 60_000,
-  });
+ const widgetKeys = layout.data?.map((widget) => widget.key) ?? [];
+ const widgetData = useQuery({
+ queryKey: ['dashboard', 'widget-data', widgetKeys],
+ queryFn: () => dashboardLayoutApi.data(widgetKeys),
+ enabled: widgetKeys.length > 0,
+ refetchInterval: 60_000,
+ });
 
-  const reset = useMutation({
-    mutationFn: () => dashboardLayoutApi.reset(),
-    onSuccess: () => {
-      toast.success('Dashboard reset to your role default.');
-      queryClient.invalidateQueries({ queryKey: ['dashboard', 'layout'] });
-    },
-    onError: () => toast.error('Failed to reset layout.'),
-  });
+ const reset = useMutation({
+ mutationFn: () => dashboardLayoutApi.reset(),
+ onSuccess: () => {
+ toast.success('Dashboard reset to your role default.');
+ queryClient.invalidateQueries({ queryKey: ['dashboard', 'layout'] });
+ },
+ onError: () => toast.error('Failed to reset layout.'),
+ });
 
-  const subtitle = canSeeFinance
-    ? 'Foundation + Hire-to-Retire + Lean Accounting are live.'
-    : 'Your widgets reflect the default layout for your role. You can save a personal layout to override.';
+ const subtitle = canSeeFinance
+ ? 'Foundation + Hire-to-Retire + Lean Accounting are live.'
+ : 'Your widgets reflect the default layout for your role. You can save a personal layout to override.';
 
-  return (
-    <DashboardShell<Awaited<ReturnType<typeof dashboardLayoutApi.layout>>>
-      title={`Welcome${user ? `, ${user.name}` : ''}`}
-      subtitle={subtitle}
-      query={layout}
-      refreshingQueryKey={['dashboard', 'layout']}
-      kpiCount={3}
-      actions={
-        canResetLayout && layout.data && layout.data.some((w) => w.source === 'user') ? (
-          <Button
-            variant="secondary"
-            icon={<RotateCcw size={14} />}
-            onClick={() => reset.mutate()}
-            loading={reset.isPending}
-            aria-label="Reset dashboard layout to role default"
-          >
-            Reset to default
-          </Button>
-        ) : undefined
-      }
-    >
-      {(widgets) => (
-        <>
-          {widgets.length === 0 ? (
-            <Panel title="No widgets configured">
-              <EmptyState
-                size="compact"
-                icon="grid"
-                title="Nothing on your dashboard yet"
-                description="Your role has no default widgets. Ask an administrator to set them up, or use the sidebar to open a module directly."
-              />
-            </Panel>
-          ) : (
-            <PanelRow cols={3}>
-              {widgets.map((item) => {
-                return (
-                  <div key={item.key} className="min-h-[120px]">
-                    <WidgetErrorBoundary>
-                      <LiveDashboardWidget
-                        widget={item}
-                        summary={widgetData.data?.[item.key]}
-                        loading={widgetData.isLoading}
-                      />
-                    </WidgetErrorBoundary>
-                  </div>
-                );
-              })}
-            </PanelRow>
-          )}
+ return (
+ <DashboardShell<Awaited<ReturnType<typeof dashboardLayoutApi.layout>>>
+ title={`Welcome${user ? `, ${user.name}` : ''}`}
+ subtitle={subtitle}
+ query={layout}
+ refreshingQueryKey={['dashboard', 'layout']}
+ kpiCount={3}
+ actions={
+ canResetLayout && layout.data && layout.data.some((w) => w.source === 'user') ? (
+ <Button
+ variant="secondary"
+ icon={<RotateCcw size={14} />}
+ onClick={() => reset.mutate()}
+ loading={reset.isPending}
+ aria-label="Reset dashboard layout to role default"
+ >
+ Reset to default
+ </Button>
+ ) : undefined
+ }
+ >
+ {(widgets) => (
+ <>
+ {widgets.length === 0 ? (
+ <Panel title="No widgets configured">
+ <EmptyState
+ size="compact"
+ icon="grid"
+ title="Nothing on your dashboard yet"
+ description="Your role has no default widgets. Ask an administrator to set them up, or use the sidebar to open a module directly."
+ />
+ </Panel>
+ ) : (
+ <PanelRow cols={3}>
+ {widgets.map((item) => {
+ return (
+ <div key={item.key} className="min-h-[120px]">
+ <WidgetErrorBoundary>
+ <LiveDashboardWidget
+ widget={item}
+ summary={widgetData.data?.[item.key]}
+ loading={widgetData.isLoading}
+ />
+ </WidgetErrorBoundary>
+ </div>
+ );
+ })}
+ </PanelRow>
+ )}
 
-          {/* Sprint 4 / Task 37 finance block — kept until widget-ised separately. */}
-          {canSeeFinance && <FinanceSection />}
-        </>
-      )}
-    </DashboardShell>
-  );
+ {/* Sprint 4 / Task 37 finance block — kept until widget-ised separately. */}
+ {canSeeFinance && <FinanceSection />}
+ </>
+ )}
+ </DashboardShell>
+ );
 }

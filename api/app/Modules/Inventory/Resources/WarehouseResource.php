@@ -18,6 +18,7 @@ class WarehouseResource extends JsonResource
             'address'   => $this->address,
             'is_active' => (bool) $this->is_active,
             'zones'     => WarehouseZoneResource::collection($this->whenLoaded('zones')),
+            'deleted_at' => optional($this->deleted_at)?->toIso8601String(),
         ];
     }
 }

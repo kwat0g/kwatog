@@ -82,3 +82,87 @@
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 }
+
+/*
+ * Plant map (Filipino-made section, landing page) — Leaflet + OpenStreetMap.
+ * Scoped under `.plant-map` (the MapContainer class) so nothing leaks into the
+ * ERP app. The whole map container is desaturated (one compositing layer — a
+ * filter on the tile pane alone could leave sibling layers unpainted in some
+ * GPU drivers, which shows up as controls vanishing when idle); the pin is a
+ * divIcon that inherits its ink color.
+ */
+.plant-map {
+  background: var(--landing-canvas);
+  font-family: var(--font-sans);
+  outline: none;
+  /* Paper sheet — kill the tile color, keep the labels legible. */
+  filter: grayscale(1) contrast(1.05) brightness(1.02);
+}
+
+/* No raster markers — the crosshair pin is drawn inline. */
+.plant-map .leaflet-marker-icon {
+  border: 0;
+  background: transparent;
+}
+
+.plant-map-pin {
+  color: #1c1917; /* ink — constant on both themes; the map itself is a paper sheet */
+  filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.95))
+    drop-shadow(0 1px 4px rgba(28, 25, 23, 0.35));
+}
+
+/* Popup — quiet card in the landing surface language. */
+.plant-map .leaflet-popup-content-wrapper {
+  background: var(--landing-elevated);
+  color: var(--landing-text);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(28, 25, 23, 0.18);
+  padding: 0;
+}
+.plant-map .leaflet-popup-content {
+  margin: 12px 14px;
+  line-height: 1.4;
+}
+.plant-map .leaflet-popup-tip {
+  background: var(--landing-elevated);
+}
+.plant-map .leaflet-popup-close-button {
+  color: var(--landing-muted);
+}
+
+/* Attribution — hairline mono chip, unobtrusive. */
+.plant-map .leaflet-control-attribution {
+  background: transparent;
+  color: var(--landing-subtle-text);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  padding: 2px 6px;
+}
+.plant-map .leaflet-control-attribution a {
+  color: var(--landing-muted);
+}
+
+/* Zoom buttons — paper chips, no leaflet default chrome. */
+.plant-map .leaflet-control-zoom {
+  border: 1px solid var(--landing-border-strong);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(28, 25, 23, 0.08);
+  overflow: hidden;
+}
+.plant-map .leaflet-control-zoom a {
+  background: var(--landing-canvas);
+  color: var(--landing-text);
+  width: 28px;
+  height: 28px;
+  line-height: 28px;
+  border-bottom: 1px solid var(--landing-border);
+  transition: background-color 0.15s ease;
+}
+.plant-map .leaflet-control-zoom a:last-child {
+  border-bottom: none;
+}
+.plant-map .leaflet-control-zoom a:hover {
+  background: var(--landing-elevated);
+  color: var(--landing-accent);
+}

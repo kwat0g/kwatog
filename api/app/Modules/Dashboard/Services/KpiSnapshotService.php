@@ -13,6 +13,7 @@ use Carbon\Carbon;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class KpiSnapshotService
 {
@@ -38,12 +39,26 @@ class KpiSnapshotService
         }
     }
 
-    public function computeKpi(KpiDefinition $def, int $year, int $month): KpiSnapshot
+    public function computeKpi(KpiDefinition $def, int $year, int $month): ?KpiSnapshot
     {
         $method = $def->calculation_method;
-        $actual = method_exists($this, $method)
-            ? $this->{$method}($year, $month)
-            : 0.0;
+        if (! method_exists($this, $method)) {
+            throw new \UnexpectedValueException("Unsupported KPI calculation method [{$method}].");
+        }
+        $actual = $this->{$method}($year, $month);
+
+        // Do not persist a synthetic zero when a KPI has no observations for
+        // the period. The scorecard will expose the KPI definition without a
+        // snapshot until there is authoritative source data.
+        if ($actual === null) {
+            return null;
+        }
+
+        if ($def->target_value === null) {
+            throw new \App\Common\Exceptions\BusinessRuleException(
+                "KPI [{$def->code}] has no configured target value. Configure it before computing a snapshot."
+            );
+        }
 
         $previous = KpiSnapshot::where('definition_id', $def->id)
             ->where(function ($q) use ($year, $month) {
@@ -59,7 +74,7 @@ class KpiSnapshotService
             ['definition_id' => $def->id, 'period_year' => $year, 'period_month' => $month],
             [
                 'actual_value' => round($actual, 4),
-                'target_value' => $def->target_value ?? 0,
+                'target_value' => $def->target_value,
                 'previous_value' => $previous,
                 'trend' => $trend,
                 'status' => $status,
@@ -99,6 +114,7 @@ class KpiSnapshotService
                     'previous_value' => $snapshot->previous_value,
                     'trend' => $snapshot->trend?->value,
                     'status' => $snapshot->status?->value,
+                    'status_label' => Str::headline((string) $snapshot->status?->value),
                     'computed_at' => $snapshot->computed_at?->toIso8601String(),
                 ] : null,
             ];
@@ -125,6 +141,7 @@ class KpiSnapshotService
                 'value' => $s->actual_value,
                 'target' => $s->target_value,
                 'status' => $s->status?->value,
+                'status_label' => Str::headline((string) $s->status?->value),
             ])
             ->all();
     }
@@ -185,7 +202,7 @@ class KpiSnapshotService
 
     // ─── Calculator Methods ─────────────────────────────────────────
 
-    private function computeOee(int $year, int $month): float
+    private function computeOee(int $year, int $month): ?float
     {
         // OEE = Availability x Performance x Quality from work_orders completed in the period
         $from = Carbon::create($year, $month, 1)->startOfDay()->toDateTimeString();
@@ -195,16 +212,17 @@ class KpiSnapshotService
             ->whereIn('status', ['completed', 'closed'])
             ->whereBetween('actual_end', [$from, $to])
             ->whereNotNull('actual_start')
-            ->get(['actual_start', 'actual_end', 'quantity_target', 'quantity_good', 'quantity_rejected']);
+            ->get(['machine_id', 'actual_start', 'actual_end', 'quantity_target', 'quantity_good', 'quantity_rejected']);
 
         if ($wos->isEmpty()) {
-            return 0.0;
+            return null;
         }
 
         $totalPlanned = 0;
         $totalActual = 0;
         $totalGood = 0;
         $totalProduced = 0;
+        $machineIds = [];
         foreach ($wos as $wo) {
             $planned = (int) $wo->quantity_target;
             $good = (int) $wo->quantity_good;
@@ -214,20 +232,35 @@ class KpiSnapshotService
             $totalGood += $good;
             $totalProduced += $produced;
             $totalActual += max(1, (int) Carbon::parse($wo->actual_start)->diffInMinutes(Carbon::parse($wo->actual_end)));
+            if ($wo->machine_id !== null) $machineIds[(int) $wo->machine_id] = true;
         }
 
         if ($totalPlanned == 0 || $totalActual == 0 || $totalProduced == 0) {
-            return 0.0;
+            return null;
         }
 
         $performance = min(1.0, $totalProduced / $totalPlanned);
         $quality = $totalGood / $totalProduced;
-        $availability = 1.0; // simplified: assume scheduled = actual runtime
+        $scheduledMinutes = 0;
+        if ($machineIds !== [] && DB::getSchemaBuilder()->hasTable('machines')) {
+            $workingDays = 0;
+            $cursor = Carbon::create($year, $month, 1)->startOfDay();
+            $end = $cursor->copy()->endOfMonth();
+            while ($cursor->lte($end)) {
+                if (! $cursor->isWeekend()) $workingDays++;
+                $cursor->addDay();
+            }
+            $hours = (float) DB::table('machines')->whereIn('id', array_keys($machineIds))->sum('available_hours_per_day');
+            $scheduledMinutes = (int) round($hours * $workingDays * 60);
+        }
+        $availability = $scheduledMinutes > 0
+            ? min(1.0, $totalActual / $scheduledMinutes)
+            : 0.0;
 
         return round($availability * $performance * $quality * 100, 2);
     }
 
-    private function computeDppm(int $year, int $month): float
+    private function computeDppm(int $year, int $month): ?float
     {
         $from = Carbon::create($year, $month, 1)->startOfDay()->toDateTimeString();
         $to = Carbon::create($year, $month, 1)->endOfMonth()->toDateTimeString();
@@ -240,13 +273,13 @@ class KpiSnapshotService
             ->sum('defects_found');
 
         if ($totalInspected == 0) {
-            return 0.0;
+            return null;
         }
 
         return round(($totalDefects / $totalInspected) * 1_000_000, 2);
     }
 
-    private function computeFirstPassYield(int $year, int $month): float
+    private function computeFirstPassYield(int $year, int $month): ?float
     {
         $from = Carbon::create($year, $month, 1)->startOfDay()->toDateTimeString();
         $to = Carbon::create($year, $month, 1)->endOfMonth()->toDateTimeString();
@@ -260,13 +293,13 @@ class KpiSnapshotService
             ->count();
 
         if ($total == 0) {
-            return 100.0;
+            return null;
         }
 
         return round(($passed / $total) * 100, 2);
     }
 
-    private function computeOnTimeDelivery(int $year, int $month): float
+    private function computeOnTimeDelivery(int $year, int $month): ?float
     {
         $from = Carbon::create($year, $month, 1)->startOfDay()->toDateTimeString();
         $to = Carbon::create($year, $month, 1)->endOfMonth()->toDateTimeString();
@@ -282,27 +315,27 @@ class KpiSnapshotService
             ->count();
 
         if ($total == 0) {
-            return 100.0;
+            return null;
         }
 
         return round(($onTime / $total) * 100, 2);
     }
 
-    private function computeSupplierQuality(int $year, int $month): float
+    private function computeSupplierQuality(int $year, int $month): ?float
     {
         // Average supplier performance score for the month
         if (! DB::getSchemaBuilder()->hasTable('supplier_performance_scores')) {
-            return 0.0;
+            return null;
         }
         $avg = DB::table('supplier_performance_scores')
             ->where('period_year', $year)
             ->where('period_month', $month)
             ->avg('overall_score');
 
-        return round((float) ($avg ?? 0), 2);
+        return $avg === null ? null : round((float) $avg, 2);
     }
 
-    private function computeCopqPctRevenue(int $year, int $month): float
+    private function computeCopqPctRevenue(int $year, int $month): ?float
     {
         // COPQ total / revenue (from invoices) * 100
         $copqSnap = DB::table('copq_snapshots')
@@ -319,13 +352,13 @@ class KpiSnapshotService
             ->sum('total_amount');
 
         if ($revenue == 0) {
-            return 0.0;
+            return null;
         }
 
         return round(($copqTotal / $revenue) * 100, 4);
     }
 
-    private function computeAttendanceRate(int $year, int $month): float
+    private function computeAttendanceRate(int $year, int $month): ?float
     {
         $from = Carbon::create($year, $month, 1)->startOfDay()->toDateString();
         $to = Carbon::create($year, $month, 1)->endOfMonth()->toDateString();
@@ -339,16 +372,17 @@ class KpiSnapshotService
             ->count();
 
         if ($total == 0) {
-            return 100.0;
+            return null;
         }
 
         return round(($present / $total) * 100, 2);
     }
 
-    private function computeArAging60d(int $year, int $month): float
+    private function computeArAging60d(int $year, int $month): ?float
     {
         // Percentage of AR balance that is over 60 days old
-        $cutoff = Carbon::create($year, $month, 1)->endOfMonth()->subDays(60)->toDateString();
+        $lookbackDays = app(\App\Common\Services\SettingsService::class)->requiredInt('dashboard.kpi_snapshot_lookback_days', 1, 3650);
+        $cutoff = Carbon::create($year, $month, 1)->endOfMonth()->subDays($lookbackDays)->toDateString();
 
         $totalAr = (float) DB::table('invoices')
             ->where('status', '!=', 'paid')
@@ -361,16 +395,16 @@ class KpiSnapshotService
             ->sum('balance_due');
 
         if ($totalAr == 0) {
-            return 0.0;
+            return null;
         }
 
         return round(($overdue / $totalAr) * 100, 2);
     }
 
-    private function computeBudgetUtilization(int $year, int $month): float
+    private function computeBudgetUtilization(int $year, int $month): ?float
     {
         if (! DB::getSchemaBuilder()->hasTable('budget_line_items')) {
-            return 0.0;
+            return null;
         }
         $totalBudget = (float) DB::table('budget_line_items')
             ->join('budgets', 'budget_line_items.budget_id', '=', 'budgets.id')
@@ -384,13 +418,13 @@ class KpiSnapshotService
             ->sum('budget_line_items.actual_total');
 
         if ($totalBudget == 0) {
-            return 0.0;
+            return null;
         }
 
         return round(($totalActual / $totalBudget) * 100, 2);
     }
 
-    private function computeNcrClosureDays(int $year, int $month): float
+    private function computeNcrClosureDays(int $year, int $month): ?float
     {
         $from = Carbon::create($year, $month, 1)->startOfDay()->toDateTimeString();
         $to = Carbon::create($year, $month, 1)->endOfMonth()->toDateTimeString();
@@ -402,17 +436,17 @@ class KpiSnapshotService
             ->selectRaw('AVG(EXTRACT(EPOCH FROM (closed_at - created_at)) / 86400) as avg_days')
             ->value('avg_days');
 
-        return round((float) ($avg ?? 0), 2);
+        return $avg === null ? null : round((float) $avg, 2);
     }
 
-    private function computeInventoryTurnover(int $year, int $month): float
+    private function computeInventoryTurnover(int $year, int $month): ?float
     {
         // COGS / Average inventory value. Simplified: use issued qty * cost
         $from = Carbon::create($year, $month, 1)->startOfDay()->toDateTimeString();
         $to = Carbon::create($year, $month, 1)->endOfMonth()->toDateTimeString();
 
         if (! DB::getSchemaBuilder()->hasTable('stock_movements')) {
-            return 0.0;
+            return null;
         }
 
         $cogs = (float) DB::table('stock_movements')
@@ -424,13 +458,13 @@ class KpiSnapshotService
             ->sum(DB::raw('quantity * unit_cost'));
 
         if ($avgInventory == 0) {
-            return 0.0;
+            return null;
         }
 
         return round($cogs / $avgInventory * 12, 2); // annualized
     }
 
-    private function computeWoCompletionRate(int $year, int $month): float
+    private function computeWoCompletionRate(int $year, int $month): ?float
     {
         $from = Carbon::create($year, $month, 1)->startOfDay()->toDateTimeString();
         $to = Carbon::create($year, $month, 1)->endOfMonth()->toDateTimeString();
@@ -445,7 +479,7 @@ class KpiSnapshotService
             ->count();
 
         if ($total == 0) {
-            return 100.0;
+            return null;
         }
 
         return round(($completed / $total) * 100, 2);

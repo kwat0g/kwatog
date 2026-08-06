@@ -6,6 +6,11 @@ namespace App\Modules\Quality\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Str;
+use App\Modules\Production\Enums\WorkOrderStatus;
+use App\Modules\Quality\Enums\InspectionStage;
+use App\Modules\Quality\Enums\InspectionStatus;
+use App\Modules\Quality\Enums\NcrDisposition;
 
 class NcrResource extends JsonResource
 {
@@ -15,9 +20,13 @@ class NcrResource extends JsonResource
             'id'                 => $this->hash_id,
             'ncr_number'         => $this->ncr_number,
             'source'             => $this->source instanceof \BackedEnum ? $this->source->value : $this->source,
+            'source_label'       => Str::headline((string) ($this->source instanceof \BackedEnum ? $this->source->value : $this->source)),
             'severity'           => $this->severity instanceof \BackedEnum ? $this->severity->value : $this->severity,
+            'severity_label'     => Str::headline((string) ($this->severity instanceof \BackedEnum ? $this->severity->value : $this->severity)),
             'status'             => $this->status instanceof \BackedEnum ? $this->status->value : $this->status,
+            'status_label'       => Str::headline((string) ($this->status instanceof \BackedEnum ? $this->status->value : $this->status)),
             'disposition'        => $this->disposition instanceof \BackedEnum ? $this->disposition->value : $this->disposition,
+            'disposition_label'  => NcrDisposition::tryFrom((string) ($this->disposition instanceof \BackedEnum ? $this->disposition->value : $this->disposition))?->label(),
             'defect_description' => $this->defect_description,
             'affected_quantity'  => (int) $this->affected_quantity,
             'is_auto_generated'  => (bool) $this->is_auto_generated,
@@ -34,6 +43,8 @@ class NcrResource extends JsonResource
                 'inspection_number' => $this->inspection->inspection_number,
                 'stage'             => $this->inspection->stage instanceof \BackedEnum ? $this->inspection->stage->value : $this->inspection->stage,
                 'status'            => $this->inspection->status instanceof \BackedEnum ? $this->inspection->status->value : $this->inspection->status,
+                'stage_label'       => InspectionStage::tryFrom((string) ($this->inspection->stage instanceof \BackedEnum ? $this->inspection->stage->value : $this->inspection->stage))?->label() ?? (string) ($this->inspection->stage instanceof \BackedEnum ? $this->inspection->stage->value : $this->inspection->stage),
+                'status_label'      => InspectionStatus::tryFrom((string) ($this->inspection->status instanceof \BackedEnum ? $this->inspection->status->value : $this->inspection->status))?->label() ?? (string) ($this->inspection->status instanceof \BackedEnum ? $this->inspection->status->value : $this->inspection->status),
             ] : null),
             'creator'            => $this->whenLoaded('creator', fn () => $this->creator ? [
                 'id'   => $this->creator->hash_id,
@@ -51,6 +62,7 @@ class NcrResource extends JsonResource
                 'id'              => $this->replacementWorkOrder->hash_id,
                 'wo_number'       => $this->replacementWorkOrder->wo_number,
                 'status'          => $this->replacementWorkOrder->status instanceof \BackedEnum ? $this->replacementWorkOrder->status->value : $this->replacementWorkOrder->status,
+                'status_label'    => WorkOrderStatus::tryFrom((string) ($this->replacementWorkOrder->status instanceof \BackedEnum ? $this->replacementWorkOrder->status->value : $this->replacementWorkOrder->status))?->label() ?? (string) ($this->replacementWorkOrder->status instanceof \BackedEnum ? $this->replacementWorkOrder->status->value : $this->replacementWorkOrder->status),
                 'quantity_target' => (int) $this->replacementWorkOrder->quantity_target,
             ] : null),
             'actions'            => $this->whenLoaded('actions', fn () => NcrActionResource::collection($this->actions)->resolve()),

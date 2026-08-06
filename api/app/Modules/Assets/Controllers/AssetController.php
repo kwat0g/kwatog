@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Modules\Assets\Controllers;
 
 use App\Modules\Assets\Models\Asset;
+use App\Modules\Assets\Enums\AssetCategory;
+use App\Modules\Assets\Enums\AssetStatus;
 use App\Modules\Assets\Requests\DisposeAssetRequest;
 use App\Modules\Assets\Requests\StoreAssetRequest;
 use App\Modules\Assets\Requests\UpdateAssetRequest;
@@ -21,6 +23,26 @@ class AssetController
         private readonly AssetService $service,
         private readonly AssetQrCodeService $qr,
     ) {}
+
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'categories' => array_map(
+                static fn (AssetCategory $category): array => [
+                    'value' => $category->value,
+                    'label' => ucwords(str_replace('_', ' ', $category->value)),
+                ],
+                AssetCategory::cases(),
+            ),
+            'statuses' => array_map(
+                static fn (AssetStatus $status): array => [
+                    'value' => $status->value,
+                    'label' => ucwords(str_replace('_', ' ', $status->value)),
+                ],
+                AssetStatus::cases(),
+            ),
+        ]]);
+    }
 
     public function index(Request $request): AnonymousResourceCollection
     {
@@ -47,6 +69,12 @@ class AssetController
     {
         $this->service->delete($asset);
         return response()->json(null, 204);
+    }
+
+    public function restore(Asset $asset): JsonResponse
+    {
+        $asset->restore();
+        return response()->json(['message' => 'Asset restored.']);
     }
 
     public function dispose(DisposeAssetRequest $request, Asset $asset): AssetResource

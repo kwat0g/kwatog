@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace App\Modules\Loans\Controllers;
 
 use App\Common\Support\HashIdFilter;
+use App\Common\Services\SettingsService;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Loans\Enums\LoanType;
+use App\Modules\Loans\Enums\LoanStatus;
 use App\Modules\Loans\Models\EmployeeLoan;
 use App\Modules\Loans\Requests\ApproveLoanRequest;
 use App\Modules\Loans\Requests\RejectLoanRequest;
@@ -24,6 +26,7 @@ class LoanController
     public function __construct(
         private readonly LoanService $service,
         private readonly AmortizationService $amortization,
+        private readonly SettingsService $settings,
     ) {}
 
     public function index(Request $request): AnonymousResourceCollection
@@ -34,6 +37,18 @@ class LoanController
     public function types(): JsonResponse
     {
         return response()->json(['data' => $this->service->types()]);
+    }
+
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'types' => $this->service->types(),
+            'statuses' => array_map(static fn (LoanStatus $status): array => [
+                'value' => $status->value,
+                'label' => $status->label(),
+            ], LoanStatus::cases()),
+            'approval_sla_hours' => $this->settings->requiredInt('approvals.reminder_hours', 1),
+        ]]);
     }
 
     public function store(StoreLoanRequest $request): JsonResponse
@@ -134,7 +149,7 @@ class LoanController
         $data = $request->validate([
             'loan_type' => ['required', \Illuminate\Validation\Rule::in(LoanType::values())],
             'principal' => ['required', 'decimal:0,2', 'min:1'],
-            'pay_periods' => ['required', 'integer', 'min:1', 'max:60'],
+            'pay_periods' => ['required', 'integer', 'min:1', 'max:'.$this->settings->requiredInt('loans.max_pay_periods', 1, 120)],
         ]);
 
         return response()->json([

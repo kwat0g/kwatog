@@ -37,7 +37,18 @@ class CreateDeliveryRequest extends FormRequest
         return [
             'sales_order_id'              => ['required', 'integer', 'exists:sales_orders,id'],
             'vehicle_id'                  => ['nullable', 'integer', 'exists:vehicles,id'],
-            'driver_id'                   => ['nullable', 'integer', 'exists:users,id'],
+            'driver_id'                   => [
+                'nullable', 'integer', 'exists:users,id',
+                // Only actual drivers may be assigned — assigning any user
+                // effectively grants driver PWA access to customer PII.
+                static function (string $attribute, mixed $value, \Closure $fail): void {
+                    if ($value !== null && ! User::query()->whereKey($value)
+                        ->whereHas('role', fn ($q) => $q->where('slug', 'driver'))
+                        ->exists()) {
+                        $fail('The selected driver is not a driver.');
+                    }
+                },
+            ],
             'scheduled_date'              => ['required', 'date'],
             'notes'                       => ['nullable', 'string', 'max:2000'],
             'items'                       => ['required', 'array', 'min:1'],

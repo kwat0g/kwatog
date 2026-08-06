@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Inventory\Services;
 
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Enums\ReorderMethod;
 use App\Modules\Inventory\Enums\StockMovementType;
@@ -23,7 +24,10 @@ use Illuminate\Support\Facades\DB;
  */
 class AutoReplenishmentService
 {
-    public function __construct(private readonly DocumentSequenceService $sequences) {}
+    public function __construct(
+        private readonly DocumentSequenceService $sequences,
+        private readonly SettingsService $settings,
+    ) {}
 
     public function checkAndReplenish(int $itemId): ?PurchaseRequest
     {
@@ -66,13 +70,18 @@ class AutoReplenishmentService
             ->exists();
         if ($hasOpen) return null;
 
-        // Auto-PRs are system-initiated; attribute to a system_admin (fallback:
-        // first user). If no user exists at all, skip rather than hit the
+        // Auto-PRs are system-initiated; attribute only to a configured
+        // automation actor. If no eligible user exists, skip rather than hit the
         // non-null requested_by FK with a bogus id.
         $systemUserId = $this->systemUserId();
         if ($systemUserId === null) return null;
 
         $orderQty = $this->computeOrderQuantity($item);
+        if ($orderQty === null || (float) $item->standard_cost <= 0) {
+            // Do not create a replenishment request with a fabricated quantity
+            // or a zero-valued estimate; master data must be completed first.
+            return null;
+        }
         $priority = $available <= $safety ? PurchaseRequestPriority::Critical : PurchaseRequestPriority::Urgent;
 
         $pr = DB::transaction(function () use ($item, $orderQty, $priority, $systemUserId) {
@@ -105,19 +114,21 @@ class AutoReplenishmentService
     }
 
     /**
-     * Resolve the user an auto-generated PR is attributed to: a system_admin
-     * if one exists, else the lowest user id. Null only when there are no users.
+     * Resolve the configured automation actor. Null when no configured role or
+     * eligible user exists, so automated records are never attributed randomly.
      */
     private function systemUserId(): ?int
     {
+        $roles = array_values(array_filter((array) $this->settings->get('system.automation.actor_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
+        if ($roles === []) return null;
         $adminId = User::query()
-            ->whereHas('role', fn ($q) => $q->where('slug', 'system_admin'))
+            ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
             ->min('id');
 
-        return $adminId !== null ? (int) $adminId : (User::query()->min('id') !== null ? (int) User::query()->min('id') : null);
+        return $adminId !== null ? (int) $adminId : null;
     }
 
-    private function computeOrderQuantity(Item $item): string
+    private function computeOrderQuantity(Item $item): ?string
     {
         $reorder = (float) $item->reorder_point;
         $available = (float) $item->available;
@@ -126,24 +137,26 @@ class AutoReplenishmentService
         if ($item->reorder_method === ReorderMethod::FixedQuantity) {
             $qty = max(($reorder * 2) - $available, $reorder);
         } else {
-            // Days-of-supply: avg daily consumption (last 30d) × lead_time_days × 1.2
-            $thirtyDaysAgo = now()->subDays(30);
+            $historyDays = $this->settings->requiredInt('inventory.replenishment.demand_history_days', 1);
+            $coverageBuffer = $this->settings->requiredFloat('inventory.replenishment.coverage_buffer_ratio', 1);
+            // Days-of-supply: average demand × lead time × configured coverage buffer.
+            $historyStart = now()->subDays($historyDays);
             $totalIssued = (float) StockMovement::query()
                 ->where('item_id', $item->id)
                 ->whereIn('movement_type', [
                     StockMovementType::MaterialIssue->value,
                     StockMovementType::Scrap->value,
                 ])
-                ->where('created_at', '>=', $thirtyDaysAgo)
+                ->where('created_at', '>=', $historyStart)
                 ->sum('quantity');
-            $avgDaily = $totalIssued / 30.0;
-            $qty = max($avgDaily * (int) $item->lead_time_days * 1.2, $reorder);
+            $avgDaily = $totalIssued / $historyDays;
+            $qty = max($avgDaily * (int) $item->lead_time_days * $coverageBuffer, $reorder);
         }
 
         // Round up to nearest MOQ multiple.
         if ($moq > 0) {
             $qty = ceil($qty / $moq) * $moq;
         }
-        return number_format(max($qty, 1.0), 3, '.', '');
+        return $qty > 0 ? number_format($qty, 3, '.', '') : null;
     }
 }

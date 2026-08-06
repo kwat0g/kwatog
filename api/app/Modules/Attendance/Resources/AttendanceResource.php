@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\Attendance\Resources;
 
+use Illuminate\Support\Str;
+
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -37,11 +39,13 @@ class AttendanceResource extends JsonResource
             'is_rest_day'       => (bool) $this->is_rest_day,
             'day_type_rate'     => (string) $this->day_type_rate,
             'status'            => $this->status?->value,
+            'status_label'      => Str::headline((string) ($this->status?->value ?? $this->status)),
             'is_manual_entry'   => (bool) $this->is_manual_entry,
             'remarks'           => $this->remarks,
 
             'created_at'        => optional($this->created_at)->toIso8601String(),
             'updated_at'        => optional($this->updated_at)->toIso8601String(),
+            'deleted_at'        => optional($this->deleted_at)?->toIso8601String(),
         ];
     }
 }

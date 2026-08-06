@@ -15,4 +15,14 @@ enum ReviewStatus: string
     {
         return array_column(self::cases(), 'value');
     }
+
+    public function label(): string
+    {
+        return match ($this) {
+            self::Pending => 'Pending',
+            self::InProgress => 'In progress',
+            self::Submitted => 'Submitted',
+            self::Acknowledged => 'Acknowledged',
+        };
+    }
 }

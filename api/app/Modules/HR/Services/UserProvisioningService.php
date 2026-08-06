@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Services;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\PasswordHistory;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
@@ -20,6 +21,7 @@ use Illuminate\Support\Str;
  */
 class UserProvisioningService
 {
+    public function __construct(private readonly SettingsService $settings) {}
     /**
      * @param  array{email?: string, role_id?: int, send_welcome?: bool}  $options
      *
@@ -209,7 +211,7 @@ class UserProvisioningService
         $base = strtolower(($employee->first_name ?? '').'.'.($employee->last_name ?? ''));
         $base = preg_replace('/[^a-z.]/', '', $base) ?: 'employee';
         $base = trim($base, '.') ?: 'employee';
-        $domain = config('app.employee_email_domain', 'ogami.ph');
+        $domain = $this->settings->requiredString('company.employee_email_domain');
 
         $email = "{$base}@{$domain}";
         $count = 1;
@@ -231,13 +233,9 @@ class UserProvisioningService
 
     private function defaultRoleIdForEmployee(): int
     {
-        $role = Role::query()->where('slug', 'employee')->first()
-            ?? Role::query()->where('slug', 'self_service')->first();
-        if (! $role) {
-            // Fallback to lowest-priv role (any non-admin).
-            $role = Role::query()->where('slug', '!=', 'system_admin')->orderBy('id')->first();
-        }
-        abort_if(! $role, 500, 'No default role configured.');
+        $slug = $this->settings->requiredString('hr.default_user_role_slug');
+        $role = Role::query()->where('slug', $slug)->first();
+        abort_if(! $role, 500, "Configured default role [{$slug}] does not exist.");
         return (int) $role->id;
     }
 }

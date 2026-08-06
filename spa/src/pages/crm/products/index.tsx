@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate} from 'react-router-dom';
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { ArchiveRestore, Pencil, Plus, Trash2 } from 'lucide-react';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { productsApi, type ProductListParams } from '@/api/crm/products';
+import { ArchiveFilter, archiveToTrashed, type ArchiveScope } from '@/components/ui/ArchiveFilter';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -18,159 +19,171 @@ import type { Product } from '@/types/crm';
 import { formatPeso } from '@/lib/formatNumber';
 
 export default function ProductsListPage() {
-  const navigate = useNavigate();
-  const qc = useQueryClient();
-  const { can } = usePermission();
-  const canManage = can('crm.products.manage');
-  const [filters, setFilters] = useState<ProductListParams>({ page: 1, per_page: 25, is_active: 'true' });
-  const [confirmDelete, setConfirmDelete] = useState<Product | null>(null);
+ const navigate = useNavigate();
+ const qc = useQueryClient();
+ const { can } = usePermission();
+ const canManage = can('crm.products.manage');
+ const [filters, setFilters] = useState<ProductListParams>({ page: 1, per_page: 25, is_active: 'true' });
+ const [confirmDelete, setConfirmDelete] = useState<Product | null>(null);
+ const [scope, setScope] = useState<ArchiveScope>('active');
 
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['crm', 'products', filters],
-    queryFn: () => productsApi.list(filters),
-    placeholderData: (prev) => prev });
+ const { data, isLoading, isError, refetch } = useQuery({
+ queryKey: ['crm', 'products', filters, { trashed: archiveToTrashed(scope) }],
+ queryFn: () => productsApi.list({ ...filters, trashed: archiveToTrashed(scope) }),
+ placeholderData: (prev) => prev });
 
-  const del = useMutation({
-    mutationFn: (id: string) => productsApi.delete(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['crm', 'products'] });
-      toast.success('Product deleted.');
-      setConfirmDelete(null);
-    },
-    onError: (e: AxiosError<{ message?: string }>) => {
-      toast.error(e.response?.data?.message ?? 'Failed to delete product. Deactivate it instead if it has sales orders or BOMs.');
-    } });
+ const del = useMutation({
+ mutationFn: (id: string) => productsApi.delete(id),
+ onSuccess: () => {
+ qc.invalidateQueries({ queryKey: ['crm', 'products'] });
+ toast.success('Product archived.');
+ setConfirmDelete(null);
+ },
+ onError: (e: AxiosError<{ message?: string }>) => {
+  toast.error(e.response?.data?.message ?? 'Failed to delete product. Deactivate it instead if it has sales orders or BOMs.');
+  } });
 
-  const columns: Column<Product>[] = [
-    {
-      key: 'part_number', header: 'Part #',
-      cell: (r) => (
-        <span className="font-mono">{r.part_number}</span>
-      ) },
-    {
-      key: 'name', header: 'Name',
-      cell: (r) => (
-        <div>
-          <div className="font-medium">{r.name}</div>
-          {r.description && <div className="text-xs text-muted truncate max-w-md">{r.description}</div>}
-        </div>
-      ) },
-    { key: 'uom', header: 'UOM', cell: (r) => r.unit_of_measure },
-    {
-      key: 'cost', header: 'Std Cost', align: 'right',
-      cell: (r) => <NumCell>{formatPeso(r.standard_cost)}</NumCell> },
-    {
-      key: 'has_bom', header: 'BOM',
-      cell: (r) => r.has_bom ? <Chip variant="success">Yes</Chip> : <Chip variant="neutral">—</Chip> },
-    {
-      key: 'active', header: 'Active',
-      cell: (r) => r.is_active ? <Chip variant="success">Active</Chip> : <Chip variant="neutral">Inactive</Chip> },
-    ...(canManage ? [{
-      key: 'actions',
-      header: '',
-      align: 'right' as const,
-      cell: (r: Product) => (
-        <div className="flex justify-end gap-1">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            iconOnly
-            icon={<Pencil size={14} />}
-            aria-label={`Edit ${r.part_number}`}
-            onClick={() => navigate(`/crm/products/${r.id}/edit`)}
-            className="text-muted hover:text-primary"
-          />
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            iconOnly
-            icon={<Trash2 size={14} />}
-            aria-label={`Delete ${r.part_number}`}
-            onClick={() => setConfirmDelete(r)}
-            className="text-muted hover:text-danger"
-          />
-        </div>
-      ) }] : []),
-  ];
+ const restore = useMutation({
+  mutationFn: (id: string) => productsApi.restore(id),
+  onSuccess: () => {
+  qc.invalidateQueries({ queryKey: ['crm', 'products'] });
+  toast.success('Product restored.');
+  },
+  onError: (e: AxiosError<{ message?: string }>) => {
+  toast.error(e.response?.data?.message ?? 'Failed to restore product.');
+  } });
 
-  const filterConfig: FilterConfig[] = [
-    { key: 'has_bom', label: 'Has BOM', type: 'select', options: [
-      { value: '', label: 'All' }, { value: 'true', label: 'Yes' }, { value: 'false', label: 'No' },
-    ]},
-    { key: 'is_active', label: 'Active', type: 'select', options: [
-      { value: '', label: 'All' }, { value: 'true', label: 'Active' }, { value: 'false', label: 'Inactive' },
-    ]},
-  ];
+ const columns: Column<Product>[] = [
+ {
+ key: 'part_number', header: 'Part #',
+ cell: (r) => (
+ <span className="font-mono">{r.part_number}</span>
+ ) },
+ {
+ key: 'name', header: 'Name',
+ cell: (r) => (
+ <div>
+ <div className="font-medium">{r.name}</div>
+ {r.description && <div className="text-xs text-muted truncate max-w-md">{r.description}</div>}
+ </div>
+ ) },
+ { key: 'uom', header: 'UOM', cell: (r) => r.unit_of_measure },
+ {
+ key: 'cost', header: 'Std Cost', align: 'right',
+ cell: (r) => <NumCell>{formatPeso(r.standard_cost)}</NumCell> },
+ {
+ key: 'has_bom', header: 'BOM',
+ cell: (r) => r.has_bom ? <Chip variant="success">Yes</Chip> : <Chip variant="neutral">—</Chip> },
+ {
+ key: 'active', header: 'Active',
+ cell: (r) => r.is_active ? <Chip variant="success">Active</Chip> : <Chip variant="neutral">Inactive</Chip> },
+ ...(canManage ? [{
+ key: 'actions',
+ header: '',
+ align: 'right' as const,
+ cell: (r: Product) => (
+ <div className="flex justify-end gap-1">
+ <Button
+ type="button"
+ variant="ghost"
+ size="sm"
+ iconOnly
+ icon={<Pencil size={14} />}
+ aria-label={`Edit ${r.part_number}`}
+ onClick={() => navigate(`/crm/products/${r.id}/edit`)}
+ className="text-muted hover:text-primary"
+ />
+  <Button
+  type="button"
+  variant="ghost"
+  size="sm"
+  iconOnly
+  aria-label={`${scope === 'only' ? 'Restore' : 'Delete'} ${r.part_number}`}
+  onClick={() => scope === 'only' ? restore.mutate(r.id) : setConfirmDelete(r)}
+  className={scope === 'only' ? 'text-muted hover:text-primary' : 'text-muted hover:text-danger'}
+  icon={scope === 'only' ? <ArchiveRestore size={14} /> : <Trash2 size={14} />}
+  />
+  </div>
+  ) }] : []),
+ ];
 
-  return (
-    <div>
-      <PageHeader
-        title="Products"
-        subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'product' : 'products'}` : undefined}
-        actions={canManage ? (
-          <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/crm/products/create')}>
-            New product
-          </Button>
-        ) : null}
-      />
-      <FilterBar
-        filters={filterConfig}
-        values={filters}
-        onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
-        onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
-        searchPlaceholder="Search part number or name…"
-      />
-      {isLoading && !data && <SkeletonTable columns={canManage ? 7 : 6} rows={8} />}
-      {isError && (
-        <EmptyState
-          icon="alert-circle"
-          title="Failed to load products"
-          action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
-        />
-      )}
-      {data && data.data.length === 0 && (
-        <EmptyState
-          icon="package"
-          title="No products found"
-          description={canManage ? 'Add your first product to start receiving sales orders.' : 'Nothing here yet.'}
-          action={canManage ? (
-            <Button variant="primary" onClick={() => navigate('/crm/products/create')}>New product</Button>
-          ) : undefined}
-        />
-      )}
-      {data && data.data.length > 0 && (
-        <div className="px-5 py-4">
-          <DataTable
-            onRowClick={(r) => navigate(`/crm/products/${r.id}`)}
-            columns={columns}
-            data={data.data}
-            meta={data.meta}
-            onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
-          />
-        </div>
-      )}
+ const filterConfig: FilterConfig[] = [
+ { key: 'has_bom', label: 'Has BOM', type: 'select', options: [
+ { value: '', label: 'All' }, { value: 'true', label: 'Yes' }, { value: 'false', label: 'No' },
+ ]},
+ { key: 'is_active', label: 'Active', type: 'select', options: [
+ { value: '', label: 'All' }, { value: 'true', label: 'Active' }, { value: 'false', label: 'Inactive' },
+ ]},
+ ];
 
-      <ConfirmDialog
-        isOpen={!!confirmDelete}
-        onClose={() => setConfirmDelete(null)}
-        onConfirm={() => { if (confirmDelete) del.mutate(confirmDelete.id); }}
-        title="Delete product?"
-        description={
-          confirmDelete ? (
-            <>
-              <span className="font-mono font-medium text-primary">{confirmDelete.part_number}</span>{' '}
-              <span className="text-muted">— {confirmDelete.name}</span>
-              <br />
-              Deletion fails if the product appears on any sales order. Deactivate instead in that case.
-            </>
-          ) : null
-        }
-        confirmLabel="Delete"
-        variant="danger"
-        pending={del.isPending}
-      />
-    </div>
-  );
+ return (
+ <div>
+ <PageHeader
+ title="Products"
+ subtitle={data ? `${data.meta.total} ${data.meta.total === 1 ? 'product' : 'products'}` : undefined}
+ actions={canManage ? (
+ <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate('/crm/products/create')}>
+ New product
+ </Button>
+ ) : null}
+ />
+ <FilterBar
+ filters={filterConfig}
+ values={filters}
+ onSearch={(search) => setFilters((f) => ({ ...f, search, page: 1 }))}
+ onFilter={(key, value) => setFilters((f) => ({ ...f, [key]: value, page: 1 }))}
+ searchPlaceholder="Search part number or name…"
+ actions={<ArchiveFilter value={scope} onChange={setScope} />}
+ />
+ {isLoading && !data && <SkeletonTable columns={canManage ? 7 : 6} rows={8} />}
+ {isError && (
+ <EmptyState
+ icon="alert-circle"
+ title="Failed to load products"
+ action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>}
+ />
+ )}
+ {data && data.data.length === 0 && (
+ <EmptyState
+ icon="package"
+ title="No products found"
+ description={canManage ? 'Add your first product to start receiving sales orders.' : 'Nothing here yet.'}
+ action={canManage ? (
+ <Button variant="primary" onClick={() => navigate('/crm/products/create')}>New product</Button>
+ ) : undefined}
+ />
+ )}
+ {data && data.data.length > 0 && (
+ <div className="px-5 py-4">
+ <DataTable
+ onRowClick={(r) => navigate(`/crm/products/${r.id}`)}
+ columns={columns}
+ data={data.data}
+ meta={data.meta}
+ onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+ />
+ </div>
+ )}
+
+ <ConfirmDialog
+ isOpen={!!confirmDelete}
+ onClose={() => setConfirmDelete(null)}
+ onConfirm={() => { if (confirmDelete) del.mutate(confirmDelete.id); }}
+ title="Archive product?"
+ description={
+ confirmDelete ? (
+ <>
+ <span className="font-mono font-medium text-primary">{confirmDelete.part_number}</span>{' '}
+ <span className="text-muted">— {confirmDelete.name}</span>
+ <br />
+ Archiving fails if the product appears on any sales order. Deactivate instead in that case. It will be archived and can be restored later.
+ </>
+ ) : null
+ }
+ confirmLabel="Archive"
+ variant="danger"
+ pending={del.isPending}
+ />
+ </div>
+ );
 }

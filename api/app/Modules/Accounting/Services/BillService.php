@@ -32,16 +32,13 @@ use RuntimeException;
 class BillService
 {
     /** AP control account code. */
-    private const AP_CODE = '2010';
-
-    private const VAT_INPUT = '1310';
-
     public function __construct(
         private readonly JournalEntryService $journals,
         private readonly AccountingPeriodService $periods,
         private readonly ThreeWayMatchService $threeWayMatch,
         private readonly BudgetEnforcementService $budget,
         private readonly TaxPolicyService $taxPolicy,
+        private readonly AccountingAccountPolicyService $accounts,
     ) {}
 
     public function list(array $filters): LengthAwarePaginator
@@ -106,7 +103,7 @@ class BillService
             $vendor = Vendor::findOrFail(
                 HashIdFilter::decode($data['vendor_id'], Vendor::class)
             );
-            $isVatable = (bool) ($data['is_vatable'] ?? true);
+            $isVatable = (bool) ($data['is_vatable'] ?? $this->taxPolicy->isVatRegistered());
 
             // Build items + totals.
             [$items, $subtotal] = $this->normalizeItems($data['items'] ?? []);
@@ -175,8 +172,8 @@ class BillService
                             $billLines[(string) $li['item_id']] = [
                                 'item_id' => $li['item_id'],
                                 'description' => $li['description'],
-                                'quantity' => $li['quantity'] ?? '0',
-                                'unit_price' => $li['unit_price'] ?? '0',
+                                'quantity' => $li['quantity'],
+                                'unit_price' => $li['unit_price'],
                             ];
                         }
                     }
@@ -215,8 +212,8 @@ class BillService
             }
 
             // Build JE: DR each expense_account_id; DR VAT Input if vatable; CR AP.
-            $apId = $this->accountId(self::AP_CODE);
-            $vatInputId = $this->accountId(self::VAT_INPUT);
+            $apId = $this->accountId($this->accounts->ap());
+            $vatInputId = $this->accountId($this->accounts->vatInput());
 
             $lines = [];
             foreach ($items as $row) {
@@ -319,7 +316,7 @@ class BillService
                 'created_by' => $by->id,
             ]);
 
-            $apId = $this->accountId(self::AP_CODE);
+            $apId = $this->accountId($this->accounts->ap());
             $je = $this->journals->create([
                 'date' => $payment->payment_date->toDateString(),
                 'description' => "Payment for Bill {$bill->bill_number}",

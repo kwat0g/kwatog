@@ -19,13 +19,13 @@ import type { MaintenancePriority, MaintenanceWorkOrderStatus } from '@/types/ma
 
 /** Production work orders — floor tablet (`/factory`) + planner table. */
 export const workOrderStatusVariant: Record<WorkOrderStatus, ChipVariant> = {
-  planned: 'neutral',
-  confirmed: 'info',
-  in_progress: 'info',
-  paused: 'warning',
-  completed: 'success',
-  closed: 'success',
-  cancelled: 'danger',
+ planned: 'neutral',
+ confirmed: 'info',
+ in_progress: 'info',
+ paused: 'warning',
+ completed: 'success',
+ closed: 'success',
+ cancelled: 'danger',
 };
 
 /**
@@ -33,27 +33,27 @@ export const workOrderStatusVariant: Record<WorkOrderStatus, ChipVariant> = {
  * structurally identical union, so the driver pages index this with theirs.
  */
 export const deliveryStatusVariant: Record<DeliveryStatus, ChipVariant> = {
-  scheduled: 'neutral',
-  loading: 'info',
-  in_transit: 'info',
-  delivered: 'warning',
-  confirmed: 'success',
-  cancelled: 'neutral',
+ scheduled: 'neutral',
+ loading: 'info',
+ in_transit: 'info',
+ delivered: 'warning',
+ confirmed: 'success',
+ cancelled: 'neutral',
 };
 
 /** Maintenance work orders — tech PWA + maintenance table. */
 export const maintenanceStatusVariant: Record<MaintenanceWorkOrderStatus, ChipVariant> = {
-  open: 'warning',
-  assigned: 'info',
-  in_progress: 'info',
-  completed: 'success',
-  cancelled: 'neutral',
+ open: 'warning',
+ assigned: 'info',
+ in_progress: 'info',
+ completed: 'success',
+ cancelled: 'neutral',
 };
 
 /** Maintenance priority — tech PWA + maintenance table. */
 export const maintenancePriorityVariant: Record<MaintenancePriority, ChipVariant> = {
-  critical: 'danger',
-  high: 'warning',
-  medium: 'info',
-  low: 'neutral',
+ critical: 'danger',
+ high: 'warning',
+ medium: 'info',
+ low: 'neutral',
 };

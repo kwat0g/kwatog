@@ -9,4 +9,13 @@ enum LoanPaymentType: string
     case PayrollDeduction = 'payroll_deduction';
     case Manual           = 'manual';
     case FinalPay         = 'final_pay';
+
+    public function label(): string
+    {
+        return match ($this) {
+            self::PayrollDeduction => 'Payroll deduction',
+            self::Manual => 'Manual payment',
+            self::FinalPay => 'Final pay',
+        };
+    }
 }

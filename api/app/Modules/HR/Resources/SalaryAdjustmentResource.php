@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Resources;
 
+use Illuminate\Support\Str;
+
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -18,12 +20,13 @@ class SalaryAdjustmentResource extends JsonResource
             'id'                        => $this->hash_id,
             'employee'                  => new EmployeeResource($this->whenLoaded('employee')),
             'from_basic_monthly_salary' => $this->from_basic_monthly_salary,
-            'from_daily_rate'           => $this->from_daily_rate,
+            'from_semi_monthly_rate'           => $this->from_semi_monthly_rate,
             'to_basic_monthly_salary'   => $this->to_basic_monthly_salary,
-            'to_daily_rate'             => $this->to_daily_rate,
+            'to_semi_monthly_rate'             => $this->to_semi_monthly_rate,
             'effective_date'            => $this->effective_date?->toDateString(),
             'reason'                    => $this->reason,
             'status'                    => $this->status->value,
+            'status_label'              => Str::headline((string) $this->status->value),
             'requested_by'              => $this->whenLoaded('requester', fn () => [
                 'id'   => $this->requester->hash_id,
                 'name' => $this->requester->name,

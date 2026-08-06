@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace App\Modules\Quality\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\SettingsService;
 use App\Common\Support\SearchOperator;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\NotificationService;
-use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
 use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Enums\NcrActionType;
@@ -42,6 +42,7 @@ class NcrService
     public function __construct(
         private readonly DocumentSequenceService $sequences,
         private readonly NotificationService $notifications,
+        private readonly SettingsService $settings,
     ) {}
 
     public function list(array $filters): LengthAwarePaginator
@@ -153,8 +154,12 @@ class NcrService
 
         // Task A6 — notify QC Head so root cause / disposition can be filled.
         try {
+            $notificationRoles = array_values(array_filter(
+                (array) $this->settings->get('quality.ncr.auto_created_notification_roles', []),
+                static fn ($role): bool => is_string($role) && $role !== '',
+            ));
             $qcHeads = \App\Modules\Auth\Models\User::query()
-                ->whereHas('role', fn ($q) => $q->whereIn('slug', ['qc_inspector', 'system_admin']))
+                ->whereHas('role', fn ($q) => $q->whereIn('slug', $notificationRoles))
                 ->where('is_active', true)
                 ->get();
             foreach ($qcHeads as $u) {
@@ -200,7 +205,7 @@ class NcrService
                 // CAPA: seed ownership + due date so the effectiveness loop has
                 // an accountable owner once the NCR closes.
                 'owner_id'     => $data['owner_id'] ?? $by->id,
-                'due_date'     => $data['due_date'] ?? now()->addDays(30)->toDateString(),
+                'due_date'     => $data['due_date'] ?? now()->addDays($this->settings->requiredInt('quality.effectiveness.check_interval_days', 1))->toDateString(),
             ]);
             // Bump status to in_progress on first action.
             if ($ncr->status === NcrStatus::Open) {
@@ -269,8 +274,8 @@ class NcrService
                         'product_id'      => $ncr->product_id,
                         'quantity_target' => $ncr->affected_quantity,
                         'planned_start'   => now()->addDay()->toDateString(),
-                        'planned_end'     => now()->addDays(7)->toDateString(),
-                        'priority'        => 5, // bumped above default
+                        'planned_end'     => now()->addDays($this->settings->requiredInt('quality.ncr.replacement_work_order_lead_days', 1))->toDateString(),
+                        'priority'        => $this->settings->requiredInt('quality.ncr.replacement_work_order_priority', 0, 10),
                         'parent_ncr_id'   => $ncr->id,
                         'created_by'     => $by->id,
                     ]);
@@ -281,7 +286,7 @@ class NcrService
             }
 
             // T3.1.B — Rework disposition mirrors Scrap branch but creates a
-            // rework WO on a tighter timeline (3 days, priority 7).
+            // rework WO on the configured replacement timeline and priority.
             if ($ncr->disposition === NcrDisposition::Rework
                 && $ncr->inspection_id
                 && $ncr->product_id
@@ -292,8 +297,8 @@ class NcrService
                         'product_id'      => $ncr->product_id,
                         'quantity_target' => (int) $ncr->affected_quantity,
                         'planned_start'   => now()->addDay()->toDateString(),
-                        'planned_end'     => now()->addDays(3)->toDateString(),
-                        'priority'        => 7,
+                        'planned_end'     => now()->addDays($this->settings->requiredInt('quality.ncr.replacement_work_order_lead_days', 1))->toDateString(),
+                        'priority'        => $this->settings->requiredInt('quality.ncr.replacement_work_order_priority', 0, 10),
                         'parent_ncr_id'   => $ncr->id,
                         'created_by'      => $by->id,
                     ]);
@@ -342,10 +347,9 @@ class NcrService
 
     private function notifyPurchasing(NonConformanceReport $ncr): void
     {
-        // Find Purchasing officers (role slug exists from Sprint 5 seeder).
-        $role = Role::query()->where('slug', 'purchasing_officer')->first();
-        if (! $role) return;
-        $recipients = User::query()->where('role_id', $role->id)->get();
+        $roles = array_values(array_filter((array) $this->settings->get('quality.ncr.return_to_supplier.notification_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
+        if ($roles === []) return;
+        $recipients = User::query()->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))->get();
         if ($recipients->isEmpty()) return;
 
         $payload = [

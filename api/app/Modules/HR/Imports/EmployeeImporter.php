@@ -11,6 +11,7 @@ use App\Modules\HR\Enums\CivilStatus;
 use App\Modules\HR\Enums\EmploymentType;
 use App\Modules\HR\Enums\Gender;
 use App\Modules\HR\Enums\PayType;
+use App\Modules\HR\Enums\EmployeeStatus;
 use App\Modules\HR\Models\Department;
 use App\Modules\HR\Models\Employee;
 use App\Modules\HR\Models\Position;
@@ -23,10 +24,11 @@ use RuntimeException;
  *
  * Required CSV columns: first_name, last_name, birth_date, gender, civil_status,
  * department, position, employment_type, pay_type, date_hired.
- * Salary: basic_monthly_salary (pay_type=monthly) OR daily_rate (pay_type=daily).
+ * Salary: basic_monthly_salary (pay_type=monthly) OR semi_monthly_rate (pay_type=semi_monthly).
  * Optional: employee_no (preserve legacy id — else generated), middle_name,
  * suffix, mobile_number, email, street_address, city, province, sss_no,
- * philhealth_no, pagibig_no, tin, bank_name, bank_account_no, date_regularized.
+ * philhealth_no, pagibig_no, tin, bank_name, bank_account_no, date_regularized,
+ * status.
  *
  * department resolves by code then name; position by title (created within the
  * department if absent). Government IDs + bank account are stored via the
@@ -69,13 +71,13 @@ class EmployeeImporter implements EntityImporter
         $dept = $this->resolveDepartment(trim($row['department'] ?? ''));
         $position = $this->resolvePosition(trim($row['position'] ?? ''), $dept);
 
-        $monthly = trim($row['basic_monthly_salary'] ?? '');
-        $daily   = trim($row['daily_rate'] ?? '');
+        $monthly    = trim($row['basic_monthly_salary'] ?? '');
+        $semiMonthly = trim($row['semi_monthly_rate'] ?? '');
         if ($payType === PayType::Monthly->value && $monthly === '') {
             throw new RuntimeException('basic_monthly_salary is required for a monthly-paid employee.');
         }
-        if ($payType === PayType::Daily->value && $daily === '') {
-            throw new RuntimeException('daily_rate is required for a daily-paid employee.');
+        if ($payType === PayType::SemiMonthly->value && $semiMonthly === '') {
+            throw new RuntimeException('semi_monthly_rate is required for a semi-monthly-paid employee.');
         }
 
         $employeeNo = trim($row['employee_no'] ?? '');
@@ -85,7 +87,7 @@ class EmployeeImporter implements EntityImporter
             throw new RuntimeException("employee_no '{$employeeNo}' already exists.");
         }
 
-        return Employee::create([
+        $payload = [
             'employee_no'     => $employeeNo,
             'first_name'      => $first,
             'middle_name'     => trim($row['middle_name'] ?? '') ?: null,
@@ -94,6 +96,11 @@ class EmployeeImporter implements EntityImporter
             'birth_date'      => $this->date($row['birth_date'] ?? '', 'birth_date'),
             'gender'          => $gender,
             'civil_status'    => $civil,
+            // nationality is NOT NULL with a DB default of 'Filipino'. Passing
+            // an explicit null overrides that default and hard-fails the insert,
+            // which killed every employee CSV import that omitted the column.
+            // Fall back to the same default rather than dropping the key, so the
+            // value is explicit at the application layer too.
             'nationality'     => trim($row['nationality'] ?? '') ?: 'Filipino',
             'street_address'  => trim($row['street_address'] ?? '') ?: null,
             'city'            => trim($row['city'] ?? '') ?: null,
@@ -112,11 +119,21 @@ class EmployeeImporter implements EntityImporter
             'date_regularized' => trim($row['date_regularized'] ?? '') !== ''
                 ? $this->date($row['date_regularized'], 'date_regularized') : null,
             'basic_monthly_salary' => $monthly !== '' ? $monthly : null,
-            'daily_rate'      => $daily !== '' ? $daily : null,
+            'semi_monthly_rate' => $semiMonthly !== '' ? $semiMonthly : null,
             'bank_name'       => trim($row['bank_name'] ?? '') ?: null,
             'bank_account_no' => trim($row['bank_account_no'] ?? '') ?: null,
-            'status'          => 'active',
-        ]);
+        ];
+
+        // Status is optional for legacy CSVs; when supplied, preserve the
+        // authoritative source value instead of forcing every imported person
+        // into an active employment state.
+        $status = strtolower(trim($row['status'] ?? ''));
+        if ($status !== '') {
+            $this->assertEnum($status, EmployeeStatus::values(), 'status');
+            $payload['status'] = $status;
+        }
+
+        return Employee::create($payload);
     }
 
     private function resolveDepartment(string $ref): Department

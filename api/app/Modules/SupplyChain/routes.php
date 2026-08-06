@@ -18,6 +18,8 @@ use Illuminate\Support\Facades\Route;
 Route::middleware(['auth:sanctum', 'feature:supply_chain'])->prefix('supply-chain')->group(function () {
 
     /* ─── Shipments (Task 65) ─── */
+    Route::get('/shipments/options',                    [ShipmentController::class, 'options'])
+        ->middleware('permission:supply_chain.view');
     Route::get('/shipments',                                [ShipmentController::class, 'index'])
         ->middleware('permission:supply_chain.view');
     Route::get('/shipments/{shipment}',                     [ShipmentController::class, 'show'])
@@ -29,6 +31,8 @@ Route::middleware(['auth:sanctum', 'feature:supply_chain'])->prefix('supply-chai
     Route::patch('/shipments/{shipment}',                   [ShipmentController::class, 'updateMeta'])
         ->middleware('permission:supply_chain.shipments.manage');
     Route::delete('/shipments/{shipment}',                  [ShipmentController::class, 'destroy'])
+        ->middleware('permission:supply_chain.shipments.manage');
+    Route::patch('/shipments/{shipment}/restore',            [ShipmentController::class, 'restore'])
         ->middleware('permission:supply_chain.shipments.manage');
 
     /* ─── OGAMI-104 — Landed cost calculation ─── */
@@ -48,6 +52,8 @@ Route::middleware(['auth:sanctum', 'feature:supply_chain'])->prefix('supply-chai
         ->middleware('permission:supply_chain.view');
     Route::delete('/shipment-documents/{document}',         [ShipmentController::class, 'destroyDocument'])
         ->middleware('permission:supply_chain.shipments.manage');
+    Route::patch('/shipment-documents/{document}/restore',  [ShipmentController::class, 'restoreDocument'])
+        ->middleware('permission:supply_chain.shipments.manage');
 
     /* ─── Containers (multi-container shipment tracking) ─── */
     Route::get('/shipments/{shipment}/containers',              [\App\Modules\SupplyChain\Controllers\ContainerController::class, 'index'])
@@ -60,8 +66,12 @@ Route::middleware(['auth:sanctum', 'feature:supply_chain'])->prefix('supply-chai
         ->middleware('permission:supply_chain.shipments.manage');
     Route::delete('/containers/{container}',                     [\App\Modules\SupplyChain\Controllers\ContainerController::class, 'destroy'])
         ->middleware('permission:supply_chain.shipments.manage');
+    Route::patch('/containers/{container}/restore',              [\App\Modules\SupplyChain\Controllers\ContainerController::class, 'restore'])
+        ->middleware('permission:supply_chain.shipments.manage');
 
     /* ─── Vehicles (Task 66) ─── */
+    Route::get('/vehicles/options',                          [VehicleController::class, 'options'])
+        ->middleware('permission:supply_chain.view');
     Route::get('/vehicles',                                 [VehicleController::class, 'index'])
         ->middleware('permission:supply_chain.view');
     Route::post('/vehicles',                                [VehicleController::class, 'store'])
@@ -70,8 +80,12 @@ Route::middleware(['auth:sanctum', 'feature:supply_chain'])->prefix('supply-chai
         ->middleware('permission:supply_chain.fleet.manage');
     Route::delete('/vehicles/{vehicle}',                    [VehicleController::class, 'destroy'])
         ->middleware('permission:supply_chain.fleet.manage');
+    Route::patch('/vehicles/{vehicle}/restore',             [VehicleController::class, 'restore'])
+        ->middleware('permission:supply_chain.fleet.manage');
 
     /* ─── Deliveries (Task 66) ─── */
+    Route::get('/deliveries/options',                       [DeliveryController::class, 'options'])
+        ->middleware('permission:supply_chain.view');
     Route::get('/deliveries',                               [DeliveryController::class, 'index'])
         ->middleware('permission:supply_chain.view');
     Route::get('/deliveries/{delivery}',                    [DeliveryController::class, 'show'])
@@ -88,8 +102,12 @@ Route::middleware(['auth:sanctum', 'feature:supply_chain'])->prefix('supply-chai
         ->middleware('permission:supply_chain.deliveries.confirm');
     Route::delete('/deliveries/{delivery}',                 [DeliveryController::class, 'destroy'])
         ->middleware('permission:supply_chain.deliveries.create');
+    Route::patch('/deliveries/{delivery}/restore',          [DeliveryController::class, 'restore'])
+        ->middleware('permission:supply_chain.deliveries.create');
 
     /* ─── ADV7 — Proof of Delivery (multi-file) ─── */
+    Route::get('/deliveries/proofs/options',                  [DeliveryProofController::class, 'options'])
+        ->middleware('permission:supply_chain.view');
     Route::get('/deliveries/{delivery}/proofs',                       [DeliveryProofController::class, 'index'])
         ->middleware('permission:supply_chain.view');
     Route::post('/deliveries/{delivery}/proofs',                      [DeliveryProofController::class, 'store'])
@@ -98,11 +116,13 @@ Route::middleware(['auth:sanctum', 'feature:supply_chain'])->prefix('supply-chai
         ->middleware('permission:supply_chain.view');
     Route::delete('/deliveries/{delivery}/proofs/{proof}',            [DeliveryProofController::class, 'destroy'])
         ->middleware('permission:supply_chain.deliveries.create');
+    Route::patch('/deliveries/{delivery}/proofs/{proof}/restore',     [DeliveryProofController::class, 'restore'])
+        ->middleware('permission:supply_chain.deliveries.create');
 });
 
 /* ─── Driver self-service surface (T2.5) ──────────────────────── */
 Route::prefix('driver')
-    ->middleware(['auth:sanctum', 'session.timeout'])
+    ->middleware(['auth:sanctum', 'session.timeout', 'permission:supply_chain.driver.access'])
     ->group(function (): void {
         Route::get('/deliveries',                       [DriverDeliveryController::class, 'index']);
         Route::get('/deliveries/{delivery}',            [DriverDeliveryController::class, 'show']);

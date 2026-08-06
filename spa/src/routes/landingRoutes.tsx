@@ -7,12 +7,12 @@ import { SkeletonLandingPage } from '@/components/ui/Skeleton';
 const LandingPage = lazy(() => import('@/pages/landing/LandingPage'));
 
 export const landingRoutes = (
-  <Route
-    path="/"
-    element={
-      <Suspense fallback={<SkeletonLandingPage />}>
-        <LandingPage />
-      </Suspense>
-    }
-  />
+ <Route
+ path="/"
+ element={
+ <Suspense fallback={<SkeletonLandingPage />}>
+ <LandingPage />
+ </Suspense>
+ }
+ />
 );

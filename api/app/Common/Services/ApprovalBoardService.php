@@ -20,8 +20,10 @@ use Illuminate\Support\Facades\DB;
  *                       slug matches that step's role_slug
  *   - awaiting_others : an approval step is pending but a different role
  *                       must act
- *   - approved        : last terminal action was 'approved' within 30 days
- *   - rejected        : last terminal action was 'rejected' within 30 days
+ *   - approved        : last terminal action was 'approved' within the
+ *                       configured recent approval history window
+ *   - rejected        : last terminal action was 'rejected' within the
+ *                       configured recent approval history window
  *
  * The actual approve/reject mutations remain on the per-entity controllers
  * (leave, PR, PO, loan, payroll) that already enforce per-type permission
@@ -38,6 +40,16 @@ class ApprovalBoardService
         'App\\Modules\\Payroll\\Models\\PayrollPeriod'      => ['kind' => 'payroll','table' => 'payroll_periods',   'number' => null,              'link' => '/payroll/periods/'],
     ];
 
+    /** @return array<int, array{value:string,label:string}> */
+    public function kindOptions(): array
+    {
+        $labels = ['leave' => 'Leave', 'pr' => 'Purchase requests', 'po' => 'Purchase orders', 'loan' => 'Loans', 'payroll' => 'Payroll'];
+        return array_values(array_map(
+            static fn (string $kind): array => ['value' => $kind, 'label' => $labels[$kind] ?? $kind],
+            array_unique(array_column(self::TYPE_MAP, 'kind')),
+        ));
+    }
+
     /**
      * @return array{
      *   my_action: array<int, array<string, mixed>>,
@@ -50,7 +62,8 @@ class ApprovalBoardService
     public function board(User $user, ?string $kindFilter = null): array
     {
         $userRoleSlugs = $this->roleSlugsFor($user);
-        $thirtyDaysAgo = Carbon::now()->subDays(30);
+        $recentDays = app(SettingsService::class)->requiredInt('approvals.recent_history_days', 1, 3650);
+        $historySince = Carbon::now()->subDays($recentDays);
 
         // Pull pending approvals (open columns).
         $pending = DB::table('approval_records')
@@ -65,7 +78,7 @@ class ApprovalBoardService
         $actioned = DB::table('approval_records')
             ->select(['id', 'approvable_type', 'approvable_id', 'step_order', 'role_slug', 'action', 'remarks', 'acted_at', 'approver_id'])
             ->whereIn('action', ['approved', 'rejected'])
-            ->where('acted_at', '>=', $thirtyDaysAgo)
+            ->where('acted_at', '>=', $historySince)
             ->orderByDesc('acted_at')
             ->limit(200)
             ->get();
@@ -279,7 +292,7 @@ class ApprovalBoardService
             'leave'   => 'Leave request — '.((string) ($source->start_date ?? '')).' to '.((string) ($source->end_date ?? '')),
             'pr'      => 'Purchase request',
             'po'      => 'Purchase order — vendor #'.((string) ($source->vendor_id ?? '')),
-            'loan'    => ucfirst((string) ($source->loan_type ?? 'loan')).' — ₱'.((string) ($source->principal ?? '0.00')),
+            'loan'    => ucfirst((string) ($source->loan_type ?? 'loan')).' — '.app(CurrencyDisplayService::class)->format($source->principal ?? 0),
             'payroll' => 'Payroll period '.((string) ($source->period_start ?? '')).' to '.((string) ($source->period_end ?? '')),
             default   => '',
         };

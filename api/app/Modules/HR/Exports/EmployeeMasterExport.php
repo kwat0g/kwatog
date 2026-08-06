@@ -80,19 +80,19 @@ class EmployeeMasterExport extends BaseModuleExport
                 'resolver' => fn (Employee $e) => $e->pay_type,
             ],
             'monthly_salary' => [
-                'label'   => 'Monthly Salary (PHP)',
+                'label'   => 'Monthly Salary',
                 'default' => false,
                 'format'  => 'money',
                 'resolver' => fn (Employee $e) => $e->basic_monthly_salary !== null
                     ? (float) $e->basic_monthly_salary
                     : null,
             ],
-            'daily_rate' => [
-                'label'   => 'Daily Rate (PHP)',
+            'semi_monthly_rate' => [
+                'label'   => 'Semi-monthly Rate',
                 'default' => false,
                 'format'  => 'money',
-                'resolver' => fn (Employee $e) => $e->daily_rate !== null
-                    ? (float) $e->daily_rate
+                'resolver' => fn (Employee $e) => $e->semi_monthly_rate !== null
+                    ? (float) $e->semi_monthly_rate
                     : null,
             ],
             'date_hired' => [

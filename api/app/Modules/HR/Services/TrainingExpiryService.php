@@ -39,7 +39,8 @@ class TrainingExpiryService
     ) {}
 
     /**
-     * Scan completed training records whose expiry is within 30 days (or past),
+     * Scan completed training records whose expiry is within the configured
+     * first-reminder horizon (or past),
      * and fire any tier alert that has not yet been fired for that record.
      *
      * @return array{evaluated:int, alerts_sent:int, expired_marked:int}
@@ -194,8 +195,10 @@ class TrainingExpiryService
             $users->push($empUser);
         }
 
-        $deptHeadRoleId  = Role::query()->where('slug', 'department_head')->value('id');
-        $hrOfficerRoleId = Role::query()->where('slug', 'hr_officer')->value('id');
+        $roles = array_values(array_filter((array) $this->settings->get('hr.training_expiry.notification_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
+        $roleIds = Role::query()->whereIn('slug', $roles)->pluck('id', 'slug');
+        $deptHeadRoleId  = $roleIds->get('department_head');
+        $hrOfficerRoleId = $roleIds->get('hr_officer');
         $deptId          = $r->employee?->department_id;
 
         // (b) Department heads of the employee's department.

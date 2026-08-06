@@ -15,19 +15,20 @@ use App\Modules\Loans\Enums\LoanStatus;
 use App\Modules\Loans\Enums\LoanType;
 use App\Modules\Loans\Models\EmployeeLoan;
 use App\Modules\Loans\Models\LoanPayment;
-use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Payroll\Enums\DeductionType;
 use App\Modules\Payroll\Enums\PayrollAdjustmentStatus;
 use App\Modules\Payroll\Enums\PayrollAdjustmentType;
 use App\Modules\Payroll\Enums\PayrollPeriodStatus;
 use App\Modules\Payroll\Models\Payroll;
 use App\Modules\Payroll\Models\PayrollAdjustment;
+use App\Modules\Payroll\Models\PayrollCycleClaim;
 use App\Modules\Payroll\Models\PayrollDeductionDetail;
 use App\Modules\Payroll\Models\PayrollPeriod;
 use App\Modules\Payroll\Services\Government\BirTaxComputationService;
 use App\Modules\Payroll\Services\Government\PagibigComputationService;
 use App\Modules\Payroll\Services\Government\PhilhealthComputationService;
 use App\Modules\Payroll\Services\Government\SssComputationService;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -71,8 +72,13 @@ class PayrollCalculatorService
      * Compute (or recompute) the payroll row for one employee in one period.
      *
      * Wrapped in DB::transaction so failed math leaves no partial rows.
+     *
+     * @param bool $internal True only when called by ProcessPayrollJob, which
+     *        owns the period's Processing claim. External callers (the
+     *        per-employee Recompute button) are additionally refused Approved
+     *        and Processing periods — see the guard below.
      */
-    public function computeForEmployee(PayrollPeriod $period, Employee $employee): Payroll
+    public function computeForEmployee(PayrollPeriod $period, Employee $employee, bool $internal = false): Payroll
     {
         // Locked = Finalized, Disbursed or Voided. Only Finalized was checked
         // before, so a disbursed run (money already paid) or a voided one could
@@ -82,6 +88,28 @@ class PayrollCalculatorService
                 'Cannot recompute: payroll period is %s.',
                 strtolower($period->status->label()),
             ));
+        }
+
+        // isLocked() alone left two holes for externally-triggered recomputes:
+        //
+        //   Approved   — a checker has already signed off on these amounts.
+        //                Rewriting a row here changed approved payroll with no
+        //                re-approval, defeating maker-checker (REC-04).
+        //   Processing — the batch job owns the period; a concurrent single-row
+        //                recompute races it and can be overwritten mid-flight
+        //                (or double-apply loan deductions and adjustments).
+        //
+        // The batch job passes internal: true because its own claim is exactly
+        // what puts the period into Processing.
+        if (! $internal && in_array($period->status, [
+            PayrollPeriodStatus::Approved,
+            PayrollPeriodStatus::Processing,
+        ], true)) {
+            throw new BusinessRuleException(
+                $period->status === PayrollPeriodStatus::Approved
+                    ? 'Cannot recompute: this period is already approved. Void it or force-unlock to make changes.'
+                    : 'Cannot recompute: a compute run is currently in progress for this period.',
+            );
         }
 
         return DB::transaction(function () use ($period, $employee) {
@@ -125,12 +153,21 @@ class PayrollCalculatorService
 
             $payType = $employee->pay_type instanceof \BackedEnum ? $employee->pay_type->value : (string) $employee->pay_type;
 
-            // ─── Hourly + daily rates ────────────────────────────
-            $monthlySalary = (string) ($employee->basic_monthly_salary ?? '0');
-            $dailyRate     = $payType === PayType::Daily->value
-                ? (string) ($employee->daily_rate ?? '0')
-                : Money::div($monthlySalary, $this->positivePolicy('payroll.work_days_per_month'), 4);
-            $hourlyRate    = Money::div($dailyRate, $this->positivePolicy('payroll.hours_per_day'), 4);
+            // ─── Pay basis ───────────────────────────────────────
+            // Both pay types are flat per cutoff (migration 0437). We resolve a
+            // single monthly-equivalent figure and derive everything from it, so
+            // basic pay and the government-contribution basis can never disagree
+            // about what a month is — the defect that made daily pay unusable.
+            $monthlySalary = $this->monthlyBasis($employee, $payType);
+
+            // Daily + hourly are DERIVED divisors used for OT, night
+            // differential, holiday premium and tardiness/undertime only. They
+            // are never a basic-pay basis.
+            $dailyRate  = Money::div($monthlySalary, $this->positivePolicy('payroll.work_days_per_month'), 4);
+            if (Money::lte($dailyRate, '0')) {
+                throw new BusinessRuleException("Employee {$employee->employee_no} has no authoritative pay rate for payroll calculation.");
+            }
+            $hourlyRate = Money::div($dailyRate, $this->positivePolicy('payroll.hours_per_day'), 4);
 
             // ─── Load attendance rows for this period ────────────
             /** @var \Illuminate\Support\Collection<int, Attendance> $attendances */
@@ -144,15 +181,15 @@ class PayrollCalculatorService
 
             // ─── Basic pay ───────────────────────────────────────
             $basicPay = $this->computeBasicPay(
-                $employee, $period, $aggregates['days_worked'], $monthlySalary, $dailyRate,
+                $employee, $period, $monthlySalary, $payType,
             );
 
-            // ─── Paid-leave pay (OGAMI-003) ──────────────────────
-            // Daily-rated workers earn nothing for days they don't clock in, so
-            // approved PAID leave must be compensated explicitly. Monthly-salaried
-            // staff already receive a flat half-month basic regardless of leave,
-            // so adding leave_pay for them would double-pay — keep it daily-only.
-            $leavePay = $this->computeLeavePay($employee, $attendances, $dailyRate);
+            // ─── Paid-leave pay ──────────────────────────────────
+            // Both pay types earn a flat cutoff basic whether or not the
+            // employee was on leave, so paid leave is already inside basic_pay.
+            // The column is kept (payslips + GL reference it) but is always zero
+            // now that the days-worked daily pay type is gone.
+            $leavePay = Money::zero();
 
             // ─── Earnings stack ──────────────────────────────────
             $overtimePay  = $aggregates['ot_pay'];
@@ -166,7 +203,25 @@ class PayrollCalculatorService
             if (Money::lt($grossPay, '0')) $grossPay = Money::zero();
 
             // ─── Government deductions (first half only) ─────────
-            $govBasis = $this->governmentDeductionBasis($employee, $monthlySalary, $dailyRate);
+            // Government contributions are assessed on the employee's ACTUAL
+            // monthly compensation, not their nominal rate. For a full cutoff
+            // those are the same figure. For a partial one — hired or separated
+            // mid-month — the nominal rate overstates what they earned, pushing
+            // them into a higher SSS/PhilHealth/Pag-IBIG bracket than their pay
+            // supports: a 3-of-15-day cutoff earned ₱1,892 but was assessed a
+            // full month's ₱1,623, an 86% deduction ratio that clamped net to
+            // near zero and raised high_deduction + large_change flags (which
+            // block finalize()).
+            //
+            // This is the same class of defect that made the daily pay type
+            // unusable — basic pay and the contribution basis disagreeing about
+            // the period they describe. It predates the semi-monthly conversion:
+            // mid-period HIRES have always been assessed this way. Scaling the
+            // basis by the employed fraction makes the two agree from both ends.
+            $govBasis = Money::round2(Money::mul(
+                $monthlySalary,
+                $this->employedDayFraction($employee, $period),
+            ));
             $sssEe = $sssEr = $phEe = $phEr = $pgEe = $pgEr = $wht = '0.00';
 
             if ($period->is_first_half && ! $period->is_thirteenth_month) {
@@ -219,6 +274,20 @@ class PayrollCalculatorService
                 'computed_at' => now(),
             ]);
 
+            // ─── Cycle claim: the double-pay guard ───────────────
+            // Scoped periods (migration 0438) let several periods cover one
+            // cutoff, so "one payroll row per period+employee" is no longer
+            // enough — the same person could be paid by two different scoped
+            // periods for the same dates, taking two sets of gov contributions
+            // and two loan amortizations.
+            //
+            // payroll_cycle_claims has a UNIQUE (employee_id, cycle_key), so
+            // this insert is the authoritative gate. It sits INSIDE the same
+            // transaction as the payroll row, so a rejected claim rolls the
+            // whole computation back and nothing is half-written. Two
+            // concurrent workers racing on different periods cannot both win.
+            $this->claimCycle($payroll, $period, $employee);
+
             // ─── Re-parent adjustment FKs from replaced payroll ──
             // original_payroll_id is NOT NULL with no ON DELETE rule; point references
             // at the new replacement row so the audit trail is preserved.
@@ -266,6 +335,76 @@ class PayrollCalculatorService
 
             return $payroll->fresh(['deductionDetails', 'employee.department', 'employee.position', 'period']);
         });
+    }
+
+    /**
+     * Stake this employee's claim on the period's pay cycle.
+     *
+     * Fails loudly when another (non-voided) period has already paid them for
+     * the same cutoff. The message names the offending period so HR can fix the
+     * scope rather than guess.
+     *
+     * A recompute of the SAME period is fine: the old payroll row was deleted
+     * above and payroll_cycle_claims cascades on payroll_id, so the previous
+     * claim went with it inside this transaction.
+     */
+    private function claimCycle(Payroll $payroll, PayrollPeriod $period, Employee $employee): void
+    {
+        $cycleKey = $period->cycleKey();
+
+        // Read first so the common case gets a message naming the period that
+        // already paid this employee. This is NOT the guard — a concurrent
+        // worker can still slip between this read and the insert below — but it
+        // has to happen BEFORE the insert, because PostgreSQL aborts the entire
+        // transaction on a constraint violation (SQLSTATE 25P02) and no further
+        // query can run on it. Diagnosing after the fact is impossible.
+        $holder = PayrollCycleClaim::query()
+            ->where('employee_id', $employee->id)
+            ->where('cycle_key', $cycleKey)
+            ->with('period')
+            ->first();
+
+        if ($holder) {
+            throw new BusinessRuleException(sprintf(
+                'Employee %s was already paid for this pay cycle by period %s. Two payroll periods cannot pay the same employee for %s–%s — narrow this period\'s scope, or void the other period first.',
+                $employee->employee_no,
+                $holder->period?->label() ?? 'another period',
+                $period->period_start->format('Y-m-d'),
+                $period->period_end->format('Y-m-d'),
+            ));
+        }
+
+        try {
+            PayrollCycleClaim::create([
+                'employee_id'       => $employee->id,
+                'payroll_id'        => $payroll->id,
+                'payroll_period_id' => $period->id,
+                'cycle_key'         => $cycleKey,
+            ]);
+        } catch (QueryException $e) {
+            // The race the read above cannot cover: another worker claimed this
+            // employee for the same cycle in the microseconds since. The unique
+            // index is what actually makes double payment impossible; this is
+            // the only place that outcome is observable. Anything that is not a
+            // unique violation is a real DB fault and must not be flattened
+            // into a business-rule message.
+            if (! $this->isUniqueViolation($e)) {
+                throw $e;
+            }
+
+            throw new BusinessRuleException(sprintf(
+                'Employee %s was claimed by a concurrent payroll run for the same pay cycle (%s). Re-run compute once the other run has finished.',
+                $employee->employee_no,
+                $cycleKey,
+            ));
+        }
+    }
+
+    private function isUniqueViolation(QueryException $e): bool
+    {
+        // PG: SQLSTATE 23505. SQLite (test fallback): 23000 with a message.
+        return in_array($e->getCode(), ['23505', '23000'], true)
+            || str_contains(strtolower($e->getMessage()), 'unique');
     }
 
     /**
@@ -343,49 +482,117 @@ class PayrollCalculatorService
     }
 
     /**
-     * Basic pay calculation — handles monthly vs daily, mid-period hire pro-ration,
-     * and mid-cycle salary changes (OGAMI-011).
+     * Basic pay calculation — mid-period hire pro-ration and mid-cycle salary
+     * changes (OGAMI-011). Monthly-salaried only; see migration 0437.
      *
      * Compatibility contract: when an employee has NO employee_salary_history
      * rows, this behaves EXACTLY as the legacy implementation (uses
-     * $monthlySalary / $dailyRate verbatim). Proration only kicks in when a
-     * salary change's effective_date falls strictly inside the period.
+     * $monthlySalary verbatim). Proration only kicks in when a salary change's
+     * effective_date falls strictly inside the period.
      */
     private function computeBasicPay(
         Employee $employee,
         PayrollPeriod $period,
-        string $daysWorked,
         string $monthlySalary,
-        string $dailyRate,
+        string $payType,
     ): string {
-        $payType = $employee->pay_type instanceof \BackedEnum ? $employee->pay_type->value : (string) $employee->pay_type;
-
         // ─── Mid-cycle salary change proration (OGAMI-011) ───────
         // Only engages when there is at least one salary-history row whose
         // effective_date lands strictly inside (period_start, period_end].
-        $segments = $this->salarySegments($employee, $period, $monthlySalary, $dailyRate);
+        $segments = $this->salarySegments($employee, $period, $monthlySalary, $payType);
         if ($segments !== null) {
-            return $this->basicPayFromSegments($payType, $period, $daysWorked, $segments);
+            // Mid-cycle raise: blend the segments, then apply the same
+            // employment-window proration the flat path uses. Without this a
+            // raise inside the cutoff would silently bypass hire/separation
+            // proration and pay a leaver the full blended half-month.
+            return Money::round2(Money::mul(
+                $this->basicPayFromSegments($period, $segments),
+                $this->employedDayFraction($employee, $period),
+            ));
         }
 
-        // ─── Legacy path (no history) — unchanged ────────────────
-        if ($payType === PayType::Daily->value) {
-            return Money::mul($daysWorked, $dailyRate);
-        }
-
-        // Monthly: half-period basic = monthly_salary / 2
+        // One cutoff's basic = monthly equivalent / 2. Identical for both pay
+        // types: a semi_monthly employee's monthly basis is already rate × 2.
         $halfBasic = Money::div($monthlySalary, '2', 4);
 
-        // Pro-rate if hired mid-period.
-        $hireDate = $employee->date_hired;
-        if ($hireDate && $hireDate->gt($period->period_start) && $hireDate->lte($period->period_end)) {
-            $totalDays = max(1, $period->period_start->diffInDays($period->period_end) + 1);
-            $workedDays = max(0, $hireDate->diffInDays($period->period_end) + 1);
-            $factor = bcdiv((string) $workedDays, (string) $totalDays, 4);
-            return Money::mul($halfBasic, $factor);
+        // Pro-rate the days actually covered by employment. A flat cutoff rate
+        // is only correct for someone employed the WHOLE cutoff; joining or
+        // leaving partway means they are owed a fraction of it.
+        return Money::round2(
+            Money::mul($halfBasic, $this->employedDayFraction($employee, $period)),
+        );
+    }
+
+    /**
+     * What fraction of this cutoff's calendar days was the employee employed?
+     *
+     * '1.0000' for a full cutoff — the overwhelmingly common case, and the value
+     * that keeps an unchanged run byte-identical to the pre-proration behaviour.
+     *
+     * Both ends are handled:
+     *
+     *   hire date inside the cutoff        → paid from the hire date onward
+     *   separation date inside the cutoff  → paid up to the last working day
+     *
+     * The separation half matters because basic pay is now FLAT (migration 0437
+     * retired the days-worked daily type). Someone who resigns on day 3 of a
+     * 1–15 cutoff used to earn 3 × daily_rate; without this they would bank the
+     * entire half-month. FinalPayService::lastSalaryProRated() reads
+     * payroll.basic_pay verbatim when a computed row exists, so the inflated
+     * figure would flow straight into final pay — roughly ₱6,880 on a ₱9,460
+     * cutoff, per separation.
+     */
+    private function employedDayFraction(Employee $employee, PayrollPeriod $period): string
+    {
+        $periodStart = $period->period_start;
+        $periodEnd   = $period->period_end;
+
+        $from = $employee->date_hired && $employee->date_hired->gt($periodStart)
+            ? $employee->date_hired
+            : $periodStart;
+
+        $separationDate = $this->separationDate($employee);
+        $to = $separationDate && $separationDate->lt($periodEnd)
+            ? $separationDate
+            : $periodEnd;
+
+        // Employment window does not overlap the cutoff at all (hired after it
+        // ended, or separated before it began). Nothing is owed.
+        if ($to->lt($from)) {
+            return '0.0000';
         }
 
-        return Money::round2($halfBasic);
+        $totalDays   = max(1, $periodStart->diffInDays($periodEnd) + 1);
+        $coveredDays = $from->diffInDays($to) + 1;
+
+        if ($coveredDays >= $totalDays) {
+            return '1.0000';
+        }
+
+        return bcdiv((string) $coveredDays, (string) $totalDays, 4);
+    }
+
+    /**
+     * The employee's last working day, if a separation is on record.
+     *
+     * Read from clearances.separation_date — the authoritative last day, set when
+     * the separation is initiated. Guarded so the calculator keeps working if the
+     * clearance table is absent, and takes the EARLIEST separation date on record
+     * so a re-initiated separation cannot extend paid days.
+     */
+    private function separationDate(Employee $employee): ?\Illuminate\Support\Carbon
+    {
+        if (! \Illuminate\Support\Facades\Schema::hasTable('clearances')) {
+            return null;
+        }
+
+        $date = DB::table('clearances')
+            ->where('employee_id', $employee->id)
+            ->whereNull('deleted_at')
+            ->whereNotNull('separation_date')
+            ->min('separation_date');
+
+        return $date === null ? null : \Illuminate\Support\Carbon::parse($date)->startOfDay();
     }
 
     /**
@@ -394,16 +601,15 @@ class PayrollCalculatorService
      * Returns null when there is no mid-period salary change to honor — the
      * caller then runs the legacy code path verbatim (the compatibility
      * guarantee). When a change DOES land inside the period, returns an ordered
-     * list of day-spans each tagged with the monthly + daily rate in force for
-     * that span.
+     * list of day-spans each tagged with the monthly rate in force for that span.
      *
-     * @return array<int, array{days:int, monthly:string, daily:string}>|null
+     * @return array<int, array{days:int, monthly:string}>|null
      */
     private function salarySegments(
         Employee $employee,
         PayrollPeriod $period,
         string $monthlySalary,
-        string $dailyRate,
+        string $payType,
     ): ?array {
         // Cheap existence guard first — keeps the no-history path allocation-free.
         $history = \App\Modules\HR\Models\EmployeeSalaryHistory::query()
@@ -428,20 +634,13 @@ class PayrollCalculatorService
             return null;
         }
 
-        $payType = $employee->pay_type instanceof \BackedEnum ? $employee->pay_type->value : (string) $employee->pay_type;
-
         // Salary in force at period_start = latest history row effective on or
         // before period_start, else the employee's current values (the row set
         // may only describe the raise, not the starting salary).
         $startRow = $history->last(function ($h) use ($period) {
             return \Illuminate\Support\Carbon::parse($h->effective_date)->lte($period->period_start);
         });
-        $curMonthly = $startRow ? (string) $startRow->basic_monthly_salary : $monthlySalary;
-        $curDaily   = $startRow && $startRow->daily_rate !== null
-            ? (string) $startRow->daily_rate
-            : ($payType === PayType::Daily->value
-                ? $dailyRate
-                : Money::div($curMonthly, $this->positivePolicy('payroll.work_days_per_month'), 4));
+        $curMonthly = $this->historyMonthly($startRow, $payType) ?? $monthlySalary;
 
         // Build day-by-day cursor, switching rates as effective dates pass.
         $insideChanges = $history
@@ -462,37 +661,79 @@ class PayrollCalculatorService
             while ($changeIdx < $insideChanges->count()
                 && \Illuminate\Support\Carbon::parse($insideChanges[$changeIdx]->effective_date)->startOfDay()->eq($day)) {
                 if ($spanDays > 0) {
-                    $segments[] = ['days' => $spanDays, 'monthly' => $curMonthly, 'daily' => $curDaily];
+                    $segments[] = ['days' => $spanDays, 'monthly' => $curMonthly];
                     $spanDays = 0;
                 }
-                $row = $insideChanges[$changeIdx];
-                $curMonthly = (string) $row->basic_monthly_salary;
-                $curDaily   = $row->daily_rate !== null
-                    ? (string) $row->daily_rate
-                    : ($payType === PayType::Daily->value
-                        ? $curDaily
-                        : Money::div($curMonthly, $this->positivePolicy('payroll.work_days_per_month'), 4));
+                $curMonthly = $this->historyMonthly($insideChanges[$changeIdx], $payType) ?? $curMonthly;
                 $changeIdx++;
             }
             $spanDays++;
         }
         if ($spanDays > 0) {
-            $segments[] = ['days' => $spanDays, 'monthly' => $curMonthly, 'daily' => $curDaily];
+            $segments[] = ['days' => $spanDays, 'monthly' => $curMonthly];
         }
 
         return $segments;
     }
 
     /**
+     * Monthly-equivalent salary carried by a salary-history row, or null when
+     * the row holds no usable figure for this pay type.
+     */
+    private function historyMonthly(?object $row, string $payType): ?string
+    {
+        if ($row === null) {
+            return null;
+        }
+
+        // Per-cutoff rate wins for a semi-monthly employee, but fall through to
+        // the monthly column when the row predates their switch to semi-monthly
+        // (rows of both shapes coexist for someone whose pay type changed).
+        if ($payType === PayType::SemiMonthly->value
+            && $row->semi_monthly_rate !== null
+            && Money::gt((string) $row->semi_monthly_rate, '0')) {
+            return Money::mul((string) $row->semi_monthly_rate, '2');
+        }
+
+        return $row->basic_monthly_salary !== null && Money::gt((string) $row->basic_monthly_salary, '0')
+            ? (string) $row->basic_monthly_salary
+            : null;
+    }
+
+    /**
+     * Monthly-equivalent salary for an employee.
+     *
+     * The single basis both basic pay and government contributions read, so the
+     * two can never diverge:
+     *
+     *   monthly       → basic_monthly_salary
+     *   semi_monthly  → semi_monthly_rate × 2
+     */
+    private function monthlyBasis(Employee $employee, string $payType): string
+    {
+        if ($payType === PayType::SemiMonthly->value) {
+            if ($employee->semi_monthly_rate === null) {
+                throw new BusinessRuleException("Employee {$employee->employee_no} has no semi-monthly rate for payroll calculation.");
+            }
+            return Money::mul((string) $employee->semi_monthly_rate, '2');
+        }
+
+        if ($employee->basic_monthly_salary === null) {
+            throw new BusinessRuleException("Employee {$employee->employee_no} has no monthly salary for payroll calculation.");
+        }
+
+        return (string) $employee->basic_monthly_salary;
+    }
+
+    /**
      * Compute basic pay from ordered salary segments.
      *
-     * Monthly: each segment earns (half-month-basic at that salary) × (segment
-     * days ÷ total period days). Daily: segment-local day rate × days worked,
-     * apportioned to each segment by its share of calendar days.
+     * Each segment earns (half-month-basic at that salary) × (segment days ÷
+     * total period days).
      *
-     * @param  array<int, array{days:int, monthly:string, daily:string}>  $segments
+     * @param  array<int, array{days:int, monthly:string}>  $segments
      */
-    private function basicPayFromSegments(string $payType, PayrollPeriod $period, string $daysWorked, array $segments): string
+    private function basicPayFromSegments(PayrollPeriod $period, array $segments): string
     {
         $totalDays = 0;
         foreach ($segments as $s) {
@@ -500,19 +741,7 @@ class PayrollCalculatorService
         }
         $totalDays = max(1, $totalDays);
 
-        if ($payType === PayType::Daily->value) {
-            // Apportion the actual worked-day count across segments by calendar
-            // share, paying each portion at its in-force daily rate.
-            $total = Money::zero();
-            foreach ($segments as $s) {
-                $share = bcdiv((string) $s['days'], (string) $totalDays, 6);
-                $segDays = Money::mul($daysWorked, $share);
-                $total = Money::add($total, Money::mul($segDays, $s['daily']));
-            }
-            return Money::round2($total);
-        }
-
-        // Monthly: blended half-month basic weighted by calendar-day share.
+        // Blended half-month basic weighted by calendar-day share.
         $total = Money::zero();
         foreach ($segments as $s) {
             $halfBasic = Money::div($s['monthly'], '2', 4);
@@ -523,70 +752,7 @@ class PayrollCalculatorService
     }
 
     /**
-     * Paid-leave pay for daily-rated employees (OGAMI-003).
-     *
-     * The leave service writes each approved leave day as an OnLeave attendance
-     * row with zeroed hours and remarks "leave:{leave_request_no}". Daily-rated
-     * staff are paid per day worked, so without this they earn ₱0 for leave.
-     * We pay daily_rate per PAID leave day (LeaveType.is_paid = true); unpaid
-     * leave stays at zero. Monthly-salaried staff are excluded — their flat
-     * half-month basic already covers leave, so paying again would double-pay.
-     *
-     * @param  \Illuminate\Support\Collection<int, Attendance>  $attendances
-     */
-    private function computeLeavePay(Employee $employee, $attendances, string $dailyRate): string
-    {
-        $payType = $employee->pay_type instanceof \BackedEnum ? $employee->pay_type->value : (string) $employee->pay_type;
-        if ($payType !== PayType::Daily->value) {
-            return Money::zero();
-        }
-
-        // Collect leave_request_no tokens from OnLeave rows in this period.
-        $leaveNos = [];
-        foreach ($attendances as $att) {
-            if ($att->status !== AttendanceStatus::OnLeave) {
-                continue;
-            }
-            if (is_string($att->remarks) && str_starts_with($att->remarks, 'leave:')) {
-                $leaveNos[] = substr($att->remarks, 6);
-            }
-        }
-
-        if ($leaveNos === []) {
-            return Money::zero();
-        }
-
-        // Which of those leave requests are PAID? (single query, no N+1)
-        $paidLeaveNos = LeaveRequest::query()
-            ->whereIn('leave_request_no', array_unique($leaveNos))
-            ->whereHas('leaveType', fn ($q) => $q->where('is_paid', true))
-            ->pluck('leave_request_no')
-            ->all();
-
-        if ($paidLeaveNos === []) {
-            return Money::zero();
-        }
-
-        $paidLeaveNoSet = array_flip($paidLeaveNos);
-
-        // One day's pay per attendance row whose leave request is paid.
-        $paidDays = '0';
-        foreach ($attendances as $att) {
-            if ($att->status !== AttendanceStatus::OnLeave || ! is_string($att->remarks)) {
-                continue;
-            }
-            $no = str_starts_with($att->remarks, 'leave:') ? substr($att->remarks, 6) : null;
-            if ($no !== null && isset($paidLeaveNoSet[$no])) {
-                $paidDays = bcadd($paidDays, '1', 0);
-            }
-        }
-
-        return Money::mul($paidDays, $dailyRate);
-    }
-
-    /**
      * Salary basis used for monthly gov contribution calculations.
-     * For daily-rated employees we project: daily_rate × 22 (standard PH practice).
      */
     /**
      * Taxable-excess de minimis for the employee in this period's month.
@@ -613,15 +779,6 @@ class PayrollCalculatorService
             ]);
             return '0.00';
         }
-    }
-
-    private function governmentDeductionBasis(Employee $employee, string $monthlySalary, string $dailyRate): string
-    {
-        $payType = $employee->pay_type instanceof \BackedEnum ? $employee->pay_type->value : (string) $employee->pay_type;
-        if ($payType === PayType::Daily->value) {
-            return Money::mul($dailyRate, $this->positivePolicy('payroll.work_days_per_month'));
-        }
-        return $monthlySalary;
     }
 
     private function positivePolicy(string $key): string

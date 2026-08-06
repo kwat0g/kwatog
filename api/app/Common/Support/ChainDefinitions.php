@@ -128,19 +128,44 @@ final class ChainDefinitions
         'closed'     => 'closed',
     ];
 
+    /** @return array<string,array{steps: list<string>, status_map: array<string,string>}> */
+    public static function defaults(): array
+    {
+        return [
+            'sales_order' => ['steps' => self::STEPS_SALES_ORDER, 'status_map' => self::STATUS_MAP_SALES_ORDER],
+            'work_order' => ['steps' => self::STEPS_WORK_ORDER, 'status_map' => self::STATUS_MAP_WORK_ORDER],
+            'purchase_order' => ['steps' => self::STEPS_PURCHASE_ORDER, 'status_map' => self::STATUS_MAP_PURCHASE_ORDER],
+            'delivery' => ['steps' => self::STEPS_DELIVERY, 'status_map' => self::STATUS_MAP_DELIVERY],
+            'grn' => ['steps' => self::STEPS_GRN, 'status_map' => self::STATUS_MAP_GRN],
+        ];
+    }
+
+    /** @return array<string,array{steps: list<string>, status_map: array<string,string>}> */
+    private static function configured(): array
+    {
+        $value = app(\App\Common\Services\SettingsService::class)->get('workflow.chain_definitions');
+        if (! is_array($value) || $value === []) return self::defaults();
+
+        $valid = [];
+        foreach ($value as $type => $definition) {
+            if (! is_string($type) || ! is_array($definition)) continue;
+            $steps = array_values(array_filter((array) ($definition['steps'] ?? []), 'is_string'));
+            $statusMap = array_filter((array) ($definition['status_map'] ?? []), 'is_string');
+            if ($steps !== [] && $statusMap !== []) {
+                $valid[$type] = ['steps' => $steps, 'status_map' => $statusMap];
+            }
+        }
+        return $valid !== [] ? $valid : self::defaults();
+    }
+
     /**
      * @return array{0: string, 1: array<int,string>} [activeStep, completedSteps]
      */
     public static function resolve(string $entityType, string $status): array
     {
-        [$steps, $statusMap] = match ($entityType) {
-            'sales_order'    => [self::STEPS_SALES_ORDER, self::STATUS_MAP_SALES_ORDER],
-            'work_order'     => [self::STEPS_WORK_ORDER,  self::STATUS_MAP_WORK_ORDER],
-            'purchase_order' => [self::STEPS_PURCHASE_ORDER, self::STATUS_MAP_PURCHASE_ORDER],
-            'delivery'       => [self::STEPS_DELIVERY,    self::STATUS_MAP_DELIVERY],
-            'grn'            => [self::STEPS_GRN,         self::STATUS_MAP_GRN],
-            default          => [[], []],
-        };
+        $definition = self::configured()[$entityType] ?? null;
+        $steps = $definition['steps'] ?? [];
+        $statusMap = $definition['status_map'] ?? [];
 
         $active = $statusMap[$status] ?? ($steps[0] ?? 'unknown');
         $idx    = array_search($active, $steps, true);
@@ -152,7 +177,7 @@ final class ChainDefinitions
     /** @return array<int,string> */
     public static function allowedTypes(): array
     {
-        return ['sales_order', 'work_order', 'purchase_order', 'delivery', 'grn'];
+        return array_keys(self::configured());
     }
 
     /** Required permission to listen to a given chain channel. */

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Controllers;
 
+use App\Modules\Inventory\Enums\WarehouseZoneType;
 use App\Modules\Inventory\Models\Warehouse;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Models\WarehouseZone;
@@ -24,6 +25,16 @@ class WarehouseController
     public function tree(): AnonymousResourceCollection
     {
         return WarehouseResource::collection($this->service->tree());
+    }
+
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'zone_types' => array_map(static fn (WarehouseZoneType $type): array => [
+                'value' => $type->value,
+                'label' => $type->label(),
+            ], WarehouseZoneType::cases()),
+        ]]);
     }
 
     public function indexWarehouses(): AnonymousResourceCollection
@@ -49,6 +60,12 @@ class WarehouseController
         return response()->json(null, 204);
     }
 
+    public function restoreWarehouse(Warehouse $warehouse): JsonResponse
+    {
+        $warehouse->restore();
+        return response()->json(['message' => 'Warehouse restored.']);
+    }
+
     public function storeZone(StoreWarehouseZoneRequest $request): JsonResponse
     {
         $z = $this->service->createZone($request->validated());
@@ -65,6 +82,12 @@ class WarehouseController
         try { $this->service->deleteZone($zone); }
         catch (\RuntimeException $e) { return response()->json(['message' => $e->getMessage()], 422); }
         return response()->json(null, 204);
+    }
+
+    public function restoreZone(WarehouseZone $zone): JsonResponse
+    {
+        $zone->restore();
+        return response()->json(['message' => 'Warehouse zone restored.']);
     }
 
     public function storeLocation(StoreWarehouseLocationRequest $request): JsonResponse
@@ -85,5 +108,11 @@ class WarehouseController
         try { $this->service->deleteLocation($location); }
         catch (\RuntimeException $e) { return response()->json(['message' => $e->getMessage()], 422); }
         return response()->json(null, 204);
+    }
+
+    public function restoreLocation(WarehouseLocation $location): JsonResponse
+    {
+        $location->restore();
+        return response()->json(['message' => 'Warehouse location restored.']);
     }
 }

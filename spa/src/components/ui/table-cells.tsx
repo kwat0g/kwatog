@@ -16,24 +16,24 @@ import { cn } from '@/lib/cn';
 type Align = 'left' | 'right' | 'center';
 
 const alignCls: Record<Align, string> = {
-  left: 'text-left',
-  right: 'text-right',
-  center: 'text-center',
+ left: 'text-left',
+ right: 'text-right',
+ center: 'text-center',
 };
 
 /** Header cell classes. Use when you can't use `<Th>` (e.g. inside a map). */
 export const thCls = (align: Align = 'left'): string =>
-  cn('h-9 px-3.5 text-2xs uppercase tracking-wider text-muted font-semibold bg-[var(--bg-thead)] select-none', alignCls[align]);
+ cn('h-8 px-2.5 text-2xs uppercase tracking-wider text-muted font-medium select-none', alignCls[align]);
 
 /** Body cell classes. `mono` for any numeric / ID / date content. */
 export const tdCls = (align: Align = 'left', mono = false): string =>
-  cn('px-3.5 py-2.5 align-middle', alignCls[align], mono && 'font-mono tabular-nums');
+ cn('px-2.5 py-1 align-middle', alignCls[align], mono && 'font-mono tabular-nums');
 
-/** Row classes — 40px tall, hairline separator, high-contrast theme-aware zebra striping, hover highlight, selected outline. */
-export const trCls = 'h-10 border-b border-subtle/80 odd:bg-[var(--bg-zebra-odd)] even:bg-[var(--bg-zebra-even)] hover:bg-[var(--bg-row-hover)] transition-all duration-fast aria-selected:outline aria-selected:outline-2 aria-selected:outline-landing-accent aria-selected:-outline-offset-2 aria-selected:z-10 aria-selected:shadow-xs';
+/** Row classes — 32px tall, hairline separator, hover highlight, selected outline. */
+export const trCls = 'h-8 border-b border-subtle hover:bg-subtle transition-all duration-fast aria-selected:outline aria-selected:outline-2 aria-selected:outline-landing-accent aria-selected:-outline-offset-2 aria-selected:z-10 aria-selected:';
 
 /** Header row classes. */
-export const theadTrCls = 'border-b border-default bg-[var(--bg-thead)]';
+export const theadTrCls = 'border-b border-default';
 
 /**
  * Totals / grand-total row — a heavier rule above it and 500 weight.
@@ -43,35 +43,35 @@ export const theadTrCls = 'border-b border-default bg-[var(--bg-thead)]';
  * all-sides colour appended after it loses on stylesheet order, silently
  * leaving the rule hairline-grey. A side-specific utility cannot collide.
  */
-export const totalsTrCls = 'h-10 border-t-2 border-t-strong font-medium bg-[var(--bg-thead)]';
+export const totalsTrCls = 'h-8 border-t-2 border-t-strong font-medium';
 
 /** Table element classes. */
-export const tableCls = 'w-full border-collapse text-sm';
+export const tableCls = 'w-full border-collapse text-xs';
 
 interface ThProps extends Omit<ThHTMLAttributes<HTMLTableCellElement>, 'align'> {
-  align?: Align;
-  children?: ReactNode;
+ align?: Align;
+ children?: ReactNode;
 }
 
 export function Th({ align = 'left', className, children, ...rest }: ThProps) {
-  return (
-    <th scope="col" className={cn(thCls(align), className)} {...rest}>
-      {children}
-    </th>
-  );
+ return (
+ <th scope="col" className={cn(thCls(align), className)} {...rest}>
+ {children}
+ </th>
+ );
 }
 
 interface TdProps extends Omit<TdHTMLAttributes<HTMLTableCellElement>, 'align'> {
-  align?: Align;
-  /** Numbers, IDs, dates — anything that should align vertically in a column. */
-  mono?: boolean;
-  children?: ReactNode;
+ align?: Align;
+ /** Numbers, IDs, dates — anything that should align vertically in a column. */
+ mono?: boolean;
+ children?: ReactNode;
 }
 
 export function Td({ align = 'left', mono = false, className, children, ...rest }: TdProps) {
-  return (
-    <td className={cn(tdCls(align, mono), className)} {...rest}>
-      {children}
-    </td>
-  );
+ return (
+ <td className={cn(tdCls(align, mono), className)} {...rest}>
+ {children}
+ </td>
+ );
 }

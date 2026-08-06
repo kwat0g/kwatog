@@ -1,6 +1,6 @@
 {{-- ImpEx Packing List — customs clearance document for inbound resin shipments.
 
-     Shipper (Japanese vendor) → Consignee (Ogami Philippines).
+     Shipper → Consignee import/export document.
      Lists container(s), PO line items, quantities, and weights.
      Pattern follows purchase-request.blade.php layout style. --}}
 <!DOCTYPE html>
@@ -158,7 +158,7 @@
 
 <div class="footer">
     Generated on {{ $now->format('M d, Y · H:i') }} ·
-    {{ $company['name'] }} · OGAMI ERP
+    {{ $company['name'] }}
 </div>
 
 </body>

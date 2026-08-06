@@ -29,6 +29,7 @@ Route::prefix('auth')->group(function (): void {
             ->middleware('throttle:sensitive');
 
         Route::get('user', AuthUserController::class);
+        Route::get('password-policy', [AuthUserController::class, 'passwordPolicy']);
 
         // Mutating preference update is gated by password expiry — a user
         // with an expired password should change it before tweaking prefs.
@@ -55,6 +56,8 @@ Route::middleware(['auth:sanctum', 'session.timeout', 'password.expired',
                    'permission:notifications.preferences.manage'])
     ->prefix('notification-preferences')->group(function () {
         Route::get('/',  [NotificationController::class, 'preferencesIndex'])
+            ->middleware('permission:notifications.preferences.manage');
+        Route::get('/options', [NotificationController::class, 'options'])
             ->middleware('permission:notifications.preferences.manage');
         Route::put('/',  [NotificationController::class, 'preferencesUpdate'])
             ->middleware('permission:notifications.preferences.manage');

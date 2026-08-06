@@ -48,4 +48,10 @@ class ProductController
         }
         return response()->json(null, 204);
     }
+
+    public function restore(Product $product): JsonResponse
+    {
+        $product->restore();
+        return response()->json(['message' => 'Product restored.']);
+    }
 }

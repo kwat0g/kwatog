@@ -8,7 +8,12 @@ use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockCountItem;
 use App\Modules\Inventory\Models\WarehouseLocation;
+use App\Modules\Inventory\Enums\GrnStatus;
+use App\Modules\Inventory\Enums\StockCountItemStatus;
+use App\Modules\Inventory\Enums\ItemType;
+use App\Modules\Production\Enums\WorkOrderStatus;
 use App\Modules\Production\Models\WorkOrder;
+use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 
 /**
@@ -119,6 +124,7 @@ class EdgeScanResolverService
                 'wo_number' => $wo->wo_number,
                 'product' => $wo->product?->name,
                 'status' => $status,
+                'status_label' => $this->enumLabel(WorkOrderStatus::tryFrom($status ?? '')),
                 'quantity_target' => (int) $wo->quantity_target,
                 'quantity_produced' => (int) ($wo->quantity_produced ?? 0),
             ],
@@ -159,6 +165,7 @@ class EdgeScanResolverService
                 'po_number' => $po->po_number,
                 'vendor' => $po->vendor?->name,
                 'status' => $status,
+                'status_label' => $this->enumLabel(PurchaseOrderStatus::tryFrom($status ?? '')),
             ],
             'suggested_actions' => $actions,
         ];
@@ -178,7 +185,8 @@ class EdgeScanResolverService
             'entity' => [
                 'id' => $grn->hash_id,
                 'grn_number' => $grn->grn_number,
-                'status' => $this->statusValue($grn->status),
+                'status' => $grnStatus = $this->statusValue($grn->status),
+                'status_label' => $this->enumLabel(GrnStatus::tryFrom($grnStatus ?? '')),
             ],
             'suggested_actions' => [[
                 'action' => 'view_grn',
@@ -201,7 +209,7 @@ class EdgeScanResolverService
         if ($sessionId) {
             $countItem = StockCountItem::query()->where('session_id', $sessionId)
                 ->where('item_id', $item->id)
-                ->whereIn('status', ['pending', 'counted'])
+                ->whereIn('status', [StockCountItemStatus::Pending->value, StockCountItemStatus::Counted->value])
                 ->first();
             if ($countItem) {
                 $actions[] = [
@@ -264,6 +272,9 @@ class EdgeScanResolverService
                 'item_type' => $item->item_type instanceof \BackedEnum
                     ? $item->item_type->value
                     : $item->item_type,
+                'item_type_label' => $this->enumLabel($item->item_type instanceof ItemType
+                    ? $item->item_type
+                    : ItemType::tryFrom((string) $item->item_type)),
                 'unit_of_measure' => $item->unit_of_measure,
             ],
             'suggested_actions' => $actions,
@@ -282,6 +293,11 @@ class EdgeScanResolverService
         }
 
         return $status === null ? null : (string) $status;
+    }
+
+    private function enumLabel(?\BackedEnum $enum): ?string
+    {
+        return $enum !== null && method_exists($enum, 'label') ? $enum->label() : null;
     }
 
     private function decodeHashId(string $hash): ?int

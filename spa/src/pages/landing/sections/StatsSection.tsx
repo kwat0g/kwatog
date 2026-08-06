@@ -119,12 +119,12 @@ export function StatsSection() {
             key={stat.id}
             data-reveal
             data-reveal-delay={(i * 0.08).toFixed(2)}
-            className="border-l border-landing-border pl-6"
+            className="group border-l border-landing-border pl-6 transition-colors duration-300 hover:border-landing-accent"
           >
-            <div className="font-display text-[clamp(2.75rem,6vw,4rem)] font-medium leading-none tracking-tight text-landing-text">
+            <div className="font-display text-[clamp(3.5rem,8vw,5.5rem)] font-bold leading-none tracking-[-0.04em] text-landing-text transition-transform duration-500 group-hover:-translate-y-1">
               <Counter stat={stat} />
             </div>
-            <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.16em] text-landing-muted">
+            <p className="mt-5 font-mono text-sm uppercase tracking-[0.2em] text-landing-muted">
               {stat.label}
             </p>
           </div>

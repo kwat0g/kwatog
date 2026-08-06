@@ -108,6 +108,11 @@ const config: Config = {
       // Border-only aliases: `border-default` / `border-subtle` / `border-strong`
       // read better than `border-border-default`, and DEFAULT lets a bare
       // `border` pick up the token.
+      textColor: {
+        subtle: 'color-mix(in srgb, var(--text-subtle) calc(<alpha-value> * 100%), transparent)',
+        'text-subtle': 'color-mix(in srgb, var(--text-subtle) calc(<alpha-value> * 100%), transparent)',
+      },
+
       borderColor: {
         DEFAULT: 'color-mix(in srgb, var(--border-default) calc(<alpha-value> * 100%), transparent)',
         subtle: 'color-mix(in srgb, var(--border-subtle) calc(<alpha-value> * 100%), transparent)',
@@ -170,8 +175,8 @@ const config: Config = {
 
       keyframes: {
         shimmer: {
-          '0%': { backgroundPosition: '-1000px 0' },
-          '100%': { backgroundPosition: '1000px 0' },
+          '0%': { backgroundPosition: '-200% 0' },
+          '100%': { backgroundPosition: '200% 0' },
         },
         'fade-in': {
           '0%': { opacity: '0' },
@@ -200,7 +205,7 @@ const config: Config = {
       },
 
       animation: {
-        shimmer: 'shimmer 1.5s linear infinite',
+        shimmer: 'shimmer 1.8s ease-in-out infinite',
         'fade-in': 'fade-in var(--duration-slow) var(--ease-default)',
         'slide-up': 'slide-up var(--duration-slow) var(--ease-default)',
         'approval-pulse': 'approval-pulse 1.5s ease-in-out infinite',

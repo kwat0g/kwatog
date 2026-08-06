@@ -46,7 +46,7 @@ class CreditNoteResource extends JsonResource
                 'bill_number' => $this->bill->bill_number,
             ] : null),
             'lines'              => $this->whenLoaded('lines', fn () => $this->lines->map(fn ($l) => [
-                'id'          => $l->hash_id ?? null,
+                'id'          => $l->hash_id,
                 'description' => $l->description,
                 'amount'      => (string) $l->amount,
             ])->all()),

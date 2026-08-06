@@ -39,7 +39,7 @@ class Employee extends Model
         'department_id', 'position_id',
         'employment_type', 'pay_type',
         'date_hired', 'date_regularized',
-        'basic_monthly_salary', 'daily_rate',
+        'basic_monthly_salary', 'semi_monthly_rate',
         'bank_name', 'bank_account_no',
         'status',
     ];
@@ -49,7 +49,7 @@ class Employee extends Model
         'date_hired'           => 'date',
         'date_regularized'     => 'date',
         'basic_monthly_salary' => 'decimal:2',
-        'daily_rate'           => 'decimal:2',
+        'semi_monthly_rate'           => 'decimal:2',
         // Encrypted at rest
         'sss_no'               => 'encrypted',
         'philhealth_no'        => 'encrypted',
@@ -74,6 +74,31 @@ class Employee extends Model
             $this->suffix,
         ]);
         return implode(' ', $parts);
+    }
+
+    /**
+     * Monthly-equivalent basic salary, whichever pay type the employee is on.
+     *
+     * The ONE place the two pay types are reconciled (migration 0437):
+     *
+     *   monthly       → basic_monthly_salary
+     *   semi_monthly  → semi_monthly_rate × 2
+     *
+     * Everything that needs a rate — payroll basic pay, government
+     * contribution basis, loan limits, final pay, leave encashment — derives
+     * from this so no two callers can disagree about what a month is worth.
+     * Returns null when the employee has no authoritative figure on file;
+     * callers decide whether that is fatal.
+     */
+    public function monthlyEquivalentSalary(): ?string
+    {
+        if ($this->pay_type === PayType::SemiMonthly) {
+            return $this->semi_monthly_rate !== null
+                ? bcmul((string) $this->semi_monthly_rate, '2', 2)
+                : null;
+        }
+
+        return $this->basic_monthly_salary !== null ? (string) $this->basic_monthly_salary : null;
     }
 
     // ─── Relationships ─────────────────────────────

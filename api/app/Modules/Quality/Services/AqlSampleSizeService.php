@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\Quality\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
+use App\Common\Services\SettingsService;
+
 /**
  * Sprint 7 — Task 60. ANSI/ASQ Z1.4 sample-size calculator at AQL 0.65,
  * General Inspection Level II — the level we use for outgoing batch QC.
@@ -19,37 +22,33 @@ final class AqlSampleSizeService
      */
     public static function forBatch(int $batchQuantity): array
     {
+        if ($batchQuantity < 1) {
+            throw new BusinessRuleException('AQL sampling requires a positive batch quantity.');
+        }
+        /** @var array<string, mixed> $plan */
+        $plan = app(SettingsService::class)->get('quality.aql.sample_plan', []);
+        $tiny = is_array($plan['tiny_batch'] ?? null) ? $plan['tiny_batch'] : null;
+        $rows = is_array($plan['rows'] ?? null) ? $plan['rows'] : [];
+        $overflow = is_array($plan['overflow'] ?? null) ? $plan['overflow'] : null;
+        if (! $tiny || $rows === [] || ! $overflow) {
+            throw new BusinessRuleException('Required quality.aql.sample_plan setting is missing or invalid.');
+        }
+
         if ($batchQuantity < 2) {
             // Tiny batches: 100% inspection, zero acceptance.
-            return ['code' => 'A', 'sample_size' => max(1, $batchQuantity), 'accept' => 0, 'reject' => 1];
+            return ['code' => (string) $tiny['code'], 'sample_size' => $batchQuantity, 'accept' => (int) $tiny['accept'], 'reject' => (int) $tiny['reject']];
         }
 
         // Sample plan resolved with AQL 0.65 arrow-rules pre-applied.
         // Format: [maxLot, code, sample, Ac, Re].
-        $table = [
-            [8,        'G', 32,   0, 1], // arrow from A
-            [15,       'G', 32,   0, 1], // arrow from B
-            [25,       'G', 32,   0, 1], // arrow from C
-            [50,       'G', 32,   0, 1], // arrow from D
-            [90,       'G', 32,   0, 1], // arrow from E
-            [150,      'G', 32,   0, 1], // arrow from F
-            [280,      'G', 32,   0, 1],
-            [500,      'H', 50,   1, 2],
-            [1200,     'J', 80,   1, 2],
-            [3200,     'K', 125,  2, 3],
-            [10000,    'L', 200,  3, 4],
-            [35000,    'M', 315,  5, 6],
-            [150000,   'N', 500,  7, 8],
-            [500000,   'P', 800,  10, 11],
-        ];
-
-        foreach ($table as [$max, $code, $n, $ac, $re]) {
-            if ($batchQuantity <= $max) {
-                $sample = min($n, $batchQuantity); // never sample more than the lot
-                return ['code' => $code, 'sample_size' => $sample, 'accept' => $ac, 'reject' => $re];
+        foreach ($rows as $row) {
+            if (! is_array($row) || ! isset($row['max_lot'], $row['code'], $row['sample_size'], $row['accept'], $row['reject'])) continue;
+            if ($batchQuantity <= (int) $row['max_lot']) {
+                $sample = min((int) $row['sample_size'], $batchQuantity); // never sample more than the lot
+                return ['code' => (string) $row['code'], 'sample_size' => $sample, 'accept' => (int) $row['accept'], 'reject' => (int) $row['reject']];
             }
         }
 
-        return ['code' => 'Q', 'sample_size' => 1250, 'accept' => 14, 'reject' => 15];
+        return ['code' => (string) $overflow['code'], 'sample_size' => (int) $overflow['sample_size'], 'accept' => (int) $overflow['accept'], 'reject' => (int) $overflow['reject']];
     }
 }

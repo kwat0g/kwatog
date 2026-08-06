@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Quality\Controllers;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Quality\Models\ControlledDocument;
 use App\Modules\Quality\Requests\PublishDocumentRevisionRequest;
 use App\Modules\Quality\Requests\StoreControlledDocumentRequest;
@@ -11,17 +12,35 @@ use App\Modules\Quality\Requests\UpdateControlledDocumentRequest;
 use App\Modules\Quality\Resources\ControlledDocumentResource;
 use App\Modules\Quality\Resources\DocumentRevisionResource;
 use App\Modules\Quality\Services\DocumentService;
+use App\Modules\Auth\Models\Role;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class DocumentController
 {
-    public function __construct(private readonly DocumentService $service) {}
+    public function __construct(
+        private readonly DocumentService $service,
+        private readonly SettingsService $settings,
+    ) {}
+
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'categories' => array_values(array_filter((array) $this->settings->get('quality.document.categories', []), static fn ($option) => is_array($option) && isset($option['value'], $option['label']))),
+            'max_review_interval_months' => $this->settings->requiredInt('quality.document.max_review_interval_months', 1, 600),
+        ]]);
+    }
 
     public function index(Request $request): AnonymousResourceCollection
     {
         return ControlledDocumentResource::collection($this->service->list($request->query()));
+    }
+
+    public function assigneeRoles(): JsonResponse
+    {
+        $roles = Role::query()->orderBy('name')->get(['slug', 'name']);
+        return response()->json(['data' => $roles]);
     }
 
     public function show(ControlledDocument $document): ControlledDocumentResource

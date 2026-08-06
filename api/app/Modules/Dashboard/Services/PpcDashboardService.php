@@ -6,10 +6,15 @@ namespace App\Modules\Dashboard\Services;
 
 use App\Modules\Auth\Models\User;
 use App\Modules\Dashboard\Services\Concerns\DashboardQueries;
+use App\Modules\Accounting\Enums\InvoiceStatus;
+use App\Modules\Accounting\Enums\BillStatus;
+use App\Modules\Production\Enums\WorkOrderStatus;
+use App\Common\Services\SettingsService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 /**
  * P4.1 extraction — PPC (Production Planning & Control) + Accounting dashboards.
@@ -24,10 +29,17 @@ class PpcDashboardService
 
     private const CACHE_TTL = 30;
 
+    public function __construct(private readonly SettingsService $settings) {}
+
     public function ppc(User $user): array
     {
         return Cache::remember("dashboard:ppc:{$user->id}", self::CACHE_TTL, function () {
-            $activeWos    = $this->safeCount('work_orders', fn ($q) => $q->whereIn('status', ['planned', 'confirmed', 'in_progress', 'paused']));
+            $activeWos    = $this->safeCount('work_orders', fn ($q) => $q->whereIn('status', [
+                WorkOrderStatus::Planned->value,
+                WorkOrderStatus::Confirmed->value,
+                WorkOrderStatus::InProgress->value,
+                WorkOrderStatus::Paused->value,
+            ]));
             $shortages    = $this->safeCount('purchase_requests', fn ($q) => $q->where('is_auto_generated', true)->where('status', 'pending'));
             $breakdowns   = $this->safeCount('machine_downtimes', fn ($q) => $q->whereNull('end_time')->where('category', 'breakdown'));
             $moldsAtLimit = $this->moldsNearingLimit();
@@ -41,7 +53,7 @@ class PpcDashboardService
                     $this->kpi('Active WOs',         (string) $activeWos,    'count'),
                     $this->kpi('Material Shortages',  (string) $shortages,   'count'),
                     $this->kpi('Capacity Used',       $capacityUsed,          'pct'),
-                    $this->kpi('Molds ≥ 80%',        (string) $moldsAtLimit, 'count'),
+                    $this->kpi('Molds ≥ '.round($this->settings->requiredFloat('alerts.mold.warning_ratio', 0, 1) * 100, 1).'%', (string) $moldsAtLimit, 'count'),
                 ],
                 'panels' => [
                     'chain_stages'         => $this->chainStageBreakdown(),
@@ -52,6 +64,7 @@ class PpcDashboardService
                     'production_gantt'     => $this->productionGantt(),
                     'mrp_shortages'        => $this->ppcMrpShortages(),
                     'machine_availability' => $this->machineAvailabilityGrid(),
+                    'gantt_horizon_days'    => $this->ganttHorizonDays(),
                     'wo_status_breakdown'  => $this->woStatusBreakdown(),
                 ],
             ];
@@ -62,15 +75,15 @@ class PpcDashboardService
     {
         return Cache::remember("dashboard:accounting:{$user->id}", self::CACHE_TTL, function () {
             $cashBalance = $this->cashBalance();
-            $arOpen      = $this->safeSum('invoices', 'balance', fn ($q) => $q->whereIn('status', ['unpaid', 'partial']));
-            $apOpen      = $this->safeSum('bills',    'balance', fn ($q) => $q->whereIn('status', ['unpaid', 'partial']));
+            $arOpen      = $this->safeSum('invoices', 'balance', fn ($q) => $q->whereIn('status', [InvoiceStatus::Finalized->value, InvoiceStatus::Partial->value]));
+            $apOpen      = $this->safeSum('bills',    'balance', fn ($q) => $q->whereIn('status', [BillStatus::Unpaid->value, BillStatus::Partial->value]));
             $jeDraft     = $this->safeCount('journal_entries', fn ($q) => $q->where('status', 'draft'));
 
             return [
                 'kpis' => [
-                    $this->kpi('Cash Balance',   $cashBalance,       'PHP'),
-                    $this->kpi('AR Outstanding',  $arOpen,           'PHP'),
-                    $this->kpi('AP Outstanding',  $apOpen,           'PHP'),
+                    $this->kpi('Cash Balance',   $cashBalance,       $this->functionalCurrency()),
+                    $this->kpi('AR Outstanding',  $arOpen,           $this->functionalCurrency()),
+                    $this->kpi('AP Outstanding',  $apOpen,           $this->functionalCurrency()),
                     $this->kpi('Draft JEs',       (string) $jeDraft, 'count'),
                 ],
                 'panels' => [
@@ -86,8 +99,9 @@ class PpcDashboardService
     private function moldsNearingLimit(): int
     {
         if (! Schema::hasTable('molds')) return 0;
+        $ratio = $this->settings->requiredFloat('alerts.mold.warning_ratio', 0, 1);
         return (int) DB::table('molds')
-            ->whereRaw('current_shot_count >= (max_shots_before_maintenance * 0.8)')
+            ->whereRaw('current_shot_count >= (max_shots_before_maintenance * CAST(? AS numeric))', [$ratio])
             ->count();
     }
 
@@ -130,7 +144,7 @@ class PpcDashboardService
 
         $today = now()->startOfDay();
         $days  = [];
-        for ($i = 0; $i < 7; $i++) {
+        for ($i = 0; $i < $this->ganttHorizonDays(); $i++) {
             $days[] = $today->copy()->addDays($i)->toDateString();
         }
 
@@ -155,7 +169,7 @@ class PpcDashboardService
     }
 
     /**
-     * @return array<int, array{item_code: string, item_name: string, shortage: string, urgency: string, pr_status: string|null}>
+     * @return array<int, array{item_code: string, item_name: string, shortage: string, urgency: string|null, pr_status: string|null}>
      */
     private function ppcMrpShortages(): array
     {
@@ -167,14 +181,14 @@ class PpcDashboardService
             ->join('items', 'items.id', '=', 'pri.item_id')
             ->where('pr.is_auto_generated', true)
             ->where('pr.status', 'pending')
-            ->select('items.code as item_code', 'items.name as item_name', 'pri.quantity', 'pr.pr_number', 'pr.status as pr_status')
+            ->select('items.code as item_code', 'items.name as item_name', 'pri.quantity', 'pr.pr_number', 'pr.priority', 'pr.status as pr_status')
             ->limit(10)
             ->get()
             ->map(fn ($r) => [
                 'item_code'  => $r->item_code,
                 'item_name'  => $r->item_name,
                 'shortage'   => (string) ($r->quantity ?? '0'),
-                'urgency'    => 'urgent',
+                'urgency'    => $r->priority !== null ? (string) $r->priority : null,
                 'pr_status'  => $r->pr_status,
             ])
             ->all();
@@ -195,7 +209,8 @@ class PpcDashboardService
         if ($machines->isEmpty()) return [];
 
         $start = now()->startOfDay();
-        $end   = $start->copy()->addDays(6)->endOfDay();
+        $horizon = $this->ganttHorizonDays();
+        $end   = $start->copy()->addDays(max(0, $horizon - 1))->endOfDay();
 
         $wos = DB::table('work_orders')
             ->whereIn('status', ['confirmed', 'in_progress'])
@@ -217,7 +232,7 @@ class PpcDashboardService
         }
 
         $days = [];
-        for ($i = 0; $i < 7; $i++) {
+        for ($i = 0; $i < $horizon; $i++) {
             $days[] = $start->copy()->addDays($i);
         }
 
@@ -247,16 +262,31 @@ class PpcDashboardService
         return $rows;
     }
 
+    private function ganttHorizonDays(): int
+    {
+        return app(SettingsService::class)->requiredInt('dashboard.widgets.gantt_horizon_days', 1, 365);
+    }
+
     /**
-     * @return array<int, array{status: string, count: int}>
+     * @return array<int, array{status: string, status_label: string, count: int}>
      */
     private function woStatusBreakdown(): array
     {
         if (! Schema::hasTable('work_orders')) return [];
-        $statuses = ['planned', 'confirmed', 'in_progress', 'paused', 'completed'];
+        $statuses = [
+            WorkOrderStatus::Planned->value,
+            WorkOrderStatus::Confirmed->value,
+            WorkOrderStatus::InProgress->value,
+            WorkOrderStatus::Paused->value,
+            WorkOrderStatus::Completed->value,
+        ];
         $rows     = [];
         foreach ($statuses as $s) {
-            $rows[] = ['status' => $s, 'count' => $this->safeCount('work_orders', fn ($q) => $q->where('status', $s))];
+            $rows[] = [
+                'status' => $s,
+                'status_label' => WorkOrderStatus::tryFrom($s)?->label() ?? Str::headline($s),
+                'count' => $this->safeCount('work_orders', fn ($q) => $q->where('status', $s)),
+            ];
         }
         return $rows;
     }
@@ -272,6 +302,7 @@ class PpcDashboardService
                 'id'           => app('hashids')->encode((int) $je->id),
                 'entry_number' => $je->entry_number,
                 'status'       => $je->status,
+                'status_label' => Str::headline((string) $je->status),
                 'total_debit'  => (string) $je->total_debit,
                 'date'         => $je->date,
             ])->all();
@@ -281,7 +312,7 @@ class PpcDashboardService
     {
         if (! Schema::hasTable('invoices')) return [];
         return DB::table('invoices')
-            ->whereIn('status', ['unpaid', 'partial'])
+            ->whereIn('status', [InvoiceStatus::Finalized->value, InvoiceStatus::Partial->value])
             ->where('due_date', '<', now()->toDateString())
             ->select('customer_id', DB::raw('SUM(balance) as total_overdue'))
             ->groupBy('customer_id')

@@ -32,16 +32,25 @@ Route::middleware(['auth:sanctum', 'feature:production'])->prefix('production')-
         return response()->json([
             'data' => \App\Modules\Production\Models\DefectType::active()
                 ->orderBy('code')
-                ->get(['id', 'code', 'name', 'description']),
+                ->get()
+                ->map(fn (\App\Modules\Production\Models\DefectType $t) => [
+                    'id'          => $t->hash_id,
+                    'code'        => $t->code,
+                    'name'        => $t->name,
+                    'description' => $t->description,
+                ])
+                ->values(),
         ]);
     })->middleware('permission:production.work_orders.view');
 
     /* ─── Work orders (Task 51) ─── */
+    Route::get('/work-orders/options',               [WorkOrderController::class, 'options'])->middleware('permission:production.work_orders.view');
     Route::get('/work-orders',                       [WorkOrderController::class, 'index']) ->middleware('permission:production.work_orders.view');
     Route::get('/work-orders/{workOrder}',           [WorkOrderController::class, 'show'])  ->middleware('permission:production.work_orders.view');
     Route::get('/work-orders/{workOrder}/chain',     [WorkOrderController::class, 'chain']) ->middleware('permission:production.work_orders.view');
     Route::post('/work-orders',                      [WorkOrderController::class, 'store']) ->middleware('permission:production.wo.create');
     Route::delete('/work-orders/{workOrder}',        [WorkOrderController::class, 'destroy'])->middleware('permission:production.wo.create');
+    Route::patch('/work-orders/{workOrder}/restore', [WorkOrderController::class, 'restore'])->middleware('permission:production.wo.create');
     Route::post('/work-orders/{workOrder}/confirm',  [WorkOrderController::class, 'confirm'])->middleware('permission:production.wo.confirm');
     Route::post('/work-orders/{workOrder}/start',    [WorkOrderController::class, 'start'])  ->middleware('permission:production.work_orders.lifecycle');
     Route::post('/work-orders/{workOrder}/pause',    [WorkOrderController::class, 'pause'])  ->middleware('permission:production.work_orders.lifecycle');

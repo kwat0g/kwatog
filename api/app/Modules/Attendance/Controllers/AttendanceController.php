@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Attendance\Controllers;
 
 use App\Modules\Attendance\Models\Attendance;
+use App\Modules\Attendance\Enums\AttendanceStatus;
 use App\Modules\Attendance\Requests\ImportAttendanceRequest;
 use App\Modules\Attendance\Requests\StoreAttendanceRequest;
 use App\Modules\Attendance\Requests\UpdateAttendanceRequest;
@@ -26,6 +27,16 @@ class AttendanceController
     public function index(Request $request): AnonymousResourceCollection
     {
         return AttendanceResource::collection($this->service->list($request->query(), $request->user()));
+    }
+
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'statuses' => array_map(static fn (AttendanceStatus $status): array => [
+                'value' => $status->value,
+                'label' => $status->label(),
+            ], AttendanceStatus::cases()),
+        ]]);
     }
 
     public function store(StoreAttendanceRequest $request): JsonResponse
@@ -52,6 +63,12 @@ class AttendanceController
         $this->service->delete($attendance);
 
         return response()->json(null, 204);
+    }
+
+    public function restore(Attendance $attendance): JsonResponse
+    {
+        $attendance->restore();
+        return response()->json(['message' => 'Attendance restored.']);
     }
 
     public function import(ImportAttendanceRequest $request): JsonResponse

@@ -7,6 +7,7 @@ namespace App\Modules\Assets\Resources;
 use App\Modules\Assets\Models\Asset;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Str;
 
 /**
  * @mixin Asset
@@ -21,6 +22,7 @@ class AssetResource extends JsonResource
             'name'                     => $this->name,
             'description'              => $this->description,
             'category'                 => $this->category instanceof \BackedEnum ? $this->category->value : $this->category,
+            'category_label'           => Str::headline((string) ($this->category instanceof \BackedEnum ? $this->category->value : $this->category)),
             'department'               => $this->whenLoaded('department', fn () => $this->department ? [
                 'id'   => $this->department->hash_id,
                 'name' => $this->department->name,
@@ -36,6 +38,7 @@ class AssetResource extends JsonResource
             'monthly_depreciation'     => $this->monthly_depreciation,
             'book_value'               => $this->book_value,
             'status'                   => $this->status instanceof \BackedEnum ? $this->status->value : $this->status,
+            'status_label'             => Str::headline((string) ($this->status instanceof \BackedEnum ? $this->status->value : $this->status)),
             'disposed_date'            => optional($this->disposed_date)?->toDateString(),
             'disposal_amount'          => $this->disposal_amount !== null ? (string) $this->disposal_amount : null,
             'location'                 => $this->location,

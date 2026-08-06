@@ -23,10 +23,14 @@ use Illuminate\Support\Facades\Log;
  */
 class PredictiveMaintenanceService
 {
-    private const METRICS = ['temperature', 'vibration', 'pressure', 'current', 'oil_quality'];
-
     /** @var array{thresholds: array<string, array{min:?float,max:?float}>, breach_window:int}|null */
     private ?array $configuration = null;
+
+    /** @return array<int, array{value:string,label:string,unit:string}> */
+    public function metricOptions(): array
+    {
+        return $this->metricDefinitions();
+    }
 
     public function __construct(
         private readonly MaintenanceWorkOrderService $workOrders,
@@ -46,9 +50,9 @@ class PredictiveMaintenanceService
                 'machine_id'  => (int) $data['machine_id'],
                 'metric'      => $data['metric'],
                 'value'       => $data['value'],
-                'unit'        => $data['unit'] ?? self::defaultUnit($data['metric']),
+                'unit'        => $data['unit'] ?? $this->metricUnit((string) $data['metric']),
                 'recorded_at' => $data['recorded_at'] ?? now(),
-                'source'      => $data['source'] ?? 'manual',
+                'source'      => $data['source'] ?? (string) $this->settings->get('maintenance.predictive.default_source', ''),
                 'notes'       => $data['notes'] ?? null,
                 'recorded_by' => $by->id,
             ]);
@@ -97,7 +101,7 @@ class PredictiveMaintenanceService
             ->get();
 
         foreach ($machines as $machine) {
-            foreach (self::METRICS as $metric) {
+            foreach (array_column($this->metricDefinitions(), 'value') as $metric) {
                 $latest = $this->latestReading((int) $machine->id, $metric);
                 if ($latest && $this->isBreach($metric, (float) $latest->value)) {
                     if ($this->shouldTriggerWorkOrder((int) $machine->id, $metric)) {
@@ -160,14 +164,14 @@ class PredictiveMaintenanceService
     {
         $out = [];
         $configuration = $this->configuration();
-        foreach (self::METRICS as $metric) {
+        foreach (array_column($this->metricDefinitions(), 'value') as $metric) {
             $threshold = $configuration['thresholds'][$metric];
             $r = $this->latestReading($machineId, $metric);
             if (! $r) {
                 $out[] = [
                     'metric'       => $metric,
                     'value'        => null,
-                    'unit'         => self::defaultUnit($metric),
+                    'unit'         => $this->metricUnit($metric),
                     'recorded_at'  => null,
                     'status'       => 'ok',
                     'min_threshold'=> $threshold['min'],
@@ -256,16 +260,24 @@ class PredictiveMaintenanceService
         ], $by);
     }
 
-    private static function defaultUnit(string $metric): string
+    private function metricUnit(string $metric): string
     {
-        return match ($metric) {
-            'temperature' => 'celsius',
-            'vibration'   => 'mm/s',
-            'pressure'    => 'bar',
-            'current'     => 'amp',
-            'oil_quality' => 'percent',
-            default       => 'unit',
-        };
+        foreach ($this->metricDefinitions() as $definition) {
+            if ($definition['value'] === $metric) return $definition['unit'];
+        }
+        throw new BusinessRuleException("Unknown predictive-maintenance metric: {$metric}.");
+    }
+
+    /** @return list<array{value:string,label:string,unit:string}> */
+    private function metricDefinitions(): array
+    {
+        $definitions = $this->settings->get('maintenance.predictive.metrics', []);
+        if (! is_array($definitions) || $definitions === []) {
+            throw new BusinessRuleException('Predictive-maintenance metric catalog is not configured.');
+        }
+        return array_values(array_filter($definitions, static fn ($definition): bool => is_array($definition)
+            && is_string($definition['value'] ?? null) && trim($definition['value']) !== ''
+            && is_string($definition['unit'] ?? null) && trim($definition['unit']) !== ''));
     }
 
     /** @return array{thresholds: array<string, array{min:?float,max:?float}>, breach_window:int} */
@@ -277,7 +289,7 @@ class PredictiveMaintenanceService
 
         $values = $this->settings->getGroup('maintenance');
         $thresholds = [];
-        foreach (self::METRICS as $metric) {
+        foreach (array_column($this->metricDefinitions(), 'value') as $metric) {
             $minKey = "maintenance.predictive.{$metric}.min";
             $maxKey = "maintenance.predictive.{$metric}.max";
             $min = array_key_exists($minKey, $values) ? (float) $values[$minKey] : null;

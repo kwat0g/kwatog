@@ -18,7 +18,7 @@
   </div>
   <div class="col">
     <label>Employer</label>
-    <div class="v">{{ $company['name'] ?? 'Philippine Ogami Corporation' }}</div>
+    <div class="v">{{ $company['name'] ?? '' }}</div>
     <label style="margin-top:6px;">Employer TIN</label>
     <div class="v">{{ $company['tin'] ?? '—' }}</div>
     <label style="margin-top:6px;">Address</label>

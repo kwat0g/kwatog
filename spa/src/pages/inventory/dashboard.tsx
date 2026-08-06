@@ -11,109 +11,109 @@ import { formatPeso } from '@/lib/formatNumber';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 const movementChip = (t: string): 'success' | 'info' | 'warning' | 'danger' | 'neutral' => {
-  if (t === 'grn_receipt' || t === 'production_receipt' || t === 'adjustment_in') return 'success';
-  if (t === 'material_issue' || t === 'delivery') return 'info';
-  if (t === 'adjustment_out' || t === 'transfer') return 'warning';
-  if (t === 'scrap' || t === 'return_to_vendor') return 'danger';
-  return 'neutral';
+ if (t === 'grn_receipt' || t === 'production_receipt' || t === 'adjustment_in') return 'success';
+ if (t === 'material_issue' || t === 'delivery') return 'info';
+ if (t === 'adjustment_out' || t === 'transfer') return 'warning';
+ if (t === 'scrap' || t === 'return_to_vendor') return 'danger';
+ return 'neutral';
 };
 
 export default function InventoryDashboardPage() {
-    const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['inventory', 'dashboard'],
-    queryFn: () => inventoryDashboardApi.summary(),
-    refetchInterval: 30_000 });
+ const { data, isLoading, isError, refetch } = useQuery({
+ queryKey: ['inventory', 'dashboard'],
+ queryFn: () => inventoryDashboardApi.summary(),
+ refetchInterval: 30_000 });
 
-  return (
-    <div>
-      <PageHeader title="Inventory" subtitle="Live snapshot · refreshes every 30s" />
-      <div className="px-5 py-4 space-y-4">
-        {isLoading && !data && <SkeletonTable rows={6} columns={4} />}
-        {isError && <EmptyState icon="alert-circle" title="Failed to load dashboard" action={<Button onClick={() => refetch()}>Retry</Button>} />}
-        {data && (
-          <>
-            <div className="grid grid-cols-4 gap-3">
-              <StatCard label="Total stock value" value={formatPeso(data.total_stock_value)} />
-              <StatCard label="Items below reorder" value={data.items_below_reorder.toString()} />
-              <StatCard label="Critical low" value={data.items_critical.toString()}
-                         />
-              <StatCard label="Pending GRNs" value={data.pending_grns.toString()} />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <Panel title="Low stock alerts" className="col-span-1">
-                {data.low_stock_alerts.length === 0
-                  ? <div className="text-sm text-muted px-1">All items are above reorder point.</div>
-                  : (
-                    <table className={tableCls}>
-                      <thead>
-                        <tr className={theadTrCls}>
-                          <Th>Item</Th>
-                          <Th align="right">Available</Th>
-                          <Th align="right">Reorder</Th>
-                          <Th>Chain</Th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {data.low_stock_alerts.map((a) => (
-                          <tr key={a.code} className={trCls}>
-                            <Td>
-                              <div className="font-mono">{a.code}</div>
-                              <div className="text-2xs text-muted">{a.name}</div>
-                            </Td>
-                            <Td align="right" mono className="text-danger-fg">{Number(a.available).toFixed(3)}</Td>
-                            <Td align="right" mono>{Number(a.reorder_point).toFixed(3)}</Td>
-                            <Td>
-                              {a.open_pr
-                                ? <Chip variant="warning">PR {a.open_pr.number}</Chip>
-                                : a.open_po
-                                  ? <Chip variant="info">PO {a.open_po.number}</Chip>
-                                  : <Chip variant="danger">No PR</Chip>}
-                            </Td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-              </Panel>
-              <Panel title="Recent movements">
-                <ul className="text-xs divide-y divide-subtle">
-                  {data.recent_movements.slice(0, 10).map((m) => (
-                    <li key={m.id} className="py-1.5 flex items-center gap-2">
-                      <Chip variant={movementChip(m.movement_type)}>{m.movement_type_label ?? m.movement_type.replace(/_/g, ' ')}</Chip>
-                      <span className="font-mono">{m.item?.code}</span>
-                      <span className="text-muted truncate">{m.item?.name}</span>
-                      <span className="ml-auto font-mono tabular-nums">{Number(m.quantity).toFixed(3)}</span>
-                    </li>
-                  ))}
-                </ul>
-              </Panel>
-            </div>
-            <Panel title={`Top consumed materials (${data.consumption_history_days} days)`}>
-              <table className={tableCls}>
-                <thead>
-                  <tr className={theadTrCls}>
-                    <Th>Item</Th>
-                    <Th align="right">Quantity</Th>
-                    <Th align="right">Total value</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.top_consumed_materials.length === 0 && (
-                    <tr><Td className="text-muted" colSpan={3}>No issuance in the selected history window.</Td></tr>
-                  )}
-                  {data.top_consumed_materials.map((m) => (
-                    <tr key={m.id} className={trCls}>
-                      <Td>{m.code} {m.name}</Td>
-                      <Td align="right" mono>{Number(m.qty).toFixed(3)} {m.unit_of_measure}</Td>
-                      <Td align="right" mono>{formatPeso(m.total_value)}</Td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </Panel>
-          </>
-        )}
-      </div>
-    </div>
-  );
+ return (
+ <div>
+ <PageHeader title="Inventory" subtitle="Live snapshot · refreshes every 30s" />
+ <div className="px-5 py-4 space-y-4">
+ {isLoading && !data && <SkeletonTable rows={6} columns={4} />}
+ {isError && <EmptyState icon="alert-circle" title="Failed to load dashboard" action={<Button onClick={() => refetch()}>Retry</Button>} />}
+ {data && (
+ <>
+ <div className="grid grid-cols-4 gap-3">
+ <StatCard label="Total stock value" value={formatPeso(data.total_stock_value)} />
+ <StatCard label="Items below reorder" value={data.items_below_reorder.toString()} />
+ <StatCard label="Critical low" value={data.items_critical.toString()}
+ />
+ <StatCard label="Pending GRNs" value={data.pending_grns.toString()} />
+ </div>
+ <div className="grid grid-cols-2 gap-4">
+ <Panel title="Low stock alerts" className="col-span-1">
+ {data.low_stock_alerts.length === 0
+ ? <div className="text-sm text-muted px-1">All items are above reorder point.</div>
+ : (
+ <table className={tableCls}>
+ <thead>
+ <tr className={theadTrCls}>
+ <Th>Item</Th>
+ <Th align="right">Available</Th>
+ <Th align="right">Reorder</Th>
+ <Th>Chain</Th>
+ </tr>
+ </thead>
+ <tbody>
+ {data.low_stock_alerts.map((a) => (
+ <tr key={a.code} className={trCls}>
+ <Td>
+ <div className="font-mono">{a.code}</div>
+ <div className="text-2xs text-muted">{a.name}</div>
+ </Td>
+ <Td align="right" mono className="text-danger-fg">{Number(a.available).toFixed(3)}</Td>
+ <Td align="right" mono>{Number(a.reorder_point).toFixed(3)}</Td>
+ <Td>
+ {a.open_pr
+ ? <Chip variant="warning">PR {a.open_pr.number}</Chip>
+ : a.open_po
+ ? <Chip variant="info">PO {a.open_po.number}</Chip>
+ : <Chip variant="danger">No PR</Chip>}
+ </Td>
+ </tr>
+ ))}
+ </tbody>
+ </table>
+ )}
+ </Panel>
+ <Panel title="Recent movements">
+ <ul className="text-xs divide-y divide-subtle">
+ {data.recent_movements.slice(0, 10).map((m) => (
+ <li key={m.id} className="py-1.5 flex items-center gap-2">
+ <Chip variant={movementChip(m.movement_type)}>{m.movement_type_label ?? m.movement_type.replace(/_/g, ' ')}</Chip>
+ <span className="font-mono">{m.item?.code}</span>
+ <span className="text-muted truncate">{m.item?.name}</span>
+ <span className="ml-auto font-mono tabular-nums">{Number(m.quantity).toFixed(3)}</span>
+ </li>
+ ))}
+ </ul>
+ </Panel>
+ </div>
+ <Panel title={`Top consumed materials (${data.consumption_history_days} days)`}>
+ <table className={tableCls}>
+ <thead>
+ <tr className={theadTrCls}>
+ <Th>Item</Th>
+ <Th align="right">Quantity</Th>
+ <Th align="right">Total value</Th>
+ </tr>
+ </thead>
+ <tbody>
+ {data.top_consumed_materials.length === 0 && (
+ <tr><Td className="text-muted" colSpan={3}>No issuance in the selected history window.</Td></tr>
+ )}
+ {data.top_consumed_materials.map((m) => (
+ <tr key={m.id} className={trCls}>
+ <Td>{m.code} {m.name}</Td>
+ <Td align="right" mono>{Number(m.qty).toFixed(3)} {m.unit_of_measure}</Td>
+ <Td align="right" mono>{formatPeso(m.total_value)}</Td>
+ </tr>
+ ))}
+ </tbody>
+ </table>
+ </Panel>
+ </>
+ )}
+ </div>
+ </div>
+ );
 }

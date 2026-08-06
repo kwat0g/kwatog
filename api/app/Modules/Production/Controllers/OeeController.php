@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Production\Controllers;
 
+use App\Common\Services\SettingsService;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\Production\Services\OeeService;
 use Illuminate\Http\JsonResponse;
@@ -12,7 +13,10 @@ use Illuminate\Support\Carbon;
 
 class OeeController
 {
-    public function __construct(private readonly OeeService $service) {}
+    public function __construct(
+        private readonly OeeService $service,
+        private readonly SettingsService $settings,
+    ) {}
 
     /** GET /production/oee/machine/{machine}?from=&to= */
     public function forMachine(Request $request, Machine $machine): JsonResponse
@@ -53,7 +57,14 @@ class OeeController
             }
         }
 
-        return response()->json(['data' => $this->service->report($from, $to, $machine)]);
+        $data = $this->service->report($from, $to, $machine);
+        $data['benchmark_pct'] = round($this->settings->requiredFloat('alerts.oee.quality_rate_threshold', 0, 1) * 100, 1);
+        $data['display_policy'] = [
+            'world_class_ratio' => $this->settings->requiredFloat('production.oee.world_class_ratio', 0, 1),
+            'on_track_ratio' => $this->settings->requiredFloat('production.oee.on_track_ratio', 0, 1),
+        ];
+
+        return response()->json(['data' => $data]);
     }
 
     private function window(Request $request): array

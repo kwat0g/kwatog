@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 import { AxiosError } from 'axios';
@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Input } from '@/components/ui/Input';
 import { Panel } from '@/components/ui/Panel';
 import { ReasonDialog } from '@/components/ui/ReasonDialog';
 import { SkeletonTable } from '@/components/ui/Skeleton';
@@ -20,138 +21,191 @@ import { buildGrnChain } from '@/lib/chains';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 
 export default function GrnDetailPage() {
-  const { id = '' } = useParams<{ id: string }>();
-  const qc = useQueryClient();
-  const { can } = usePermission();
-  const [confirmAccept, setConfirmAccept] = useState(false);
-  const [rejectOpen, setRejectOpen] = useState(false);
+ const { id = '' } = useParams<{ id: string }>();
+ const qc = useQueryClient();
+ const { can } = usePermission();
+ const [confirmAccept, setConfirmAccept] = useState(false);
+ const [confirmPartial, setConfirmPartial] = useState(false);
+ const [rejectOpen, setRejectOpen] = useState(false);
+ const [acceptMap, setAcceptMap] = useState<Record<string, string>>({});
 
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['inventory', 'grn', id],
-    queryFn: () => grnApi.show(id),
-    enabled: !!id,
-  });
-  const { data: grnOptions } = useQuery({
-    queryKey: ['inventory', 'grn', 'options'],
-    queryFn: grnApi.options,
-    staleTime: 300_000,
-  });
+ const { data, isLoading, isError, refetch } = useQuery({
+ queryKey: ['inventory', 'grn', id],
+ queryFn: () => grnApi.show(id),
+ enabled: !!id,
+ });
+ const { data: grnOptions } = useQuery({
+ queryKey: ['inventory', 'grn', 'options'],
+ queryFn: grnApi.options,
+ staleTime: 300_000,
+ });
 
-  const accept = useMutation({
-    mutationFn: () => grnApi.accept(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['inventory', 'grn', id] });
-      toast.success('GRN accepted, stock updated.');
-      setConfirmAccept(false);
-    },
-    onError: (e: AxiosError<{ message?: string }>) =>
-      toast.error(e.response?.data?.message ?? 'Failed to accept GRN.'),
-  });
-  const reject = useMutation({
-    mutationFn: (reason: string) => grnApi.reject(id, reason),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['inventory', 'grn', id] });
-      toast.success('GRN rejected.');
-      setRejectOpen(false);
-    },
-    onError: (e: AxiosError<{ message?: string }>) =>
-      toast.error(e.response?.data?.message ?? 'Failed to reject GRN.'),
-  });
+ const accept = useMutation({
+ mutationFn: (map?: Record<string, string>) => grnApi.accept(id, map),
+ onSuccess: () => {
+ qc.invalidateQueries({ queryKey: ['inventory', 'grn', id] });
+ toast.success('GRN accepted, stock updated.');
+ setConfirmAccept(false);
+ setConfirmPartial(false);
+ },
+ onError: (e: AxiosError<{ message?: string }>) =>
+ toast.error(e.response?.data?.message ?? 'Failed to accept GRN.'),
+ });
+ const reject = useMutation({
+ mutationFn: (reason: string) => grnApi.reject(id, reason),
+ onSuccess: () => {
+ qc.invalidateQueries({ queryKey: ['inventory', 'grn', id] });
+ toast.success('GRN rejected.');
+ setRejectOpen(false);
+ },
+ onError: (e: AxiosError<{ message?: string }>) =>
+ toast.error(e.response?.data?.message ?? 'Failed to reject GRN.'),
+ });
 
-  if (isLoading) return <SkeletonTable rows={6} columns={5} />;
-  if (isError || !data) return (
-    <EmptyState icon="alert-circle" title="Failed to load GRN" action={<Button onClick={() => refetch()}>Retry</Button>} />
-  );
+ const isEditable = data?.status === 'pending_qc';
 
-  const variant = ({ pending_qc: 'warning', accepted: 'success', partial_accepted: 'info', rejected: 'danger' } as const)[data.status];
+ useEffect(() => {
+ // Pre-fill accept qty with received qty when a pending GRN first loads.
+ if (isEditable && Object.keys(acceptMap).length === 0) {
+ const initial: Record<string, string> = {};
+ data?.items?.forEach((l) => { initial[l.id] = l.quantity_received; });
+ setAcceptMap(initial);
+ }
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ }, [isEditable, data?.id]);
 
-  return (
-    <div>
-      <PageHeader
-        title={<span className="font-mono">{data.grn_number}</span>}
-        backTo="/inventory/grn" backLabel="GRNs"
-        breadcrumbs={[{ label: 'Inventory', href: '/inventory' }, { label: 'GRNs', href: '/inventory/grn' }, { label: data.grn_number }]}
-        actions={
-          <div className="flex items-center gap-2">
-            <Chip variant={variant}>{grnOptions?.statuses.find((option) => option.value === data.status)?.label ?? data.status}</Chip>
-            {data.status === 'pending_qc' && can('inventory.grn.create') && (
-              <>
-                <Button variant="secondary" size="sm" icon={<XCircle size={14} />} onClick={() => setRejectOpen(true)}>Reject</Button>
-                <Button variant="primary" size="sm" icon={<CheckCircle2 size={14} />} onClick={() => setConfirmAccept(true)}
-                        loading={accept.isPending} disabled={accept.isPending}>Accept</Button>
-              </>
-            )}
-          </div>
-        }
-      />
-      <div className="px-5 py-4 space-y-4">
-        <Panel title="Procure-to-pay chain">
-          <ChainHeader steps={buildGrnChain(data)} />
-        </Panel>
-        <Panel title="Header">
-          <dl className="grid grid-cols-4 gap-y-3 gap-x-6 text-sm">
-            <div><dt className="text-2xs uppercase tracking-wider text-muted">PO</dt><dd className="font-mono">{data.purchase_order?.po_number ?? '—'}</dd></div>
-            <div><dt className="text-2xs uppercase tracking-wider text-muted">Vendor</dt><dd>{data.vendor?.name ?? '—'}</dd></div>
-            <div><dt className="text-2xs uppercase tracking-wider text-muted">Received</dt><dd className="font-mono">{formatDate(data.received_date)}</dd></div>
-            <div><dt className="text-2xs uppercase tracking-wider text-muted">Received by</dt><dd>{data.receiver?.name ?? '—'}</dd></div>
-            {data.accepted_at && <div><dt className="text-2xs uppercase tracking-wider text-muted">Accepted</dt><dd className="font-mono">{formatDate(data.accepted_at)} · {data.acceptor?.name}</dd></div>}
-            {data.rejected_reason && <div className="col-span-4"><dt className="text-2xs uppercase tracking-wider text-muted">Rejection reason</dt><dd className="text-danger-fg">{data.rejected_reason}</dd></div>}
-          </dl>
-        </Panel>
-        <Panel title="Line items">
-          <table className={tableCls}>
-            <thead><tr className={theadTrCls}>
-              <Th>Item</Th>
-              <Th>Location</Th>
-              <Th align="right">Received</Th>
-              <Th align="right">Accepted</Th>
-              <Th align="right">Unit cost</Th>
-              <Th align="right">Total</Th>
-            </tr></thead>
-            <tbody>
-              {data.items?.map((l) => (
-                <tr key={l.id} className={trCls}>
-                  <Td>
-                    <span className="font-mono">{l.item?.code}</span>
-                    <div className="text-2xs text-muted">{l.item?.name}</div>
-                    <Chip variant={l.item?.quality_plan_ready ? 'success' : 'warning'}>{l.item?.quality_plan_ready ? 'QC plan' : 'fallback QC'}</Chip>
-                  </Td>
-                  <Td mono>{l.location?.full_code}</Td>
-                  <Td align="right" mono>{Number(l.quantity_received).toFixed(3)}</Td>
-                  <Td align="right" mono>{Number(l.quantity_accepted).toFixed(3)}</Td>
-                  <Td align="right" mono>{Number(l.unit_cost).toFixed(4)}</Td>
-                  <Td align="right" mono>{(Number(l.quantity_received) * Number(l.unit_cost)).toFixed(2)}</Td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Panel>
-      </div>
+ if (isLoading) return <SkeletonTable rows={6} columns={5} />;
+ if (isError || !data) return (
+ <EmptyState icon="alert-circle" title="Failed to load GRN" action={<Button onClick={() => refetch()}>Retry</Button>} />
+ );
 
-      <ConfirmDialog
-        isOpen={confirmAccept}
-        onClose={() => setConfirmAccept(false)}
-        onConfirm={() => accept.mutate()}
-        title="Accept this GRN?"
-        description="Accepting will post stock movements to update inventory levels and weighted-average cost. This cannot be undone."
-        confirmLabel="Accept GRN"
-        variant="primary"
-        pending={accept.isPending}
-      />
+ const hasPartial = isEditable && data.items?.some((l) => {
+ const qty = acceptMap[l.id];
+ return qty !== undefined && Number(qty) < Number(l.quantity_received);
+ });
 
-      <ReasonDialog
-        isOpen={rejectOpen}
-        onClose={() => setRejectOpen(false)}
-        onConfirm={(reason) => reject.mutate(reason)}
-        title="Reject this GRN?"
-        description="The vendor delivery will be flagged as rejected. Reason is recorded for audit."
-        reasonLabel="Rejection reason"
-        reasonPlaceholder="e.g. Material failed incoming inspection (mould flash on pin 3)"
-        minLength={10}
-        confirmLabel="Reject"
-        variant="danger"
-        pending={reject.isPending}
-      />
-    </div>
-  );
+ const variant = ({ pending_qc: 'warning', accepted: 'success', partial_accepted: 'info', rejected: 'danger' } as const)[data.status];
+
+ return (
+ <div>
+ <PageHeader
+ title={<span className="font-mono">{data.grn_number}</span>}
+ backTo="/inventory/grn" backLabel="GRNs"
+ breadcrumbs={[{ label: 'Inventory', href: '/inventory' }, { label: 'GRNs', href: '/inventory/grn' }, { label: data.grn_number }]}
+ actions={
+ <div className="flex items-center gap-2">
+ <Chip variant={variant}>{grnOptions?.statuses.find((option) => option.value === data.status)?.label ?? data.status}</Chip>
+ {data.status === 'pending_qc' && can('inventory.grn.create') && (
+ <>
+ <Button variant="secondary" size="sm" icon={<XCircle size={14} />} onClick={() => setRejectOpen(true)}>Reject</Button>
+ {hasPartial ? (
+ <Button variant="primary" size="sm" icon={<CheckCircle2 size={14} />} onClick={() => setConfirmPartial(true)}
+ loading={accept.isPending} disabled={accept.isPending}>Partial accept</Button>
+ ) : (
+ <Button variant="primary" size="sm" icon={<CheckCircle2 size={14} />} onClick={() => setConfirmAccept(true)}
+ loading={accept.isPending} disabled={accept.isPending}>Accept</Button>
+ )}
+ </>
+ )}
+ </div>
+ }
+ />
+ <div className="px-5 py-4 space-y-4">
+ <Panel title="Procure-to-pay chain">
+ <ChainHeader steps={buildGrnChain(data)} />
+ </Panel>
+ <Panel title="Header">
+ <dl className="grid grid-cols-4 gap-y-3 gap-x-6 text-sm">
+ <div><dt className="text-2xs uppercase tracking-wider text-muted">PO</dt><dd className="font-mono">{data.purchase_order?.po_number ?? '—'}</dd></div>
+ <div><dt className="text-2xs uppercase tracking-wider text-muted">Vendor</dt><dd>{data.vendor?.name ?? '—'}</dd></div>
+ <div><dt className="text-2xs uppercase tracking-wider text-muted">Received</dt><dd className="font-mono">{formatDate(data.received_date)}</dd></div>
+ <div><dt className="text-2xs uppercase tracking-wider text-muted">Received by</dt><dd>{data.receiver?.name ?? '—'}</dd></div>
+ {data.accepted_at && <div><dt className="text-2xs uppercase tracking-wider text-muted">Accepted</dt><dd className="font-mono">{formatDate(data.accepted_at)} · {data.acceptor?.name}</dd></div>}
+ {data.rejected_reason && <div className="col-span-4"><dt className="text-2xs uppercase tracking-wider text-muted">Rejection reason</dt><dd className="text-danger-fg">{data.rejected_reason}</dd></div>}
+ </dl>
+ </Panel>
+ <Panel title="Line items">
+ <table className={tableCls}>
+ <thead><tr className={theadTrCls}>
+ <Th>Item</Th>
+ <Th>Location</Th>
+ <Th align="right">Received</Th>
+ {isEditable && <Th align="right">Accept qty</Th>}
+ <Th align="right">Accepted</Th>
+ <Th align="right">Unit cost</Th>
+ <Th align="right">Total</Th>
+ </tr></thead>
+ <tbody>
+ {data.items?.map((l) => (
+ <tr key={l.id} className={trCls}>
+ <Td>
+ <span className="font-mono">{l.item?.code}</span>
+ <div className="text-2xs text-muted">{l.item?.name}</div>
+ <Chip variant={l.item?.quality_plan_ready ? 'success' : 'warning'}>{l.item?.quality_plan_ready ? 'QC plan' : 'fallback QC'}</Chip>
+ </Td>
+ <Td mono>{l.location?.full_code}</Td>
+ <Td align="right" mono>{Number(l.quantity_received).toFixed(3)}</Td>
+ {isEditable && (
+ <Td align="right">
+ <Input
+ type="number"
+ min="0"
+ step="0.001"
+ max={l.quantity_received}
+ value={acceptMap[l.id] ?? l.quantity_received}
+ onChange={(e) => {
+ const v = e.target.value;
+ setAcceptMap((m) => ({ ...m, [l.id]: v }));
+ }}
+ className="w-24 h-7 text-right font-mono"
+ />
+ </Td>
+ )}
+ <Td align="right" mono>{Number(l.quantity_accepted).toFixed(3)}</Td>
+ <Td align="right" mono>{Number(l.unit_cost).toFixed(4)}</Td>
+ <Td align="right" mono>{(Number(l.quantity_received) * Number(l.unit_cost)).toFixed(2)}</Td>
+ </tr>
+ ))}
+ </tbody>
+ </table>
+ </Panel>
+ </div>
+
+ <ConfirmDialog
+ isOpen={confirmAccept}
+ onClose={() => setConfirmAccept(false)}
+ onConfirm={() => accept.mutate(undefined)}
+ title="Accept this GRN?"
+ description="Accepting will post stock movements to update inventory levels and weighted-average cost. This cannot be undone."
+ confirmLabel="Accept GRN"
+ variant="primary"
+ pending={accept.isPending}
+ />
+
+ <ConfirmDialog
+ isOpen={confirmPartial}
+ onClose={() => setConfirmPartial(false)}
+ onConfirm={() => accept.mutate(acceptMap)}
+ title="Partially accept this GRN?"
+ description="Lines with a lower accept quantity will move only the accepted amount into inventory; the remainder is excluded. Accepted stock updates weighted-average cost."
+ confirmLabel="Partial accept"
+ variant="primary"
+ pending={accept.isPending}
+ />
+
+ <ReasonDialog
+ isOpen={rejectOpen}
+ onClose={() => setRejectOpen(false)}
+ onConfirm={(reason) => reject.mutate(reason)}
+ title="Reject this GRN?"
+ description="The vendor delivery will be flagged as rejected. Reason is recorded for audit."
+ reasonLabel="Rejection reason"
+ reasonPlaceholder="e.g. Material failed incoming inspection (mould flash on pin 3)"
+ minLength={10}
+ confirmLabel="Reject"
+ variant="danger"
+ pending={reject.isPending}
+ />
+ </div>
+ );
 }

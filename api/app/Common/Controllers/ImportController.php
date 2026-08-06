@@ -10,6 +10,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use RuntimeException;
+use Illuminate\Support\Str;
 
 /**
  * REC-03 — master-data CSV import (dry-run preview, atomic commit, rollback).
@@ -21,7 +22,10 @@ class ImportController
     /** Available import entity types (coa, items, ...). */
     public function entities(): JsonResponse
     {
-        return response()->json(['data' => $this->service->entityTypes()]);
+        return response()->json(['data' => [
+            'entities' => $this->service->entityTypes(),
+            'schemas' => $this->service->entitySchemas(),
+        ]]);
     }
 
     /** Validate a CSV without writing anything — returns preview + row errors. */
@@ -77,6 +81,7 @@ class ImportController
                 'entity_type' => $b->entity_type,
                 'filename' => $b->filename,
                 'status' => $b->status,
+                'status_label' => Str::headline((string) $b->status),
                 'total_rows' => $b->total_rows,
                 'imported_rows' => $b->imported_rows,
                 'created_by' => $b->creator?->name,

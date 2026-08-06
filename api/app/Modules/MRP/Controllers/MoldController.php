@@ -68,6 +68,12 @@ class MoldController
         return response()->json(null, 204);
     }
 
+    public function restore(Mold $mold): JsonResponse
+    {
+        $mold->restore();
+        return response()->json(['message' => 'Mold restored.']);
+    }
+
     public function syncCompatibility(AssignMoldCompatibilityRequest $request, Mold $mold): MoldResource
     {
         $m = $this->service->syncCompatibility($mold, $request->validated()['machine_ids']);

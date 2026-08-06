@@ -101,16 +101,54 @@ class MidCycleSalaryProrationTest extends TestCase
         $this->assertSame('10000.00', $payroll->basic_pay);
     }
 
-    public function test_no_history_behaves_exactly_as_legacy_daily(): void
+    public function test_no_history_behaves_exactly_as_legacy_semi_monthly(): void
     {
-        $emp = $this->makeEmployee(['pay_type' => 'daily', 'daily_rate' => '1000.00', 'basic_monthly_salary' => '0.00']);
+        $emp = $this->makeEmployee([
+            'pay_type'             => 'semi_monthly',
+            'semi_monthly_rate'    => '11000.00',
+            'basic_monthly_salary' => null,
+        ]);
         $period = $this->makePeriod();
-        $this->attendance($emp, '2026-04-01', '2026-04-15'); // 13 worked days (Sundays skipped: Apr 5, 12)
+        $this->attendance($emp, '2026-04-01', '2026-04-15');
 
         $payroll = $this->calc->computeForEmployee($period, $emp);
 
-        $expectedDays = (float) $payroll->days_worked;
-        $this->assertSame(number_format($expectedDays * 1000, 2, '.', ''), $payroll->basic_pay);
+        // Flat per-cutoff rate, independent of days worked.
+        $this->assertSame('11000.00', $payroll->basic_pay);
+    }
+
+    /**
+     * A mid-period raise prorates for a semi-monthly employee too: the history
+     * row's semi_monthly_rate is scaled to a monthly equivalent (× 2) and blended
+     * by calendar-day share, exactly as the monthly path does.
+     */
+    public function test_semi_monthly_raise_mid_period_is_prorated(): void
+    {
+        $emp = $this->makeEmployee([
+            'pay_type'             => 'semi_monthly',
+            'semi_monthly_rate'    => '12000.00',
+            'basic_monthly_salary' => null,
+        ]);
+        $period = $this->makePeriod('2026-04-01', '2026-04-15');
+        $this->attendance($emp, '2026-04-01', '2026-04-15');
+
+        // Mirrors SalaryAdjustmentService: both the per-cutoff rate and its
+        // monthly equivalent are recorded.
+        EmployeeSalaryHistory::create([
+            'employee_id' => $emp->id, 'semi_monthly_rate' => '10000.00',
+            'basic_monthly_salary' => '20000.00', 'effective_date' => '2025-01-01',
+        ]);
+        EmployeeSalaryHistory::create([
+            'employee_id' => $emp->id, 'semi_monthly_rate' => '12000.00',
+            'basic_monthly_salary' => '24000.00', 'effective_date' => '2026-04-09',
+        ]);
+
+        $payroll = $this->calc->computeForEmployee($period, $emp);
+
+        // Apr 1-8 = 8 days @ 10000/cutoff; Apr 9-15 = 7 days @ 12000/cutoff.
+        // 10000 * 8/15 + 12000 * 7/15 = 5333.33 + 5600 = 10933.33
+        $this->assertGreaterThan(10000.0, (float) $payroll->basic_pay);
+        $this->assertLessThan(12000.0, (float) $payroll->basic_pay);
     }
 
     public function test_monthly_raise_mid_period_is_prorated(): void

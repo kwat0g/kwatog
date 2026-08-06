@@ -23,7 +23,7 @@ function PillarCell({ pillar, index }: { pillar: PillarData; index: number }) {
     <div
       data-reveal
       data-reveal-delay={(index * 0.08).toFixed(2)}
-      className="group relative flex flex-col bg-landing-surface p-5 transition-colors duration-500 hover:bg-landing-elevated sm:p-7"
+      className="group relative flex flex-col rounded-2xl border border-landing-border bg-landing-surface p-6 transition-all duration-500 hover:-translate-y-1.5 hover:border-landing-accent/50 hover:shadow-2xl hover:shadow-landing-accent/20 sm:p-8"
     >
       <span className="font-mono text-[11px] tabular-nums text-landing-subtle-text">
         0{index + 1}
@@ -31,10 +31,10 @@ function PillarCell({ pillar, index }: { pillar: PillarData; index: number }) {
       <div className="mt-5 flex h-11 w-11 items-center justify-center rounded-md border border-landing-border text-landing-accent transition-colors duration-500 group-hover:border-landing-accent/40">
         <Icon size={20} strokeWidth={1.6} />
       </div>
-      <h3 className="mt-5 font-display text-lg font-medium tracking-tight text-landing-text">
+      <h3 className="mt-6 font-display text-xl font-semibold tracking-[-0.02em] text-landing-text">
         {pillar.title}
       </h3>
-      <p className="mt-2.5 font-sans text-[13px] leading-relaxed text-landing-text-secondary">
+      <p className="mt-3 font-sans text-[15px] font-light leading-relaxed text-landing-text-secondary">
         {pillar.body}
       </p>
     </div>
@@ -72,7 +72,7 @@ export function QualitySection() {
           </div>
         </div>
 
-        <div className="mt-16 grid gap-px overflow-hidden rounded-md border border-landing-border bg-landing-border sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-16 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {qualityPillars.map((pillar, i) => (
             <PillarCell key={pillar.id} pillar={pillar} index={i} />
           ))}
@@ -81,16 +81,16 @@ export function QualitySection() {
         <div className={`mt-6 grid ${cardGap} lg:grid-cols-[1fr_1.4fr]`}>
           <div
             data-reveal="scale"
-            className="flex flex-col justify-between rounded-md border border-landing-border bg-landing-surface p-5 sm:p-7"
+            className="flex flex-col justify-between rounded-2xl border border-landing-border bg-landing-surface p-6 transition-all duration-500 hover:-translate-y-1.5 hover:border-landing-accent/50 hover:shadow-2xl hover:shadow-landing-accent/20 sm:p-8"
           >
             <div className="flex h-12 w-12 items-center justify-center rounded-md border border-landing-border text-landing-accent">
               <Award size={22} strokeWidth={1.6} />
             </div>
             <div className="mt-5">
-              <h3 className="font-display text-lg font-medium tracking-tight text-landing-text">
+              <h3 className="font-display text-2xl font-semibold tracking-[-0.02em] text-landing-text">
                 {qualityPolicy?.certification_title || 'IATF 16949 & ISO 9001:2015 Certified'}
               </h3>
-              <p className="mt-2 text-[13px] leading-relaxed text-landing-text-secondary">
+              <p className="mt-3 font-sans text-base font-light leading-relaxed text-landing-text-secondary">
                 {qualityPolicy?.certification_body || 'Audited and certified for automotive quality management and injection molded component production.'}
               </p>
               <button
@@ -112,7 +112,7 @@ export function QualitySection() {
                       // Error toast is handled by the global axios interceptor.
                     });
                 }}
-                className={cn('mt-5 inline-flex items-center gap-2 rounded-full border border-landing-border px-4 py-2 font-sans text-[12px] font-medium text-landing-text transition-colors hover:border-landing-accent/40 hover:bg-landing-elevated cursor-pointer', focusRingLanding)}
+                className={cn('mt-6 inline-flex w-fit items-center gap-2 rounded-full border border-landing-border-strong px-6 py-3 font-sans text-[14px] font-medium text-landing-text transition-all duration-300 hover:scale-105 hover:border-landing-text hover:bg-landing-elevated cursor-pointer', focusRingLanding)}
               >
                 <Download size={14} />
                 Download quality policy
@@ -123,10 +123,10 @@ export function QualitySection() {
           <div
             data-reveal="scale"
             data-reveal-delay="0.08"
-            className="flex items-start gap-4 rounded-md border border-landing-accent/20 bg-landing-accent-glow p-5 sm:p-7"
+            className="flex items-start gap-5 rounded-2xl border border-landing-accent/30 bg-landing-accent/5 p-6 transition-all duration-500 hover:-translate-y-1.5 hover:border-landing-accent/50 hover:shadow-2xl hover:shadow-landing-accent/20 sm:p-8"
           >
-            <ShieldCheck size={22} className="mt-0.5 shrink-0 text-landing-accent" strokeWidth={1.7} />
-            <p className="font-sans text-[14px] leading-relaxed text-landing-text-secondary">
+            <ShieldCheck size={26} className="mt-0.5 shrink-0 text-landing-accent" strokeWidth={2} />
+            <p className="font-sans text-base font-light leading-relaxed text-landing-text-secondary">
                 <span className="font-medium text-landing-text">
                   {qualityPolicy?.conformance_title || '100% Quality & Traceability Guarantee:'}
                 </span>{' '}

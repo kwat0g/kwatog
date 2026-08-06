@@ -11,6 +11,7 @@ use App\Modules\CRM\Models\SalesOrderItem;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\WarehouseLocation;
+use App\Modules\Inventory\Models\WarehouseZone;
 use App\Modules\MRP\Models\Bom;
 use App\Modules\MRP\Models\BomItem;
 use App\Modules\MRP\Services\MrpEngineService;
@@ -297,6 +298,50 @@ class MrpNettingTest extends TestCase
         $prItem = $pr->items()->where('item_id', $this->material->id)->firstOrFail();
         // net = 20 - 8 = 12, stored rounded to 2 decimal places
         $this->assertSame('12.00', $prItem->quantity, 'PR item qty must equal net shortage (12)');
+    }
+
+    /**
+     * F-02 — quarantine/scrap-zone stock must never satisfy gross demand.
+     *
+     * Setup:
+     *   BOM: 2 pcs per unit, 0% waste
+     *   SO line: 10 units → gross = 20 pcs
+     *   On-hand: 20 pcs, but ALL of it sits in a quarantine-zone location
+     *
+     * Expected: net = 20 → a PR for 20 is created. Without the zone filter the
+     * engine would treat the held stock as available and raise no PR at all.
+     */
+    public function test_quarantine_zone_stock_is_not_counted_as_on_hand(): void
+    {
+        $this->createBom(qtyPerUnit: 2.0, wasteFactor: 0.0);
+
+        $quarantineZone = WarehouseZone::factory()->create(['zone_type' => 'quarantine']);
+        $quarantineLocation = WarehouseLocation::factory()->create(['zone_id' => $quarantineZone->id]);
+
+        StockLevel::create([
+            'item_id'           => $this->material->id,
+            'location_id'       => $quarantineLocation->id,
+            'quantity'          => 20,
+            'reserved_quantity' => 0,
+            'weighted_avg_cost' => 5.00,
+            'lock_version'      => 0,
+        ]);
+
+        $so = $this->createConfirmedSo(lineQty: 10);
+
+        $plan = $this->engine->runForSalesOrder($so);
+
+        $this->assertSame(1, $plan->shortages_found, 'held stock must not satisfy demand');
+        $this->assertSame(1, $plan->auto_pr_count);
+
+        $prItem = PurchaseRequest::where('is_auto_generated', true)
+            ->where('mrp_plan_id', $plan->id)
+            ->firstOrFail()
+            ->items()
+            ->where('item_id', $this->material->id)
+            ->firstOrFail();
+
+        $this->assertSame('20.00', $prItem->quantity, 'net shortage must be the full 20');
     }
 
     public function test_persisted_safety_buffer_controls_material_order_by_date(): void

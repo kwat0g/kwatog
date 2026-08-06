@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Attendance\Services;
 
+use App\Common\Support\TrashedFilter;
 use App\Modules\Attendance\Models\Holiday;
 use Carbon\CarbonInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -16,6 +17,7 @@ class HolidayService
     public function list(array $filters): LengthAwarePaginator
     {
         $q = Holiday::query();
+        TrashedFilter::apply($q, $filters);
         if (!empty($filters['search'])) $q->where('name', 'ilike', "%{$filters['search']}%");
         if (!empty($filters['type'])) $q->where('type', $filters['type']);
         if (!empty($filters['year'])) {

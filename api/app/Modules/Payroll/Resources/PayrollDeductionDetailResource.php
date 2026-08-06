@@ -19,7 +19,6 @@ class PayrollDeductionDetailResource extends JsonResource
             'deduction_type_label' => $this->deduction_type?->label(),
             'description'          => $this->description,
             'amount'               => $this->amount,
-            'reference_id'         => $this->reference_id, // raw int — internal only
         ];
     }
 }

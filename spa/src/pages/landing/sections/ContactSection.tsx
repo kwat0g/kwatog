@@ -114,8 +114,8 @@ export function ContactSection() {
 
   return (
     <section id="contact" className="relative bg-landing-canvas px-5 py-20 sm:px-5 sm:py-28">
-      <div className="mx-auto max-w-6xl">
-        <div className="relative overflow-hidden rounded-md border border-landing-border-strong bg-landing-surface px-7 py-16 sm:px-14 sm:py-20">
+      <div className="mx-auto max-w-screen-xl">
+        <div className="relative overflow-hidden rounded-3xl border border-landing-border-strong bg-landing-surface px-8 py-20 sm:px-16 sm:py-24 shadow-2xl">
           {/* atmosphere — soft warm wash + blueprint grid */}
           <div
             aria-hidden="true"
@@ -161,14 +161,14 @@ export function ContactSection() {
               <h2
                 data-reveal
                 data-reveal-delay="0.05"
-                className="mt-5 font-display text-[clamp(2.25rem,5.5vw,4rem)] font-medium leading-[1.02] tracking-[-0.025em] text-landing-text"
+                className="mt-6 font-display text-[clamp(2.5rem,6vw,4.5rem)] font-semibold leading-[0.98] tracking-[-0.03em] text-landing-text"
               >
                 {contactTitle}
               </h2>
               <p
                 data-reveal
                 data-reveal-delay="0.1"
-                className="mt-5 font-sans text-[15px] leading-relaxed text-landing-text-secondary sm:text-lg"
+                className="mt-6 font-sans text-base font-light tracking-wide leading-relaxed text-landing-text-secondary sm:text-xl"
               >
                 {contactIntro}
               </p>
@@ -199,7 +199,7 @@ export function ContactSection() {
             <div
               data-reveal
               data-reveal-delay="0.15"
-              className="rounded-md border border-landing-border bg-landing-canvas p-5 sm:p-5"
+              className="rounded-2xl border border-landing-border bg-landing-canvas p-6 sm:p-8 shadow-xl shadow-black/5"
             >
               {submitted ? (
                 <div className="py-5 text-center">

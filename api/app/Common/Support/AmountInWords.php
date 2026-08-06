@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Common\Support;
 
 use NumberFormatter;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Series E (Task E1) — "Amount in Words" helper used by the Tax Invoice
@@ -32,7 +33,27 @@ class AmountInWords
         }
 
         $words = ucwords($words);
-        return sprintf('%s Pesos and %02d/100 Only', $words, $cents);
+        return sprintf('%s %s and %02d/100 Only', $words, self::currencyLabel(), $cents);
+    }
+
+    private static function currencyLabel(): string
+    {
+        // Keep a minimal isolated-test fallback only before the settings table
+        // exists. Once settings are available, a missing currency is a policy
+        // error and must not silently become PHP.
+        if (! Schema::hasTable('settings')) return 'Pesos';
+        $code = strtoupper(app(\App\Common\Services\SettingsService::class)
+            ->requiredString('accounting.functional_currency_code'));
+
+        return match ($code) {
+            'PHP' => 'Pesos',
+            'USD' => 'Dollars',
+            'EUR' => 'Euros',
+            'GBP' => 'Pounds',
+            'JPY' => 'Yen',
+            'CNY' => 'Yuan',
+            default => $code,
+        };
     }
 
     /** Lightweight fallback covering 0..999_999_999_999. */

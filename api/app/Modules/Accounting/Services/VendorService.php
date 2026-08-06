@@ -7,6 +7,7 @@ namespace App\Modules\Accounting\Services;
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\BusinessPolicyService;
 use App\Common\Support\SearchOperator;
+use App\Common\Support\TrashedFilter;
 
 use App\Modules\Accounting\Models\Vendor;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -20,6 +21,8 @@ class VendorService
     public function list(array $filters): LengthAwarePaginator
     {
         $q = Vendor::query();
+
+        TrashedFilter::apply($q, $filters);
 
         if (isset($filters['is_active']) && $filters['is_active'] !== '') {
             $q->where('is_active', filter_var($filters['is_active'], FILTER_VALIDATE_BOOLEAN));

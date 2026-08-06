@@ -6,15 +6,21 @@ namespace App\Modules\B2B\Services;
 
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\Accounting\Models\Invoice;
+use App\Modules\Accounting\Enums\InvoiceStatus;
 use App\Modules\Accounting\Services\StatementOfAccountService;
 use App\Modules\B2B\Models\DeliverySchedule;
 use App\Modules\CRM\Models\CustomerComplaint;
+use App\Modules\CRM\Enums\ComplaintStatus;
+use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Services\SalesOrderService;
 use App\Modules\Edge\Services\EdgeSystemUserResolver;
+use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use App\Modules\SupplyChain\Models\Delivery;
+use App\Modules\Production\Enums\WorkOrderStatus;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 
 /**
  * Business logic for the Customer B2B Portal.
@@ -37,18 +43,22 @@ class CustomerPortalService
     public function dashboard(int $customerId): array
     {
         $openSoCount = SalesOrder::where('customer_id', $customerId)
-            ->whereIn('status', ['draft', 'confirmed'])->count();
+            ->whereIn('status', [SalesOrderStatus::Draft->value, SalesOrderStatus::Confirmed->value])->count();
 
         $pendingDeliveryCount = Delivery::whereHas(
             'salesOrder',
             fn ($q) => $q->where('customer_id', $customerId),
-        )->whereIn('status', ['scheduled', 'loading', 'in_transit'])->count();
+        )->whereIn('status', [
+            DeliveryStatus::Scheduled->value,
+            DeliveryStatus::Loading->value,
+            DeliveryStatus::InTransit->value,
+        ])->count();
 
-        $openInvoiceCount = Invoice::where('customer_id', $customerId)
-            ->whereIn('status', ['sent', 'overdue', 'partial'])->count();
+        $openInvoices = Invoice::where('customer_id', $customerId)
+            ->whereIn('status', [InvoiceStatus::Finalized, InvoiceStatus::Partial]);
+        $openInvoiceCount = (clone $openInvoices)->count();
 
-        $totalOutstanding = Invoice::where('customer_id', $customerId)
-            ->whereIn('status', ['sent', 'overdue', 'partial'])->sum('balance');
+        $totalOutstanding = (clone $openInvoices)->sum('balance');
 
         $recentOrders = SalesOrder::where('customer_id', $customerId)
             ->withCount('items')
@@ -107,6 +117,13 @@ class CustomerPortalService
             'invoices:id,invoice_number,total_amount,status,created_at',
             'workOrders:id,wo_number,status',
         ]);
+
+        $salesOrder->workOrders->each(function ($workOrder): void {
+            $workOrder->setAttribute(
+                'status_label',
+                WorkOrderStatus::tryFrom((string) $workOrder->status)?->label() ?? (string) $workOrder->status,
+            );
+        });
 
         return $salesOrder;
     }
@@ -215,7 +232,9 @@ class CustomerPortalService
         return [
             'complaint_number' => $complaint->complaint_number,
             'complaint_status' => $complaint->status?->value ?? $complaint->status,
+            'complaint_status_label' => ComplaintStatus::tryFrom((string) ($complaint->status?->value ?? $complaint->status))?->label() ?? (string) $complaint->status,
             'severity' => $complaint->severity?->value ?? $complaint->severity,
+            'severity_label' => Str::headline((string) ($complaint->severity?->value ?? $complaint->severity)),
             'description' => $complaint->description,
             'report' => [
                 'id' => $report->hash_id,

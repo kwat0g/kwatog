@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\Purchasing\Controllers;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Requests\CancelPurchaseOrderRequest;
 use App\Modules\Purchasing\Requests\StorePurchaseOrderRequest;
 use App\Modules\Purchasing\Requests\UpdatePurchaseOrderRequest;
@@ -22,11 +24,23 @@ class PurchaseOrderController
     public function __construct(
         private readonly PurchaseOrderService $service,
         private readonly PurchaseOrderPdfService $pdf,
+        private readonly SettingsService $settings,
     ) {}
 
     public function index(Request $request): AnonymousResourceCollection
     {
         return PurchaseOrderResource::collection($this->service->list($request->query(), $request->user()));
+    }
+
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'statuses' => array_map(static fn (PurchaseOrderStatus $status): array => [
+                'value' => $status->value,
+                'label' => str_replace('_', ' ', ucfirst($status->value)),
+            ], PurchaseOrderStatus::cases()),
+            'approval_sla_hours' => $this->settings->requiredInt('approvals.reminder_hours', 1),
+        ]]);
     }
 
     public function show(PurchaseOrder $purchaseOrder): PurchaseOrderResource
@@ -56,6 +70,12 @@ class PurchaseOrderController
         try { $this->service->delete($purchaseOrder); }
         catch (RuntimeException $e) { return response()->json(['message' => $e->getMessage()], 422); }
         return response()->json(null, 204);
+    }
+
+    public function restore(PurchaseOrder $purchaseOrder): JsonResponse
+    {
+        $purchaseOrder->restore();
+        return response()->json(['message' => 'Purchase order restored.']);
     }
 
     public function submit(PurchaseOrder $purchaseOrder): PurchaseOrderResource

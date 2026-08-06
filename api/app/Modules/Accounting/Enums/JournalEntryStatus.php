@@ -10,6 +10,15 @@ enum JournalEntryStatus: string
     case Posted   = 'posted';
     case Reversed = 'reversed';
 
+    public function label(): string
+    {
+        return match ($this) {
+            self::Draft => 'Draft',
+            self::Posted => 'Posted',
+            self::Reversed => 'Reversed',
+        };
+    }
+
     /** @return array<int, string> */
     public static function values(): array
     {

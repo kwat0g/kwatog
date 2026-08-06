@@ -1,152 +1,152 @@
 // Sprint 6 — Production types.
 
 export type WorkOrderStatus =
-  | 'planned' | 'confirmed' | 'in_progress' | 'paused'
-  | 'completed' | 'closed' | 'cancelled';
+ | 'planned' | 'confirmed' | 'in_progress' | 'paused'
+ | 'completed' | 'closed' | 'cancelled';
 
 export type MachineDowntimeCategory =
-  | 'breakdown' | 'changeover' | 'material_shortage' | 'no_order' | 'planned_maintenance';
+ | 'breakdown' | 'changeover' | 'material_shortage' | 'no_order' | 'planned_maintenance';
 
 export interface MachineDowntimeCategoryOption {
-  value: MachineDowntimeCategory;
-  label: string;
-  is_planned: boolean;
+ value: MachineDowntimeCategory;
+ label: string;
+ is_planned: boolean;
 }
 
 export interface WorkOrderMaterial {
-  id: string;
-  item: { id: string; code: string; name: string; unit_of_measure: string } | null;
-  bom_quantity: string;
-  actual_quantity_issued: string;
-  variance: string;
+ id: string;
+ item: { id: string; code: string; name: string; unit_of_measure: string } | null;
+ bom_quantity: string;
+ actual_quantity_issued: string;
+ variance: string;
 }
 
 export interface WorkOrderDefectRow {
-  id: string;
-  count: number;
-  defect_type: { id: string; code: string; name: string } | null;
+ id: string;
+ count: number;
+ defect_type: { id: string; code: string; name: string } | null;
 }
 
 export interface WorkOrderOutput {
-  id: string;
-  recorded_at: string;
-  good_count: number;
-  reject_count: number;
-  total_count: number;
-  shift: string | null;
-  batch_code: string | null;
-  remarks: string | null;
-  recorder?: { id: string; name: string } | null;
-  defects?: WorkOrderDefectRow[];
+ id: string;
+ recorded_at: string;
+ good_count: number;
+ reject_count: number;
+ total_count: number;
+ shift: string | null;
+ batch_code: string | null;
+ remarks: string | null;
+ recorder?: { id: string; name: string } | null;
+ defects?: WorkOrderDefectRow[];
 }
 
 /** ADV3 — IATF 16949 material lot reference snapshot per work order. */
 export interface WorkOrderMaterialLotReference {
-  item_id: string | null;
-  item_code: string | null;
-  item_name: string | null;
-  grn_number: string | null;
-  material_lot_number: string | null;
-  supplier_lot_reference: string | null;
-  quantity_used: string | null;
+ item_id: string | null;
+ item_code: string | null;
+ item_name: string | null;
+ grn_number: string | null;
+ material_lot_number: string | null;
+ supplier_lot_reference: string | null;
+ quantity_used: string | null;
 }
 
 export interface WorkOrder {
-  id: string;
-  wo_number: string;
-  /** ADV3 — Production batch number (BATCH-YYYYMM-NNNN). Set when the WO is started. */
-  batch_number: string | null;
-  /** ADV3 — Snapshot of the supplier lots used by this batch. */
-  material_lot_references: WorkOrderMaterialLotReference[];
-  product?: { id: string; part_number: string; name: string };
-  sales_order?: { id: string; so_number: string } | null;
-  machine?: { id: string; machine_code: string; name: string } | null;
-  mold?: { id: string; mold_code: string; name: string } | null;
-  quantity_target: number;
-  quantity_produced: number;
-  quantity_good: number;
-  quantity_rejected: number;
-  progress_percentage: number;
-  scrap_rate: string;
-  planned_start: string;
-  planned_end: string;
-  actual_start: string | null;
-  actual_end: string | null;
-  status: WorkOrderStatus;
-  status_label: string;
-  next_statuses?: Array<{ value: string; label: string }>;
-  pause_reason: string | null;
-  priority: number;
-  creator?: { id: string; name: string } | null;
-  materials?: WorkOrderMaterial[];
-  outputs?: WorkOrderOutput[];
-  inspections?: Array<{
-    id: string;
-    inspection_number: string;
-    stage: string;
-    stage_label?: string;
-    status: string;
-    status_label?: string;
-    completed_at: string | null;
-  }>;
-  created_at: string;
-  updated_at: string;
+ id: string;
+ wo_number: string;
+ /** ADV3 — Production batch number (BATCH-YYYYMM-NNNN). Set when the WO is started. */
+ batch_number: string | null;
+ /** ADV3 — Snapshot of the supplier lots used by this batch. */
+ material_lot_references: WorkOrderMaterialLotReference[];
+ product?: { id: string; part_number: string; name: string };
+ sales_order?: { id: string; so_number: string } | null;
+ machine?: { id: string; machine_code: string; name: string } | null;
+ mold?: { id: string; mold_code: string; name: string } | null;
+ quantity_target: number;
+ quantity_produced: number;
+ quantity_good: number;
+ quantity_rejected: number;
+ progress_percentage: number;
+ scrap_rate: string;
+ planned_start: string;
+ planned_end: string;
+ actual_start: string | null;
+ actual_end: string | null;
+ status: WorkOrderStatus;
+ status_label: string;
+ next_statuses?: Array<{ value: string; label: string }>;
+ pause_reason: string | null;
+ priority: number;
+ creator?: { id: string; name: string } | null;
+ materials?: WorkOrderMaterial[];
+ outputs?: WorkOrderOutput[];
+ inspections?: Array<{
+ id: string;
+ inspection_number: string;
+ stage: string;
+ stage_label?: string;
+ status: string;
+ status_label?: string;
+ completed_at: string | null;
+ }>;
+ created_at: string;
+ updated_at: string;
 }
 
 export interface DefectType {
-  id: string;
-  code: string;
-  name: string;
-  description: string | null;
-  is_active: boolean;
+ id: string;
+ code: string;
+ name: string;
+ description: string | null;
+ is_active: boolean;
 }
 
 export interface CreateWorkOrderData {
-  product_id: string;
-  sales_order_id?: string;
-  machine_id?: string;
-  mold_id?: string;
-  quantity_target: number;
-  planned_start: string;
-  planned_end: string;
-  priority?: number;
+ product_id: string;
+ sales_order_id?: string;
+ machine_id?: string;
+ mold_id?: string;
+ quantity_target: number;
+ planned_start: string;
+ planned_end: string;
+ priority?: number;
 }
 
 export interface RecordOutputData {
-  good_count: number;
-  reject_count: number;
-  shift?: string;
-  remarks?: string;
-  defects?: { defect_type_id: string; count: number }[];
+ good_count: number;
+ reject_count: number;
+ shift?: string;
+ remarks?: string;
+ defects?: { defect_type_id: string; count: number }[];
 }
 
 export interface OeeResult {
-  availability: number;
-  performance: number;
-  quality: number;
-  oee: number;
-  diagnostics: {
-    scheduled_minutes: number;
-    planned_downtime: number;
-    unplanned_downtime: number;
-    available_time: number;
-    run_time: number;
-    good_count: number;
-    reject_count: number;
-    ideal_cycle_seconds: number;
-    performance_capped: boolean;
-  };
-  period_from: string;
-  period_to: string;
+ availability: number;
+ performance: number;
+ quality: number;
+ oee: number;
+ diagnostics: {
+ scheduled_minutes: number;
+ planned_downtime: number;
+ unplanned_downtime: number;
+ available_time: number;
+ run_time: number;
+ good_count: number;
+ reject_count: number;
+ ideal_cycle_seconds: number;
+ performance_capped: boolean;
+ };
+ period_from: string;
+ period_to: string;
 }
 
 export interface MachineOeeRow extends OeeResult {
-  machine_id: string;
-  machine_code: string;
-  name: string;
-  tonnage: number | null;
-  status: string;
-  status_label?: string;
+ machine_id: string;
+ machine_code: string;
+ name: string;
+ tonnage: number | null;
+ status: string;
+ status_label?: string;
 }
 
 /**
@@ -154,39 +154,39 @@ export interface MachineOeeRow extends OeeResult {
  * Matches `OeeService::report()` output 1:1.
  */
 export interface OeeReport {
-  benchmark_pct?: number;
-  display_policy?: { world_class_ratio: number; on_track_ratio: number };
-  range: { from: string; to: string };
-  overall: { availability: number; performance: number; quality: number; oee: number };
-  machines: MachineOeeRow[];
-  trend: Array<{ date: string; oee: number | null }>;
-  downtime_breakdown: Array<{ category: string; minutes: number }>;
+ benchmark_pct?: number;
+ display_policy?: { world_class_ratio: number; on_track_ratio: number };
+ range: { from: string; to: string };
+ overall: { availability: number; performance: number; quality: number; oee: number };
+ machines: MachineOeeRow[];
+ trend: Array<{ date: string; oee: number | null }>;
+ downtime_breakdown: Array<{ category: string; minutes: number }>;
 }
 
 export interface ProductionDashboardPayload {
-  display_policy?: { world_class_ratio: number; on_track_ratio: number };
-  defect_history_days: number;
-  kpis: {
-    today_output_total: number;
-    today_output_good: number;
-    today_output_reject: number;
-    active_work_orders: number;
-    machines_total: number;
-    machines_running: number;
-    machines_idle: number;
-    machines_breakdown: number;
-    avg_oee_today: number | null;
-  };
-  chain_stage_breakdown: Array<{ label: string; count: number; percent: number; color: string }>;
-  machine_utilization: MachineOeeRow[];
-  alerts: Array<{ type: string; type_label?: string; severity: string; message: string; link: string }>;
-  defect_pareto: Array<{ defect_code: string; defect_name: string; count: number; percent: number }>;
-  generated_at: string;
+ display_policy?: { world_class_ratio: number; on_track_ratio: number };
+ defect_history_days: number;
+ kpis: {
+ today_output_total: number;
+ today_output_good: number;
+ today_output_reject: number;
+ active_work_orders: number;
+ machines_total: number;
+ machines_running: number;
+ machines_idle: number;
+ machines_breakdown: number;
+ avg_oee_today: number | null;
+ };
+ chain_stage_breakdown: Array<{ label: string; count: number; percent: number; color: string }>;
+ machine_utilization: MachineOeeRow[];
+ alerts: Array<{ type: string; type_label?: string; severity: string; message: string; link: string }>;
+ defect_pareto: Array<{ defect_code: string; defect_name: string; count: number; percent: number }>;
+ generated_at: string;
 }
 
 export interface ChainStep {
-  key: string;
-  label: string;
-  date: string | null;
-  state: 'done' | 'active' | 'pending';
+ key: string;
+ label: string;
+ date: string | null;
+ state: 'done' | 'active' | 'pending';
 }

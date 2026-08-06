@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Mail;
 
+use App\Common\Services\SettingsService;
 use App\Modules\HR\Models\ApplicationInterview;
 use App\Modules\HR\Models\JobApplication;
 use Illuminate\Mail\Mailable;
@@ -26,6 +27,7 @@ class InterviewScheduledMail extends Mailable
 
     public function content(): Content
     {
+        $settings = app(SettingsService::class);
         return new Content(
             markdown: 'emails.recruitment.interview-scheduled',
             with: [
@@ -34,6 +36,8 @@ class InterviewScheduledMail extends Mailable
                 'scheduledAt'     => $this->interview->scheduled_at->format('F j, Y g:i A'),
                 'location'        => $this->interview->location ?? 'To be confirmed',
                 'interviewerName' => $this->interview->interviewer_name,
+                'companyName' => $settings->requiredString('company.legal_name'),
+                'companyAddress' => $settings->requiredString('company.address'),
             ],
         );
     }

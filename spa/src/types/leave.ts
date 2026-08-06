@@ -1,85 +1,105 @@
 import type { Department } from './hr';
 
 export interface LeaveType {
-  id: string;
-  name: string;
-  code: string;
-  default_balance: string;
-  is_paid: boolean;
-  requires_document: boolean;
-  is_convertible_on_separation: boolean;
-  is_convertible_year_end: boolean;
-  conversion_rate: string;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
+ id: string;
+ name: string;
+ code: string;
+ default_balance: string;
+ max_carryover_days: string | null;
+ is_paid: boolean;
+ requires_document: boolean;
+ is_convertible_on_separation: boolean;
+ is_convertible_year_end: boolean;
+ conversion_rate: string;
+ is_active: boolean;
+ created_at: string;
+ updated_at: string;
 }
 
+export interface CreateLeaveTypeData {
+ name: string;
+ code: string;
+ default_balance: number;
+ is_paid?: boolean;
+ requires_document?: boolean;
+ is_convertible_on_separation?: boolean;
+ is_convertible_year_end?: boolean;
+ conversion_rate?: number;
+ max_carryover_days?: number;
+ is_active?: boolean;
+}
+
+export type UpdateLeaveTypeData = Partial<CreateLeaveTypeData>;
+
 export interface EmployeeLeaveBalance {
-  id: string;
-  employee_id: string;
-  leave_type: { id: string; code: string; name: string };
-  year: number;
-  total_credits: string;
-  used: string;
-  remaining: string;
+ id: string;
+ employee_id: string;
+ leave_type: { id: string; code: string; name: string };
+ year: number;
+ total_credits: string;
+ used: string;
+ remaining: string;
 }
 
 export type LeaveStatus = 'pending_dept' | 'pending_hr' | 'approved' | 'rejected' | 'cancelled';
 
 export interface LeaveRequest {
-  id: string;
-  leave_request_no: string;
-  employee: { id: string; employee_no: string; full_name: string; department: string | null } | null;
-  leave_type: { id: string; code: string; name: string } | null;
-  start_date: string;
-  end_date: string;
-  days: string;
-  reason: string | null;
-  document_path: string | null;
-  status: LeaveStatus;
-  dept_approver: { id: string; name: string } | null;
-  dept_approved_at: string | null;
-  hr_approver: { id: string; name: string } | null;
-  hr_approved_at: string | null;
-  rejection_reason: string | null;
-  created_at: string;
-  updated_at: string;
+ id: string;
+ leave_request_no: string;
+ employee: { id: string; employee_no: string; full_name: string; department: string | null } | null;
+ leave_type: { id: string; code: string; name: string } | null;
+ start_date: string;
+ end_date: string;
+ days: string;
+ /** M-18 — 'am' | 'pm' when the request is a half-day; null for full-day. */
+ half_day_period: 'am' | 'pm' | null;
+ reason: string | null;
+ document_path: string | null;
+ status: LeaveStatus;
+ status_label?: string;
+ dept_approver: { id: string; name: string } | null;
+ dept_approved_at: string | null;
+ hr_approver: { id: string; name: string } | null;
+ hr_approved_at: string | null;
+ rejection_reason: string | null;
+ created_at: string;
+ updated_at: string;
 }
 
 export interface CreateLeaveRequestData {
-  employee_id: string;
-  leave_type_id: string;
-  start_date: string;
-  end_date: string;
-  /** M-18 — 'am' / 'pm' for half-day; omit for full-day. */
-  half_day_period?: 'am' | 'pm';
-  reason?: string;
-  document_path?: string;
+ employee_id: string;
+ leave_type_id: string;
+ start_date: string;
+ end_date: string;
+ /** M-18 — 'am' / 'pm' for half-day; omit for full-day. */
+ half_day_period?: 'am' | 'pm';
+ reason?: string;
+ document_path?: string;
 }
 
 export interface LeaveCalendarDay {
-  date: string;
-  day_of_week: number;
-  approved_count: number;
-  pending_count: number;
-  present_count: number;
-  headcount: number;
-  coverage_pct: number;
-  employees_on_leave: Array<{
-    employee_name: string;
-    status: string;
-    status_label?: string;
-    leave_type: string;
-  }>;
+ date: string;
+ day_of_week: number;
+ approved_count: number;
+ pending_count: number;
+ present_count: number;
+ headcount: number;
+ coverage_pct: number;
+ employees_on_leave: Array<{
+ employee_name: string;
+ status: string;
+ status_label?: string;
+ leave_type: string;
+ half_day_period?: 'am' | 'pm' | null;
+ }>;
 }
 
 export interface LeaveCalendarData {
-  year: number;
-  month: number;
-  headcount: number;
-  coverage_policy?: { success_pct: number; warning_pct: number };
-  days: LeaveCalendarDay[];
+ year: number;
+ month: number;
+ headcount: number;
+ coverage_policy?: { success_pct: number; warning_pct: number };
+ days: LeaveCalendarDay[];
 }
 
 export type { Department };

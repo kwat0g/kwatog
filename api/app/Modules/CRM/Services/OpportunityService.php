@@ -6,6 +6,7 @@ namespace App\Modules\CRM\Services;
 
 use App\Common\Exceptions\BusinessRuleException;
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\SettingsService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\SearchOperator;
 use App\Modules\Accounting\Models\Customer;
@@ -22,6 +23,7 @@ class OpportunityService
 {
     public function __construct(
         private readonly DocumentSequenceService $sequences,
+        private readonly SettingsService $settings,
     ) {}
 
     public function list(array $filters): LengthAwarePaginator
@@ -74,14 +76,17 @@ class OpportunityService
     public function createFromLead(Lead $lead): Opportunity
     {
         return DB::transaction(function () use ($lead) {
+            if ($lead->estimated_value === null) {
+                throw new BusinessRuleException('Lead must have an estimated value before it can be converted to an opportunity.');
+            }
             $opportunity = Opportunity::create([
                 'opportunity_number' => $this->sequences->generate('opportunity'),
                 'lead_id'            => $lead->id,
                 'customer_id'        => $lead->customer_id ?? $this->resolveOrFailCustomer($lead),
                 'title'              => $lead->company_name,
                 'stage'              => OpportunityStage::Prospecting->value,
-                'probability'        => 10,
-                'estimated_value'    => $lead->estimated_value ?? '0.00',
+                'probability'        => $this->settings->requiredInt('crm.opportunity.initial_probability', 0, 100),
+                'estimated_value'    => $lead->estimated_value,
                 'assigned_to'        => $lead->assigned_to,
             ]);
             return $this->show($opportunity->fresh());

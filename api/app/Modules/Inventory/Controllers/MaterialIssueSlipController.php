@@ -36,4 +36,10 @@ class MaterialIssueSlipController
         }
         return (new MaterialIssueSlipResource($slip))->response()->setStatusCode(201);
     }
+
+    public function cancel(MaterialIssueSlip $materialIssueSlip, Request $request): MaterialIssueSlipResource
+    {
+        $this->service->cancel($materialIssueSlip, $request->user());
+        return new MaterialIssueSlipResource($this->service->show($materialIssueSlip));
+    }
 }

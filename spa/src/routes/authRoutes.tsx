@@ -11,40 +11,40 @@ const ForgotPasswordPage = lazy(() => import('@/pages/auth/forgot-password'));
 const ResetPasswordPage = lazy(() => import('@/pages/auth/reset-password'));
 
 export const authRoutes = (
-  <>
-    {/* Restore an existing cookie session before showing the login form. */}
-    <Route
-      element={
-        <GuestGuard>
-          <AuthLayout />
-        </GuestGuard>
-      }
-    >
-      <Route
-        path="/login"
-        element={
-          <Suspense fallback={<SkeletonForm />}>
-            <LoginPage />
-          </Suspense>
-        }
-      />
-    </Route>
+ <>
+ {/* Restore an existing cookie session before showing the login form. */}
+ <Route
+ element={
+ <GuestGuard>
+ <AuthLayout />
+ </GuestGuard>
+ }
+ >
+ <Route
+ path="/login"
+ element={
+ <Suspense fallback={<SkeletonForm />}>
+ <LoginPage />
+ </Suspense>
+ }
+ />
+ </Route>
 
-    {/* Password recovery remains available without a session. */}
-    <Route element={<AuthLayout />}>
-      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-      <Route path="/reset-password" element={<ResetPasswordPage />} />
-    </Route>
+ {/* Password recovery remains available without a session. */}
+ <Route element={<AuthLayout />}>
+ <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+ <Route path="/reset-password" element={<ResetPasswordPage />} />
+ </Route>
 
-    <Route
-      path="/change-password"
-      element={
-        <AuthGuard>
-          <AuthLayout />
-        </AuthGuard>
-      }
-    >
-      <Route index element={<ChangePasswordPage />} />
-    </Route>
-  </>
+ <Route
+ path="/change-password"
+ element={
+ <AuthGuard>
+ <AuthLayout />
+ </AuthGuard>
+ }
+ >
+ <Route index element={<ChangePasswordPage />} />
+ </Route>
+ </>
 );

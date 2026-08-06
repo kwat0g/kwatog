@@ -12,58 +12,58 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import type { StockLevel } from '@/types/inventory';
 
 export default function StockLevelsPage() {
-  const navigate = useNavigate();
-  const [search] = useSearchParams();
-  const itemFilter = search.get('item_id') ?? '';
-  const [filters, setFilters] = useState<Record<string, unknown>>({ page: 1, per_page: 50, item_id: itemFilter || undefined });
+ const navigate = useNavigate();
+ const [search] = useSearchParams();
+ const itemFilter = search.get('item_id') ?? '';
+ const [filters, setFilters] = useState<Record<string, unknown>>({ page: 1, per_page: 50, item_id: itemFilter || undefined });
 
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['inventory', 'stock-levels', filters],
-    queryFn: () => stockLevelsApi.list(filters),
-    placeholderData: (prev) => prev });
-  const { data: itemOptions } = useQuery({
-    queryKey: ['inventory', 'items', 'options'],
-    queryFn: itemsApi.options,
-    staleTime: 5 * 60 * 1000 });
+ const { data, isLoading, isError, refetch } = useQuery({
+ queryKey: ['inventory', 'stock-levels', filters],
+ queryFn: () => stockLevelsApi.list(filters),
+ placeholderData: (prev) => prev });
+ const { data: itemOptions } = useQuery({
+ queryKey: ['inventory', 'items', 'options'],
+ queryFn: itemsApi.options,
+ staleTime: 5 * 60 * 1000 });
 
-  const columns: Column<StockLevel>[] = [
-    { key: 'item', header: 'Item', cell: (r) => (
-      <div>
-        <span className="font-mono">{r.item?.code}</span>
-        <div className="text-xs text-muted">{r.item?.name}</div>
-      </div>
-    ) },
-    { key: 'loc', header: 'Location', cell: (r) => <span className="font-mono">{r.location?.full_code}</span> },
-    { key: 'qty', header: 'Quantity', align: 'right', cell: (r) => <NumCell>{Number(r.quantity).toFixed(3)}</NumCell> },
-    { key: 'res', header: 'Reserved', align: 'right', cell: (r) => <NumCell>{Number(r.reserved_quantity).toFixed(3)}</NumCell> },
-    { key: 'avail', header: 'Available', align: 'right', cell: (r) => <NumCell>{Number(r.available).toFixed(3)}</NumCell> },
-    { key: 'wac', header: 'WAC', align: 'right', cell: (r) => <NumCell>{Number(r.weighted_avg_cost).toFixed(4)}</NumCell> },
-    { key: 'val', header: 'Total value', align: 'right', cell: (r) => <NumCell className="font-medium">{Number(r.total_value).toFixed(2)}</NumCell> },
-  ];
+ const columns: Column<StockLevel>[] = [
+ { key: 'item', header: 'Item', cell: (r) => (
+ <div>
+ <span className="font-mono">{r.item?.code}</span>
+ <div className="text-xs text-muted">{r.item?.name}</div>
+ </div>
+ ) },
+ { key: 'loc', header: 'Location', cell: (r) => <span className="font-mono">{r.location?.full_code}</span> },
+ { key: 'qty', header: 'Quantity', align: 'right', cell: (r) => <NumCell>{Number(r.quantity).toFixed(3)}</NumCell> },
+ { key: 'res', header: 'Reserved', align: 'right', cell: (r) => <NumCell>{Number(r.reserved_quantity).toFixed(3)}</NumCell> },
+ { key: 'avail', header: 'Available', align: 'right', cell: (r) => <NumCell>{Number(r.available).toFixed(3)}</NumCell> },
+ { key: 'wac', header: 'WAC', align: 'right', cell: (r) => <NumCell>{Number(r.weighted_avg_cost).toFixed(4)}</NumCell> },
+ { key: 'val', header: 'Total value', align: 'right', cell: (r) => <NumCell className="font-medium">{Number(r.total_value).toFixed(2)}</NumCell> },
+ ];
 
-  const filterConfig: FilterConfig[] = [
-    { key: 'item_type', label: 'Type', type: 'select', options: [
-      { value: '', label: 'All' },
-      ...(itemOptions?.item_types ?? []),
-    ]},
-  ];
+ const filterConfig: FilterConfig[] = [
+ { key: 'item_type', label: 'Type', type: 'select', options: [
+ { value: '', label: 'All' },
+ ...(itemOptions?.item_types ?? []),
+ ]},
+ ];
 
-  return (
-    <div>
-      <PageHeader title="Stock levels" backTo="/inventory/items" backLabel="Items" subtitle={data ? `${data.meta.total} entries` : undefined} />
-      <FilterBar filters={filterConfig} values={filters}
-        onSearch={(s) => setFilters(f => ({ ...f, search: s, page: 1 }))}
-        onFilter={(k, v) => setFilters(f => ({ ...f, [k]: v, page: 1 }))}
-        searchPlaceholder="Search item…" />
-      {isLoading && !data && <SkeletonTable columns={7} rows={8} />}
-      {isError && <EmptyState icon="alert-circle" title="Failed to load stock" action={<Button onClick={() => refetch()}>Retry</Button>} />}
-      {data && data.data.length === 0 && <EmptyState icon="inbox" title="No stock found" />}
-      {data && data.data.length > 0 && (
-        <div className="px-5 py-4">
-          <DataTable onRowClick={(r) => navigate(`/inventory/items/${r.item?.id}`)}
-            columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters(f => ({ ...f, page }))} />
-        </div>
-      )}
-    </div>
-  );
+ return (
+ <div>
+ <PageHeader title="Stock levels" backTo="/inventory/items" backLabel="Items" subtitle={data ? `${data.meta.total} entries` : undefined} />
+ <FilterBar filters={filterConfig} values={filters}
+ onSearch={(s) => setFilters(f => ({ ...f, search: s, page: 1 }))}
+ onFilter={(k, v) => setFilters(f => ({ ...f, [k]: v, page: 1 }))}
+ searchPlaceholder="Search item…" />
+ {isLoading && !data && <SkeletonTable columns={7} rows={8} />}
+ {isError && <EmptyState icon="alert-circle" title="Failed to load stock" action={<Button onClick={() => refetch()}>Retry</Button>} />}
+ {data && data.data.length === 0 && <EmptyState icon="inbox" title="No stock found" />}
+ {data && data.data.length > 0 && (
+ <div className="px-5 py-4">
+ <DataTable onRowClick={(r) => navigate(`/inventory/items/${r.item?.id}`)}
+ columns={columns} data={data.data} meta={data.meta} onPageChange={(page) => setFilters(f => ({ ...f, page }))} />
+ </div>
+ )}
+ </div>
+ );
 }

@@ -6,6 +6,7 @@ namespace App\Modules\SupplyChain\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Str;
 
 class ShipmentResource extends JsonResource
 {
@@ -15,6 +16,7 @@ class ShipmentResource extends JsonResource
             'id'                       => $this->hash_id,
             'shipment_number'          => $this->shipment_number,
             'status'                   => $this->status instanceof \BackedEnum ? $this->status->value : $this->status,
+            'status_label'             => Str::headline((string) ($this->status instanceof \BackedEnum ? $this->status->value : $this->status)),
             'carrier'                  => $this->carrier,
             'vessel'                   => $this->vessel,
             'container_number'         => $this->container_number,
@@ -49,6 +51,7 @@ class ShipmentResource extends JsonResource
                 ShipmentDocumentResource::collection($this->documents)->resolve()),
             'created_at'               => optional($this->created_at)?->toISOString(),
             'updated_at'               => optional($this->updated_at)?->toISOString(),
+            'deleted_at'               => optional($this->deleted_at)?->toIso8601String(),
         ];
     }
 }

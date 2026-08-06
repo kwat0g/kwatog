@@ -31,10 +31,10 @@ function CapabilityCard({ cap, index }: { cap: Capability; index: number }) {
         </span>
       </div>
 
-      <h3 className="mt-6 font-display text-xl font-medium tracking-tight text-landing-text">
+      <h3 className="mt-8 font-display text-2xl font-semibold tracking-[-0.02em] text-landing-text">
         {cap.title}
       </h3>
-      <p className="mt-2.5 font-sans text-[14px] leading-relaxed text-landing-text-secondary">
+      <p className="mt-3 font-sans text-base font-light leading-relaxed text-landing-text-secondary">
         {cap.blurb}
       </p>
     </article>

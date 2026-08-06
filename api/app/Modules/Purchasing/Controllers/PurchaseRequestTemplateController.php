@@ -95,6 +95,12 @@ class PurchaseRequestTemplateController
         return response()->json(null, 204);
     }
 
+    public function restore(PurchaseRequestTemplate $template): JsonResponse
+    {
+        $template->restore();
+        return response()->json(['message' => 'Purchase request template restored.']);
+    }
+
     private function decodeDepartmentId(Request $request): void
     {
         if (! $request->filled('department_id')) {

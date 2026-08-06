@@ -10,6 +10,7 @@ use App\Modules\Auth\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
  * ADV1 — Each row is one proof file (deposit slip, bank confirmation, etc.)
@@ -17,7 +18,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class DisbursementProof extends Model
 {
-    use HasFactory, HasHashId, HasAuditLog;
+    use HasFactory, HasHashId, HasAuditLog, SoftDeletes;
 
     // Migration 0151 created this as `payroll_disbursement_proofs`; without an
     // explicit table the model would default to `disbursement_proofs` (which

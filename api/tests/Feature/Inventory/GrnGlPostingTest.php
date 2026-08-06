@@ -19,6 +19,7 @@ use App\Modules\Inventory\Services\GrnService;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Purchasing\Models\PurchaseOrderItem;
+use App\Modules\Quality\Services\InspectionService;
 use Database\Seeders\ChartOfAccountsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -117,6 +118,20 @@ class GrnGlPostingTest extends TestCase
                 'unit_cost' => $row['unit_cost'],
             ]);
         }
+
+        // F-06 — the incoming-QC gate is fail-closed now. buildGrn creates the
+        // GRN directly (bypassing GrnService::create()'s synchronous inspection
+        // creation), so it must attach a passed inspection itself or accept()
+        // refuses to run.
+        $firstLine = $grn->items->first();
+        $inspection = app(InspectionService::class)->createIncomingForItem(
+            Item::query()->findOrFail($firstLine->item_id),
+            max(1, (int) $firstLine->quantity_received),
+            $grn->id,
+            $this->user,
+        );
+        $inspection->update(['status' => 'passed']);
+        $grn->refresh();
 
         return $grn->fresh(['items']);
     }

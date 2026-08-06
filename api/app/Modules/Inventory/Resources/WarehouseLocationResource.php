@@ -27,12 +27,14 @@ class WarehouseLocationResource extends JsonResource
                 'name'      => $this->zone->name,
                 'code'      => $this->zone->code,
                 'zone_type' => (string) $this->zone->zone_type?->value,
+                'zone_type_label' => $this->zone->zone_type?->label(),
                 'warehouse' => $whLoaded ? [
                     'id'   => $this->zone->warehouse->hash_id,
                     'name' => $this->zone->warehouse->name,
                     'code' => $this->zone->warehouse->code,
                 ] : null,
             ] : null),
+            'deleted_at' => optional($this->deleted_at)?->toIso8601String(),
         ];
     }
 }

@@ -22,6 +22,7 @@ class ItemCategoryResource extends JsonResource
             'children'  => self::collection($this->whenLoaded('children')),
             'created_at'=> optional($this->created_at)->toIso8601String(),
             'updated_at'=> optional($this->updated_at)->toIso8601String(),
+            'deleted_at'=> optional($this->deleted_at)?->toIso8601String(),
         ];
     }
 }

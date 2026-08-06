@@ -18,112 +18,112 @@ import { onFormInvalid } from '@/lib/formErrors';
 import type { ApiValidationError } from '@/types';
 
 const schema = z.object({
-  name: z.string().min(1, 'Name is required').max(200),
-  description: z.string().max(5000).optional().or(z.literal('')),
-  category: z.string().min(1, 'Category is required'),
-  department_id: z.coerce.number().int().optional(),
-  acquisition_date: z.string().min(1, 'Acquisition date required'),
-  acquisition_cost: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Enter amount like 100000.00'),
-  useful_life_years: z.coerce.number().int().min(1).max(100),
-  salvage_value: z.string().regex(/^\d+(\.\d{1,2})?$/).optional().or(z.literal('')),
-  location: z.string().max(100).optional().or(z.literal('')),
+ name: z.string().min(1, 'Name is required').max(200),
+ description: z.string().max(5000).optional().or(z.literal('')),
+ category: z.string().min(1, 'Category is required'),
+ department_id: z.coerce.number().int().optional(),
+ acquisition_date: z.string().min(1, 'Acquisition date required'),
+ acquisition_cost: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Enter amount like 100000.00'),
+ useful_life_years: z.coerce.number().int().min(1).max(100),
+ salvage_value: z.string().regex(/^\d+(\.\d{1,2})?$/).optional().or(z.literal('')),
+ location: z.string().max(100).optional().or(z.literal('')),
 });
 type FormValues = z.infer<typeof schema>;
 
 export default function CreateAssetPage() {
-  const navigate = useNavigate();
-  const qc = useQueryClient();
-  const { register, handleSubmit, setError, watch, setValue, formState: { errors, isSubmitting } } = useForm<FormValues>({
-    resolver: zodResolver(schema),
-    defaultValues: { category: '', salvage_value: '' },
-  });
+ const navigate = useNavigate();
+ const qc = useQueryClient();
+ const { register, handleSubmit, setError, watch, setValue, formState: { errors, isSubmitting } } = useForm<FormValues>({
+ resolver: zodResolver(schema),
+ defaultValues: { category: '', salvage_value: '' },
+ });
 
-  const { data: deptData, isLoading: deptLoading } = useQuery({
-    queryKey: ['hr', 'departments', 'list'],
-    queryFn: () => departmentsApi.list({ per_page: 200 }),
-    staleTime: 300_000,
-  });
-  const { data: assetOptions } = useQuery({
-    queryKey: ['assets', 'options'],
-    queryFn: () => assetsApi.options(),
-  });
+ const { data: deptData, isLoading: deptLoading } = useQuery({
+ queryKey: ['hr', 'departments', 'list'],
+ queryFn: () => departmentsApi.list({ per_page: 200 }),
+ staleTime: 300_000,
+ });
+ const { data: assetOptions } = useQuery({
+ queryKey: ['assets', 'options'],
+ queryFn: () => assetsApi.options(),
+ });
 
-  useEffect(() => {
-    if (!watch('category') && assetOptions?.categories?.length) {
-      setValue('category', assetOptions.categories[0].value);
-    }
-  }, [assetOptions, setValue, watch]);
+ useEffect(() => {
+ if (!watch('category') && assetOptions?.categories?.length) {
+ setValue('category', assetOptions.categories[0].value);
+ }
+ }, [assetOptions, setValue, watch]);
 
-  const mutation = useMutation({
-    mutationFn: (data: FormValues) => assetsApi.create({
-      ...data,
-      category: data.category as import('@/types/assets').AssetCategory,
-      description: data.description || undefined,
-      salvage_value: data.salvage_value || undefined,
-      location: data.location || undefined,
-      department_id: data.department_id || null,
-    }),
-    onSuccess: (asset) => {
-      qc.invalidateQueries({ queryKey: ['assets'] });
-      toast.success(`Asset ${asset.asset_code} created.`);
-      navigate(`/assets/${asset.id}`);
-    },
-    onError: (err: AxiosError<ApiValidationError>) => {
-      if (err.response?.status === 422 && err.response.data.errors) {
-        Object.entries(err.response.data.errors).forEach(([k, v]) =>
-          setError(k as keyof FormValues, { type: 'server', message: v[0] }));
-        toast.error(err.response?.data?.message || 'Validation failed.');
-      }
-    },
-  });
+ const mutation = useMutation({
+ mutationFn: (data: FormValues) => assetsApi.create({
+ ...data,
+ category: data.category as import('@/types/assets').AssetCategory,
+ description: data.description || undefined,
+ salvage_value: data.salvage_value || undefined,
+ location: data.location || undefined,
+ department_id: data.department_id || null,
+ }),
+ onSuccess: (asset) => {
+ qc.invalidateQueries({ queryKey: ['assets'] });
+ toast.success(`Asset ${asset.asset_code} created.`);
+ navigate(`/assets/${asset.id}`);
+ },
+ onError: (err: AxiosError<ApiValidationError>) => {
+ if (err.response?.status === 422 && err.response.data.errors) {
+ Object.entries(err.response.data.errors).forEach(([k, v]) =>
+ setError(k as keyof FormValues, { type: 'server', message: v[0] }));
+ toast.error(err.response?.data?.message || 'Validation failed.');
+ }
+ },
+ });
 
-  return (
-    <div>
-      <PageHeader title="New asset" backTo="/assets" backLabel="Assets" />
-      <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-3xl mx-auto px-5 py-4">
-        <fieldset className="mb-6">
-          <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">Identification</legend>
-          <Input label="Name" {...register('name')} error={errors.name?.message} required />
-          <div className="grid grid-cols-2 gap-3 mt-3">
-            <Select label="Category" {...register('category')} error={errors.category?.message} required>
-              {(assetOptions?.categories ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </Select>
-            <Select label="Department" {...register('department_id')} error={errors.department_id?.message} disabled={deptLoading}>
-              <option value="">{deptLoading ? 'Loading…' : '— None —'}</option>
-              {deptData?.data?.map((d) => (
-                <option key={d.id} value={d.id}>{d.name}</option>
-              ))}
-            </Select>
-          </div>
-          <div className="mt-3">
-            <Input label="Location" {...register('location')} error={errors.location?.message} placeholder="Asset location" />
-          </div>
-          <div className="mt-3">
-            <Textarea label="Description" {...register('description')} rows={3} error={errors.description?.message} />
-          </div>
-        </fieldset>
+ return (
+ <div>
+ <PageHeader title="New asset" backTo="/assets" backLabel="Assets" />
+ <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-3xl mx-auto px-5 py-4">
+ <fieldset className="mb-6">
+ <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">Identification</legend>
+ <Input label="Name" {...register('name')} error={errors.name?.message} required />
+ <div className="grid grid-cols-2 gap-3 mt-3">
+ <Select label="Category" {...register('category')} error={errors.category?.message} required>
+ {(assetOptions?.categories ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+ </Select>
+ <Select label="Department" {...register('department_id')} error={errors.department_id?.message} disabled={deptLoading}>
+ <option value="">{deptLoading ? 'Loading…' : '— None —'}</option>
+ {deptData?.data?.map((d) => (
+ <option key={d.id} value={d.id}>{d.name}</option>
+ ))}
+ </Select>
+ </div>
+ <div className="mt-3">
+ <Input label="Location" {...register('location')} error={errors.location?.message} placeholder="Asset location" />
+ </div>
+ <div className="mt-3">
+ <Textarea label="Description" {...register('description')} rows={3} error={errors.description?.message} />
+ </div>
+ </fieldset>
 
-        <fieldset className="mb-6">
-          <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">Acquisition</legend>
-          <div className="grid grid-cols-3 gap-3">
-            <Input label="Acquisition date" type="date" {...register('acquisition_date')} error={errors.acquisition_date?.message} required />
-            <Input label="Acquisition cost" {...register('acquisition_cost')} error={errors.acquisition_cost?.message}
-              className="font-mono" placeholder="0.00" required />
-            <Input label="Useful life (years)" type="number" {...register('useful_life_years')} error={errors.useful_life_years?.message} required />
-          </div>
-          <div className="mt-3 max-w-xs">
-            <Input label="Salvage value" {...register('salvage_value')} error={errors.salvage_value?.message}
-              className="font-mono" placeholder="0.00" />
-          </div>
-        </fieldset>
+ <fieldset className="mb-6">
+ <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">Acquisition</legend>
+ <div className="grid grid-cols-3 gap-3">
+ <Input label="Acquisition date" type="date" {...register('acquisition_date')} error={errors.acquisition_date?.message} required />
+ <Input label="Acquisition cost" {...register('acquisition_cost')} error={errors.acquisition_cost?.message}
+ className="font-mono" placeholder="0.00" required />
+ <Input label="Useful life (years)" type="number" {...register('useful_life_years')} error={errors.useful_life_years?.message} required />
+ </div>
+ <div className="mt-3 max-w-xs">
+ <Input label="Salvage value" {...register('salvage_value')} error={errors.salvage_value?.message}
+ className="font-mono" placeholder="0.00" />
+ </div>
+ </fieldset>
 
-        <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
-          <Button type="button" variant="secondary" onClick={() => navigate('/assets')}>Cancel</Button>
-          <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending} loading={mutation.isPending}>
-            {mutation.isPending ? 'Creating…' : 'Create asset'}
-          </Button>
-        </div>
-      </form>
-    </div>
-  );
+ <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+ <Button type="button" variant="secondary" onClick={() => navigate('/assets')}>Cancel</Button>
+ <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending} loading={mutation.isPending}>
+ {mutation.isPending ? 'Creating…' : 'Create asset'}
+ </Button>
+ </div>
+ </form>
+ </div>
+ );
 }

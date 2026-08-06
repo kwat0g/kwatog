@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Dashboard\Services;
 
+use App\Common\Services\SettingsService;
 use App\Common\Models\ApprovalRecord;
 use App\Modules\Attendance\Models\OvertimeRequest;
 use App\Modules\Auth\Models\User;
@@ -36,6 +37,8 @@ use Throwable;
  */
 class BadgeService
 {
+    public function __construct(private readonly SettingsService $settings) {}
+
     /**
      * Build the per-slot badge map for the given user.
      *
@@ -47,7 +50,7 @@ class BadgeService
      */
     public function for(User $user): array
     {
-        $ttl = (int) config('badges.cache_ttl', 30);
+        $ttl = $this->settings->requiredInt('dashboard.badges.cache_ttl_seconds', 1);
         $version = self::version();
 
         return Cache::remember(
@@ -205,6 +208,14 @@ class BadgeService
                     ->count(),
             ],
 
+            // HR > Training expiry — employee trainings that have expired.
+            'training_expiry' => [
+                'permissions' => ['hr.trainings.view'],
+                'counter'     => fn (): int => \App\Modules\HR\Models\EmployeeTraining::query()
+                    ->where('status', \App\Modules\HR\Enums\EmployeeTrainingStatus::Expired->value)
+                    ->count(),
+            ],
+
             // Production > Work orders — overdue (planned_end passed, not done).
             'work_orders' => [
                 'permissions' => ['production.work_orders.view'],
@@ -255,9 +266,8 @@ class BadgeService
 
     private function severity(int $count): string
     {
-        $danger  = (int) config('badges.severity.danger', 20);
-        $warning = (int) config('badges.severity.warning', 0);
-
+        $danger  = $this->settings->requiredInt('dashboard.badges.danger_threshold', 0);
+        $warning = $this->settings->requiredInt('dashboard.badges.warning_threshold', 0);
         if ($count > $danger)  return 'danger';
         if ($count > $warning) return 'warning';
         return 'neutral';

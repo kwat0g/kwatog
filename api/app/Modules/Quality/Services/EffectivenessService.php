@@ -159,8 +159,9 @@ class EffectivenessService
 
             $escalationDays = $this->positiveIntSetting('quality.effectiveness.overdue_escalation_days');
             if ($overdueDays <= -$escalationDays) {
+                $roles = array_values(array_filter((array) $this->settings->get('quality.effectiveness.overdue_notification_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
                 $managers = User::query()
-                    ->whereHas('role', fn ($q) => $q->where('slug', 'production_manager'))
+                    ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                     ->where('is_active', true)
                     ->get();
                 if ($managers->isNotEmpty()) {

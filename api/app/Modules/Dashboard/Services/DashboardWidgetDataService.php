@@ -4,13 +4,27 @@ declare(strict_types=1);
 
 namespace App\Modules\Dashboard\Services;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
+use App\Modules\Accounting\Enums\InvoiceStatus;
+use App\Modules\Accounting\Enums\BillStatus;
+use App\Modules\Production\Enums\WorkOrderStatus;
+use App\Modules\CRM\Enums\SalesOrderStatus;
+use App\Modules\Quality\Enums\InspectionStatus;
+use App\Modules\Quality\Enums\NcrStatus;
+use App\Modules\Inventory\Enums\GrnStatus;
+use App\Modules\Inventory\Enums\MaterialIssueStatus;
+use App\Modules\MRP\Enums\MachineStatus;
+use App\Modules\SupplyChain\Enums\DeliveryStatus;
+use App\Modules\Purchasing\Enums\PurchaseRequestStatus;
+use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
 /** Resolves configurable dashboard widgets from live transactional tables. */
 class DashboardWidgetDataService
 {
+    public function __construct(private readonly SettingsService $settings) {}
     /** @return array<string, array{key:string,value:string|null,kind:string,helper:?string,available:bool,updated_at:string}> */
     public function summaries(array $keys, User $user): array
     {
@@ -38,6 +52,10 @@ class DashboardWidgetDataService
     private function summary(string $key, User $user): array
     {
         $today = now()->toDateString();
+        $ganttDays = $this->settings->requiredInt('dashboard.widgets.gantt_horizon_days', 0);
+        $payablesDays = $this->settings->requiredInt('dashboard.widgets.payables_horizon_days', 0);
+        $probationDays = $this->settings->requiredInt('dashboard.widgets.probation_horizon_days', 0);
+        $deliveryDays = $this->settings->requiredInt('dashboard.widgets.delivery_horizon_days', 0);
         $employeeId = $user->employee_id ? (int) $user->employee_id : null;
         $departmentId = $employeeId ? DB::table('employees')->where('id', $employeeId)->value('department_id') : null;
 
@@ -46,48 +64,60 @@ class DashboardWidgetDataService
                 DB::table('work_order_outputs')->whereDate('recorded_at', $today)->sum(DB::raw('good_count + reject_count')),
                 'units recorded today',
             ),
-            'production.active_wo' => $this->number(DB::table('work_orders')->whereIn('status', ['confirmed', 'in_progress', 'paused'])->count(), 'confirmed, running, or paused'),
+            'production.active_wo' => $this->number(DB::table('work_orders')->whereIn('status', [
+                WorkOrderStatus::Confirmed->value,
+                WorkOrderStatus::InProgress->value,
+                WorkOrderStatus::Paused->value,
+            ])->count(), 'confirmed, running, or paused'),
             'production.wo_breakdown' => $this->breakdown('work_orders', 'status'),
-            'production.gantt_mini' => $this->number(DB::table('work_orders')->whereBetween('planned_start', [now()->startOfDay(), now()->addDays(7)->endOfDay()])->whereNotIn('status', ['completed', 'closed', 'cancelled'])->count(), 'scheduled in the next 7 days'),
-            'machine.utilization', 'oee.gauges' => $this->ratio(DB::table('machines')->where('status', 'running')->count(), DB::table('machines')->count(), 'machines running now'),
-            'machine.status' => $this->number(DB::table('machines')->where('status', 'running')->count(), DB::table('machines')->where('status', 'breakdown')->count().' in breakdown'),
-            'chain.stage_breakdown' => $this->number(DB::table('sales_orders')->whereNotIn('status', ['delivered', 'invoiced', 'cancelled'])->count(), 'active order-to-cash chains'),
+            'production.gantt_mini' => $this->number(DB::table('work_orders')->whereBetween('planned_start', [now()->startOfDay(), now()->addDays($ganttDays)->endOfDay()])->whereNotIn('status', [
+                WorkOrderStatus::Completed->value,
+                WorkOrderStatus::Closed->value,
+                WorkOrderStatus::Cancelled->value,
+            ])->count(), "scheduled in the next {$ganttDays} days"),
+            'machine.utilization', 'oee.gauges' => $this->ratio(DB::table('machines')->where('status', MachineStatus::Running->value)->count(), DB::table('machines')->count(), 'machines running now'),
+            'machine.status' => $this->number(DB::table('machines')->where('status', MachineStatus::Running->value)->count(), DB::table('machines')->where('status', MachineStatus::Breakdown->value)->count().' in breakdown'),
+            'chain.stage_breakdown' => $this->number(DB::table('sales_orders')->whereNotIn('status', [SalesOrderStatus::Delivered->value, SalesOrderStatus::Invoiced->value, SalesOrderStatus::Cancelled->value])->count(), 'active order-to-cash chains'),
 
             'qc.pareto' => $this->number(DB::table('inspections')->whereMonth('created_at', now()->month)->whereYear('created_at', now()->year)->sum('defect_count'), 'defects recorded this month'),
-            'qc.pending_inspections' => $this->number(DB::table('inspections')->whereIn('status', ['draft', 'in_progress'])->count(), 'awaiting completion'),
-            'qc.open_ncrs' => $this->number(DB::table('non_conformance_reports')->whereNotIn('status', ['closed', 'cancelled'])->count(), 'open non-conformance reports'),
+            'qc.pending_inspections' => $this->number(DB::table('inspections')->whereIn('status', [InspectionStatus::Draft->value, InspectionStatus::InProgress->value])->count(), 'awaiting completion'),
+            'qc.open_ncrs' => $this->number(DB::table('non_conformance_reports')->whereNotIn('status', [NcrStatus::Closed->value, NcrStatus::Cancelled->value])->count(), 'open non-conformance reports'),
             'qc.pass_rate' => $this->inspectionPassRate(),
             'mrp.shortages' => $this->number(DB::table('mrp_plans')->where('status', 'active')->sum('shortages_found'), 'shortage lines in active plans'),
             'material.reservations' => $this->decimal(DB::table('stock_levels')->sum('reserved_quantity'), 'units currently reserved'),
 
             'finance.cash_position' => $this->currency($this->cashPosition(), 'posted cash-account balance'),
-            'finance.ar_aging' => $this->currency(DB::table('invoices')->whereIn('status', ['finalized', 'partial', 'overdue'])->sum('balance'), 'open accounts receivable'),
-            'finance.ap_aging' => $this->currency(DB::table('bills')->whereIn('status', ['approved', 'partial', 'overdue'])->sum('balance'), 'open accounts payable'),
-            'finance.revenue_mtd' => $this->currency(DB::table('invoices')->whereDate('date', '>=', now()->startOfMonth()->toDateString())->whereNotIn('status', ['draft', 'cancelled'])->sum('total_amount'), 'invoiced month to date'),
-            'finance.unpaid_invoices' => $this->number(DB::table('invoices')->where('balance', '>', 0)->whereNotIn('status', ['draft', 'cancelled'])->count(), 'customer invoices with balance'),
-            'finance.upcoming_payables' => $this->currency(DB::table('bills')->whereBetween('due_date', [$today, now()->addDays(30)->toDateString()])->where('balance', '>', 0)->sum('balance'), 'due in the next 30 days'),
+            'finance.ar_aging' => $this->currency(DB::table('invoices')->whereIn('status', [InvoiceStatus::Finalized->value, InvoiceStatus::Partial->value])->sum('balance'), 'open accounts receivable'),
+            'finance.ap_aging' => $this->currency(DB::table('bills')->whereIn('status', [BillStatus::Unpaid->value, BillStatus::Partial->value])->sum('balance'), 'open accounts payable'),
+            'finance.revenue_mtd' => $this->currency(DB::table('invoices')->whereDate('date', '>=', now()->startOfMonth()->toDateString())->whereNotIn('status', [InvoiceStatus::Draft->value, InvoiceStatus::Cancelled->value])->sum('total_amount'), 'invoiced month to date'),
+            'finance.unpaid_invoices' => $this->number(DB::table('invoices')->where('balance', '>', 0)->whereNotIn('status', [InvoiceStatus::Draft->value, InvoiceStatus::Cancelled->value])->count(), 'customer invoices with balance'),
+            'finance.upcoming_payables' => $this->currency(DB::table('bills')->whereBetween('due_date', [$today, now()->addDays($payablesDays)->toDateString()])->where('balance', '>', 0)->sum('balance'), "due in the next {$payablesDays} days"),
 
             'hr.headcount' => $this->number(DB::table('employees')->where('status', 'active')->count(), 'active employees'),
             'hr.on_leave_today' => $this->number($this->leaveCount($today), 'approved leave today'),
             'hr.team_on_leave_today' => $this->number($this->leaveCount($today, $departmentId), 'approved leave in your department'),
             'hr.team_dtr_today' => $this->number($this->attendanceCount($today, $departmentId), 'department DTR records today'),
-            'hr.probation_alerts' => $this->number(DB::table('employees')->where('status', 'active')->whereBetween('date_regularized', [$today, now()->addDays(30)->toDateString()])->count(), 'regularization due in 30 days'),
+            'hr.probation_alerts' => $this->number(DB::table('employees')->where('status', 'active')->whereBetween('date_regularized', [$today, now()->addDays($probationDays)->toDateString()])->count(), "regularization due in {$probationDays} days"),
             'payroll.upcoming' => $this->upcomingPayroll(),
             'approvals.pending' => $this->number(DB::table('approval_records')->where('action', 'pending')->count(), 'approval requests awaiting action'),
 
-            'purchasing.open_prs' => $this->number(DB::table('purchase_requests')->whereNotIn('status', ['converted', 'rejected', 'cancelled'])->count(), 'open purchase requests'),
-            'purchasing.open_pos' => $this->number(DB::table('purchase_orders')->whereNotIn('status', ['received', 'cancelled'])->count(), 'open purchase orders'),
+            'purchasing.open_prs' => $this->number(DB::table('purchase_requests')->whereNotIn('status', [PurchaseRequestStatus::Converted->value, PurchaseRequestStatus::Rejected->value, PurchaseRequestStatus::Cancelled->value])->count(), 'open purchase requests'),
+            'purchasing.open_pos' => $this->number(DB::table('purchase_orders')->whereNotIn('status', [PurchaseOrderStatus::Received->value, PurchaseOrderStatus::Cancelled->value])->count(), 'open purchase orders'),
             'purchasing.supplier_perf' => $this->supplierPerformance(),
-            'supply.overdue_deliveries' => $this->number(DB::table('deliveries')->whereDate('scheduled_date', '<', $today)->whereNotIn('status', ['delivered', 'confirmed', 'cancelled'])->count(), 'past scheduled date'),
-            'supply.delivery_schedule' => $this->number(DB::table('deliveries')->whereBetween('scheduled_date', [$today, now()->addDays(7)->toDateString()])->whereNotIn('status', ['confirmed', 'cancelled'])->count(), 'scheduled in the next 7 days'),
+            'supply.overdue_deliveries' => $this->number(DB::table('deliveries')->whereDate('scheduled_date', '<', $today)->whereNotIn('status', [DeliveryStatus::Delivered->value, DeliveryStatus::Confirmed->value, DeliveryStatus::Cancelled->value])->count(), 'past scheduled date'),
+            'supply.delivery_schedule' => $this->number(DB::table('deliveries')->whereBetween('scheduled_date', [$today, now()->addDays($deliveryDays)->toDateString()])->whereNotIn('status', [DeliveryStatus::Confirmed->value, DeliveryStatus::Cancelled->value])->count(), "scheduled in the next {$deliveryDays} days"),
 
             'inventory.low_stock' => $this->number($this->lowStockCount(), 'items at or below reorder point'),
-            'inventory.pending_grns' => $this->number(DB::table('goods_receipt_notes')->whereNotIn('status', ['accepted', 'rejected', 'cancelled'])->count(), 'receipts awaiting completion'),
-            'inventory.pending_issues' => $this->number(DB::table('material_issue_slips')->whereIn('status', ['draft', 'pending', 'confirmed'])->count(), 'material issues not completed'),
+            'inventory.pending_grns' => $this->number(DB::table('goods_receipt_notes')->whereNotIn('status', [GrnStatus::Accepted->value, GrnStatus::Rejected->value])->count(), 'receipts awaiting completion'),
+            'inventory.pending_issues' => $this->number(DB::table('material_issue_slips')->where('status', MaterialIssueStatus::Draft->value)->count(), 'material issues not completed'),
 
             'self.payslip_summary' => $this->latestPayslip($employeeId),
-            'self.leave_balance' => $this->decimal($employeeId ? DB::table('employee_leave_balances')->where('employee_id', $employeeId)->sum('remaining') : 0, 'remaining leave days'),
-            'self.dtr_today' => $this->hours($employeeId ? DB::table('attendances')->where('employee_id', $employeeId)->whereDate('date', $today)->value('regular_hours') : 0, 'regular hours recorded today'),
+            'self.leave_balance' => $employeeId
+                ? $this->decimal(DB::table('employee_leave_balances')->where('employee_id', $employeeId)->sum('remaining'), 'remaining leave days')
+                : ['value' => null, 'kind' => 'decimal', 'helper' => 'No employee is linked to this account'],
+            'self.dtr_today' => $employeeId
+                ? $this->hours(DB::table('attendances')->where('employee_id', $employeeId)->whereDate('date', $today)->value('regular_hours'), 'regular hours recorded today')
+                : ['value' => null, 'kind' => 'hours', 'helper' => 'No employee is linked to this account'],
             'self.pending_requests' => $this->number($this->selfPendingCount($employeeId), 'your pending requests'),
             'alerts' => $this->number(DB::table('alerts')->where('is_dismissed', false)->count(), 'open operational alerts'),
             default => throw new \InvalidArgumentException("Unsupported dashboard widget: {$key}"),
@@ -97,8 +127,24 @@ class DashboardWidgetDataService
     private function number(mixed $value, ?string $helper): array { return ['value' => (string) (int) $value, 'kind' => 'number', 'helper' => $helper]; }
     private function decimal(mixed $value, ?string $helper): array { return ['value' => number_format((float) $value, 2, '.', ''), 'kind' => 'decimal', 'helper' => $helper]; }
     private function currency(mixed $value, ?string $helper): array { return ['value' => number_format((float) $value, 2, '.', ''), 'kind' => 'currency', 'helper' => $helper]; }
-    private function hours(mixed $value, ?string $helper): array { return ['value' => number_format((float) ($value ?? 0), 2, '.', ''), 'kind' => 'hours', 'helper' => $helper]; }
-    private function ratio(int $part, int $total, string $helper): array { return ['value' => number_format($total > 0 ? ($part / $total) * 100 : 0, 1, '.', ''), 'kind' => 'percent', 'helper' => $helper]; }
+    private function hours(mixed $value, ?string $helper): array
+    {
+        return [
+            'value' => $value === null ? null : number_format((float) $value, 2, '.', ''),
+            'kind' => 'hours',
+            'helper' => $value === null ? 'No hours recorded yet' : $helper,
+        ];
+    }
+    private function ratio(int $part, int $total, string $helper): array
+    {
+        // A percentage with no observations is unknown, not zero. Returning
+        // null keeps empty dashboards from presenting a fabricated KPI.
+        return [
+            'value' => $total > 0 ? number_format(($part / $total) * 100, 1, '.', '') : null,
+            'kind' => 'percent',
+            'helper' => $total > 0 ? $helper : 'No observations yet',
+        ];
+    }
 
     private function breakdown(string $table, string $column): array
     {
@@ -115,7 +161,8 @@ class DashboardWidgetDataService
 
     private function cashPosition(): float
     {
-        return (float) DB::table('journal_entry_lines as l')->join('journal_entries as j', 'j.id', '=', 'l.journal_entry_id')->join('accounts as a', 'a.id', '=', 'l.account_id')->where('j.status', 'posted')->where(function ($q) { $q->where('a.code', '1020')->orWhereRaw('LOWER(a.name) LIKE ?', ['%cash%']); })->sum(DB::raw('l.debit - l.credit'));
+        $cashCode = $this->settings->requiredString('accounting.accounts.cash_code');
+        return (float) DB::table('journal_entry_lines as l')->join('journal_entries as j', 'j.id', '=', 'l.journal_entry_id')->join('accounts as a', 'a.id', '=', 'l.account_id')->where('j.status', 'posted')->where(function ($q) use ($cashCode) { $q->where('a.code', $cashCode)->orWhereRaw('LOWER(a.name) LIKE ?', ['%cash%']); })->sum(DB::raw('l.debit - l.credit'));
     }
 
     private function leaveCount(string $today, mixed $departmentId = null): int

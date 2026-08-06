@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Admin\Resources;
 
+use App\Modules\Admin\Enums\AdminUserStatus;
 use App\Modules\Auth\Models\User;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -19,6 +20,7 @@ class AdminUserListResource extends JsonResource
             'name'  => $user->name,
             'email' => $user->email,
             'status' => $this->derivedStatus($user),
+            'status_label' => AdminUserStatus::from($this->derivedStatus($user))->label(),
             'is_active' => (bool) $user->is_active,
             'is_locked' => $user->isLocked(),
             'must_change_password' => (bool) $user->must_change_password,

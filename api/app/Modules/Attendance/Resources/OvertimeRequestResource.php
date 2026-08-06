@@ -22,10 +22,12 @@ class OvertimeRequestResource extends JsonResource
             'hours_requested' => (string) $this->hours_requested,
             'reason'          => $this->reason,
             'status'          => $this->status?->value,
+            'status_label'    => $this->status?->label(),
             'approver'        => $this->whenLoaded('approver', fn () => $this->approver ? [
                 'id'   => $this->approver->hash_id,
                 'name' => $this->approver->name,
             ] : null),
+            'approved_at'     => optional($this->approved_at)->toIso8601String(),
             'rejection_reason'=> $this->rejection_reason,
             'is_auto_detected'=> (bool) $this->is_auto_detected,
             'created_at'      => optional($this->created_at)->toIso8601String(),

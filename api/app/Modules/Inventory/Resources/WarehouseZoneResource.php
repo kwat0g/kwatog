@@ -19,6 +19,7 @@ class WarehouseZoneResource extends JsonResource
             'zone_type'    => (string) $this->zone_type?->value,
             'zone_type_label' => $this->zone_type?->label(),
             'locations'    => WarehouseLocationResource::collection($this->whenLoaded('locations')),
+            'deleted_at'    => optional($this->deleted_at)?->toIso8601String(),
         ];
     }
 }

@@ -11,11 +11,12 @@ use App\Modules\SupplyChain\Enums\ContainerType;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 /** Container tracking for multi-container shipments (resin imports typically have 2-5 containers). */
 class Container extends Model
 {
-    use HasFactory, HasHashId, HasAuditLog;
+    use HasFactory, HasHashId, HasAuditLog, SoftDeletes;
 
     protected $fillable = [
         'shipment_id', 'container_number', 'seal_number',

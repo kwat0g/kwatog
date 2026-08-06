@@ -6,6 +6,7 @@ namespace App\Modules\Accounting\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Str;
 
 class JournalEntryLineResource extends JsonResource
 {
@@ -21,7 +22,9 @@ class JournalEntryLineResource extends JsonResource
                 'code'           => $this->account->code,
                 'name'           => $this->account->name,
                 'type'           => $this->account->type?->value,
+                'type_label'     => $this->account->type?->label() ?? Str::headline((string) $this->account->type),
                 'normal_balance' => $this->account->normal_balance?->value,
+                'normal_balance_label' => $this->account->normal_balance?->label() ?? Str::headline((string) $this->account->normal_balance),
             ] : null),
         ];
     }

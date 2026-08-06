@@ -5,33 +5,33 @@ import { useSidebarStore } from '@/stores/sidebarStore';
 import { FullPageLoader } from '@/components/ui/Spinner';
 
 interface AuthGuardProps {
-  children: ReactNode;
+ children: ReactNode;
 }
 
 export function AuthGuard({ children }: AuthGuardProps) {
-  const { isAuthenticated, isLoading, user, bootstrap } = useAuthStore();
-  const location = useLocation();
+ const { isAuthenticated, isLoading, user, bootstrap } = useAuthStore();
+ const location = useLocation();
 
-  useEffect(() => {
-    if (!isAuthenticated && !user && isLoading) {
-      void bootstrap().then(() => {
-        const authedUser = useAuthStore.getState().user;
-        if (authedUser) {
-          useSidebarStore.getState().init(authedUser.sidebar_collapsed);
-        }
-      });
-    }
-  }, [isAuthenticated, user, isLoading, bootstrap]);
+ useEffect(() => {
+ if (!isAuthenticated && !user && isLoading) {
+ void bootstrap().then(() => {
+ const authedUser = useAuthStore.getState().user;
+ if (authedUser) {
+ useSidebarStore.getState().init(authedUser.sidebar_collapsed);
+ }
+ });
+ }
+ }, [isAuthenticated, user, isLoading, bootstrap]);
 
-  if (isLoading) return <FullPageLoader />;
+ if (isLoading) return <FullPageLoader />;
 
-  if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location.pathname }} replace />;
-  }
+ if (!isAuthenticated) {
+ return <Navigate to="/login" state={{ from: location.pathname }} replace />;
+ }
 
-  if (user?.must_change_password && location.pathname !== '/change-password') {
-    return <Navigate to="/change-password" replace />;
-  }
+ if (user?.must_change_password && location.pathname !== '/change-password') {
+ return <Navigate to="/change-password" replace />;
+ }
 
-  return <>{children}</>;
+ return <>{children}</>;
 }

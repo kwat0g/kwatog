@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Leave\Services;
 
+use App\Common\Support\TrashedFilter;
 use App\Modules\Leave\Models\LeaveType;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -13,6 +14,7 @@ class LeaveTypeService
     public function list(array $filters): LengthAwarePaginator
     {
         $q = LeaveType::query();
+        TrashedFilter::apply($q, $filters);
         if (!empty($filters['search'])) $q->where('name', 'ilike', "%{$filters['search']}%");
         if (array_key_exists('is_active', $filters) && $filters['is_active'] !== '') {
             $q->where('is_active', filter_var($filters['is_active'], FILTER_VALIDATE_BOOLEAN));

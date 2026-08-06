@@ -6,6 +6,7 @@ namespace App\Modules\Auth\Controllers;
 
 use App\Modules\Auth\Models\NotificationPreference;
 use App\Modules\Auth\Services\UserNotificationService;
+use App\Common\Services\NotificationCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -17,7 +18,12 @@ use Illuminate\Http\Request;
  */
 class NotificationController
 {
-    public function __construct(private readonly UserNotificationService $service) {}
+    public function __construct(private readonly UserNotificationService $service, private readonly NotificationCatalog $catalog) {}
+
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => ['groups' => $this->catalog->groups()]]);
+    }
 
     public function index(Request $request): JsonResponse
     {

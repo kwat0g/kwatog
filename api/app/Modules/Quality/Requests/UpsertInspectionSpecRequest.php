@@ -8,6 +8,7 @@ use App\Common\Concerns\ResolvesHashIds;
 use App\Modules\CRM\Models\Product;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use App\Modules\Quality\Enums\InspectionParameterType;
 
 class UpsertInspectionSpecRequest extends FormRequest
 {
@@ -32,7 +33,7 @@ class UpsertInspectionSpecRequest extends FormRequest
             'notes'                     => ['nullable', 'string', 'max:2000'],
             'items'                     => ['required', 'array', 'min:1'],
             'items.*.parameter_name'    => ['required', 'string', 'max:150'],
-            'items.*.parameter_type'    => ['required', Rule::in(['dimensional', 'visual', 'functional'])],
+            'items.*.parameter_type'    => ['required', Rule::enum(InspectionParameterType::class)],
             'items.*.unit_of_measure'   => ['nullable', 'string', 'max:20'],
             'items.*.nominal_value'     => ['nullable', 'decimal:0,4'],
             'items.*.tolerance_min'     => ['nullable', 'decimal:0,4'],

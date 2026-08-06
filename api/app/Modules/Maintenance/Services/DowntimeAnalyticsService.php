@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Maintenance\Services;
 
+use App\Common\Services\SettingsService;
 use App\Modules\Production\Enums\MachineDowntimeCategory;
 use App\Modules\Production\Models\MachineDowntime;
 use App\Modules\MRP\Models\Machine;
@@ -17,6 +18,8 @@ use Illuminate\Support\Facades\DB;
  */
 class DowntimeAnalyticsService
 {
+    public function __construct(private readonly SettingsService $settings) {}
+
     /**
      * Overall summary for a machine or all machines.
      *
@@ -31,7 +34,7 @@ class DowntimeAnalyticsService
      */
     public function summary(?int $machineId = null, ?Carbon $from = null, ?Carbon $to = null): array
     {
-        $from = $from ?? now()->subDays(30);
+        $from = $from ?? now()->subDays($this->settings->requiredInt('maintenance.downtime.default_history_days', 1));
         $to   = $to   ?? now();
 
         $base = MachineDowntime::query()
@@ -92,8 +95,9 @@ class DowntimeAnalyticsService
      *
      * @return array<int, array{date: string, total_minutes: int, breakdown_minutes: int}>
      */
-    public function dailyTrend(?int $machineId = null, int $days = 30): array
+    public function dailyTrend(?int $machineId = null, ?int $days = null): array
     {
+        $days ??= $this->historyDays();
         $from = now()->subDays($days)->startOfDay();
         $to   = now()->endOfDay();
 
@@ -123,8 +127,9 @@ class DowntimeAnalyticsService
      *
      * @return array<int, array{machine_id: int, machine_code: string, name: string, downtime_minutes: int, breakdown_count: int}>
      */
-    public function topMachines(int $limit = 10, int $days = 30): array
+    public function topMachines(int $limit = 10, ?int $days = null): array
     {
+        $days ??= $this->historyDays();
         $from = now()->subDays($days)->startOfDay();
         $to   = now()->endOfDay();
 
@@ -157,8 +162,9 @@ class DowntimeAnalyticsService
      *
      * @return array<int, array{machine: array{id: int, code: string, name: string}, summary: array}>
      */
-    public function allMachinesSummary(int $days = 30): array
+    public function allMachinesSummary(?int $days = null): array
     {
+        $days ??= $this->historyDays();
         $machines = Machine::query()
             ->orderBy('machine_code')
             ->get();
@@ -188,8 +194,9 @@ class DowntimeAnalyticsService
      *   percent: float, cumulative_percent: float
      * }>
      */
-    public function categoryPareto(?int $machineId = null, int $days = 30): array
+    public function categoryPareto(?int $machineId = null, ?int $days = null): array
     {
+        $days ??= $this->historyDays();
         $from = now()->subDays($days)->startOfDay();
         $to   = now()->endOfDay();
 
@@ -239,5 +246,10 @@ class DowntimeAnalyticsService
             'planned_maintenance' => 'Planned Maintenance',
             default               => ucwords(str_replace('_', ' ', $category)),
         };
+    }
+
+    private function historyDays(): int
+    {
+        return $this->settings->requiredInt('maintenance.downtime.default_history_days', 1, 3650);
     }
 }

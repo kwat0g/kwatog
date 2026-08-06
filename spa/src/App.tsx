@@ -33,70 +33,70 @@ import { maintenanceMobileRoutes } from '@/routes/maintenanceMobileRoutes';
 const NotFoundPage = lazy(() => import('@/pages/error/NotFound'));
 
 export default function App() {
-  return (
-    <Suspense fallback={<TopLoadingBar />}>
-      <Routes>
-        {/* Public landing page */}
-        {landingRoutes}
-        {careersRoutes}
+ return (
+ <Suspense fallback={<TopLoadingBar />}>
+ <Routes>
+ {/* Public landing page */}
+ {landingRoutes}
+ {careersRoutes}
 
-        {/* Auth routes (no AuthGuard) */}
-        {authRoutes}
+ {/* Auth routes (no AuthGuard) */}
+ {authRoutes}
 
-        {/* Authenticated app shell */}
-        <Route
-          element={
-            <AuthGuard>
-              <ErrorBoundary>
-                <AppLayout />
-              </ErrorBoundary>
-            </AuthGuard>
-          }
-        >
-          {dashboardRoutes}
-          {adminRoutes}
-          {hrRoutes}
-          {payrollRoutes}
-          {accountingRoutes}
-          {inventoryRoutes}
-          {purchasingRoutes}
-          {crmRoutes}
-          {mrpRoutes}
-          {qualityRoutes}
-          {supplyChainRoutes}
-          {productionRoutes}
-          {maintenanceRoutes}
-          {assetsRoutes}
-          {advancedRoutes}
-          {selfServiceRoutes}
-        </Route>
+ {/* Authenticated app shell */}
+ <Route
+ element={
+ <AuthGuard>
+ <ErrorBoundary>
+ <AppLayout />
+ </ErrorBoundary>
+ </AuthGuard>
+ }
+ >
+ {dashboardRoutes}
+ {adminRoutes}
+ {hrRoutes}
+ {payrollRoutes}
+ {accountingRoutes}
+ {inventoryRoutes}
+ {purchasingRoutes}
+ {crmRoutes}
+ {mrpRoutes}
+ {qualityRoutes}
+ {supplyChainRoutes}
+ {productionRoutes}
+ {maintenanceRoutes}
+ {assetsRoutes}
+ {advancedRoutes}
+ {selfServiceRoutes}
+ </Route>
 
-        {/* Driver PWA — T2.5
-            Uses AuthGuard with the main session (drivers log in via /login).
-            DriverLayout renders a mobile-first shell with no sidebar. */}
-        {driverRoutes}
+ {/* Driver PWA — T2.5
+ Uses AuthGuard with the main session (drivers log in via /login).
+ DriverLayout renders a mobile-first shell with no sidebar. */}
+ {driverRoutes}
 
-        {/* Factory Floor PWA — Mobile-first for shop floor operators.
-            Uses AuthGuard with the main session (operators log in via /login).
-            FactoryFloorLayout renders a mobile-first shell with bottom nav. */}
-        {factoryRoutes}
+ {/* Factory Floor PWA — Mobile-first for shop floor operators.
+ Uses AuthGuard with the main session (operators log in via /login).
+ FactoryFloorLayout renders a mobile-first shell with bottom nav. */}
+ {factoryRoutes}
 
-        {/* Maintenance Mobile PWA — Mobile-first for maintenance techs.
-            Uses AuthGuard with the main session (techs log in via /login).
-            MaintenanceMobileLayout renders a mobile-first shell with bottom nav. */}
-        {maintenanceMobileRoutes}
+ {/* Maintenance Mobile PWA — Mobile-first for maintenance techs.
+ Uses AuthGuard with the main session (techs log in via /login).
+ MaintenanceMobileLayout renders a mobile-first shell with bottom nav. */}
+ {maintenanceMobileRoutes}
 
-        {/* B2B Portals — Supplier + Customer
-            SECURITY: Portal routes are deliberately outside the main AuthGuard
-            because they use a separate auth session (supplier/customer accounts).
-            Each portal layout (SupplierPortalLayout / CustomerPortalLayout) performs
-            its own bootstrap + redirect-to-login. Never render a portal page
-            outside its layout wrapper — that would bypass auth entirely. */}
-        {portalRoutes}
+ {/* B2B Portals — Supplier + Customer
+ SECURITY: Portal routes are deliberately outside the main AuthGuard
+ because they use a separate auth session (supplier/customer accounts).
+ Each portal layout (SupplierPortalLayout / CustomerPortalLayout) performs
+ its own bootstrap + redirect-to-login. Never render a portal page
+ outside its layout wrapper — that would bypass auth entirely. */}
+ {portalRoutes}
 
-        {/* 404 */}
-        <Route path="*" element={<NotFoundPage />} />
-      </Routes>
-    </Suspense>
-  );
+ {/* 404 */}
+ <Route path="*" element={<NotFoundPage />} />
+ </Routes>
+ </Suspense>
+ );
 }

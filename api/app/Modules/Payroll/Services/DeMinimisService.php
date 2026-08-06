@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Payroll\Services;
 
+use App\Common\Services\SettingsService;
 use App\Common\Support\Money;
 use App\Modules\HR\Models\Employee;
 use App\Modules\Payroll\Enums\DeMinimisBenefitType;
@@ -24,6 +25,8 @@ use Illuminate\Support\Facades\Log;
  */
 class DeMinimisService
 {
+    public function __construct(private readonly SettingsService $settings) {}
+
     /**
      * Record a de minimis benefit entry.
      *
@@ -131,9 +134,9 @@ class DeMinimisService
             return $amount; // flag-only types are always fully taxable (or handled separately)
         }
 
-        if ($benefitType->isAnnual()) {
+        $annualLimit = $this->annualLimit($benefitType);
+        if ($annualLimit !== null) {
             $ytdTotal = $this->getYtdTotal($employee, $benefitType, $year);
-            $annualLimit = $benefitType->annualLimit();
             $projected = Money::add($ytdTotal, $amount);
 
             if (Money::gt($projected, $annualLimit)) {
@@ -154,13 +157,24 @@ class DeMinimisService
 
         $monthTotalFormatted = number_format((float) $monthTotal, 2, '.', '');
         $projected = Money::add($monthTotalFormatted, $amount);
-        $monthlyLimit = $benefitType->monthlyLimit();
+        $monthlyLimit = $this->monthlyLimit($benefitType);
 
         if (Money::gt($projected, $monthlyLimit)) {
             return Money::sub($projected, $monthlyLimit);
         }
 
         return Money::zero();
+    }
+
+    private function monthlyLimit(DeMinimisBenefitType $benefitType): string
+    {
+        return number_format($this->settings->requiredFloat('payroll.de_minimis.'.$benefitType->value.'.monthly_limit', 0), 2, '.', '');
+    }
+
+    private function annualLimit(DeMinimisBenefitType $benefitType): ?string
+    {
+        $value = $this->settings->get('payroll.de_minimis.'.$benefitType->value.'.annual_limit');
+        return $value === null || $value === '' ? null : number_format((float) $value, 2, '.', '');
     }
 
     /**

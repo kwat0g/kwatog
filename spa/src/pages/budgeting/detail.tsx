@@ -22,237 +22,237 @@ import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'] as const;
 
 const STATUS_VARIANT: Record<string, ChipVariant> = {
-  active: 'success', approved: 'success', submitted: 'warning',
-  draft: 'neutral', closed: 'neutral',
+ active: 'success', approved: 'success', submitted: 'warning',
+ draft: 'neutral', closed: 'neutral',
 };
 
 export default function BudgetDetailPage() {
-  const { id } = useParams<{ id: string }>();
-  const queryClient = useQueryClient();
-  const { can } = usePermission();
-  const canManage = can('budgeting.manage');
-  const canApprove = can('budgeting.approve');
-  const [confirmSubmit, setConfirmSubmit] = useState(false);
-  const [confirmApprove, setConfirmApprove] = useState(false);
-  const [confirmClose, setConfirmClose] = useState(false);
+ const { id } = useParams<{ id: string }>();
+ const queryClient = useQueryClient();
+ const { can } = usePermission();
+ const canManage = can('budgeting.manage');
+ const canApprove = can('budgeting.approve');
+ const [confirmSubmit, setConfirmSubmit] = useState(false);
+ const [confirmApprove, setConfirmApprove] = useState(false);
+ const [confirmClose, setConfirmClose] = useState(false);
 
-  const { data: budget, isLoading } = useQuery<Budget>({
-    queryKey: ['budget', id],
-    queryFn: () => budgetingApi.show(id!),
-    enabled: !!id,
-  });
-  const { data: budgetOptions } = useQuery({
-    queryKey: ['budgets', 'options'],
-    queryFn: () => budgetingApi.options(),
-    staleTime: 300_000,
-  });
+ const { data: budget, isLoading } = useQuery<Budget>({
+ queryKey: ['budget', id],
+ queryFn: () => budgetingApi.show(id!),
+ enabled: !!id,
+ });
+ const { data: budgetOptions } = useQuery({
+ queryKey: ['budgets', 'options'],
+ queryFn: () => budgetingApi.options(),
+ staleTime: 300_000,
+ });
 
-  const submitMutation = useMutation({
-    mutationFn: () => budgetingApi.submit(id!),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['budget', id] });
-      toast.success('Budget submitted for approval.');
-      setConfirmSubmit(false);
-    },
-    onError: () => toast.error('Failed to submit budget.'),
-  });
+ const submitMutation = useMutation({
+ mutationFn: () => budgetingApi.submit(id!),
+ onSuccess: () => {
+ queryClient.invalidateQueries({ queryKey: ['budget', id] });
+ toast.success('Budget submitted for approval.');
+ setConfirmSubmit(false);
+ },
+ onError: () => toast.error('Failed to submit budget.'),
+ });
 
-  const approveMutation = useMutation({
-    mutationFn: () => budgetingApi.approve(id!),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['budget', id] });
-      toast.success('Budget approved and activated.');
-      setConfirmApprove(false);
-    },
-    onError: () => toast.error('Failed to approve budget.'),
-  });
+ const approveMutation = useMutation({
+ mutationFn: () => budgetingApi.approve(id!),
+ onSuccess: () => {
+ queryClient.invalidateQueries({ queryKey: ['budget', id] });
+ toast.success('Budget approved and activated.');
+ setConfirmApprove(false);
+ },
+ onError: () => toast.error('Failed to approve budget.'),
+ });
 
-  const closeMutation = useMutation({
-    mutationFn: () => budgetingApi.close(id!),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['budget', id] });
-      toast.success('Budget closed.');
-      setConfirmClose(false);
-    },
-    onError: () => toast.error('Failed to close budget.'),
-  });
+ const closeMutation = useMutation({
+ mutationFn: () => budgetingApi.close(id!),
+ onSuccess: () => {
+ queryClient.invalidateQueries({ queryKey: ['budget', id] });
+ toast.success('Budget closed.');
+ setConfirmClose(false);
+ },
+ onError: () => toast.error('Failed to close budget.'),
+ });
 
-  if (isLoading) return <SkeletonDetail />;
-  if (!budget) return <EmptyState icon="alert-circle" title="Budget not found" />;
+ if (isLoading) return <SkeletonDetail />;
+ if (!budget) return <EmptyState icon="alert-circle" title="Budget not found" />;
 
-  const canSubmit = budget.status === 'draft' && canManage;
-  const canApproveAction = budget.status === 'submitted' && canApprove;
-  const canClose = (budget.status === 'active' || budget.status === 'approved') && canManage;
+ const canSubmit = budget.status === 'draft' && canManage;
+ const canApproveAction = budget.status === 'submitted' && canApprove;
+ const canClose = (budget.status === 'active' || budget.status === 'approved') && canManage;
 
-  return (
-    <div className="p-5 space-y-6">
-      <PageHeader
-        title={budget.name}
-        subtitle={
-          <div className="flex items-center gap-3 mt-1">
-            <Chip variant={STATUS_VARIANT[budget.status] ?? 'neutral'}>{budget.status_label ?? budget.status}</Chip>
-            {budget.department && <span className="text-sm text-muted">{budget.department.name}</span>}
-            <Chip variant="neutral">{budget.budget_type}</Chip>
-            <span className={cn(
-              'text-xs font-medium px-1.5 py-0.5 rounded',
-                budget.utilization_pct >= (budgetOptions?.critical_ratio_pct ?? Number.POSITIVE_INFINITY) ? 'text-danger-fg bg-danger-bg' :
-                budget.utilization_pct >= (budgetOptions?.warning_ratio_pct ?? Number.POSITIVE_INFINITY) ? 'text-warning-fg bg-warning-bg' : 'text-success-fg bg-success-bg'
-            )}>
-              {budget.utilization_pct}% used
-            </span>
-          </div>
-        }
-        breadcrumbs={[{ label: 'Budgeting', href: '/budgeting' }, { label: budget.name }]}
-        actions={
-          <div className="flex items-center gap-2">
-            <Link to="/budgeting" className="inline-flex items-center gap-1 text-sm text-secondary hover:text-primary transition-colors">
-              <ArrowLeft size={14} /> Back
-            </Link>
-            {canSubmit && (
-              <Button size="sm" variant="primary" onClick={() => setConfirmSubmit(true)} loading={submitMutation.isPending}>
-                <Send size={14} /> Submit for Approval
-              </Button>
-            )}
-            {canApproveAction && (
-              <Button size="sm" variant="primary" onClick={() => setConfirmApprove(true)} loading={approveMutation.isPending}>
-                <CheckCircle size={14} /> Approve
-              </Button>
-            )}
-            {canClose && (
-              <Button size="sm" variant="secondary" onClick={() => setConfirmClose(true)} loading={closeMutation.isPending}>
-                <XCircle size={14} /> Close
-              </Button>
-            )}
-          </div>
-        }
-      />
+ return (
+ <div className="p-5 space-y-6">
+ <PageHeader
+ title={budget.name}
+ subtitle={
+ <div className="flex items-center gap-3 mt-1">
+ <Chip variant={STATUS_VARIANT[budget.status] ?? 'neutral'}>{budget.status_label ?? budget.status}</Chip>
+ {budget.department && <span className="text-sm text-muted">{budget.department.name}</span>}
+ <Chip variant="neutral">{budget.budget_type}</Chip>
+ <span className={cn(
+ 'text-xs font-medium px-1.5 py-0.5 rounded',
+ budget.utilization_pct >= (budgetOptions?.critical_ratio_pct ?? Number.POSITIVE_INFINITY) ? 'text-danger-fg bg-danger-bg' :
+ budget.utilization_pct >= (budgetOptions?.warning_ratio_pct ?? Number.POSITIVE_INFINITY) ? 'text-warning-fg bg-warning-bg' : 'text-success-fg bg-success-bg'
+ )}>
+ {budget.utilization_pct}% used
+ </span>
+ </div>
+ }
+ breadcrumbs={[{ label: 'Budgeting', href: '/budgeting' }, { label: budget.name }]}
+ actions={
+ <div className="flex items-center gap-2">
+ <Link to="/budgeting" className="inline-flex items-center gap-1 text-sm text-secondary hover:text-primary transition-colors">
+ <ArrowLeft size={14} /> Back
+ </Link>
+ {canSubmit && (
+ <Button size="sm" variant="primary" onClick={() => setConfirmSubmit(true)} loading={submitMutation.isPending}>
+ <Send size={14} /> Submit for Approval
+ </Button>
+ )}
+ {canApproveAction && (
+ <Button size="sm" variant="primary" onClick={() => setConfirmApprove(true)} loading={approveMutation.isPending}>
+ <CheckCircle size={14} /> Approve
+ </Button>
+ )}
+ {canClose && (
+ <Button size="sm" variant="secondary" onClick={() => setConfirmClose(true)} loading={closeMutation.isPending}>
+ <XCircle size={14} /> Close
+ </Button>
+ )}
+ </div>
+ }
+ />
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <StatCard label="Allocated" value={formatCompactCurrency(budget.total_allocated, 1_000_000, 'M')} />
-        <StatCard label="Spent" value={formatCompactCurrency(budget.total_spent, 1_000_000, 'M')} />
-        <StatCard label="Committed" value={formatCompactCurrency(budget.total_committed, 1_000_000, 'M')} />
-        <StatCard
-          label="Available"
-          value={formatCompactCurrency(budget.available, 1_000_000, 'M')}
-          className={budget.available < 0 ? 'text-danger' : 'text-success'}
-        />
-      </div>
+ {/* Summary Cards */}
+ <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+ <StatCard label="Allocated" value={formatCompactCurrency(budget.total_allocated, 1_000_000, 'M')} />
+ <StatCard label="Spent" value={formatCompactCurrency(budget.total_spent, 1_000_000, 'M')} />
+ <StatCard label="Committed" value={formatCompactCurrency(budget.total_committed, 1_000_000, 'M')} />
+ <StatCard
+ label="Available"
+ value={formatCompactCurrency(budget.available, 1_000_000, 'M')}
+ className={budget.available < 0 ? 'text-danger' : 'text-success'}
+ />
+ </div>
 
-      {/* Utilization Bar */}
-      <div className="space-y-1.5">
-        <div className="flex justify-between text-sm">
-          <span className="text-secondary">Utilization</span>
-          <span className={cn('font-medium', budget.utilization_pct >= (budgetOptions?.critical_ratio_pct ?? Number.POSITIVE_INFINITY) ? 'text-danger' : 'text-success')}>
-            {budget.utilization_pct}%
-          </span>
-        </div>
-        <div className="h-3 bg-subtle rounded-full overflow-hidden">
-          <div
-            className={cn(
-              'h-full rounded-full transition-all duration-500',
-              budget.utilization_pct >= (budgetOptions?.critical_ratio_pct ?? Number.POSITIVE_INFINITY) ? 'bg-danger' :
-              budget.utilization_pct >= (budgetOptions?.warning_ratio_pct ?? Number.POSITIVE_INFINITY) ? 'bg-warning' : 'bg-success'
-            )}
-            style={{ width: `${Math.min(budget.utilization_pct, 100)}%` }}
-          />
-        </div>
-      </div>
+ {/* Utilization Bar */}
+ <div className="space-y-1.5">
+ <div className="flex justify-between text-sm">
+ <span className="text-secondary">Utilization</span>
+ <span className={cn('font-medium', budget.utilization_pct >= (budgetOptions?.critical_ratio_pct ?? Number.POSITIVE_INFINITY) ? 'text-danger' : 'text-success')}>
+ {budget.utilization_pct}%
+ </span>
+ </div>
+ <div className="h-3 bg-subtle rounded-full overflow-hidden">
+ <div
+ className={cn(
+ 'h-full rounded-full transition-all duration-500',
+ budget.utilization_pct >= (budgetOptions?.critical_ratio_pct ?? Number.POSITIVE_INFINITY) ? 'bg-danger' :
+ budget.utilization_pct >= (budgetOptions?.warning_ratio_pct ?? Number.POSITIVE_INFINITY) ? 'bg-warning' : 'bg-success'
+ )}
+ style={{ width: `${Math.min(budget.utilization_pct, 100)}%` }}
+ />
+ </div>
+ </div>
 
-      {/* Line Items */}
-      <Panel title="Line Items" meta={<span className="text-xs text-muted">Monthly allocations per account</span>}>
-        {budget.line_items && budget.line_items.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className={tableCls}>
-              <thead>
-                <tr className={theadTrCls}>
-                  <Th>Account</Th>
-                  {MONTHS.map((m) => (
-                    <Th align="right" className="font-mono" key={m}>{m}</Th>
-                  ))}
-                  <Th align="right">Annual</Th>
-                  <Th align="right">Actual</Th>
-                  <Th align="right">Variance</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {budget.line_items.map((li) => (
-                  <tr key={li.id} className={trCls}>
-                    <Td>
-                      <span className="font-medium">{li.account?.code}</span>
-                      <span className="ml-1.5 text-muted text-xs">{li.account?.name}</span>
-                    </Td>
-                    {MONTHS.map((m) => {
-                      const val = li[m.toLowerCase() as keyof typeof li] as number;
-                      return (
-                        <Td align="right" mono className="text-xs" key={m}>
-                          {val > 0 ? formatCompactCurrency(val, 1_000, 'K') : '-'}
-                        </Td>
-                      );
-                    })}
-                      <Td align="right" mono className="font-medium">{formatCompactCurrency(li.annual_total, 1_000, 'K')}</Td>
-                      <Td align="right" mono>{formatCompactCurrency(li.actual_total, 1_000, 'K')}</Td>
-                    <Td align="right" mono className={cn(li.variance < 0 ? 'text-danger' : 'text-success')}>
-                        {li.variance >= 0 ? '+' : '-'}{formatCompactCurrency(Math.abs(li.variance), 1_000, 'K')}
-                    </Td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p className="text-sm text-muted py-4 text-center">No line items configured.</p>
-        )}
-      </Panel>
+ {/* Line Items */}
+ <Panel title="Line Items" meta={<span className="text-xs text-muted">Monthly allocations per account</span>}>
+ {budget.line_items && budget.line_items.length > 0 ? (
+ <div className="overflow-x-auto">
+ <table className={tableCls}>
+ <thead>
+ <tr className={theadTrCls}>
+ <Th>Account</Th>
+ {MONTHS.map((m) => (
+ <Th align="right" className="font-mono" key={m}>{m}</Th>
+ ))}
+ <Th align="right">Annual</Th>
+ <Th align="right">Actual</Th>
+ <Th align="right">Variance</Th>
+ </tr>
+ </thead>
+ <tbody>
+ {budget.line_items.map((li) => (
+ <tr key={li.id} className={trCls}>
+ <Td>
+ <span className="font-medium">{li.account?.code}</span>
+ <span className="ml-1.5 text-muted text-xs">{li.account?.name}</span>
+ </Td>
+ {MONTHS.map((m) => {
+ const val = li[m.toLowerCase() as keyof typeof li] as number;
+ return (
+ <Td align="right" mono className="text-xs" key={m}>
+ {val > 0 ? formatCompactCurrency(val, 1_000, 'K') : '-'}
+ </Td>
+ );
+ })}
+ <Td align="right" mono className="font-medium">{formatCompactCurrency(li.annual_total, 1_000, 'K')}</Td>
+ <Td align="right" mono>{formatCompactCurrency(li.actual_total, 1_000, 'K')}</Td>
+ <Td align="right" mono className={cn(li.variance < 0 ? 'text-danger' : 'text-success')}>
+ {li.variance >= 0 ? '+' : '-'}{formatCompactCurrency(Math.abs(li.variance), 1_000, 'K')}
+ </Td>
+ </tr>
+ ))}
+ </tbody>
+ </table>
+ </div>
+ ) : (
+ <p className="text-sm text-muted py-4 text-center">No line items configured.</p>
+ )}
+ </Panel>
 
-      {/* Approval Info */}
-      {(budget.submitted_by || budget.approved_by) && (
-        <Panel title="Approval History">
-          <div className="space-y-2 text-sm">
-            {budget.submitted_by && (
-              <div className="flex items-center justify-between py-1.5 border-b border-default/50">
-                <span className="text-secondary">Submitted by</span>
-                <span>{budget.submitted_by.name} {budget.submitted_at ? `on ${formatDate(budget.submitted_at)}` : ''}</span>
-              </div>
-            )}
-            {budget.approved_by && (
-              <div className="flex items-center justify-between py-1.5">
-                <span className="text-secondary">Approved by</span>
-                <span>{budget.approved_by.name} {budget.approved_at ? `on ${formatDate(budget.approved_at)}` : ''}</span>
-              </div>
-            )}
-          </div>
-        </Panel>
-      )}
+ {/* Approval Info */}
+ {(budget.submitted_by || budget.approved_by) && (
+ <Panel title="Approval History">
+ <div className="space-y-2 text-sm">
+ {budget.submitted_by && (
+ <div className="flex items-center justify-between py-1.5 border-b border-default/50">
+ <span className="text-secondary">Submitted by</span>
+ <span>{budget.submitted_by.name} {budget.submitted_at ? `on ${formatDate(budget.submitted_at)}` : ''}</span>
+ </div>
+ )}
+ {budget.approved_by && (
+ <div className="flex items-center justify-between py-1.5">
+ <span className="text-secondary">Approved by</span>
+ <span>{budget.approved_by.name} {budget.approved_at ? `on ${formatDate(budget.approved_at)}` : ''}</span>
+ </div>
+ )}
+ </div>
+ </Panel>
+ )}
 
-      <ConfirmDialog
-        isOpen={confirmSubmit}
-        onClose={() => setConfirmSubmit(false)}
-        onConfirm={() => submitMutation.mutate()}
-        title="Submit budget for approval?"
-        variant="warning"
-        confirmLabel="Submit"
-        pending={submitMutation.isPending}
-      />
-      <ConfirmDialog
-        isOpen={confirmApprove}
-        onClose={() => setConfirmApprove(false)}
-        onConfirm={() => approveMutation.mutate()}
-        title="Approve budget?"
-        variant="warning"
-        confirmLabel="Approve"
-        pending={approveMutation.isPending}
-      />
-      <ConfirmDialog
-        isOpen={confirmClose}
-        onClose={() => setConfirmClose(false)}
-        onConfirm={() => closeMutation.mutate()}
-        title="Close budget period?"
-        description="No further changes or transfers will be allowed."
-        variant="warning"
-        confirmLabel="Close"
-        pending={closeMutation.isPending}
-      />
-    </div>
-  );
+ <ConfirmDialog
+ isOpen={confirmSubmit}
+ onClose={() => setConfirmSubmit(false)}
+ onConfirm={() => submitMutation.mutate()}
+ title="Submit budget for approval?"
+ variant="warning"
+ confirmLabel="Submit"
+ pending={submitMutation.isPending}
+ />
+ <ConfirmDialog
+ isOpen={confirmApprove}
+ onClose={() => setConfirmApprove(false)}
+ onConfirm={() => approveMutation.mutate()}
+ title="Approve budget?"
+ variant="warning"
+ confirmLabel="Approve"
+ pending={approveMutation.isPending}
+ />
+ <ConfirmDialog
+ isOpen={confirmClose}
+ onClose={() => setConfirmClose(false)}
+ onConfirm={() => closeMutation.mutate()}
+ title="Close budget period?"
+ description="No further changes or transfers will be allowed."
+ variant="warning"
+ confirmLabel="Close"
+ pending={closeMutation.isPending}
+ />
+ </div>
+ );
 }

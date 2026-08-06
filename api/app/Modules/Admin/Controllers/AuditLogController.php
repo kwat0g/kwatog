@@ -16,6 +16,13 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AuditLogController
 {
+    public function options(): JsonResponse
+    {
+        $actions = AuditLog::query()->whereNotNull('action')->distinct()->orderBy('action')->pluck('action')
+            ->map(static fn ($action): array => ['value' => (string) $action, 'label' => ucfirst((string) $action)])->values();
+        return response()->json(['data' => ['actions' => $actions]]);
+    }
+
     public function index(Request $request): AnonymousResourceCollection
     {
         $query = $this->filteredQuery($request)->with(['user:id,name,email,role_id', 'user.role:id,name,slug']);

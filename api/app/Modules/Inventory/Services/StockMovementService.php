@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Services;
 
+use App\Modules\Inventory\Enums\StockCountSessionStatus;
 use App\Modules\Inventory\Enums\StockMovementType;
+use App\Modules\Inventory\Enums\WarehouseZoneType;
 use App\Modules\Inventory\Events\StockMovementCompleted;
 use App\Modules\Inventory\Exceptions\InsufficientStockException;
 use App\Modules\Inventory\Exceptions\InvalidMovementException;
@@ -13,6 +15,7 @@ use App\Modules\Inventory\Models\StockLevel;
 use App\Modules\Inventory\Models\StockMovement;
 use App\Modules\Inventory\Models\WarehouseLocation;
 use App\Modules\Inventory\Support\StockMovementInput;
+use App\Common\Exceptions\BusinessRuleException;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -39,6 +42,10 @@ use RuntimeException;
  */
 class StockMovementService
 {
+    public function __construct(
+        private readonly MovementGlPostingService $glPosting,
+    ) {}
+
     public function move(StockMovementInput $in): StockMovement
     {
         $this->validateInput($in);
@@ -61,7 +68,33 @@ class StockMovementService
                     : $this->lockOrCreate($in->itemId, $in->toLocationId))
                 : null;
 
-            $unitCost = $in->unitCost ?? ($fromLevel?->weighted_avg_cost ?? '0');
+            // F-15 — optimistic-lock check: when the caller passes the lock
+            // version it previously read, reject the movement if the ledger
+            // row has moved on since (a concurrent receipt/issue landed in
+            // between read and write). The row lock above guarantees the
+            // version cannot change between this check and the save below.
+            $this->assertVersionMatches($fromLevel, $in->expectedFromVersion, 'source');
+            $this->assertVersionMatches($toLevel, $in->expectedToVersion, 'destination');
+
+            $unitCost = $in->unitCost;
+            if ($unitCost === null && $fromLevel !== null) {
+                if ($fromLevel->weighted_avg_cost === null) {
+                    throw new BusinessRuleException('A source weighted-average cost is required for this stock movement.');
+                }
+                $unitCost = (string) $fromLevel->weighted_avg_cost;
+            }
+            if ($unitCost === null && $toLevel !== null) {
+                // Pure receipt without an explicit cost (customer returns,
+                // production receipts): inherit the destination level's current
+                // WAC so the blend is value-neutral. A fresh location with no
+                // prior stock costs 0.00 — the received units add no value.
+                $unitCost = $toLevel->weighted_avg_cost !== null
+                    ? $this->round2((string) $toLevel->weighted_avg_cost)
+                    : '0.00';
+            }
+            if ($unitCost === null || trim((string) $unitCost) === '') {
+                throw new BusinessRuleException('A unit cost is required for this stock movement.');
+            }
             $totalCost = bcmul($in->quantity, (string) $unitCost, 4);
 
             // ── Issue side: validate availability and decrement source.
@@ -114,8 +147,44 @@ class StockMovementService
             // Fire event AFTER commit — listeners (auto-replenishment) run async.
             DB::afterCommit(fn () => event(new StockMovementCompleted($movement)));
 
+            // F-05 — post the movement's GL entry atomically inside the same
+            // transaction (idempotent, skips non-value-changing types and
+            // unconfigured ledgers; see MovementGlPostingService).
+            $this->glPosting->postFor($movement);
+
             return $movement;
         });
+    }
+
+    /**
+     * Read the current ledger row for an (item, location) pair without taking
+     * a write lock. Used by F-15 optimistic-lock callers: read the version,
+     * then pass it back on the next movement.
+     */
+    public function currentLevel(int $itemId, int $locationId): ?StockLevel
+    {
+        return StockLevel::query()
+            ->where('item_id', $itemId)
+            ->where('location_id', $locationId)
+            ->first();
+    }
+
+    /**
+     * F-15 — reject a stale write: the caller supplies the lock_version it
+     * observed on a prior read; if the ledger row has advanced since, another
+     * transaction already changed the stock the caller was reasoning about.
+     */
+    private function assertVersionMatches(?StockLevel $level, ?int $expectedVersion, string $side): void
+    {
+        if ($level === null || $expectedVersion === null) {
+            return;
+        }
+        if ((int) $level->lock_version !== $expectedVersion) {
+            throw new BusinessRuleException(
+                "Stock level for item {$level->item_id} at location {$level->location_id} changed since it was read ".
+                "(version {$expectedVersion} → {$level->lock_version}); reload and retry ({$side})."
+            );
+        }
     }
 
     /** Lock-or-create the per-(item, location) ledger row. */
@@ -174,6 +243,36 @@ class StockMovementService
         if (in_array($in->type, [StockMovementType::MaterialIssue, StockMovementType::AdjustmentOut, StockMovementType::Scrap]) && ! $in->fromLocationId) {
             throw new InvalidMovementException("{$in->type->value} requires a source location.");
         }
+
+        // F-02 — consumption must never draw from quarantine/scrap zones. Stock
+        // there is held under an MRB (or already written off). Only deliberate
+        // write-offs (adjustment_out, scrap, return_to_vendor) and quarantine
+        // mechanics (transfer) may touch it.
+        $this->assertConsumableSource($in->fromLocationId, $in->type);
+    }
+
+    private function assertConsumableSource(?int $fromLocationId, StockMovementType $type): void
+    {
+        if ($fromLocationId === null) {
+            return;
+        }
+        if (! in_array($type, [StockMovementType::MaterialIssue, StockMovementType::Delivery], true)) {
+            return;
+        }
+
+        $zoneType = WarehouseLocation::query()
+            ->where('id', $fromLocationId)
+            ->with('zone:id,zone_type')
+            ->first()
+            ?->zone
+            ?->zone_type;
+
+        $zoneValue = $zoneType instanceof WarehouseZoneType ? $zoneType->value : (string) $zoneType;
+        if (in_array($zoneValue, [WarehouseZoneType::Quarantine->value, WarehouseZoneType::Scrap->value], true)) {
+            throw new BusinessRuleException(
+                "Cannot {$type->value} from location {$fromLocationId}: stock in a {$zoneValue} zone is held (MRB) or scrapped."
+            );
+        }
     }
 
     /** @param array<int, int|null> $locationIds */
@@ -191,7 +290,7 @@ class StockMovementService
 
         foreach ($locations as $location) {
             $session = StockCountSession::query()
-                ->where('status', 'in_progress')
+                ->where('status', StockCountSessionStatus::InProgress->value)
                 ->where(function ($query) use ($location) {
                     $query->whereHas('items', fn ($items) => $items->where('location_id', $location->id))
                         ->orWhere(function ($scope) use ($location) {
@@ -225,6 +324,19 @@ class StockMovementService
     {
         DB::transaction(function () use ($itemId, $locationId, $quantity) {
             $this->assertLocationsNotFrozen([$locationId]);
+            // F-02 — never reserve stock held in quarantine/scrap zones.
+            $zoneType = WarehouseLocation::query()
+                ->where('id', $locationId)
+                ->with('zone:id,zone_type')
+                ->first()
+                ?->zone
+                ?->zone_type;
+            $zoneValue = $zoneType instanceof WarehouseZoneType ? $zoneType->value : (string) $zoneType;
+            if (in_array($zoneValue, [WarehouseZoneType::Quarantine->value, WarehouseZoneType::Scrap->value], true)) {
+                throw new BusinessRuleException(
+                    "Cannot reserve stock at location {$locationId}: its {$zoneValue} zone is held (MRB) or scrapped."
+                );
+            }
             $level = $this->lockOrCreate($itemId, $locationId);
             $available = bcsub((string) $level->quantity, (string) $level->reserved_quantity, 3);
             if (bccomp($available, $quantity, 3) < 0) {
@@ -233,6 +345,7 @@ class StockMovementService
                 );
             }
             $level->reserved_quantity = bcadd((string) $level->reserved_quantity, $quantity, 3);
+            $level->lock_version++;
             $level->save();
         });
     }
@@ -246,6 +359,7 @@ class StockMovementService
             $rem = bcsub((string) $level->reserved_quantity, $quantity, 3);
             if (bccomp($rem, '0', 3) < 0) $rem = '0';
             $level->reserved_quantity = $rem;
+            $level->lock_version++;
             $level->save();
         });
     }

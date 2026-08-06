@@ -24,15 +24,6 @@ use Illuminate\Support\Facades\Log;
  */
 class SafetyStockRecomputeService
 {
-    /** @var list<string> */
-    private const ISSUE_TYPES = [
-        'material_issue',
-        'delivery',
-        'adjustment_out',
-        'scrap',
-        'return_to_vendor',
-    ];
-
     public function __construct(private readonly SettingsService $settings) {}
 
     /**
@@ -65,7 +56,7 @@ class SafetyStockRecomputeService
         foreach ($items as $item) {
             $evaluated++;
             try {
-                $newSs = $this->computeForItem((int) $item->id, $opts);
+            $newSs = $this->computeForItem((int) $item->id, $opts);
                 if ($newSs === null) {
                     $skipped++;
                     continue;
@@ -88,7 +79,7 @@ class SafetyStockRecomputeService
     }
 
     /**
-     * @param array{z:float, history_days:int, min_demand_days:int} $opts
+     * @param array{z:float, history_days:int, min_demand_days:int, issue_movement_types:list<string>} $opts
      */
     public function computeForItem(int $itemId, array $opts): ?float
     {
@@ -103,7 +94,7 @@ class SafetyStockRecomputeService
         $rows = DB::table('stock_movements')
             ->selectRaw('DATE(created_at) as d, SUM(quantity) as qty')
             ->where('item_id', $itemId)
-            ->whereIn('movement_type', self::ISSUE_TYPES)
+            ->whereIn('movement_type', $opts['issue_movement_types'])
             ->whereBetween('created_at', [$start, $end])
             ->groupByRaw('DATE(created_at)')
             ->get()
@@ -144,13 +135,14 @@ class SafetyStockRecomputeService
     }
 
     /**
-     * @return array{z:float, history_days:int, min_demand_days:int}
+     * @return array{z:float, history_days:int, min_demand_days:int, issue_movement_types:list<string>}
      */
     private function loadOpts(): array
     {
         $z = $this->settings->get('inventory.safety_stock.service_level_z');
         $historyDays = $this->settings->get('inventory.safety_stock.history_days');
         $minDemandDays = $this->settings->get('inventory.safety_stock.min_demand_days');
+        $issueMovementTypes = $this->settings->get('inventory.safety_stock.issue_movement_types');
         if (! is_numeric($z) || (float) $z <= 0) {
             throw new BusinessRuleException('Required business setting inventory.safety_stock.service_level_z is missing or invalid.');
         }
@@ -160,7 +152,14 @@ class SafetyStockRecomputeService
         if (! is_numeric($minDemandDays) || (int) $minDemandDays <= 0) {
             throw new BusinessRuleException('Required business setting inventory.safety_stock.min_demand_days is missing or invalid.');
         }
+        if (! is_array($issueMovementTypes) || $issueMovementTypes === []) {
+            throw new BusinessRuleException('Required business setting inventory.safety_stock.issue_movement_types is missing or invalid.');
+        }
+        $issueMovementTypes = array_values(array_filter($issueMovementTypes, static fn ($type): bool => is_string($type) && trim($type) !== ''));
+        if ($issueMovementTypes === []) {
+            throw new BusinessRuleException('Required business setting inventory.safety_stock.issue_movement_types is missing or invalid.');
+        }
 
-        return ['z' => (float) $z, 'history_days' => (int) $historyDays, 'min_demand_days' => (int) $minDemandDays];
+        return ['z' => (float) $z, 'history_days' => (int) $historyDays, 'min_demand_days' => (int) $minDemandDays, 'issue_movement_types' => $issueMovementTypes];
     }
 }

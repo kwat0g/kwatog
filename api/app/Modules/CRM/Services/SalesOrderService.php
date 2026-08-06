@@ -9,6 +9,7 @@ use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\TaxPolicyService;
 use App\Common\Support\HashIdFilter;
 use App\Common\Support\SearchOperator;
+use App\Common\Support\TrashedFilter;
 use App\Modules\Accounting\Models\Customer;
 use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Models\Product;
@@ -41,6 +42,12 @@ class SalesOrderService
         'cancelled'           => [],
         'draft'               => [],
     ];
+
+    /** @return array<string, list<string>> */
+    public static function allowedTransitions(): array
+    {
+        return self::ALLOWED_TRANSITIONS;
+    }
 
     public function __construct(
         private readonly DocumentSequenceService $sequences,
@@ -99,12 +106,12 @@ class SalesOrderService
 
         if (bccomp($totalExposure, $limit, 2) > 0) {
             $msg = sprintf(
-                'Credit limit exceeded. Limit: ₱%s, Current exposure: ₱%s (AR ₱%s + open SOs ₱%s + this SO ₱%s).',
-                number_format((float) $limit, 2),
-                number_format((float) $totalExposure, 2),
-                number_format((float) $arBalance, 2),
-                number_format((float) $openSoExposure, 2),
-                number_format((float) $so->total_amount, 2),
+                'Credit limit exceeded. Limit: %s, Current exposure: %s (AR %s + open SOs %s + this SO %s).',
+                app(\App\Common\Services\CurrencyDisplayService::class)->format($limit),
+                app(\App\Common\Services\CurrencyDisplayService::class)->format($totalExposure),
+                app(\App\Common\Services\CurrencyDisplayService::class)->format($arBalance),
+                app(\App\Common\Services\CurrencyDisplayService::class)->format($openSoExposure),
+                app(\App\Common\Services\CurrencyDisplayService::class)->format($so->total_amount),
             );
             throw ValidationException::withMessages([
                 'credit_limit' => [$msg],
@@ -117,6 +124,8 @@ class SalesOrderService
         $q = SalesOrder::query()
             ->with(['customer:id,name', 'creator:id,name,role_id'])
             ->withCount('items');
+
+        TrashedFilter::apply($q, $filters);
 
         if (! empty($filters['customer_id'])) {
             $cid = HashIdFilter::decode($filters['customer_id'], Customer::class);
@@ -205,7 +214,8 @@ class SalesOrderService
                 $subtotal += $lineTotal;
             }
 
-            $vat   = round($subtotal * (float) $this->taxPolicy->vatRate(), 2);
+            $isVatable = $this->taxPolicy->isVatRegistered();
+            $vat   = $isVatable ? round($subtotal * (float) $this->taxPolicy->vatRate(), 2) : 0.0;
             $total = round($subtotal + $vat, 2);
 
             $so = SalesOrder::create([
@@ -268,7 +278,8 @@ class SalesOrderService
                 ];
                 $subtotal += $lineTotal;
             }
-            $vat   = round($subtotal * (float) $this->taxPolicy->vatRate(), 2);
+            $isVatable = $this->taxPolicy->isVatRegistered();
+            $vat   = $isVatable ? round($subtotal * (float) $this->taxPolicy->vatRate(), 2) : 0.0;
             $total = round($subtotal + $vat, 2);
 
             $so->update([
@@ -283,7 +294,7 @@ class SalesOrderService
             ]);
 
             // Replace items wholesale (draft state — no FK ramifications yet).
-            $so->items()->delete();
+            $so->items()->forceDelete();
             foreach ($newLines as $line) {
                 $so->items()->create($line);
             }

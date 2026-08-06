@@ -8,6 +8,8 @@ use App\Common\Models\Alert;
 use App\Common\Requests\ListAlertsRequest;
 use App\Common\Resources\AlertResource;
 use App\Common\Services\AlertEngineService;
+use App\Common\Enums\AlertSeverity;
+use App\Common\Enums\AlertType;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
@@ -52,6 +54,14 @@ class AlertController
               ->orderByDesc('created_at');
 
         return AlertResource::collection($query->paginate($perPage));
+    }
+
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'types' => array_map(static fn (AlertType $type): array => ['value' => $type->value, 'label' => $type->label()], AlertType::cases()),
+            'severities' => array_map(static fn (AlertSeverity $severity): array => ['value' => $severity->value, 'label' => $severity->label()], AlertSeverity::cases()),
+        ]]);
     }
 
     public function dismiss(Alert $alert): AlertResource

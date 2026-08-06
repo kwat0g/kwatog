@@ -16,4 +16,14 @@ enum BillStatus: string
     {
         return array_map(fn (self $c) => $c->value, self::cases());
     }
+
+    public function label(): string
+    {
+        return match ($this) {
+            self::Unpaid => 'Unpaid',
+            self::Partial => 'Partially paid',
+            self::Paid => 'Paid',
+            self::Cancelled => 'Cancelled',
+        };
+    }
 }

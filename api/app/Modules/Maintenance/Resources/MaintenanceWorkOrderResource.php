@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Maintenance\Resources;
 
 use App\Modules\Maintenance\Enums\MaintainableType;
+use App\Modules\Maintenance\Enums\MaintenanceWorkOrderStatus;
 use App\Modules\Maintenance\Models\MaintenanceWorkOrder;
 use App\Modules\MRP\Models\Machine;
 use App\Modules\MRP\Models\Mold;
@@ -18,6 +19,10 @@ class MaintenanceWorkOrderResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $status = $this->status instanceof MaintenanceWorkOrderStatus
+            ? $this->status
+            : MaintenanceWorkOrderStatus::tryFrom((string) $this->status);
+
         $target = $this->maintainable_type === MaintainableType::Machine
             ? Machine::find($this->maintainable_id)
             : Mold::find($this->maintainable_id);
@@ -38,9 +43,13 @@ class MaintenanceWorkOrderResource extends JsonResource
                 'interval_value' => (int) $this->schedule->interval_value,
             ] : null),
             'type'              => $this->type instanceof \BackedEnum ? $this->type->value : $this->type,
+            'type_label'        => $this->type?->label(),
             'priority'          => $this->priority instanceof \BackedEnum ? $this->priority->value : $this->priority,
+            'priority_label'    => $this->priority?->label(),
             'description'       => $this->description,
-            'status'            => $this->status instanceof \BackedEnum ? $this->status->value : $this->status,
+            'status'            => $status?->value ?? $this->status,
+            'status_label'      => $status?->label() ?? (string) $this->status,
+            'available_actions' => $this->availableActions($status),
             'started_at'        => optional($this->started_at)?->toISOString(),
             'completed_at'      => optional($this->completed_at)?->toISOString(),
             'downtime_minutes'  => (int) $this->downtime_minutes,
@@ -77,5 +86,16 @@ class MaintenanceWorkOrderResource extends JsonResource
             'created_at'        => optional($this->created_at)?->toISOString(),
             'updated_at'        => optional($this->updated_at)?->toISOString(),
         ];
+    }
+
+    /** @return list<string> */
+    private function availableActions(?MaintenanceWorkOrderStatus $status): array
+    {
+        return match ($status) {
+            MaintenanceWorkOrderStatus::Open,
+            MaintenanceWorkOrderStatus::Assigned => ['start', 'cancel'],
+            MaintenanceWorkOrderStatus::InProgress => ['complete', 'cancel'],
+            default => [],
+        };
     }
 }

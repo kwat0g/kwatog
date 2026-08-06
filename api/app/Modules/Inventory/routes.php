@@ -30,15 +30,20 @@ Route::middleware(['auth:sanctum', 'feature:inventory'])->prefix('inventory')->g
     Route::post('/item-categories', [ItemCategoryController::class, 'store'])->middleware('permission:inventory.items.manage');
     Route::put('/item-categories/{itemCategory}', [ItemCategoryController::class, 'update'])->middleware('permission:inventory.items.manage');
     Route::delete('/item-categories/{itemCategory}', [ItemCategoryController::class, 'destroy'])->middleware('permission:inventory.items.manage');
+    Route::patch('/item-categories/{itemCategory}/restore', [ItemCategoryController::class, 'restore'])->middleware('permission:inventory.categories.manage');
 
     /* ─── Items ─── */
+    Route::get('/items/options', [ItemController::class, 'options'])->middleware('permission:inventory.view');
     Route::post('/items/recompute-abc', [ItemController::class, 'recomputeAbc'])->middleware('permission:inventory.items.manage');
     Route::get('/items', [ItemController::class, 'index'])->middleware('permission:inventory.view');
     Route::get('/items/{item}', [ItemController::class, 'show'])->middleware('permission:inventory.view');
     Route::post('/items', [ItemController::class, 'store'])->middleware('permission:inventory.items.manage');
     Route::put('/items/{item}', [ItemController::class, 'update'])->middleware('permission:inventory.items.manage');
     Route::delete('/items/{item}', [ItemController::class, 'destroy'])->middleware('permission:inventory.items.manage');
+    Route::patch('/items/{item}/restore', [ItemController::class, 'restore'])->middleware('permission:inventory.items.manage');
     Route::get('/items/{item}/quality-plans', [ItemQualityPlanController::class, 'index'])
+        ->middleware('permission:inventory.view');
+    Route::get('/quality-plans/options', [ItemQualityPlanController::class, 'options'])
         ->middleware('permission:inventory.view');
     Route::post('/items/{item}/quality-plans', [ItemQualityPlanController::class, 'store'])
         ->middleware('permission:quality.specs.manage');
@@ -63,24 +68,31 @@ Route::middleware(['auth:sanctum', 'feature:inventory'])->prefix('inventory')->g
         ->middleware('permission:inventory.items.manage');
 
     /* ─── Warehouse / Zones / Locations ─── */
+    Route::get('/warehouse/options', [WarehouseController::class, 'options'])->middleware('permission:inventory.view');
     Route::get('/warehouse', [WarehouseController::class, 'tree'])->middleware('permission:inventory.view');
     Route::get('/warehouses', [WarehouseController::class, 'indexWarehouses'])->middleware('permission:inventory.view');
     Route::post('/warehouses', [WarehouseController::class, 'storeWarehouse'])->middleware('permission:inventory.items.manage');
     Route::put('/warehouses/{warehouse}', [WarehouseController::class, 'updateWarehouse'])->middleware('permission:inventory.items.manage');
     Route::delete('/warehouses/{warehouse}', [WarehouseController::class, 'destroyWarehouse'])->middleware('permission:inventory.items.manage');
+    Route::patch('/warehouses/{warehouse}/restore', [WarehouseController::class, 'restoreWarehouse'])->middleware('permission:inventory.warehouses.manage');
 
     Route::post('/zones', [WarehouseController::class, 'storeZone'])->middleware('permission:inventory.items.manage');
     Route::put('/zones/{zone}', [WarehouseController::class, 'updateZone'])->middleware('permission:inventory.items.manage');
     Route::delete('/zones/{zone}', [WarehouseController::class, 'destroyZone'])->middleware('permission:inventory.items.manage');
+    Route::patch('/zones/{zone}/restore', [WarehouseController::class, 'restoreZone'])->middleware('permission:inventory.warehouses.manage');
 
     Route::post('/locations', [WarehouseController::class, 'storeLocation'])->middleware('permission:inventory.items.manage');
     Route::put('/locations/{location}', [WarehouseController::class, 'updateLocation'])->middleware('permission:inventory.items.manage');
     Route::delete('/locations/{location}', [WarehouseController::class, 'destroyLocation'])->middleware('permission:inventory.items.manage');
+    Route::patch('/locations/{location}/restore', [WarehouseController::class, 'restoreLocation'])->middleware('permission:inventory.warehouses.manage');
 
     /* ─── Stock ─── */
     Route::get('/stock-levels', [StockLevelController::class, 'index'])->middleware('permission:inventory.view');
+    Route::get('/stock-movements/options', [StockMovementController::class, 'options'])->middleware('permission:inventory.view');
     Route::get('/stock-movements', [StockMovementController::class, 'index'])->middleware('permission:inventory.view');
     Route::post('/scan/resolve', [WarehouseScanController::class, 'resolve'])->middleware('permission:inventory.view');
+    Route::get('/scan/options', [WarehouseScanController::class, 'options'])->middleware('permission:inventory.view');
+    Route::get('/stock-adjustments', [StockAdjustmentController::class, 'index'])->middleware('permission:inventory.view');
     Route::post('/stock-adjustments', [StockAdjustmentController::class, 'store'])->middleware('permission:inventory.adjust');
     Route::patch('/stock-adjustments/{stockAdjustment}/approve', [StockAdjustmentController::class, 'approve'])->middleware('permission:inventory.adjust.approve');
     Route::post('/stock-transfers', [StockTransferController::class, 'store'])->middleware('permission:inventory.adjust');
@@ -90,6 +102,7 @@ Route::middleware(['auth:sanctum', 'feature:inventory'])->prefix('inventory')->g
     Route::get('/warehouse-map/bins/{location}', [WarehouseMapController::class, 'binDetail'])->middleware('permission:inventory.view');
 
     /* ─── ADV8 — WMS: Stock Count ─── */
+    Route::get('/stock-counts/options', [StockCountController::class, 'options'])->middleware('permission:inventory.stock_count.view');
     Route::get('/stock-counts', [StockCountController::class, 'index'])->middleware('permission:inventory.stock_count.view');
     Route::get('/stock-counts/{id}', [StockCountController::class, 'show'])->middleware('permission:inventory.stock_count.view');
     Route::post('/stock-counts', [StockCountController::class, 'store'])->middleware('permission:inventory.stock_count.manage');
@@ -110,6 +123,7 @@ Route::middleware(['auth:sanctum', 'feature:inventory'])->prefix('inventory')->g
     Route::get('/picking-lists/mis/{materialIssueSlip}', [WarehouseMapController::class, 'pickingList'])->middleware('permission:inventory.view');
 
     /* ─── GRN ─── */
+    Route::get('/grn/options', [GoodsReceiptNoteController::class, 'options'])->middleware('permission:inventory.view');
     Route::get('/grn', [GoodsReceiptNoteController::class, 'index'])->middleware('permission:inventory.view');
     Route::get('/grn/{grn}', [GoodsReceiptNoteController::class, 'show'])->middleware('permission:inventory.view');
     Route::post('/grn', [GoodsReceiptNoteController::class, 'store'])->middleware('permission:inventory.grn.create');
@@ -123,8 +137,10 @@ Route::middleware(['auth:sanctum', 'feature:inventory'])->prefix('inventory')->g
     Route::get('/material-issues', [MaterialIssueSlipController::class, 'index'])->middleware('permission:inventory.view');
     Route::get('/material-issues/{materialIssueSlip}', [MaterialIssueSlipController::class, 'show'])->middleware('permission:inventory.view');
     Route::post('/material-issues', [MaterialIssueSlipController::class, 'store'])->middleware('permission:inventory.issue.create');
+    Route::delete('/material-issues/{materialIssueSlip}', [MaterialIssueSlipController::class, 'cancel'])->middleware('permission:inventory.issue.create');
 
     /* ─── REC-08 — Material Review Board (hold / quarantine nonconforming stock) ─── */
+    Route::get('/mrb/options', [MrbController::class, 'options'])->middleware('permission:inventory.mrb.view');
     Route::get('/mrb', [MrbController::class, 'index'])->middleware('permission:inventory.mrb.view');
     Route::get('/mrb/{mrb}', [MrbController::class, 'show'])->middleware('permission:inventory.mrb.view');
     Route::post('/mrb', [MrbController::class, 'store'])->middleware('permission:inventory.mrb.manage');

@@ -91,11 +91,17 @@ class AmortizationService
 
     public function monthlyAmortization(string $principal, int $periods): string
     {
-        return bcdiv($principal, (string) max(1, $periods), 2);
+        if ($periods <= 0) {
+            throw new \InvalidArgumentException('Pay periods must be at least 1.');
+        }
+        return bcdiv($principal, (string) $periods, 2);
     }
 
     public function monthlyAmortizationWithInterest(string $principal, string $annualRate, int $periods): string
     {
+        if ($periods <= 0) {
+            throw new \InvalidArgumentException('Pay periods must be at least 1.');
+        }
         if (bccomp($annualRate, '0', 10) === 0) {
             return $this->monthlyAmortization($principal, $periods);
         }

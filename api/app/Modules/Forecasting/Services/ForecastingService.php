@@ -330,7 +330,7 @@ class ForecastingService
     private function applyMethod(array $series, string $method): array
     {
         if (count($series) === 0) {
-            return [0.0, 0.0];
+            return [0.0, null];
         }
 
         $values = array_map(fn ($r) => (float) $r['qty'], $series);
@@ -356,7 +356,7 @@ class ForecastingService
 
     /**
      * Confidence% = clamp(100 - 100 × CV, 0, 100), where CV = stddev / mean.
-     * If mean is 0 we report 50% (neutral) since no signal exists.
+     * If mean is 0 there is no signal, so confidence remains unknown.
      */
     private function confidenceFromSeries(array $values, float $forecastQty): ?float
     {
@@ -364,7 +364,7 @@ class ForecastingService
         if ($n < 2) return null;
 
         $mean = array_sum($values) / $n;
-        if ($mean <= 0) return 50.0;
+        if ($mean <= 0) return null;
 
         $variance = 0.0;
         foreach ($values as $v) {

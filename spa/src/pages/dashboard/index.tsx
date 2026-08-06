@@ -22,27 +22,27 @@ import DashboardDefaultPage from '@/pages/dashboard/default';
  * `/dashboard/accounting` route now 301s into it).
  */
 const ROLE_DASHBOARDS: Record<string, { path: string; permission: string }> = {
-  production_manager: { path: '/dashboard/plant-manager', permission: 'dashboard.plant_manager.view' },
-  hr_officer:         { path: '/dashboard/hr',            permission: 'dashboard.hr.view' },
-  ppc_head:           { path: '/dashboard/ppc',           permission: 'dashboard.ppc.view' },
-  finance_officer:    { path: '/dashboard/finance',       permission: 'dashboard.accounting.view' },
-  // D6, D7, D8 — New role-specific dashboards
-  purchasing_officer: { path: '/dashboard/purchasing',    permission: 'dashboard.purchasing.view' },
-  warehouse_staff:    { path: '/dashboard/warehouse',     permission: 'dashboard.warehouse.view' },
-  qc_inspector:       { path: '/dashboard/quality',       permission: 'dashboard.quality.view' },
-  system_admin:       { path: '/dashboard/admin',         permission: 'dashboard.admin.view' },
+ production_manager: { path: '/dashboard/plant-manager', permission: 'dashboard.plant_manager.view' },
+ hr_officer: { path: '/dashboard/hr', permission: 'dashboard.hr.view' },
+ ppc_head: { path: '/dashboard/ppc', permission: 'dashboard.ppc.view' },
+ finance_officer: { path: '/dashboard/finance', permission: 'dashboard.accounting.view' },
+ // D6, D7, D8 — New role-specific dashboards
+ purchasing_officer: { path: '/dashboard/purchasing', permission: 'dashboard.purchasing.view' },
+ warehouse_staff: { path: '/dashboard/warehouse', permission: 'dashboard.warehouse.view' },
+ qc_inspector: { path: '/dashboard/quality', permission: 'dashboard.quality.view' },
+ system_admin: { path: '/dashboard/admin', permission: 'dashboard.admin.view' },
 };
 
 export default function DashboardPage() {
-  const user = useAuthStore((s) => s.user);
-  const { can } = usePermission();
+ const user = useAuthStore((s) => s.user);
+ const { can } = usePermission();
 
-  const roleSlug = user?.role?.slug;
-  const target = roleSlug ? ROLE_DASHBOARDS[roleSlug] : undefined;
+ const roleSlug = user?.role?.slug;
+ const target = roleSlug ? ROLE_DASHBOARDS[roleSlug] : undefined;
 
-  if (target && can(target.permission)) {
-    return <Navigate to={target.path} replace />;
-  }
+ if (target && can(target.permission)) {
+ return <Navigate to={target.path} replace />;
+ }
 
-  return <DashboardDefaultPage />;
+ return <DashboardDefaultPage />;
 }

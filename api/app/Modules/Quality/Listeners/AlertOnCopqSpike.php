@@ -57,9 +57,11 @@ class AlertOnCopqSpike implements ShouldQueue
                 return;
             }
 
-            $audience = User::whereHas('role', fn ($q) =>
-                    $q->whereIn('slug', ['qc_inspector', 'production_manager'])
-                )
+            $roles = array_values(array_filter(
+                (array) $this->settings->get('quality.copq.alert_notification_roles', []),
+                static fn ($role): bool => is_string($role) && $role !== '',
+            ));
+            $audience = User::whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                 ->where('is_active', true)
                 ->get();
 
@@ -72,7 +74,7 @@ class AlertOnCopqSpike implements ShouldQueue
 
             $this->notifications->send($audience, 'copq.spike', [
                 'title'       => "COPQ Spike — {$label}",
-                'message'     => "COPQ jumped {$pct}% MoM to ₱" . number_format($newTotal, 2) . '.',
+                'message'     => "COPQ jumped {$pct}% MoM to " . app(\App\Common\Services\CurrencyDisplayService::class)->format($newTotal) . '.',
                 'link_to'     => '/quality/copq',
                 'entity_type' => 'copq_snapshot',
                 'entity_id'   => $snap->hash_id,

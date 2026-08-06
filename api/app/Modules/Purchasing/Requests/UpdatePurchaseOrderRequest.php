@@ -7,6 +7,8 @@ namespace App\Modules\Purchasing\Requests;
 use App\Common\Concerns\ResolvesHashIds;
 use App\Modules\Inventory\Models\Item;
 use Illuminate\Foundation\Http\FormRequest;
+use App\Modules\SupplyChain\Enums\Incoterm;
+use Illuminate\Validation\Rule;
 
 class UpdatePurchaseOrderRequest extends FormRequest
 {
@@ -28,7 +30,7 @@ class UpdatePurchaseOrderRequest extends FormRequest
             'date'                   => ['nullable', 'date'],
             'expected_delivery_date' => ['nullable', 'date'],
             'is_vatable'             => ['nullable', 'boolean'],
-            'incoterm'               => ['nullable', 'string', 'in:EXW,FCA,FAS,FOB,CFR,CIF,CPT,CIP,DAP,DPU,DDP'],
+            'incoterm'               => ['nullable', Rule::enum(Incoterm::class)],
             'remarks'                => ['nullable', 'string', 'max:1000'],
             'items'                  => ['nullable', 'array', 'min:1'],
             'items.*.item_id'        => ['required_with:items', 'integer', 'exists:items,id'],

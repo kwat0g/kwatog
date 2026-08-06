@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Landing\Services;
 
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\SettingsService;
 use App\Modules\Landing\Models\QuoteRequest;
 use App\Modules\Landing\Notifications\QuoteRequestReceivedNotification;
 use Illuminate\Http\Request;
@@ -16,9 +17,10 @@ use Illuminate\Support\Facades\Storage;
 
 class QuoteRequestService
 {
-    private const SALES_INBOX = 'sales@ogami.com.ph';
-
-    public function __construct(private readonly DocumentSequenceService $sequences) {}
+    public function __construct(
+        private readonly DocumentSequenceService $sequences,
+        private readonly SettingsService $settings,
+    ) {}
 
     public function create(array $data, ?UploadedFile $drawing, Request $request): QuoteRequest
     {
@@ -50,7 +52,7 @@ class QuoteRequestService
         }
 
         try {
-            Notification::route('mail', self::SALES_INBOX)
+            Notification::route('mail', $this->settings->requiredString('company.sales_inbox_email'))
                 ->notify(new QuoteRequestReceivedNotification($quote));
         } catch (\Throwable $e) {
             Log::warning('QuoteRequestReceivedNotification failed to send', [

@@ -23,6 +23,7 @@ use Illuminate\Support\Facades\DB;
  */
 class ChainBottleneckService
 {
+    public function __construct(private readonly SettingsService $settings) {}
     /**
      * Run every detector. Returns a map of detector key -> list of rows.
      *
@@ -30,7 +31,11 @@ class ChainBottleneckService
      */
     public function detectAll(): array
     {
-        $cfg = config('chain.bottlenecks', []);
+        $cfg = $this->settings->get('dashboard.chain_bottlenecks', []);
+        if (! is_array($cfg) || $cfg === []) return [];
+        // Expose the live policy for legacy consumers/tests without making
+        // config files the source of truth.
+        config()->set('chain.bottlenecks', $cfg);
 
         $out = [];
         foreach (array_keys($cfg) as $key) {
@@ -46,12 +51,16 @@ class ChainBottleneckService
      */
     public function detect(string $key): array
     {
-        $cfg = config("chain.bottlenecks.{$key}");
+        $all = $this->settings->get('dashboard.chain_bottlenecks', []);
+        $cfg = is_array($all) ? ($all[$key] ?? null) : null;
         if (! is_array($cfg)) return [];
 
-        $hours    = (int) ($cfg['hours'] ?? 24);
-        $audience = (string) ($cfg['audience'] ?? 'system_admin');
-        $label    = (string) ($cfg['label'] ?? $key);
+        if (! isset($cfg['hours'], $cfg['audience'], $cfg['label'])) {
+            return [];
+        }
+        $hours    = (int) $cfg['hours'];
+        $audience = (string) $cfg['audience'];
+        $label    = (string) $cfg['label'];
         $cutoff   = Carbon::now()->subHours($hours);
 
         return match ($key) {
@@ -76,7 +85,7 @@ class ChainBottleneckService
             ->where('status', 'confirmed')
             ->where('updated_at', '<=', $cutoff)
             ->orderBy('updated_at')
-            ->limit(50)
+            ->limit($this->resultLimit())
             ->get();
         return $this->mapRows($rows, 'sales_order', 'so_number', $key, $label, $audience);
     }
@@ -89,7 +98,7 @@ class ChainBottleneckService
             ->where('status', 'confirmed')
             ->where('updated_at', '<=', $cutoff)
             ->orderBy('updated_at')
-            ->limit(50)
+            ->limit($this->resultLimit())
             ->get();
         return $this->mapRows($rows, 'work_order', 'wo_number', $key, $label, $audience);
     }
@@ -103,7 +112,7 @@ class ChainBottleneckService
             ->whereIn('status', ['draft', 'in_progress'])
             ->where('created_at', '<=', $cutoff)
             ->orderBy('created_at')
-            ->limit(50)
+            ->limit($this->resultLimit())
             ->get();
         return $this->mapRows($rows, 'inspection', 'inspection_number', $key, $label, $audience);
     }
@@ -116,7 +125,7 @@ class ChainBottleneckService
             ->where('status', 'scheduled')
             ->where('updated_at', '<=', $cutoff)
             ->orderBy('updated_at')
-            ->limit(50)
+            ->limit($this->resultLimit())
             ->get();
         return $this->mapRows($rows, 'delivery', 'delivery_number', $key, $label, $audience);
     }
@@ -129,7 +138,7 @@ class ChainBottleneckService
             ->where('status', 'draft')
             ->where('updated_at', '<=', $cutoff)
             ->orderBy('updated_at')
-            ->limit(50)
+            ->limit($this->resultLimit())
             ->get();
         return $this->mapRows($rows, 'invoice', 'invoice_number', $key, $label, $audience);
     }
@@ -142,7 +151,7 @@ class ChainBottleneckService
             ->where('status', 'pending')
             ->where('updated_at', '<=', $cutoff)
             ->orderBy('updated_at')
-            ->limit(50)
+            ->limit($this->resultLimit())
             ->get();
         return $this->mapRows($rows, 'purchase_request', 'pr_number', $key, $label, $audience);
     }
@@ -157,12 +166,17 @@ class ChainBottleneckService
             ->where('status', 'unpaid')
             ->where('due_date', '<=', $cutoff->toDateString())
             ->orderBy('due_date')
-            ->limit(50)
+            ->limit($this->resultLimit())
             ->get();
         return $this->mapRows($rows, 'bill', 'bill_number', $key, $label, $audience);
     }
 
     // ─── Helpers ───────────────────────────────────────────────────
+
+    private function resultLimit(): int
+    {
+        return $this->settings->requiredInt('dashboard.chain_bottlenecks.result_limit', 1, 500);
+    }
 
     /**
      * Common row-mapper. Adds hash_id, hours_stuck, key/label/audience.

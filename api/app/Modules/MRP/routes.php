@@ -23,19 +23,23 @@ Route::middleware(['auth:sanctum', 'feature:mrp'])->prefix('mrp')->group(functio
     Route::post('/boms',                  [BomController::class, 'store']) ->middleware('permission:mrp.boms.manage');
     Route::put('/boms/{bom}',             [BomController::class, 'update'])->middleware('permission:mrp.boms.manage');
     Route::delete('/boms/{bom}',          [BomController::class, 'destroy'])->middleware('permission:mrp.boms.manage');
+    Route::patch('/boms/{bom}/restore',   [BomController::class, 'restore'])->middleware('permission:mrp.boms.manage');
 
     Route::get('/products/{product}/bom', [BomController::class, 'forProduct'])->middleware('permission:mrp.boms.view');
 
     /* ─── Machines (Task 50) ─── */
+    Route::get('/machines/options',   [MachineController::class, 'options'])->middleware('permission:mrp.machines.view');
     Route::get('/machines',           [MachineController::class, 'index']) ->middleware('permission:mrp.machines.view');
     Route::get('/machines/{machine}', [MachineController::class, 'show'])  ->middleware('permission:mrp.machines.view');
     Route::post('/machines',          [MachineController::class, 'store']) ->middleware('permission:production.machines.manage');
     Route::put('/machines/{machine}', [MachineController::class, 'update'])->middleware('permission:production.machines.manage');
     Route::delete('/machines/{machine}', [MachineController::class, 'destroy'])->middleware('permission:production.machines.manage');
+    Route::patch('/machines/{machine}/restore', [MachineController::class, 'restore'])->middleware('permission:production.machines.manage');
     Route::patch('/machines/{machine}/transition-status', [MachineController::class, 'transitionStatus'])
         ->middleware('permission:production.machines.transition');
 
     /* ─── Molds (Task 50) ─── */
+    Route::get('/molds/options',   [MoldController::class, 'options'])->middleware('permission:mrp.molds.view');
     Route::get('/molds',           [MoldController::class, 'index']) ->middleware('permission:mrp.molds.view');
     Route::get('/molds/{mold}',    [MoldController::class, 'show'])  ->middleware('permission:mrp.molds.view');
     Route::get('/molds/{mold}/history',          [MoldController::class, 'history']) ->middleware('permission:mrp.molds.view');
@@ -44,12 +48,14 @@ Route::middleware(['auth:sanctum', 'feature:mrp'])->prefix('mrp')->group(functio
     Route::post('/molds',          [MoldController::class, 'store']) ->middleware('permission:production.molds.manage');
     Route::put('/molds/{mold}',    [MoldController::class, 'update'])->middleware('permission:production.molds.manage');
     Route::delete('/molds/{mold}', [MoldController::class, 'destroy'])->middleware('permission:production.molds.manage');
+    Route::patch('/molds/{mold}/restore', [MoldController::class, 'restore'])->middleware('permission:production.molds.manage');
     Route::post('/molds/{mold}/commission',   [MoldController::class, 'commission'])  ->middleware('permission:production.molds.manage');
     Route::post('/molds/{mold}/decommission', [MoldController::class, 'decommission'])->middleware('permission:production.molds.manage');
     Route::post('/molds/{mold}/compatibility', [MoldController::class, 'syncCompatibility'])
         ->middleware('permission:production.molds.manage');
 
     /* ─── MRP plans (Task 52) ─── */
+    Route::get('/plans/options',            [MrpPlanController::class, 'options'])->middleware('permission:mrp.plans.view');
     Route::get('/plans',                    [MrpPlanController::class, 'index']) ->middleware('permission:mrp.plans.view');
     Route::get('/plans/{mrpPlan}',          [MrpPlanController::class, 'show']) ->middleware('permission:mrp.plans.view');
     Route::post('/plans/{mrpPlan}/rerun',   [MrpPlanController::class, 'rerun'])->middleware('permission:mrp.plans.run');
@@ -62,6 +68,7 @@ Route::middleware(['auth:sanctum', 'feature:mrp'])->prefix('mrp')->group(functio
     Route::patch('/scheduler/{schedule}/reorder',    [SchedulerController::class, 'reorder'])->middleware('permission:mrp.schedule');
     Route::patch('/scheduler/{schedule}/reassign',   [SchedulerController::class, 'reassign'])->middleware('permission:mrp.schedule');
     Route::get('/scheduler/snapshot',                [SchedulerController::class, 'snapshot'])->middleware('permission:production.schedule.view');
+    Route::get('/scheduler/options',                 [SchedulerController::class, 'options'])->middleware('permission:production.schedule.view');
 
     /* ─── MRP runs (Task A1) ─── */
     Route::get('/runs',                  [MrpRunController::class, 'index']) ->middleware('permission:mrp.runs.view');

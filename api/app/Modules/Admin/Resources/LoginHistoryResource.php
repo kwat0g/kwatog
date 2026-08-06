@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Modules\Admin\Resources;
 
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Str;
 
 class LoginHistoryResource extends JsonResource
 {
@@ -13,6 +14,7 @@ class LoginHistoryResource extends JsonResource
         return [
             'id'              => $this->hash_id,
             'status'          => $this->status,
+            'status_label'    => Str::headline((string) $this->status),
             'reason'          => $this->reason,
             'email_attempted' => $this->email_attempted,
             'ip_address'      => $this->ip_address,

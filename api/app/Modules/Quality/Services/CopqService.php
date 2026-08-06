@@ -41,6 +41,7 @@ class CopqService
                 ],
                 'external_failure' => $b['external_failure'] ?? [
                     'returns' => 0, 'complaints' => 0, 'return_cost' => 0.0,
+                    'complaint_cost' => 0.0,
                 ],
                 'total'        => (float) ($b['total'] ?? 0),
                 'period_label' => $from->format('M Y') . ' – ' . $to->format('M Y'),
@@ -96,7 +97,11 @@ class CopqService
                 ->whereBetween('created_at', [$fromTs, $toTs])
                 ->sum('quantity_target') ?? 0);
 
-            // --- External failure (counts only, costs stay 0 for now) ---
+            // --- External failure ---
+            // Return cost comes from persisted refunds. Complaint cost comes
+            // from replacement work actually recorded for the complaint;
+            // complaints without a replacement transaction contribute no
+            // invented amount.
             $returns = Schema::hasTable('return_requests')
                 ? (int) DB::table('return_requests')
                     ->where('status', 'completed')
@@ -110,10 +115,25 @@ class CopqService
                     ->count()
                 : 0;
 
+            $returnCost = Schema::hasTable('return_requests')
+                ? (float) DB::table('return_requests')
+                    ->where('status', 'completed')
+                    ->whereBetween('updated_at', [$fromTs, $toTs])
+                    ->sum('refund_amount')
+                : 0.0;
+
+            $complaintCost = Schema::hasTable('customer_complaints')
+                ? (float) DB::table('customer_complaints as c')
+                    ->leftJoin('work_orders as w', 'c.replacement_work_order_id', '=', 'w.id')
+                    ->leftJoin('products as p', 'w.product_id', '=', 'p.id')
+                    ->whereBetween('c.created_at', [$fromTs, $toTs])
+                    ->sum(DB::raw('COALESCE(w.quantity_good, w.quantity_produced, w.quantity_target, 0) * COALESCE(p.standard_cost, 0)'))
+                : 0.0;
+
             $internalScrap  = round($scrapCost, 2);
             $internalRework = round($reworkCost, 2);
-            $externalReturn = 0.00;       // no per-item cost yet
-            $externalComp   = 0.00;       // no per-item cost yet
+            $externalReturn = round($returnCost, 2);
+            $externalComp   = round($complaintCost, 2);
             $total = round($internalScrap + $internalRework + $externalReturn + $externalComp, 2);
 
             $breakdown = [
@@ -127,6 +147,7 @@ class CopqService
                     'returns'      => $returns,
                     'complaints'   => $complaints,
                     'return_cost'  => $externalReturn,
+                    'complaint_cost' => $externalComp,
                 ],
                 'total'        => $total,
                 'period_label' => $from->format('M Y'),
@@ -302,6 +323,16 @@ class CopqService
             ->whereBetween('w.created_at', [$fromDate, $toDate])
             ->sum(DB::raw('w.quantity_target * p.standard_cost * '.(string) $this->reworkCostRatio())) ?? 0);
 
+        $returnCost = (float) DB::table('return_requests')
+            ->where('status', 'completed')
+            ->whereBetween('updated_at', [$fromDate, $toDate])
+            ->sum('refund_amount');
+        $complaintCost = (float) DB::table('customer_complaints as c')
+            ->leftJoin('work_orders as w', 'c.replacement_work_order_id', '=', 'w.id')
+            ->leftJoin('products as p', 'w.product_id', '=', 'p.id')
+            ->whereBetween('c.created_at', [$fromDate, $toDate])
+            ->sum(DB::raw('COALESCE(w.quantity_good, w.quantity_produced, w.quantity_target, 0) * COALESCE(p.standard_cost, 0)'));
+
         return [
             'internal_failure' => [
                 'scrap_units'  => $scrap,
@@ -312,9 +343,10 @@ class CopqService
             'external_failure' => [
                 'returns'     => $returns,
                 'complaints'  => $complaints,
-                'return_cost' => 0.0,
+                'return_cost' => round($returnCost, 2),
+                'complaint_cost' => round($complaintCost, 2),
             ],
-            'total'        => round($scrapCost + $reworkCost, 2),
+            'total'        => round($scrapCost + $reworkCost + $returnCost + $complaintCost, 2),
             'period_label' => $from->format('M Y') . ' – ' . $to->format('M Y'),
         ];
     }

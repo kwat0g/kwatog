@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\HR\Mail;
 
+use App\Common\Services\SettingsService;
 use App\Modules\HR\Models\JobApplication;
 use App\Modules\HR\Models\JobPosting;
 use Illuminate\Mail\Mailable;
@@ -26,6 +27,7 @@ class ApplicationReceivedMail extends Mailable
 
     public function content(): Content
     {
+        $settings = app(SettingsService::class);
         return new Content(
             markdown: 'emails.recruitment.application-received',
             with: [
@@ -33,6 +35,7 @@ class ApplicationReceivedMail extends Mailable
                 'positionTitle' => $this->posting->title,
                 'trackingCode'  => $this->application->tracking_code,
                 'trackingUrl'   => config('app.frontend_url') . '/careers/track',
+                'companyName' => $settings->requiredString('company.legal_name'),
             ],
         );
     }

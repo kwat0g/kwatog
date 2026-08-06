@@ -2,54 +2,54 @@ export type AssetCategory = 'machine' | 'mold' | 'vehicle' | 'equipment' | 'furn
 export type AssetStatus = 'active' | 'under_maintenance' | 'disposed';
 
 export interface Asset {
-  id: string;
-  asset_code: string;
-  name: string;
-  description: string | null;
-  category: AssetCategory;
-  category_label?: string;
-  department?: { id: string; name: string; code: string } | null;
-  acquisition_date: string;
-  acquisition_cost: string;
-  useful_life_years: number;
-  salvage_value: string;
-  accumulated_depreciation: string;
-  monthly_depreciation: string;
-  book_value: string;
-  status: AssetStatus;
-  status_label?: string;
-  disposed_date: string | null;
-  disposal_amount: string | null;
-  location: string | null;
-  depreciations?: Array<{
-    id: string;
-    period_year: number;
-    period_month: number;
-    depreciation_amount: string;
-    accumulated_after: string;
-    journal_entry_id: string | null;
-    created_at: string | null;
-  }>;
-  created_at: string | null;
-  updated_at: string | null;
+ id: string;
+ asset_code: string;
+ name: string;
+ description: string | null;
+ category: AssetCategory;
+ category_label?: string;
+ department?: { id: string; name: string; code: string } | null;
+ acquisition_date: string;
+ acquisition_cost: string;
+ useful_life_years: number;
+ salvage_value: string;
+ accumulated_depreciation: string;
+ monthly_depreciation: string;
+ book_value: string;
+ status: AssetStatus;
+ status_label?: string;
+ disposed_date: string | null;
+ disposal_amount: string | null;
+ location: string | null;
+ depreciations?: Array<{
+ id: string;
+ period_year: number;
+ period_month: number;
+ depreciation_amount: string;
+ accumulated_after: string;
+ journal_entry_id: string | null;
+ created_at: string | null;
+ }>;
+ created_at: string | null;
+ updated_at: string | null;
 }
 
 export interface CreateAssetData {
-  name: string;
-  description?: string;
-  category: AssetCategory;
-  department_id?: number | null;
-  acquisition_date: string;
-  acquisition_cost: string;
-  useful_life_years: number;
-  salvage_value?: string;
-  location?: string;
+ name: string;
+ description?: string;
+ category: AssetCategory;
+ department_id?: number | null;
+ acquisition_date: string;
+ acquisition_cost: string;
+ useful_life_years: number;
+ salvage_value?: string;
+ location?: string;
 }
 
 export interface DisposeAssetData {
-  disposal_amount: string;
-  disposed_date?: string;
-  remarks?: string;
+ disposal_amount: string;
+ disposed_date?: string;
+ remarks?: string;
 }
 
 /* ── Asset Transfers ── */
@@ -57,25 +57,25 @@ export interface DisposeAssetData {
 export type AssetTransferStatus = 'pending' | 'approved' | 'rejected' | 'completed';
 
 export interface AssetTransfer {
-  id: string;
-  transfer_number: string;
-  asset: { id: string; asset_code: string; name: string };
-  from_department: { id: string; name: string };
-  to_department: { id: string; name: string };
-  reason: string | null;
-  transfer_date: string;
-  status: AssetTransferStatus;
-  status_label?: string;
-  requested_by: string;
-  approved_by: string | null;
-  approved_at: string | null;
-  created_at: string;
+ id: string;
+ transfer_number: string;
+ asset: { id: string; asset_code: string; name: string };
+ from_department: { id: string; name: string };
+ to_department: { id: string; name: string };
+ reason: string | null;
+ transfer_date: string;
+ status: AssetTransferStatus;
+ status_label?: string;
+ requested_by: string;
+ approved_by: string | null;
+ approved_at: string | null;
+ created_at: string;
 }
 
 export interface CreateTransferData {
-  asset_id: string;
-  from_department_id: string;
-  to_department_id: string;
-  reason?: string;
-  transfer_date: string;
+ asset_id: string;
+ from_department_id: string;
+ to_department_id: string;
+ reason?: string;
+ transfer_date: string;
 }

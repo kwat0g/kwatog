@@ -15,74 +15,74 @@ import { onFormInvalid } from '@/lib/formErrors';
 import type { ApiValidationError } from '@/types';
 
 const schema = z.object({
-  maintainable_type: z.string().min(1, 'Target type required'),
-  maintainable_id: z.coerce.number().int().min(1, 'Target ID required'),
-  description: z.string().min(1).max(200),
-  interval_type: z.string().min(1, 'Interval type required'),
-  interval_value: z.coerce.number().int().min(1),
-  is_active: z.coerce.boolean().default(true),
+ maintainable_type: z.string().min(1, 'Target type required'),
+ maintainable_id: z.coerce.number().int().min(1, 'Target ID required'),
+ description: z.string().min(1).max(200),
+ interval_type: z.string().min(1, 'Interval type required'),
+ interval_value: z.coerce.number().int().min(1),
+ is_active: z.coerce.boolean().default(true),
 });
 type FormValues = z.infer<typeof schema>;
 
 export default function CreateMaintenanceSchedulePage() {
-  const navigate = useNavigate();
-  const qc = useQueryClient();
-  const { data: options } = useQuery({ queryKey: ['maintenance', 'schedule-options'], queryFn: () => schedulesApi.options() });
-  const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<FormValues>({
-    resolver: zodResolver(schema),
-    defaultValues: { maintainable_type: '', interval_type: '', is_active: true },
-  });
+ const navigate = useNavigate();
+ const qc = useQueryClient();
+ const { data: options } = useQuery({ queryKey: ['maintenance', 'schedule-options'], queryFn: () => schedulesApi.options() });
+ const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<FormValues>({
+ resolver: zodResolver(schema),
+ defaultValues: { maintainable_type: '', interval_type: '', is_active: true },
+ });
 
-  const mutation = useMutation({
-    mutationFn: (data: FormValues) => schedulesApi.create(data as Parameters<typeof schedulesApi.create>[0]),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['maintenance', 'schedules'] });
-      toast.success('Schedule created.');
-      navigate('/maintenance/schedules');
-    },
-    onError: (err: AxiosError<ApiValidationError>) => {
-      if (err.response?.status === 422 && err.response.data.errors) {
-        Object.entries(err.response.data.errors).forEach(([k, v]) =>
-          setError(k as keyof FormValues, { type: 'server', message: v[0] }));
-        toast.error(err.response?.data?.message || 'Validation failed.');
-      }
-    },
-  });
+ const mutation = useMutation({
+ mutationFn: (data: FormValues) => schedulesApi.create(data as Parameters<typeof schedulesApi.create>[0]),
+ onSuccess: () => {
+ qc.invalidateQueries({ queryKey: ['maintenance', 'schedules'] });
+ toast.success('Schedule created.');
+ navigate('/maintenance/schedules');
+ },
+ onError: (err: AxiosError<ApiValidationError>) => {
+ if (err.response?.status === 422 && err.response.data.errors) {
+ Object.entries(err.response.data.errors).forEach(([k, v]) =>
+ setError(k as keyof FormValues, { type: 'server', message: v[0] }));
+ toast.error(err.response?.data?.message || 'Validation failed.');
+ }
+ },
+ });
 
-  return (
-    <div>
-      <PageHeader title="New maintenance schedule" backTo="/maintenance/schedules" backLabel="Schedules" />
-      <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-2xl mx-auto px-5 py-4">
-        <fieldset className="mb-6">
-          <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">Target</legend>
-          <div className="grid grid-cols-2 gap-3">
-            <Select label="Type" {...register('maintainable_type')} error={errors.maintainable_type?.message} required>
-              <option value="">— Select —</option>
-              {(options?.maintainable_types ?? []).map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
-            </Select>
-            <Input label="Target ID" type="number" {...register('maintainable_id')} error={errors.maintainable_id?.message} required />
-          </div>
-        </fieldset>
+ return (
+ <div>
+ <PageHeader title="New maintenance schedule" backTo="/maintenance/schedules" backLabel="Schedules" />
+ <form onSubmit={handleSubmit((d) => mutation.mutate(d), onFormInvalid<FormValues>())} className="max-w-2xl mx-auto px-5 py-4">
+ <fieldset className="mb-6">
+ <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">Target</legend>
+ <div className="grid grid-cols-2 gap-3">
+ <Select label="Type" {...register('maintainable_type')} error={errors.maintainable_type?.message} required>
+ <option value="">— Select —</option>
+ {(options?.maintainable_types ?? []).map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
+ </Select>
+ <Input label="Target ID" type="number" {...register('maintainable_id')} error={errors.maintainable_id?.message} required />
+ </div>
+ </fieldset>
 
-        <fieldset className="mb-6">
-          <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">Schedule</legend>
-          <Input label="Description" {...register('description')} error={errors.description?.message} required />
-          <div className="grid grid-cols-2 gap-3 mt-3">
-            <Select label="Interval type" {...register('interval_type')} error={errors.interval_type?.message} required>
-              <option value="">— Select —</option>
-              {(options?.interval_types ?? []).map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
-            </Select>
-            <Input label="Interval value" type="number" {...register('interval_value')} error={errors.interval_value?.message} required />
-          </div>
-        </fieldset>
+ <fieldset className="mb-6">
+ <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">Schedule</legend>
+ <Input label="Description" {...register('description')} error={errors.description?.message} required />
+ <div className="grid grid-cols-2 gap-3 mt-3">
+ <Select label="Interval type" {...register('interval_type')} error={errors.interval_type?.message} required>
+ <option value="">— Select —</option>
+ {(options?.interval_types ?? []).map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
+ </Select>
+ <Input label="Interval value" type="number" {...register('interval_value')} error={errors.interval_value?.message} required />
+ </div>
+ </fieldset>
 
-        <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
-          <Button type="button" variant="secondary" onClick={() => navigate('/maintenance/schedules')}>Cancel</Button>
-          <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending} loading={mutation.isPending}>
-            {mutation.isPending ? 'Creating…' : 'Create schedule'}
-          </Button>
-        </div>
-      </form>
-    </div>
-  );
+ <div className="flex items-center justify-end gap-2 pt-4 border-t border-default">
+ <Button type="button" variant="secondary" onClick={() => navigate('/maintenance/schedules')}>Cancel</Button>
+ <Button type="submit" variant="primary" disabled={isSubmitting || mutation.isPending} loading={mutation.isPending}>
+ {mutation.isPending ? 'Creating…' : 'Create schedule'}
+ </Button>
+ </div>
+ </form>
+ </div>
+ );
 }

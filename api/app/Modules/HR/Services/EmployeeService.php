@@ -28,7 +28,10 @@ class EmployeeService
 
     public function list(array $filters, ?User $user = null): LengthAwarePaginator
     {
-        $query = Employee::query()->with(['department', 'position']);
+        // Include the linked account so resources can populate an empty legacy
+        // employee email from the authoritative login record without issuing
+        // per-row lazy queries.
+        $query = Employee::query()->with(['department', 'position', 'user:id,employee_id,email']);
 
         // REC-11 — centralized, permission-driven row-level scope. Tiers:
         // hr.employees.view_sensitive (HR/admin) → all; hr.employees.view
@@ -122,6 +125,9 @@ class EmployeeService
         return DB::transaction(function () use ($data) {
             $data['employee_no'] = $this->sequences->generate('employee');
 
+            $shiftId = ! empty($data['shift_id']) ? (int) $data['shift_id'] : null;
+            unset($data['shift_id']);
+
             /** @var Employee $employee */
             $employee = Employee::create($data);
 
@@ -133,11 +139,27 @@ class EmployeeService
                     'position_id' => $employee->position_id,
                     'employment_type' => $employee->employment_type instanceof \BackedEnum ? $employee->employment_type->value : $employee->employment_type,
                     'pay_type' => $employee->pay_type instanceof \BackedEnum ? $employee->pay_type->value : $employee->pay_type,
-                    'salary' => $employee->basic_monthly_salary ?? $employee->daily_rate,
+                    'salary' => $employee->basic_monthly_salary ?? $employee->semi_monthly_rate,
                 ],
                 'effective_date' => $employee->date_hired,
                 'created_at' => now(),
             ]);
+
+            // Auto-assign shift: use explicit shift_id from data, or fall back to default shift.
+            if (! $shiftId && Schema::hasTable('shifts')) {
+                $defaultShift = DB::table('shifts')->where('is_default', true)->value('id');
+                if ($defaultShift) {
+                    $shiftId = (int) $defaultShift;
+                }
+            }
+            if ($shiftId && Schema::hasTable('employee_shift_assignments')) {
+                DB::table('employee_shift_assignments')->insert([
+                    'employee_id'    => $employee->id,
+                    'shift_id'       => $shiftId,
+                    'effective_date' => $employee->date_hired?->toDateString() ?? now()->toDateString(),
+                    'created_at'     => now(),
+                ]);
+            }
 
             // U4 — initialize onboarding tracker (auto-completes profile +
             // leave-balance steps inside this same transaction).
@@ -184,10 +206,10 @@ class EmployeeService
             // REC-03 — pay can ONLY change through the maker-checker SalaryAdjustment
             // gate (SalaryAdjustmentService). Strip salary fields here so a direct
             // employee edit can never bypass approval, even if a caller supplies them.
-            unset($data['basic_monthly_salary'], $data['daily_rate']);
+            unset($data['basic_monthly_salary'], $data['semi_monthly_rate']);
 
             $original = $employee->only([
-                'department_id', 'position_id', 'basic_monthly_salary', 'daily_rate', 'employment_type', 'pay_type',
+                'department_id', 'position_id', 'basic_monthly_salary', 'semi_monthly_rate', 'employment_type', 'pay_type',
             ]);
 
             $employee->update($data);
@@ -210,17 +232,17 @@ class EmployeeService
             }
             if (
                 (array_key_exists('basic_monthly_salary', $data) && (string) $original['basic_monthly_salary'] !== (string) $employee->basic_monthly_salary)
-                || (array_key_exists('daily_rate', $data) && (string) $original['daily_rate'] !== (string) $employee->daily_rate)
+                || (array_key_exists('semi_monthly_rate', $data) && (string) $original['semi_monthly_rate'] !== (string) $employee->semi_monthly_rate)
             ) {
                 $changes[] = [
                     'change_type' => EmploymentChangeType::SalaryAdjusted->value,
                     'from_value' => [
                         'basic_monthly_salary' => $original['basic_monthly_salary'],
-                        'daily_rate' => $original['daily_rate'],
+                        'semi_monthly_rate' => $original['semi_monthly_rate'],
                     ],
                     'to_value' => [
                         'basic_monthly_salary' => $employee->basic_monthly_salary,
-                        'daily_rate' => $employee->daily_rate,
+                        'semi_monthly_rate' => $employee->semi_monthly_rate,
                     ],
                 ];
             }

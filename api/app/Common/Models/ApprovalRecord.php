@@ -32,9 +32,11 @@ class ApprovalRecord extends Model
 
     public function getIsOverdueAttribute(): bool
     {
+        $overdueHours = app(\App\Common\Services\SettingsService::class)
+            ->requiredInt('approvals.reminder_hours', 1);
         return $this->action === 'pending'
             && $this->created_at
-            && $this->created_at->lt(now()->subHours(24));
+            && $this->created_at->lt(now()->subHours($overdueHours));
     }
 
     public function getOverdueHoursAttribute(): int

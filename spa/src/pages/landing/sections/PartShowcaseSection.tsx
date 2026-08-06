@@ -35,7 +35,7 @@ export function PartShowcaseSection() {
 
   return (
     <section id="parts-3d" className="relative bg-landing-canvas px-5 py-24 sm:px-5 sm:py-32">
-      <div className="mx-auto max-w-7xl">
+      <div className="mx-auto max-w-[1440px]">
         <SectionHeading
           eyebrow={content?.section_copy?.part_showcase_eyebrow || 'Interactive 3D Catalogue'}
           title={content?.section_copy?.part_showcase_title || 'Inspect Moulded Components & Specs'}
@@ -57,11 +57,11 @@ export function PartShowcaseSection() {
                     aria-selected={active}
                     onClick={() => setPartIndex(i)}
                     className={cn(
-                      'rounded-full border px-4 py-2 font-mono text-[11px] uppercase tracking-[0.12em] transition-colors duration-300',
+                      'rounded-full border px-5 py-2.5 font-mono text-xs uppercase tracking-[0.15em] transition-all duration-300 hover:-translate-y-0.5',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas',
                       active
-                        ? 'border-landing-accent bg-landing-accent text-landing-accent-fg'
-                        : 'border-landing-border text-landing-muted hover:border-landing-accent/40 hover:text-landing-text',
+                        ? 'border-landing-accent bg-landing-accent text-landing-accent-fg shadow-lg shadow-landing-accent/20'
+                        : 'border-landing-border text-landing-muted hover:border-landing-accent/40 hover:text-landing-text hover:shadow-md',
                     )}
                   >
                     {content?.part_specs?.find((candidate) => candidate.id === p.id)?.name || p.name || '—'}
@@ -109,11 +109,11 @@ export function PartShowcaseSection() {
                   aria-pressed={exploded}
                   onClick={() => setExploded((v) => !v)}
                   className={cn(
-                    'group inline-flex items-center gap-2.5 rounded-full border px-5 py-3 font-sans text-[13px] font-medium transition-colors duration-300',
+                    'group inline-flex items-center gap-3 rounded-full border px-6 py-3.5 font-sans text-[14px] font-semibold transition-all duration-300 hover:scale-105',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas',
                     exploded
-                      ? 'border-landing-accent bg-landing-accent text-landing-accent-fg'
-                      : 'border-landing-border-strong text-landing-text hover:border-landing-accent/50 hover:bg-landing-elevated',
+                      ? 'border-landing-accent bg-landing-accent text-landing-accent-fg shadow-lg shadow-landing-accent/20'
+                      : 'border-landing-border-strong text-landing-text hover:border-landing-accent/50 hover:bg-landing-elevated hover:shadow-md hover:shadow-landing-accent/10',
                   )}
                 >
                   {exploded ? <Box size={15} /> : <Layers size={15} />}
@@ -139,8 +139,8 @@ export function PartShowcaseSection() {
           </div>
 
           {/* ── Drawing frame ────────────────────────────────────── */}
-          <div data-reveal="right">
-            <figure className="relative aspect-square w-full overflow-hidden rounded-md border border-landing-border-strong bg-landing-surface sm:aspect-[5/4] lg:aspect-square">
+          <div data-reveal="right" className="flex items-center">
+            <figure className="relative w-full overflow-hidden rounded-md border border-landing-border-strong bg-landing-surface aspect-square sm:aspect-[4/3] lg:aspect-[4/3]">
               {/* blueprint grid */}
               <div
                 aria-hidden="true"

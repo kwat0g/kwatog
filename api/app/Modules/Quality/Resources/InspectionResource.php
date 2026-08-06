@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Modules\Quality\Resources;
 
+use App\Modules\Quality\Enums\InspectionStage;
+use Illuminate\Support\Str;
+
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -15,7 +18,9 @@ class InspectionResource extends JsonResource
             'id' => $this->hash_id,
             'inspection_number' => $this->inspection_number,
             'stage' => $this->stage instanceof \BackedEnum ? $this->stage->value : $this->stage,
+            'stage_label' => InspectionStage::tryFrom((string) ($this->stage instanceof \BackedEnum ? $this->stage->value : $this->stage))?->label(),
             'status' => $this->status instanceof \BackedEnum ? $this->status->value : $this->status,
+            'status_label' => Str::headline((string) ($this->status instanceof \BackedEnum ? $this->status->value : $this->status)),
             'entity_type' => $this->entity_type instanceof \BackedEnum ? $this->entity_type->value : $this->entity_type,
             'entity_hash_id' => $this->entity_id ? app('hashids')->encode($this->entity_id) : null,
             'batch_quantity' => (int) $this->batch_quantity,

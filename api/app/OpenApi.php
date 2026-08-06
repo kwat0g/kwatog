@@ -7,14 +7,14 @@ namespace App;
 /**
  * @OA\Info(
  *     version="1.0.0",
- *     title="Ogami ERP API",
- *     description="REST API for the Ogami ERP system — IATF 16949 certified plastic injection molding manufacturer",
- *     @OA\Contact(email="admin@ogami.ph")
+ *     title="ERP API",
+ *     description="REST API for the enterprise resource planning system",
+ *     @OA\Contact()
  * )
  *
  * @OA\Server(
  *     url="/api/v1",
- *     description="Ogami ERP API v1"
+ *     description="ERP API v1"
  * )
  *
  * @OA\SecurityScheme(

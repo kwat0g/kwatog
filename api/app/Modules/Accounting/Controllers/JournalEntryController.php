@@ -26,6 +26,16 @@ class JournalEntryController
         return JournalEntryResource::collection($this->service->list($request->query()));
     }
 
+    public function options(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'statuses' => array_map(static fn (JournalEntryStatus $status): array => [
+                'value' => $status->value,
+                'label' => ucfirst($status->value),
+            ], JournalEntryStatus::cases()),
+        ]]);
+    }
+
     public function show(JournalEntry $journalEntry): JournalEntryResource
     {
         return new JournalEntryResource($this->service->show($journalEntry));
@@ -69,6 +79,12 @@ class JournalEntryController
             return response()->json(['message' => $e->getMessage()], 422);
         }
         return response()->json(null, 204);
+    }
+
+    public function restore(JournalEntry $journalEntry): JsonResponse
+    {
+        $journalEntry->restore();
+        return response()->json(['message' => 'Journal entry restored.']);
     }
 
     public function post(Request $request, JournalEntry $journalEntry): JsonResponse|JournalEntryResource
