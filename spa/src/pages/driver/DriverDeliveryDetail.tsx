@@ -114,7 +114,7 @@ export default function DriverDeliveryDetail() {
  {next && label && (
  <Button
  variant="primary"
- size="xl"
+ size="lg"
  className="w-full"
  loading={transition.isPending}
  onClick={() => transition.mutate(next)}
@@ -126,7 +126,7 @@ export default function DriverDeliveryDetail() {
  {data.status === 'delivered' && (
  <Button
  variant="secondary"
- size="xl"
+ size="lg"
  className="w-full"
  onClick={() => navigate(`/driver/${id}/photo`)}
  >

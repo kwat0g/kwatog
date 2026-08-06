@@ -65,7 +65,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
  onChange?.(e);
  }}
  className={cn(
- 'min-h-[72px] px-3 py-2 rounded-xl border bg-canvas text-sm resize-y transition-all duration-300 shadow-sm',
+ 'min-h-[72px] px-3 py-2 rounded-md border bg-canvas text-sm resize-y transition-all duration-fast',
  'hover:border-strong focus:outline-none focus:ring-[3px] focus:ring-accent/20 focus:border-accent',
  'placeholder:text-subtle',
  error ? 'border-danger' : 'border-default',

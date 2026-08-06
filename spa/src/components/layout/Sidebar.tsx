@@ -504,10 +504,10 @@ const NavLink = memo(function NavLink({
  to={item.to}
  aria-label={collapsed ? item.label : undefined}
  className={cn(
- 'relative flex items-center gap-3 px-3 py-2.5 mx-2 mb-0.5 rounded-xl text-sm transition-all duration-300',
+ 'relative flex items-center gap-3 px-3 py-2.5 mx-2 mb-0.5 rounded-md text-sm transition-all duration-fast',
  active
- ? 'text-accent font-semibold bg-accent/15 shadow-sm'
- : 'text-secondary hover:bg-surface hover:text-primary hover:shadow-sm hover:translate-x-1',
+ ? 'text-accent font-medium bg-accent/15'
+ : 'text-secondary hover:bg-surface hover:text-primary',
  collapsed && 'justify-center mx-1 py-2',
  )}
  >

@@ -82,7 +82,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
  )}
  <div
   className={cn(
-  'flex items-stretch rounded-xl border overflow-hidden transition-all duration-300 shadow-sm',
+  'flex items-stretch rounded-md border overflow-hidden transition-all duration-fast',
   shellSize[fieldSize],
   'hover:border-strong focus-within:ring-[3px] focus-within:ring-accent/20 focus-within:border-accent focus-within:bg-canvas',
   isPicker ? 'bg-elevated hover:bg-canvas cursor-pointer' : 'bg-canvas',

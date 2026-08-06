@@ -38,7 +38,7 @@ export function DocumentRevisionDiff({ revisions, documentCode, title }: Documen
  <div className="bg-canvas border border-default rounded-md p-4 space-y-4">
  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-default pb-3">
  <div className="flex items-center gap-2">
- <GitCompare className="w-5 h-5 text-indigo-500" />
+ <GitCompare className="w-5 h-5 text-accent" />
  <div>
  <h3 className="text-xs font-medium uppercase tracking-wider text-primary flex items-center gap-1.5">
  IATF 16949 Controlled Revision Diff Viewer
@@ -93,7 +93,7 @@ export function DocumentRevisionDiff({ revisions, documentCode, title }: Documen
  <div className="bg-surface/60 border border-default/80 rounded-md p-3 space-y-2">
  <div className="flex items-center justify-between border-b border-default/60 pb-2">
  <div className="flex items-center gap-1.5">
- <FileText className="w-4 h-4 text-zinc-500" />
+ <FileText className="w-4 h-4 text-muted" />
  <span className="font-mono font-medium text-xs text-primary">Revision {revA.revision_number}</span>
  </div>
  <Chip variant="neutral" className="text-[10px]">
@@ -123,11 +123,11 @@ export function DocumentRevisionDiff({ revisions, documentCode, title }: Documen
  </div>
 
  {/* Revision Target Card (Rev B) */}
- <div className="bg-indigo-500/5 border border-indigo-500/30 rounded-md p-3 space-y-2">
- <div className="flex items-center justify-between border-b border-indigo-500/20 pb-2">
+ <div className="bg-elevated border border-accent/30 rounded-md p-3 space-y-2">
+ <div className="flex items-center justify-between border-b border-accent/20 pb-2">
  <div className="flex items-center gap-1.5">
- <FileText className="w-4 h-4 text-indigo-500" />
- <span className="font-mono font-medium text-xs text-indigo-600 dark:text-indigo-400">
+ <FileText className="w-4 h-4 text-accent" />
+ <span className="font-mono font-medium text-xs text-accent">
  Revision {revB.revision_number}
  </span>
  </div>
@@ -151,7 +151,7 @@ export function DocumentRevisionDiff({ revisions, documentCode, title }: Documen
  </div>
  </div>
 
- <div className="bg-canvas p-2.5 rounded border border-indigo-500/20 text-2xs font-mono text-secondary space-y-1">
+ <div className="bg-canvas p-2.5 rounded border border-accent/20 text-2xs font-mono text-secondary space-y-1">
  <span className="text-muted uppercase text-[9px] block">Engineering Change Notes:</span>
  <p className="font-medium text-primary">
  {revB.change_summary ?? 'Updated critical dimensional tolerance window and ANSI/ASQ Z1.4 sampling plan limits.'}
@@ -163,25 +163,25 @@ export function DocumentRevisionDiff({ revisions, documentCode, title }: Documen
  {/* Parameter Delta Visualizer (Simulated Spec Change Matrix) */}
  <div className="bg-surface rounded-md border border-default/60 p-3 space-y-2">
  <h4 className="text-2xs font-medium uppercase tracking-wider text-muted flex items-center gap-1">
- <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+ <ShieldCheck className="w-3.5 h-3.5 text-success" />
  Audit Change Analysis (IATF 16949 §7.5.3.2 Document Control Audit Trail)
  </h4>
 
  <div className="text-xs space-y-1 font-mono">
- <div className="flex items-center justify-between p-1.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-800 dark:text-emerald-300">
+ <div className="flex items-center justify-between p-1.5 rounded bg-success-bg border border-success/20 text-success-fg">
  <span className="flex items-center gap-1.5">
  <Check className="w-3.5 h-3.5" />
  Critical Cavity Wall Thickness Tolerance: Nominal 2.50mm ± 0.05mm
  </span>
- <span className="text-2xs bg-emerald-500/20 px-1.5 py-0.5 rounded font-sans">Tighter Quality Limit</span>
+ <span className="text-2xs bg-success/20 px-1.5 py-0.5 rounded font-sans">Tighter Quality Limit</span>
  </div>
 
- <div className="flex items-center justify-between p-1.5 rounded bg-indigo-500/10 border border-indigo-500/20 text-indigo-800 dark:text-indigo-300">
+ <div className="flex items-center justify-between p-1.5 rounded bg-info-bg border border-info/20 text-info-fg">
  <span className="flex items-center gap-1.5">
  <Check className="w-3.5 h-3.5" />
  ANSI/ASQ Z1.4 Inspection Sampling: Level II (Normal) → Level III (Tightened)
  </span>
- <span className="text-2xs bg-indigo-500/20 px-1.5 py-0.5 rounded font-sans">Sampling Plan Upgrade</span>
+ <span className="text-2xs bg-info/20 px-1.5 py-0.5 rounded font-sans">Sampling Plan Upgrade</span>
  </div>
  </div>
  </div>

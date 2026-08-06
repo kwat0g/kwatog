@@ -97,7 +97,7 @@ export default function SubmitReviewPage() {
  if (isError || !review) {
  return (
  <EmptyState icon="alert-circle" title="Failed to load review"
- action={<Button variant="secondary" onClick={() => navigate('/hr/performance-reviews/reviews')}>Back</Button>} />
+ action={<Button variant="secondary" onClick={() => navigate(-1)}>Back</Button>} />
  );
  }
 

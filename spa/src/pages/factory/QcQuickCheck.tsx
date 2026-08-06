@@ -189,8 +189,8 @@ export default function QcQuickCheck() {
  <div className="grid grid-cols-2 gap-3 pt-2">
  <Button
  type="button"
- variant="success"
- size="xl"
+ variant="primary"
+ size="lg"
  onClick={handlePass}
  disabled={!canSubmit}
  loading={mutation.isPending}
@@ -200,7 +200,7 @@ export default function QcQuickCheck() {
  <Button
  type="button"
  variant="danger"
- size="xl"
+ size="lg"
  onClick={handleFail}
  disabled={!canSubmit}
  loading={mutation.isPending}

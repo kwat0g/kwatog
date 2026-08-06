@@ -32,30 +32,30 @@ export function ShopFloorMap({ machines, onSelectMachine }: ShopFloorMapProps) {
  const bayB = machines.filter((_, idx) => idx >= 6);
 
  const getStatusBg = (status: string) => {
- switch (status) {
- case 'running':
- return 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400';
- case 'breakdown':
- return 'bg-rose-500/10 border-rose-500/30 text-rose-600 dark:text-rose-400';
- case 'maintenance':
- return 'bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400';
- default:
- return 'bg-zinc-500/10 border-zinc-500/30 text-zinc-600 dark:text-zinc-400';
- }
- };
+  switch (status) {
+  case 'running':
+  return 'bg-success-bg border-success/30 text-success-fg';
+  case 'breakdown':
+  return 'bg-danger-bg border-danger/30 text-danger-fg';
+  case 'maintenance':
+  return 'bg-warning-bg border-warning/30 text-warning-fg';
+  default:
+  return 'bg-subtle border-default text-muted';
+  }
+  };
 
- const getStatusIcon = (status: string) => {
- switch (status) {
- case 'running':
- return <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 animate-pulse" />;
- case 'breakdown':
- return <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />;
- case 'maintenance':
- return <Wrench className="w-3.5 h-3.5 text-amber-500" />;
- default:
- return <Activity className="w-3.5 h-3.5 text-zinc-400" />;
- }
- };
+  const getStatusIcon = (status: string) => {
+  switch (status) {
+  case 'running':
+  return <CheckCircle2 className="w-3.5 h-3.5 text-success" />;
+  case 'breakdown':
+  return <AlertTriangle className="w-3.5 h-3.5 text-danger" />;
+  case 'maintenance':
+  return <Wrench className="w-3.5 h-3.5 text-warning" />;
+  default:
+  return <Activity className="w-3.5 h-3.5 text-muted" />;
+  }
+  };
 
  const renderMachineNode = (m: ShopFloorMachine) => {
  const isSelected = selectedMachine?.machine_id === m.machine_id;
@@ -70,9 +70,9 @@ export function ShopFloorMap({ machines, onSelectMachine }: ShopFloorMapProps) {
  onSelectMachine?.(m);
  }}
  className={`group relative flex flex-col justify-between p-3 rounded-md border text-left transition-all duration-200 cursor-pointer ${
- isSelected
- ? 'border-indigo-500 ring-2 ring-indigo-500/20 bg-indigo-500/5 '
- : `${getStatusBg(m.status)} hover:border-indigo-400/50 hover:`
+  isSelected
+  ? 'border-accent ring-2 ring-accent/20 bg-elevated '
+  : `${getStatusBg(m.status)} hover:border-accent/50 hover:bg-elevated`
  }`}
  >
  <div className="flex items-center justify-between gap-1 w-full mb-1.5">
@@ -107,18 +107,18 @@ export function ShopFloorMap({ machines, onSelectMachine }: ShopFloorMapProps) {
  <div className="flex justify-between items-center text-[10px]">
  <span className="text-muted">OEE</span>
  <span
- className={`font-mono font-medium ${
- oeePct >= 80 ? 'text-emerald-600 dark:text-emerald-400' : oeePct >= 65 ? 'text-amber-600' : 'text-rose-600'
- }`}
+  className={`font-mono font-medium ${
+  oeePct >= 80 ? 'text-success' : oeePct >= 65 ? 'text-warning' : 'text-danger'
+  }`}
  >
  {oeePct}%
  </span>
  </div>
  <div className="h-1 bg-elevated rounded-full overflow-hidden">
  <div
- className={`h-full rounded-full transition-all ${
- oeePct >= 80 ? 'bg-emerald-500' : oeePct >= 65 ? 'bg-amber-500' : 'bg-rose-500'
- }`}
+  className={`h-full rounded-full transition-all ${
+  oeePct >= 80 ? 'bg-success' : oeePct >= 65 ? 'bg-warning' : 'bg-danger'
+  }`}
  style={{ width: `${Math.min(100, Math.max(5, oeePct))}%` }}
  />
  </div>
@@ -126,7 +126,7 @@ export function ShopFloorMap({ machines, onSelectMachine }: ShopFloorMapProps) {
 
  <div className="flex items-center justify-between text-[10px] text-subtle pt-1 border-t border-default/40">
  <span>WO: {m.active_wo ?? 'WO-2026-001'}</span>
- <span className="group-hover:text-indigo-500 flex items-center gap-0.5">
+  <span className="group-hover:text-accent flex items-center gap-0.5">
  Details <ArrowRight className="w-2.5 h-2.5" />
  </span>
  </div>
@@ -141,16 +141,16 @@ export function ShopFloorMap({ machines, onSelectMachine }: ShopFloorMapProps) {
  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-default pb-3">
  <div>
  <h3 className="text-xs font-medium text-primary uppercase tracking-wider flex items-center gap-1.5">
- <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+  <span className="w-2 h-2 rounded-full bg-success" />
  Dasmarinas Plant — Injection Molding Shop Floor (12 Bays)
  </h3>
  <p className="text-2xs text-muted">Click any machine cell to inspect real-time OEE, mold, and active work orders.</p>
  </div>
  <div className="flex items-center gap-3 text-xs">
- <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Running</span>
- <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Maintenance</span>
- <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> Breakdown</span>
- <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-zinc-400" /> Idle</span>
+  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-success" /> Running</span>
+  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-warning" /> Maintenance</span>
+  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-danger" /> Breakdown</span>
+  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-muted" /> Idle</span>
  </div>
  </div>
 
@@ -182,7 +182,7 @@ export function ShopFloorMap({ machines, onSelectMachine }: ShopFloorMapProps) {
 
  {/* Selected Machine Detail Popover Drawer */}
  {selectedMachine && (
- <div className="bg-surface border border-indigo-500/40 rounded-md p-4 space-y-3 relative animate-in fade-in slide-in-from-bottom-2 duration-200">
+  <div className="bg-surface border border-accent/40 rounded-md p-4 space-y-3 relative transition-all duration-fast">
  <button
  type="button"
  onClick={() => setSelectedMachine(null)}

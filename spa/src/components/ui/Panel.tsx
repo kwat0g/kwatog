@@ -13,7 +13,7 @@ interface PanelProps {
 
 export function Panel({ title, meta, actions, children, className, bodyClassName, noPadding }: PanelProps) {
  return (
- <div className={cn('bg-canvas border border-default rounded-2xl overflow-hidden shadow-sm transition-all duration-300 hover:shadow-md hover:-translate-y-0.5', className)}>
+ <div className={cn('bg-canvas border border-default rounded-md overflow-hidden', className)}>
  {(title || meta || actions) && (
  <div className="flex items-center justify-between px-4 py-3 border-b border-default">
  <div className="flex items-baseline gap-2">

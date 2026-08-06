@@ -179,8 +179,8 @@ export default function MobileWorkOrderDetail() {
  {canStart && !isTerminal && (
  <Button
  type="button"
- variant="success"
- size="xl"
+ variant="primary"
+ size="lg"
  className="w-full"
  icon={<Play className="w-5 h-5" />}
  onClick={() => startMutation.mutate()}
@@ -300,7 +300,7 @@ export default function MobileWorkOrderDetail() {
  <Button
  type="submit"
  variant="primary"
- size="xl"
+ size="lg"
  className="w-full"
  icon={<CheckCircle2 className="w-5 h-5" />}
  loading={completeMutation.isPending}
@@ -436,7 +436,7 @@ export default function MobileWorkOrderDetail() {
  <Button
  type="button"
  variant="primary"
- size="xl"
+ size="lg"
  className="w-full"
  disabled={!canAddPart}
  loading={sparePartMutation.isPending}

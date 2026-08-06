@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Quality\Listeners;
 
+use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Production\Events\WorkOrderCompleted;
@@ -13,7 +14,6 @@ use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Services\InspectionService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 
 /**
  * Series C — Task C1 / ADV7. Outgoing QC auto-trigger.
@@ -127,25 +127,19 @@ class TriggerOutgoingQC implements ShouldQueue
             // Notify QC team.
             try {
                 $roles = array_values(array_filter((array) $this->settings->get('quality.outgoing_qc.notification_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
-                User::query()
+                $recipients = User::query()
                     ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                     ->where('is_active', true)
-                    ->get()
-                    ->each(function (User $user) use ($wo) {
-                        $user->notifications()->create([
-                            'id'              => (string) Str::uuid(),
-                            'type'            => 'chain.outgoing_qc_required',
-                            'notifiable_type' => $user::class,
-                            'notifiable_id'   => $user->id,
-                            'data'            => [
-                                'wo_id'     => $wo->hash_id,
-                                'wo_number' => $wo->wo_number,
-                                'message'   => "Outgoing QC required for WO {$wo->wo_number}.",
-                                'link'      => "/production/work-orders/{$wo->hash_id}",
-                            ],
-                            'read_at'         => null,
-                        ]);
-                    });
+                    ->get();
+
+                app(NotificationService::class)->send($recipients, 'chain.outgoing_qc_required', [
+                    'title'       => 'Outgoing QC required',
+                    'message'     => "Outgoing QC required for WO {$wo->wo_number}.",
+                    'link_to'     => "/production/work-orders/{$wo->hash_id}",
+                    'entity_type' => 'work_order',
+                    'entity_id'   => $wo->hash_id,
+                    'wo_number'   => $wo->wo_number,
+                ]);
             } catch (\Throwable $e) {
                 Log::debug('TriggerOutgoingQC notification failed', ['error' => $e->getMessage()]);
             }

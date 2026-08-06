@@ -58,7 +58,7 @@ export function Topbar({ user, onLogout, rightExtras }: TopbarProps) {
  }, []);
 
  return (
- <header className="sticky top-0 z-40 h-16 bg-canvas/80 backdrop-blur-xl border-b border-default flex items-center px-6 gap-5 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.04)]">
+ <header className="sticky top-0 z-40 h-12 bg-canvas/80 backdrop-blur-xl border-b border-default flex items-center px-4 gap-5">
  <Button
  variant="ghost"
  size="sm"

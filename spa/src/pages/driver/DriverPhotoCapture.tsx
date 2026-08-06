@@ -121,17 +121,17 @@ export default function DriverPhotoCapture() {
  )}
 
  <div className="grid grid-cols-2 gap-2">
- <Button variant="secondary" size="xl" onClick={() => fileRef.current?.click()}>
+ <Button variant="secondary" size="lg" onClick={() => fileRef.current?.click()}>
  {preview ? 'Retake' : 'Take photo'}
  </Button>
- <Button variant="secondary" size="xl" onClick={() => galleryRef.current?.click()}>
+ <Button variant="secondary" size="lg" onClick={() => galleryRef.current?.click()}>
  Choose from gallery
  </Button>
  </div>
 
  <Button
  variant="primary"
- size="xl"
+ size="lg"
  className="w-full"
  disabled={!file}
  loading={upload.isPending}

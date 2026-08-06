@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Purchasing\Services;
 
+use App\Common\Services\NotificationService;
 use App\Common\Enums\AlertSeverity;
 use App\Common\Enums\AlertType;
 use App\Common\Services\AlertEngineService;
@@ -18,7 +19,6 @@ use App\Modules\Purchasing\Models\PurchaseOrderItem;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 
 /**
  * Task A8 — For items marked is_critical = true with a single preferred
@@ -140,23 +140,15 @@ class AutoPurchaseOrderService
                 ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                 ->where('is_active', true)
                 ->get();
-            foreach ($vps as $u) {
-                $u->notifications()->create([
-                    'id'              => (string) Str::uuid(),
-                    'type'            => 'auto_po_pending',
-                    'notifiable_type' => $u::class,
-                    'notifiable_id'   => $u->id,
-                    'data'            => [
-                        'po_id'     => $po->hash_id,
-                        'po_number' => $po->po_number,
-                        'item_code' => $item->code,
-                        'message'   => "Critical stock alert. Auto-PO {$po->po_number} for {$item->code}. Review and approve.",
-                        'link'      => "/purchasing/purchase-orders/{$po->hash_id}",
-                    ],
-                    'read_at'         => null,
-                ]);
-            }
-        } catch (\Throwable $e) {
+            app(NotificationService::class)->send($vps, 'auto_po_pending', [
+                'title'       => 'Auto-PO awaiting approval',
+                'message'     => "Critical stock alert. Auto-PO {$po->po_number} for {$item->code}. Review and approve.",
+                'link_to'     => "/purchasing/purchase-orders/{$po->hash_id}",
+                'entity_type' => 'purchase_order',
+                'entity_id'   => $po->hash_id,
+                'po_number'   => $po->po_number,
+                'item_code'   => $item->code,
+            ]);        } catch (\Throwable $e) {
             Log::warning('AutoPurchaseOrderService::notifyVp failed', ['error' => $e->getMessage()]);
         }
     }

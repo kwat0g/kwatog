@@ -162,23 +162,16 @@ class NcrService
                 ->whereHas('role', fn ($q) => $q->whereIn('slug', $notificationRoles))
                 ->where('is_active', true)
                 ->get();
-            foreach ($qcHeads as $u) {
-                $u->notifications()->create([
-                    'id'              => (string) \Illuminate\Support\Str::uuid(),
-                    'type'            => 'auto_ncr_created',
-                    'notifiable_type' => $u::class,
-                    'notifiable_id'   => $u->id,
-                    'data'            => [
-                        'ncr_id'        => $ncr->hash_id,
-                        'ncr_number'    => $ncr->ncr_number,
-                        'inspection_id' => $inspection->hash_id,
-                        'severity'      => $severity,
-                        'message'       => "NCR auto-created from {$inspection->stage->value} inspection. {$inspection->defect_count} pcs rejected. {$severity} severity. Review disposition.",
-                        'link'          => "/quality/ncrs/{$ncr->hash_id}",
-                    ],
-                    'read_at'         => null,
-                ]);
-            }
+            app(NotificationService::class)->send($qcHeads, 'auto_ncr_created', [
+                'title'         => 'NCR auto-created',
+                'message'       => "NCR auto-created from {$inspection->stage->value} inspection. {$inspection->defect_count} pcs rejected. {$severity} severity. Review disposition.",
+                'link_to'       => "/quality/ncrs/{$ncr->hash_id}",
+                'entity_type'   => 'ncr',
+                'entity_id'     => $ncr->hash_id,
+                'ncr_number'    => $ncr->ncr_number,
+                'inspection_id' => $inspection->hash_id,
+                'severity'      => $severity,
+            ]);
         } catch (\Throwable $e) {
             // NCR is already persisted; only the QC notification fan-out failed.
             \Illuminate\Support\Facades\Log::warning(

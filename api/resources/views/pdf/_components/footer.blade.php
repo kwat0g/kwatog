@@ -4,7 +4,7 @@
     div above it shows the disclaimer + generator metadata.
 --}}
 <div class="footer-meta" style="position:fixed; bottom:24px; left:0; right:0;
-     text-align:center; font-size:7px; color:#999;
+     text-align:center; font-size:7.5pt; color:#64748b;
      padding:0 32px;">
   @if (!empty($company['disclaimer']))
     <div style="margin-bottom:2px;">{{ $company['disclaimer'] }}</div>
@@ -21,6 +21,6 @@
     $font = $fontMetrics->getFont('DejaVu Sans');
     $size = 7;
     // Bottom-right page number; layout is fixed at 8pt, A4 portrait default.
-    $pdf->page_text(495, 815, "Page {PAGE_NUM} of {PAGE_COUNT}", $font, $size, [0.55, 0.55, 0.55]);
+    $pdf->page_text(495, 815, "Page {PAGE_NUM} of {PAGE_COUNT}", $font, $size, [0.39, 0.45, 0.55]);
   }
 </script>

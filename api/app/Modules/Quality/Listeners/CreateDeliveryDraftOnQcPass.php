@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Quality\Listeners;
 
+use App\Common\Services\NotificationService;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
@@ -18,7 +19,6 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 
 /**
  * Series C — Task C1. After an outgoing inspection passes, draft a
@@ -92,25 +92,19 @@ class CreateDeliveryDraftOnQcPass implements ShouldQueue
             try {
                 $settings = $this->settings ?? app(SettingsService::class);
                 $roles = array_values(array_filter((array) $settings->get('quality.outgoing_qc_delivery.notification_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
-                User::query()
+                $recipients = User::query()
                     ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                     ->where('is_active', true)
-                    ->get()
-                    ->each(function (User $user) use ($wo) {
-                        $user->notifications()->create([
-                            'id'              => (string) Str::uuid(),
-                            'type'            => 'chain.delivery_drafted',
-                            'notifiable_type' => $user::class,
-                            'notifiable_id'   => $user->id,
-                            'data'            => [
-                                'wo_id'     => $wo->hash_id,
-                                'wo_number' => $wo->wo_number,
-                                'message'   => "Outgoing QC passed — delivery drafted for WO {$wo->wo_number}.",
-                                'link'      => "/supply-chain/deliveries",
-                            ],
-                            'read_at'         => null,
-                        ]);
-                    });
+                    ->get();
+
+                app(NotificationService::class)->send($recipients, 'chain.delivery_drafted', [
+                    'title'       => 'Delivery drafted',
+                    'message'     => "Outgoing QC passed — delivery drafted for WO {$wo->wo_number}.",
+                    'link_to'     => '/supply-chain/deliveries',
+                    'entity_type' => 'work_order',
+                    'entity_id'   => $wo->hash_id,
+                    'wo_number'   => $wo->wo_number,
+                ]);
             } catch (\Throwable $e) {
                 Log::debug('CreateDeliveryDraftOnQcPass notification failed', ['error' => $e->getMessage()]);
             }

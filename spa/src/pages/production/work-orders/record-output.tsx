@@ -194,7 +194,7 @@ export default function RecordOutputPage() {
  </div>
 
  <div className="mt-6 flex items-center justify-end gap-2 pt-3 border-t border-default">
- <Button type="button" variant="secondary" onClick={() => navigate(`/production/work-orders/${id}`)}>Back</Button>
+ <Button type="button" variant="secondary" onClick={() => navigate(-1)}>Back</Button>
  <Button type="submit" variant="primary" disabled={isSubmitting || submit.isPending} loading={submit.isPending}>
  {submit.isPending ? 'Recording…' : 'Record'}
  </Button>

@@ -59,7 +59,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
  )}
  <div
  className={cn(
- 'relative flex items-stretch rounded-xl border bg-elevated overflow-hidden transition-all duration-300 shadow-sm',
+ 'relative flex items-stretch rounded-md border bg-elevated overflow-hidden transition-all duration-fast',
  'hover:border-strong hover:bg-canvas',
  'focus-within:ring-[3px] focus-within:ring-accent/20 focus-within:border-accent focus-within:bg-canvas',
  shellSize[fieldSize],

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Quality\Listeners;
 
+use App\Common\Services\NotificationService;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
 use App\Modules\Inventory\Events\GoodsReceiptNoteCreated;
@@ -14,7 +15,6 @@ use App\Modules\Quality\Services\InspectionService;
 use App\Modules\Quality\Services\ItemQualityPlanService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 
 /**
  * Series C — Task C2. Incoming QC auto-trigger.
@@ -96,25 +96,19 @@ class TriggerIncomingQC implements ShouldQueue
 
             try {
                 $roles = array_values(array_filter((array) ($this->settings ?? app(SettingsService::class))->get('quality.incoming_qc.notification_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
-                User::query()
+                $recipients = User::query()
                     ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                     ->where('is_active', true)
-                    ->get()
-                    ->each(function (User $user) use ($grn) {
-                        $user->notifications()->create([
-                            'id' => (string) Str::uuid(),
-                            'type' => 'chain.incoming_qc_required',
-                            'notifiable_type' => $user::class,
-                            'notifiable_id' => $user->id,
-                            'data' => [
-                                'grn_id' => $grn->hash_id,
-                                'grn_number' => $grn->grn_number,
-                                'message' => "Incoming QC required for GRN {$grn->grn_number}.",
-                                'link' => "/inventory/grns/{$grn->hash_id}",
-                            ],
-                            'read_at' => null,
-                        ]);
-                    });
+                    ->get();
+
+                app(NotificationService::class)->send($recipients, 'chain.incoming_qc_required', [
+                    'title'       => 'Incoming QC required',
+                    'message'     => "Incoming QC required for GRN {$grn->grn_number}.",
+                    'link_to'     => "/inventory/grns/{$grn->hash_id}",
+                    'entity_type' => 'grn',
+                    'entity_id'   => $grn->hash_id,
+                    'grn_number'  => $grn->grn_number,
+                ]);
             } catch (\Throwable $e) {
                 Log::debug('TriggerIncomingQC notification failed', ['error' => $e->getMessage()]);
             }

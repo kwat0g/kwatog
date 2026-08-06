@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ogami ERP - Neo-Industrial Dashboard</title>
+    
+    <!-- Tailwind CSS via CDN for rapid prototyping -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Modern Sans-Serif Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        midnight: {
+                            900: '#0b132b',
+                            800: '#152238',
+                            700: '#1c2e4a',
+                        },
+                        cyan: {
+                            400: '#00f0ff',
+                            500: '#00c3ff',
+                        },
+                        amber: {
+                            400: '#ffb703',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        body {
+            /* Sleek dark gradient background */
+            background: linear-gradient(135deg, #0b132b 0%, #0a0f1a 100%);
+            color: #e2e8f0;
+        }
+        
+        /* Glassmorphism utility class */
+        .glass-card {
+            background: rgba(28, 46, 74, 0.4);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 1rem;
+        }
+        
+        .neon-text {
+            color: #00f0ff;
+            text-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
+        }
+        
+        .neon-border {
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.15);
+            border-left: 4px solid #00f0ff;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex antialiased">
+
+    <!-- Sidebar Navigation -->
+    <aside class="w-64 glass-card m-4 hidden md:flex flex-col">
+        <div class="p-6 border-b border-white/10">
+            <h1 class="text-2xl font-bold tracking-wider">
+                <span class="neon-text">OGAMI</span><br>
+                <span class="text-sm font-light text-slate-400">CORPORATION</span>
+            </h1>
+        </div>
+        <nav class="flex-1 p-4 space-y-2">
+            <!-- Active Menu Item -->
+            <a href="#" class="flex items-center space-x-3 p-3 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 transition-all">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+                <span class="font-medium">Dashboard</span>
+            </a>
+            <!-- Inactive Menu Items -->
+            <a href="#" class="flex items-center space-x-3 p-3 rounded-lg text-slate-400 hover:bg-white/5 hover:text-white transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                <span class="font-medium">Production</span>
+            </a>
+            <a href="#" class="flex items-center space-x-3 p-3 rounded-lg text-slate-400 hover:bg-white/5 hover:text-white transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+                <span class="font-medium">Inventory</span>
+            </a>
+            <a href="#" class="flex items-center space-x-3 p-3 rounded-lg text-slate-400 hover:bg-white/5 hover:text-white transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
+                <span class="font-medium">Settings</span>
+            </a>
+        </nav>
+    </aside>
+
+    <!-- Main Content Workspace -->
+    <main class="flex-1 p-4 md:p-8 overflow-y-auto">
+        <!-- Top Header Bar -->
+        <header class="flex justify-between items-center mb-8">
+            <div>
+                <h2 class="text-3xl font-bold tracking-tight">Factory Overview</h2>
+                <p class="text-slate-400 mt-1 flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+                    Tokyo Plant - Active Shift
+                </p>
+            </div>
+            <div class="flex items-center space-x-4">
+                <div class="text-right hidden sm:block">
+                    <p class="text-sm font-medium text-white">Y. Tanaka</p>
+                    <p class="text-xs text-slate-400">Production Manager</p>
+                </div>
+                <!-- Premium Avatar Wrapper -->
+                <div class="h-10 w-10 rounded-full bg-gradient-to-r from-cyan-400 to-blue-500 p-0.5 shadow-lg shadow-cyan-500/20">
+                    <div class="h-full w-full bg-midnight-900 rounded-full border-2 border-transparent overflow-hidden">
+                        <img src="https://ui-avatars.com/api/?name=YT&background=0D8ABC&color=fff" alt="User">
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- KPI Grid Dashboard -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <!-- Optimal Metric Card -->
+            <div class="glass-card p-6 neon-border transition-transform hover:-translate-y-1 cursor-pointer">
+                <h3 class="text-slate-400 text-sm font-medium mb-2">Production Line A</h3>
+                <div class="flex items-end justify-between">
+                    <div>
+                        <p class="text-3xl font-bold neon-text">91%</p>
+                        <p class="text-xs text-cyan-400/70 mt-1">Efficiency Rating</p>
+                    </div>
+                    <div class="bg-cyan-500/20 text-cyan-400 text-xs py-1 px-2 rounded-md font-medium border border-cyan-500/30">
+                        +3.2%
+                    </div>
+                </div>
+                <!-- Custom Progress Bar -->
+                <div class="mt-4 h-2 w-full bg-midnight-900 rounded-full overflow-hidden">
+                    <div class="h-full bg-cyan-400 w-[91%] shadow-[0_0_10px_#00f0ff]"></div>
+                </div>
+            </div>
+
+            <!-- Warning/Alert Metric Card -->
+            <div class="glass-card p-6 border-l-4 border-l-amber-400 transition-transform hover:-translate-y-1 cursor-pointer">
+                <h3 class="text-slate-400 text-sm font-medium mb-2">Machine Downtime</h3>
+                <div class="flex items-end justify-between">
+                    <div>
+                        <p class="text-3xl font-bold text-amber-400">2.1 hrs</p>
+                        <p class="text-xs text-amber-400/70 mt-1">Line 4 Maintenance</p>
+                    </div>
+                    <div class="bg-amber-400/20 text-amber-400 text-xs py-1 px-2 rounded-md font-medium border border-amber-400/30">
+                        -0.8%
+                    </div>
+                </div>
+                <!-- Custom Progress Bar -->
+                <div class="mt-4 h-2 w-full bg-midnight-900 rounded-full overflow-hidden">
+                    <div class="h-full bg-amber-400 w-[45%]"></div>
+                </div>
+            </div>
+
+            <!-- Standard Metric Card -->
+            <div class="glass-card p-6 transition-transform hover:-translate-y-1 cursor-pointer">
+                <h3 class="text-slate-400 text-sm font-medium mb-2">Raw Material Stock</h3>
+                <div class="flex items-end justify-between">
+                    <div>
+                        <p class="text-3xl font-bold text-white">84%</p>
+                        <p class="text-xs text-emerald-400 mt-1">Status: Optimal</p>
+                    </div>
+                </div>
+                <!-- Simple CSS Bar Graph -->
+                <div class="mt-4 h-8 w-full flex items-end space-x-1">
+                    <div class="w-1/6 bg-white/10 hover:bg-white/20 transition-colors rounded-t h-[40%]"></div>
+                    <div class="w-1/6 bg-white/10 hover:bg-white/20 transition-colors rounded-t h-[60%]"></div>
+                    <div class="w-1/6 bg-white/10 hover:bg-white/20 transition-colors rounded-t h-[50%]"></div>
+                    <div class="w-1/6 bg-white/10 hover:bg-white/20 transition-colors rounded-t h-[80%]"></div>
+                    <div class="w-1/6 bg-white/10 hover:bg-white/20 transition-colors rounded-t h-[70%]"></div>
+                    <div class="w-1/6 bg-cyan-400 rounded-t h-[84%] shadow-[0_0_8px_#00f0ff]"></div>
+                </div>
+            </div>
+
+            <!-- Standard Metric Card -->
+            <div class="glass-card p-6 transition-transform hover:-translate-y-1 cursor-pointer">
+                <h3 class="text-slate-400 text-sm font-medium mb-2">Overall Equipment (OEE)</h3>
+                <div class="flex items-end justify-between">
+                    <div>
+                        <p class="text-3xl font-bold text-white">88.5%</p>
+                        <p class="text-xs text-slate-400 mt-1">Target: 90%</p>
+                    </div>
+                </div>
+                <!-- Custom Progress Bar -->
+                <div class="mt-4 h-2 w-full bg-midnight-900 rounded-full overflow-hidden">
+                    <div class="h-full bg-blue-500 w-[88.5%]"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Large Content Area / Chart Placeholder -->
+        <div class="glass-card p-6 h-96 flex items-center justify-center relative overflow-hidden group border border-white/5 hover:border-cyan-500/30 transition-colors">
+             <!-- Background Glow Effect -->
+             <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl pointer-events-none group-hover:bg-cyan-500/10 transition-all duration-700"></div>
+             
+             <div class="text-center z-10">
+                 <div class="w-16 h-16 bg-white/5 rounded-2xl mx-auto flex items-center justify-center mb-4 border border-white/10 text-cyan-400">
+                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"></path></svg>
+                 </div>
+                 <h3 class="text-xl font-semibold mb-2 text-white">Production Trend Visualization</h3>
+                 <p class="text-slate-400 text-sm mb-6 max-w-sm mx-auto">This area is reserved for your React charting library (e.g. Recharts or Chart.js) featuring smooth area charts with gradients.</p>
+                 <button class="px-6 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg transition-all text-sm font-medium text-white hover:border-cyan-500/50 hover:shadow-[0_0_15px_rgba(0,240,255,0.2)]">
+                     Connect Data Source
+                 </button>
+             </div>
+        </div>
+    </main>
+</body>
+</html>

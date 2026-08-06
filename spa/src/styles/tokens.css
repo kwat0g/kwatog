@@ -60,9 +60,9 @@
   --text-muted: #71717a;
   --text-subtle: #a1a1aa;
 
-  /* ─── Accent (Monochrome / Contrast) ─── */
-  --accent: #18181b;
-  --accent-hover: #27272a;
+  /* ─── Accent (Indigo) ─── */
+  --accent: #4f46e5;
+  --accent-hover: #4338ca;
   --accent-fg: #ffffff;
 
   /* Links */
@@ -91,8 +91,8 @@
   --purple-fg: #5b21b6;
 
   /* ─── Focus ring ─── */
-  --ring: rgba(24, 24, 27, 0.3);
-  --ring-offset: transparent;
+  --ring: #4f46e5;
+  --ring-offset: #ffffff;
 
   /* ─── Shadows ─── */
   --shadow-focus: 0 0 0 4px rgba(24, 24, 27, 0.15);
@@ -157,9 +157,9 @@
   --text-muted: #a1a1aa;
   --text-subtle: #71717a;
 
-  --accent: #fafafa;
-  --accent-hover: #e4e4e7;
-  --accent-fg: #0a0a0a;
+  --accent: #6366f1;
+  --accent-hover: #818cf8;
+  --accent-fg: #ffffff;
 
   --text-link: #fafafa;
   --text-link-hover: #d4d4d8;
@@ -184,8 +184,8 @@
   --purple-bg: rgba(76, 29, 149, 0.5);
   --purple-fg: #ddd6fe;
 
-  --ring: rgba(250, 250, 250, 0.4);
-  --ring-offset: transparent;
+  --ring: #6366f1;
+  --ring-offset: #0a0a0a;
 
   --shadow-focus: 0 0 0 4px rgba(250, 250, 250, 0.2);
   --shadow-menu: 0 10px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.5);

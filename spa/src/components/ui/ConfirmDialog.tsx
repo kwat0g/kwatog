@@ -57,7 +57,7 @@ export function ConfirmDialog({
  ? 'text-warning'
  : 'text-accent';
 
- const buttonVariant: 'primary' | 'danger' = variant === 'danger' ? 'danger' : 'primary';
+ const buttonVariant = variant === 'danger' || variant === 'warning' ? 'danger' : 'primary';
 
  return (
  <Modal
@@ -72,7 +72,7 @@ export function ConfirmDialog({
  <AlertTriangle size={24} />
  </div>
  <div className="space-y-2 mt-1">
- <h2 className="text-lg font-semibold tracking-tight text-primary">{title}</h2>
+ <h2 className="text-lg font-medium tracking-tight text-primary">{title}</h2>
  {description && (
  <div className="text-base text-muted leading-relaxed">{description}</div>
  )}

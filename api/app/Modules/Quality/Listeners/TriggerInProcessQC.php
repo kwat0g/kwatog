@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Quality\Listeners;
 
+use App\Common\Services\NotificationService;
 use App\Common\Services\DocumentSequenceService;
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\User;
@@ -66,25 +67,19 @@ class TriggerInProcessQC implements ShouldQueue
             // Notify QC team.
             try {
                 $roles = array_values(array_filter((array) $this->settings->get('quality.in_process_qc.notification_roles', []), static fn ($role): bool => is_string($role) && $role !== ''));
-                User::query()
+                $recipients = User::query()
                     ->whereHas('role', fn ($q) => $q->whereIn('slug', $roles))
                     ->where('is_active', true)
-                    ->get()
-                    ->each(function (User $user) use ($wo) {
-                        $user->notifications()->create([
-                            'id'              => (string) \Illuminate\Support\Str::uuid(),
-                            'type'            => 'chain.in_process_qc_required',
-                            'notifiable_type' => $user::class,
-                            'notifiable_id'   => $user->id,
-                            'data'            => [
-                                'wo_id'     => $wo->hash_id,
-                                'wo_number' => $wo->wo_number,
-                                'message'   => "In-process QC required for WO {$wo->wo_number}.",
-                                'link'      => "/production/work-orders/{$wo->hash_id}",
-                            ],
-                            'read_at'         => null,
-                        ]);
-                    });
+                    ->get();
+
+                app(NotificationService::class)->send($recipients, 'chain.in_process_qc_required', [
+                    'title'       => 'In-process QC required',
+                    'message'     => "In-process QC required for WO {$wo->wo_number}.",
+                    'link_to'     => "/production/work-orders/{$wo->hash_id}",
+                    'entity_type' => 'work_order',
+                    'entity_id'   => $wo->hash_id,
+                    'wo_number'   => $wo->wo_number,
+                ]);
             } catch (\Throwable $e) {
                 Log::debug('TriggerInProcessQC notification failed', ['error' => $e->getMessage()]);
             }

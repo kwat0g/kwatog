@@ -175,7 +175,7 @@ export default function MobileConditionReading() {
  <Button
  type="submit"
  variant="primary"
- size="xl"
+ size="lg"
  className="w-full"
  disabled={!canSubmit}
  loading={mutation.isPending}

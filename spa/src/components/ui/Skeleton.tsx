@@ -87,7 +87,7 @@ export function SkeletonGrid({ count = 4, className }: { count?: number; classNa
 /** Rich detail page skeleton loader with header, KPI row, process timeline, and main layout. */
 export function SkeletonDetail() {
  return (
- <div className="px-5 py-4 space-y-4 animate-fade-in">
+ <div className="px-5 py-4 space-y-4">
  {/* Header skeleton */}
  <div className="flex items-center justify-between border-b border-default pb-4">
  <div className="space-y-1.5">
@@ -138,7 +138,7 @@ export function SkeletonDetail() {
 /** Form skeleton loader with section blocks and input grid placeholders. */
 export function SkeletonForm() {
  return (
- <div className="max-w-3xl mx-auto px-5 py-4 space-y-6 animate-fade-in">
+ <div className="max-w-3xl mx-auto px-5 py-4 space-y-6">
  {[1, 2].map((section) => (
  <div key={section} className="p-4 bg-canvas border border-default rounded-md space-y-4">
  <SkeletonBlock className="h-4 w-36 rounded-sm" />
@@ -173,7 +173,7 @@ export function SkeletonPanel() {
 /** Full application page skeleton used during initial page/auth loading. */
 export function SkeletonPage() {
  return (
- <div className="min-h-screen w-full bg-canvas flex flex-col animate-fade-in">
+ <div className="min-h-screen w-full bg-canvas flex flex-col">
  {/* Topbar skeleton */}
  <div className="h-12 border-b border-default bg-canvas flex items-center px-4 justify-between">
  <div className="flex items-center gap-3">
@@ -212,7 +212,7 @@ export function SkeletonPage() {
 /** Landing page skeleton screen for ogamiph.dev initial visits (light gray modern theme). */
 export function SkeletonLandingPage() {
  return (
- <div className="min-h-screen w-full bg-canvas text-primary flex flex-col animate-fade-in font-sans">
+ <div className="min-h-screen w-full bg-canvas text-primary flex flex-col font-sans">
  {/* Landing Nav Skeleton */}
  <div className="h-16 border-b border-default bg-canvas/90 backdrop-blur-md flex items-center px-6 justify-between sticky top-0 z-50">
  <div className="flex items-center gap-3">
@@ -278,7 +278,7 @@ export function SkeletonLandingPage() {
 /** Login / Auth page skeleton loader. */
 export function SkeletonLoginPage() {
  return (
- <div className="grid min-h-screen w-full bg-canvas text-primary lg:grid-cols-2 animate-fade-in font-sans">
+ <div className="grid min-h-screen w-full bg-canvas text-primary lg:grid-cols-2 font-sans">
  {/* Left Brand Panel Skeleton (lg+) */}
  <div className="hidden border-r border-default bg-surface p-12 lg:flex lg:flex-col lg:justify-between">
  <div className="flex items-center gap-3">
@@ -335,7 +335,7 @@ export function SkeletonLoginPage() {
 /** Executive / KPI Dashboard page skeleton screen. */
 export function SkeletonDashboard() {
  return (
- <div className="p-5 space-y-5 animate-fade-in font-sans">
+ <div className="p-5 space-y-5 font-sans">
  {/* Top Header + Action Row */}
  <div className="flex justify-between items-center">
  <div className="space-y-1">
@@ -378,7 +378,7 @@ export function SkeletonDashboard() {
 /** Kanban / Board page skeleton screen. */
 export function SkeletonKanban() {
  return (
- <div className="p-5 space-y-4 animate-fade-in font-sans">
+ <div className="p-5 space-y-4 font-sans">
  <div className="flex justify-between items-center">
  <SkeletonBlock className="h-6 w-48 rounded-sm" />
  <SkeletonBlock className="h-8 w-28 rounded-md" />

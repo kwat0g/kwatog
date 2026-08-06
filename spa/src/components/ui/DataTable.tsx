@@ -325,14 +325,14 @@ export function DataTable<T>({
  toggleColumnVisibility={toggleColumnVisibility}
  />
 
- <div className="overflow-x-auto rounded-xl border border-default shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)]">
+  <div className="overflow-x-auto rounded-md border border-default">
  <table className="w-full border-collapse text-xs">
  <thead className={cn(stickyHeader && 'sticky top-0 z-10 bg-surface backdrop-blur-md')}>
- <tr className="border-b border-default bg-surface/80 backdrop-blur-md shadow-sm">
+      <tr className="border-b border-default bg-surface/80 backdrop-blur-md">
  {selectable && (
  <th scope="col"
  className={cn(
- 'px-2.5 w-8 text-left text-2xs uppercase tracking-wider text-muted font-semibold',
+            'px-2.5 w-8 text-left text-2xs uppercase tracking-wider text-muted font-medium',
  rowHeight.default,
  stickyHeader && 'sticky top-0 z-20',
  )}>
@@ -346,7 +346,7 @@ export function DataTable<T>({
  {renderExpanded && (
  <th scope="col"
  className={cn(
- 'px-1.5 w-7 text-left text-2xs uppercase tracking-wider text-muted font-semibold',
+              'px-1.5 w-7 text-left text-2xs uppercase tracking-wider text-muted font-medium',
  rowHeight.default,
  stickyHeader && 'sticky top-0 z-20',
  )}
@@ -360,7 +360,7 @@ export function DataTable<T>({
  scope="col"
  style={isPinned ? { left: pinnedOffsets[col.key] } : undefined}
  className={cn(
- 'px-2.5 text-2xs uppercase tracking-wider text-muted font-semibold select-none',
+                    'px-2.5 text-2xs uppercase tracking-wider text-muted font-medium select-none',
  rowHeight.default,
  alignClass[col.align ?? 'left'],
  col.sortable && onSort && 'cursor-pointer hover:text-primary transition-colors duration-fast',
@@ -409,7 +409,7 @@ export function DataTable<T>({
  ? 'bg-accent/10 hover:bg-accent/15 outline outline-2 outline-accent -outline-offset-2 z-10'
  : highlightedRowId && rid === highlightedRowId
  ? 'bg-subtle outline outline-2 outline-accent/50 -outline-offset-2 z-10'
- : 'hover:bg-surface hover:shadow-md hover:z-10',
+ : 'hover:bg-surface hover:z-10',
  rowHeight[density],
  )}
  onClick={(e) => {

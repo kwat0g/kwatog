@@ -142,31 +142,35 @@ export function Modal({
  if (!isOpen) return null;
 
  return (
- <div
- className="fixed inset-0 z-50 flex items-center justify-center px-4"
- role="dialog"
- aria-modal="true"
- aria-labelledby={title ? titleId : undefined}
- onMouseDown={(e) => {
- if (closeOnOverlayClick && e.target === e.currentTarget) onClose();
- }}
- >
- <div className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in" />
- <div
- ref={dialogRef}
- className={cn(
- 'relative w-full bg-surface backdrop-blur-xl border border-default shadow-menu rounded-xl animate-slide-up',
- sizes[size],
- className,
- )}
- >
- {title && (
- <div className="px-5 py-4 border-b border-default/50">
- <h2 id={titleId} className="text-lg font-semibold text-primary tracking-tight">{title}</h2>
- </div>
- )}
- <div className="p-5">{children}</div>
- </div>
- </div>
- );
+  <div
+  className="fixed inset-0 z-50 flex items-center justify-center px-4 sm:px-6"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby={title ? titleId : undefined}
+  onMouseDown={(e) => {
+  if (closeOnOverlayClick && e.target === e.currentTarget) onClose();
+  }}
+  >
+  <div className="fixed inset-0 bg-black/60 transition-opacity" aria-hidden="true" />
+  
+  <div
+  ref={dialogRef}
+  className={cn(
+  'relative w-full bg-canvas border border-default rounded-lg animate-slide-up flex flex-col max-h-[90vh]',
+  sizes[size],
+  className,
+  )}
+  >
+  {title && (
+  <div className="px-5 py-4 border-b border-default bg-surface shrink-0 flex items-center justify-between rounded-t-md">
+  <h2 id={titleId} className="text-base font-medium text-primary m-0">{title}</h2>
+  <button onClick={onClose} type="button" className="text-muted hover:text-primary transition-colors focus:outline-none focus:ring-2 focus:ring-accent rounded-sm" aria-label="Close modal">
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+  </button>
+  </div>
+  )}
+  <div className="p-5 overflow-y-auto">{children}</div>
+  </div>
+  </div>
+  );
 }

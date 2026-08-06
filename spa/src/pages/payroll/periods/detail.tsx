@@ -52,8 +52,14 @@ export default function PayrollPeriodDetailPage() {
  const qc = useQueryClient();
  const { can } = usePermission();
  const [activeTab, setActiveTab] = useState<'employees' | 'failures' | 'anomalies' | 'summary' | 'variance'>('employees');
+ const [payrollPage, setPayrollPage] = useState(1);
+ const [payrollSearch, setPayrollSearch] = useState('');
  const [compareToId, setCompareToId] = useState<string>('');
  const [bankFormat, setBankFormat] = useState<string>('');
+
+ useEffect(() => {
+   setPayrollPage(1);
+ }, [activeTab, payrollSearch]);
 
  const isProcessing = (period?: PayrollPeriod | null) => period?.status === 'processing';
 
@@ -125,10 +131,13 @@ export default function PayrollPeriodDetailPage() {
  });
  const bankBlocked = (bankPreview?.unbankable_count ?? 0) > 0;
 
- const payrollFilters: PayrollListParams = {
- period_id: id, page: 1, per_page: 100,
- failed_only: activeTab === 'failures',
- };
+  const payrollFilters: PayrollListParams = {
+    period_id: id,
+    page: payrollPage,
+    per_page: 50,
+    search: payrollSearch || undefined,
+    failed_only: activeTab === 'failures',
+  };
  const { data: payrolls, isLoading: payrollsLoading } = useQuery({
  queryKey: ['payrolls', payrollFilters],
  queryFn: () => payrollsApi.list(payrollFilters),
@@ -520,6 +529,15 @@ export default function PayrollPeriodDetailPage() {
 
  {(activeTab === 'employees' || activeTab === 'failures') && (
  <>
+ <div className="mb-3 flex items-center justify-between">
+   <Input
+     type="search"
+     placeholder="Search employees..."
+     value={payrollSearch}
+     onChange={(e) => setPayrollSearch(e.target.value)}
+     className="max-w-sm"
+   />
+ </div>
  {payrollsLoading && !payrolls && <SkeletonTable columns={8} rows={8} />}
  {payrolls && payrolls.data.length === 0 && (
  <EmptyState icon="users"
@@ -529,12 +547,15 @@ export default function PayrollPeriodDetailPage() {
  : 'Run Compute to generate payroll rows.'} />
  )}
  {payrolls && payrolls.data.length > 0 && (
+ <div className="max-h-[600px] overflow-y-auto rounded-md border border-default [&>div]:border-0 [&>div]:shadow-none">
  <DataTable
  onRowClick={(r) => navigate(`/payroll/periods/${period.id}/employee/${r.id}`)}
  columns={columns}
  data={payrolls.data}
  meta={payrolls.meta}
+ onPageChange={setPayrollPage}
  />
+ </div>
  )}
  </>
  )}
