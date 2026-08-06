@@ -96,8 +96,12 @@ class PruneExpiredPermissionOverridesTest extends TestCase
             ->expectsOutputToContain('Pruned 1')
             ->assertSuccessful();
 
-        $this->assertEquals(2, DB::table('user_permission_overrides')->count());
-        $this->assertDatabaseMissing('user_permission_overrides', ['id' => $expired->id]);
+        // Overrides soft-delete (migration 0444), so the pruned row stays on
+        // the table with deleted_at set. Authorization reads them through the
+        // Eloquent model, whose SoftDeletingScope excludes it — count through
+        // the model rather than the raw table.
+        $this->assertEquals(2, UserPermissionOverride::query()->count());
+        $this->assertSoftDeleted('user_permission_overrides', ['id' => $expired->id]);
 
         // Audit row written for the deleted override.
         $this->assertDatabaseHas('audit_logs', [

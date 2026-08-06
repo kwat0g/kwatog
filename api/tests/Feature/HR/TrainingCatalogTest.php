@@ -81,7 +81,10 @@ class TrainingCatalogTest extends TestCase
 
         $resp = $this->actingAs($this->admin())->deleteJson("/api/v1/hr/trainings/{$t->hash_id}");
         $resp->assertNoContent();
-        $this->assertDatabaseMissing('trainings', ['id' => $t->id]);
+        // Training soft-deletes (migration 0444) so the catalogue keeps its
+        // history and the /restore endpoint has something to restore. The row
+        // stays present with deleted_at set rather than disappearing.
+        $this->assertSoftDeleted('trainings', ['id' => $t->id]);
     }
 
     public function test_non_manager_cannot_create_training(): void

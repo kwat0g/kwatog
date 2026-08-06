@@ -44,15 +44,11 @@ class SparePartUsageService
                 ->where('location_id', (int) $data['location_id'])
                 ->first();
             if ($level === null) {
-                // firstOrFail() here rendered a bare 404, which reads as "work
-                // order not found" on a POST to the WO endpoint.
                 throw ValidationException::withMessages([
                     'location_id' => ['This item has no stock record at the selected location.'],
                 ]);
             }
-            $unitCost = (string) $level->weighted_avg_cost;
             $qty = (string) $data['quantity'];
-            $totalCost = number_format((float) $unitCost * (float) $qty, 2, '.', '');
 
             $movement = $this->stockMovements->move(new StockMovementInput(
                 type: StockMovementType::MaterialIssue,
@@ -66,6 +62,9 @@ class SparePartUsageService
                 remarks: 'Spare-part issue for '.$wo->mwo_number,
                 createdBy: $by->id,
             ));
+
+            $unitCost = (string) $movement->unit_cost;
+            $totalCost = bcmul($qty, $unitCost, 4);
 
             $usage = SparePartUsage::create([
                 'work_order_id'     => $wo->id,

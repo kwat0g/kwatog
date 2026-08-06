@@ -91,7 +91,10 @@ class DeliveryUploadTest extends TestCase
         // fails — but keep the model in memory so the status guard passes and
         // the file store (outside the transaction) runs first.
         // PG enforces FKs by default; no PRAGMA needed (was SQLite-only).
-        Delivery::withoutGlobalScopes()->where('id', $delivery->id)->delete();
+        // forceDelete, not delete: Delivery soft-deletes (migration 0444), and a
+        // soft-deleted row still satisfies the foreign key, so the transaction
+        // would succeed and this test would never exercise the rollback path.
+        Delivery::withoutGlobalScopes()->where('id', $delivery->id)->forceDelete();
 
         $caughtException = null;
         try {
