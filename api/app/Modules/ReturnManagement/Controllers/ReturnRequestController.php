@@ -4,8 +4,18 @@ declare(strict_types=1);
 
 namespace App\Modules\ReturnManagement\Controllers;
 
+use App\Common\Services\SettingsService;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
+use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
+use App\Modules\ReturnManagement\Enums\ReturnRequestType;
+use App\Modules\ReturnManagement\Enums\DispositionType;
+use App\Common\Support\HashIdFilter;
+use App\Modules\Accounting\Models\Customer;
+use App\Modules\Accounting\Models\Vendor;
+use App\Modules\ReturnManagement\Requests\CompleteReturnRequest;
 use App\Modules\ReturnManagement\Requests\DisposeReturnRequest;
+use App\Modules\ReturnManagement\Requests\ReceiveReturnRequest;
+use App\Modules\ReturnManagement\Requests\StoreReturnRequestRequest;
 use App\Modules\ReturnManagement\Resources\ReturnRequestResource;
 use App\Modules\ReturnManagement\Services\ReturnRequestService;
 use Illuminate\Http\Request;
@@ -16,7 +26,34 @@ class ReturnRequestController extends Controller
 {
     public function __construct(
         private readonly ReturnRequestService $service,
+        private readonly SettingsService $settings,
     ) {}
+
+    public function options(): \Illuminate\Http\JsonResponse
+    {
+        $read = fn (string $key): array => array_values(array_filter(
+            (array) $this->settings->get($key, []),
+            static fn ($option): bool => is_array($option) && isset($option['value'], $option['label']),
+        ));
+
+        return response()->json(['data' => [
+            'types' => array_map(
+                static fn (ReturnRequestType $type): array => ['value' => $type->value, 'label' => $type->label()],
+                ReturnRequestType::cases(),
+            ),
+            'statuses' => array_map(
+                static fn (ReturnRequestStatus $status): array => ['value' => $status->value, 'label' => $status->label()],
+                ReturnRequestStatus::cases(),
+            ),
+            'reasons' => $read('returns.reason_codes'),
+            'resolutions' => $read('returns.resolutions'),
+            'conditions' => $read('returns.item_conditions'),
+            'dispositions' => array_map(
+                static fn (DispositionType $disposition): array => ['value' => $disposition->value, 'label' => $disposition->label()],
+                DispositionType::cases(),
+            ),
+        ]]);
+    }
 
     /**
      * List all RMAs.
@@ -40,11 +77,13 @@ class ReturnRequestController extends Controller
         if ($status = $request->query('status')) {
             $q->where('status', $status);
         }
-        if ($customerId = $request->query('customer_id')) {
-            $q->where('customer_id', (int) $customerId);
+        // (int) on a hash_id yields 0, which matches nothing — the customer and
+        // vendor filters were silently returning an empty list from the SPA.
+        if ($customerId = HashIdFilter::decode($request->query('customer_id'), Customer::class)) {
+            $q->where('customer_id', $customerId);
         }
-        if ($vendorId = $request->query('vendor_id')) {
-            $q->where('vendor_id', (int) $vendorId);
+        if ($vendorId = HashIdFilter::decode($request->query('vendor_id'), Vendor::class)) {
+            $q->where('vendor_id', $vendorId);
         }
 
         // Search by RMA number
@@ -94,34 +133,9 @@ class ReturnRequestController extends Controller
     /**
      * Create a new RMA.
      */
-    public function store(Request $request): ReturnRequestResource
+    public function store(StoreReturnRequestRequest $request): ReturnRequestResource
     {
-        $validated = $request->validate([
-            'type'                => ['required', 'string', 'in:customer_return,supplier_return'],
-            'sales_order_id'      => ['nullable', 'exists:sales_orders,id'],
-            'invoice_id'          => ['nullable', 'exists:invoices,id'],
-            'purchase_order_id'   => ['nullable', 'exists:purchase_orders,id'],
-            'bill_id'             => ['nullable', 'exists:bills,id'],
-            'customer_id'         => ['nullable', 'exists:customers,id'],
-            'vendor_id'           => ['nullable', 'exists:vendors,id'],
-            'reason_code'         => ['nullable', 'string', 'max:30'],
-            'reason_description'  => ['nullable', 'string', 'max:1000'],
-            'customer_notes'      => ['nullable', 'string', 'max:2000'],
-            'resolution'          => ['nullable', 'string', 'max:30'],
-            'return_date'         => ['nullable', 'date'],
-            'items'               => ['nullable', 'array'],
-            'items.*.product_id'  => ['nullable', 'exists:products,id'],
-            'items.*.item_id'     => ['nullable', 'exists:items,id'],
-            'items.*.quantity'    => ['required_with:items', 'numeric', 'min:0.001'],
-            'items.*.unit_price'  => ['nullable', 'numeric', 'min:0'],
-            'items.*.reason'      => ['nullable', 'string', 'max:500'],
-            'items.*.condition'   => ['nullable', 'string', 'max:30'],
-            'items.*.source_po_item_id' => ['nullable', 'exists:purchase_order_items,id'],
-            'items.*.source_grn_item_id' => ['nullable', 'exists:grn_items,id'],
-            'items.*.source_bill_item_id' => ['nullable', 'exists:bill_items,id'],
-        ]);
-
-        $rma = $this->service->create($validated, $request->user());
+        $rma = $this->service->create($request->validated(), $request->user());
 
         return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor']));
     }
@@ -150,14 +164,9 @@ class ReturnRequestController extends Controller
     /**
      * Record receipt.
      */
-    public function receive(Request $request, ReturnRequest $returnRequest): ReturnRequestResource
+    public function receive(ReceiveReturnRequest $request, ReturnRequest $returnRequest): ReturnRequestResource
     {
-        $validated = $request->validate([
-            'received_quantities' => ['nullable', 'array'],
-            'received_quantities.*' => ['numeric', 'min:0'],
-        ]);
-
-        $rma = $this->service->receive($returnRequest, $validated['received_quantities'] ?? []);
+        $rma = $this->service->receive($returnRequest, $request->receivedQuantitiesById());
         return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor']));
     }
 
@@ -192,13 +201,9 @@ class ReturnRequestController extends Controller
     /**
      * Complete the RMA.
      */
-    public function complete(Request $request, ReturnRequest $returnRequest): ReturnRequestResource
+    public function complete(CompleteReturnRequest $request, ReturnRequest $returnRequest): ReturnRequestResource
     {
-        $validated = $request->validate([
-            'location_id' => ['required', 'exists:warehouse_locations,id'],
-        ]);
-
-        $rma = $this->service->complete($returnRequest, $request->user(), (int) $validated['location_id']);
+        $rma = $this->service->complete($returnRequest, $request->user(), (int) $request->validated()['location_id']);
         return new ReturnRequestResource($rma->load(['items', 'customer', 'vendor', 'stockMovement']));
     }
 

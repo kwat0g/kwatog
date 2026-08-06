@@ -243,7 +243,7 @@ class DispositionTest extends TestCase
 
     public function test_supplier_disposition_reverses_receipt_applies_credit_and_creates_replacement_po(): void
     {
-        config()->set('budgeting.enforcement_mode', 'off');
+        app(\App\Common\Services\SettingsService::class)->set('budgeting.enforcement_mode', 'off');
 
         $by = $this->makeUser();
         $vendor = Vendor::factory()->create(['created_by' => null]);

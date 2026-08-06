@@ -464,6 +464,7 @@ Work Order     WO-YYYYMM-NNNN    WO-202604-0006
 NCR            NCR-YYYYMM-NNNN   NCR-202604-0002
 GRN            GRN-YYYYMM-NNNN   GRN-202604-0011
 Sales Order    SO-YYYYMM-NNNN    SO-202604-0003
+Return (RMA)   RMA-YYYYMM-NNNN   RMA-202604-0004
 Leave Request  LR-YYYYMM-NNNN    LR-202604-0045
 Inspection     QC-YYYYMM-NNNN    QC-202604-0012
 ```
@@ -472,7 +473,54 @@ Inspection     QC-YYYYMM-NNNN    QC-202604-0012
 
 - **Currency:** Philippine Peso only (₱)
 - **Payroll:** Semi-monthly. Gov deductions on 1st period only
-- **Pay types:** Monthly salaried AND daily-rated (both supported)
+- **Pay types:** `monthly` (basic_monthly_salary ÷ 2 per cutoff) and `semi_monthly`
+  (`semi_monthly_rate`, a flat per-cutoff figure). Both are FLAT — basic pay never
+  multiplies by days worked. `daily` was retired by migration 0437: its days-worked
+  basic disagreed with the monthly gov-contribution basis, so any absence withheld a
+  full month of deductions from a partial month of pay (zero net + anomaly flags that
+  block finalize). Use `Employee::monthlyEquivalentSalary()` — the ONE place the two
+  pay types are reconciled (`semi_monthly_rate × 2`) — never read a rate column directly.
+- **Payroll period scope:** A period may be limited to employment types, pay types
+  and/or departments (`scope_*` columns, all ANDed; all null = company-wide). Two
+  periods may share dates only if their scopes are disjoint — enforced against real
+  employee sets, not by comparing filter arrays.
+- **No double pay:** `payroll_cycle_claims` has UNIQUE (employee_id, cycle_key) where
+  cycle_key is `YYYY-MM-H1|H2` / `YYYY-13TH`. One employee is payable at most once per
+  cutoff, across ALL periods. This is the race-proof guard — application checks alone
+  cannot close it (two workers, two transactions). Voiding a period releases its claims
+  so a replacement run can pay those people.
+- **The half is DERIVED, never chosen** (`PayrollPeriod::deriveIsFirstHalf()`: day 1–15 =
+  first half). It was an operator checkbox, which let the label contradict the dates —
+  enter Aug 16–31, tick "1st half" — inverting the cycle key so the guard saw two
+  different cycles and paid one employee twice for the month, and moving gov
+  contributions onto the wrong cutoff. A cutoff must also stay inside ONE half of ONE
+  month; straddling windows (Aug 10–20, Aug 20–Sep 10) are refused, since their key
+  would describe only the half they start in. Migration 0440 reconciled existing rows.
+  `is_first_half` remains a list FILTER, not a create input.
+- **payroll_date is load-bearing, not cosmetic.** It selects the effective-dated gov
+  contribution tables, the de-minimis month, and the GL posting date. Only
+  `>= period_end` was enforced, so a 2029 cutoff could carry a 2034 date and be
+  computed against another year's SSS schedule (~₱100/employee between the 2024 and
+  2025 tables). Now bounded to `period_start … period_end + N` days
+  (`payroll.payroll_date.max_days_after_period_end`, default 45).
+- **Partial employment prorates BOTH ends.** Basic pay is flat per cutoff, which is only
+  right for someone employed the whole cutoff. `employedDayFraction()` scales it by the
+  days actually covered — hire date OR separation date (`clearances.separation_date`,
+  earliest wins). Without the separation half a leaver banked the full half-month and
+  `FinalPayService::lastSalaryProRated()` reads `payroll.basic_pay` verbatim, so it flowed
+  straight into final pay (~₱6,880 on a ₱9,460 cutoff).
+- **The gov-contribution basis follows ACTUAL compensation**, i.e. monthly equivalent ×
+  employed fraction. Using the nominal salary on a partial cutoff assessed a full month's
+  contributions against part of a month's pay — an 86% deduction ratio that clamped net to
+  near zero and raised `high_deduction`, blocking finalize. Same class of defect as the old
+  daily pay type. Note this predated the semi-monthly work: mid-period HIRES were always
+  assessed this way.
+- **13th month is maker-checker gated.** `computeAndPay()` lands on **Computed** and links
+  accruals but does NOT set `is_paid`; payment is recognised only in `finalize()`
+  (synchronously, inside its transaction — not a queued listener that swallows failures).
+  It used to flip `is_paid` at Draft, so the year read as settled before any checker saw
+  it, and since `accrue()` skips a paid accrual a re-run then wiped the payroll rows and
+  rebuilt **nothing** — an empty period nobody gets paid from. Voiding reopens the accruals.
 - **OT:** Min 30min, Max 4hrs. Extended shift (6AM–6PM) = auto-OT
 - **Night diff:** 10% premium for 10PM–6AM ONLY
 - **Loans:** Zero interest. Max 1 month salary. 1 loan + 1 CA at a time
@@ -602,8 +650,8 @@ docs:check-reviews                       (06:45)
 ```
 
 ### Migration numbering
-Recent additions use 4-digit numbered (`0186_*`, `0187_*`, …, `0197_*`). Highest as of 2026-06-15 = **0197**. New migrations use highest+1. Mixed timestamp-style migrations (`2026_06_09_*`) coexist for older HR/Payroll changes — don't introduce more.
+Recent additions use 4-digit numbered (`0186_*`, `0187_*`, …). Highest as of 2026-08-04 = **0441**. New migrations use highest+1. Mixed timestamp-style migrations (`2026_06_09_*`) coexist for older HR/Payroll changes — don't introduce more.
 
 ### Test runner + suite size
-Full suite as of 2026-06-15: **746 tests / 0 fail / ~4 min runtime**. Use `--filter='Foo|Bar'` for tight loops. Re-run full suite only at end of feature.
+Full suite as of 2026-08-04: **1242 tests / 0 fail / ~9 min runtime**. Use `--filter='Foo|Bar'` for tight loops. Re-run full suite only at end of feature.
 

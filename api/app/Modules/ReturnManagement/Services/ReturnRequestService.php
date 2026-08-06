@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\ReturnManagement\Services;
 
+use App\Common\Exceptions\BusinessRuleException;
 use App\Modules\Auth\Models\User;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\BillItem;
@@ -19,12 +20,14 @@ use App\Modules\Quality\Enums\InspectionStage;
 use App\Modules\Quality\Models\Inspection;
 use App\Modules\Quality\Services\InspectionService;
 use App\Modules\Quality\Services\NcrService;
+use App\Modules\ReturnManagement\Enums\DispositionType;
 use App\Modules\ReturnManagement\Enums\ReturnRequestStatus;
 use App\Modules\ReturnManagement\Enums\ReturnRequestType;
 use App\Modules\ReturnManagement\Models\ReturnRequest;
 use App\Modules\ReturnManagement\Models\ReturnRequestItem;
 use App\Common\Services\ApprovalService;
 use App\Common\Services\DocumentSequenceService;
+use App\Common\Services\TaxPolicyService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -37,6 +40,8 @@ class ReturnRequestService
         private readonly InspectionService $inspections,
         private readonly \App\Modules\Accounting\Services\CreditNoteService $creditNotes,
         private readonly PurchaseOrderService $purchaseOrders,
+        private readonly \App\Modules\Accounting\Services\AccountingAccountPolicyService $accountPolicies,
+        private readonly TaxPolicyService $taxPolicy,
     ) {}
 
     /**
@@ -74,13 +79,18 @@ class ReturnRequestService
 
             if (! empty($data['items'])) {
                 foreach ($data['items'] as $item) {
+                    if (! array_key_exists('unit_price', $item) || $item['unit_price'] === null || $item['unit_price'] === '') {
+                        throw new BusinessRuleException('Each return line requires an authoritative unit price.');
+                    }
+                    $quantity = (string) $item['quantity'];
+                    $unitPrice = (string) $item['unit_price'];
                     ReturnRequestItem::create([
                         'return_request_id'         => $rma->id,
                         'product_id'                => $item['product_id'] ?? null,
                         'item_id'                   => $item['item_id'] ?? null,
-                        'quantity'                  => $item['quantity'] ?? 0,
-                        'unit_price'                => $item['unit_price'] ?? 0,
-                        'total'                     => $item['total'] ?? 0,
+                        'quantity'                  => $quantity,
+                        'unit_price'                => $unitPrice,
+                        'total'                     => bcmul($quantity, $unitPrice, 2),
                         'reason'                    => $item['reason'] ?? null,
                         'condition'                 => $item['condition'] ?? null,
                         'source_sales_order_item_id' => $item['source_sales_order_item_id'] ?? null,
@@ -113,12 +123,20 @@ class ReturnRequestService
             try {
                 $this->approvals->submit($rma, 'return_request');
             } catch (\Throwable $e) {
-                // L-37 — Best-effort: if the return_request workflow is
-                // missing (deploy not seeded yet), don't block submission.
-                \Illuminate\Support\Facades\Log::warning('return_request approval submit failed', [
+                // A swallowed failure here used to strand the RMA: the status
+                // flipped to pending_approval while no approval records existed,
+                // and isFullyApproved() is false for an empty chain — so it could
+                // never be approved again, only rejected. Fail the submission
+                // instead and leave the RMA editable in draft.
+                Log::warning('return_request approval submit failed', [
                     'rma_id' => $rma->id,
                     'error'  => $e->getMessage(),
                 ]);
+
+                throw new BusinessRuleException(
+                    'The return approval workflow is not configured, so this RMA cannot be submitted. '
+                    . 'Ask an administrator to set up the "Return Request Approval" workflow.'
+                );
             }
             return $rma->fresh();
         });
@@ -139,12 +157,16 @@ class ReturnRequestService
             try {
                 $this->approvals->approve($rma, $by, $remarks);
             } catch (\Throwable $e) {
-                // If approval-records aren't wired (legacy data path), fall
-                // through to the direct flip below.
-                \Illuminate\Support\Facades\Log::warning('return_request approval approve failed', [
+                // Swallowing this returned 200 with an unchanged RMA, so the SPA
+                // showed "RMA approved." for an approval that never happened.
+                Log::warning('return_request approval approve failed', [
                     'rma_id' => $rma->id,
                     'error'  => $e->getMessage(),
                 ]);
+
+                throw $e instanceof BusinessRuleException
+                    ? $e
+                    : new BusinessRuleException($e->getMessage() ?: 'You cannot approve this return request.');
             }
 
             if ($this->approvals->isFullyApproved($rma)) {
@@ -161,25 +183,32 @@ class ReturnRequestService
 
     /**
      * Record receipt of returned goods (approved → received).
+     *
+     * @param array<int, numeric-string> $receivedQtys keyed by return_request_items.id
      */
     public function receive(ReturnRequest $rma, array $receivedQtys = []): ReturnRequest
     {
         $this->ensureStatus($rma, ReturnRequestStatus::Approved);
-        $rma->update([
-            'status'      => ReturnRequestStatus::Received,
-            'received_at' => now(),
-        ]);
 
-        // Update per-item returned quantities
-        if (! empty($receivedQtys)) {
+        return DB::transaction(function () use ($rma, $receivedQtys) {
+            $rma->update([
+                'status'      => ReturnRequestStatus::Received,
+                'received_at' => now(),
+            ]);
+
             foreach ($rma->items as $item) {
-                if (isset($receivedQtys[$item->id])) {
-                    $item->update(['returned_quantity' => $receivedQtys[$item->id]]);
-                }
+                // Default to the requested quantity so a receipt recorded without
+                // per-line counts still yields a usable returned_quantity — every
+                // downstream step (credit note, restock) reads that column, and it
+                // previously stayed at zero because the caller keyed the map by
+                // hash_id while this loop looked for the raw integer PK.
+                $item->update([
+                    'returned_quantity' => (string) ($receivedQtys[$item->id] ?? $item->quantity),
+                ]);
             }
-        }
 
-        return $rma->fresh()->load('items');
+            return $rma->fresh()->load('items');
+        });
     }
 
     /**
@@ -268,7 +297,7 @@ class ReturnRequestService
             $rma = ReturnRequest::query()->lockForUpdate()->findOrFail($rma->id);
             $this->ensureStatus($rma, ReturnRequestStatus::Inspected);
             if ($rma->disposition_status === 'disposed') {
-                throw new \RuntimeException('RMA has already been disposed.');
+                throw new BusinessRuleException('RMA has already been disposed.');
             }
 
             $rma->load(['items', 'bill.items', 'purchaseOrder.items']);
@@ -303,8 +332,19 @@ class ReturnRequestService
 
             $rma->load('items');
             if ($rma->type === ReturnRequestType::CustomerReturn && $rma->invoice_id) {
-                $creditTotal = $rma->items->sum(fn ($item) => (float) $item->total);
-                if ($creditTotal > 0) {
+                // Credit only what the customer actually sent back, and only the
+                // lines we kept. Summing $item->total credited the *requested*
+                // quantity, and included lines routed onward to the supplier —
+                // both over-credit the customer against the original invoice.
+                $creditTotal = $rma->items
+                    ->filter(fn ($item) => $item->disposition !== null
+                        && $item->disposition !== DispositionType::ReturnToSupplier->value)
+                    ->reduce(
+                        fn (string $carry, $item) => bcadd($carry, $this->creditableAmount($item), 2),
+                        '0',
+                    );
+
+                if (bccomp($creditTotal, '0', 2) > 0) {
                     $creditNote = $this->createCreditNote($rma, (float) $creditTotal, $by);
                     $rma->update(['credit_note_id' => $creditNote->id]);
                 }
@@ -320,6 +360,22 @@ class ReturnRequestService
         });
     }
 
+    /**
+     * The quantity that physically came back on a line, falling back to the
+     * requested quantity for RMAs received before per-line counts existed.
+     */
+    private function settledQuantity(ReturnRequestItem $item): string
+    {
+        return bccomp((string) $item->returned_quantity, '0', 3) > 0
+            ? (string) $item->returned_quantity
+            : (string) $item->quantity;
+    }
+
+    private function creditableAmount(ReturnRequestItem $item): string
+    {
+        return bcmul($this->settledQuantity($item), (string) $item->unit_price, 2);
+    }
+
     private function processSupplierDisposition(ReturnRequest $rma, User $by, bool $createReplacementPo): void
     {
         $returnedItems = $rma->items->where('disposition', 'return_to_supplier');
@@ -327,14 +383,14 @@ class ReturnRequestService
             return;
         }
         if (! $rma->vendor_id || ! $rma->purchase_order_id) {
-            throw new \RuntimeException('Supplier returns require a vendor and source purchase order.');
+            throw new BusinessRuleException('Supplier returns require a vendor and source purchase order.');
         }
 
         $creditLines = [];
         $replacementLines = [];
         foreach ($returnedItems->sortBy('source_grn_item_id') as $item) {
             if (! $item->source_grn_item_id || ! $item->source_po_item_id) {
-                throw new \RuntimeException('Each supplier-return line requires source GRN and PO lines.');
+                throw new BusinessRuleException('Each supplier-return line requires source GRN and PO lines.');
             }
 
             $quantity = (string) ((float) $item->returned_quantity > 0 ? $item->returned_quantity : $item->quantity);
@@ -345,13 +401,13 @@ class ReturnRequestService
                 || (int) $poItem->purchase_order_id !== (int) $rma->purchase_order_id
                 || (int) $grnItem->item_id !== (int) $item->item_id
                 || (int) $grnItem->grn->vendor_id !== (int) $rma->vendor_id) {
-                throw new \RuntimeException('Supplier-return source documents do not match the RMA.');
+                throw new BusinessRuleException('Supplier-return source documents do not match the RMA.');
             }
             if (bccomp($quantity, '0', 3) <= 0
                 || bccomp($quantity, (string) $grnItem->quantity_received, 3) > 0
                 || bccomp($quantity, (string) $grnItem->quantity_accepted, 3) > 0
                 || bccomp($quantity, (string) $poItem->quantity_received, 3) > 0) {
-                throw new \RuntimeException('Supplier-return quantity exceeds the accepted receipt quantity.');
+                throw new BusinessRuleException('Supplier-return quantity exceeds the accepted receipt quantity.');
             }
 
             $grnItem->update([
@@ -366,9 +422,10 @@ class ReturnRequestService
                 ? BillItem::query()->where('bill_id', $rma->bill_id)->find($item->source_bill_item_id)
                 : null;
             $accountId = $billItem?->expense_account_id
-                ?? Account::query()->where('code', '1200')->value('id');
+                ?? Account::query()->where('code', app(\App\Common\Services\SettingsService::class)
+                    ->requiredString('accounting.accounts.inventory_raw_material_code'))->value('id');
             if (! $accountId) {
-                throw new \RuntimeException('No accounting account is available for the supplier credit.');
+                throw new BusinessRuleException('No accounting account is available for the supplier credit.');
             }
             $amount = bcmul($quantity, (string) $item->unit_price, 2);
             if (bccomp($amount, '0', 2) > 0) {
@@ -392,7 +449,7 @@ class ReturnRequestService
                 'bill_id'           => $rma->bill_id,
                 'return_request_id' => $rma->id,
                 'date'              => now()->toDateString(),
-                'is_vatable'        => (bool) ($rma->bill?->is_vatable ?? true),
+                'is_vatable'        => (bool) ($rma->bill?->is_vatable ?? $this->taxPolicy->isVatRegistered()),
                 'reason'            => "Supplier return — RMA {$rma->rma_number}",
                 'lines'             => collect($creditLines)->map(
                     fn ($amount, $accountId) => [
@@ -418,7 +475,7 @@ class ReturnRequestService
             $replacement = $this->purchaseOrders->create([
                 'vendor_id'           => $rma->vendor_id,
                 'date'                => now()->toDateString(),
-                'is_vatable'          => true,
+                'is_vatable'          => $this->taxPolicy->isVatRegistered(),
                 'remarks'             => "Replacement for supplier RMA {$rma->rma_number}",
                 'items'               => $replacementLines,
             ], $by);
@@ -446,7 +503,7 @@ class ReturnRequestService
     private function createCreditNote(ReturnRequest $rma, float $amount, User $by): \App\Modules\Accounting\Models\CreditNote
     {
         $revenueAccountId = \App\Modules\Accounting\Models\Account::query()
-            ->where('code', '4010')->value('id');
+            ->where('code', $this->accountPolicies->revenue())->value('id');
 
         $cn = $this->creditNotes->create([
             'type'              => 'customer',
@@ -454,7 +511,7 @@ class ReturnRequestService
             'invoice_id'        => $rma->invoice_id,
             'return_request_id' => $rma->id,
             'date'              => now()->toDateString(),
-            'is_vatable'        => true,
+            'is_vatable'        => $this->taxPolicy->isVatRegistered(),
             'reason'            => "Customer return — RMA {$rma->rma_number}",
             'lines'             => [[
                 'account_id'  => $revenueAccountId,
@@ -478,7 +535,17 @@ class ReturnRequestService
         // M-36 — refuse the arbitrary first-location fallback. The caller
         // must declare which warehouse the stock movement lands in.
         if (! $locationId) {
-            throw new \RuntimeException('A warehouse location is required to complete a return.');
+            throw new BusinessRuleException('A warehouse location is required to complete a return.');
+        }
+
+        // Completing straight from Inspected skipped dispose() entirely, so the
+        // RMA closed with no credit note, no NCR and every line restocked
+        // regardless of condition — a defective batch silently re-entered
+        // sellable stock and the customer was never credited.
+        if ($rma->disposition_status !== 'disposed') {
+            throw new BusinessRuleException(
+                'Record a disposition for every returned line before completing this RMA.'
+            );
         }
 
         DB::transaction(function () use ($rma, $by, $locationId) {
@@ -488,14 +555,24 @@ class ReturnRequestService
                 'completed_at' => now(),
             ]);
 
+            $rma->load('items');
+
             if ($rma->items->isNotEmpty()) {
                 $totalMovedQty = '0';
 
                 foreach ($rma->items as $line) {
+                    // Only lines kept in-house re-enter stock. Scrapped units are
+                    // destroyed and return_to_supplier units were already shipped
+                    // out by dispose(); restocking either inflated on-hand
+                    // quantity and dragged the weighted-average cost with it.
+                    if (! $this->isRestockable($line)) {
+                        continue;
+                    }
+
                     $itemId = $line->item_id ?? $line->product?->items()->first()?->id;
                     if (! $itemId) continue;
 
-                    $qty = $line->returned_quantity > 0 ? (string) $line->returned_quantity : (string) $line->quantity;
+                    $qty = $this->settledQuantity($line);
 
                     if ($rma->type === ReturnRequestType::CustomerReturn) {
                         // Customer return → add stock back
@@ -538,19 +615,43 @@ class ReturnRequestService
     }
 
     /**
+     * Whether a disposed line's units stay with us and belong back in stock.
+     *
+     * A line with no disposition recorded is treated as restockable so RMAs that
+     * skip the dispose step (the pre-disposition flow) behave as before.
+     */
+    private function isRestockable(ReturnRequestItem $item): bool
+    {
+        return ! in_array($item->disposition, [
+            DispositionType::Scrap->value,
+            DispositionType::ReturnToSupplier->value,
+        ], true);
+    }
+
+    /**
      * Reject (any active status → rejected).
      */
     public function reject(ReturnRequest $rma, ?string $reason = null): ReturnRequest
     {
         if (! $rma->status->isActive()) {
-            throw new \RuntimeException("Cannot reject a {$rma->status->value} RMA.");
+            throw new BusinessRuleException("Cannot reject a {$rma->status->value} RMA.");
+        }
+
+        // Rejecting after dispose() already shipped units back to the supplier,
+        // raised a debit memo and/or issued a customer credit note left those
+        // documents live against a dead RMA with no reversal path.
+        if ($rma->disposition_status === 'disposed') {
+            throw new BusinessRuleException(
+                'This RMA has already been disposed and cannot be rejected. '
+                . 'Reverse the linked credit or debit memo instead.'
+            );
         }
         $update = [
             'status'      => ReturnRequestStatus::Rejected,
             'rejected_at' => now(),
         ];
         if ($reason) {
-            $update['internal_notes'] = $reason;
+            $update['internal_notes'] = $this->appendNote($rma, "Rejected: {$reason}");
         }
         $rma->update($update);
         return $rma->fresh();
@@ -562,23 +663,34 @@ class ReturnRequestService
     public function cancel(ReturnRequest $rma, ?string $reason = null): ReturnRequest
     {
         if (! in_array($rma->status, [ReturnRequestStatus::Draft, ReturnRequestStatus::PendingApproval], true)) {
-            throw new \RuntimeException("Only draft or pending_approval RMA can be cancelled.");
+            throw new BusinessRuleException("Only draft or pending_approval RMA can be cancelled.");
         }
         $update = [
             'status'        => ReturnRequestStatus::Cancelled,
             'cancelled_at'  => now(),
         ];
         if ($reason) {
-            $update['internal_notes'] = $reason;
+            $update['internal_notes'] = $this->appendNote($rma, "Cancelled: {$reason}");
         }
         $rma->update($update);
         return $rma->fresh();
     }
 
+    /**
+     * Reject / cancel reasons used to overwrite internal_notes wholesale,
+     * destroying the inspection findings recorded by inspect().
+     */
+    private function appendNote(ReturnRequest $rma, string $note): string
+    {
+        $existing = trim((string) $rma->internal_notes);
+
+        return $existing === '' ? $note : "{$existing}\n\n{$note}";
+    }
+
     private function ensureStatus(ReturnRequest $rma, ReturnRequestStatus $expected): void
     {
         if ($rma->status !== $expected) {
-            throw new \RuntimeException(
+            throw new BusinessRuleException(
                 "Expected status {$expected->value}, got {$rma->status->value}."
             );
         }

@@ -7,6 +7,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Panel } from '@/components/ui/Panel';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
 import { Chip, type ChipVariant } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ReasonDialog } from '@/components/ui/ReasonDialog';
@@ -14,6 +15,7 @@ import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
 import { returnManagementApi } from '@/api/returnManagement';
+import { warehouseApi } from '@/api/inventory/warehouse';
 import { usePermission } from '@/hooks/usePermission';
 import { formatDate, formatDateTime } from '@/lib/formatDate';
 import { formatPeso, formatInt } from '@/lib/formatNumber';
@@ -23,421 +25,573 @@ import { cn } from '@/lib/cn';
 const DisposeDialog = lazy(() => import('./dispose'));
 
 const STATUS_VARIANT: Record<string, ChipVariant> = {
-  draft: 'neutral',
-  pending_approval: 'warning',
-  approved: 'info',
-  received: 'info',
-  inspected: 'purple',
-  completed: 'success',
-  rejected: 'danger',
-  cancelled: 'neutral',
+ draft: 'neutral',
+ pending_approval: 'warning',
+ approved: 'info',
+ received: 'info',
+ inspected: 'purple',
+ completed: 'success',
+ rejected: 'danger',
+ cancelled: 'neutral',
 };
 
 /** Design-token dot class for each timeline event. */
 const TIMELINE_DOT: Record<string, string> = {
-  created: 'bg-strong',
-  approved: 'bg-info',
-  received: 'bg-accent',
-  inspected: 'bg-purple',
-  completed: 'bg-success',
-  rejected: 'bg-danger',
-  cancelled: 'bg-strong',
+ created: 'bg-strong',
+ approved: 'bg-info',
+ received: 'bg-accent',
+ inspected: 'bg-purple',
+ completed: 'bg-success',
+ rejected: 'bg-danger',
+ cancelled: 'bg-strong',
 };
 
 const errMsg = (e: unknown, fallback: string) =>
-  (e instanceof AxiosError ? e.response?.data?.message : undefined) ?? fallback;
+ (e instanceof AxiosError ? e.response?.data?.message : undefined) ?? fallback;
 
 export default function ReturnRequestDetailPage() {
-  const { id } = useParams<{ id: string }>();
-  const queryClient = useQueryClient();
-  const { can } = usePermission();
+ const { id } = useParams<{ id: string }>();
+ const queryClient = useQueryClient();
+ const { can } = usePermission();
 
-  const [confirm, setConfirm] = useState<'submit' | 'approve' | 'receive' | 'inspect' | 'complete' | 'cancel' | null>(null);
-  const [rejectOpen, setRejectOpen] = useState(false);
-  const [locationId, setLocationId] = useState('');
-  const [showDispose, setShowDispose] = useState(false);
+ const [confirm, setConfirm] = useState<'submit' | 'approve' | 'receive' | 'inspect' | 'complete' | 'cancel' | null>(null);
+ const [rejectOpen, setRejectOpen] = useState(false);
+ const [locationId, setLocationId] = useState('');
+ const [receivedQty, setReceivedQty] = useState<Record<string, string>>({});
+ const [showDispose, setShowDispose] = useState(false);
 
-  const { data: rma, isLoading, isError, refetch } = useQuery({
-    queryKey: ['return-request', id],
-    queryFn: () => returnManagementApi.get(id!),
-    enabled: !!id,
-  });
-  const { data: options } = useQuery({
-    queryKey: ['return-management', 'options'],
-    queryFn: returnManagementApi.options,
-    staleTime: 5 * 60 * 1000,
-  });
-  const reasonLabel = new Map((options?.reasons ?? []).map((option) => [option.value, option.label]));
-  const resolutionLabel = new Map((options?.resolutions ?? []).map((option) => [option.value, option.label]));
-  const conditionLabel = new Map((options?.conditions ?? []).map((option) => [option.value, option.label]));
-  const dispositionLabel = new Map((options?.dispositions ?? []).map((option) => [option.value, option.label]));
+ const { data: rma, isLoading, isError, refetch } = useQuery({
+ queryKey: ['return-request', id],
+ queryFn: () => returnManagementApi.get(id!),
+ enabled: !!id,
+ });
+ const { data: warehouses } = useQuery({
+ queryKey: ['warehouse-tree'],
+ queryFn: () => warehouseApi.tree(),
+ staleTime: 5 * 60 * 1000,
+ });
+ const locations = (warehouses ?? []).flatMap((w) =>
+ (w.zones ?? []).flatMap((z) =>
+ (z.locations ?? []).map((l) => ({
+ id: l.id,
+ label: `${w.code}-${z.code}-${l.code}`,
+ sub: `${w.name} / ${z.name}`,
+ })),
+ ),
+ );
+ const { data: options } = useQuery({
+ queryKey: ['return-management', 'options'],
+ queryFn: returnManagementApi.options,
+ staleTime: 5 * 60 * 1000,
+ });
+ const reasonLabel = new Map((options?.reasons ?? []).map((option) => [option.value, option.label]));
+ const resolutionLabel = new Map((options?.resolutions ?? []).map((option) => [option.value, option.label]));
+ const conditionLabel = new Map((options?.conditions ?? []).map((option) => [option.value, option.label]));
+ const dispositionLabel = new Map((options?.dispositions ?? []).map((option) => [option.value, option.label]));
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['return-request', id] });
+ const invalidate = () => queryClient.invalidateQueries({ queryKey: ['return-request', id] });
 
-  const submitMut = useMutation({
-    mutationFn: () => returnManagementApi.submit(id!),
-    onSuccess: () => { invalidate(); toast.success('RMA submitted for approval.'); setConfirm(null); },
-    onError: (e) => toast.error(errMsg(e, 'Failed to submit RMA.')),
-  });
+ const submitMut = useMutation({
+ mutationFn: () => returnManagementApi.submit(id!),
+ onSuccess: () => { invalidate(); toast.success('RMA submitted for approval.'); setConfirm(null); },
+ onError: (e) => toast.error(errMsg(e, 'Failed to submit RMA.')),
+ });
 
-  const approveMut = useMutation({
-    mutationFn: () => returnManagementApi.approve(id!),
-    onSuccess: () => { invalidate(); toast.success('RMA approved.'); setConfirm(null); },
-    onError: (e) => toast.error(errMsg(e, 'Failed to approve RMA.')),
-  });
+ const approveMut = useMutation({
+ mutationFn: () => returnManagementApi.approve(id!),
+ onSuccess: () => { invalidate(); toast.success('RMA approved.'); setConfirm(null); },
+ onError: (e) => toast.error(errMsg(e, 'Failed to approve RMA.')),
+ });
 
-  const receiveMut = useMutation({
-    mutationFn: () => returnManagementApi.receive(id!),
-    onSuccess: () => { invalidate(); toast.success('Receipt recorded.'); setConfirm(null); },
-    onError: (e) => toast.error(errMsg(e, 'Failed to record receipt.')),
-  });
+ const receiveMut = useMutation({
+ // Without per-line counts the backend falls back to the claimed quantity,
+ // so a short return would be credited in full.
+ mutationFn: () => returnManagementApi.receive(
+ id!,
+ Object.fromEntries(
+ Object.entries(receivedQty)
+ .filter(([, v]) => v !== '')
+ .map(([k, v]) => [k, Number(v)]),
+ ),
+ ),
+ onSuccess: () => { invalidate(); toast.success('Receipt recorded.'); setConfirm(null); setReceivedQty({}); },
+ onError: (e) => toast.error(errMsg(e, 'Failed to record receipt.')),
+ });
 
-  const inspectMut = useMutation({
-    mutationFn: () => returnManagementApi.inspect(id!),
-    onSuccess: () => { invalidate(); toast.success('Inspection completed.'); setConfirm(null); },
-    onError: (e) => toast.error(errMsg(e, 'Failed to complete inspection.')),
-  });
+ const inspectMut = useMutation({
+ mutationFn: () => returnManagementApi.inspect(id!),
+ onSuccess: () => { invalidate(); toast.success('Inspection completed.'); setConfirm(null); },
+ onError: (e) => toast.error(errMsg(e, 'Failed to complete inspection.')),
+ });
 
-  const completeMut = useMutation({
-    mutationFn: (locId?: string) => returnManagementApi.complete(id!, locId as string),
-    onSuccess: () => { invalidate(); toast.success('RMA completed.'); setConfirm(null); setLocationId(''); },
-    onError: (e) => toast.error(errMsg(e, 'Failed to complete RMA.')),
-  });
+ const completeMut = useMutation({
+ mutationFn: (locId: string) => returnManagementApi.complete(id!, locId),
+ onSuccess: () => { invalidate(); toast.success('RMA completed.'); setConfirm(null); setLocationId(''); },
+ onError: (e) => toast.error(errMsg(e, 'Failed to complete RMA.')),
+ });
 
-  const rejectMut = useMutation({
-    mutationFn: (reason: string) => returnManagementApi.reject(id!, reason),
-    onSuccess: () => { invalidate(); toast.success('RMA rejected.'); setRejectOpen(false); },
-    onError: (e) => toast.error(errMsg(e, 'Failed to reject RMA.')),
-  });
+ const rejectMut = useMutation({
+ mutationFn: (reason: string) => returnManagementApi.reject(id!, reason),
+ onSuccess: () => { invalidate(); toast.success('RMA rejected.'); setRejectOpen(false); },
+ onError: (e) => toast.error(errMsg(e, 'Failed to reject RMA.')),
+ });
 
-  const cancelMut = useMutation({
-    mutationFn: () => returnManagementApi.cancel(id!),
-    onSuccess: () => { invalidate(); toast.success('RMA cancelled.'); setConfirm(null); },
-    onError: (e) => toast.error(errMsg(e, 'Failed to cancel RMA.')),
-  });
+ const cancelMut = useMutation({
+ mutationFn: () => returnManagementApi.cancel(id!),
+ onSuccess: () => { invalidate(); toast.success('RMA cancelled.'); setConfirm(null); },
+ onError: (e) => toast.error(errMsg(e, 'Failed to cancel RMA.')),
+ });
 
-  const availableActions = (status?: string): Array<{ key: string; label: string; variant?: 'primary' | 'danger' | 'default' }> => {
-    if (!status) return [];
-    switch (status) {
-      case 'draft': return [
-        { key: 'submit', label: 'Submit for Approval', variant: 'primary' },
-        { key: 'cancel', label: 'Cancel', variant: 'danger' },
-      ];
-      case 'pending_approval': return [
-        { key: 'approve', label: 'Approve', variant: 'primary' },
-        { key: 'reject', label: 'Reject', variant: 'danger' },
-      ];
-      case 'approved': return [
-        { key: 'receive', label: 'Record Receipt', variant: 'primary' },
-        { key: 'reject', label: 'Reject', variant: 'danger' },
-      ];
-      case 'received': return [
-        { key: 'inspect', label: 'Complete Inspection', variant: 'primary' },
-        { key: 'reject', label: 'Reject', variant: 'danger' },
-      ];
-      case 'inspected': return [
-        ...(rma?.disposition_status !== 'disposed' ? [{ key: 'dispose', label: 'Dispose Items', variant: 'primary' as const }] : []),
-        { key: 'complete', label: 'Complete RMA', variant: 'primary' as const },
-        { key: 'reject', label: 'Reject', variant: 'danger' as const },
-      ];
-      default: return [];
-    }
-  };
+ const availableActions = (status?: string): Array<{ key: string; label: string; variant?: 'primary' | 'danger' | 'default' }> => {
+ if (!status) return [];
+ switch (status) {
+ case 'draft': return [
+ { key: 'submit', label: 'Submit for Approval', variant: 'primary' },
+ { key: 'cancel', label: 'Cancel', variant: 'danger' },
+ ];
+ case 'pending_approval': return [
+ { key: 'approve', label: 'Approve', variant: 'primary' },
+ { key: 'reject', label: 'Reject', variant: 'danger' },
+ ];
+ case 'approved': return [
+ { key: 'receive', label: 'Record Receipt', variant: 'primary' },
+ { key: 'reject', label: 'Reject', variant: 'danger' },
+ ];
+ case 'received': return [
+ { key: 'inspect', label: 'Complete Inspection', variant: 'primary' },
+ { key: 'reject', label: 'Reject', variant: 'danger' },
+ ];
+ case 'inspected': {
+ const disposed = rma?.disposition_status === 'disposed';
+ return [
+ // Disposition decides scrap vs restock and issues the credit note;
+ // completing before it would close the RMA with neither.
+ ...(disposed ? [] : [{ key: 'dispose', label: 'Dispose Items', variant: 'primary' as const }]),
+ ...(disposed ? [{ key: 'complete', label: 'Complete RMA', variant: 'primary' as const }] : []),
+ // Once disposed the credit / debit memo is live — rejection is no
+ // longer a clean unwind, so the backend refuses it.
+ ...(disposed ? [] : [{ key: 'reject', label: 'Reject', variant: 'danger' as const }]),
+ ];
+ }
+ default: return [];
+ }
+ };
 
-  const handleAction = (key: string) => {
-    if (key === 'reject') {
-      setRejectOpen(true);
-    } else if (key === 'dispose') {
-      setShowDispose(true);
-    } else if (key === 'complete') {
-      setConfirm('complete');
-    } else {
-      setConfirm(key as typeof confirm);
-    }
-  };
+ const handleAction = (key: string) => {
+ if (key === 'reject') {
+ setRejectOpen(true);
+ } else if (key === 'dispose') {
+ setShowDispose(true);
+ } else if (key === 'complete') {
+ setConfirm('complete');
+ } else if (key === 'receive') {
+ setConfirm('receive');
+ } else {
+ setConfirm(key as typeof confirm);
+ }
+ };
 
-  const executeConfirm = () => {
-    switch (confirm) {
-      case 'submit': submitMut.mutate(); break;
-      case 'approve': approveMut.mutate(); break;
-      case 'receive': receiveMut.mutate(); break;
-      case 'inspect': inspectMut.mutate(); break;
-      case 'cancel': cancelMut.mutate(); break;
-      default: break;
-    }
-  };
+ const executeConfirm = () => {
+ switch (confirm) {
+ case 'submit': submitMut.mutate(); break;
+ case 'approve': approveMut.mutate(); break;
+ case 'inspect': inspectMut.mutate(); break;
+ case 'cancel': cancelMut.mutate(); break;
+ default: break;
+ }
+ };
 
-  const confirmPending =
-    confirm === 'submit' ? submitMut.isPending
-    : confirm === 'approve' ? approveMut.isPending
-    : confirm === 'receive' ? receiveMut.isPending
-    : confirm === 'inspect' ? inspectMut.isPending
-    : confirm === 'cancel' ? cancelMut.isPending
-    : false;
+ const confirmPending =
+ confirm === 'submit' ? submitMut.isPending
+ : confirm === 'approve' ? approveMut.isPending
+ : confirm === 'receive' ? receiveMut.isPending
+ : confirm === 'inspect' ? inspectMut.isPending
+ : confirm === 'cancel' ? cancelMut.isPending
+ : false;
 
-  const CONFIRM_META: Record<string, { title: string; description: string; label: string; variant: 'primary' | 'danger' }> = {
-    submit: { title: 'Submit RMA for approval?', description: 'The RMA enters the approval chain. Edits are no longer allowed until approved or rejected.', label: 'Submit', variant: 'primary' },
-    approve: { title: 'Approve this RMA?', description: 'Approval is recorded against your account in the audit log.', label: 'Approve', variant: 'primary' },
-    receive: { title: 'Record receipt of returned items?', description: 'Marks the items as physically received and ready for inspection.', label: 'Record Receipt', variant: 'primary' },
-    inspect: { title: 'Complete inspection?', description: 'Marks the inspection as done. Items can then be disposed and the RMA completed.', label: 'Complete Inspection', variant: 'primary' },
-    cancel: { title: 'Cancel this RMA?', description: 'Cancellation is permanent. The RMA cannot be reopened.', label: 'Yes, cancel RMA', variant: 'danger' },
-  };
+ const CONFIRM_META: Record<string, { title: string; description: string; label: string; variant: 'primary' | 'danger' }> = {
+ submit: { title: 'Submit RMA for approval?', description: 'The RMA enters the approval chain. Edits are no longer allowed until approved or rejected.', label: 'Submit', variant: 'primary' },
+ approve: { title: 'Approve this RMA?', description: 'Approval is recorded against your account in the audit log.', label: 'Approve', variant: 'primary' },
+ receive: { title: 'Record receipt of returned items?', description: 'Marks the items as physically received and ready for inspection.', label: 'Record Receipt', variant: 'primary' },
+ inspect: { title: 'Complete inspection?', description: 'Marks the inspection as done. Items can then be disposed and the RMA completed.', label: 'Complete Inspection', variant: 'primary' },
+ cancel: { title: 'Cancel this RMA?', description: 'Cancellation is permanent. The RMA cannot be reopened.', label: 'Yes, cancel RMA', variant: 'danger' },
+ };
 
-  if (isLoading) return <SkeletonDetail />;
+ if (isLoading) return <SkeletonDetail />;
 
-  if (isError || !rma) {
-    return <EmptyState icon="alert-circle" title="Failed to load return request" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />;
-  }
+ if (isError || !rma) {
+ return <EmptyState icon="alert-circle" title="Failed to load return request" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />;
+ }
 
-  const actions = can('return_management.manage') ? availableActions(rma.status) : [];
+ const actions = can('return_management.manage') ? availableActions(rma.status) : [];
 
-  // Build timeline entries from timestamp fields
-  const timeline: Array<{ key: string; label: string; at: string | null | undefined; by?: { name: string } | null }> = [
-    { key: 'created', label: 'Created', at: rma.created_at, by: rma.creator },
-    { key: 'approved', label: 'Approved', at: rma.approved_at, by: rma.approved_by },
-    { key: 'received', label: 'Received', at: rma.received_at },
-    { key: 'inspected', label: 'Inspected', at: rma.inspected_at },
-    { key: 'completed', label: 'Completed', at: rma.completed_at, by: rma.approved_by },
-    { key: 'rejected', label: 'Rejected', at: rma.rejected_at },
-    { key: 'cancelled', label: 'Cancelled', at: rma.cancelled_at },
-  ];
+ // Build timeline entries from timestamp fields
+ const timeline: Array<{ key: string; label: string; at: string | null | undefined; by?: { name: string } | null }> = [
+ { key: 'created', label: 'Created', at: rma.created_at, by: rma.creator },
+ { key: 'approved', label: 'Approved', at: rma.approved_at, by: rma.approved_by },
+ { key: 'received', label: 'Received', at: rma.received_at },
+ { key: 'inspected', label: 'Inspected', at: rma.inspected_at },
+ { key: 'completed', label: 'Completed', at: rma.completed_at, by: rma.approved_by },
+ { key: 'rejected', label: 'Rejected', at: rma.rejected_at },
+ { key: 'cancelled', label: 'Cancelled', at: rma.cancelled_at },
+ ];
 
-  return (
-    <div>
-      <PageHeader
-        title={<span className="font-mono">{rma.rma_number}</span>}
-        subtitle={
-          <div className="flex items-center gap-2">
-            <Chip variant={STATUS_VARIANT[rma.status] ?? 'neutral'}>
-              {rma.status_label}
-            </Chip>
-            <span className="text-muted">|</span>
-            <span>{rma.type_label}</span>
-          </div>
-        }
-        backTo="/return-management"
-        breadcrumbs={[{ label: 'Returns', href: '/return-management' }, { label: rma.rma_number }]}
-      />
+ return (
+ <div>
+ <PageHeader
+ title={<span className="font-mono">{rma.rma_number}</span>}
+ subtitle={
+ <div className="flex items-center gap-2">
+ <Chip variant={STATUS_VARIANT[rma.status] ?? 'neutral'}>
+ {rma.status_label}
+ </Chip>
+ <span className="text-muted">|</span>
+ <span>{rma.type_label}</span>
+ </div>
+ }
+ backTo="/return-management"
+ breadcrumbs={[{ label: 'Returns', href: '/return-management' }, { label: rma.rma_number }]}
+ />
 
-      <div className="px-4 space-y-4">
-        {/* Workflow Actions */}
-        {actions.length > 0 && (
-          <div className="flex gap-2 flex-wrap">
-            {actions.map((action) => (
-              <Button
-                key={action.key}
-                variant={action.variant === 'danger' ? 'danger' : 'primary'}
-                onClick={() => handleAction(action.key)}
-              >
-                {action.label}
-              </Button>
-            ))}
-          </div>
-        )}
+ <div className="px-4 space-y-4">
+ {/* Workflow Actions */}
+ {actions.length > 0 && (
+ <div className="flex gap-2 flex-wrap">
+ {actions.map((action) => (
+ <Button
+ key={action.key}
+ variant={action.variant === 'danger' ? 'danger' : 'primary'}
+ onClick={() => handleAction(action.key)}
+ >
+ {action.label}
+ </Button>
+ ))}
+ </div>
+ )}
 
-        {/* Details Panel */}
-        <Panel title="RMA Details">
-          <dl className="grid grid-cols-3 gap-y-3 gap-x-6 text-sm mt-2">
-            <div>
-              <dt className="text-2xs uppercase tracking-wider text-muted">Type</dt>
-              <dd>{rma.type_label}</dd>
-            </div>
-            <div>
-              <dt className="text-2xs uppercase tracking-wider text-muted">Status</dt>
-              <dd><Chip variant={STATUS_VARIANT[rma.status] ?? 'neutral'}>{rma.status_label}</Chip></dd>
-            </div>
-            <div>
-              <dt className="text-2xs uppercase tracking-wider text-muted">Return Date</dt>
-              <dd className="font-mono tabular-nums">{formatDate(rma.return_date)}</dd>
-            </div>
-            <div>
-              <dt className="text-2xs uppercase tracking-wider text-muted">Source</dt>
-              <dd className="flex flex-col gap-0.5">
-                {rma.customer && <span>Customer: {rma.customer.name}</span>}
-                {rma.vendor && <span>Vendor: {rma.vendor.name}</span>}
-                {rma.sales_order && (
-                  <Link to={`/crm/sales-orders/${rma.sales_order.id}`} className="text-accent hover:underline font-mono">
-                    SO: {rma.sales_order.so_number}
-                  </Link>
-                )}
-                {rma.invoice && (
-                  <Link to={`/accounting/invoices/${rma.invoice.id}`} className="text-accent hover:underline font-mono">
-                    Invoice: {rma.invoice.invoice_number}
-                  </Link>
-                )}
-                {rma.purchase_order && (
-                  <Link to={`/purchasing/purchase-orders/${rma.purchase_order.id}`} className="text-accent hover:underline font-mono">
-                    PO: {rma.purchase_order.po_number}
-                  </Link>
-                )}
-                {rma.bill && (
-                  <Link to={`/accounting/bills/${rma.bill.id}`} className="text-accent hover:underline font-mono">
-                    Bill: {rma.bill.bill_number}
-                  </Link>
-                )}
-                {!rma.customer && !rma.vendor && !rma.sales_order && !rma.invoice && !rma.purchase_order && !rma.bill && (
-                  <span className="text-muted">—</span>
-                )}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-2xs uppercase tracking-wider text-muted">Reason</dt>
-              <dd>{reasonLabel.get(rma.reason_code ?? '') || rma.reason_code || '—'}</dd>
-              {rma.reason_description && (
-                <dd className="text-muted text-xs mt-0.5">{rma.reason_description}</dd>
-              )}
-            </div>
-            <div>
-              <dt className="text-2xs uppercase tracking-wider text-muted">Resolution</dt>
-              <dd>{resolutionLabel.get(rma.resolution ?? '') || rma.resolution || '—'}</dd>
-            </div>
-          </dl>
+ {/* Details Panel */}
+ <Panel title="RMA Details">
+ <dl className="grid grid-cols-3 gap-y-3 gap-x-6 text-sm mt-2">
+ <div>
+ <dt className="text-2xs uppercase tracking-wider text-muted">Type</dt>
+ <dd>{rma.type_label}</dd>
+ </div>
+ <div>
+ <dt className="text-2xs uppercase tracking-wider text-muted">Status</dt>
+ <dd><Chip variant={STATUS_VARIANT[rma.status] ?? 'neutral'}>{rma.status_label}</Chip></dd>
+ </div>
+ <div>
+ <dt className="text-2xs uppercase tracking-wider text-muted">Return Date</dt>
+ <dd className="font-mono tabular-nums">{formatDate(rma.return_date)}</dd>
+ </div>
+ <div>
+ <dt className="text-2xs uppercase tracking-wider text-muted">Source</dt>
+ <dd className="flex flex-col gap-0.5">
+ {rma.customer && <span>Customer: {rma.customer.name}</span>}
+ {rma.vendor && <span>Vendor: {rma.vendor.name}</span>}
+ {rma.sales_order && (
+ <Link to={`/crm/sales-orders/${rma.sales_order.id}`} className="text-accent hover:underline font-mono">
+ SO: {rma.sales_order.so_number}
+ </Link>
+ )}
+ {rma.invoice && (
+ <Link to={`/accounting/invoices/${rma.invoice.id}`} className="text-accent hover:underline font-mono">
+ Invoice: {rma.invoice.invoice_number}
+ </Link>
+ )}
+ {rma.purchase_order && (
+ <Link to={`/purchasing/purchase-orders/${rma.purchase_order.id}`} className="text-accent hover:underline font-mono">
+ PO: {rma.purchase_order.po_number}
+ </Link>
+ )}
+ {rma.bill && (
+ <Link to={`/accounting/bills/${rma.bill.id}`} className="text-accent hover:underline font-mono">
+ Bill: {rma.bill.bill_number}
+ </Link>
+ )}
+ {!rma.customer && !rma.vendor && !rma.sales_order && !rma.invoice && !rma.purchase_order && !rma.bill && (
+ <span className="text-muted">—</span>
+ )}
+ </dd>
+ </div>
+ <div>
+ <dt className="text-2xs uppercase tracking-wider text-muted">Reason</dt>
+ <dd>{reasonLabel.get(rma.reason_code ?? '') || rma.reason_code || '—'}</dd>
+ {rma.reason_description && (
+ <dd className="text-muted text-xs mt-0.5">{rma.reason_description}</dd>
+ )}
+ </div>
+ <div>
+ <dt className="text-2xs uppercase tracking-wider text-muted">Resolution</dt>
+ <dd>{resolutionLabel.get(rma.resolution ?? '') || rma.resolution || '—'}</dd>
+ </div>
+ </dl>
 
-          {rma.customer_notes && (
-            <div className="mt-3">
-              <div className="text-2xs uppercase tracking-wider text-muted mb-0.5">Customer Notes</div>
-              <div className="text-sm bg-elevated p-2 rounded">{rma.customer_notes}</div>
-            </div>
-          )}
+ {rma.customer_notes && (
+ <div className="mt-3">
+ <div className="text-2xs uppercase tracking-wider text-muted mb-0.5">Customer Notes</div>
+ <div className="text-sm bg-elevated p-2 rounded">{rma.customer_notes}</div>
+ </div>
+ )}
 
-          {rma.internal_notes && (
-            <div className="mt-3">
-              <div className="text-2xs uppercase tracking-wider text-muted mb-0.5">Internal Notes</div>
-              <div className="text-sm bg-elevated p-2 rounded">{rma.internal_notes}</div>
-            </div>
-          )}
+ {rma.internal_notes && (
+ <div className="mt-3">
+ <div className="text-2xs uppercase tracking-wider text-muted mb-0.5">Internal Notes</div>
+ <div className="text-sm bg-elevated p-2 rounded">{rma.internal_notes}</div>
+ </div>
+ )}
 
-          {rma.refund_amount && (
-            <div className="mt-3">
-              <div className="text-2xs uppercase tracking-wider text-muted mb-0.5">Refund Amount</div>
-              <div className="text-sm font-medium font-mono tabular-nums">{formatPeso(rma.refund_amount)}</div>
-            </div>
-          )}
-        </Panel>
+ {rma.refund_amount && (
+ <div className="mt-3">
+ <div className="text-2xs uppercase tracking-wider text-muted mb-0.5">Refund Amount</div>
+ <div className="text-sm font-medium font-mono tabular-nums">{formatPeso(rma.refund_amount)}</div>
+ </div>
+ )}
+ </Panel>
 
-        {/* Timeline */}
-        <Panel title="Timeline">
-          <div className="space-y-2 text-sm mt-2">
-            {timeline
-              .filter((t) => t.at)
-              .map((t) => (
-                <div key={t.key} className="flex items-center gap-2">
-                  <div className={`h-2 w-2 rounded-full shrink-0 ${TIMELINE_DOT[t.key] ?? 'bg-strong'}`} />
-                  <span className="text-muted text-xs">{t.label}</span>
-                  <span className="font-mono tabular-nums">{formatDateTime(t.at)}</span>
-                  {t.by && <span className="text-muted">by {t.by.name}</span>}
-                </div>
-              ))}
-          </div>
-        </Panel>
+ {/* Timeline */}
+ <Panel title="Timeline">
+ <div className="space-y-2 text-sm mt-2">
+ {timeline
+ .filter((t) => t.at)
+ .map((t) => (
+ <div key={t.key} className="flex items-center gap-2">
+ <div className={`h-2 w-2 rounded-full shrink-0 ${TIMELINE_DOT[t.key] ?? 'bg-strong'}`} />
+ <span className="text-muted text-xs">{t.label}</span>
+ <span className="font-mono tabular-nums">{formatDateTime(t.at)}</span>
+ {t.by && <span className="text-muted">by {t.by.name}</span>}
+ </div>
+ ))}
+ </div>
+ </Panel>
 
-        {/* Items */}
-        <Panel title={`Items (${rma.items?.length ?? 0})`}>
-          {!rma.items || rma.items.length === 0 ? (
-            <div className="text-muted text-sm py-2">No items.</div>
-          ) : (
-            <table className={cn(tableCls, 'mt-2')}>
-              <thead>
-                <tr className={theadTrCls}>
-                  <Th>Product</Th>
-                  <Th align="right">Qty</Th>
-                  <Th align="right">Returned</Th>
-                  <Th align="right">Unit Price</Th>
-                  <Th>Condition</Th>
-                  <Th>Reason</Th>
-                  <Th>Disposition</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {rma.items.map((item) => (
-                  <tr key={item.id} className={trCls}>
-                    <Td mono>
-                      {item.product
-                        ? `${item.product.part_number} — ${item.product.name}`
-                        : item.item
-                          ? `${item.item.code} — ${item.item.name}`
-                          : '—'}
-                    </Td>
-                    <Td align="right" mono>{formatInt(item.quantity)}</Td>
-                    <Td align="right" mono>{formatInt(item.returned_quantity)}</Td>
-                    <Td align="right" mono>{formatPeso(item.unit_price)}</Td>
-                    <Td>{conditionLabel.get(item.condition ?? '') || item.condition || '—'}</Td>
-                    <Td>{item.reason || '—'}</Td>
-                    <Td>
-                      {item.disposition
-                        ? <Chip variant={item.disposition === 'restock' ? 'success' : item.disposition === 'scrap' ? 'danger' : 'warning'}>{item.disposition_label ?? dispositionLabel.get(item.disposition) ?? item.disposition}</Chip>
-                        : '—'}
-                    </Td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </Panel>
-      </div>
+ {/* Outcome — the documents disposition produced. These were returned by
+     the API but never rendered, so there was no way to tell from the UI
+     whether a customer had actually been credited. */}
+ {(rma.credit_note || rma.replacement_purchase_order || rma.inspection || rma.disposition_status) && (
+ <Panel title="Outcome">
+ <dl className="grid grid-cols-3 gap-y-3 gap-x-6 text-sm mt-2">
+ <div>
+ <dt className="text-2xs uppercase tracking-wider text-muted">Disposition</dt>
+ <dd>
+ {rma.disposition_status === 'disposed'
+ ? <Chip variant="success">Disposed</Chip>
+ : <Chip variant="warning">Pending</Chip>}
+ </dd>
+ </div>
+ <div>
+ <dt className="text-2xs uppercase tracking-wider text-muted">Credit Note</dt>
+ <dd>
+ {rma.credit_note ? (
+ <Link to={`/accounting/credit-notes/${rma.credit_note.id}`} className="text-accent hover:underline font-mono">
+ {rma.credit_note.credit_note_number} · {formatPeso(rma.credit_note.total_amount)}
+ </Link>
+ ) : <span className="text-muted">—</span>}
+ </dd>
+ </div>
+ <div>
+ <dt className="text-2xs uppercase tracking-wider text-muted">Replacement PO</dt>
+ <dd>
+ {rma.replacement_purchase_order ? (
+ <Link to={`/purchasing/purchase-orders/${rma.replacement_purchase_order.id}`} className="text-accent hover:underline font-mono">
+ {rma.replacement_purchase_order.po_number}
+ </Link>
+ ) : <span className="text-muted">—</span>}
+ </dd>
+ </div>
+ <div>
+ <dt className="text-2xs uppercase tracking-wider text-muted">Inspection</dt>
+ <dd>
+ {rma.inspection ? (
+ <Link to={`/quality/inspections/${rma.inspection.id}`} className="text-accent hover:underline font-mono">
+ {rma.inspection.inspection_number}
+ </Link>
+ ) : <span className="text-muted">—</span>}
+ </dd>
+ </div>
+ </dl>
+ </Panel>
+ )}
 
-      {/* Confirm dialogs for simple actions (submit, approve, receive, inspect, cancel) */}
-      {confirm && confirm !== 'complete' && CONFIRM_META[confirm] && (
-        <ConfirmDialog
-          isOpen
-          onClose={() => setConfirm(null)}
-          onConfirm={executeConfirm}
-          title={CONFIRM_META[confirm].title}
-          description={CONFIRM_META[confirm].description}
-          confirmLabel={CONFIRM_META[confirm].label}
-          variant={CONFIRM_META[confirm].variant === 'danger' ? 'danger' : 'primary'}
-          pending={confirmPending}
-        />
-      )}
+ {/* Items */}
+ <Panel title={`Items (${rma.items?.length ?? 0})`}>
+ {!rma.items || rma.items.length === 0 ? (
+ <div className="text-muted text-sm py-2">No items.</div>
+ ) : (
+ <table className={cn(tableCls, 'mt-2')}>
+ <thead>
+ <tr className={theadTrCls}>
+ <Th>Product</Th>
+ <Th align="right">Qty</Th>
+ <Th align="right">Returned</Th>
+ <Th align="right">Unit Price</Th>
+ <Th>Condition</Th>
+ <Th>Reason</Th>
+ <Th>Disposition</Th>
+ </tr>
+ </thead>
+ <tbody>
+ {rma.items.map((item) => (
+ <tr key={item.id} className={trCls}>
+ <Td mono>
+ {item.product
+ ? `${item.product.part_number} — ${item.product.name}`
+ : item.item
+ ? `${item.item.code} — ${item.item.name}`
+ : '—'}
+ </Td>
+ <Td align="right" mono>{formatInt(item.quantity)}</Td>
+ <Td align="right" mono>{formatInt(item.returned_quantity)}</Td>
+ <Td align="right" mono>{formatPeso(item.unit_price)}</Td>
+ <Td>{conditionLabel.get(item.condition ?? '') || item.condition || '—'}</Td>
+ <Td>{item.reason || '—'}</Td>
+ <Td>
+ {item.disposition
+ ? <Chip variant={item.disposition === 'restock' ? 'success' : item.disposition === 'scrap' ? 'danger' : 'warning'}>{item.disposition_label ?? dispositionLabel.get(item.disposition) ?? item.disposition}</Chip>
+ : '—'}
+ </Td>
+ </tr>
+ ))}
+ </tbody>
+ </table>
+ )}
+ </Panel>
+ </div>
 
-      {/* Reject dialog (requires reason) */}
-      <ReasonDialog
-        isOpen={rejectOpen}
-        onClose={() => setRejectOpen(false)}
-        onConfirm={(reason) => rejectMut.mutate(reason)}
-        title="Reject this return request?"
-        description="The RMA is returned to the requester with your reason. Please be specific."
-        reasonLabel="Rejection reason"
-        reasonPlaceholder="e.g. Items were not received within the return window"
-        minLength={10}
-        confirmLabel="Reject"
-        variant="danger"
-        pending={rejectMut.isPending}
-      />
+ {/* Confirm dialogs for simple actions (submit, approve, inspect, cancel).
+     Receive and complete have their own dialogs — they need input. */}
+ {confirm && confirm !== 'complete' && confirm !== 'receive' && CONFIRM_META[confirm] && (
+ <ConfirmDialog
+ isOpen
+ onClose={() => setConfirm(null)}
+ onConfirm={executeConfirm}
+ title={CONFIRM_META[confirm].title}
+ description={CONFIRM_META[confirm].description}
+ confirmLabel={CONFIRM_META[confirm].label}
+ variant={CONFIRM_META[confirm].variant === 'danger' ? 'danger' : 'primary'}
+ pending={confirmPending}
+ />
+ )}
 
-      {/* Complete with location picker */}
-      <Modal
-        isOpen={confirm === 'complete'}
-        onClose={() => setConfirm(null)}
-        title="Complete RMA"
-      >
-        <div className="space-y-3">
-          <p className="text-sm text-muted">Select the warehouse location for stock movement:</p>
-          <Input
-            label="Location ID (optional)"
-            placeholder="Warehouse location"
-            value={locationId}
-            onChange={(e) => setLocationId(e.target.value)}
-          />
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setConfirm(null)}>Cancel</Button>
-            <Button
-              variant="primary"
-              loading={completeMut.isPending}
-              onClick={() => completeMut.mutate(locationId || undefined)}
-            >
-              Confirm Complete
-            </Button>
-          </div>
-        </div>
-      </Modal>
+ {/* Reject dialog (requires reason) */}
+ <ReasonDialog
+ isOpen={rejectOpen}
+ onClose={() => setRejectOpen(false)}
+ onConfirm={(reason) => rejectMut.mutate(reason)}
+ title="Reject this return request?"
+ description="The RMA is returned to the requester with your reason. Please be specific."
+ reasonLabel="Rejection reason"
+ reasonPlaceholder="e.g. Items were not received within the return window"
+ minLength={10}
+ confirmLabel="Reject"
+ variant="danger"
+ pending={rejectMut.isPending}
+ />
 
-      {/* Dispose Items Dialog */}
-      {rma && showDispose && (
-        <Suspense fallback={null}>
-          <DisposeDialog rma={rma} isOpen={showDispose} onClose={() => setShowDispose(false)} />
-        </Suspense>
-      )}
-    </div>
-  );
+ {/* Complete with location picker */}
+ <Modal
+ isOpen={confirm === 'complete'}
+ onClose={() => setConfirm(null)}
+ title="Complete RMA"
+ >
+ <div className="space-y-3">
+ <p className="text-sm text-muted">
+ Select the warehouse location for the stock movement. Lines disposed as
+ scrap or returned to the supplier are not restocked.
+ </p>
+ {/* Was a free-text "Location ID (optional)" box against a required
+     backend field — nothing in the UI exposed a valid value. */}
+ <Select
+ label="Warehouse location"
+ required
+ value={locationId}
+ onChange={(e) => setLocationId(e.target.value)}
+ >
+ <option value="">— Select location —</option>
+ {locations.map((l) => (
+ <option key={l.id} value={l.id}>
+ {l.label} · {l.sub}
+ </option>
+ ))}
+ </Select>
+ <div className="flex justify-end gap-2">
+ <Button variant="secondary" onClick={() => setConfirm(null)}>Cancel</Button>
+ <Button
+ variant="primary"
+ loading={completeMut.isPending}
+ disabled={!locationId || completeMut.isPending}
+ onClick={() => completeMut.mutate(locationId)}
+ >
+ Confirm Complete
+ </Button>
+ </div>
+ </div>
+ </Modal>
+
+ {/* Receive with per-line quantities */}
+ <Modal
+ isOpen={confirm === 'receive'}
+ onClose={() => setConfirm(null)}
+ title="Record receipt"
+ >
+ <div className="space-y-3">
+ <p className="text-sm text-muted">
+ Enter how many units actually came back on each line. Leave a line blank
+ to accept the full requested quantity.
+ </p>
+ <table className={tableCls}>
+ <thead>
+ <tr className={theadTrCls}>
+ <Th>Line</Th>
+ <Th align="right">Requested</Th>
+ <Th align="right">Received</Th>
+ </tr>
+ </thead>
+ <tbody>
+ {(rma.items ?? []).map((item) => (
+ <tr key={item.id} className={trCls}>
+ <Td mono>
+ {item.product
+ ? `${item.product.part_number} — ${item.product.name}`
+ : item.item
+ ? `${item.item.code} — ${item.item.name}`
+ : '—'}
+ </Td>
+ <Td align="right" mono>{formatInt(item.quantity)}</Td>
+ <Td align="right">
+ <Input
+ type="number"
+ step="0.001"
+ min="0"
+ max={item.quantity}
+ className="font-mono tabular-nums text-right"
+ value={receivedQty[item.id] ?? ''}
+ onChange={(e) => setReceivedQty((prev) => ({ ...prev, [item.id]: e.target.value }))}
+ />
+ </Td>
+ </tr>
+ ))}
+ </tbody>
+ </table>
+ <div className="flex justify-end gap-2">
+ <Button variant="secondary" onClick={() => setConfirm(null)}>Cancel</Button>
+ <Button
+ variant="primary"
+ loading={receiveMut.isPending}
+ onClick={() => receiveMut.mutate()}
+ >
+ Record Receipt
+ </Button>
+ </div>
+ </div>
+ </Modal>
+
+ {/* Dispose Items Dialog */}
+ {rma && showDispose && (
+ <Suspense fallback={null}>
+ <DisposeDialog rma={rma} isOpen={showDispose} onClose={() => setShowDispose(false)} />
+ </Suspense>
+ )}
+ </div>
+ );
 }

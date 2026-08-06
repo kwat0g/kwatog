@@ -5,12 +5,17 @@ declare(strict_types=1);
 namespace App\Modules\B2B\Services;
 
 use App\Common\Support\HashIdFilter;
+use App\Common\Services\SettingsService;
+use App\Common\Services\TaxPolicyService;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\Bill;
+use App\Modules\Accounting\Enums\BillStatus;
 use App\Modules\Accounting\Models\Vendor;
 use App\Modules\Accounting\Services\BillService;
 use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\DeliverySchedule;
+use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
+use App\Modules\B2B\Enums\SupplierAgingBucket;
 use App\Modules\B2B\Models\PortalShippingDocument;
 use App\Modules\Edge\Services\EdgeSystemUserResolver;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
@@ -35,6 +40,8 @@ class SupplierPortalService
     public function __construct(
         private readonly BillService $bills,
         private readonly EdgeSystemUserResolver $systemUser,
+        private readonly SettingsService $settings,
+        private readonly TaxPolicyService $taxPolicy,
     ) {}
 
     /* ─── Dashboard ──────────────────────────────────────────────── */
@@ -42,16 +49,16 @@ class SupplierPortalService
     public function dashboard(int $vendorId): array
     {
         $openPoCount = PurchaseOrder::where('vendor_id', $vendorId)
-            ->whereIn('status', ['approved', 'sent'])->count();
+            ->whereIn('status', [PurchaseOrderStatus::Approved->value, PurchaseOrderStatus::Sent->value])->count();
 
         $pendingDeliveryCount = PurchaseOrder::where('vendor_id', $vendorId)
-            ->where('status', 'sent')->count();
+            ->where('status', PurchaseOrderStatus::Sent->value)->count();
 
         $unpaidInvoiceCount = Bill::where('vendor_id', $vendorId)
-            ->whereIn('status', ['unpaid', 'partial'])->count();
+            ->whereIn('status', [BillStatus::Unpaid->value, BillStatus::Partial->value])->count();
 
         $totalUnpaid = Bill::where('vendor_id', $vendorId)
-            ->whereIn('status', ['unpaid', 'partial'])->sum('balance');
+            ->whereIn('status', [BillStatus::Unpaid->value, BillStatus::Partial->value])->sum('balance');
 
         $recentPos = PurchaseOrder::where('vendor_id', $vendorId)
             ->orderByDesc('created_at')->limit(5)->get();
@@ -109,6 +116,13 @@ class SupplierPortalService
             'purchaseRequest:id,pr_number',
         ]);
 
+        $purchaseOrder->bills->each(function ($bill): void {
+            $bill->setAttribute(
+                'status_label',
+                BillStatus::tryFrom((string) $bill->status)?->label() ?? (string) $bill->status,
+            );
+        });
+
         return $purchaseOrder;
     }
 
@@ -119,7 +133,7 @@ class SupplierPortalService
         return $this->systemUser->impersonate(function () use ($purchaseOrder, $data) {
             $purchaseOrder->expected_delivery_date = $data['expected_delivery_date'] ?? $purchaseOrder->expected_delivery_date;
             $purchaseOrder->remarks = $data['notes'] ?? $purchaseOrder->remarks;
-            $purchaseOrder->status = 'sent';
+            $purchaseOrder->status = PurchaseOrderStatus::Sent->value;
             $purchaseOrder->sent_to_supplier_at = now();
             $purchaseOrder->save();
 
@@ -133,12 +147,13 @@ class SupplierPortalService
 
         return $this->systemUser->impersonate(function () use ($purchaseOrder, $data) {
             $estimatedArrival = $data['estimated_arrival'] ?? $purchaseOrder->expected_delivery_date;
-            $carrier = $data['carrier'] ?? 'N/A';
-            $tracking = $data['tracking_number'] ?? 'N/A';
+            $carrier = $data['carrier'] ?? null;
+            $tracking = $data['tracking_number'] ?? null;
             $prevNotes = $purchaseOrder->remarks ? $purchaseOrder->remarks."\n" : '';
 
             $purchaseOrder->expected_delivery_date = $estimatedArrival;
-            $purchaseOrder->remarks = $prevNotes."Shipment: {$carrier} / {$tracking}";
+            $shipment = implode(' / ', array_filter([$carrier, $tracking], static fn ($v) => $v !== null && $v !== ''));
+            $purchaseOrder->remarks = $shipment !== '' ? $prevNotes."Shipment: {$shipment}" : $prevNotes;
             $purchaseOrder->save();
 
             return $purchaseOrder;
@@ -229,12 +244,14 @@ class SupplierPortalService
             'expense_account_id' => $defaultAccountHashId,
             'description' => $poItem->description,
             'quantity' => (string) $poItem->quantity,
-            'unit' => $poItem->unit ?? 'pcs',
+            'unit' => $poItem->unit,
             'unit_price' => (string) $poItem->unit_price,
         ])->toArray();
 
         if (empty($items)) {
-            throw new \RuntimeException('This purchase order has no items to bill.');
+            // A supplier hitting this saw a generic 500 "Server Error" page with
+            // no clue what to fix. It is a state violation, not a server fault.
+            throw new \App\Common\Exceptions\BusinessRuleException('This purchase order has no items to bill.');
         }
 
         $storedPath = null;
@@ -248,7 +265,7 @@ class SupplierPortalService
                     'purchase_order_id' => $purchaseOrder->hash_id,
                     'date' => $data['date'],
                     'due_date' => $data['due_date'] ?? $data['date'],
-                    'is_vatable' => $data['is_vatable'] ?? true,
+                    'is_vatable' => $data['is_vatable'] ?? $this->taxPolicy->isVatRegistered(),
                     'remarks' => $data['remarks'] ?? null,
                     'items' => $items,
                 ], User::find($systemUser->id())));
@@ -293,12 +310,15 @@ class SupplierPortalService
     private function defaultExpenseAccountHashId(): string
     {
         $account = Account::query()
-            ->where('code', '5000')
+            ->where('code', $this->settings->requiredString('accounting.default_expense_account_code'))
             ->orWhere('name', 'like', '%Cost of Goods Sold%')
             ->first();
 
         if (! $account) {
-            throw new \RuntimeException('No COGS/expense account configured. Please contact the administrator.');
+            // The message is already written for a human ("contact the
+            // administrator"), so render it as a 422 the portal can display
+            // instead of burying it in a 500.
+            throw new \App\Common\Exceptions\BusinessRuleException('No COGS/expense account configured. Please contact the administrator.');
         }
 
         return $account->hash_id;
@@ -352,7 +372,7 @@ class SupplierPortalService
     {
         $openBills = Bill::where('vendor_id', $vendorId)
             ->with('purchaseOrder:id,po_number')
-            ->whereIn('status', ['unpaid', 'partial'])
+            ->whereIn('status', [BillStatus::Unpaid->value, BillStatus::Partial->value])
             ->orderBy('due_date')
             ->get();
 
@@ -380,6 +400,10 @@ class SupplierPortalService
                 'd61_90' => number_format($aging['d61_90'], 2),
                 'd91_plus' => number_format($aging['d91_plus'], 2),
             ],
+            'aging_bucket_options' => array_map(
+                static fn (SupplierAgingBucket $bucket): array => ['value' => $bucket->value, 'label' => $bucket->label()],
+                SupplierAgingBucket::cases(),
+            ),
             'open_bills' => $openBills,
             'as_of_date' => now()->toDateString(),
         ];

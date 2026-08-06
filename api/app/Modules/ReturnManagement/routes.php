@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Route;
  */
 
 Route::middleware(['auth:sanctum'])->prefix('return-management')->group(function () {
+    Route::get('/options', [ReturnRequestController::class, 'options'])->middleware('permission:return_management.view');
 
     /* ─── Return requests (RMA) ─── */
     Route::get('/return-requests',                    [ReturnRequestController::class, 'index'])  ->middleware('permission:return_management.view');
