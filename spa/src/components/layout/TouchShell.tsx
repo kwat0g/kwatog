@@ -1,6 +1,8 @@
+import { useEffect } from 'react';
 import { Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
 import { type LucideIcon } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
+import { useThemeStore } from '@/stores/themeStore';
 import { Button } from '@/components/ui/Button';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { focusRingInset } from '@/lib/focus';
@@ -42,6 +44,16 @@ export function TouchShell({ eyebrow, eyebrowIcon: EyebrowIcon, fallbackName, ta
  const logout = useAuthStore((s) => s.logout);
  const navigate = useNavigate();
  const location = useLocation();
+
+ // Force the high-contrast floor palette for as long as a touch PWA is mounted,
+ // then hand the user's own light/dark preference back on the way out. Read via
+ // getState() rather than a selector so the actions stay out of the dependency
+ // array — they are stable, and subscribing would re-run this on every theme change.
+ useEffect(() => {
+ const { pushOverride, popOverride } = useThemeStore.getState();
+ pushOverride('floor');
+ return () => popOverride();
+ }, []);
 
  const hasTabs = Boolean(tabs?.length);
 

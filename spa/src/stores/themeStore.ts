@@ -2,18 +2,26 @@ import { create } from 'zustand';
 import { authApi } from '@/api/auth';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
+/** What actually lands on <html data-theme>. `floor` is route-forced, never chosen. */
+export type AppliedTheme = 'light' | 'dark' | 'floor';
 
 interface ThemeState {
  /** User-selected mode (light / dark / system). */
  mode: ThemeMode;
  /** Effective theme after resolving 'system' against prefers-color-scheme. */
  resolvedTheme: 'light' | 'dark';
+ /** Non-null while a route forces a palette. Suppresses mode-driven application. */
+ override: AppliedTheme | null;
  /** Updates the mode, applies the data-theme attribute, and (later) syncs to the API. */
  setMode: (mode: ThemeMode) => void;
  /** Initializes the store from an authenticated user's preference. */
  init: (initialMode?: ThemeMode) => void;
  /** Internally re-evaluates resolvedTheme and toggles <html data-theme>. */
  apply: () => void;
+ /** Forces a palette for the current route. Idempotent. */
+ pushOverride: (theme: AppliedTheme) => void;
+ /** Releases the override and restores the user's preference. Safe to call unpaired. */
+ popOverride: () => void;
 }
 
 const systemPrefersDark = (): boolean =>
@@ -25,7 +33,7 @@ const resolveTheme = (mode: ThemeMode): 'light' | 'dark' => {
  return mode;
 };
 
-const applyToDocument = (theme: 'light' | 'dark') => {
+const applyToDocument = (theme: AppliedTheme) => {
  if (typeof document !== 'undefined') {
  document.documentElement.setAttribute('data-theme', theme);
  }
@@ -59,10 +67,11 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
  // preference (light / dark / system) overrides this via init().
  mode: 'light',
  resolvedTheme: 'light',
+ override: null,
 
  setMode: (mode) => {
  const resolvedTheme = resolveTheme(mode);
- applyToDocument(resolvedTheme);
+ if (get().override === null) applyToDocument(resolvedTheme);
  set({ mode, resolvedTheme });
 
  if (mode === 'system') {
@@ -83,7 +92,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
  init: (initialMode) => {
  const mode = initialMode ?? 'light';
  const resolvedTheme = resolveTheme(mode);
- applyToDocument(resolvedTheme);
+ if (get().override === null) applyToDocument(resolvedTheme);
  set({ mode, resolvedTheme });
 
  if (mode === 'system') {
@@ -96,7 +105,22 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
  apply: () => {
  const { mode } = get();
  const resolvedTheme = resolveTheme(mode);
- applyToDocument(resolvedTheme);
+ if (get().override === null) applyToDocument(resolvedTheme);
  set({ resolvedTheme });
+ },
+
+ pushOverride: (theme) => {
+ // Idempotent: re-pushing the same override must not disturb anything.
+ if (get().override === theme) return;
+ applyToDocument(theme);
+ set({ override: theme });
+ },
+
+ popOverride: () => {
+ if (get().override === null) return;
+ set({ override: null });
+ // resolvedTheme already tracks the user's preference — setMode and the
+ // system listener keep it current even while overridden.
+ applyToDocument(get().resolvedTheme);
  },
 }));
