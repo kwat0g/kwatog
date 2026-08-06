@@ -15,7 +15,9 @@
       content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: https://*.tile.openstreetmap.org; connect-src 'self' ws: wss:;"
     />
 
-    <!-- Geist + Geist Mono — self-hosted fonts (woff2) for production independence. -->
+    <!-- Atelier typefaces (Instrument Serif / Public Sans / Spline Sans Mono) are
+         self-hosted via @fontsource and bundled by Vite — imported in src/main.tsx,
+         so they are served from our own origin and satisfy `font-src 'self'`. -->
 
     <!-- PWA manifests — each sub-app has its own; sw-register.ts picks the right
          manifest at runtime based on URL path. The default link below is the

@@ -8,7 +8,10 @@ import { queryClient } from './lib/queryClient';
 import { useThemeStore } from './stores/themeStore';
 import { applyPlainMode } from './lib/plainMode';
 import { registerSW } from './sw-register';
-import '@fontsource-variable/bricolage-grotesque/wght.css';
+import '@fontsource/instrument-serif/400.css';
+import '@fontsource/instrument-serif/400-italic.css';
+import '@fontsource-variable/public-sans';
+import '@fontsource-variable/spline-sans-mono';
 import './styles/globals.css';
 
 // Initialize theme before first paint (system preference until auth supplies a saved choice).

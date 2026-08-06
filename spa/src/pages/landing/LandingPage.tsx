@@ -12,7 +12,6 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 // Self-hosted display face (Fontsource → same-origin → CSP-safe).
-import '@fontsource-variable/bricolage-grotesque/wght.css';
 
 import { LandingNav } from './components/LandingNav';
 import { LandingFooter } from './components/LandingFooter';

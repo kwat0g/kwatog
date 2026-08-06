@@ -22,7 +22,6 @@ import { reduceMotion } from '@/pages/landing/motion';
 
 // Self-hosted display face (Fontsource → same-origin → CSP-safe); the auth
 // pages share the marketing site's display typeface for brand continuity.
-import '@fontsource-variable/bricolage-grotesque/wght.css';
 
 import { BrandLogo } from '@/components/brand/BrandLogo';
 import { AutoPartShowcase } from '@/pages/landing/components/AutoPartShowcase';
