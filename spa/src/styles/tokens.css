@@ -218,8 +218,11 @@
 
   --text-primary: #fffdf8;
   --text-secondary: #e8e2d8;
-  --text-muted: #a89f93;
-  --text-subtle: #8a8078;
+  /* Lifted from the dark palette's #a89f93 / #8a8078: those clear AA on the
+     office canvas but fall to 6.26 / 4.23 against --bg-elevated here, under
+     floor's AAA bar. Measured by styles/__tests__/palette-contrast.test.ts. */
+  --text-muted: #b8afa2;
+  --text-subtle: #9a9186;
 
   --accent: #ff8a4c;
   --accent-hover: #ffa473;
