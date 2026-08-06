@@ -98,7 +98,18 @@ Links become clay. Today they are ink-coloured (`--text-link: #18181b`) because 
 
 **Atelier Dark — office, `[data-theme="dark"]`**
 
-Espresso, not black. Semantic hues lift for legibility on dark; semantic `-bg` values are the hue at ~18% alpha.
+Espresso, not black. Semantic hues lift for legibility on dark.
+
+Semantic `-bg` values are **opaque**, pre-composited at ~18% of the hue over `--bg-canvas`, not alpha. Alpha would defeat the contrast gate in §7 — a parser cannot resolve `rgba()` against an unknown backdrop — and opaque surfaces are already the rule under Atelier. Same applies to the floor palette at ~20%.
+
+| Semantic | `--x` | `--x-bg` | `--x-fg` |
+|---|---|---|---|
+| accent | `#D97848` | `#3A2619` | `#F0B393` |
+| success | `#6FA688` | `#272E25` | `#9ED2B4` |
+| warning | `#D9A441` | `#3A2E18` | `#F0CB86` |
+| danger | `#D9645A` | `#3A221D` | `#F0A9A2` |
+| info | `#7A9BC4` | `#292C30` | `#B6CDE6` |
+| purple | `#A98CC2` | `#312A2F` | `#D3C2E4` |
 
 | Token | Value | | Token | Value |
 |---|---|---|---|---|
@@ -173,15 +184,15 @@ Each track is independently shippable and independently revertible. T1 alone cha
 |---|---|---|---|
 | **T0** | Commit or stash working tree; resolve `fix_buttons.py` | repo | — |
 | **T1** | Author `tokens.css` — 3 palettes, type, radius, motion, shadows. Update `tailwind.config.ts` token map, `fontSize`, `borderRadius`. Retune `globals.css`. | 3 files | T0 |
-| **T2** | Install fonts: Instrument Serif, Public Sans, Spline Sans Mono as self-hosted `.woff2`. Remove Geist files and the `@fontsource-variable/bricolage-grotesque` dep. | `public/fonts/`, `package.json` | **lands with T1** |
+| **T2** | Install fonts: Instrument Serif, Public Sans, Spline Sans Mono via `@fontsource` packages. Remove the hand-managed Geist `.woff2` files and the `@fontsource-variable/bricolage-grotesque` dep. | `package.json`, `main.tsx`, `public/fonts/` | **lands with T1** |
 
 T1 and T2 must land in the same commit: `tokens.css` declares the `@font-face` sources, so T1 alone would reference font files that do not exist yet and the app would render in fallback faces.
 | **T3** | Remove glassmorphism — 10 `backdrop-blur` sites: `ui/Skeleton`, `ui/DataTable`, `layout/Topbar`, `layouts/PortalLayout`, and 6 under `pages/landing/`. | 10 files | T1 |
 | **T4** | Detokenize `components/mrp/MoldShotMeter.tsx` — the only file in the app using raw Tailwind palette classes (`bg-amber-500`, `text-emerald-600`, `dark:` variants). Silently breaks under a third palette. | 1 file | T1 |
 | **T5** | Chart tokens — replace stale fallbacks in `charts/DowntimeParetoChart.tsx` and `charts/OeeGaugeChart.tsx` (`var(--token, #e5e7eb)` etc.) with Atelier values. | 2 files | T1 |
 | **T6** | Primitive sweep — walk all ~50 `components/ui/` primitives against the new form language. Most need no edit; verify rather than assume. | ~50 files | T1, T3 |
-| **T7** | Floor palette wiring — `themeStore` override API; `FactoryFloorLayout`, `DriverLayout`, `MaintenanceMobileLayout` adopt it; density tokens applied. | 4 files | T1 |
-| **T8** | Brand assets — wordmark, app mark, `favicon.svg`, `driver-icon-192.png`, `driver-icon-512.png`, `driver-manifest.webmanifest`, `factory-manifest.webmanifest`. | `public/` | T1 |
+| **T7** | Floor palette wiring — `themeStore` override API; `components/layout/TouchShell.tsx` adopts it; density tokens applied. | 2 files | T1 |
+| **T8** | Brand assets — wordmark, app mark, `favicon.svg`, `driver-icon-192.png`, `driver-icon-512.png`, `factory-manifest.webmanifest`, `driver-manifest.webmanifest`, `index.html` theme-color. | `public/`, `index.html` | T1 |
 | **T9** | Hero screens — auth (4 pages), role dashboards (12), `ShopFloorMap`, MRP II Gantt, Quality Pareto, OEE gauge. | ~20 files | T1–T7 |
 | **T10** | Landing — re-author the `--landing-*` namespace in Atelier; 27 files under `pages/landing/`. | 27 files | T1, T3 |
 | **T11** | PDF templates — `api/resources/views/pdf/` is Blade with its own styling and inherits nothing. Payslip first. | Blade views | T1 |
