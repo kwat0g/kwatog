@@ -46,3 +46,6 @@ docker-compose.override.yml
 /backups/
 .claude/worktrees/
 graphify-out/
+
+# superpowers brainstorm sessions
+.superpowers/
