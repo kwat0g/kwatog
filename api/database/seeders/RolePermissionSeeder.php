@@ -390,6 +390,10 @@ class RolePermissionSeeder extends Seeder
                 // Series R — Task R4: dashboard layout management.
                 ['slug' => 'dashboard.layout.reset',              'name' => 'Reset Own Dashboard Layout to Default'],
                 ['slug' => 'dashboard.role_defaults.manage',      'name' => 'Manage Role-Default Dashboard Layouts'],
+                // Cross-cutting personal work queues (backend auth-only,
+                // granted to every role so guards exist for later tightening).
+                ['slug' => 'dashboard.action_center.view',        'name' => 'View Personal Action Center'],
+                ['slug' => 'dashboard.exceptions.view',           'name' => 'View Exception Workbench'],
                 // Series F — Task F1 & F2: cross-module aggregator pages.
                 ['slug' => 'calendar.view',                       'name' => 'View Company Calendar'],
                 ['slug' => 'approvals.board.view',                'name' => 'View Approvals Kanban Board'],
@@ -408,7 +412,12 @@ class RolePermissionSeeder extends Seeder
             // ADV12 — Return Management (RMA)
             'return_management' => [
                 ['slug' => 'return_management.view',   'name' => 'View Return Requests (RMA)'],
-                ['slug' => 'return_management.manage', 'name' => 'Create / Approve / Complete Return Requests'],
+                ['slug' => 'return_management.manage', 'name' => 'Create / Receive / Dispose / Complete Return Requests'],
+                // L-37 — the seeded return_request workflow routes approval to
+                // department_head then production_manager, but neither role holds
+                // `manage`, so the approve route rejected the only users the chain
+                // would accept and every submitted RMA stalled in pending_approval.
+                ['slug' => 'return_management.approve', 'name' => 'Approve / Reject Return Requests'],
             ],
 
             // ADV9 — Budgeting
@@ -507,6 +516,9 @@ class RolePermissionSeeder extends Seeder
                         'forecasting.view',
                         'return_management.view',
                         'quality.copq.view',
+                        // OGAMI-012 — finance is the CHECKER for high-value stock
+                        // adjustments; warehouse_staff is the maker.
+                        'inventory.adjust.approve',
                     ],
                 ),
             ],
@@ -528,7 +540,8 @@ class RolePermissionSeeder extends Seeder
                         'alerts.view', 'alerts.dismiss',
                         'dashboard.view_bottlenecks',
                         'forecasting.view',
-                        'return_management.view',
+                        // Final step of the return_request approval chain.
+                        'return_management.view', 'return_management.approve',
                         // REC-03 — production_manager is the step-1 checker on the
                         // salary_adjustment chain.
                         'hr.salary_adjustments.view',
@@ -649,6 +662,8 @@ class RolePermissionSeeder extends Seeder
                         // workflows; list/show remain department-scoped.
                         'loans.view', 'loans.approve',
                         'purchasing.view', 'purchasing.pr.approve',
+                        // First step of the return_request approval chain.
+                        'return_management.view', 'return_management.approve',
                         'hr.clearance.sign',
                         'search.global', 'notifications.preferences.manage',
                     ],
@@ -749,6 +764,8 @@ class RolePermissionSeeder extends Seeder
                         'calendar.view',
                         'approvals.board.view',
                         'hr.directory.view',
+                        'dashboard.action_center.view',
+                        'dashboard.exceptions.view',
                     ],
                 )));
 

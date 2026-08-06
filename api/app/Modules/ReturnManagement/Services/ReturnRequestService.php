@@ -561,11 +561,10 @@ class ReturnRequestService
                 $totalMovedQty = '0';
 
                 foreach ($rma->items as $line) {
-                    // Only lines kept in-house re-enter stock. Scrapped units are
-                    // destroyed and return_to_supplier units were already shipped
-                    // out by dispose(); restocking either inflated on-hand
-                    // quantity and dragged the weighted-average cost with it.
-                    if (! $this->isRestockable($line)) {
+                    // Only certain dispositions trigger inventory movement.
+                    // Customer returns: restock/rework add inventory back.
+                    // Supplier returns: return_to_supplier ships goods out.
+                    if (! $this->shouldMove($line, $rma)) {
                         continue;
                     }
 
@@ -615,17 +614,28 @@ class ReturnRequestService
     }
 
     /**
-     * Whether a disposed line's units stay with us and belong back in stock.
+     * Whether a disposed line triggers inventory movement at completion.
      *
-     * A line with no disposition recorded is treated as restockable so RMAs that
-     * skip the dispose step (the pre-disposition flow) behave as before.
+     * Customer returns: only restock/rework dispositions add inventory back.
+     * Supplier returns: only return_to_supplier disposition ships goods out.
+     * A line with no disposition is treated as restockable (the pre-disposition flow).
      */
-    private function isRestockable(ReturnRequestItem $item): bool
+    private function shouldMove(ReturnRequestItem $item, ReturnRequest $rma): bool
     {
-        return ! in_array($item->disposition, [
-            DispositionType::Scrap->value,
-            DispositionType::ReturnToSupplier->value,
-        ], true);
+        if ($rma->type === ReturnRequestType::CustomerReturn) {
+            // Customer return: units with restock or rework dispositions go
+            // back into inventory. Scrap is destroyed; return_to_supplier
+            // doesn't apply (they came from the customer, not from us).
+            return in_array($item->disposition, [
+                DispositionType::Restock->value,
+                DispositionType::Rework->value,
+                null, // no disposition recorded = pre-disposition flow, treat as restockable
+            ], true);
+        }
+
+        // Supplier return: only return_to_supplier disposition ships goods out.
+        // Scrap/rework don't apply (those are customer-return concepts).
+        return $item->disposition === DispositionType::ReturnToSupplier->value;
     }
 
     /**

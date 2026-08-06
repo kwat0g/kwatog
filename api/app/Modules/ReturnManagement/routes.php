@@ -20,11 +20,14 @@ Route::middleware(['auth:sanctum'])->prefix('return-management')->group(function
 
     // Workflow actions
     Route::post('/return-requests/{returnRequest}/submit',   [ReturnRequestController::class, 'submit'])  ->middleware('permission:return_management.manage');
-    Route::post('/return-requests/{returnRequest}/approve',  [ReturnRequestController::class, 'approve']) ->middleware('permission:return_management.manage');
+    // Approve / reject sit behind their own permission: the seeded
+    // return_request chain routes them to department_head and
+    // production_manager, who deliberately do not hold `manage`.
+    Route::post('/return-requests/{returnRequest}/approve',  [ReturnRequestController::class, 'approve']) ->middleware('permission:return_management.approve');
+    Route::post('/return-requests/{returnRequest}/reject',   [ReturnRequestController::class, 'reject'])  ->middleware('permission:return_management.approve');
     Route::post('/return-requests/{returnRequest}/receive',  [ReturnRequestController::class, 'receive']) ->middleware('permission:return_management.manage');
     Route::post('/return-requests/{returnRequest}/inspect',  [ReturnRequestController::class, 'inspect']) ->middleware('permission:return_management.manage');
     Route::post('/return-requests/{returnRequest}/dispose',  [ReturnRequestController::class, 'dispose']) ->middleware('permission:return_management.manage');
     Route::post('/return-requests/{returnRequest}/complete', [ReturnRequestController::class, 'complete'])->middleware('permission:return_management.manage');
-    Route::post('/return-requests/{returnRequest}/reject',   [ReturnRequestController::class, 'reject'])  ->middleware('permission:return_management.manage');
     Route::post('/return-requests/{returnRequest}/cancel',   [ReturnRequestController::class, 'cancel'])  ->middleware('permission:return_management.manage');
 });

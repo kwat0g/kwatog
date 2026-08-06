@@ -223,7 +223,15 @@ export default function ReturnRequestDetailPage() {
  return <EmptyState icon="alert-circle" title="Failed to load return request" action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />;
  }
 
- const actions = can('return_management.manage') ? availableActions(rma.status) : [];
+ // Approve / reject sit behind their own permission — the approval chain
+ // routes them to department heads and managers, who deliberately do not
+ // hold `manage`. Gating every action on `manage` hid the approve button
+ // from the only people allowed to press it.
+ const canManage = can('return_management.manage');
+ const canApprove = can('return_management.approve');
+ const actions = availableActions(rma.status).filter((action) =>
+ action.key === 'approve' || action.key === 'reject' ? canApprove : canManage,
+ );
 
  // Build timeline entries from timestamp fields
  const timeline: Array<{ key: string; label: string; at: string | null | undefined; by?: { name: string } | null }> = [
