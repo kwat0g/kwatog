@@ -122,7 +122,7 @@ export default function PortalLayout({ type, user, onLogout, title, subtitle, ch
 
  <main className="flex-1 flex flex-col overflow-auto">
  {/* Top bar */}
- <header className="h-14 border-b border-default flex items-center justify-between px-5 shrink-0 bg-elevated/50 backdrop-blur-sm">
+ <header className="h-14 border-b border-default flex items-center justify-between px-5 shrink-0 bg-elevated">
  <div>
  <h1 className="text-sm font-medium">{title}</h1>
  <p className="text-2xs text-muted">{subtitle}</p>

@@ -327,8 +327,8 @@ export function DataTable<T>({
 
   <div className="overflow-x-auto rounded-md border border-default">
  <table className="w-full border-collapse text-xs">
- <thead className={cn(stickyHeader && 'sticky top-0 z-10 bg-surface backdrop-blur-md')}>
-      <tr className="border-b border-default bg-surface/80 backdrop-blur-md">
+ <thead className={cn(stickyHeader && 'sticky top-0 z-10 bg-[var(--bg-thead)]')}>
+      <tr className="border-b border-default bg-[var(--bg-thead)]">
  {selectable && (
  <th scope="col"
  className={cn(

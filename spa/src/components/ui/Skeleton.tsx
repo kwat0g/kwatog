@@ -214,7 +214,7 @@ export function SkeletonLandingPage() {
  return (
  <div className="min-h-screen w-full bg-canvas text-primary flex flex-col font-sans">
  {/* Landing Nav Skeleton */}
- <div className="h-16 border-b border-default bg-canvas/90 backdrop-blur-md flex items-center px-6 justify-between sticky top-0 z-50">
+ <div className="h-16 border-b border-default bg-canvas flex items-center px-6 justify-between sticky top-0 z-50">
  <div className="flex items-center gap-3">
  <SkeletonBlock className="h-7 w-32 rounded-sm" />
  </div>
