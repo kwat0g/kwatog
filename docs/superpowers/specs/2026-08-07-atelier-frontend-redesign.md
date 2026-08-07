@@ -139,7 +139,16 @@ Same identity, contrast budget raised. Clay pushed to safety-orange; every seman
 | `--border-strong` | `#6B6156` | | `--danger` | `#F87171` |
 | `--text-primary` | `#FFFDF8` | | `--info` | `#93C5FD` |
 | `--text-secondary` | `#E8E2D8` | | `--purple` | `#C4B5FD` |
-| `--text-muted` | `#A89F93` | | `--row-height` | `48px` |
+| `--text-muted` | `#B8AFA2` | | `--row-height` | `48px` |
+| `--text-subtle` | `#9A9186` | | `--hit-min` | `44px` |
+
+> **Adjusted during implementation to clear the contrast gate.** `--text-muted`
+> and `--text-subtle` were originally specified as `#A89F93` / `#8A8078`, the same
+> values the dark palette uses. Those clear the floor canvas but fail against
+> `--bg-elevated` (`#241F19`), the lightest floor surface, at floor's AAA bar —
+> measured 6.26:1 and 4.23:1 against thresholds of 7:1 and 4.5:1. Lifted to
+> `#B8AFA2` and `#9A9186`, which clear 7.54:1 and 5.27:1 while keeping the ramp
+> ordered. `spa/src/styles/tokens.css` is the source of truth.
 
 Floor also overrides density tokens: row height 48px, minimum hit target 44×44, body 15px. `--row-height` and `--hit-min` are **new** tokens — the office palettes must declare them too (`32px` / `28px`) so `DataTable` and friends read them unconditionally instead of branching on theme.
 
@@ -192,7 +201,7 @@ T1 and T2 must land in the same commit: `tokens.css` declares the `@font-face` s
 | **T5** | Chart tokens — replace stale fallbacks in `charts/DowntimeParetoChart.tsx` and `charts/OeeGaugeChart.tsx` (`var(--token, #e5e7eb)` etc.) with Atelier values. | 2 files | T1 |
 | **T6** | Primitive sweep — walk all ~50 `components/ui/` primitives against the new form language. Most need no edit; verify rather than assume. | ~50 files | T1, T3 |
 | **T7** | Floor palette wiring — `themeStore` override API; `components/layout/TouchShell.tsx` adopts it; density tokens applied. | 2 files | T1 |
-| **T8** | Brand assets — wordmark, app mark, `favicon.svg`, `driver-icon-192.png`, `driver-icon-512.png`, `factory-manifest.webmanifest`, `driver-manifest.webmanifest`, `index.html` theme-color. | `public/`, `index.html` | T1 |
+| **T8** | Brand assets — app mark, `favicon.svg`, PWA icons, both manifests, `index.html` theme-color. Two source SVGs in `spa/brand/` (office + floor variants) rasterised by `scripts/build-brand-assets.mjs`. | `brand/`, `public/`, `index.html`, `scripts/` | T1 |
 | **T9** | Hero screens — auth (4 pages), role dashboards (12), `ShopFloorMap`, MRP II Gantt, Quality Pareto, OEE gauge. | ~20 files | T1–T7 |
 | **T10** | Landing — re-author the `--landing-*` namespace in Atelier; 27 files under `pages/landing/`. | 27 files | T1, T3 |
 | **T11** | PDF templates — `api/resources/views/pdf/` is Blade with its own styling and inherits nothing. Payslip first. | Blade views | T1 |

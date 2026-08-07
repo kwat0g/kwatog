@@ -533,17 +533,20 @@ Inspection     QC-YYYYMM-NNNN    QC-202604-0012
 
 ## DESIGN SYSTEM QUICK REFERENCE
 
-Full spec in `docs/DESIGN-SYSTEM.md`. Summary:
+Full spec in `docs/DESIGN-SYSTEM.md`. Brand: **Atelier** — editorial, warm, unhurried.
 
-- **Font:** Geist (sans) + Geist Mono (numbers, IDs, tables)
-- **Canvas:** Pure grayscale. Zero color in backgrounds, text, borders, sidebars
-- **6 accent colors only:** Indigo (primary), Emerald (success), Amber (warning), Red (danger), Blue (info), Purple (optional)
+- **Font:** Instrument Serif (display / page titles) + Public Sans (UI) + Spline Sans Mono (numbers, IDs, tables)
+- **Canvas:** Warm paper (`#fdfcfa`) with espresso ink (`#1f1b16`). Surfaces are **opaque** — no translucency, no `backdrop-blur`
+- **Accent:** Clay (`#b4542a`). Semantics are brand-hued, not Tailwind defaults: moss, ochre, oxide red, slate blue, plum
+- **Three palettes:** `:root` light · `[data-theme="dark"]` espresso · `[data-theme="floor"]` high-contrast for the shop-floor PWAs (route-forced by `TouchShell`, never user-selectable)
 - **Applied only to:** Primary buttons, status chips, KPI deltas, alert dots, links
-- **Tables:** 32px rows, monospace for numbers (tabular figures)
+- **Tables:** `h-row` (`--row-height`) — 32px office / 48px floor; monospace tabular figures for numbers
 - **Sidebar:** Collapsible (240px ↔ 56px rail)
-- **Radius:** 6px everywhere
+- **Radius:** 8px `sm` / 10px `md` / 14px `lg`
+- **Hierarchy comes from borders, not shadows.** Shadows are for true overlays only (menu, modal, toast) and warm-tinted
 - **Animations:** Minimal — loading, progress, status changes only
 - **Dark mode:** First-class
+- **Never hardcode a colour.** Every value lives in `spa/src/styles/tokens.css`; `npm run audit:tokens` enforces it in CI
 
 ## TASK EXECUTION PROTOCOL
 

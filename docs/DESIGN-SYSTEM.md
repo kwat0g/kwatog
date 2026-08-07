@@ -1,176 +1,244 @@
 # OGAMI ERP — Design System
 
-> Exact visual spec. Every color, every spacing, every component pattern.
-> Goal: dense, professional, SAP/Linear-inspired. Monochrome canvas + meaningful color only.
+> Exact visual spec. Brand: **Atelier**.
+> Source of truth for values is `spa/src/styles/tokens.css`. If this document and
+> that file disagree, the file wins — and this document is the bug.
 
 ## PHILOSOPHY
 
-**The canvas is grayscale. Color is for meaning.** Backgrounds, text, borders, cards, tables, sidebars — all pure white/gray/black. Color only appears on status chips, primary buttons, KPI deltas, alert dots, and links. This is how we avoid the AI-made look.
+**Warm paper, espresso ink, one clay accent.** The canvas is a warm off-white, not
+pure grey, and the accent is a muted terracotta. Semantics are hued to match the
+brand — moss, ochre, oxide, slate blue, plum — rather than borrowed from Tailwind's
+defaults. Generic `#10b981 / #f59e0b / #ef4444 / #3b82f6` is a large part of what
+makes an interface read as templated.
 
-**Information density over whitespace.** Real ERPs show more data per screen than web apps. Tight row heights, packed columns, monospace numbers, inline status. If it feels airy, it's wrong.
+**Surfaces are opaque.** No translucency, no `backdrop-blur`. Hierarchy comes from
+hairline borders. Shadows exist only for true overlays — menu, modal, toast — and
+are warm-tinted, never neutral black.
 
-**Two weights only: 400 regular, 500 medium.** Never 600 or 700 — they look heavy and make the UI feel cheap.
+**Information density over whitespace.** Real ERPs show more data per screen than
+web apps. Tight rows, packed columns, monospace numbers, inline status. Base body
+size is 13px and office table rows are 32px; these are spec, not preference.
+
+**Serif for display, sans for interface.** Instrument Serif carries page titles and
+gives the product its voice. It ships at weight 400 only — never apply a weight
+class to it, or the browser synthesises a bold and it looks smeared.
 
 ## COLOR TOKENS
 
-Define as CSS variables in `spa/src/styles/tokens.css`. Every component reads from variables. Tailwind extends to use them.
+Defined in `spa/src/styles/tokens.css`, mapped into Tailwind by
+`spa/tailwind.config.ts`. Components name **roles** (`bg-accent`, `text-danger`,
+`border-default`), never colours. This indirection is what let 355 pages restyle
+during the Atelier rebrand without being edited.
 
-### Light mode
+Three palettes, not four:
+
+| Palette | Selector | Used by |
+|---|---|---|
+| Light | `:root` | all office routes |
+| Dark | `[data-theme="dark"]` | all office routes |
+| Floor | `[data-theme="floor"]` | factory / driver / maintenance-mobile PWAs |
+
+Floor is **route-forced** by `components/layout/TouchShell.tsx` and is never
+user-selectable. See `stores/themeStore.ts` (`pushOverride` / `popOverride`).
+
+### Light — office
 
 ```css
 :root {
-  /* Canvas — pure grayscale */
-  --bg-canvas:        #FFFFFF;  /* page background */
-  --bg-surface:       #FAFAFA;  /* cards, metric tiles, right panels */
-  --bg-elevated:      #F4F4F5;  /* modals, dropdowns, hover states */
-  --bg-subtle:        #F4F4F5;  /* alternating rows, inactive chips */
+  /* Canvas — warm paper */
+  --bg-canvas:      #fdfcfa;  /* page background */
+  --bg-surface:     #f7f4ef;  /* cards, metric tiles, right panels */
+  --bg-elevated:    #f2ede4;  /* modals, dropdowns, hover states */
+  --bg-subtle:      #f5f1e9;  /* inactive chips */
+
+  /* Table zebra & header */
+  --bg-zebra-odd:   transparent;
+  --bg-zebra-even:  #f7f4ef;
+  --bg-row-hover:   #f2ede4;
+  --bg-thead:       #f7f4ef;
 
   /* Borders */
-  --border-subtle:    #F4F4F5;  /* row dividers inside tables */
-  --border-default:   #E4E4E7;  /* card borders, section dividers */
-  --border-strong:    #D4D4D8;  /* emphasized borders */
+  --border-subtle:  #f0eae0;  /* row dividers inside tables */
+  --border-default: #e8e2d8;  /* card borders, section dividers */
+  --border-strong:  #d6cec1;  /* emphasized borders */
 
-  /* Text */
-  --text-primary:     #09090B;  /* headings, primary content */
-  --text-secondary:   #52525B;  /* body text, labels */
-  --text-muted:       #71717A;  /* secondary info, meta */
-  --text-subtle:      #A1A1AA;  /* placeholders, disabled, hints */
+  /* Text — espresso ink */
+  --text-primary:   #1f1b16;
+  --text-secondary: #4a4239;
+  --text-muted:     #6b6259;
+  --text-subtle:    #8a8078;  /* placeholders, disabled — decorative only */
 
-  /* Accent — primary (indigo) */
-  --accent:           #4F46E5;  /* primary buttons, active nav indicator */
-  --accent-hover:     #4338CA;
-  --accent-fg:        #FFFFFF;  /* text on accent background */
+  /* Accent — clay */
+  --accent:         #b4542a;
+  --accent-hover:   #96461f;
+  --accent-fg:      #fdfcfa;
 
-  /* Semantic — status colors */
-  --success:          #059669;  /* text color */
-  --success-bg:       #D1FAE5;  /* chip background */
-  --success-fg:       #065F46;  /* text on chip */
+  /* Links — Atelier permits an accent link; the old system forbade colour */
+  --text-link:      #b4542a;
+  --text-link-hover:#96461f;
 
-  --warning:          #D97706;
-  --warning-bg:       #FEF3C7;
-  --warning-fg:       #92400E;
+  /* Semantic — brand-hued */
+  --success: #3f6d54;  --success-bg: #e3ece7;  --success-fg: #2c4e3b;  /* moss  */
+  --warning: #b07a22;  --warning-bg: #f7eedc;  --warning-fg: #7a5314;  /* ochre */
+  --danger:  #a8392f;  --danger-bg:  #f6e4e1;  --danger-fg:  #7a2820;  /* oxide */
+  --info:    #3d5a80;  --info-bg:    #e3e9f0;  --info-fg:    #2a4059;  /* slate */
+  --purple:  #75558c;  --purple-bg:  #ede7f1;  --purple-fg:  #4c3862;  /* plum  */
 
-  --danger:           #DC2626;
-  --danger-bg:        #FEE2E2;
-  --danger-fg:        #991B1B;
+  --ring: #b4542a;
+  --ring-offset: #fdfcfa;
 
-  --info:             #2563EB;
-  --info-bg:          #DBEAFE;
-  --info-fg:          #1E40AF;
-
-  /* Optional — for charts/categories only */
-  --purple:           #7C3AED;
-  --purple-bg:        #EDE9FE;
-  --purple-fg:        #5B21B6;
-
-  /* Focus ring */
-  --ring:             #4F46E5;
-  --ring-offset:      #FFFFFF;
+  /* Density — floor overrides all three */
+  --row-height: 32px;
+  --hit-min: 28px;
+  --font-size-body: 13px;
 }
 ```
 
-### Dark mode
+### Dark — office
+
+Espresso, not black. Semantic `-bg` values are **opaque**, pre-composited at ~18%
+of the hue over canvas. Alpha would defeat the contrast gate, which cannot resolve
+`rgba()` against an unknown backdrop.
 
 ```css
-[data-theme="dark"] {
-  --bg-canvas:        #0A0A0A;  /* near-black, not pure */
-  --bg-surface:       #111111;
-  --bg-elevated:      #1A1A1A;
-  --bg-subtle:        #1A1A1A;
+[data-theme='dark'] {
+  --bg-canvas:      #17140f;
+  --bg-surface:     #1f1b16;
+  --bg-elevated:    #2a251e;
 
-  --border-subtle:    #1A1A1A;
-  --border-default:   #27272A;
-  --border-strong:    #3F3F46;
+  --border-subtle:  #241f19;
+  --border-default: #332c24;
+  --border-strong:  #4a4137;
 
-  --text-primary:     #FAFAFA;
-  --text-secondary:   #D4D4D8;
-  --text-muted:       #A1A1AA;
-  --text-subtle:      #71717A;
+  --text-primary:   #f5f1ea;
+  --text-secondary: #d6cec1;
+  --text-muted:     #a89f93;
+  --text-subtle:    #7d7468;
 
-  --accent:           #6366F1;  /* slightly brighter for dark bg */
-  --accent-hover:     #818CF8;
-  --accent-fg:        #FFFFFF;
+  --accent:         #d97848;
+  --accent-hover:   #e8926a;
+  --accent-fg:      #17140f;
 
-  --success:          #10B981;
-  --success-bg:       #064E3B;
-  --success-fg:       #6EE7B7;
-
-  --warning:          #F59E0B;
-  --warning-bg:       #78350F;
-  --warning-fg:       #FCD34D;
-
-  --danger:           #EF4444;
-  --danger-bg:        #7F1D1D;
-  --danger-fg:        #FCA5A5;
-
-  --info:             #3B82F6;
-  --info-bg:          #1E3A8A;
-  --info-fg:          #93C5FD;
-
-  --purple:           #A78BFA;
-  --purple-bg:        #4C1D95;
-  --purple-fg:        #DDD6FE;
-
-  --ring:             #6366F1;
-  --ring-offset:      #0A0A0A;
+  --success: #6fa688;  --success-bg: #272e25;  --success-fg: #9ed2b4;
+  --warning: #d9a441;  --warning-bg: #3a2e18;  --warning-fg: #f0cb86;
+  --danger:  #d9645a;  --danger-bg:  #3a221d;  --danger-fg:  #f0a9a2;
+  --info:    #7a9bc4;  --info-bg:    #292c30;  --info-fg:    #b6cde6;
+  --purple:  #a98cc2;  --purple-bg:  #312a2f;  --purple-fg:  #d3c2e4;
 }
 ```
+
+Dark deliberately does **not** redeclare the density tokens — it inherits `:root`
+through the cascade rather than duplicating identical values.
+
+### Floor — shop floor
+
+Same clay identity, contrast budget raised. A tablet under fluorescent light, held
+in a glove. Clay is pushed to safety-orange and every semantic hue clears AAA.
+
+```css
+[data-theme='floor'] {
+  --bg-canvas:      #0d0b08;
+  --bg-surface:     #17140f;
+  --bg-elevated:    #241f19;
+
+  --border-default: #4a4137;
+  --border-strong:  #6b6156;
+
+  --text-primary:   #fffdf8;
+  --text-secondary: #e8e2d8;
+  --text-muted:     #b8afa2;  /* lifted from dark's #a89f93 to clear AAA */
+  --text-subtle:    #9a9186;  /* lifted from dark's #8a8078 */
+
+  --accent:         #ff8a4c;
+  --accent-fg:      #0d0b08;
+
+  --success: #4ade80;  --warning: #fbbf24;  --danger: #f87171;
+  --info:    #93c5fd;  --purple:  #c4b5fd;
+
+  /* The only palette that raises these */
+  --row-height: 48px;
+  --hit-min: 44px;
+  --font-size-body: 15px;
+}
+```
+
+`--text-muted` and `--text-subtle` are lighter here than in dark mode for a
+measured reason: the dark values cleared the canvas but failed against
+`--bg-elevated`, the lightest floor surface, at floor's AAA bar (6.26 and 4.23).
+The contrast gate caught it.
+
+### Out of scope: `--landing-*`
+
+The landing page keeps its own namespace and has **not** been re-authored in
+Atelier. It is exempt from the token-discipline gate. That work is a separate
+track.
+
+## CONTRAST — enforced, not aspirational
+
+`spa/src/styles/__tests__/palette-contrast.test.ts` reads `tokens.css` from disk
+and asserts every text/background pair on every palette. It runs as part of
+`npm run test:run`.
+
+| Role | Office (light/dark) | Floor |
+|---|---|---|
+| `--text-primary`, `--text-secondary`, `--text-muted`, all `-fg` | AA 4.5:1 | AAA 7:1 |
+| `--text-subtle` (decorative — placeholders, disabled captions) | AA-large 3:1 | AA 4.5:1 |
+| Semantic marks on canvas (chips, bars, icon strokes — WCAG 1.4.11) | 3:1 | 4.5:1 |
+
+**Never lower a threshold to make the gate pass.** Darken or lighten the token.
 
 ## TYPOGRAPHY
 
+Faces are self-hosted via `@fontsource` and imported once in `src/main.tsx` — not
+from a CDN, which keeps `font-src 'self'` in the CSP.
+
 ```css
-@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500&family=Geist+Mono:wght@400;500&display=swap');
-
-:root {
-  --font-sans: 'Geist', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-  --font-mono: 'Geist Mono', 'SF Mono', Menlo, Monaco, Consolas, monospace;
-}
-
-body {
-  font-family: var(--font-sans);
-  font-feature-settings: "cv11", "ss01";  /* Geist stylistic sets */
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--text-primary);
-  background: var(--bg-canvas);
-}
+--font-sans:    'Public Sans Variable', -apple-system, system-ui, sans-serif;
+--font-mono:    'Spline Sans Mono Variable', 'SF Mono', Menlo, monospace;
+--font-display: 'Instrument Serif', Georgia, 'Times New Roman', serif;
 ```
+
+Those family strings must match exactly what `@fontsource` registers. A typo fails
+silently — the browser falls back and nothing errors.
 
 ### Type scale
 
-| Name | Size | Weight | Line height | Usage |
-|---|---|---|---|---|
-| `text-2xs` | 10px | 500 | 1.4 | Column headers (uppercase, letter-spaced), muted labels |
-| `text-xs` | 11px | 400/500 | 1.4 | Chip text, badges, meta info |
-| `text-sm` | 12px | 400/500 | 1.4 | Table cells, secondary text, filter chips |
-| `text-base` | 13px | 400/500 | 1.5 | Body text, form inputs, navigation |
-| `text-md` | 14px | 400/500 | 1.4 | Card titles, section headers |
-| `text-lg` | 16px | 500 | 1.3 | Panel titles, page subheaders |
-| `text-xl` | 18px | 500 | 1.3 | Page titles |
-| `text-2xl` | 22px | 500 | 1.2 | KPI values |
+| Name | Size | Line height | Usage |
+|---|---|---|---|
+| `text-2xs` | 10px | 1.4 | Column headers (uppercase, tracked), muted labels |
+| `text-xs` | 11px | 1.4 | Chip text, badges, meta |
+| `text-sm` | 12px | 1.4 | Table cells, secondary text |
+| `text-base` | 13px | 1.5 | Body, form inputs, navigation |
+| `text-md` | 14px | 1.4 | Card titles, section headers |
+| `text-lg` | 16px | 1.3 | Panel titles |
+| `text-xl` | 20px | 1.25 | — |
+| `text-2xl` | 26px | 1.15 | **Page titles** (`font-display`) |
+| `text-3xl` | 32px | 1.1 | Large display |
+
+`xl` and `2xl` are larger than the pre-Atelier scale (18px / 22px). Instrument
+Serif has a small x-height next to Public Sans and read undersized at the old
+values.
+
+### Page titles — serif
+
+`components/layout/PageHeader.tsx` renders the `h1` on essentially every page:
+
+```tsx
+<h1 className="font-display text-2xl text-primary truncate">
+```
+
+No weight class — the family is 400-only. Subtitles, breadcrumbs and actions stay
+on `font-sans`; serif in small UI text reads as a mistake.
 
 ### Numbers, IDs, dates — always mono
 
 ```tsx
-// ALL numeric content uses Geist Mono with tabular figures
 <span className="font-mono tabular-nums">₱ 486,500.00</span>
-<span className="font-mono tabular-nums">10,000</span>
 <span className="font-mono tabular-nums">PO-202604-0015</span>
-<span className="font-mono tabular-nums">Apr 20, 2026</span>
 ```
 
-Tabular numbers align vertically across table columns. This single detail is the biggest "not AI-made" tell in the UI.
-
-### Column headers — uppercase letter-spaced
-
-```tsx
-// All table column headers
-<th className="text-2xs uppercase tracking-wider text-muted font-medium">
-  Customer
-</th>
-```
-
-Font size 10px, uppercase, letter-spacing 0.03em, `--text-muted` color, weight 500.
+Tabular figures align vertically across table columns.
 
 ## SPACING (8px grid with 4px increments)
 
@@ -180,7 +248,6 @@ Font size 10px, uppercase, letter-spacing 0.03em, `--text-muted` color, weight 5
 6 = 24px     8 = 32px   10 = 40px    12 = 48px
 ```
 
-**Rules:**
 - Inside cells, chips, badges: 2–8px padding
 - Between form fields: 12px
 - Between sections: 16–20px
@@ -190,75 +257,74 @@ Font size 10px, uppercase, letter-spacing 0.03em, `--text-muted` color, weight 5
 ## BORDER RADIUS
 
 ```css
---radius-sm: 4px;   /* chips, small elements */
---radius-md: 6px;   /* DEFAULT — buttons, inputs, cards */
---radius-lg: 8px;   /* modals, large panels */
+--radius-sm:   8px;    /* chips, small elements */
+--radius-md:  10px;    /* DEFAULT — buttons, inputs, cards */
+--radius-lg:  14px;    /* modals, large panels */
 --radius-full: 9999px; /* avatars, full-round badges */
 ```
 
-**Use 6px everywhere unless there's a reason not to.** Consistency is what makes it feel designed.
+Softer than the old 4/6/8 without becoming bubbly. Use `md` unless there's a
+reason not to.
 
 ## BORDERS
 
-**Use 0.5px borders on most elements.** Real 0.5px on retina, falls back to 1px elsewhere.
+Hairline. Real 0.5px on retina via `.border-hairline`, 1px elsewhere.
 
 ```css
-border: 0.5px solid var(--border-default);
+border: 1px solid var(--border-default);
 ```
 
-Borders are for separation, not emphasis. Never use thick borders (2px+) except on the focus ring.
+Borders carry hierarchy — this is what replaced glassmorphism. Never thicker than
+1px except the focus ring.
 
 ## FOCUS RING
 
 ```css
-button:focus-visible,
-input:focus-visible,
-[role="button"]:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
-}
+outline: 2px solid var(--ring);   /* clay */
+outline-offset: 2px;
 ```
 
-Primary indigo ring on all interactive elements. Never remove focus styles.
+Never remove focus styles.
 
 ## SHADOWS
 
-**Almost none.** Real ERPs don't use drop shadows on flat surfaces.
+Overlays only, and warm-tinted.
 
 ```css
---shadow-focus: 0 0 0 3px rgba(79, 70, 229, 0.15);
---shadow-menu:  0 4px 12px rgba(0, 0, 0, 0.08);  /* dropdowns, popovers only */
+--shadow-focus: 0 0 0 4px rgba(180, 84, 42, 0.18);
+--shadow-menu:  0 16px 32px -8px rgba(31, 27, 22, 0.14),
+                0 8px 16px -4px rgba(31, 27, 22, 0.09);
 ```
 
-No shadows on cards, buttons, panels. They sit flat with 0.5px borders.
+No shadows on cards, buttons, or panels. They sit flat with a hairline border.
+Neutral-black shadows on a warm canvas read as dirt.
+
+## DENSITY TOKENS
+
+```
+h-row        → var(--row-height)   32px office · 48px floor
+min-h-hit    → var(--hit-min)      28px office · 44px floor
+min-w-hit    → var(--hit-min)
+```
+
+Components read these unconditionally instead of branching on theme. `DataTable`'s
+`compact` and `spacious` densities stay fixed — those are explicit operator
+choices the palette should not override.
 
 ## ANIMATIONS
 
-Minimal and purposeful. Real ERPs feel instant.
-
 ```css
---duration-fast:   100ms;  /* hover, button press */
---duration-normal: 150ms;  /* dropdown open, tab switch */
---duration-slow:   200ms;  /* modal open */
-
---ease-default: cubic-bezier(0.4, 0, 0.2, 1);
+--duration-fast:   150ms;
+--duration-normal: 250ms;
+--duration-slow:   400ms;
+--ease-default: cubic-bezier(0.16, 1, 0.3, 1);
 ```
 
-**Allowed animations:**
-- Button press: `scale(0.98)` for 100ms
-- Dropdown/popover open/close: 150ms fade + 4px slide
-- Modal: 200ms fade + 8px slide-up
-- Skeleton loading: shimmer 1.5s
-- Progress bar fill: smooth width transition
-- Status change: 150ms color transition
-- Toast slide-in: 200ms from right
+**Allowed:** button press `scale(0.98)`, dropdown fade + slide, modal fade +
+slide-up, skeleton shimmer, progress fill, status colour transition, toast slide-in.
 
-**Never:**
-- Card hover lift (too web-appy)
-- KPI count-up animations (instant feels faster)
-- Bouncy easing (unprofessional)
-- Fade-in on page load (slows perception)
-- Entrance animations on table rows
+**Never:** card hover lift, KPI count-up, bouncy easing, page-load fade, row
+entrance animations.
 
 All animations respect `prefers-reduced-motion: reduce`.
 
@@ -270,116 +336,42 @@ All animations respect `prefers-reduced-motion: reduce`.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│ Topbar (48px, sticky, bottom border 0.5px)                   │
+│ Topbar (48px, sticky, hairline bottom border)                │
 ├──────┬───────────────────────────────────────────────────────┤
-│      │                                                        │
-│ Side │ Page content                                           │
-│ bar  │                                                        │
-│      │                                                        │
+│ Side │                                                        │
+│ bar  │ Page content                                           │
 │ 240  │                                                        │
 │  or  │                                                        │
 │  56  │                                                        │
-│      │                                                        │
 └──────┴───────────────────────────────────────────────────────┘
 ```
 
 ### Topbar (48px)
 
-```
-┌────────────────────────────────────────────────────────────────┐
-│ [Logo] Ogami ERP  Breadcrumbs        [Search ⌘K] [☀/🌙] [👤] │
-└────────────────────────────────────────────────────────────────┘
-```
-
-- Height: 48px
-- Bottom border: 0.5px `--border-default`
+- Hairline bottom border `--border-default`, opaque `--bg-canvas` (no blur)
 - Padding: 0 16px
-- Logo: 22px square, black square with white "O" (inverted in dark mode)
-- Breadcrumbs: `text-sm text-muted`, active segment `text-primary font-medium`
-- Search trigger: 180px wide, border, icon, "Search..." text, `⌘K` keyboard hint
-- Theme toggle: 30px square icon button
-- Avatar: 28px circle with initials
+- Breadcrumbs `text-sm text-muted`, active segment `text-primary font-medium`
+- Search trigger 180px with `⌘K` hint · theme toggle 30px · avatar 28px
 
-### Sidebar — Two modes
+### Sidebar
 
-**Expanded (240px):** Used on screens ≥ 1280px wide, or when user expanded it
+**Expanded (240px)** on ≥1280px or when the user expands it:
 
-```
-┌──────────────────────┐
-│ ─── OPERATIONS ───   │  ← section label: text-2xs uppercase muted
-│ ▸ Dashboard          │
-│ ● Sales Orders       │  ← active: left border 2px indigo, bg subtle
-│ ▸ Production Orders  │
-│ ▸ MRP Plans          │
-│ ▸ Inventory      (3) │  ← badge for pending items
-│ ▸ Quality Control    │
-│ ▸ Deliveries         │
-│                      │
-│ ─── FINANCE ───      │
-│ ▸ Receivables        │
-│ ▸ Payables           │
-│ ▸ General Ledger     │
-│                      │
-│ ─── PEOPLE ───       │
-│ ▸ Employees          │
-│ ▸ Attendance         │
-│ ▸ Payroll            │
-│                      │
-└──────────────────────┘
-```
+- Hairline right border, padding 12px 0
+- Section label: 10px uppercase, tracking 0.08em, `--text-subtle`, padding 6px 16px
+- Nav item: 13px, 6px/16px padding, `--text-secondary`
+- Active: `--text-primary`, `--bg-elevated`, 2px left border `--accent`, weight 500
+- Hover: `--bg-elevated`
 
-- Width: 240px
-- Right border: 0.5px `--border-default`
-- Padding: 12px 0
-- Section label: 10px uppercase, letter-spacing 0.08em, `--text-subtle`, padding 6px 16px
-- Nav item: 13px, 6px vertical padding, 16px horizontal, `--text-secondary`
-- Nav item active: `--text-primary`, background `--bg-elevated`, 2px left border `--accent`, font-weight 500
-- Nav item hover: background `--bg-elevated`
-- Badge: 10px, indigo or amber background with matching fg text, 10px height pill
+**Rail (56px)** below 1280px or collapsed: 16px Lucide icons, 36px square targets,
+`rounded-md`, 2px clay indicator on the active item, tooltip on hover.
 
-**Rail (56px):** Used on screens < 1280px or when user collapsed
+### Shop-floor PWAs
 
-```
-┌────┐
-│ ▪  │  ← icons only, 16px, 36px clickable area
-│ ▪  │
-│ ◼  │  ← active: left indicator 2px indigo bar, bg subtle
-│ ▪  │
-│ ▪  │
-└────┘
-```
-
-- Width: 56px
-- Icons: 16px Lucide, `--text-muted`
-- Item: 36px square, rounded 6px, hover `--bg-elevated`
-- Active: `--text-primary`, background `--bg-elevated`, 2px indigo indicator on left (absolute positioned)
-- Tooltip on hover showing label
-
-### Page content area
-
-- Padding: 16–20px
-- Max content width: none (fill available space)
-
-### Page header pattern
-
-```tsx
-<div className="px-5 py-4 border-b border-default">
-  <div className="flex items-center justify-between mb-3">
-    <div className="flex items-center gap-3">
-      <h1 className="text-xl font-medium">SO-202604-0003</h1>
-      <StatusChip status="in_production">In Production</StatusChip>
-    </div>
-    <div className="flex gap-1.5">
-      <Button variant="ghost" size="sm">Export</Button>
-      <Button variant="ghost" size="sm">Print</Button>
-      <Button variant="primary" size="sm">Edit Order</Button>
-    </div>
-  </div>
-
-  {/* Optional: chain header */}
-  <ChainHeader steps={chainSteps} activeStep={3} />
-</div>
-```
+Factory, driver and maintenance-mobile all render through
+`components/layout/TouchShell.tsx` — one shell, three sets of props. No sidebar.
+`TouchShell` forces `[data-theme="floor"]` on mount and restores the user's own
+preference on unmount.
 
 ---
 
@@ -387,64 +379,29 @@ All animations respect `prefers-reduced-motion: reduce`.
 
 ### Button
 
-Three variants: `primary`, `secondary` (default, ghost), `danger`.
+Variants: `primary`, `secondary` (default), `danger`, `ghost`. Sizes: sm 28px,
+md 32px, lg 36px.
 
 ```tsx
-// Primary — indigo filled
-<button className="h-8 px-3 rounded-md bg-accent text-accent-fg text-sm font-medium hover:bg-accent-hover">
-  Edit Order
-</button>
-
-// Secondary / ghost — default
-<button className="h-8 px-3 rounded-md border border-default bg-transparent text-primary text-sm hover:bg-elevated">
-  Export
-</button>
-
-// Danger
-<button className="h-8 px-3 rounded-md bg-danger text-white text-sm font-medium hover:bg-danger-hover">
-  Delete
-</button>
+// Primary — clay filled
+<Button variant="primary">Edit Order</Button>
+// Secondary — hairline border on transparent
+<Button variant="secondary">Export</Button>
 ```
 
-**Sizes:** sm (28px), md (32px default), lg (36px). Never larger.
-
-**Rules:**
-- Font weight 500 (primary) or 400 (secondary)
-- Border radius 6px
-- Press animation: `scale(0.98)` for 100ms
-- Focus ring always visible when tabbed
+Radius `md`, press `scale(0.98)`, focus ring always visible when tabbed.
 
 ### Input
 
-```tsx
-<div className="flex flex-col gap-1">
-  <label className="text-xs text-muted font-medium">Customer</label>
-  <input
-    className="h-8 px-3 rounded-md border border-default bg-canvas text-sm
-               focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent
-               placeholder:text-subtle"
-    placeholder="Select customer..."
-  />
-  {error && <span className="text-xs text-danger">{error}</span>}
-</div>
-```
-
-- Height: 32px
-- Padding: 0 12px
-- Border: 0.5px `--border-default`
-- Focus: 2px indigo ring
-- Label above input, 11px muted
+32px tall, 0 12px padding, hairline border, clay focus ring, label above at 11px
+muted, error below at 11px `text-danger`.
 
 ### Status chip
 
-The most important component. Appears everywhere.
+The most-used component in the system. Every variant uses its `-bg`/`-fg` **pair** —
+never `-DEFAULT` on canvas, which is the pairing the contrast gate asserts.
 
 ```tsx
-// 4px vertical, 7px horizontal padding
-// 10px font, weight 500
-// 4px radius
-// Semantic colors — bg + fg from same ramp
-
 const chipVariants = {
   success: 'bg-success-bg text-success-fg',
   warning: 'bg-warning-bg text-warning-fg',
@@ -452,13 +409,9 @@ const chipVariants = {
   info:    'bg-info-bg    text-info-fg',
   neutral: 'bg-subtle     text-muted',
 };
-
-<span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-success-bg text-success-fg">
-  Completed
-</span>
 ```
 
-**Status → variant mapping:**
+**Status → variant mapping** (see `chipVariantForStatus` in `ui/Chip.tsx`):
 
 | Status | Variant |
 |---|---|
@@ -470,85 +423,27 @@ const chipVariants = {
 
 ### Data table
 
-**The most important layout in the system.** Dense, readable, SAP-like.
+- Row height: `h-row` — **32px** office, 48px floor. `compact` 28px, `spacious` 40px stay fixed
+- Header: `h-row`, 10px uppercase tracked muted, `--bg-thead`
+- Sticky header: `--bg-thead` **plus a bottom border** — there is no blur to separate it
+- Cell padding: 0 10px
+- Row separator: hairline `--border-subtle`; hover `--bg-row-hover`
+- Zebra: `--bg-zebra-even`
+- Numbers: `font-mono tabular-nums`, right-aligned
+- Selected row outline: `outline-accent` (**not** a landing token)
 
-```tsx
-<table className="w-full border-collapse text-xs">
-  <thead>
-    <tr className="border-b border-default">
-      <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">#</th>
-      <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Product</th>
-      <th className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">Qty</th>
-      <th className="h-8 px-2.5 text-right text-2xs uppercase tracking-wider text-muted font-medium">Total</th>
-      <th className="h-8 px-2.5 text-left text-2xs uppercase tracking-wider text-muted font-medium">Status</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr className="h-8 border-b border-subtle hover:bg-subtle">
-      <td className="px-2.5 text-muted font-mono tabular-nums">01</td>
-      <td className="px-2.5">
-        <div className="font-medium">Wiper Bushing WB-001</div>
-        <div className="text-xs text-muted">Standard grade</div>
-      </td>
-      <td className="px-2.5 text-right font-mono tabular-nums">10,000</td>
-      <td className="px-2.5 text-right font-mono tabular-nums font-medium">85,000.00</td>
-      <td className="px-2.5"><StatusChip variant="success">Completed</StatusChip></td>
-    </tr>
-  </tbody>
-</table>
-```
-
-**Exact specs:**
-- Row height: **32px** (default). Compact: 28px. Spacious: 40px.
-- Header: 32px height, 10px uppercase font, tracking-wider, muted
-- Cell padding: 0 10px (2.5 in Tailwind)
-- Row separator: 0.5px `--border-subtle`
-- Hover: `--bg-subtle` background
-- Numbers: always `font-mono tabular-nums` right-aligned
-- Product/name column: two lines — primary + muted subtitle
-- Border on table: none (sits in a card if needed)
+Table tokens (`--bg-thead`, `--bg-zebra-*`, `--bg-row-hover`) are not mapped as
+Tailwind colours — consume them as `bg-[var(--bg-thead)]`.
 
 ### Metric / KPI card
 
-```tsx
-<div className="p-3 bg-surface border border-default rounded-md">
-  <div className="text-2xs uppercase tracking-wider text-subtle font-medium mb-1.5">
-    Revenue · Week
-  </div>
-  <div className="text-2xl font-medium font-mono tabular-nums text-primary">
-    ₱ 4.82M
-  </div>
-  <div className="text-xs font-mono mt-1 text-success">
-    ↑ 12.4%
-  </div>
-</div>
-```
+Padding 14–16px, `--bg-surface`, hairline border, label 10px uppercase muted,
+value 26px mono medium, delta 11px mono in `--success` / `--danger`.
 
-- Padding: 14–16px
-- Background: `--bg-surface`
-- Border: 0.5px `--border-default`
-- Label: 10px uppercase muted
-- Value: 22px monospace medium
-- Delta: 11px mono, `--success` or `--danger` based on direction
+### Panel
 
-### Panel (card with header)
-
-```tsx
-<div className="bg-canvas border border-default rounded-md overflow-hidden">
-  <div className="flex items-center justify-between px-4 py-3 border-b border-default">
-    <h3 className="text-sm font-medium">Active Orders by Chain Stage</h3>
-    <span className="text-xs text-muted">5 alerts</span>
-  </div>
-  <div className="p-4">
-    {/* content */}
-  </div>
-</div>
-```
-
-- Border: 0.5px `--border-default`
-- Header: 12px vertical padding, 16px horizontal, bottom border
-- Title: 14px medium
-- Meta (right side): 11px muted
+Hairline border, header 12px/16px padding with bottom border, title 14px medium,
+right-side meta 11px muted.
 
 ---
 
@@ -556,202 +451,90 @@ const chipVariants = {
 
 ### ChainHeader — horizontal process timeline
 
-Used on top of detail pages (Sales Order, Purchase Order, Work Order). Shows the full chain with current position.
+On detail pages (Sales Order, Purchase Order, Work Order). Shows the full chain and
+current position.
 
-```tsx
-interface ChainStep {
-  key: string;
-  label: string;
-  date?: string;
-  state: 'done' | 'active' | 'pending';
-}
+- Done: 9px moss dot, hairline outline
+- Active: 9px clay dot, label `text-primary` bold
+- Pending: 9px grey dot, label `text-subtle`
+- Connector: 1px, moss when done, grey when pending
+- Labels 11px medium, 10px mono date beneath
 
-<ChainHeader
-  steps={[
-    { key: 'order_entered', label: 'Order Entered', date: 'Apr 05', state: 'done' },
-    { key: 'mrp_planned', label: 'MRP Planned', date: 'Apr 05', state: 'done' },
-    { key: 'in_production', label: 'In Production', date: 'Apr 08', state: 'active' },
-    { key: 'qc_outgoing', label: 'QC Outgoing', state: 'pending' },
-    { key: 'delivered', label: 'Delivered', state: 'pending' },
-    { key: 'invoiced', label: 'Invoiced', state: 'pending' },
-  ]}
-/>
-```
+### StageBreakdown — vertical stage counts
 
-**Visual spec:**
-- Horizontal flex row with steps separated by thin lines
-- Done steps: 9px emerald dot with 1px outline
-- Active step: 9px indigo dot with 1px outline, label `text-primary` bold
-- Pending step: 9px gray dot, label `text-subtle`
-- Line between steps: 1px, emerald when done, gray when pending
-- Labels: 11px medium + 10px mono date below
-- Align step tops, line flows between centers
+Dashboards. Label + count on one line, 4px progress bar beneath on `--bg-subtle`,
+fill coloured by stage status, 10px between rows.
 
-### StageBreakdown — vertical list of stages with counts
+### LinkedRecords — related records
 
-Used on dashboards. Shows how many records are at each step of a chain.
-
-```tsx
-<StageBreakdown
-  title="Active Orders by Chain Stage"
-  stages={[
-    { label: 'Order Entered',     count: 12, percent: 100, color: 'success' },
-    { label: 'MRP Planned',       count: 9,  percent: 75,  color: 'success' },
-    { label: 'In Production',     count: 7,  percent: 58,  color: 'info' },
-    { label: 'QC Pending',        count: 4,  percent: 33,  color: 'info' },
-    { label: 'Ready to Ship',     count: 3,  percent: 25,  color: 'success' },
-    { label: 'Delivered · Unpaid', count: 6, percent: 50,  color: 'warning' },
-    { label: 'At Risk',           count: 2,  percent: 16,  color: 'danger' },
-  ]}
-/>
-```
-
-**Visual spec:**
-- Each row: label + count on one line, 4px progress bar below
-- Progress bar: full width, 4px tall, `--bg-subtle` background
-- Fill: colored according to stage status (emerald/indigo/amber/red)
-- Row spacing: 10px between stages
-
-### LinkedRecords — related record sidebar
-
-Used on right panel of detail pages. Shows ALL records related to the current one, grouped by type.
-
-```tsx
-<LinkedRecords
-  groups={[
-    { label: 'MRP Plan', items: [{ id: 'MRP-202604-0008', meta: 'Generated Apr 05 · 4 shortages' }] },
-    { label: 'Work Orders', items: [
-      { id: 'WO-202604-0006', chip: { variant: 'success', text: 'Done' } },
-      { id: 'WO-202604-0007', chip: { variant: 'info', text: 'Running' } },
-    ]},
-    { label: 'QC Inspections', items: [{ id: 'QC-202604-0012', chip: { variant: 'success', text: 'Passed' }, meta: 'AQL 0.65 · 200 sampled · 0 rejects' }] },
-  ]}
-/>
-```
-
-**Visual spec:**
-- Right panel background: `--bg-surface`
-- Left border: 0.5px `--border-default`
-- Group label: 10px uppercase muted
-- Record ID: 12px monospace, primary color, clickable
-- Meta: 11px muted
-- Chip: inline next to ID
-- 12px spacing between groups
+Right panel of detail pages, grouped by type. `--bg-surface`, hairline left border,
+group label 10px uppercase muted, record ID 12px mono clickable, meta 11px muted,
+chip inline, 12px between groups.
 
 ### ActivityStream — chronological events
 
-Used under LinkedRecords on right panels. Shows recent events on the record.
-
-```tsx
-<ActivityStream
-  items={[
-    { dot: 'success', text: '<b>Rosa V.</b> approved QC inspection', time: '2 hours ago' },
-    { dot: 'info', text: 'WO-202604-0006 completed · 10,000 good / 45 reject', time: '4 hours ago' },
-    { dot: 'warning', text: 'PR-202604-0018 flagged urgent — Resin C shortage', time: 'Yesterday' },
-  ]}
-/>
-```
-
-**Visual spec:**
-- Each item: 6px colored dot + content block
-- Text: 11px primary
-- Time: 10px mono muted
-- 6px vertical padding per item
+Under LinkedRecords. 6px semantic dot + content, text 11px primary, time 10px mono
+muted, 6px vertical padding per item.
 
 ---
 
 ## PAGE PATTERNS
 
-### List page (e.g., Employees, Sales Orders)
+### List page
 
 ```
-Topbar
-Sidebar | Page Header (title + action buttons + search/filter bar)
+Sidebar | Page Header (serif title + actions + filter bar)
         | Data Table (dense, paginated, sortable)
         | Pagination footer
 ```
 
-### Detail page (e.g., Sales Order SO-202604-0003)
+### Detail page
 
 ```
-Topbar
-Sidebar | Page Header
-        |   Title + Status Chip + Action Buttons
-        |   ChainHeader (horizontal process timeline)
-        | ──────────────────────────────────────
-        | Main content (2/3)        | Right panel (1/3)
-        |   Metrics row             |   Linked Records
-        |   Tabs (Line Items,       |   Activity Stream
-        |         Work Orders,      |
-        |         QC, Deliveries,   |
-        |         Documents,        |
-        |         Activity)         |
-        |   Tab content             |
+Sidebar | Page Header — serif title + status chip + actions
+        |               ChainHeader
+        | ─────────────────────────────────────────
+        | Main (2/3)              | Right panel (1/3)
+        |   Metrics row           |   LinkedRecords
+        |   Tabs + content        |   ActivityStream
 ```
 
 ### Dashboard
 
 ```
-Topbar
-Rail sb | Page Header (title + time range selector + export)
-        | KPI cards row (4 cards)
-        | Main grid (2 columns)
-        |   Large panel (Chain Stage Breakdown) | Small panel (Alerts)
-        |   Small panel (Machine Util)          | Small panel (QC Pareto)
+Rail | Page Header (title + range selector + export)
+     | KPI cards row
+     | Two-column grid of panels
 ```
 
 ---
 
 ## ACCESSIBILITY
 
-- Color contrast 4.5:1 minimum for text (WCAG AA)
-- All interactive elements keyboard reachable
-- Focus ring always visible
-- Form labels always linked to inputs
-- Status conveyed via text AND color (chip has text, not just color)
+- Contrast enforced by the palette gate — AA office, AAA floor. Not a manual check
+- All interactive elements keyboard reachable; focus ring always visible
+- Form labels linked to inputs
+- Status conveyed via text **and** colour (chips carry text)
 - `prefers-reduced-motion` respected
-- Screen reader labels on icon-only buttons (`aria-label`)
-- Tables use proper `<thead>` / `<tbody>` / `<th scope="col">`
+- `aria-label` on icon-only buttons
+- Tables use `<thead>` / `<tbody>` / `<th scope="col">`
+- Floor palette raises hit targets to 44×44 for gloved use
 
 ---
 
-## IMPLEMENTATION NOTES FOR CLAUDE CODE
+## WORKING IN THIS SYSTEM
 
-1. **Start by creating `spa/src/styles/tokens.css`** with all CSS variables from above
-2. **Configure Tailwind** to read from CSS variables:
-   ```js
-   // tailwind.config.ts
-   export default {
-     theme: {
-       extend: {
-         colors: {
-           canvas: 'var(--bg-canvas)',
-           surface: 'var(--bg-surface)',
-           elevated: 'var(--bg-elevated)',
-           subtle: 'var(--bg-subtle)',
-           primary: 'var(--text-primary)',
-           secondary: 'var(--text-secondary)',
-           muted: 'var(--text-muted)',
-           accent: 'var(--accent)',
-           'accent-fg': 'var(--accent-fg)',
-           success: 'var(--success)',
-           'success-bg': 'var(--success-bg)',
-           'success-fg': 'var(--success-fg)',
-           // ... etc
-         },
-         fontFamily: {
-           sans: ['Geist', 'system-ui', 'sans-serif'],
-           mono: ['Geist Mono', 'monospace'],
-         },
-         fontSize: {
-           '2xs': ['10px', { lineHeight: '1.4' }],
-         },
-       },
-     },
-   };
-   ```
-3. **Load Geist fonts** in `index.html` via Google Fonts
-4. **Set theme via** `document.documentElement.setAttribute('data-theme', 'dark')`
-5. **Persist theme choice** per user in database (not localStorage — this is an ERP)
-6. **Base components first** — build Button, Input, Chip, DataTable, Panel, StatCard, ChainHeader in Sprint 1 before any module pages
-7. **Never deviate from these tokens.** If a value isn't in this file, use the closest one — don't invent new ones
+1. **Never hardcode a colour.** Values live only in `tokens.css`.
+   `npm run audit:tokens` fails the build on a hex literal or raw Tailwind palette
+   class anywhere in `src/` (landing excepted). It runs in CI on every PR.
+2. **Name roles, not colours.** `bg-accent`, not `bg-orange-600`. This is why the
+   Atelier rebrand touched ~20 files instead of 355.
+3. **No `dark:` variants.** A token already differs per palette; a `dark:` override
+   fights it and breaks the floor palette, which is neither light nor dark.
+4. **Read density from tokens.** `h-row` / `min-h-hit`, not `h-8` / `min-h-[44px]`.
+5. **Adding a semantic colour** means adding all three of `--x`, `--x-bg`, `--x-fg`
+   to **all three** palettes, plus a Tailwind mapping. The contrast gate will tell
+   you if the pairing fails.
+6. **Base components first.** Button, Input, Chip, DataTable, Panel, StatCard,
+   ChainHeader before any module page.
+7. **If a value isn't here, use the closest one.** Don't invent tokens.
