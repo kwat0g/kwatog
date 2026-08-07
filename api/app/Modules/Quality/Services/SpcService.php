@@ -5,21 +5,28 @@ declare(strict_types=1);
 namespace App\Modules\Quality\Services;
 
 use App\Common\Services\SettingsService;
-use App\Modules\Quality\Enums\SpcAlertRule;
-use App\Modules\Quality\Enums\SpcChartStatus;
-use App\Modules\Quality\Enums\SpcChartType;
 use App\Modules\Quality\Models\InspectionSpecItem;
-use App\Modules\Quality\Models\SpcAlert;
-use App\Modules\Quality\Models\SpcControlChart;
-use App\Modules\Quality\Models\SpcDataPoint;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Statistical Process Control (SPC) capability indices.
+ * Process capability indices (Cp / Cpk).
  *
  * Computes Cp and Cpk from measurement samples stored in
  * inspection_measurements.measured_value, grouped by inspection_spec_item_id.
  * Pure math — no side effects — fully unit-testable without the DB.
+ *
+ * Scope cut (2026-08-07): the control-chart half of SPC — X̄-R charts,
+ * subgroup data points, Nelson run rules and chart alerts — was removed. It
+ * was a second, parallel detection mechanism for a signal the IATF inspection
+ * path already raises: InspectionService::recordMeasurements() auto-evaluates
+ * every measurement against its tolerance and opens an NCR on failure, and
+ * the defect Pareto ranks what actually failed. The chart tables held 1 row
+ * and 0 data points in every environment, so no chart ever accumulated the
+ * 20-point minimum its own policy required to compute limits.
+ *
+ * What remains is the part with demonstrable value and real data behind it:
+ * Cp/Cpk read straight from inspection_measurements, shown on the inspection
+ * spec editor and the capability study page.
  *
  * Cp  = (USL - LSL) / (6σ)          — total spread capability
  * Cpu = (USL - x̄)  / (3σ)           — upper one-sided capability
@@ -143,232 +150,6 @@ class SpcService
     }
 
     /** @return array<int, array{A2: float, D3: float, D4: float, d2: float}> */
-    private function xbarRConstants(): array
-    {
-        $constants = $this->settings()->get('quality.spc.xbar_r_constants');
-        if (! is_array($constants) || $constants === []) {
-            throw new \App\Common\Exceptions\BusinessRuleException('Required quality.spc.xbar_r_constants setting is missing or invalid.');
-        }
-        return $constants;
-    }
-
-    public function createChart(int $productId, int $specItemId, SpcChartType $type, int $subgroupSize = 5): SpcControlChart
-    {
-        return SpcControlChart::create([
-            'product_id'    => $productId,
-            'spec_item_id'  => $specItemId,
-            'chart_type'    => $type,
-            'subgroup_size' => $subgroupSize,
-            'status'        => SpcChartStatus::Active,
-        ]);
-    }
-
-    public function recordDataPoint(SpcControlChart $chart, array $measurements, array $inspectionIds = []): SpcDataPoint
-    {
-        // Point create + run-rule alerts + limit recalc are one logical
-        // write; a mid-sequence failure must not leave a point without its
-        // alerts or an un-recalculated chart (silent SPC corruption).
-        return DB::transaction(fn () => $this->recordDataPointInner($chart, $measurements, $inspectionIds));
-    }
-
-    private function recordDataPointInner(SpcControlChart $chart, array $measurements, array $inspectionIds = []): SpcDataPoint
-    {
-        $nextSubgroup = ($chart->dataPoints()->max('subgroup_number') ?? 0) + 1;
-
-        $values = array_values(array_filter($measurements, fn ($v) => $v !== null && is_numeric($v)));
-        $values = array_map(fn ($v) => (float) $v, $values);
-
-        $mean = count($values) > 0 ? array_sum($values) / count($values) : 0;
-        $range = count($values) > 1 ? max($values) - min($values) : 0;
-        $stdDev = count($values) > 1 ? $this->stdDev($values) : null;
-
-        $point = SpcDataPoint::create([
-            'control_chart_id' => $chart->id,
-            'subgroup_number'  => $nextSubgroup,
-            'subgroup_mean'    => round($mean, 6),
-            'subgroup_range'   => round($range, 6),
-            'subgroup_std_dev' => $stdDev !== null ? round($stdDev, 6) : null,
-            'individual_value' => $chart->chart_type === SpcChartType::Imr ? $values[0] ?? null : null,
-            'moving_range'     => null,
-            'sample_values'    => $values,
-            'recorded_at'      => now(),
-            'inspection_ids'   => $inspectionIds,
-        ]);
-
-        if ($chart->chart_type === SpcChartType::Imr && $nextSubgroup > 1) {
-            $prevPoint = $chart->dataPoints()->where('subgroup_number', $nextSubgroup - 1)->first();
-            if ($prevPoint && $prevPoint->individual_value !== null && $point->individual_value !== null) {
-                $point->update(['moving_range' => round(abs((float) $point->individual_value - (float) $prevPoint->individual_value), 6)]);
-            }
-        }
-
-        if (!$chart->limits_locked && $chart->center_line !== null) {
-            $violations = $this->evaluateRunRules($chart, $point);
-            if (!empty($violations)) {
-                $point->update(['alerts' => array_map(fn ($r) => $r->value, $violations)]);
-                foreach ($violations as $rule) {
-                    $severity = $rule === SpcAlertRule::BeyondThreeSigma ? 'critical' : 'warning';
-                    SpcAlert::create([
-                        'control_chart_id' => $chart->id,
-                        'data_point_id'    => $point->id,
-                        'rule_code'        => $rule,
-                        'severity'         => $severity,
-                    ]);
-                }
-                event(new \App\Modules\Quality\Events\SpcAlertTriggered($chart, $point, $violations));
-            }
-        }
-
-        if (!$chart->limits_locked) {
-            $totalPoints = $chart->dataPoints()->count();
-            $start = $this->settings()->requiredInt('quality.spc.recalculate_after_points', 2, 1000);
-            $interval = $this->settings()->requiredInt('quality.spc.recalculate_interval_points', 1, 1000);
-            if ($totalPoints >= $start && ($totalPoints % $interval === 0 || $chart->center_line === null)) {
-                $this->recalculateLimits($chart);
-            }
-        }
-
-        return $point->fresh();
-    }
-
-    public function recalculateLimits(SpcControlChart $chart): void
-    {
-        $history = $this->settings()->requiredInt('quality.spc.display_history_points', 1, 1000);
-        $minimum = $this->settings()->requiredInt('quality.spc.minimum_control_points', 2, 1000);
-        $points = $chart->dataPoints()->orderBy('subgroup_number', 'desc')->limit($history)->get();
-        if ($points->count() < $minimum) {
-            return;
-        }
-
-        if ($chart->chart_type === SpcChartType::XbarR) {
-            $constantsMap = $this->xbarRConstants();
-            $constants = $constantsMap[$chart->subgroup_size] ?? $constantsMap[5] ?? reset($constantsMap);
-            $grandMean = $points->avg('subgroup_mean');
-            $avgRange = $points->avg('subgroup_range');
-
-            $chart->update([
-                'center_line'         => round((float) $grandMean, 6),
-                'ucl'                 => round((float) $grandMean + $constants['A2'] * (float) $avgRange, 6),
-                'lcl'                 => round((float) $grandMean - $constants['A2'] * (float) $avgRange, 6),
-                'center_range'        => round((float) $avgRange, 6),
-                'ucl_range'           => round($constants['D4'] * (float) $avgRange, 6),
-                'lcl_range'           => round($constants['D3'] * (float) $avgRange, 6),
-                'limits_sample_count' => $points->count(),
-            ]);
-        } elseif ($chart->chart_type === SpcChartType::Imr) {
-            $values = $points->pluck('individual_value')->filter()->values();
-            $mRanges = $points->pluck('moving_range')->filter()->values();
-            $mean = $values->avg();
-            $avgMR = $mRanges->avg();
-
-            $chart->update([
-                'center_line'         => round((float) $mean, 6),
-                'ucl'                 => round((float) $mean + 2.66 * (float) $avgMR, 6),
-                'lcl'                 => round((float) $mean - 2.66 * (float) $avgMR, 6),
-                'center_range'        => round((float) $avgMR, 6),
-                'ucl_range'           => round(3.267 * (float) $avgMR, 6),
-                'lcl_range'           => 0,
-                'limits_sample_count' => $values->count(),
-            ]);
-        }
-    }
-
-    /**
-     * Evaluate Western Electric run rules for a new data point.
-     *
-     * @return SpcAlertRule[]
-     */
-    public function evaluateRunRules(SpcControlChart $chart, SpcDataPoint $point): array
-    {
-        if ($chart->center_line === null || $chart->ucl === null || $chart->lcl === null) {
-            return [];
-        }
-
-        $recentPoints = $chart->dataPoints()
-            ->where('subgroup_number', '<=', $point->subgroup_number)
-            ->orderBy('subgroup_number', 'desc')
-            ->limit(8)
-            ->pluck('subgroup_mean')
-            ->map(fn ($v) => (float) $v)
-            ->toArray();
-
-        return $this->evaluateRunRulesFromValues(
-            recentMeans: $recentPoints,
-            centerLine: (float) $chart->center_line,
-            ucl: (float) $chart->ucl,
-            lcl: (float) $chart->lcl,
-        );
-    }
-
-    /**
-     * Pure function: evaluate run rules from values (unit-testable without DB).
-     *
-     * @param  float[]  $recentMeans  Most recent first (index 0 = current point)
-     * @return SpcAlertRule[]
-     */
-    public function evaluateRunRulesFromValues(array $recentMeans, float $centerLine, float $ucl, float $lcl): array
-    {
-        $violations = [];
-        $sigma = ($ucl - $centerLine) / 3;
-        if ($sigma <= 0 || count($recentMeans) === 0) {
-            return [];
-        }
-
-        $current = $recentMeans[0];
-
-        // Rule 1: one point beyond 3σ (UCL/LCL)
-        if ($current > $ucl || $current < $lcl) {
-            $violations[] = SpcAlertRule::BeyondThreeSigma;
-        }
-
-        // Rule 2: 2 of 3 consecutive points beyond 2σ (same side)
-        if (count($recentMeans) >= 3) {
-            $twoSigmaUpper = $centerLine + 2 * $sigma;
-            $twoSigmaLower = $centerLine - 2 * $sigma;
-
-            $aboveCount = 0;
-            $belowCount = 0;
-            for ($i = 0; $i < 3; $i++) {
-                if ($recentMeans[$i] > $twoSigmaUpper) $aboveCount++;
-                if ($recentMeans[$i] < $twoSigmaLower) $belowCount++;
-            }
-            if ($aboveCount >= 2 || $belowCount >= 2) {
-                $violations[] = SpcAlertRule::TwoOfThreeBeyondTwoSigma;
-            }
-        }
-
-        // Rule 3: 4 of 5 consecutive points beyond 1σ (same side)
-        if (count($recentMeans) >= 5) {
-            $oneSigmaUpper = $centerLine + $sigma;
-            $oneSigmaLower = $centerLine - $sigma;
-
-            $aboveCount = 0;
-            $belowCount = 0;
-            for ($i = 0; $i < 5; $i++) {
-                if ($recentMeans[$i] > $oneSigmaUpper) $aboveCount++;
-                if ($recentMeans[$i] < $oneSigmaLower) $belowCount++;
-            }
-            if ($aboveCount >= 4 || $belowCount >= 4) {
-                $violations[] = SpcAlertRule::FourOfFiveBeyondOneSigma;
-            }
-        }
-
-        // Rule 4: 8 consecutive points on same side of center line
-        if (count($recentMeans) >= 8) {
-            $aboveCount = 0;
-            $belowCount = 0;
-            for ($i = 0; $i < 8; $i++) {
-                if ($recentMeans[$i] > $centerLine) $aboveCount++;
-                if ($recentMeans[$i] < $centerLine) $belowCount++;
-            }
-            if ($aboveCount === 8 || $belowCount === 8) {
-                $violations[] = SpcAlertRule::EightSameSide;
-            }
-        }
-
-        return $violations;
-    }
-
     public function computeCapabilityStudy(int $productId, int $specItemId, int $sampleSize = 50): ?array
     {
         $specItem = InspectionSpecItem::find($specItemId);

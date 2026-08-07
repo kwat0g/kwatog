@@ -31,7 +31,7 @@ import { SkeletonForm } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { productsApi } from '@/api/crm/products';
 import { inspectionSpecsApi, type SpcResult } from '@/api/quality/inspectionSpecs';
-import { spcApi } from '@/api/quality/spc';
+import { capabilityApi } from '@/api/quality/capability';
 import { uomsApi } from '@/api/inventory/uoms';
 import type { UpsertInspectionSpecData } from '@/types/quality';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
@@ -88,7 +88,7 @@ export default function InspectionSpecEditorPage() {
  });
  const { data: spcOptions } = useQuery({
  queryKey: ['quality', 'spc', 'options'],
- queryFn: spcApi.options,
+ queryFn: capabilityApi.options,
  staleTime: 300_000,
  });
  const { data: uoms = [] } = useQuery({

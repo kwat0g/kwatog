@@ -14,7 +14,7 @@ import toast from 'react-hot-toast';
 import type { AxiosError } from 'axios';
 import { inspectionsApi } from '@/api/quality/inspections';
 import { analyticsApi, type SpcCapabilityItem } from '@/api/quality/analytics';
-import { spcApi } from '@/api/quality/spc';
+import { capabilityApi } from '@/api/quality/capability';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { Chip } from '@/components/ui/Chip';
@@ -77,7 +77,7 @@ export default function InspectionDetailPage() {
  });
  const { data: spcOptions } = useQuery({
  queryKey: ['quality', 'spc', 'options'],
- queryFn: spcApi.options,
+ queryFn: capabilityApi.options,
  staleTime: 300_000,
  });
  const statusLabel = inspectionOptions?.statuses.find((option) => option.value === data?.status)?.label;

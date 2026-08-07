@@ -169,11 +169,6 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(InspectionFailed::class,        [RejectGRNOnQcFail::class,                'handle']);
         Event::listen(InspectionFailed::class,        [NotifyOnInspectionFailed::class,         'handle']);
 
-        // SPC — auto-populate control charts on inspection completion.
-        Event::listen(InspectionPassed::class,        [\App\Modules\Quality\Listeners\AutoPopulateSpcChart::class, 'handle']);
-        Event::listen(InspectionFailed::class,        [\App\Modules\Quality\Listeners\AutoPopulateSpcChart::class, 'handle']);
-        Event::listen(\App\Modules\Quality\Events\SpcAlertTriggered::class, [\App\Modules\Quality\Listeners\NotifyOnSpcAlert::class, 'handle']);
-
         // T3.2.C — Auto-spawn 8D shell when a customer-complaint NCR recurs.
         Event::listen(NcrRecurrenceLinked::class,     [AutoSpawn8DOnNcrRecurrence::class,       'handle']);
 

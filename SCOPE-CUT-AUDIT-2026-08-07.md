@@ -114,13 +114,16 @@ LOC weight, test coverage, seeder mentions.
 | Verified | `api/app/Modules/HR/Controllers/TrainingMatrixController.php:10,39,52-63,92-100` |
 | Separate finding | `skills` and `employee_skills` are both **0 rows** — the matrix renders blank in a demo today. Seeding gap, not a scope problem. Worth adding demo rows before defense |
 
-### 9. SPC (2,864 LOC, 29 files)
+### 9. SPC — PARTIAL CUT (control charts out, Cp/Cpk kept) ✅ DONE
 | | |
 |---|---|
-| Surface | `/quality/spc` (statistical process control charts) |
-| Why cut | IATF *says* SPC is optional — traceability + inspections + NCRs are the mandatory proof (flagship trace doesn't touch SPC). 29 files = biggest quality drag |
-| Keep | Inspections already record measurements + tolerances; Pareto/COPQ stays |
-| Risk | Low (no inbound refs) |
+| Surface | `/quality/spc`, `/quality/spc/charts/:id` (charts) · Cp/Cpk panel on inspection-spec editor + `/quality/capability-study` |
+| Why cut | IATF *says* SPC is optional — traceability + inspections + NCRs are the mandatory proof. The chart half was a **second, parallel detector** for a signal the inspection path already raises: `InspectionService::recordMeasurements()` auto-evaluates every measurement against tolerance and opens an NCR on failure |
+| Evidence | `spc_control_charts` = **1 row**, `spc_data_points` = **0**, `spc_alerts` = **0**. No chart ever reached the 20-point minimum its own policy required to compute limits, so no limits were ever calculated. `quality.spc.view` was **already revoked** from every role — all 3 chart pages were unreachable |
+| Kept | `SpcService::compute()` / `computeForSpec()` / `computeCapabilityStudy()` / `capabilityThresholds()` — they read `inspection_measurements` directly, need no chart row, and back two live screens. New `CapabilityController` serves the 2 surviving endpoints |
+| Removed | `SpcService` trimmed 436 → 217 lines; chart controller/models/resources/requests/listeners, 3 SPA pages, `spcApi`, 3 tables (migration 0460), 7 chart-only settings (0461) + their validation rules |
+| Verified | `SpcServiceTest` 9/9 pass (Cp/Cpk math untouched) · quality suite 103/103 · `tsc --noEmit` clean · 903 routes register |
+| Risk | Low — no inbound refs; capability seam is a pure read over kept inspection data |
 
 ### 10. COPQ (1,885 LOC, 17 files)
 | | |

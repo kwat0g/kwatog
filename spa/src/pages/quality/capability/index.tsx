@@ -21,7 +21,7 @@ import {
  ResponsiveContainer,
  Cell,
 } from 'recharts';
-import { spcApi } from '@/api/quality/spc';
+import { capabilityApi } from '@/api/quality/capability';
 import { inspectionSpecsApi } from '@/api/quality/inspectionSpecs';
 import { productsApi } from '@/api/crm/products';
 import { Button } from '@/components/ui/Button';
@@ -89,7 +89,7 @@ export default function CapabilityStudyPage() {
  const [selectedProductId, setSelectedProductId] = useState('');
  const [selectedSpecItemId, setSelectedSpecItemId] = useState('');
  const [result, setResult] = useState<SpcCapabilityResult | null>(null);
- const { data: spcOptions } = useQuery({ queryKey: ['quality', 'spc', 'options'], queryFn: spcApi.options, staleTime: 300_000 });
+ const { data: spcOptions } = useQuery({ queryKey: ['quality', 'spc', 'options'], queryFn: capabilityApi.options, staleTime: 300_000 });
  const thresholds = spcOptions?.capability_thresholds;
 
  // Fetch products for the dropdown
@@ -116,7 +116,7 @@ export default function CapabilityStudyPage() {
 
  // Run the study
  const study = useMutation({
- mutationFn: (data: RunCapabilityData) => spcApi.runCapability(data),
+ mutationFn: (data: RunCapabilityData) => capabilityApi.runCapability(data),
  onSuccess: (data) => {
  setResult(data);
  toast.success('Capability study completed');

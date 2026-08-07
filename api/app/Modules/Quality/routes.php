@@ -11,7 +11,7 @@ use App\Modules\Quality\Controllers\EffectivenessController;
 use App\Modules\Quality\Controllers\NcrTemplateController;
 use App\Modules\Quality\Controllers\PpapController;
 use App\Modules\Quality\Controllers\ShipmentLotController;
-use App\Modules\Quality\Controllers\SpcController;
+use App\Modules\Quality\Controllers\CapabilityController;
 use App\Modules\Quality\Controllers\TraceabilityController;
 use Illuminate\Support\Facades\Route;
 
@@ -158,14 +158,7 @@ Route::middleware(['auth:sanctum', 'feature:quality'])->prefix('quality')->group
     Route::patch('/ppap/{ppap}/reject',       [PpapController::class, 'reject']) ->middleware('permission:quality.ppap.manage');
     Route::patch('/ppap/{ppap}/elements/{element}', [PpapController::class, 'updateElement'])->middleware('permission:quality.ppap.manage');
 
-    /* ─── SPC — Statistical Process Control ─── */
-    Route::get('/spc/charts',                      [SpcController::class, 'index'])           ->middleware('permission:quality.spc.view');
-    Route::get('/spc/charts/options',              [SpcController::class, 'options'])         ->middleware('permission:quality.spc.view');
-    Route::post('/spc/charts',                     [SpcController::class, 'store'])           ->middleware('permission:quality.spc.manage');
-    Route::get('/spc/charts/{chart}',              [SpcController::class, 'show'])            ->middleware('permission:quality.spc.view');
-    Route::get('/spc/charts/{chart}/data',         [SpcController::class, 'data'])            ->middleware('permission:quality.spc.view');
-    Route::post('/spc/charts/{chart}/recalculate', [SpcController::class, 'recalculate'])     ->middleware('permission:quality.spc.manage');
-    Route::post('/spc/capability',                 [SpcController::class, 'capability'])      ->middleware('permission:quality.spc.view');
-    Route::get('/spc/alerts',                      [SpcController::class, 'alerts'])          ->middleware('permission:quality.spc.view');
-    Route::post('/spc/alerts/{alert}/acknowledge', [SpcController::class, 'acknowledgeAlert'])->middleware('permission:quality.spc.manage');
+    /* ─── Process capability (Cp / Cpk) ─── */
+    Route::get('/spc/charts/options', [CapabilityController::class, 'options'])   ->middleware('permission:quality.inspections.view');
+    Route::post('/spc/capability',    [CapabilityController::class, 'capability'])->middleware('permission:quality.inspections.view');
 });
