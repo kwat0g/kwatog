@@ -4,8 +4,9 @@
  * A revolved wireframe of an automotive oil filler cap (seal flange → grip
  * skirt → top deck → hollow bore), rotating slowly inside the hero's drawing
  * frame. Rendered as clean ink lines on the page with crisp espresso edges, so
- * it reads like a turning CAD model on a blueprint — directly connected to
- * what Ogami makes, no decoration.
+ * it reads like a turning part on a blueprint — directly connected to what
+ * Ogami makes, no decoration. The profile is hand-authored, not imported
+ * geometry; visible copy must not claim otherwise.
  *
  * Defensive by construction:
  *   • No WebGL / reduced-motion → renders nothing; the SVG PartBlueprint shows.

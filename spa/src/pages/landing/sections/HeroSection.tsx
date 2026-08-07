@@ -48,7 +48,7 @@ export function HeroSection() {
   const heroPart = content?.part_specs?.find((part) => part.id === 'filler-cap') ?? { name: 'Wiper Filler Cap', material: 'POM Grade A', tolerance: '±0.02mm' };
   const heroCopy = content?.hero_copy ?? { line_one: 'Precision Injection', line_two: 'Molding & Tooling', line_three: 'For OEM Leaders' };
   const heroCta = content?.section_copy?.hero_cta ?? {
-    quote_label: 'Request Quote',
+    quote_label: 'Contact us',
     quote_href: '#contact',
     explore_label: 'Explore Parts',
     explore_href: '#parts-3d',

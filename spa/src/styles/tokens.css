@@ -105,6 +105,22 @@
    * than inline in globals.css so no colour value lives outside this file.
    */
   --plant-map-pin-ink: #1c1917;
+
+  /*
+   * Plant-map chrome — popup, attribution, zoom buttons. Theme-invariant for
+   * the same reason as the pin: this chrome sits ON the desaturated sheet, not
+   * on the page canvas, so a palette-following token would turn espresso in
+   * dark mode over light paper and vanish. Warm-paper values matching Atelier
+   * Light, held constant across all three palettes.
+   */
+  --plant-map-surface: #fdfcfa;
+  --plant-map-elevated: #f2ede4;
+  --plant-map-border: #e8e2d8;
+  --plant-map-border-strong: #d6cec1;
+  --plant-map-text: #1f1b16;
+  --plant-map-muted: #6b6259;
+  --plant-map-subtle: #8a8078;
+  --plant-map-accent: #b4542a;
 }
 
 /*

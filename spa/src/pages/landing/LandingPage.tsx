@@ -17,8 +17,6 @@ import { LandingNav } from './components/LandingNav';
 import { LandingFooter } from './components/LandingFooter';
 import { CookieBanner } from './components/CookieBanner';
 import { BackToTop } from './components/BackToTop';
-import { FloatingQuoteButton } from './components/FloatingQuoteButton';
-import { QuoteModal } from './components/QuoteModal';
 import { CrosshairCursor } from './components/CrosshairCursor';
 import { ScrollProgress } from './components/ScrollProgress';
 import { HeroSection } from './sections/HeroSection';
@@ -46,7 +44,6 @@ function inertWhen(active: boolean): Record<string, unknown> {
 export default function LandingPage() {
   const rootRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [quoteOpen, setQuoteOpen] = useState(false);
   const { data: contact } = useQuery({ queryKey: ['landing', 'contact'], queryFn: landingApi.contact, staleTime: 300_000 });
   const { data: content } = useQuery({ queryKey: ['landing', 'content'], queryFn: landingApi.content, staleTime: 300_000 });
   useLandingMotion(rootRef);
@@ -97,11 +94,11 @@ export default function LandingPage() {
         Skip to content
       </a>
 
-      <LandingNav open={menuOpen} onOpenChange={setMenuOpen} onOpenQuote={() => setQuoteOpen(true)} />
+      <LandingNav open={menuOpen} onOpenChange={setMenuOpen} />
 
       {/* While the mobile menu is open, hide page content from AT + pointer.
           `inert` is set via a ref-free attribute prop (cast) for RB18 typings. */}
-      <main {...inertWhen(menuOpen || quoteOpen)}>
+      <main {...inertWhen(menuOpen)}>
         <HeroSection />
         <MarqueeSection />
         <CapabilitiesSection />
@@ -113,14 +110,12 @@ export default function LandingPage() {
         <ContactSection />
       </main>
 
-      <div {...inertWhen(menuOpen || quoteOpen)}>
+      <div {...inertWhen(menuOpen)}>
         <LandingFooter />
       </div>
 
       <CookieBanner />
       <BackToTop />
-      <FloatingQuoteButton onOpenQuote={() => setQuoteOpen(true)} />
-      <QuoteModal open={quoteOpen} onClose={() => setQuoteOpen(false)} />
     </div>
   );
 }

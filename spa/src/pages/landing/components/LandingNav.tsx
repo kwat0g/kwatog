@@ -28,12 +28,11 @@ import { landingApi } from '@/api/landing';
 export interface LandingNavProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onOpenQuote?: () => void;
 }
 
 const DEFAULT_NAV_LINKS = [
   { label: 'Capabilities', href: '#capabilities' },
-  { label: '3D Parts', href: '#parts-3d' },
+  { label: 'Parts', href: '#parts-3d' },
   { label: 'Process', href: '#process' },
   { label: 'Quality', href: '#quality' },
   { label: 'Contact', href: '#contact' },

@@ -32,7 +32,7 @@ export function LandingFooter() {
   const { data: content } = useQuery({ queryKey: ['landing', 'content'], queryFn: landingApi.content, staleTime: 300_000 });
   const navLinks = content?.section_copy?.nav_links?.length ? content.section_copy.nav_links : [
     { label: 'Capabilities', href: '#capabilities' },
-    { label: '3D Parts', href: '#parts-3d' },
+    { label: 'Parts', href: '#parts-3d' },
     { label: 'Process', href: '#process' },
     { label: 'Quality', href: '#quality' },
     { label: 'Contact', href: '#contact' },

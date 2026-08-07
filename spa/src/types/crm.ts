@@ -300,3 +300,29 @@ export interface CreateOpportunityData {
 }
 
 export type UpdateOpportunityData = Partial<CreateOpportunityData>;
+
+/**
+ * A submission from the public contact form (`/landing/contact-inquiry`).
+ *
+ * Kept out of `leads` on purpose: the form also catches job seekers and
+ * supplier pitches, so promotion into the CRM funnel is an explicit action
+ * rather than an automatic one.
+ */
+export type ContactInquiryStatus = 'new' | 'in_progress' | 'converted' | 'closed';
+
+export interface ContactInquiry {
+ id: string;
+ inquiry_no: string;
+ full_name: string;
+ company: string | null;
+ email: string;
+ phone: string | null;
+ message: string;
+ status: ContactInquiryStatus;
+ status_label: string;
+ ip_address: string | null;
+ user_agent: string | null;
+ converted_to_lead?: { id: string; lead_number: string } | null;
+ created_at: string;
+ updated_at: string;
+}

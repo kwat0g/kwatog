@@ -1,14 +1,13 @@
 import { unwrappingClient as client, getCsrfCookie } from './client';
 
-export interface QuoteRequestPayload {
+export interface ContactInquiryPayload {
  full_name: string;
- company: string;
+ company?: string;
  email: string;
- part_description: string;
- annual_volume?: string;
- drawing?: File;
+ phone?: string;
+ message: string;
 }
-export interface QuoteRequestResponse { message: string }
+export interface ContactInquiryResponse { message: string }
 export interface LandingContact {
  legal_name: string | null;
  address: string | null;
@@ -85,16 +84,11 @@ export interface LandingContent {
 export const landingApi = {
  contact: () => client.get<LandingContact>('/landing/contact').then((r) => r.data),
  content: () => client.get<LandingContent>('/landing/content').then((r) => r.data),
- requestQuote: async (payload: QuoteRequestPayload): Promise<QuoteRequestResponse> => {
- const formData = new FormData();
- formData.append('full_name', payload.full_name);
- formData.append('company', payload.company);
- formData.append('email', payload.email);
- formData.append('part_description', payload.part_description);
- if (payload.annual_volume) formData.append('annual_volume', payload.annual_volume);
- if (payload.drawing) formData.append('drawing', payload.drawing);
+ // Plain JSON now that the drawing upload is gone — no FormData, so no
+ // multipart boundary to get wrong.
+ submitInquiry: async (payload: ContactInquiryPayload): Promise<ContactInquiryResponse> => {
  await getCsrfCookie();
- const { data } = await client.post<QuoteRequestResponse>('/landing/quote-request', formData);
+ const { data } = await client.post<ContactInquiryResponse>('/landing/contact-inquiry', payload);
  return data;
  },
  subscribeNewsletter: async (email: string): Promise<{ message: string }> => {

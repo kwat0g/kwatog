@@ -1,5 +1,8 @@
 /**
- * AutoPartShowcase — a self-driving tour of the molded-parts catalogue in 3D.
+ * AutoPartShowcase — a self-driving tour of the parts Ogami molds.
+ *
+ * Geometry is parametric, authored in three/parts.ts — not imported CAD. Visible
+ * copy must not imply otherwise.
  *
  * Cycles through every {@link PartDef} on a timer: it dwells on the assembled
  * part (info on screen), pulls it into an exploded view for a couple of seconds,

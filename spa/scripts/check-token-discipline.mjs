@@ -16,6 +16,18 @@ const PALETTE =
 const HEX = /#[0-9a-fA-F]{6}\b/;
 
 /**
+ * Retired namespace. `--landing-*` was landing's parallel palette; it is gone,
+ * and a stale `var(--landing-canvas)` resolves to nothing rather than erroring,
+ * so a leftover reference is invisible at runtime — the element just renders
+ * transparent. Caught here instead.
+ *
+ * Two namespaces are deliberately landing-adjacent and permitted:
+ *   --blueprint-*  derived from ink, follows every palette
+ *   --plant-map-*  theme-invariant, sits on the always-light desaturated sheet
+ */
+const RETIRED = /var\(\s*(--landing-[a-z-]+)/;
+
+/**
  * Exemptions, each with a reason. Landing used to be exempt while it ran a
  * parallel --landing-* palette; it now resolves through the shared Atelier
  * tokens like every other page, so the gate covers it.
@@ -56,6 +68,8 @@ for (const file of files) {
     if (palette) violations.push(`${rel}:${i + 1}  raw palette class  ${palette[0]}`);
     const hex = HEX.exec(line);
     if (hex) violations.push(`${rel}:${i + 1}  hex literal  ${hex[0]}`);
+    const retired = RETIRED.exec(line);
+    if (retired) violations.push(`${rel}:${i + 1}  retired token  ${retired[1]}`);
   });
 }
 
@@ -64,7 +78,9 @@ if (violations.length > 0) {
   for (const v of violations) console.error(`  ${v}`);
   console.error(
     '\nUse a semantic token instead (bg-accent, text-danger, border-default).' +
-      '\nColour values belong only in src/styles/tokens.css.\n',
+      '\nColour values belong only in src/styles/tokens.css.' +
+      '\n--landing-* is retired: use the shared Atelier tokens, or --blueprint-*' +
+      '\nfor line-work and --plant-map-* for map chrome.\n',
   );
   process.exit(1);
 }

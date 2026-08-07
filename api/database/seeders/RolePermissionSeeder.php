@@ -286,6 +286,11 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'crm.opportunities.manage',       'name' => 'Manage Opportunities'],
                 ['slug' => 'crm.quotes.view',                'name' => 'View Quotes'],
                 ['slug' => 'crm.quotes.manage',              'name' => 'Manage Quotes'],
+                // Public contact-form inbox. Separate from leads on purpose —
+                // the form also catches job seekers and supplier pitches, and
+                // `manage` gates the promote-to-lead step.
+                ['slug' => 'crm.inquiries.view',             'name' => 'View Contact Inquiries'],
+                ['slug' => 'crm.inquiries.manage',           'name' => 'Manage Contact Inquiries'],
             ],
 
             // Quality

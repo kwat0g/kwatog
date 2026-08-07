@@ -24,6 +24,7 @@ import {
  Package,
  Bell,
  Inbox,
+ MailOpen,
  AlertTriangle,
  Calendar,
  ArrowLeftRight,
@@ -127,6 +128,7 @@ export const SECTIONS: NavSection[] = [
  items: [
  { to: '/crm/sales-orders', label: 'Sales Orders', icon: Briefcase, feature: 'crm', permission: 'crm.sales_orders.view', badgeKey: 'pending_so' },
  { to: '/crm/leads', label: 'Leads', icon: Filter, feature: 'crm', permission: 'crm.leads.view' },
+ { to: '/crm/inquiries', label: 'Inquiries', icon: MailOpen, feature: 'crm', permission: 'crm.inquiries.view' },
  { to: '/crm/opportunities', label: 'Opportunities', icon: GitBranch, feature: 'crm', permission: 'crm.opportunities.view' },
  { to: '/crm/customers', label: 'CRM Customers', icon: Users2, feature: 'crm', permission: 'crm.sales_orders.view' },
  { to: '/crm/products', label: 'Products', icon: Tag, feature: 'crm', permission: 'crm.products.view' },

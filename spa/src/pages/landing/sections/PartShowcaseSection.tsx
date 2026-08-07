@@ -1,14 +1,19 @@
 /**
- * PartShowcaseSection — "inspect the part."
+ * PartShowcaseSection — an illustrated gallery of parts Ogami molds.
  *
- * A live 3D drawing frame the visitor can drive: pick one of several molded
- * parts, drag to rotate it, and pull it apart into an engineering exploded view.
- * Left rail carries the part selector, a decoding spec readout, and the
- * controls; the right frame holds the WebGL model over its ghosted cross-section.
+ * Pick one of several molded parts, drag to rotate it, and pull it apart to see
+ * how it is built up. Left rail carries the part selector, a decoding spec
+ * readout, and the controls; the right frame holds the model over its ghosted
+ * cross-section.
+ *
+ * The geometry is a parametric approximation authored in three/parts.ts — lathed
+ * from hand-written half-profiles, NOT imported CAD. Copy here must not claim
+ * otherwise: no "CAD", no "catalogue", no "inspect". Ogami molds to a customer's
+ * existing tooling and does not take custom part design, so this section is
+ * illustration of our own products, not an intake tool.
  *
  * Reduced-motion / no-WebGL: the frame falls back to the static cross-section
- * and the interactive controls are hidden — the section still reads as a precise
- * parts catalogue.
+ * and the interactive controls are hidden.
  */
 
 import { useMemo, useState } from 'react';
@@ -37,9 +42,9 @@ export function PartShowcaseSection() {
     <section id="parts-3d" className="relative bg-canvas px-5 py-24 sm:px-5 sm:py-32">
       <div className="mx-auto max-w-[1440px]">
         <SectionHeading
-          eyebrow={content?.section_copy?.part_showcase_eyebrow || 'Interactive 3D Catalogue'}
-          title={content?.section_copy?.part_showcase_title || 'Inspect Moulded Components & Specs'}
-          intro={content?.section_copy?.part_showcase_intro || 'Rotate real CAD geometries, inspect material grades, tolerances, and disassemble into exploded engineering views.'}
+          eyebrow={content?.section_copy?.part_showcase_eyebrow || 'Parts We Mold'}
+          title={content?.section_copy?.part_showcase_title || 'Components We Produce'}
+          intro={content?.section_copy?.part_showcase_intro || 'Representative geometries of components we produce, with the material and tolerance each is held to.'}
         />
 
         <div className="mt-16 grid items-stretch gap-5 lg:grid-cols-[0.82fr_1.18fr] lg:gap-12">
@@ -57,11 +62,11 @@ export function PartShowcaseSection() {
                     aria-selected={active}
                     onClick={() => setPartIndex(i)}
                     className={cn(
-                      'rounded-full border px-5 py-2.5 font-mono text-xs uppercase tracking-[0.15em] transition-all duration-300 hover:-translate-y-0.5',
+                      'rounded-full border px-5 py-2.5 font-mono text-xs uppercase tracking-[0.15em] transition-colors duration-150',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas',
                       active
                         ? 'border-accent bg-accent text-accent-fg'
-                        : 'border-default text-muted hover:border-accent/40 hover:text-primary hover:shadow-md',
+                        : 'border-default text-muted hover:border-accent/40 hover:text-primary',
                     )}
                   >
                     {content?.part_specs?.find((candidate) => candidate.id === p.id)?.name || p.name || '—'}
@@ -109,7 +114,7 @@ export function PartShowcaseSection() {
                   aria-pressed={exploded}
                   onClick={() => setExploded((v) => !v)}
                   className={cn(
-                    'group inline-flex items-center gap-3 rounded-full border px-6 py-3.5 font-sans text-[14px] font-semibold transition-all duration-300 hover:scale-105',
+                    'group inline-flex items-center gap-3 rounded-full border px-6 py-3.5 font-sans text-md font-semibold transition-colors duration-150',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas',
                     exploded
                       ? 'border-accent bg-accent text-accent-fg'
@@ -189,7 +194,7 @@ export function PartShowcaseSection() {
               </span>
 
               {/* title block */}
-              <figcaption className="absolute inset-x-3 bottom-3 grid grid-cols-3 overflow-hidden rounded-md border border-default bg-canvas/85 font-mono text-[9px] uppercase tracking-[0.12em] text-muted backdrop-blur-sm sm:text-[10px]">
+              <figcaption className="absolute inset-x-3 bottom-3 grid grid-cols-3 overflow-hidden rounded-md border border-default bg-canvas font-mono text-[9px] uppercase tracking-[0.12em] text-muted sm:text-2xs">
                 <span className="border-r border-default px-3 py-2">
                   <span className="block text-text-subtle">Part</span>
                   <span className="text-primary">{displayPart.name || '—'}</span>

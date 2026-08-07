@@ -1,16 +1,24 @@
 /**
  * ContactSection — the closing call to action.
  *
- * A single, confident invitation to start a part with Ogami. Now includes an
- * inline quote request form so visitors can send RFQs without leaving the page.
+ * A general enquiry form: name, company, email, phone, message. Deliberately NOT
+ * an RFQ intake. Ogami molds to a customer's existing tooling and does not accept
+ * custom mold part design, so the old form — part description, annual volume, CAD
+ * drawing upload — invited work the company cannot take, from people who then
+ * heard nothing back.
+ *
+ * Submissions land in `contact_inquiries` and surface at /crm/inquiries, where a
+ * genuine sales enquiry can be promoted to a CRM lead. A contact form also
+ * catches job seekers and supplier pitches, which is exactly why it does not
+ * write straight into `leads`.
  */
 
-import { useState, type DragEvent } from 'react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { ArrowRight, Mail, Phone, CheckCircle, Upload, FileText, Trash2 } from 'lucide-react';
+import { ArrowRight, Mail, Phone, CheckCircle } from 'lucide-react';
 import { AxiosError } from 'axios';
 import { DatumMark } from '../components/DatumMark';
 import { ScrambleText } from '../components/ScrambleText';
@@ -19,27 +27,22 @@ import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { FormErrorSummary } from '@/components/ui/FormErrorSummary';
 import { landingApi } from '@/api/landing';
-import { cn } from '@/lib/cn';
 import { useMagnetic } from '../hooks/useMagnetic';
 
-function formatBytes(bytes: number, decimals = 1) {
-  if (bytes === 0) return '0 Bytes';
-  const k = 1024;
-  const dm = decimals < 0 ? 0 : decimals;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
-}
-
-const quoteSchema = z.object({
+/**
+ * Mirrors StoreContactInquiryRequest on the API. `company` and `phone` are
+ * optional because a job applicant or a student asking about the plant has
+ * neither, and rejecting them would be the same mistake in a smaller form.
+ */
+const inquirySchema = z.object({
   full_name: z.string().min(1, 'Full name is required'),
-  company: z.string().min(1, 'Company is required'),
+  company: z.string().optional(),
   email: z.string().min(1, 'Email is required').email('Invalid email'),
-  part_description: z.string().min(1, 'Part description is required'),
-  annual_volume: z.string().optional(),
+  phone: z.string().optional(),
+  message: z.string().min(1, 'Message is required').max(2000, 'Message is too long (2000 characters max)'),
 });
 
-type QuoteForm = z.infer<typeof quoteSchema>;
+type InquiryForm = z.infer<typeof inquirySchema>;
 
 export function ContactSection() {
   const { data: contact } = useQuery({ queryKey: ['landing', 'contact'], queryFn: landingApi.contact, staleTime: 300_000 });
@@ -47,35 +50,14 @@ export function ContactSection() {
   const salesEmail = contact?.sales_email || 'sales@ogami.ph';
   const phone = contact?.phone || '+63 (046) 402-1234';
   const address = contact?.address || 'FCIE Dasmariñas, Cavite, Philippines';
-  const quoteLabel = content?.section_copy?.hero_cta?.quote_label || 'Request Quote';
   const sectionCopy = content?.section_copy;
-  const contactTitle = sectionCopy?.contact_title || 'Start Your Next Precision Part';
-  const contactIntro = sectionCopy?.contact_intro || 'Send your 2D/3D CAD drawing or spec sheet for immediate DFM feedback, tooling quotation, and volume production lead times.';
-  const [drawing, setDrawing] = useState<File | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
+  const ctaLabel = sectionCopy?.hero_cta?.quote_label || 'Send message';
+  const contactTitle = sectionCopy?.contact_title || 'Talk to us.';
+  const contactIntro =
+    sectionCopy?.contact_intro ||
+    'Questions about our capabilities, an existing order, or working with us — send a message and the right person will come back to you.';
   const [submitted, setSubmitted] = useState(false);
   const submitRef = useMagnetic<HTMLButtonElement>({ strength: 0.22, duration: 0.55 });
-
-  const handleDragOver = (e: DragEvent<HTMLLabelElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e: DragEvent<HTMLLabelElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e: DragEvent<HTMLLabelElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      setDrawing(e.dataTransfer.files[0]);
-    }
-  };
 
   const {
     register,
@@ -83,30 +65,34 @@ export function ContactSection() {
     setError,
     reset,
     formState: { errors, isSubmitting },
-  } = useForm<QuoteForm>({
-    resolver: zodResolver(quoteSchema),
+  } = useForm<InquiryForm>({
+    resolver: zodResolver(inquirySchema),
   });
 
-  const onSubmit = async (data: QuoteForm) => {
+  const onSubmit = async (data: InquiryForm) => {
     try {
-      await landingApi.requestQuote({ ...data, drawing: drawing ?? undefined });
+      await landingApi.submitInquiry(data);
       setSubmitted(true);
       reset();
-      setDrawing(null);
     } catch (err) {
       const axe = err as AxiosError<{ message?: string; errors?: Record<string, string[]> }>;
       const body = axe.response?.data;
       if (axe.response?.status === 422 && body?.errors) {
         Object.entries(body.errors).forEach(([field, msgs]) => {
-          setError(field as keyof QuoteForm, {
+          setError(field as keyof InquiryForm, {
             type: 'server',
             message: msgs[0] ?? 'Invalid value.',
           });
         });
+      } else if (axe.response?.status === 429) {
+        setError('root', {
+          type: 'server',
+          message: 'Too many messages sent. Please try again in a few minutes.',
+        });
       } else {
         setError('root', {
           type: 'server',
-          message: body?.message ?? 'Could not send request. Please try again.',
+          message: body?.message ?? 'Could not send message. Please try again.',
         });
       }
     }
@@ -115,17 +101,8 @@ export function ContactSection() {
   return (
     <section id="contact" className="relative bg-canvas px-5 py-20 sm:px-5 sm:py-28">
       <div className="mx-auto max-w-screen-xl">
-        <div className="relative overflow-hidden rounded-3xl border border-strong bg-surface px-8 py-20 sm:px-16 sm:py-24 shadow-2xl">
-          {/* atmosphere — soft warm wash + blueprint grid */}
-          <div
-            aria-hidden="true"
-            className="absolute inset-0"
-            style={{
-              background:
-                'radial-gradient(90% 110% at 100% 0%, rgba(28,25,23,0.05) 0%, rgba(250,250,249,0) 60%),' +
-                'radial-gradient(90% 100% at 0% 100%, rgba(28,25,23,0.04) 0%, rgba(250,250,249,0) 60%)',
-            }}
-          />
+        <div className="relative overflow-hidden rounded-lg border border-strong bg-surface px-8 py-20 sm:px-16 sm:py-24">
+          {/* atmosphere — blueprint grid */}
           <div
             aria-hidden="true"
             className="absolute inset-0 opacity-70"
@@ -133,7 +110,7 @@ export function ContactSection() {
               backgroundImage:
                 'linear-gradient(var(--blueprint-grid) 1px, transparent 1px),' +
                 'linear-gradient(90deg, var(--blueprint-grid) 1px, transparent 1px)',
-              backgroundSize: '32px 32px',
+              backgroundSize: 'var(--blueprint-grid-size) var(--blueprint-grid-size)',
               maskImage: 'radial-gradient(120% 100% at 90% 10%, #000 30%, transparent 80%)',
               WebkitMaskImage: 'radial-gradient(120% 100% at 90% 10%, #000 30%, transparent 80%)',
             }}
@@ -148,20 +125,17 @@ export function ContactSection() {
           <div className="relative grid gap-14 lg:grid-cols-[1fr_1.1fr]">
             {/* ── Copy ─────────────────────────────────────────────── */}
             <div>
-              <p
-                data-reveal
-                className="font-mono text-[11px] uppercase tracking-[0.24em] text-accent"
-              >
+              <p data-reveal className="font-mono text-xs uppercase tracking-[0.24em] text-accent">
                 <ScrambleText
-                  text="Let's build it"
+                  text="Get in touch"
                   trigger="view"
-                  className="font-mono text-[11px] uppercase tracking-[0.24em] text-accent"
+                  className="font-mono text-xs uppercase tracking-[0.24em] text-accent"
                 />
               </p>
               <h2
                 data-reveal
                 data-reveal-delay="0.05"
-                className="mt-6 font-display text-[clamp(2.5rem,6vw,4.5rem)] font-semibold leading-[0.98] tracking-[-0.03em] text-primary"
+                className="mt-6 font-display text-[clamp(2.5rem,6vw,4.5rem)] leading-[0.98] tracking-[-0.03em] text-primary"
               >
                 {contactTitle}
               </h2>
@@ -180,47 +154,37 @@ export function ContactSection() {
               >
                 <a
                   href={`mailto:${salesEmail}`}
-                  className="flex items-center gap-2.5 font-mono text-[12px] text-secondary transition-colors hover:text-accent"
+                  className="flex items-center gap-2.5 font-mono text-sm text-secondary transition-colors hover:text-accent"
                 >
                   <Mail size={15} className="text-accent" />
                   {salesEmail}
                 </a>
-                <span className="flex items-center gap-2.5 font-mono text-[12px] text-secondary">
+                <span className="flex items-center gap-2.5 font-mono text-sm text-secondary">
                   <Phone size={15} className="text-accent" />
                   {phone}
                 </span>
-                <span className="font-mono text-[12px] text-text-subtle">
-                  {address}
-                </span>
+                <span className="font-mono text-sm text-text-subtle">{address}</span>
               </div>
             </div>
 
-            {/* ── Quote form ───────────────────────────────────────── */}
+            {/* ── Enquiry form ─────────────────────────────────────── */}
             <div
               data-reveal
               data-reveal-delay="0.15"
-              className="rounded-2xl border border-default bg-canvas p-6 sm:p-8 shadow-xl shadow-black/5"
+              className="rounded-lg border border-default bg-canvas p-6 sm:p-8"
             >
               {submitted ? (
                 <div className="py-5 text-center">
-                  <CheckCircle
-                    size={40}
-                    className="mx-auto text-success"
-                    strokeWidth={1.5}
-                  />
-                  <h3 className="mt-4 font-display text-xl font-medium text-primary">
-                    {sectionCopy?.contact_success_title ?? '—'}
+                  <CheckCircle size={40} className="mx-auto text-success" strokeWidth={1.5} />
+                  <h3 className="mt-4 font-display text-xl text-primary">
+                    {sectionCopy?.contact_success_title || 'Message sent'}
                   </h3>
-                  <p className="mt-2 text-[13px] text-secondary">
-                    {sectionCopy?.contact_success_body ?? '—'}
+                  <p className="mt-2 text-base text-secondary">
+                    {sectionCopy?.contact_success_body ||
+                      'Thank you for reaching out. We will get back to you shortly.'}
                   </p>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="mt-5"
-                    onClick={() => setSubmitted(false)}
-                  >
-                    Send another request
+                  <Button type="button" variant="secondary" className="mt-5" onClick={() => setSubmitted(false)}>
+                    Send another message
                   </Button>
                 </div>
               ) : (
@@ -234,99 +198,35 @@ export function ContactSection() {
                       error={errors.full_name?.message}
                     />
                     <Input
-                      label="Company"
+                      label="Company (optional)"
                       autoComplete="organization"
                       {...register('company')}
                       error={errors.company?.message}
                     />
                   </div>
-                  <Input
-                    type="email"
-                    label="Email"
-                    autoComplete="email"
-                    {...register('email')}
-                    error={errors.email?.message}
-                  />
-                  <Textarea
-                    label="Part description"
-                    rows={4}
-                    placeholder="Material, tolerance, annual volume, finish requirements..."
-                    {...register('part_description')}
-                    error={errors.part_description?.message}
-                  />
-                  <Input
-                    type="number"
-                    label="Estimated annual volume (optional)"
-                    min={0}
-                    {...register('annual_volume')}
-                    error={errors.annual_volume?.message}
-                  />
-
-                  <label
-                    htmlFor="drawing-upload"
-                    onDragOver={handleDragOver}
-                    onDragLeave={handleDragLeave}
-                    onDrop={handleDrop}
-                    className={cn(
-                      'group relative flex cursor-pointer flex-col items-center justify-center gap-2 rounded-md border border-dashed px-4 py-4 transition-all',
-                      isDragging
-                        ? 'border-accent bg-accent/10 ring-2 ring-accent/30'
-                        : drawing
-                        ? 'border-solid border-accent/50 bg-elevated'
-                        : 'border-default bg-elevated hover:border-accent/40',
-                    )}
-                  >
-                    <input
-                      id="drawing-upload"
-                      type="file"
-                      accept=".pdf,.step,.stp,.iges,.igs,.dwg,.dxf,.png,.jpg,.jpeg"
-                      className="sr-only"
-                      onChange={(e) => setDrawing(e.target.files?.[0] ?? null)}
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Input
+                      type="email"
+                      label="Email"
+                      autoComplete="email"
+                      {...register('email')}
+                      error={errors.email?.message}
                     />
-                    {drawing ? (
-                      <div className="flex w-full items-center justify-between gap-3">
-                        <div className="flex items-center gap-2.5 overflow-hidden">
-                          <FileText size={20} className="shrink-0 text-accent" />
-                          <div className="min-w-0 text-left">
-                            <p className="truncate text-xs font-medium text-primary">
-                              {drawing.name}
-                            </p>
-                            <p className="text-[10px] text-muted">
-                              {formatBytes(drawing.size)}
-                            </p>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          aria-label="Remove drawing"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setDrawing(null);
-                          }}
-                          className="shrink-0 rounded p-1 text-muted transition-colors hover:bg-canvas hover:text-danger"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        <Upload size={20} className="text-muted transition-colors group-hover:text-accent" />
-                        <div className="text-center">
-                          <p className="text-xs font-medium text-primary">
-                            Drag CAD drawing or click to browse
-                          </p>
-                          <div className="mt-1.5 flex flex-wrap justify-center gap-1">
-                            {['.STEP', '.IGES', '.DWG', '.DXF', '.PDF'].map((ext) => (
-                              <span key={ext} className="rounded bg-surface px-1.5 py-0.5 font-mono text-[9px] text-muted border border-default">
-                                {ext}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      </>
-                    )}
-                  </label>
+                    <Input
+                      type="tel"
+                      label="Phone (optional)"
+                      autoComplete="tel"
+                      {...register('phone')}
+                      error={errors.phone?.message}
+                    />
+                  </div>
+                  <Textarea
+                    label="Message"
+                    rows={6}
+                    placeholder="How can we help?"
+                    {...register('message')}
+                    error={errors.message?.message}
+                  />
 
                   <Button
                     ref={submitRef}
@@ -337,16 +237,16 @@ export function ContactSection() {
                     disabled={isSubmitting}
                     className="mt-2 w-full"
                   >
-                    {quoteLabel}
+                    {ctaLabel}
                     <ArrowRight size={16} />
                   </Button>
-                  <p className="text-center text-[11px] text-muted">
+                  <p className="text-center text-xs text-muted">
                     Prefer email?{' '}
                     <a
-                      href={contact?.sales_email ? `mailto:${contact.sales_email}?subject=Quote%20request` : undefined}
+                      href={contact?.sales_email ? `mailto:${contact.sales_email}` : undefined}
                       className="underline-offset-2 transition-colors hover:text-primary hover:underline"
                     >
-                      Talk to our team
+                      Write to us directly
                     </a>
                   </p>
                 </form>

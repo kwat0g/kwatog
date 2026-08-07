@@ -33,6 +33,8 @@ const CommissionRatesPage = lazy(() => import('@/pages/crm/commissions/rates'));
 
 // Sales pipeline — leads + opportunities (audit §3.1 follow-up)
 const LeadsListPage = lazy(() => import('@/pages/crm/leads'));
+const InquiryListPage = lazy(() => import('@/pages/crm/inquiries'));
+const InquiryDetailPage = lazy(() => import('@/pages/crm/inquiries/detail'));
 const CreateLeadPage = lazy(() => import('@/pages/crm/leads/create'));
 const LeadDetailPage = lazy(() => import('@/pages/crm/leads/detail'));
 const EditLeadPage = lazy(() => import('@/pages/crm/leads/edit'));
@@ -56,6 +58,12 @@ export const crmRoutes = (
  element={<PermissionGuard permission="crm.leads.view"><LeadDetailPage /></PermissionGuard>} />
  <Route path="/crm/leads/:id/edit"
  element={<PermissionGuard permission="crm.leads.manage"><EditLeadPage /></PermissionGuard>} />
+
+ {/* Public contact-form inbox — ERP-side reader for /landing/contact-inquiry */}
+ <Route path="/crm/inquiries"
+ element={<PermissionGuard permission="crm.inquiries.view"><InquiryListPage /></PermissionGuard>} />
+ <Route path="/crm/inquiries/:id"
+ element={<PermissionGuard permission="crm.inquiries.view"><InquiryDetailPage /></PermissionGuard>} />
 
  <Route path="/crm/opportunities"
  element={<PermissionGuard permission="crm.opportunities.view"><OpportunitiesListPage /></PermissionGuard>} />
