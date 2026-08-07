@@ -81,7 +81,7 @@ class ComprehensiveDemoSeeder extends Seeder
             'material_issue_slips', 'material_issue_slip_items',
             'stock_count_sessions', 'stock_count_items',
             'transfer_orders',
-            'budgets', 'budget_line_items', 'budget_transfers',
+            'budgets', 'budget_line_items',
             'journal_entries', 'journal_entry_lines',
             'employee_loans', 'loan_payments', 'leave_requests',
             'return_requests', 'return_request_items',
@@ -606,14 +606,6 @@ class ComprehensiveDemoSeeder extends Seeder
         $fromLine = DB::table('budget_line_items')->where('budget_id', $budgetId)->first();
         $toLine = DB::table('budget_line_items')->where('budget_id', $budgetId)->skip(1)->first();
         if ($fromLine && $toLine) {
-            DB::table('budget_transfers')->insert([
-                'from_budget_line_id' => $fromLine->id,
-                'to_budget_line_id'   => $toLine->id,
-                'amount'              => 50_000,
-                'reason'              => 'Reallocation for urgent raw material purchase',
-                'status'              => 'approved',
-                'requested_by'        => $this->admin->id,
-            ]);
         }
 
         $this->command?->info('[Budgets] Created 1 budget with 4 line items + 1 transfer.');

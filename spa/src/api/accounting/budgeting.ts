@@ -1,6 +1,6 @@
 import { client } from '../client';
 import type { ApiSuccess, PaginatedResponse } from '@/types';
-import type { Budget, BudgetTransfer, BudgetOverview, BudgetVsActual, BudgetCheckAvailability, FiscalYear } from '@/types/budgeting';
+import type { Budget, BudgetOverview, BudgetVsActual, BudgetCheckAvailability, FiscalYear } from '@/types/budgeting';
 
 export interface BudgetListParams {
  fiscal_year_id?: number;
@@ -80,21 +80,4 @@ export const budgetingApi = {
  params: { department_id: departmentId, amount, fiscal_year_id: fiscalYearId },
  }).then((r) => r.data.data),
 
- // Transfers
- transfers: {
- list: (params?: { status?: string; per_page?: number; page?: number }) =>
- client.get<PaginatedResponse<BudgetTransfer>>('/budget-transfers', { params }).then((r) => r.data),
-
- show: (id: string) =>
- client.get<ApiSuccess<BudgetTransfer>>(`/budget-transfers/${id}`).then((r) => r.data.data),
-
- create: (data: CreateTransferData) =>
- client.post<ApiSuccess<BudgetTransfer>>('/budget-transfers', data).then((r) => r.data.data),
-
- approve: (id: string) =>
- client.post(`/budget-transfers/${id}/approve`).then((r) => r.data),
-
- reject: (id: string) =>
- client.post(`/budget-transfers/${id}/reject`).then((r) => r.data),
- },
 };

@@ -380,9 +380,7 @@ class RolePermissionSeeder extends Seeder
             'budgeting' => [
                 ['slug' => 'budgeting.view',    'name' => 'View Budgets & Reports'],
                 ['slug' => 'budgeting.manage',  'name' => 'Create / Edit / Submit Budgets'],
-                ['slug' => 'budgeting.approve', 'name' => 'Approve / Reject Budgets & Transfers'],
-                // REC-02 — SoD override: approve a budget transfer you requested.
-                ['slug' => 'budgeting.transfers.self_approve_override', 'name' => 'Approve Own Budget Transfer (SoD override)'],
+                ['slug' => 'budgeting.approve', 'name' => 'Approve / Reject Budgets'],
             ],
         ];
     }
@@ -453,7 +451,7 @@ class RolePermissionSeeder extends Seeder
                     $this->module('accounting', except: ['accounting.journal.self_post_override']),
                     // REC-02 — finance_officer approves transfers but cannot self-approve
                     // one they requested (override withheld → system_admin only).
-                    $this->module('budgeting', except: ['budgeting.transfers.self_approve_override']),
+                    $this->module('budgeting'),
                     $this->module('loans'),
                     $this->module('assets'),
                     $this->module('crm_commissions'),

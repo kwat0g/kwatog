@@ -53,21 +53,6 @@ export interface BudgetLineItem {
  variance: number;
 }
 
-export interface BudgetTransfer {
- id: string;
- from_budget_line_id: number;
- to_budget_line_id: number;
- from_line_item?: BudgetLineItem;
- to_line_item?: BudgetLineItem;
- amount: number;
- reason: string;
- status: 'pending' | 'approved' | 'rejected';
- status_label?: string;
- requested_by?: { id: string; name: string } | null;
- approved_by?: { id: string; name: string } | null;
- approved_at?: string | null;
- created_at: string;
-}
 
 export interface BudgetOverview {
  total_allocated: number;

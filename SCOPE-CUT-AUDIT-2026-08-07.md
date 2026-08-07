@@ -154,13 +154,15 @@ LOC weight, test coverage, seeder mentions.
 | Keep | None (TB/statements stay) |
 | Risk | Low (demo runs fresh-seeded) |
 
-### 14. Accounting Periods close/lock (812 LOC)
+### 14. Accounting Periods close/lock — ~~CUT~~ **KEEP** (verdict reversed 2026-08-07)
 | | |
 |---|---|
 | Surface | `/accounting/periods` (close/reopen fiscal periods) |
-| Why cut | Audit-close discipline — the thesis demo never closes a period; adds a "why locked?" explanation. Statements don't depend on it |
-| Keep | None (period-end closing NOT a stated cut-scope item, but it's pure admin ceremony) |
-| Risk | Low (11 files, no chain coupling) |
+| Original call | Cut — "audit-close ceremony, statements don't depend on it" |
+| Why reversed | **Wrong.** `AccountingPeriodService::assertPostingAllowed()` is called on 6 live GL-posting paths: `JournalEntryService` (create + post), `InvoiceService`, `BillService`, `CreditNoteService`, `PayrollGlPostingService`. It is an enforced internal control that blocks backdated posting into a closed month — not ceremony |
+| Cost of cutting | Would require stripping the guard out of 5 **kept** services, removing a control. Negative value, high risk |
+| Defense value | Easy to explain in one line ("you cannot post to a closed month"), and a recognised accounting control a panel will respect |
+| Note | CLAUDE.md's NOT BUILDING list says "❌ fiscal period locking". The feature exists, is enforced and is tested — the **spec line is stale**, not the code. Recommend updating CLAUDE.md rather than deleting the control |
 
 ### 15. Budget Transfers (472 LOC)
 | | |
@@ -215,7 +217,7 @@ LOC weight, test coverage, seeder mentions.
 ## REMOVAL ORDER (safest first)
 
 1. **Phase 1 — dead/free:** Quotes (no UI), Budget Revisions, QMS Documents (no demo refs). ~~Employee Skills~~ withdrawn — see §8, it backs the IATF training matrix
-2. **Phase 2 — zero-coupling features:** Commissions, Succession, Performance Reviews, Leads/Opportunities, Opening Balances, Accounting Periods, FX Rates/Parent Pack
+2. **Phase 2 — zero-coupling features:** Commissions, Succession, Performance Reviews, Leads/Opportunities, Opening Balances, FX Rates/Parent Pack. ~~Accounting Periods~~ withdrawn — see §14, `assertPostingAllowed()` guards 6 live GL-posting paths
 3. **Phase 3 — heavy but standalone:** SPC, COPQ (needs dashboard widget detach), Landing page (needs root redirect), Recruitment (+ careers site)
 4. **Phase 4 — surgical:** Edge module (keep `EdgeSystemUserResolver`), Budget Transfers (keep overview/enforcement)
 
