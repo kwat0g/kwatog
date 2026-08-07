@@ -23,14 +23,19 @@ const alignCls: Record<Align, string> = {
 
 /** Header cell classes. Use when you can't use `<Th>` (e.g. inside a map). */
 export const thCls = (align: Align = 'left'): string =>
- cn('h-8 px-2.5 text-2xs uppercase tracking-wider text-muted font-medium select-none', alignCls[align]);
+ cn('h-row px-2.5 text-2xs uppercase tracking-wider text-muted font-medium select-none', alignCls[align]);
 
 /** Body cell classes. `mono` for any numeric / ID / date content. */
 export const tdCls = (align: Align = 'left', mono = false): string =>
  cn('px-2.5 py-1 align-middle', alignCls[align], mono && 'font-mono tabular-nums');
 
-/** Row classes — 32px tall, hairline separator, hover highlight, selected outline. */
-export const trCls = 'h-8 border-b border-subtle hover:bg-subtle transition-all duration-fast aria-selected:outline aria-selected:outline-2 aria-selected:outline-landing-accent aria-selected:-outline-offset-2 aria-selected:z-10 aria-selected:';
+/**
+ * Row classes — hairline separator, hover highlight, selected outline.
+ *
+ * Height is `h-row` (`--row-height`), not a fixed `h-8`: office palettes
+ * declare 32px, the shop-floor palette 48px for gloved hands.
+ */
+export const trCls = 'h-row border-b border-subtle hover:bg-subtle transition-all duration-fast aria-selected:outline aria-selected:outline-2 aria-selected:outline-accent aria-selected:-outline-offset-2 aria-selected:z-10';
 
 /** Header row classes. */
 export const theadTrCls = 'border-b border-default';
@@ -43,7 +48,7 @@ export const theadTrCls = 'border-b border-default';
  * all-sides colour appended after it loses on stylesheet order, silently
  * leaving the rule hairline-grey. A side-specific utility cannot collide.
  */
-export const totalsTrCls = 'h-8 border-t-2 border-t-strong font-medium';
+export const totalsTrCls = 'h-row border-t-2 border-t-strong font-medium';
 
 /** Table element classes. */
 export const tableCls = 'w-full border-collapse text-xs';

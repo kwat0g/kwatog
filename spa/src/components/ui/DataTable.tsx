@@ -86,7 +86,10 @@ export interface DataTableProps<T> {
 
 const rowHeight: Record<TableDensity, string> = {
  compact: 'h-7',
- default: 'h-8',
+ // `h-row` is `--row-height`: 32px in the office palettes, 48px on the shop
+ // floor. compact/spacious stay fixed — they are explicit operator choices,
+ // and only the default should follow the palette's density.
+ default: 'h-row',
  spacious: 'h-10',
 };
 
