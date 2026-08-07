@@ -29,10 +29,10 @@ export function MoldShotMeter({
  const isExceeded = pct >= 100;
 
  const barColor = isExceeded
- ? 'bg-rose-500'
+ ? 'bg-danger'
  : isNearing
- ? 'bg-amber-500'
- : 'bg-emerald-500';
+   ? 'bg-warning'
+   : 'bg-success';
 
  const statusVariant = isExceeded
  ? 'danger'
@@ -49,11 +49,7 @@ export function MoldShotMeter({
  </span>
  <span
  className={`font-mono text-2xs font-medium ${
- isExceeded
- ? 'text-rose-600 dark:text-rose-400'
- : isNearing
- ? 'text-amber-600 dark:text-amber-400'
- : 'text-emerald-600 dark:text-emerald-400'
+ isExceeded ? 'text-danger' : isNearing ? 'text-warning' : 'text-success'
  }`}
  >
  {pct.toFixed(1)}%
@@ -74,11 +70,11 @@ export function MoldShotMeter({
  <div className="flex items-center justify-between gap-2">
  <div className="flex items-center gap-2">
  {isExceeded ? (
- <ShieldAlert className="w-5 h-5 text-rose-500 animate-pulse" />
+ <ShieldAlert className="w-5 h-5 text-danger animate-pulse" />
  ) : isNearing ? (
- <AlertTriangle className="w-5 h-5 text-amber-500" />
+ <AlertTriangle className="w-5 h-5 text-warning" />
  ) : (
- <CheckCircle className="w-5 h-5 text-emerald-500" />
+ <CheckCircle className="w-5 h-5 text-success" />
  )}
  <div>
  <h4 className="text-xs font-medium uppercase tracking-wider text-primary flex items-center gap-2">
@@ -112,7 +108,7 @@ export function MoldShotMeter({
  />
  {/* 90% Warning Threshold Indicator Marker */}
  <div
- className="absolute top-0 bottom-0 w-0.5 bg-amber-500/80 z-10"
+ className="absolute top-0 bottom-0 w-0.5 bg-warning/80 z-10"
  style={{ left: `${warningRatioPct}%` }}
  title={`PM Warning Threshold (${warningRatioPct}%)`}
  />
@@ -120,7 +116,7 @@ export function MoldShotMeter({
 
  <div className="flex justify-between items-center text-2xs text-muted font-mono pt-0.5">
  <span>0 Shots</span>
- <span className="text-amber-600 font-medium">{warningRatioPct}% Threshold</span>
+ <span className="text-warning font-medium">{warningRatioPct}% Threshold</span>
  <span>{formatInt(maxShots)} Max</span>
  </div>
  </div>
@@ -143,10 +139,10 @@ export function MoldShotMeter({
 
  {/* Action Prompt */}
  {(isNearing || isExceeded) && (
- <div className="flex items-center justify-between gap-2 p-2.5 rounded-md bg-amber-500/10 border border-amber-500/30 text-xs">
+ <div className="flex items-center justify-between gap-2 p-2.5 rounded-md bg-warning/10 border border-warning/30 text-xs">
  <div className="flex items-center gap-2">
- <Wrench className="w-4 h-4 text-amber-600 shrink-0" />
- <span className="text-amber-800 dark:text-amber-200">
+ <Wrench className="w-4 h-4 text-warning shrink-0" />
+ <span className="text-warning-fg">
  {isExceeded
  ? 'Mold has reached its maximum shot limit! Cavity inspection & overhaul required.'
  : `Mold has reached ${pct.toFixed(0)}% shot limit. Schedule preventive maintenance.`}

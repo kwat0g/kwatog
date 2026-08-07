@@ -65,7 +65,7 @@ const TREND_BARS = [
  { dataKey: 'scrap_cost', color: 'var(--danger)', label: 'Scrap' },
  { dataKey: 'rework_cost', color: 'var(--warning)', label: 'Rework' },
  { dataKey: 'return_cost', color: 'var(--info)', label: 'Returns' },
- { dataKey: 'complaint_cost', color: 'var(--purple, #8b5cf6)', label: 'Complaints' },
+ { dataKey: 'complaint_cost', color: 'var(--purple)', label: 'Complaints' },
 ];
 
 export function CopqWidget() {

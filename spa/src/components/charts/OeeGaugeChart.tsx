@@ -9,7 +9,7 @@ interface Props {
 }
 
 const colorFor = (v: number, policy?: Props['displayPolicy']) =>
- policy ? (v >= policy.world_class_ratio ? 'var(--success, #22c55e)' : v >= policy.on_track_ratio ? 'var(--warning, #f59e0b)' : 'var(--danger, #ef4444)') : 'var(--text-muted, #6b7280)';
+ policy ? (v >= policy.world_class_ratio ? 'var(--success)' : v >= policy.on_track_ratio ? 'var(--warning)' : 'var(--danger)') : 'var(--text-muted)';
 
 export function OeeGaugeChart({ oee, availability, performance, quality, displayPolicy }: Props) {
  const oeePct = oee * 100;
@@ -29,7 +29,7 @@ export function OeeGaugeChart({ oee, availability, performance, quality, display
  >
  <PolarAngleAxis type="number" domain={[0, 100]} angleAxisId={0} tick={false} />
  <RadialBar
- background={{ fill: 'var(--bg-elevated, #f3f4f6)' }}
+ background={{ fill: 'var(--bg-elevated)' }}
  dataKey="value"
  angleAxisId={0}
  cornerRadius={4}

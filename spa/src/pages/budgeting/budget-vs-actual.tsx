@@ -90,22 +90,22 @@ export default function BudgetVsActualPage() {
  <div className="h-56">
  <ResponsiveContainer width="100%" height="100%">
  <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
- <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle, #e5e7eb)" vertical={false} />
- <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'var(--text-muted, #6b7280)' }} />
+ <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
+ <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
  <YAxis
- tick={{ fontSize: 10, fill: 'var(--text-muted, #6b7280)' }}
+ tick={{ fontSize: 10, fill: 'var(--text-muted)' }}
  tickFormatter={(v: number) => formatCompactCurrency(v, 1_000, 'K')}
  width={56}
  />
  <Tooltip
- contentStyle={{ background: 'var(--bg-elevated, #fff)', border: '1px solid var(--border-default, #e5e7eb)', borderRadius: 6, fontSize: 12 }}
+ contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-md)', fontSize: 12 }}
  formatter={(v: number) => formatPeso(v)}
  />
  <Legend wrapperStyle={{ fontSize: 11 }} />
- <Bar dataKey="budgeted" name="Budgeted" fill="var(--info, #3b82f6)" radius={[3, 3, 0, 0]} maxBarSize={32} />
+ <Bar dataKey="budgeted" name="Budgeted" fill="var(--info)" radius={[3, 3, 0, 0]} maxBarSize={32} />
  <Bar dataKey="actual" name="Actual" radius={[3, 3, 0, 0]} maxBarSize={32}>
  {chartData.map((entry, i) => (
- <Cell key={i} fill={entry.actual > entry.budgeted ? 'var(--danger, #ef4444)' : 'var(--success, #22c55e)'} />
+ <Cell key={i} fill={entry.actual > entry.budgeted ? 'var(--danger)' : 'var(--success)'} />
  ))}
  </Bar>
  </BarChart>

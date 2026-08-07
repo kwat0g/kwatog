@@ -35,10 +35,10 @@ export function DowntimeParetoChart({ data, height = 260, valueLabel }: Props) {
  return (
  <ResponsiveContainer width="100%" height={height}>
  <ComposedChart data={data} margin={{ top: 8, right: 40, left: 0, bottom: 40 }}>
- <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle, #e5e7eb)" vertical={false} />
+ <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
  <XAxis
  dataKey="category"
- tick={{ fontSize: 11, fill: 'var(--text-muted, #6b7280)' }}
+ tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
  tickFormatter={label}
  angle={-30}
  textAnchor="end"
@@ -47,7 +47,7 @@ export function DowntimeParetoChart({ data, height = 260, valueLabel }: Props) {
  />
  <YAxis
  yAxisId="left"
- tick={{ fontSize: 11, fill: 'var(--text-muted, #6b7280)' }}
+ tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
  tickFormatter={valueLabel ? String : formatMinutes}
  width={56}
  />
@@ -56,14 +56,14 @@ export function DowntimeParetoChart({ data, height = 260, valueLabel }: Props) {
  orientation="right"
  unit="%"
  domain={[0, 100]}
- tick={{ fontSize: 11, fill: 'var(--text-muted, #6b7280)' }}
+ tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
  width={40}
  />
  <Tooltip
  contentStyle={{
- background: 'var(--bg-elevated, #fff)',
- border: '1px solid var(--border-default, #e5e7eb)',
- borderRadius: 6,
+ background: 'var(--bg-elevated)',
+ border: '1px solid var(--border-default)',
+ borderRadius: 'var(--radius-md)',
  fontSize: 12,
  }}
  formatter={(value: number, name: string) =>
@@ -75,7 +75,7 @@ export function DowntimeParetoChart({ data, height = 260, valueLabel }: Props) {
  yAxisId="left"
  dataKey="minutes"
  name="Downtime"
- fill="var(--danger, #ef4444)"
+ fill="var(--danger)"
  radius={[3, 3, 0, 0]}
  maxBarSize={48}
  />
@@ -84,7 +84,7 @@ export function DowntimeParetoChart({ data, height = 260, valueLabel }: Props) {
  type="monotone"
  dataKey="cumulative_pct"
  name="Cumulative %"
- stroke="var(--warning, #f59e0b)"
+ stroke="var(--warning)"
  dot={{ r: 3 }}
  strokeWidth={2}
  activeDot={{ r: 4 }}
