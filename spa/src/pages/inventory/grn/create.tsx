@@ -225,7 +225,7 @@ export default function CreateGrnPage() {
  containerClassName="w-24 inline-flex"
  className="text-right font-mono tabular-nums"
  aria-label="Receive quantity"
- type="text"
+ 
  value={line.quantity_received}
  {...numberInputProps()}
  onChange={(e) => setItems(items.map((it, k) => k === i ? { ...it, quantity_received: e.target.value } : it))}
@@ -238,7 +238,7 @@ export default function CreateGrnPage() {
  containerClassName="w-24 inline-flex"
  className="text-right font-mono tabular-nums"
  aria-label="Unit cost"
- type="text"
+ 
  value={line.unit_cost}
  {...numberInputProps()}
  onChange={(e) => setItems(items.map((it, k) => k === i ? { ...it, unit_cost: e.target.value } : it))}

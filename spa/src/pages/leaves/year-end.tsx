@@ -16,7 +16,7 @@ export default function YearEndLeavePage() {
   const [year, setYear] = useState(new Date().getFullYear().toString());
   const mutation = useMutation({
     mutationFn: () => leaveTypesApi.processYearEnd(parseInt(year)),
-    onSuccess: (data: any) => {
+    onSuccess: (data) => {
       toast.success(data?.message ?? 'Year-end processing queued.');
     },
     onError: () => toast.error('Failed to queue year-end processing.'),

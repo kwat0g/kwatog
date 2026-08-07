@@ -207,7 +207,7 @@ export default function CreateMaterialIssuePage() {
  </div>
  <div className="col-span-2">
  <Input
- type="text"
+ 
  placeholder="0"
  className="font-mono tabular-nums text-right"
  {...numberInputProps()}

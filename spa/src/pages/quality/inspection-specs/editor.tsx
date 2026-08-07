@@ -32,6 +32,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { productsApi } from '@/api/crm/products';
 import { inspectionSpecsApi, type SpcResult } from '@/api/quality/inspectionSpecs';
 import { spcApi } from '@/api/quality/spc';
+import { uomsApi } from '@/api/inventory/uoms';
 import type { UpsertInspectionSpecData } from '@/types/quality';
 import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells';
 import { Checkbox } from '@/components/ui/Checkbox';
@@ -89,6 +90,11 @@ export default function InspectionSpecEditorPage() {
  queryKey: ['quality', 'spc', 'options'],
  queryFn: spcApi.options,
  staleTime: 300_000,
+ });
+ const { data: uoms = [] } = useQuery({
+   queryKey: ['inventory', 'uoms'],
+   queryFn: uomsApi.list,
+   staleTime: 300_000
  });
  const cpkThresholds = spcOptions?.capability_thresholds;
 
@@ -292,12 +298,14 @@ export default function InspectionSpecEditorPage() {
  </Select>
  </Td>
  <Td>
- <Input
+ <Select
  {...register(`items.${i}.unit_of_measure` as const)}
  error={errors.items?.[i]?.unit_of_measure?.message}
- placeholder="mm"
  className="font-mono"
- />
+ >
+ <option value="">—</option>
+ {uoms.map((u) => <option key={u.id} value={u.code}>{u.code}</option>)}
+ </Select>
  </Td>
  <Td align="right" mono>
  <Input

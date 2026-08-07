@@ -5,7 +5,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Pencil, Trash2, ArchiveRestore } from 'lucide-react';
 import { leaveTypesApi } from '@/api/leave';
-import { ArchiveFilter, archiveToTrashed, type ArchiveScope } from '@/components/ui/ArchiveFilter';
+import { ArchiveFilter } from '@/components/ui/ArchiveFilter';
+import { archiveToTrashed, type ArchiveScope } from '@/lib/archiveScope';
 import { DataTable } from '@/components/ui/DataTable';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -95,10 +96,10 @@ export default function LeaveTypesPage() {
  setEditTarget(lt);
  reset({
  name: lt.name, code: lt.code, default_balance: Number(lt.default_balance),
- max_carryover_days: lt.max_carryover_days ? Number(lt.max_carryover_days) : '' as any,
+ max_carryover_days: lt.max_carryover_days ? Number(lt.max_carryover_days) : '',
  is_paid: lt.is_paid, requires_document: lt.requires_document,
  is_convertible_on_separation: lt.is_convertible_on_separation, is_convertible_year_end: lt.is_convertible_year_end,
- conversion_rate: lt.conversion_rate ? Number(lt.conversion_rate) : '' as any,
+ conversion_rate: lt.conversion_rate ? Number(lt.conversion_rate) : '',
  is_active: lt.is_active,
  });
  };

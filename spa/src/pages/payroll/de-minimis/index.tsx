@@ -5,7 +5,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Plus, Trash2, ArchiveRestore } from 'lucide-react';
 import { client } from '@/api/client';
-import { ArchiveFilter, archiveToTrashed, type ArchiveScope } from '@/components/ui/ArchiveFilter';
+import { employeesApi } from '@/api/hr/employees';
+import { ArchiveFilter } from '@/components/ui/ArchiveFilter';
+import { archiveToTrashed, type ArchiveScope } from '@/lib/archiveScope';
 import { DataTable } from '@/components/ui/DataTable';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -57,11 +59,17 @@ const [showCreate, setShowCreate] = useState(false);
  const [scope, setScope] = useState<ArchiveScope>('active');
  const [filters, setFilters] = useState<ListParams & { period_year?: string; period_month?: string; benefit_type?: string }>({ per_page: 25 });
 
- const { data, isLoading, isError } = useQuery({
- queryKey: ['de-minimis', filters, { trashed: archiveToTrashed(scope) }],
- queryFn: () => client.get('/payroll/de-minimis', { params: { ...filters, trashed: archiveToTrashed(scope) } }).then((r) => r.data),
- placeholderData: (prev) => prev,
- });
+  const { data, isLoading, isError } = useQuery({
+  queryKey: ['de-minimis', filters, { trashed: archiveToTrashed(scope) }],
+  queryFn: () => client.get('/payroll/de-minimis', { params: { ...filters, trashed: archiveToTrashed(scope) } }).then((r) => r.data),
+  placeholderData: (prev) => prev,
+  });
+
+  const { data: employees } = useQuery({
+    queryKey: ['hr', 'employees', 'active'],
+    queryFn: () => employeesApi.list({ per_page: 500, status: 'active' }),
+  });
+
   const items: DeMinimisRow[] = data?.data ?? [];
   const meta = data?.meta;
 
@@ -125,7 +133,12 @@ const deleteMutation = useMutation({
       {showCreate && (
         <Modal isOpen onClose={() => setShowCreate(false)} title="Record de minimis benefit">
           <form onSubmit={handleSubmit((d) => createMutation.mutate(d))} className="space-y-3 py-2">
-            <Input label="Employee ID (hash)" required {...register('employee_id')} error={errors.employee_id?.message} placeholder="Enter employee hash ID" />
+            <Select label="Employee" required {...register('employee_id')} error={errors.employee_id?.message}>
+              <option value="">— Select Employee —</option>
+              {employees?.data.map((e) => (
+                <option key={e.id} value={e.id}>{e.first_name} {e.last_name}</option>
+              ))}
+            </Select>
             <Select label="Benefit type" required {...register('benefit_type')} error={errors.benefit_type?.message}>
               <option value="">— Select —</option>
               {BENEFIT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}

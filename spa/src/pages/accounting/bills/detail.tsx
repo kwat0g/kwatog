@@ -311,7 +311,7 @@ export default function BillDetailPage() {
  {cashAccts.map((a) => <option key={a.id} value={a.id}>{a.code} — {a.name}</option>)}
  </Select>
  <Input label="Payment date" type="date" required {...register('payment_date')} error={errors.payment_date?.message} />
- <Input label={`Amount (max ${formatPeso(bill.balance)})`} type="number" step="0.01" min="0.01" max={bill.balance}
+ <Input label={`Amount (max ${formatPeso(bill.balance)})`} step="0.01" min="0.01" max={bill.balance}
  className="font-mono tabular-nums text-right" required prefix="₱" {...numberInputProps()}
  {...register('amount')} error={errors.amount?.message} />
  <Select label="Method" required {...register('payment_method')} error={errors.payment_method?.message}>

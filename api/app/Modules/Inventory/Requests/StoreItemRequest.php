@@ -33,7 +33,7 @@ class StoreItemRequest extends FormRequest
             'description'            => ['nullable', 'string', 'max:1000'],
             'category_id'            => ['required', 'integer', 'exists:item_categories,id'],
             'item_type'              => ['required', Rule::in(ItemType::values())],
-            'unit_of_measure'        => ['required', 'string', 'max:20'],
+            'unit_of_measure'        => ['required', 'string', 'max:20', $this->uomExistsRule()],
             'standard_cost'          => ['required', 'decimal:0,4', 'min:0'],
             'reorder_method'         => ['required', Rule::in(ReorderMethod::values())],
             'reorder_point'          => ['required', 'decimal:0,3', 'min:0'],
@@ -43,5 +43,14 @@ class StoreItemRequest extends FormRequest
             'is_critical'            => ['nullable', 'boolean'],
             'is_active'              => ['nullable', 'boolean'],
         ];
+    }
+
+    /**
+     * unit_of_measure must belong to the canonical `uoms` catalog. Matching is
+     * case-insensitive so a seed/import value like `pcs` still maps to `PCS`.
+     */
+    private function uomExistsRule(): \Illuminate\Validation\Rules\Exists
+    {
+        return Rule::exists('uoms', 'code')->where(fn ($query) => $query->whereRaw('LOWER(code) = LOWER(?)', [strval($this->input('unit_of_measure'))]));
     }
 }

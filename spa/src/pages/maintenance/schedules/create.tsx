@@ -7,6 +7,8 @@ import { z } from 'zod';
 import toast from 'react-hot-toast';
 import type { AxiosError } from 'axios';
 import { schedulesApi } from '@/api/maintenance/schedules';
+import { machinesApi } from '@/api/mrp/machines';
+import { moldsApi } from '@/api/mrp/molds';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -15,8 +17,8 @@ import { onFormInvalid } from '@/lib/formErrors';
 import type { ApiValidationError } from '@/types';
 
 const schema = z.object({
- maintainable_type: z.string().min(1, 'Target type required'),
- maintainable_id: z.coerce.number().int().min(1, 'Target ID required'),
+  maintainable_type: z.string().min(1, 'Target type required'),
+  maintainable_id: z.string().min(1, 'Target ID required'),
  description: z.string().min(1).max(200),
  interval_type: z.string().min(1, 'Interval type required'),
  interval_value: z.coerce.number().int().min(1),
@@ -28,10 +30,20 @@ export default function CreateMaintenanceSchedulePage() {
  const navigate = useNavigate();
  const qc = useQueryClient();
  const { data: options } = useQuery({ queryKey: ['maintenance', 'schedule-options'], queryFn: () => schedulesApi.options() });
- const { register, handleSubmit, setError, formState: { errors, isSubmitting } } = useForm<FormValues>({
+ const { register, handleSubmit, setError, watch, formState: { errors, isSubmitting } } = useForm<FormValues>({
  resolver: zodResolver(schema),
- defaultValues: { maintainable_type: '', interval_type: '', is_active: true },
+ defaultValues: { maintainable_type: '', maintainable_id: '', interval_type: '', is_active: true },
  });
+
+ const maintainableType = watch('maintainable_type');
+ const machines = useQuery({ queryKey: ['mrp', 'machines'], queryFn: () => machinesApi.list({ per_page: 200 }), enabled: maintainableType === 'machine' });
+ const molds = useQuery({ queryKey: ['mrp', 'molds'], queryFn: () => moldsApi.list({ per_page: 200 }), enabled: maintainableType === 'mold' });
+
+ const targetOptions = maintainableType === 'machine'
+   ? (machines.data?.data ?? []).map((m) => ({ value: m.id, label: `${m.machine_code} - ${m.name}` }))
+   : maintainableType === 'mold'
+     ? (molds.data?.data ?? []).map((m) => ({ value: m.id, label: `${m.mold_code} - ${m.name}` }))
+     : [];
 
  const mutation = useMutation({
  mutationFn: (data: FormValues) => schedulesApi.create(data as Parameters<typeof schedulesApi.create>[0]),
@@ -60,7 +72,10 @@ export default function CreateMaintenanceSchedulePage() {
  <option value="">— Select —</option>
  {(options?.maintainable_types ?? []).map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
  </Select>
- <Input label="Target ID" type="number" {...register('maintainable_id')} error={errors.maintainable_id?.message} required />
+ <Select label="Target" {...register('maintainable_id')} error={errors.maintainable_id?.message} disabled={!maintainableType} required>
+   <option value="">— Select Target —</option>
+   {targetOptions.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+ </Select>
  </div>
  </fieldset>
 

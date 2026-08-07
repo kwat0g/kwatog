@@ -8,7 +8,8 @@ import { schedulesApi, type ScheduleListParams } from '@/api/maintenance/schedul
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { ArchiveFilter, archiveToTrashed, type ArchiveScope } from '@/components/ui/ArchiveFilter';
+import { ArchiveFilter } from '@/components/ui/ArchiveFilter';
+import { archiveToTrashed, type ArchiveScope } from '@/lib/archiveScope';
 import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FilterBar, type FilterConfig } from '@/components/ui/FilterBar';

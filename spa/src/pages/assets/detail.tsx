@@ -19,175 +19,241 @@ import { Td, Th, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells
 import { formatPeso } from '@/lib/formatNumber';
 
 export default function AssetDetailPage() {
- const { id = '' } = useParams<{ id: string }>();
- const navigate = useNavigate();
- const qc = useQueryClient();
- const { can } = usePermission();
- const [disposeOpen, setDisposeOpen] = useState(false);
- const [disposalAmount, setDisposalAmount] = useState<string>('');
+  const { id = '' } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const { can } = usePermission();
+  const [disposeOpen, setDisposeOpen] = useState(false);
+  const [disposalAmount, setDisposalAmount] = useState<string>('');
+  const disposalError = !/^\d+(\.\d{1,2})?$/.test(disposalAmount)
+    ? disposalAmount === ''
+      ? 'Disposal proceeds is required.'
+      : 'Enter a valid amount, up to 2 decimals.'
+    : Number(disposalAmount) < 0
+      ? 'Amount cannot be negative.'
+      : undefined;
 
- const { data, isLoading, isError, refetch } = useQuery({
- queryKey: ['asset', id],
- queryFn: () => assetsApi.show(id),
- });
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['asset', id],
+    queryFn: () => assetsApi.show(id),
+  });
 
- const { data: qrData } = useQuery({
- queryKey: ['asset', id, 'qr'],
- queryFn: () => assetsApi.qr(id),
- enabled: !!id && !!data,
- staleTime: Infinity,
- });
- const { data: assetOptions } = useQuery({
- queryKey: ['assets', 'options'],
- queryFn: assetsApi.options,
- staleTime: 300_000,
- });
- const statusLabel = assetOptions?.statuses.find((option) => option.value === data?.status)?.label;
- const categoryLabel = assetOptions?.categories.find((option) => option.value === data?.category)?.label;
+  const { data: qrData } = useQuery({
+    queryKey: ['asset', id, 'qr'],
+    queryFn: () => assetsApi.qr(id),
+    enabled: !!id && !!data,
+    staleTime: Infinity,
+  });
+  const { data: assetOptions } = useQuery({
+    queryKey: ['assets', 'options'],
+    queryFn: assetsApi.options,
+    staleTime: 300_000,
+  });
+  const statusLabel = assetOptions?.statuses.find((option) => option.value === data?.status)?.label;
+  const categoryLabel = assetOptions?.categories.find(
+    (option) => option.value === data?.category,
+  )?.label;
 
- const dispose = useMutation({
- mutationFn: () => assetsApi.dispose(id, { disposal_amount: disposalAmount }),
- onSuccess: () => {
- qc.invalidateQueries({ queryKey: ['asset', id] });
- qc.invalidateQueries({ queryKey: ['assets'] });
- toast.success('Asset disposed and JE posted.');
- setDisposeOpen(false);
- },
- onError: () => toast.error('Failed to dispose asset.'),
- });
+  const dispose = useMutation({
+    mutationFn: () => assetsApi.dispose(id, { disposal_amount: disposalAmount }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['asset', id] });
+      qc.invalidateQueries({ queryKey: ['assets'] });
+      toast.success('Asset disposed and JE posted.');
+      setDisposeOpen(false);
+    },
+    onError: () => toast.error('Failed to dispose asset.'),
+  });
 
- if (isLoading) return <SkeletonDetail />;
- if (isError || !data) {
- return <EmptyState icon="alert-circle" title="Failed to load asset"
- action={<Button variant="secondary" onClick={() => refetch()}>Retry</Button>} />;
- }
+  if (isLoading) return <SkeletonDetail />;
+  if (isError || !data) {
+    return (
+      <EmptyState
+        icon="alert-circle"
+        title="Failed to load asset"
+        action={
+          <Button variant="secondary" onClick={() => refetch()}>
+            Retry
+          </Button>
+        }
+      />
+    );
+  }
 
- return (
- <div>
- <PageHeader
- title={data.asset_code}
- subtitle={data.name}
- backTo="/assets"
- backLabel="Assets"
- breadcrumbs={[{ label: 'Assets', href: '/assets' }, { label: data.asset_code }]}
- actions={
- <div className="flex gap-1.5 items-center">
- <Chip variant={data.status === 'active' ? 'success' : data.status === 'under_maintenance' ? 'warning' : 'neutral'}>
- {statusLabel ?? data.status}
- </Chip>
- {can('assets.create') && (
- <Button variant="secondary" size="sm" onClick={() => navigate(`/assets/${id}/edit`)}>
- <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
- </Button>
- )}
- {data.status === 'active' && can('assets.dispose') && (
- <Button variant="danger" size="sm" onClick={() => setDisposeOpen(true)}>Dispose</Button>
- )}
- </div>
- }
- />
+  return (
+    <div>
+      <PageHeader
+        title={data.asset_code}
+        subtitle={data.name}
+        backTo="/assets"
+        backLabel="Assets"
+        breadcrumbs={[{ label: 'Assets', href: '/assets' }, { label: data.asset_code }]}
+        actions={
+          <div className="flex gap-1.5 items-center">
+            <Chip
+              variant={
+                data.status === 'active'
+                  ? 'success'
+                  : data.status === 'under_maintenance'
+                    ? 'warning'
+                    : 'neutral'
+              }
+            >
+              {statusLabel ?? data.status}
+            </Chip>
+            {can('assets.create') && (
+              <Button variant="secondary" size="sm" onClick={() => navigate(`/assets/${id}/edit`)}>
+                <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
+              </Button>
+            )}
+            {data.status === 'active' && can('assets.dispose') && (
+              <Button variant="danger" size="sm" onClick={() => setDisposeOpen(true)}>
+                Dispose
+              </Button>
+            )}
+          </div>
+        }
+      />
 
- <div className="px-5 pt-3 pb-4 grid grid-cols-4 gap-2">
- <StatCard label="Acquisition" value={formatPeso(data.acquisition_cost)} />
- <StatCard label="Accumulated dep." value={formatPeso(data.accumulated_depreciation)} />
- <StatCard label="Book value" value={formatPeso(data.book_value)} />
- <StatCard label="Monthly dep." value={formatPeso(data.monthly_depreciation)} />
- </div>
+      <div className="px-5 pt-3 pb-4 grid grid-cols-4 gap-2">
+        <StatCard label="Acquisition" value={formatPeso(data.acquisition_cost)} />
+        <StatCard label="Accumulated dep." value={formatPeso(data.accumulated_depreciation)} />
+        <StatCard label="Book value" value={formatPeso(data.book_value)} />
+        <StatCard label="Monthly dep." value={formatPeso(data.monthly_depreciation)} />
+      </div>
 
- <div className="px-5 pb-6 grid grid-cols-3 gap-4">
- <div className="col-span-2">
- <Panel title="Depreciation history" meta={data.depreciations?.length ? `${data.depreciations.length} months` : undefined}>
- {data.depreciations && data.depreciations.length > 0 ? (
- <table className={tableCls}>
- <thead>
- <tr className={theadTrCls}>
- <Th>Period</Th>
- <Th align="right">Amount</Th>
- <Th align="right">Accumulated</Th>
- </tr>
- </thead>
- <tbody>
- {data.depreciations.map((d) => (
- <tr key={d.id} className={trCls}>
- <Td mono>{d.period_year}-{String(d.period_month).padStart(2, '0')}</Td>
- <Td align="right" mono>{formatPeso(d.depreciation_amount)}</Td>
- <Td align="right" mono>{formatPeso(d.accumulated_after)}</Td>
- </tr>
- ))}
- </tbody>
- </table>
- ) : (
- <p className="text-sm text-muted">No depreciation posted yet.</p>
- )}
- </Panel>
- </div>
- <aside className="space-y-4">
- <Panel title="Details">
- <dl className="text-sm divide-y divide-subtle">
- <Row label="Category">{data.category_label ?? categoryLabel ?? data.category}</Row>
- <Row label="Acquired">{data.acquisition_date}</Row>
- <Row label="Useful life">{data.useful_life_years} years</Row>
- <Row label="Salvage"><span className="font-mono">{formatPeso(data.salvage_value)}</span></Row>
- <Row label="Location">{data.location ?? '—'}</Row>
- <Row label="Department">{data.department?.name ?? '—'}</Row>
- {data.disposed_date && <Row label="Disposed">{data.disposed_date}</Row>}
- {data.disposal_amount && <Row label="Proceeds"><span className="font-mono">{formatPeso(data.disposal_amount)}</span></Row>}
- </dl>
- </Panel>
+      <div className="px-5 pb-6 grid grid-cols-3 gap-4">
+        <div className="col-span-2">
+          <Panel
+            title="Depreciation history"
+            meta={data.depreciations?.length ? `${data.depreciations.length} months` : undefined}
+          >
+            {data.depreciations && data.depreciations.length > 0 ? (
+              <table className={tableCls}>
+                <thead>
+                  <tr className={theadTrCls}>
+                    <Th>Period</Th>
+                    <Th align="right">Amount</Th>
+                    <Th align="right">Accumulated</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.depreciations.map((d) => (
+                    <tr key={d.id} className={trCls}>
+                      <Td mono>
+                        {d.period_year}-{String(d.period_month).padStart(2, '0')}
+                      </Td>
+                      <Td align="right" mono>
+                        {formatPeso(d.depreciation_amount)}
+                      </Td>
+                      <Td align="right" mono>
+                        {formatPeso(d.accumulated_after)}
+                      </Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p className="text-sm text-muted">No depreciation posted yet.</p>
+            )}
+          </Panel>
+        </div>
+        <aside className="space-y-4">
+          <Panel title="Details">
+            <dl className="text-sm divide-y divide-subtle">
+              <Row label="Category">{data.category_label ?? categoryLabel ?? data.category}</Row>
+              <Row label="Acquired">{data.acquisition_date}</Row>
+              <Row label="Useful life">{data.useful_life_years} years</Row>
+              <Row label="Salvage">
+                <span className="font-mono">{formatPeso(data.salvage_value)}</span>
+              </Row>
+              <Row label="Location">{data.location ?? '—'}</Row>
+              <Row label="Department">{data.department?.name ?? '—'}</Row>
+              {data.disposed_date && <Row label="Disposed">{data.disposed_date}</Row>}
+              {data.disposal_amount && (
+                <Row label="Proceeds">
+                  <span className="font-mono">{formatPeso(data.disposal_amount)}</span>
+                </Row>
+              )}
+            </dl>
+          </Panel>
 
- {/* QR code */}
- {qrData && (
- <Panel title="QR code">
- <div className="flex flex-col items-center gap-3 py-2">
- {qrData.url ? (
- <img src={qrData.url} alt={`QR for ${qrData.asset_code}`} className="w-40 h-40 rounded border border-default" />
- ) : (
- <div className="w-40 h-40 rounded border border-default bg-elevated flex items-center justify-center text-xs text-muted">
- No QR image
- </div>
- )}
- <p className="text-xs font-mono text-muted">{qrData.asset_code}</p>
- {qrData.url && (
- <a
- href={qrData.url}
- download={`${qrData.asset_code}-qr.png`}
- className="text-xs text-accent hover:underline"
- target="_blank"
- rel="noopener noreferrer"
- >
- Download QR
- </a>
- )}
- </div>
- </Panel>
- )}
- </aside>
- </div>
+          {/* QR code */}
+          {qrData && (
+            <Panel title="QR code">
+              <div className="flex flex-col items-center gap-3 py-2">
+                {qrData.url ? (
+                  <img
+                    src={qrData.url}
+                    alt={`QR for ${qrData.asset_code}`}
+                    className="w-40 h-40 rounded border border-default"
+                  />
+                ) : (
+                  <div className="w-40 h-40 rounded border border-default bg-elevated flex items-center justify-center text-xs text-muted">
+                    No QR image
+                  </div>
+                )}
+                <p className="text-xs font-mono text-muted">{qrData.asset_code}</p>
+                {qrData.url && (
+                  <a
+                    href={qrData.url}
+                    download={`${qrData.asset_code}-qr.png`}
+                    className="text-xs text-accent hover:underline"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Download QR
+                  </a>
+                )}
+              </div>
+            </Panel>
+          )}
+        </aside>
+      </div>
 
- <Modal isOpen={disposeOpen} onClose={() => setDisposeOpen(false)} size="sm" title="Dispose asset">
- <div className="py-3 space-y-3">
- <p className="text-sm text-secondary">
- Disposing posts a journal entry that nets accumulated depreciation against the asset cost and books gain or loss against the proceeds.
- </p>
- <Input label="Disposal proceeds" value={disposalAmount}
- onChange={(e) => setDisposalAmount(e.target.value)} className="font-mono" />
- </div>
- <div className="flex justify-end gap-2 pt-3 border-t border-default">
- <Button variant="secondary" onClick={() => setDisposeOpen(false)}>Cancel</Button>
- <Button variant="danger" onClick={() => dispose.mutate()} loading={dispose.isPending}>
- {dispose.isPending ? 'Disposing…' : 'Confirm dispose'}
- </Button>
- </div>
- </Modal>
- </div>
- );
+      <Modal
+        isOpen={disposeOpen}
+        onClose={() => setDisposeOpen(false)}
+        size="sm"
+        title="Dispose asset"
+      >
+        <div className="py-3 space-y-3">
+          <p className="text-sm text-secondary">
+            Disposing posts a journal entry that nets accumulated depreciation against the asset
+            cost and books gain or loss against the proceeds.
+          </p>
+          <Input
+            label="Disposal proceeds"
+            value={disposalAmount}
+            onChange={(e) => setDisposalAmount(e.target.value)}
+            error={disposalError}
+            prefix="₱"
+            className="font-mono"
+          />
+        </div>
+        <div className="flex justify-end gap-2 pt-3 border-t border-default">
+          <Button variant="secondary" onClick={() => setDisposeOpen(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="danger"
+            onClick={() => dispose.mutate()}
+            loading={dispose.isPending}
+            disabled={!!disposalError}
+          >
+            {dispose.isPending ? 'Disposing…' : 'Confirm dispose'}
+          </Button>
+        </div>
+      </Modal>
+    </div>
+  );
 }
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
- return (
- <div className="flex justify-between py-1.5">
- <span className="text-xs uppercase tracking-wider text-muted">{label}</span>
- <span>{children}</span>
- </div>
- );
+  return (
+    <div className="flex justify-between py-1.5">
+      <span className="text-xs uppercase tracking-wider text-muted">{label}</span>
+      <span>{children}</span>
+    </div>
+  );
 }

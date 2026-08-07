@@ -4,6 +4,7 @@ import { useParams } from 'react-router-dom';
 import { Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { itemQualityPlansApi, itemsApi } from '@/api/inventory/items';
+import { uomsApi } from '@/api/inventory/uoms';
 import { vendorsApi } from '@/api/accounting/vendors';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/Button';
@@ -44,6 +45,7 @@ export default function ItemQualityPlansPage() {
  const item = useQuery({ queryKey: ['inventory', 'items', id], queryFn: () => itemsApi.show(id), enabled: !!id });
  const plans = useQuery({ queryKey: ['inventory', 'quality-plans', id], queryFn: () => itemQualityPlansApi.list(id), enabled: !!id });
  const vendors = useQuery({ queryKey: ['vendors', 'quality-plan-picker'], queryFn: () => vendorsApi.list({ per_page: 100, is_active: true }) });
+ const { data: uoms = [] } = useQuery({ queryKey: ['inventory', 'uoms'], queryFn: uomsApi.list, staleTime: 300_000 });
  const planOptions = useQuery({ queryKey: ['inventory', 'quality-plans', 'options'], queryFn: () => itemQualityPlansApi.options() });
  const samplingOptions = planOptions.data?.sampling_methods ?? [];
  const parameterOptions = planOptions.data?.parameter_types ?? [];
@@ -107,7 +109,10 @@ export default function ItemQualityPlansPage() {
  <Select value={parameter.parameter_type} onChange={(e) => updateParameter(index, { parameter_type: e.target.value as DraftParameter['parameter_type'] })}>
  {parameterOptions.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
  </Select>
- <Input placeholder="Unit" value={parameter.unit_of_measure ?? ''} onChange={(e) => updateParameter(index, { unit_of_measure: e.target.value })} />
+ <Select value={parameter.unit_of_measure ?? ''} onChange={(e) => updateParameter(index, { unit_of_measure: e.target.value })}>
+   <option value="">Unit</option>
+   {uoms.map((u) => <option key={u.id} value={u.code}>{u.code}</option>)}
+ </Select>
  <Input type="number" step="any" placeholder="Min" value={parameter.tolerance_min ?? ''} onChange={(e) => updateParameter(index, { tolerance_min: e.target.value === '' ? null : Number(e.target.value) })} />
  <div className="flex gap-1"><Input type="number" step="any" placeholder="Max" value={parameter.tolerance_max ?? ''} onChange={(e) => updateParameter(index, { tolerance_max: e.target.value === '' ? null : Number(e.target.value) })} /><Button type="button" variant="ghost" size="sm" iconOnly icon={<Trash2 size={14} />} aria-label="Remove parameter" disabled={parameters.length === 1} onClick={() => setParameters((p) => p.filter((_, i) => i !== index))} className="text-muted hover:text-danger" /></div>
  <Checkbox className="col-span-2" label="Critical characteristic" checked={parameter.is_critical} onChange={(e) => updateParameter(index, { is_critical: e.target.checked })} />

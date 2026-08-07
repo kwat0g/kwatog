@@ -9,6 +9,7 @@ use App\Modules\Inventory\Enums\ItemType;
 use App\Modules\Inventory\Enums\ReorderMethod;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\ItemCategory;
+use App\Modules\Inventory\Models\Uom;
 use Illuminate\Database\Eloquent\Model;
 use RuntimeException;
 
@@ -52,12 +53,24 @@ class ItemImporter implements EntityImporter
         if ($uom === '') {
             throw new RuntimeException('unit_of_measure is required.');
         }
+        if (strlen($uom) > 20) {
+            throw new RuntimeException("unit_of_measure '{$uom}' exceeds the 20-character limit.");
+        }
         if ($categoryName === '') {
             throw new RuntimeException('category is required.');
         }
         if (Item::query()->where('code', $code)->exists()) {
             throw new RuntimeException("Item code '{$code}' already exists.");
         }
+
+        // Resolve the unit of measure against the canonical `uoms` catalog.
+        // Case is normalized so `kg`/`Kg` map to `KG`; unknown units are
+        // created (uppercased) so conversions can reference them later.
+        $uomRow = Uom::firstOrCreate(
+            ['code' => mb_strtoupper($uom)],
+            ['name' => mb_strtoupper($uom)],
+        );
+        $uom = $uomRow->code;
 
         $category = ItemCategory::firstOrCreate(['name' => $categoryName]);
 

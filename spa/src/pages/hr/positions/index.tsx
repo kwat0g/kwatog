@@ -8,7 +8,8 @@ import { AxiosError } from 'axios';
 import { Plus, Pencil, Trash2, ArchiveRestore } from 'lucide-react';
 import { positionsApi } from '@/api/hr/positions';
 import { departmentsApi } from '@/api/hr/departments';
-import { ArchiveFilter, archiveToTrashed, type ArchiveScope } from '@/components/ui/ArchiveFilter';
+import { ArchiveFilter } from '@/components/ui/ArchiveFilter';
+import { archiveToTrashed, type ArchiveScope } from '@/lib/archiveScope';
 import { Button } from '@/components/ui/Button';
 import {
  DataTable, NumCell, StackedCell, type Column,

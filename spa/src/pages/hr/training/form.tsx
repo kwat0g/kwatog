@@ -18,6 +18,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { SkeletonForm } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import type { ApiValidationError } from '@/types';
+import type { CreateTrainingData } from '@/types/hr';
 import { onFormInvalid } from '@/lib/formErrors';
 
 const schema = z.object({
@@ -30,6 +31,19 @@ const schema = z.object({
 });
 
 type FormValues = z.infer<typeof schema>;
+
+/**
+ * The optional numeric fields accept '' so the inputs can be cleared, but the
+ * API takes `number | undefined`. Drop the blanks rather than posting ''.
+ */
+const toPayload = (d: FormValues): CreateTrainingData => ({
+ name: d.name,
+ description: d.description === '' ? undefined : d.description,
+ duration_hours: d.duration_hours === '' ? undefined : d.duration_hours,
+ validity_months: d.validity_months === '' ? undefined : d.validity_months,
+ is_certification: d.is_certification,
+ department_id: d.department_id === '' ? undefined : d.department_id,
+});
 
 export default function TrainingFormPage() {
  const { id } = useParams<{ id: string }>();
@@ -58,8 +72,8 @@ export default function TrainingFormPage() {
  reset({
  name: training.name,
  description: training.description ?? '',
- duration_hours: training.duration_hours ?? '' as any,
- validity_months: training.validity_months ?? '' as any,
+ duration_hours: training.duration_hours ?? '',
+ validity_months: training.validity_months ?? '',
  is_certification: training.is_certification,
  department_id: training.department?.id ?? '',
  });
@@ -68,7 +82,7 @@ export default function TrainingFormPage() {
 
  const mutation = useMutation({
  mutationFn: (d: FormValues) =>
- isEdit ? trainingsApi.update(id!, d as any) : trainingsApi.create(d as any),
+ isEdit ? trainingsApi.update(id!, toPayload(d)) : trainingsApi.create(toPayload(d)),
  onSuccess: () => {
  qc.invalidateQueries({ queryKey: ['hr', 'trainings'] });
  toast.success(isEdit ? 'Training updated.' : 'Training created.');
@@ -100,7 +114,7 @@ export default function TrainingFormPage() {
  </div>
  <Select label="Department" {...register('department_id')} error={errors.department_id?.message}>
  <option value="">— All departments —</option>
- {depts.map((d: any) => <option key={d.id} value={d.id}>{d.name}</option>)}
+ {depts.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
  </Select>
  <Switch label="Is certification" {...register('is_certification')} />
  </div>

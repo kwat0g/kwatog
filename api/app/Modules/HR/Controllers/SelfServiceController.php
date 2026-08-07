@@ -23,6 +23,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
@@ -123,7 +124,7 @@ class SelfServiceController
         $employee = $this->currentEmployee($request);
 
         $validated = $request->validate([
-            'loan_type' => ['required', 'string', 'max:30'],
+            'loan_type' => ['required', Rule::in(collect($this->loans->types())->pluck('value')->all())],
             'amount' => ['required', 'numeric', 'min:1'],
             'periods' => ['required', 'integer', 'min:1', 'max:'.$this->settings->requiredInt('loans.max_pay_periods', 1, 120)],
             'reason' => ['nullable', 'string', 'max:500'],

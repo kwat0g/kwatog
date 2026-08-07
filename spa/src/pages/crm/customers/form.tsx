@@ -65,7 +65,7 @@ export function CustomerForm() {
  />
  <Input
  label="Payment terms (days)"
- type="number"
+ 
  min={0}
  max={365}
  className="font-mono tabular-nums text-right"
@@ -84,7 +84,7 @@ export function CustomerForm() {
  </div>
  <Input
  label="Credit limit"
- type="number"
+ 
  step="0.01"
  min="0"
  prefix="₱"

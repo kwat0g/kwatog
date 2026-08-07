@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
-import type { ArchiveScope } from '@/components/ui/ArchiveFilter';
-import { archiveToTrashed } from '@/components/ui/ArchiveFilter';
+import type { ArchiveScope } from '@/lib/archiveScope';
+import { archiveToTrashed } from '@/lib/archiveScope';
 
 /**
  * Manages the archive/trashed filter state for a list page.

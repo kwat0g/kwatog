@@ -33,7 +33,7 @@ export const leaveTypesApi = {
   delete: (id: string) => client.delete(`/leaves/types/${id}`),
   restore: (id: string) => client.patch(`/leaves/types/${id}/restore`),
   processYearEnd: (year?: number) =>
- client.post('/leaves/types/process-year-end', { year }).then((r) => r.data),
+ client.post<{ message?: string }>('/leaves/types/process-year-end', { year }).then((r) => r.data),
 };
 
 export const leaveBalancesApi = {

@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { itemsApi, itemCategoriesApi } from '@/api/inventory/items';
+import { uomsApi } from '@/api/inventory/uoms';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -54,6 +55,11 @@ export default function ItemFormPage({ mode }: { mode: 'create' | 'edit' }) {
  const { data: itemOptions } = useQuery({
  queryKey: ['inventory', 'items', 'options'],
  queryFn: () => itemsApi.options(),
+ });
+ const { data: uoms = [] } = useQuery({
+   queryKey: ['inventory', 'uoms'],
+   queryFn: uomsApi.list,
+   staleTime: 300_000
  });
 
  const defaults: FormValues = existing ? {
@@ -131,8 +137,10 @@ export default function ItemFormPage({ mode }: { mode: 'create' | 'edit' }) {
  <Select label="Item type" required {...register('item_type')} error={errors.item_type?.message}>
  {(itemOptions?.item_types ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
  </Select>
- <Input label="Unit of measure" required {...register('unit_of_measure')}
- placeholder="Enter unit of measure" error={errors.unit_of_measure?.message} />
+  <Select label="Unit of measure" required {...register('unit_of_measure')} error={errors.unit_of_measure?.message}>
+    <option value="">— Select UOM —</option>
+    {uoms.map((u) => <option key={u.id} value={u.code}>{u.code}</option>)}
+  </Select>
  <Input label="Standard cost" required {...register('standard_cost')}
  {...numberInputProps({ decimal: true })}
  className="font-mono tabular-nums text-right" error={errors.standard_cost?.message} />

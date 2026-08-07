@@ -8,6 +8,9 @@ use App\Modules\HR\Models\SuccessionPlan;
 use App\Modules\HR\Enums\SuccessionReadiness;
 use App\Modules\HR\Enums\SuccessionPriority;
 use App\Modules\HR\Enums\SuccessionStatus;
+use App\Modules\HR\Enums\EmployeeStatus;
+use App\Modules\HR\Models\Employee;
+use App\Modules\HR\Models\Position;
 use App\Modules\HR\Requests\StoreSuccessionPlanRequest;
 use App\Modules\HR\Requests\UpdateSuccessionPlanRequest;
 use App\Modules\HR\Resources\SuccessionPlanResource;
@@ -43,6 +46,20 @@ class SuccessionPlanController extends Controller
                 static fn (SuccessionPriority $priority): array => ['value' => $priority->value, 'label' => ucfirst($priority->value)],
                 SuccessionPriority::cases(),
             ),
+            'positions' => Position::query()
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->map(fn (Position $position): array => ['value' => $position->hash_id, 'label' => $position->name])
+                ->values()
+                ->all(),
+            'employees' => Employee::query()
+                ->whereIn('status', [EmployeeStatus::Active->value, EmployeeStatus::OnLeave->value])
+                ->orderBy('last_name')
+                ->orderBy('first_name')
+                ->get(['id', 'first_name', 'middle_name', 'last_name', 'suffix'])
+                ->map(fn (Employee $employee): array => ['value' => $employee->hash_id, 'label' => $employee->full_name])
+                ->values()
+                ->all(),
         ]]);
     }
 

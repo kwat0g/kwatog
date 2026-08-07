@@ -1,12 +1,14 @@
-import { Archive, ArchiveRestore, List } from 'lucide-react';
+import { Archive, List } from 'lucide-react';
 import { SegmentedControl } from './SegmentedControl';
-
-export type ArchiveScope = 'active' | 'with' | 'only';
+import type { ArchiveScope } from '@/lib/archiveScope';
 
 /**
  * Segmented toggle for filtering tables by archive state. Mirrors the backend
  * `trashed` list parameter: undefined/active = active rows only, `with` =
  * active + archived, `only` = archived rows only.
+ *
+ * `ArchiveScope` and `archiveToTrashed` live in `@/lib/archiveScope` — this
+ * module exports components only, so Fast Refresh keeps working.
  */
 export function ArchiveFilter({
  value,
@@ -36,16 +38,3 @@ export function ArchiveFilter({
   />
  );
 }
-
-export function archiveToTrashed(scope: ArchiveScope): 'with' | 'only' | undefined {
- if (scope === 'active') return undefined;
- return scope;
-}
-
-export function trashedToArchive(trashed: string | undefined): ArchiveScope {
- if (trashed === 'with') return 'with';
- if (trashed === 'only') return 'only';
- return 'active';
-}
-
-export const RestoreIcon = ArchiveRestore;

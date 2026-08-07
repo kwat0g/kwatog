@@ -184,7 +184,7 @@ export default function CreditNoteDetailPage() {
  <option value="">— Select —</option>
  {(openDocs ?? []).map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
  </Select>
- <Input label="Amount" type="number" step="0.01" min="0.01" required
+ <Input label="Amount" step="0.01" min="0.01" required
  className="font-mono tabular-nums text-right" {...numberInputProps()}
  {...register('amount')} error={errors.amount?.message}
  helper={`Credit balance available: ${formatPeso(cn.balance)}`} />

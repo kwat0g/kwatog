@@ -139,13 +139,13 @@ export default function CreateJournalEntryPage() {
  <Input placeholder="Memo" {...register(`lines.${idx}.description` as const)} />
  </div>
  <div className="col-span-2">
- <Input type="number" step="0.01" min="0" placeholder="0.00"
+ <Input step="0.01" min="0" placeholder="0.00"
  className="font-mono tabular-nums text-right"
  {...numberInputProps()}
  {...register(`lines.${idx}.debit` as const)} error={errors.lines?.[idx]?.debit?.message} />
  </div>
  <div className="col-span-2">
- <Input type="number" step="0.01" min="0" placeholder="0.00"
+ <Input step="0.01" min="0" placeholder="0.00"
  className="font-mono tabular-nums text-right"
  {...numberInputProps()}
  {...register(`lines.${idx}.credit` as const)} error={errors.lines?.[idx]?.credit?.message} />

@@ -78,9 +78,9 @@ export interface MaintenanceWorkOrder {
 }
 
 export interface CreateMaintenanceScheduleData {
- maintainable_type: MaintainableType;
- maintainable_id: number;
- description: string;
+  maintainable_type: MaintainableType;
+  maintainable_id: string;
+  description: string;
  interval_type: MaintenanceScheduleInterval;
  interval_value: number;
  last_performed_at?: string | null;
@@ -88,9 +88,9 @@ export interface CreateMaintenanceScheduleData {
 }
 
 export interface CreateMaintenanceWorkOrderData {
- maintainable_type: MaintainableType;
- maintainable_id: number;
- type: MaintenanceWorkOrderType;
+  maintainable_type: MaintainableType;
+  maintainable_id: string;
+  type: MaintenanceWorkOrderType;
  priority: MaintenancePriority;
  description: string;
 }

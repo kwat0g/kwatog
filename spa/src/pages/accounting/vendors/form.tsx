@@ -95,7 +95,7 @@ export default function VendorFormPage({ mode }: { mode: 'create' | 'edit' }) {
  <Input label="Phone" {...register('phone')} error={errors.phone?.message} />
  <Textarea label="Address" rows={2} className="col-span-2" {...register('address')} error={errors.address?.message} />
  <Input label="TIN" {...register('tin')} error={errors.tin?.message} />
- <Input label="Payment terms (days)" type="number" min={0} max={365} className="font-mono tabular-nums text-right"
+ <Input label="Payment terms (days)" min={0} max={365} className="font-mono tabular-nums text-right"
  {...numberInputProps({ decimal: false })}
  {...register('payment_terms_days')} error={errors.payment_terms_days?.message} />
  </div>

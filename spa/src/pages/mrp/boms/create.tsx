@@ -17,6 +17,7 @@ import { AxiosError } from 'axios';
 import { Plus, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { onFormInvalid } from '@/lib/formErrors';
+import { uomsApi } from '@/api/inventory/uoms';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -53,6 +54,8 @@ export default function CreateBomPage() {
  queryKey: ['inventory', 'items', 'lookup'],
  queryFn: () => itemsApi.list({ per_page: 200 }),
  });
+
+ const { data: uoms = [] } = useQuery({ queryKey: ['inventory', 'uoms'], queryFn: uomsApi.list, staleTime: 300_000 });
 
  const {
  register, control, handleSubmit, setError, watch,
@@ -168,12 +171,14 @@ export default function CreateBomPage() {
  />
  </Td>
  <Td>
- <Input
+ <Select
  {...register(`items.${i}.unit` as const)}
  error={errors.items?.[i]?.unit?.message}
- placeholder="kg"
  className="font-mono"
- />
+ >
+ <option value="">—</option>
+ {uoms.map((u) => <option key={u.id} value={u.code}>{u.code}</option>)}
+ </Select>
  </Td>
  <Td align="right" mono>
  <Input

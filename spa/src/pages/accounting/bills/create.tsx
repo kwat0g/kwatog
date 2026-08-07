@@ -254,14 +254,14 @@ export default function CreateBillPage() {
  {accounts.map((a) => <option key={a.id} value={a.id}>{a.code} — {a.name}</option>)}
  </Select>
  </div>
- <div className="col-span-1"><Input type="number" step="0.01" min="0.01" className="font-mono tabular-nums text-right" {...numberInputProps()} {...register(`items.${idx}.quantity` as const)} /></div>
+ <div className="col-span-1"><Input step="0.01" min="0.01" className="font-mono tabular-nums text-right" {...numberInputProps()} {...register(`items.${idx}.quantity` as const)} /></div>
  <div className="col-span-1">
  <Select {...register(`items.${idx}.unit` as const)}>
  <option value="">—</option>
  {uoms.map((uom) => <option key={uom.id} value={uom.code}>{uom.code}</option>)}
  </Select>
  </div>
- <div className="col-span-2"><Input type="number" step="0.01" min="0" className="font-mono tabular-nums text-right" {...numberInputProps()} {...register(`items.${idx}.unit_price` as const)} /></div>
+ <div className="col-span-2"><Input step="0.01" min="0" className="font-mono tabular-nums text-right" {...numberInputProps()} {...register(`items.${idx}.unit_price` as const)} /></div>
  <div className="col-span-1 pt-1.5 text-right font-mono tabular-nums text-sm">{formatPeso(lineTotal)}</div>
  <div className="col-span-1 flex justify-end pt-1.5">
  {fields.length > 1 && (

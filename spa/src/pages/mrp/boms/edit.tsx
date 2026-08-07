@@ -20,6 +20,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonDetail } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { itemsApi } from '@/api/inventory/items';
+import { uomsApi } from '@/api/inventory/uoms';
 import { bomsApi } from '@/api/mrp/boms';
 import type { CreateBomData } from '@/api/mrp/boms';
 import type { Path } from 'react-hook-form';
@@ -57,6 +58,7 @@ export default function EditBomPage() {
  queryKey: ['inventory', 'items', 'lookup'],
  queryFn: () => itemsApi.list({ per_page: 200 }),
  });
+ const { data: uoms = [] } = useQuery({ queryKey: ['inventory', 'uoms'], queryFn: uomsApi.list, staleTime: 300_000 });
 
  const {
  register, control, handleSubmit, setError, setValue, watch,
@@ -215,12 +217,14 @@ export default function EditBomPage() {
  />
  </Td>
  <Td>
- <Input
+ <Select
  {...register(`items.${i}.unit` as const)}
  error={errors.items?.[i]?.unit?.message}
- placeholder="kg"
  className="font-mono"
- />
+ >
+ <option value="">—</option>
+ {uoms.map((u) => <option key={u.id} value={u.code}>{u.code}</option>)}
+ </Select>
  </Td>
  <Td align="right" mono>
  <Input

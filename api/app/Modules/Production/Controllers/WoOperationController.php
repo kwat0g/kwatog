@@ -140,7 +140,7 @@ class WoOperationController
     {
         $request->validate([
             'qty'          => ['required', 'numeric', 'min:0.0001'],
-            'scrap'        => ['nullable', 'numeric', 'min:0'],
+            'scrap'        => ['nullable', 'numeric', 'min:0', 'lte:qty'],
             'scrap_reason' => ['nullable', 'string', 'max:500'],
         ]);
 

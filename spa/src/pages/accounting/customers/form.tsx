@@ -93,8 +93,8 @@ export default function CustomerFormPage({ mode }: { mode: 'create' | 'edit' }) 
  <Input label="Phone" {...register('phone')} error={errors.phone?.message} />
  <Textarea label="Address" rows={2} className="col-span-2" {...register('address')} error={errors.address?.message} />
  <Input label="TIN" {...register('tin')} error={errors.tin?.message} />
- <Input label="Payment terms (days)" type="number" min={0} max={365} className="font-mono tabular-nums text-right" {...numberInputProps({ decimal: false })} {...register('payment_terms_days')} error={errors.payment_terms_days?.message} />
- <Input label="Credit limit" type="number" step="0.01" min="0" prefix="₱" className="font-mono tabular-nums text-right" {...numberInputProps()} {...register('credit_limit')} error={errors.credit_limit?.message} />
+ <Input label="Payment terms (days)" min={0} max={365} className="font-mono tabular-nums text-right" {...numberInputProps({ decimal: false })} {...register('payment_terms_days')} error={errors.payment_terms_days?.message} />
+ <Input label="Credit limit" step="0.01" min="0" prefix="₱" className="font-mono tabular-nums text-right" {...numberInputProps()} {...register('credit_limit')} error={errors.credit_limit?.message} />
  </div>
  <div className="mt-3"><Switch label="Active" {...register('is_active')} /></div>
  </Panel>

@@ -202,7 +202,7 @@ function CreateCreditNoteModal({ onClose, onCreated }: { onClose: () => void; on
  </Select>
  </div>
  <div className="col-span-4"><Input {...register(`lines.${idx}.description` as const)} error={errors.lines?.[idx]?.description?.message} /></div>
- <div className="col-span-2"><Input type="number" step="0.01" min="0" className="font-mono tabular-nums text-right" {...numberInputProps()} {...register(`lines.${idx}.amount` as const)} error={errors.lines?.[idx]?.amount?.message} /></div>
+ <div className="col-span-2"><Input step="0.01" min="0" className="font-mono tabular-nums text-right" {...numberInputProps()} {...register(`lines.${idx}.amount` as const)} error={errors.lines?.[idx]?.amount?.message} /></div>
  <div className="col-span-1 flex justify-end pt-1.5">
  {fields.length > 1 && <Button type="button" variant="ghost" size="sm" iconOnly icon={<Trash2 size={14} />}
  aria-label="Remove line" onClick={() => remove(idx)} className="text-muted hover:text-danger" />}

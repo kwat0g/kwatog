@@ -7,8 +7,10 @@ import { z } from 'zod';
 import toast from 'react-hot-toast';
 import type { AxiosError } from 'axios';
 import { commissionRatesApi } from '@/api/crm/commissions';
+import { employeesApi } from '@/api/hr/employees';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
 import { DataTable, NumCell, type Column } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonTable } from '@/components/ui/Skeleton';
@@ -34,6 +36,11 @@ export default function CommissionRatesPage() {
  queryKey: ['commissions', 'rates', params],
  queryFn: () => commissionRatesApi.list(params),
  placeholderData: (prev) => prev,
+ });
+
+ const { data: employees } = useQuery({
+   queryKey: ['hr', 'employees', 'active'],
+   queryFn: () => employeesApi.list({ per_page: 500, status: 'active' }),
  });
 
  const { register, handleSubmit, setError, reset, formState: { errors } } = useForm<FormValues>({
@@ -92,7 +99,12 @@ export default function CommissionRatesPage() {
  <fieldset className="mb-6">
  <legend className="text-xs uppercase tracking-wider text-muted font-medium mb-3">New commission rate</legend>
  <div className="grid grid-cols-3 gap-3">
- <Input label="Employee ID" {...register('employee_id')} error={errors.employee_id?.message} required placeholder="Employee ID" />
+              <Select label="Employee" {...register('employee_id')} error={errors.employee_id?.message} required>
+                <option value="">— Select Employee —</option>
+                {employees?.data.map((e) => (
+                  <option key={e.id} value={e.id}>{e.first_name} {e.last_name}</option>
+                ))}
+              </Select>
  <Input label="Rate (decimal)" {...register('rate')} error={errors.rate?.message} required placeholder="0.05" className="font-mono" />
  <Input label="Effective from" type="date" {...register('effective_from')} error={errors.effective_from?.message} required />
  </div>

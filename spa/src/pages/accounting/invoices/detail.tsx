@@ -238,7 +238,7 @@ export default function InvoiceDetailPage() {
  {cashAccts.map((a: { id: string; code: string; name: string }) => <option key={a.id} value={a.id}>{a.code} — {a.name}</option>)}
  </Select>
  <Input label="Collection date" type="date" required {...register('collection_date')} error={errors.collection_date?.message} />
- <Input label={`Amount (max ${formatPeso(invoice.balance)})`} type="number" step="0.01" min="0.01" max={invoice.balance}
+ <Input label={`Amount (max ${formatPeso(invoice.balance)})`} step="0.01" min="0.01" max={invoice.balance}
  className="font-mono tabular-nums text-right" required prefix="₱" {...numberInputProps()}
  {...register('amount')} error={errors.amount?.message} />
  <Select label="Method" required {...register('payment_method')} error={errors.payment_method?.message}>

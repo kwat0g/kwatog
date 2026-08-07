@@ -33,7 +33,12 @@ class CreateShipmentRequest extends FormRequest
             'bl_number'         => ['nullable', 'string', 'max:32'],
             'incoterm'          => ['nullable', \Illuminate\Validation\Rule::enum(Incoterm::class)],
             'etd'               => ['nullable', 'date'],
-            'eta'               => ['nullable', 'date'],
+            'eta'               => ['nullable', 'date', function ($attribute, $value, $fail) {
+                $etd = $this->input('etd');
+                if ($value !== null && $etd !== null && $value < $etd) {
+                    $fail('ETA cannot be before ETD.');
+                }
+            }],
             'notes'             => ['nullable', 'string', 'max:2000'],
         ];
     }

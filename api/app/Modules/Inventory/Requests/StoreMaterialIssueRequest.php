@@ -31,7 +31,7 @@ class StoreMaterialIssueRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'work_order_id'                   => ['nullable', 'integer'],
+            'work_order_id'                   => ['nullable', 'integer', 'exists:work_orders,id'],
             'issued_date'                     => ['required', 'date'],
             'reference_text'                  => ['nullable', 'string', 'max:200'],
             'remarks'                         => ['nullable', 'string', 'max:1000'],
@@ -39,7 +39,7 @@ class StoreMaterialIssueRequest extends FormRequest
             'items.*.item_id'                 => ['required', 'integer', 'exists:items,id'],
             'items.*.location_id'             => ['required', 'integer', 'exists:warehouse_locations,id'],
             'items.*.quantity_issued'         => ['required', 'decimal:0,3', 'min:0.001'],
-            'items.*.material_reservation_id' => ['nullable', 'integer'],
+            'items.*.material_reservation_id' => ['nullable', 'integer', 'exists:material_reservations,id'],
             'items.*.remarks'                 => ['nullable', 'string', 'max:200'],
         ];
     }

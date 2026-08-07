@@ -12,60 +12,77 @@ import type { KeyboardEvent, WheelEvent } from 'react';
 // Apply via spreading: `<Input type="number" {...numberInputProps()} />`.
 
 const ALLOWED_KEYS = new Set([
- 'Backspace', 'Delete', 'Tab', 'Escape', 'Enter',
- 'Home', 'End', 'PageUp', 'PageDown',
- 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown',
+  'Backspace',
+  'Delete',
+  'Tab',
+  'Escape',
+  'Enter',
+  'Home',
+  'End',
+  'PageUp',
+  'PageDown',
+  'ArrowLeft',
+  'ArrowRight',
+  'ArrowUp',
+  'ArrowDown',
 ]);
 
 export interface NumberInputOpts {
- /** Allow decimal point. Default: true. */
- decimal?: boolean;
- /** Allow leading minus sign. Default: false (most ERP fields are non-negative). */
- negative?: boolean;
+  /** Allow decimal point. Default: true. */
+  decimal?: boolean;
+  /** Allow leading minus sign. Default: false (most ERP fields are non-negative). */
+  negative?: boolean;
 }
 
 export function onNumberKeyDown(opts: NumberInputOpts = {}) {
- const { decimal = true, negative = false } = opts;
- return (e: KeyboardEvent<HTMLInputElement>) => {
- // Allow Ctrl/Cmd + key combos (copy/paste/select-all/etc.)
- if (e.ctrlKey || e.metaKey) return;
+  const { decimal = true, negative = false } = opts;
+  return (e: KeyboardEvent<HTMLInputElement>) => {
+    // Allow Ctrl/Cmd + key combos (copy/paste/select-all/etc.)
+    if (e.ctrlKey || e.metaKey) return;
 
- if (ALLOWED_KEYS.has(e.key)) return;
+    if (ALLOWED_KEYS.has(e.key)) return;
 
- // Digits
- if (e.key >= '0' && e.key <= '9') return;
+    // Digits
+    if (e.key >= '0' && e.key <= '9') return;
 
- // Decimal point — only one allowed
- if (decimal && (e.key === '.' || e.key === ',')) {
- const t = e.currentTarget;
- if (t.value.includes('.')) { e.preventDefault(); return; }
- return;
- }
+    // Decimal point — only one allowed
+    if (decimal && (e.key === '.' || e.key === ',')) {
+      const t = e.currentTarget;
+      if (t.value.includes('.')) {
+        e.preventDefault();
+        return;
+      }
+      return;
+    }
 
- // Minus sign — only at the start
- if (negative && e.key === '-') {
- const t = e.currentTarget;
- if ((t.selectionStart ?? 0) !== 0 || t.value.includes('-')) { e.preventDefault(); return; }
- return;
- }
+    // Minus sign — only at the start
+    if (negative && e.key === '-') {
+      const t = e.currentTarget;
+      if ((t.selectionStart ?? 0) !== 0 || t.value.includes('-')) {
+        e.preventDefault();
+        return;
+      }
+      return;
+    }
 
- e.preventDefault();
- };
+    e.preventDefault();
+  };
 }
 
 export function onNumberWheel(e: WheelEvent<HTMLInputElement>): void {
- // Prevent the native step-on-scroll behavior. The user is almost certainly
- // trying to scroll the page, not nudge a number value.
- (e.target as HTMLInputElement).blur();
+  // Prevent the native step-on-scroll behavior. The user is almost certainly
+  // trying to scroll the page, not nudge a number value.
+  (e.target as HTMLInputElement).blur();
 }
 
 /** Spread directly into an `<Input type="number">` to enforce safe entry. */
 export function numberInputProps(opts: NumberInputOpts = {}) {
- return {
- inputMode: (opts.decimal === false ? 'numeric' : 'decimal') as 'numeric' | 'decimal',
- onKeyDown: onNumberKeyDown(opts),
- onWheel: onNumberWheel,
- };
+  return {
+    type: 'number' as const,
+    inputMode: (opts.decimal === false ? 'numeric' : 'decimal') as 'numeric' | 'decimal',
+    onKeyDown: onNumberKeyDown(opts),
+    onWheel: onNumberWheel,
+  };
 }
 
 // ─── Series X / Task X2 — Currency helpers ──────────────────────────────
@@ -79,27 +96,27 @@ export function numberInputProps(opts: NumberInputOpts = {}) {
 // Parse: a currency-symbol-prefixed amount → raw decimal
 
 const currencyDisplay = new Intl.NumberFormat('en', {
- minimumFractionDigits: 2,
- maximumFractionDigits: 2,
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
 });
 
 /** Format a raw number/string for display (no currency symbol). */
 export function formatCurrencyDisplay(raw: string | number | null | undefined): string {
- if (raw === null || raw === undefined || raw === '') return '';
- const n = typeof raw === 'number' ? raw : Number(String(raw).replace(/[,\s₱$€£¥]/g, ''));
- if (!Number.isFinite(n)) return '';
- return currencyDisplay.format(n);
+  if (raw === null || raw === undefined || raw === '') return '';
+  const n = typeof raw === 'number' ? raw : Number(String(raw).replace(/[,\s₱$€£¥]/g, ''));
+  if (!Number.isFinite(n)) return '';
+  return currencyDisplay.format(n);
 }
 
 /** Strip thousands separators / currency symbols / whitespace from a user
  * input string so it can be persisted as a decimal. Returns "" for invalid input. */
 export function parseCurrencyInput(input: string): string {
- if (!input) return '';
- // Keep digits, dot, optional leading minus.
- const cleaned = String(input)
- .replace(/[,\s₱$€£¥]/g, '')
- .replace(/[^0-9.-]/g, '');
- if (cleaned === '' || cleaned === '-' || cleaned === '.') return '';
- if (Number.isNaN(Number(cleaned))) return '';
- return cleaned;
+  if (!input) return '';
+  // Keep digits, dot, optional leading minus.
+  const cleaned = String(input)
+    .replace(/[,\s₱$€£¥]/g, '')
+    .replace(/[^0-9.-]/g, '');
+  if (cleaned === '' || cleaned === '-' || cleaned === '.') return '';
+  if (Number.isNaN(Number(cleaned))) return '';
+  return cleaned;
 }

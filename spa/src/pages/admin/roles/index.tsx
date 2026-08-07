@@ -15,7 +15,8 @@ import { SkeletonTable } from '@/components/ui/Skeleton';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { CanDo } from '@/components/guards/CanDo';
-import { ArchiveFilter, archiveToTrashed, type ArchiveScope } from '@/components/ui/ArchiveFilter';
+import { ArchiveFilter } from '@/components/ui/ArchiveFilter';
+import { archiveToTrashed, type ArchiveScope } from '@/lib/archiveScope';
 import { usePermission } from '@/hooks/usePermission';
 import type { RoleListParams } from '@/api/admin/roles';
 

@@ -7,7 +7,7 @@ import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { AxiosError } from 'axios';
 import toast from 'react-hot-toast';
@@ -16,7 +16,9 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Switch } from '@/components/ui/Switch';
 import { Textarea } from '@/components/ui/Textarea';
+import { Select } from '@/components/ui/Select';
 import { productsApi } from '@/api/crm/products';
+import { uomsApi } from '@/api/inventory/uoms';
 import type { Product, CreateProductData, UpdateProductData } from '@/types/crm';
 
 const schema = z.object({
@@ -38,6 +40,12 @@ interface Props {
 export function ProductForm({ initial, mode }: Props) {
  const navigate = useNavigate();
  const qc = useQueryClient();
+
+ const { data: uoms = [] } = useQuery({
+   queryKey: ['inventory', 'uoms'],
+   queryFn: uomsApi.list,
+   staleTime: 300_000
+ });
 
  const {
  register, handleSubmit, setError, watch, setValue,
@@ -113,13 +121,10 @@ export function ProductForm({ initial, mode }: Props) {
  placeholder="Enter part number"
  className="font-mono"
  />
- <Input
- label="Unit of Measure"
- required
- {...register('unit_of_measure')}
- error={errors.unit_of_measure?.message}
- placeholder="Enter UOM code"
- />
+ <Select label="Unit of Measure" required {...register('unit_of_measure')} error={errors.unit_of_measure?.message}>
+   <option value="">— Select UOM —</option>
+   {uoms.map((u) => <option key={u.id} value={u.code}>{u.code}</option>)}
+ </Select>
  <div className="col-span-2">
  <Input
  label="Name"
