@@ -17,7 +17,7 @@ use App\Modules\B2B\Models\DeliverySchedule;
 use App\Modules\Purchasing\Enums\PurchaseOrderStatus;
 use App\Modules\B2B\Enums\SupplierAgingBucket;
 use App\Modules\B2B\Models\PortalShippingDocument;
-use App\Modules\Edge\Services\EdgeSystemUserResolver;
+use App\Common\Services\SystemUserResolver;
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Purchasing\Models\PurchaseOrder;
 use App\Modules\Quality\Models\PpapSubmission;
@@ -39,7 +39,7 @@ class SupplierPortalService
 {
     public function __construct(
         private readonly BillService $bills,
-        private readonly EdgeSystemUserResolver $systemUser,
+        private readonly SystemUserResolver $systemUser,
         private readonly SettingsService $settings,
         private readonly TaxPolicyService $taxPolicy,
     ) {}
@@ -257,7 +257,7 @@ class SupplierPortalService
         $storedPath = null;
         try {
             return DB::transaction(function () use ($purchaseOrder, $data, $items, $file, $portalUserId, &$storedPath) {
-                $systemUser = app(EdgeSystemUserResolver::class);
+                $systemUser = app(SystemUserResolver::class);
 
                 $bill = $systemUser->impersonate(fn () => $this->bills->create([
                     'bill_number' => $data['bill_number'],

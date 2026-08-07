@@ -7,7 +7,7 @@ namespace Tests\Feature\Inventory;
 use App\Modules\Auth\Models\Permission;
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
-use App\Modules\Edge\Services\EdgeScanResolverService;
+use App\Modules\Inventory\Services\BarcodeScanResolverService;
 use App\Modules\Inventory\Models\Item;
 use App\Modules\Inventory\Models\StockCountItem;
 use App\Modules\Inventory\Models\StockCountSession;
@@ -82,7 +82,7 @@ class WarehouseScanTest extends TestCase
             'status' => 'pending',
         ]);
 
-        $result = app(EdgeScanResolverService::class)->resolve($item->code, [
+        $result = app(BarcodeScanResolverService::class)->resolve($item->code, [
             'stock_count_session_id' => $session->id,
             'material_issue_id' => 42,
         ]);

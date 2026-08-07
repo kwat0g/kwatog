@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 use App\Modules\Quality\Controllers\AnalyticsController;
 use App\Modules\Quality\Controllers\CalibrationController;
-use App\Modules\Quality\Controllers\CopqController;
-use App\Modules\Quality\Controllers\DocumentAcknowledgmentController;
-use App\Modules\Quality\Controllers\DocumentController;
 use App\Modules\Quality\Controllers\InspectionController;
 use App\Modules\Quality\Controllers\InspectionSpecController;
 use App\Modules\Quality\Controllers\NcrController;
@@ -134,18 +131,6 @@ Route::middleware(['auth:sanctum', 'feature:quality'])->prefix('quality')->group
     Route::get('/analytics/defect-pareto/drill',                [AnalyticsController::class, 'paretoDrillDown'])
         ->middleware('permission:quality.view');
 
-    /* ─── T3.6.B — COPQ rollup trend ─── */
-    Route::get('/copq/trend',                                   [CopqController::class, 'trend'])
-        ->middleware('permission:quality.copq.view');
-    Route::get('/copq/policy',                                  [CopqController::class, 'policy'])
-        ->middleware('permission:quality.copq.view');
-    Route::get('/copq/summary',                                 [CopqController::class, 'summary'])
-        ->middleware('permission:quality.copq.view');
-    Route::get('/copq/by-product',                              [CopqController::class, 'byProduct'])
-        ->middleware('permission:quality.copq.view');
-    Route::get('/copq/by-supplier',                             [CopqController::class, 'bySupplier'])
-        ->middleware('permission:quality.copq.view');
-
     /* ─── ADV3 — IATF 16949 traceability (batch + lot search, shipment lots) ─── */
     Route::get('/traceability/search', [TraceabilityController::class, 'search'])
         ->middleware('permission:quality.inspections.view');
@@ -161,24 +146,6 @@ Route::middleware(['auth:sanctum', 'feature:quality'])->prefix('quality')->group
     Route::get('/traceability/shipment-lots/{shipmentLot}',
         [ShipmentLotController::class, 'show'])
         ->middleware('permission:quality.inspections.view');
-
-    /* ─── T3.5 — Controlled documents (admin) ─── */
-    Route::get('/documents/options',                         [DocumentController::class, 'options'])
-        ->middleware('permission:quality.documents.view');
-    Route::get('/documents',                                  [DocumentController::class, 'index'])
-        ->middleware('permission:quality.documents.view');
-    Route::get('/documents/assignee-roles',                   [DocumentController::class, 'assigneeRoles'])
-        ->middleware('permission:quality.documents.view');
-    Route::post('/documents',                                 [DocumentController::class, 'store'])
-        ->middleware('permission:quality.documents.manage');
-    Route::get('/documents/{document}',                       [DocumentController::class, 'show'])
-        ->middleware('permission:quality.documents.view');
-    Route::patch('/documents/{document}',                     [DocumentController::class, 'update'])
-        ->middleware('permission:quality.documents.manage');
-    Route::post('/documents/{document}/revisions',            [DocumentController::class, 'publishRevision'])
-        ->middleware('permission:quality.documents.manage');
-    Route::post('/documents/{document}/mark-reviewed',        [DocumentController::class, 'markReviewed'])
-        ->middleware('permission:quality.documents.manage');
 
     /* ─── PPAP & APQP tracking (IATF 16949) ─── */
     Route::get('/ppap',                       [PpapController::class, 'index'])  ->middleware('permission:quality.ppap.view');
@@ -201,10 +168,4 @@ Route::middleware(['auth:sanctum', 'feature:quality'])->prefix('quality')->group
     Route::post('/spc/capability',                 [SpcController::class, 'capability'])      ->middleware('permission:quality.spc.view');
     Route::get('/spc/alerts',                      [SpcController::class, 'alerts'])          ->middleware('permission:quality.spc.view');
     Route::post('/spc/alerts/{alert}/acknowledge', [SpcController::class, 'acknowledgeAlert'])->middleware('permission:quality.spc.manage');
-});
-
-/* ─── T3.5.C — Self-service document acknowledgments ─── */
-Route::middleware(['auth:sanctum'])->prefix('self-service/documents')->group(function () {
-    Route::get('/pending',                  [DocumentAcknowledgmentController::class, 'pending']);
-    Route::post('/{revision}/acknowledge',  [DocumentAcknowledgmentController::class, 'acknowledge']);
 });

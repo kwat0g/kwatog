@@ -5,7 +5,6 @@ declare(strict_types=1);
 use App\Modules\Dashboard\Controllers\BadgeController;
 use App\Modules\Dashboard\Controllers\ActionCenterController;
 use App\Modules\Dashboard\Controllers\ActionCenterTaskController;
-use App\Modules\Dashboard\Controllers\CopqWidgetController;
 use App\Modules\Dashboard\Controllers\DashboardController;
 use App\Modules\Dashboard\Controllers\DashboardLayoutController;
 use App\Modules\Dashboard\Controllers\KpiController;
@@ -54,10 +53,6 @@ Route::middleware('auth:sanctum')->prefix('dashboards')->group(function () {
     Route::patch('/action-center/tasks', [ActionCenterTaskController::class, 'update']);
     Route::get('/rollout-health', [RolloutHealthController::class, 'index'])
         ->middleware('permission:dashboard.admin.view');
-
-    // COPQ widget — dedicated breakdown + trend chart
-    Route::get('/copq-widget', [CopqWidgetController::class, 'index'])
-        ->middleware('permission:dashboard.quality.view');
 
     // P4.3 — Finance dashboard unified under /dashboards prefix (canonical).
     // The old /dashboard/finance route in Accounting/routes.php is kept as a

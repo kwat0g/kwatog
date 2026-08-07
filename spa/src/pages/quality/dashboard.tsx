@@ -11,7 +11,6 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { analyticsApi, type ParetoDrillRow } from '@/api/quality/analytics';
 import { ncrsApi } from '@/api/quality/ncrs';
-import { dashboardsApi } from '@/api/dashboards';
 import { DowntimeParetoChart } from '@/components/charts/DowntimeParetoChart';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -20,7 +19,6 @@ import { Panel } from '@/components/ui/Panel';
 import { StatCard } from '@/components/ui/StatCard';
 import { SkeletonBlock } from '@/components/ui/Skeleton';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { formatPeso } from '@/lib/formatNumber';
 import { focusRingInset } from '@/lib/focus';
 
 export default function QualityDashboardPage() {
@@ -40,18 +38,6 @@ export default function QualityDashboardPage() {
  queryKey: ['quality', 'ncrs', 'open'],
  queryFn: () => ncrsApi.list({ status: 'open', per_page: 5 }),
  });
-
- const qualityDashboard = useQuery({
- queryKey: ['dashboards', 'quality'],
- queryFn: () => dashboardsApi.quality(),
- });
-
- const copq = qualityDashboard.data?.panels?.copq as {
- internal_failure: { scrap_units: number; rework_units: number; scrap_cost: number; rework_cost: number };
- external_failure: { returns: number; complaints: number; return_cost: number };
- total: number;
- period_label: string;
- } | undefined;
 
  const drillDown = useQuery({
  queryKey: ['quality', 'pareto', 'drill', selectedDefect],
@@ -187,36 +173,6 @@ export default function QualityDashboardPage() {
  </div>
  </div>
 
- {copq && (
- <div className="px-5 mt-6">
- <h2 className="text-sm font-medium text-muted mb-3">
- Cost of Poor Quality (This Month)
- {copq.period_label && <span className="ml-2 font-normal">— {copq.period_label}</span>}
- </h2>
- <div className="grid grid-cols-4 gap-4">
- <StatCard
- label="Scrap Units"
- value={String(copq.internal_failure.scrap_units)}
- helper={`${formatPeso(copq.internal_failure.scrap_cost)} est. cost`}
- />
- <StatCard
- label="Rework Units"
- value={String(copq.internal_failure.rework_units)}
- helper={`${formatPeso(copq.internal_failure.rework_cost)} est. cost`}
- />
- <StatCard
- label="Customer Returns"
- value={String(copq.external_failure.returns)}
- helper={`${copq.external_failure.complaints} complaints`}
- />
- <StatCard
- label="Est. COPQ"
- value={formatPeso(copq.total)}
- helper="internal + external failure"
- />
- </div>
- </div>
- )}
  </div>
  );
 }

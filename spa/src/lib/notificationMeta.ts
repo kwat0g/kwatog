@@ -103,7 +103,6 @@ const BY_TYPE: Record<string, NotificationMeta> = {
  'ncr.recurrence': { icon: ShieldAlert, group: 'alerts', label: 'Quality' },
  'ncr.return_to_supplier': { icon: ShieldAlert, group: 'alerts', label: 'Quality' },
  'spc_alert': { icon: Gauge, group: 'alerts', label: 'SPC' },
- 'copq.spike': { icon: TrendingDown, group: 'alerts', label: 'Quality' },
  'effectiveness_due': { icon: ClipboardCheck, group: 'approvals', label: 'Quality' },
  'effectiveness_overdue': { icon: AlertTriangle, group: 'alerts', label: 'Quality' },
  'document.review_due': { icon: FileWarning, group: 'approvals', label: 'Documents' },

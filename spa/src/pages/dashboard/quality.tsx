@@ -17,7 +17,6 @@ import { Th, Td, tableCls, theadTrCls, trCls } from '@/components/ui/table-cells
 import { DashboardShell, KpiGrid, PanelRow } from '@/components/dashboard/DashboardShell';
 import { ForecastPanel } from '@/components/dashboard/ForecastPanel';
 import { DonutBreakdown, BarComparison } from '@/components/charts';
-import { CopqWidget } from '@/pages/dashboard/widgets/CopqWidget';
 import { KpiStrip } from '@/components/dashboard/KpiStrip';
 
 /* ───────────────────────── Typed interface ───────────────────────── */
@@ -57,22 +56,6 @@ interface ChainCoverage {
  pct: number;
 }
 
-interface CopqData {
- internal_failure: {
- scrap_units: number;
- rework_units: number;
- scrap_cost: number;
- rework_cost: number;
- };
- external_failure: {
- returns: number;
- complaints: number;
- return_cost: number;
- };
- total: number;
- period_label: string;
-}
-
 interface QualityDashboardData {
  display_policy?: {
  defect_danger_pct: number;
@@ -92,7 +75,6 @@ interface QualityDashboardData {
  outgoing: ChainCoverage;
  };
  defect_rate_forecast: import('@/types/forecasting-dashboard').ForecastPanelData;
- copq?: CopqData;
  };
 }
 
@@ -354,7 +336,7 @@ export default function QcDashboard() {
  </KpiGrid>
 
  {/* KPI Scorecard strip */}
- <KpiStrip codes={['dppm', 'first_pass_yield', 'ncr_closure_days', 'copq_pct_revenue']} />
+ <KpiStrip codes={['dppm', 'first_pass_yield', 'ncr_closure_days']} />
 
  {/* ── Row 2: Inspection Queue + Defect Pareto ── */}
  <PanelRow>
@@ -404,9 +386,6 @@ export default function QcDashboard() {
  formatValue={(v) => `${v.toFixed(1)}%`}
  unitLabel="%"
  />
-
- {/* ── Row 6: COPQ Widget (dedicated component with trend chart) ── */}
- <CopqWidget />
  </>
  );
  }}

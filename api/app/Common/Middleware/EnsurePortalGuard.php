@@ -7,7 +7,6 @@ namespace App\Common\Middleware;
 use App\Modules\Auth\Models\User;
 use App\Modules\B2B\Models\CustomerPortalUser;
 use App\Modules\B2B\Models\SupplierPortalUser;
-use App\Modules\Edge\Models\EdgeDevice;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -39,7 +38,6 @@ class EnsurePortalGuard
     private const MODELS = [
         'customer_portal' => CustomerPortalUser::class,
         'supplier_portal' => SupplierPortalUser::class,
-        'edge_device' => EdgeDevice::class,
     ];
 
     public function handle(Request $request, Closure $next, string $guard): Response

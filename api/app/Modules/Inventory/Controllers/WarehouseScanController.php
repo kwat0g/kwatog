@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Modules\Inventory\Controllers;
 
-use App\Modules\Edge\Services\EdgeScanResolverService;
+use App\Modules\Inventory\Services\BarcodeScanResolverService;
 use App\Modules\Inventory\Models\WarehouseScanEvent;
 use App\Modules\Inventory\Enums\WarehouseScanContext;
 use Illuminate\Http\JsonResponse;
@@ -22,7 +22,7 @@ class WarehouseScanController
             ),
         ]]);
     }
-    public function __construct(private readonly EdgeScanResolverService $resolver) {}
+    public function __construct(private readonly BarcodeScanResolverService $resolver) {}
 
     public function resolve(Request $request): JsonResponse
     {

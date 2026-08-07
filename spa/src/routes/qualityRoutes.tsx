@@ -23,11 +23,7 @@ const SpcChartsListPage = lazy(() => import('@/pages/quality/spc'));
 const SpcChartDetailPage = lazy(() => import('@/pages/quality/spc/chart-detail'));
 const SpcCapabilityStudyPage = lazy(() => import('@/pages/quality/spc/capability-study'));
 // COPQ — Cost of Poor Quality analytics
-const CopqAnalyticsPage = lazy(() => import('@/pages/quality/copq'));
 // Task 16 — Document Control
-const DocumentsListPage = lazy(() => import('@/pages/quality/documents'));
-const DocumentDetailPage = lazy(() => import('@/pages/quality/documents/detail'));
-const DocumentCreatePage = lazy(() => import('@/pages/quality/documents/create'));
 
 export const qualityRoutes = (
  <>
@@ -70,15 +66,7 @@ export const qualityRoutes = (
  <Route path="/quality/spc/:id"
  element={<PermissionGuard permission="quality.spc.view"><SpcChartDetailPage /></PermissionGuard>} />
  {/* COPQ — Cost of Poor Quality analytics */}
- <Route path="/quality/copq"
- element={<PermissionGuard permission="quality.copq.view"><CopqAnalyticsPage /></PermissionGuard>} />
  {/* Task 16 — Document Control */}
- <Route path="/quality/documents"
- element={<PermissionGuard permission="quality.documents.view"><DocumentsListPage /></PermissionGuard>} />
- <Route path="/quality/documents/new"
- element={<PermissionGuard permission="quality.documents.manage"><DocumentCreatePage /></PermissionGuard>} />
- <Route path="/quality/documents/:id"
- element={<PermissionGuard permission="quality.documents.view"><DocumentDetailPage /></PermissionGuard>} />
  </Route>
  </>
 );

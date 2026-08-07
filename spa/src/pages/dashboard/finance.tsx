@@ -72,7 +72,7 @@ export default function FinanceDashboardPage() {
  </KpiGrid>
 
  {/* KPI Scorecard strip */}
- <KpiStrip codes={['copq_pct_revenue', 'ar_aging_60d', 'budget_utilization']} />
+ <KpiStrip codes={['ar_aging_60d', 'budget_utilization']} />
 
  {/* Row 2 — AR / AP aging side by side. */}
  <PanelRow>

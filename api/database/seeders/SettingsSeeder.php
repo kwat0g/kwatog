@@ -154,8 +154,6 @@ class SettingsSeeder extends Seeder
             ['key' => 'quality.calibration.due_window_days', 'value' => 30, 'group' => 'quality', 'label' => 'Calibration Due Window Days', 'description' => 'Days before calibration expiry when equipment is marked due.'],
             ['key' => 'quality.ncr.recurrence_window_days', 'value' => 30, 'group' => 'quality', 'label' => 'NCR Recurrence Window Days', 'description' => 'Prior-history window used to identify recurring NCRs.'],
             ['key' => 'quality.document_review.rearm_days', 'value' => 7, 'group' => 'quality', 'label' => 'Document Review Reminder Interval', 'description' => 'Days before an overdue document review reminder may be sent again.'],
-            ['key' => 'quality.copq.spike_ratio', 'value' => 0.25, 'group' => 'quality', 'label' => 'COPQ Spike Alert Ratio', 'description' => 'Month-over-month COPQ increase ratio that raises an alert.'],
-            ['key' => 'quality.copq.rework_cost_ratio', 'value' => 0.30, 'group' => 'quality', 'label' => 'COPQ Rework Cost Ratio', 'description' => 'Share of product standard cost used to value rework.'],
 
             // ── Accounting ───────────────────────────────────
             [

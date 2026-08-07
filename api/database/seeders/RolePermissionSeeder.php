@@ -26,18 +26,11 @@ class RolePermissionSeeder extends Seeder
                 // REC-01 — view the Segregation-of-Duties matrix + violation report.
                 ['slug' => 'admin.sod.view',           'name' => 'View Segregation-of-Duties Matrix'],
                 ['slug' => 'admin.users.manage',       'name' => 'Manage Users'],
-                // Series R — Task R2: per-user permission overrides.
-                ['slug' => 'admin.users.manage_permissions', 'name' => 'Manage Per-User Permission Overrides'],
                 ['slug' => 'admin.gov_tables.manage',  'name' => 'Manage Government Contribution Tables'],
-                ['slug' => 'admin.print.bulk',         'name' => 'Bulk Print Approved Forms'],
                 // Series E (E2/E3) — exports + document vault.
                 ['slug' => 'admin.scheduled_exports.view', 'name' => 'View Scheduled Exports'],
                 // Series F — Task F7: company-wide activity feed.
                 ['slug' => 'admin.activity.view',          'name' => 'View System Activity Feed'],
-                // REC-03 — master-data CSV import (go-live cutover capability).
-                ['slug' => 'admin.import.manage',          'name' => 'Import Master Data (CSV)'],
-                // T2.0 — Edge module: manage factory-floor devices and tokens.
-                ['slug' => 'admin.edge_devices.manage',    'name' => 'Manage Edge Devices'],
             ],
 
             // HR
@@ -153,9 +146,6 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'accounting.journal.post',         'name' => 'Post Journal Entries'],
                 ['slug' => 'accounting.journal.reverse',      'name' => 'Reverse Posted Journal Entries'],
                 ['slug' => 'accounting.journal.self_post_override', 'name' => 'Self-Post Journal Entries (SoD override)'],
-                // Period close (OGAMI-001)
-                ['slug' => 'accounting.periods.view',         'name' => 'View Accounting Periods'],
-                ['slug' => 'accounting.periods.manage',       'name' => 'Close / Reopen Accounting Periods'],
                 // Vendors & Bills (AP)
                 ['slug' => 'accounting.vendors.view',         'name' => 'View Vendors'],
                 ['slug' => 'accounting.vendors.manage',       'name' => 'Manage Vendors'],
@@ -176,12 +166,8 @@ class RolePermissionSeeder extends Seeder
                 // Statements
                 ['slug' => 'accounting.statements.view',      'name' => 'View Financial Statements'],
                 ['slug' => 'accounting.statements.export',    'name' => 'Export Statements (CSV/PDF)'],
-                // REC-12 — multi-currency: view translated (JPY) statements + manage FX rates.
-                ['slug' => 'accounting.currency.view',        'name' => 'View Translated (Foreign-Currency) Statements'],
-                ['slug' => 'accounting.currency.manage',      'name' => 'Manage FX Rates'],
                 // REC-05 — go-live opening balances (GL + stock). Finance-only
                 // via module('accounting'); a migration-time capability.
-                ['slug' => 'accounting.opening_balance.manage', 'name' => 'Load Opening Balances'],
             ],
 
             // Inventory
@@ -279,13 +265,6 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'crm.sales_orders.cancel',        'name' => 'Cancel Sales Orders'],
                 ['slug' => 'crm.so.create',                  'name' => 'Create Sales Orders (legacy)'],
                 ['slug' => 'crm.complaints.manage',          'name' => 'Manage Complaints'],
-                // Sales Pipeline — Lead → Opportunity → Quote
-                ['slug' => 'crm.leads.view',                 'name' => 'View Leads'],
-                ['slug' => 'crm.leads.manage',               'name' => 'Manage Leads'],
-                ['slug' => 'crm.opportunities.view',         'name' => 'View Opportunities'],
-                ['slug' => 'crm.opportunities.manage',       'name' => 'Manage Opportunities'],
-                ['slug' => 'crm.quotes.view',                'name' => 'View Quotes'],
-                ['slug' => 'crm.quotes.manage',              'name' => 'Manage Quotes'],
                 // Public contact-form inbox. Separate from leads on purpose —
                 // the form also catches job seekers and supplier pitches, and
                 // `manage` gates the promote-to-lead step.
@@ -310,20 +289,6 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'quality.specs.manage',         'name' => 'Manage Inspection Specs'],
                 ['slug' => 'quality.ncr.view',   'name' => 'View NCRs'],
                 ['slug' => 'quality.ncr.manage',           'name' => 'Manage NCRs'],
-                // T3.6 — COPQ rollup trend (snapshot history).
-                ['slug' => 'quality.copq.view',            'name' => 'View COPQ Trends'],
-                // OGAMI-016 — IATF calibration register.
-                ['slug' => 'quality.calibration.view',     'name' => 'View Calibration Register'],
-                ['slug' => 'quality.calibration.manage',   'name' => 'Manage Calibration Register'],
-                // T3.5 — IATF document control. `view` = self-service ack list + read.
-                // `manage` = catalog CRUD + publish revisions + mark-reviewed.
-                ['slug' => 'quality.documents.view',       'name' => 'View Controlled Documents'],
-                ['slug' => 'quality.documents.manage',     'name' => 'Manage Controlled Documents'],
-                // PPAP & APQP tracking (IATF 16949).
-                ['slug' => 'quality.ppap.view',            'name' => 'View PPAP Submissions'],
-                ['slug' => 'quality.ppap.manage',          'name' => 'Manage PPAP Submissions'],
-                ['slug' => 'quality.spc.view',             'name' => 'View SPC Control Charts'],
-                ['slug' => 'quality.spc.manage',           'name' => 'Manage SPC Control Charts'],
             ],
 
             // Maintenance
@@ -350,22 +315,11 @@ class RolePermissionSeeder extends Seeder
                 ['slug' => 'hr.clearance.sign',          'name' => 'Sign Clearance Item'],
                 ['slug' => 'hr.separation.finalize',     'name' => 'Finalize Separation & Final Pay'],
             ],
-            'hr_succession' => [
-                ['slug' => 'hr.succession.manage',       'name' => 'Manage Succession Plans'],
-            ],
-            'hr_performance' => [
-                ['slug' => 'hr.performance.view',        'name' => 'View Performance Reviews'],
-                ['slug' => 'hr.performance.manage',      'name' => 'Manage Performance Reviews'],
-            ],
             'hr_recruitment' => [
                 ['slug' => 'hr.recruitment.view',         'name' => 'View Job Postings & Applications'],
                 ['slug' => 'hr.recruitment.manage',       'name' => 'Create & Edit Job Postings'],
                 ['slug' => 'hr.recruitment.applications', 'name' => 'Manage Applications (stage, notes, interviews)'],
                 ['slug' => 'hr.recruitment.hire',         'name' => 'Mark Hired & Convert to Employee'],
-            ],
-            'crm_commissions' => [
-                ['slug' => 'crm.commissions.view',       'name' => 'View Commissions'],
-                ['slug' => 'crm.commissions.manage',     'name' => 'Manage Commissions'],
             ],
             'asset_transfers' => [
                 ['slug' => 'assets.transfer',            'name' => 'Request Asset Transfer'],
@@ -392,9 +346,6 @@ class RolePermissionSeeder extends Seeder
                 // Task A2 — alert engine
                 ['slug' => 'alerts.view',                         'name' => 'View Alerts'],
                 ['slug' => 'alerts.dismiss',                      'name' => 'Dismiss Alerts'],
-                // Series R — Task R4: dashboard layout management.
-                ['slug' => 'dashboard.layout.reset',              'name' => 'Reset Own Dashboard Layout to Default'],
-                ['slug' => 'dashboard.role_defaults.manage',      'name' => 'Manage Role-Default Dashboard Layouts'],
                 // Cross-cutting personal work queues (backend auth-only,
                 // granted to every role so guards exist for later tightening).
                 ['slug' => 'dashboard.action_center.view',        'name' => 'View Personal Action Center'],
@@ -520,7 +471,6 @@ class RolePermissionSeeder extends Seeder
                         'purchasing.suppliers.performance.view',
                         'forecasting.view',
                         'return_management.view',
-                        'quality.copq.view',
                         // OGAMI-012 — finance is the CHECKER for high-value stock
                         // adjustments; warehouse_staff is the maker.
                         'inventory.adjust.approve',
@@ -538,7 +488,6 @@ class RolePermissionSeeder extends Seeder
                         'inventory.view',
                         // Quality: view + read sub-resources for quality dashboard / NCR/inspection pages
                         'quality.view', 'quality.inspections.view', 'quality.ncr.view',
-                        'quality.copq.view', 'quality.ppap.view', 'quality.spc.view',
                         'dashboard.plant_manager.view',
                         'maintenance.view', 'assets.view',
                         'search.global', 'notifications.preferences.manage',
@@ -586,8 +535,6 @@ class RolePermissionSeeder extends Seeder
                         'forecasting.view',
                         'return_management.view', 'return_management.manage',
                         'dashboard.purchasing.view',
-                        // PPAP: purchasing owns supplier part-approval.
-                        'quality.ppap.view', 'quality.ppap.manage',
                     ],
                 ),
             ],
@@ -755,15 +702,12 @@ class RolePermissionSeeder extends Seeder
                 ],
             );
 
-            // Series R — Task R4: every role gets the layout-reset permission
-            // by default so users can always restore their dashboard.
             $permissions = $def['permissions'] === '*'
                 ? '*'
                 : array_values(array_unique(array_merge(
                     (array) $def['permissions'],
                     [
                         'notifications.view',
-                        'dashboard.layout.reset',
                         // Series F — Tasks F1, F2, F5: cross-cutting reads
                         // available to every authenticated role.
                         'calendar.view',

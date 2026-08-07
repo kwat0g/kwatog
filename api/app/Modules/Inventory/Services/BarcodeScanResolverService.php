@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Modules\Edge\Services;
+namespace App\Modules\Inventory\Services;
 
 use App\Modules\Inventory\Models\GoodsReceiptNote;
 use App\Modules\Inventory\Models\Item;
@@ -25,7 +25,7 @@ use App\Modules\Purchasing\Models\PurchaseOrder;
  * Unknown barcodes return type='unknown' with no actions. The device
  * renders "Unrecognised barcode" on that response.
  */
-class EdgeScanResolverService
+class BarcodeScanResolverService
 {
     public function resolve(string $barcode, array $context = []): array
     {

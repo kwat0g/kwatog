@@ -14,7 +14,7 @@ use App\Modules\CRM\Enums\ComplaintStatus;
 use App\Modules\CRM\Enums\SalesOrderStatus;
 use App\Modules\CRM\Models\SalesOrder;
 use App\Modules\CRM\Services\SalesOrderService;
-use App\Modules\Edge\Services\EdgeSystemUserResolver;
+use App\Common\Services\SystemUserResolver;
 use App\Modules\SupplyChain\Enums\DeliveryStatus;
 use App\Modules\SupplyChain\Models\Delivery;
 use App\Modules\Production\Enums\WorkOrderStatus;
@@ -35,7 +35,7 @@ class CustomerPortalService
     public function __construct(
         private readonly SalesOrderService $salesOrderService,
         private readonly StatementOfAccountService $soa,
-        private readonly EdgeSystemUserResolver $systemUser,
+        private readonly SystemUserResolver $systemUser,
     ) {}
 
     /* ─── Dashboard ──────────────────────────────────────────────── */

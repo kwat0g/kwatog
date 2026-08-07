@@ -158,7 +158,6 @@ final class NotificationCatalog
                 ['key' => 'ncr.recurrence', 'label' => 'Recurring non-conformance', 'description' => 'The same defect pattern has been detected again.'],
                 ['key' => 'ncr.return_to_supplier', 'label' => 'NCR returned to supplier', 'description' => 'An NCR was dispositioned as return-to-supplier and needs Purchasing action.'],
                 ['key' => 'spc_alert', 'label' => 'SPC control limit breach', 'description' => 'A measured dimension drifted outside its control limits.'],
-                ['key' => 'copq.spike', 'label' => 'Cost of poor quality spike', 'description' => 'Monthly COPQ rose sharply against its trend.'],
                 ['key' => 'effectiveness_due', 'label' => 'Corrective action review due', 'description' => 'A corrective action is due for its effectiveness review.'],
                 ['key' => 'effectiveness_overdue', 'label' => 'Corrective action review overdue', 'description' => 'An effectiveness review has passed its due date.'],
                 ['key' => 'document.review_due', 'label' => 'Controlled document review due', 'description' => 'A controlled document has reached its scheduled review date.'],

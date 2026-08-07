@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Modules\Edge\Services;
+namespace App\Common\Services;
 
 use App\Common\Services\SettingsService;
 use App\Modules\Auth\Models\Role;
@@ -12,29 +12,31 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
 /**
- * T2.2 / T2.3 / T2.4 shared. Resolves the audit-trail user that every Edge
- * ingest persists under (`recorded_by` on MachineConditionReading /
- * WorkOrderOutput, `created_by` on the auto-generated MWO, etc.).
+ * Shared service-account resolver.
  *
- * Why this class exists: under `auth:edge_device`, `Auth::id()` returns the
- * EdgeDevice PK. Models that write audit rows (HasAuditLog) would then
- * violate `audit_logs.user_id → users(id)` FK. We pin the auth context to a
- * real `users` row for the duration of the call.
+ * Resolves (or lazily provisions) the system user that owns audit rows
+ * written under non-web guards (`auth:supplier_portal`,
+ * `auth:customer_portal`). Under those guards `Auth::id()` returns a
+ * non-User PK, which would violate the `audit_logs.user_id → users(id)` FK;
+ * `impersonate()` pins the auth context to a real `users` row for the call.
+ *
+ * Settings keys: `system_user.email` / `system_user.name` (renamed from the
+ * legacy `edge.system_user.*` by migration 0450).
  */
-class EdgeSystemUserResolver
+class SystemUserResolver
 {
-    public const CACHE_KEY         = 'edge:system_user_id';
+    public const CACHE_KEY         = 'system:user_id';
 
     public function __construct(private readonly SettingsService $settings) {}
 
     /**
-     * Resolve (or lazily provision) the edge-system user id. Cached forever
+     * Resolve (or lazily provision) the system user id. Cached forever
      * once seeded; re-provisioned if the cached id is stale.
      */
     public function id(): int
     {
-        $email = $this->settings->requiredString('edge.system_user.email');
-        $name = $this->settings->requiredString('edge.system_user.name');
+        $email = $this->settings->requiredString('system_user.email');
+        $name = $this->settings->requiredString('system_user.name');
         $cached = Cache::get(self::CACHE_KEY);
         if (is_int($cached) && User::query()->whereKey($cached)->exists()) {
             return $cached;
@@ -59,9 +61,9 @@ class EdgeSystemUserResolver
     }
 
     /**
-     * Run $fn impersonating the edge-system user on the `web` guard so
+     * Run $fn impersonating the system user on the `web` guard so
      * HasAuditLog's Auth::id() returns a valid users.id rather than the
-     * EdgeDevice PK from the `edge_device` guard.
+     * portal-user PK from a non-web guard.
      */
     public function impersonate(callable $fn): mixed
     {

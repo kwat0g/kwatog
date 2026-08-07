@@ -335,29 +335,6 @@ class KpiSnapshotService
         return $avg === null ? null : round((float) $avg, 2);
     }
 
-    private function computeCopqPctRevenue(int $year, int $month): ?float
-    {
-        // COPQ total / revenue (from invoices) * 100
-        $copqSnap = DB::table('copq_snapshots')
-            ->where('period_year', $year)
-            ->where('period_month', $month)
-            ->first();
-        $copqTotal = (float) ($copqSnap->total_cost ?? 0);
-
-        $from = Carbon::create($year, $month, 1)->startOfDay()->toDateTimeString();
-        $to = Carbon::create($year, $month, 1)->endOfMonth()->toDateTimeString();
-        $revenue = (float) DB::table('invoices')
-            ->where('status', 'paid')
-            ->whereBetween('paid_at', [$from, $to])
-            ->sum('total_amount');
-
-        if ($revenue == 0) {
-            return null;
-        }
-
-        return round(($copqTotal / $revenue) * 100, 4);
-    }
-
     private function computeAttendanceRate(int $year, int $month): ?float
     {
         $from = Carbon::create($year, $month, 1)->startOfDay()->toDateString();

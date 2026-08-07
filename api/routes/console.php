@@ -210,22 +210,6 @@ Schedule::command('training:check-expiries')
     ->withoutOverlapping()
     ->onOneServer();
 
-// T3.6.C — Monthly COPQ rollup snapshot on the 1st at 02:30. Snaps the
-// PRIOR calendar month via CopqService::snapshot(). Idempotent
-// (updateOrCreate keyed by period_year+period_month).
-Schedule::command('copq:snap-monthly')
-    ->monthlyOn(1, '02:30')
-    ->withoutOverlapping()
-    ->onOneServer();
-
-// T3.5.D — Daily controlled-document review reminders at 06:45.
-// Idempotent — re-fires only after `last_review_alert_at` is older than 7 days
-// or the doc has been re-reviewed (clears the alert stamp).
-Schedule::command('docs:check-reviews')
-    ->dailyAt('06:45')
-    ->withoutOverlapping()
-    ->onOneServer();
-
 // OGAMI-016 — recompute calibration due/overdue statuses daily at 06:50.
 Schedule::command('calibration:check-due')
     ->dailyAt('06:50')

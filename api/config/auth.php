@@ -20,11 +20,6 @@ return [
             'driver' => 'sanctum',
             'provider' => 'customer_portal_users',
         ],
-        // T2.0 — Edge device guard (Sanctum bearer token)
-        'edge_device' => [
-            'driver' => 'sanctum',
-            'provider' => 'edge_devices',
-        ],
     ],
 
     'providers' => [
@@ -40,11 +35,6 @@ return [
         'customer_portal_users' => [
             'driver' => 'eloquent',
             'model' => App\Modules\B2B\Models\CustomerPortalUser::class,
-        ],
-        // T2.0 — Edge device provider
-        'edge_devices' => [
-            'driver' => 'eloquent',
-            'model' => App\Modules\Edge\Models\EdgeDevice::class,
         ],
     ],
 
