@@ -414,7 +414,6 @@ class RolePermissionSeeder extends Seeder
                     $this->module('attendance'),
                     $this->module('leave'),
                     $this->module('hr_separation'),
-                    $this->module('hr_performance'),
                     $this->module('hr_recruitment'),
                     $this->module('loans'),
                     $this->selfService(),

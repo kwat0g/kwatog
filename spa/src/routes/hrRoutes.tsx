@@ -47,9 +47,6 @@ const SeparationDetailPage = lazy(() => import('@/pages/hr/separations/detail'))
 
 
 // Performance Reviews
-const PerformanceCyclesPage = lazy(() => import('@/pages/hr/performance-reviews'));
-const PerformanceReviewsPage = lazy(() => import('@/pages/hr/performance-reviews/reviews'));
-const SubmitReviewPage = lazy(() => import('@/pages/hr/performance-reviews/submit'));
 
 // Training Matrix
 const TrainingMatrixPage = lazy(() => import('@/pages/hr/training/matrix'));
@@ -204,12 +201,6 @@ export const hrRoutes = (
 
  {/* Performance Reviews */}
  <Route element={<ModuleGuard module="hr" />}>
- <Route path="/hr/performance-reviews"
- element={<PermissionGuard permission="hr.performance.view"><PerformanceCyclesPage /></PermissionGuard>} />
- <Route path="/hr/performance-reviews/reviews"
- element={<PermissionGuard permission="hr.performance.view"><PerformanceReviewsPage /></PermissionGuard>} />
- <Route path="/hr/performance-reviews/:id/submit"
- element={<PermissionGuard permission="hr.performance.view"><SubmitReviewPage /></PermissionGuard>} />
  </Route>
 
  {/* Training Matrix */}

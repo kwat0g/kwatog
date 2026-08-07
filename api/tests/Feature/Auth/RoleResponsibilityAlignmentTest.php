@@ -43,7 +43,7 @@ class RoleResponsibilityAlignmentTest extends TestCase
                 ['dashboard.ppc.view', 'quality.inspections.manage', 'purchasing.po.approve', 'attendance.edit', 'inventory.stock_count.view']],
             'PPC Head' => ['ppc_head',
                 ['mrp.boms.manage', 'mrp.plans.run', 'forecasting.manage', 'production.wo.confirm'],
-                ['attendance.edit', 'leave.approve_hr', 'loans.view', 'payroll.periods.view', 'quality.documents.view']],
+                ['attendance.edit', 'leave.approve_hr', 'loans.view', 'payroll.periods.view']],
             'Purchasing Officer' => ['purchasing_officer',
                 ['purchasing.pr.create', 'purchasing.po.approve', 'purchasing.po.send', 'inventory.grn.create'],
                 ['purchasing.po.sod_override', 'accounting.bills.pay', 'production.wo.record', 'attendance.edit', 'inventory.stock_count.view']],
@@ -51,7 +51,7 @@ class RoleResponsibilityAlignmentTest extends TestCase
                 ['inventory.grn.create', 'inventory.issue.create', 'inventory.stock_count.manage', 'inventory.picking.view'],
                 ['purchasing.po.approve', 'accounting.view', 'quality.inspections.manage', 'payroll.periods.view']],
             'QC Inspector' => ['qc_inspector',
-                ['quality.inspections.manage', 'quality.ncr.manage', 'quality.documents.manage', 'inventory.mrb.manage'],
+                ['quality.inspections.manage', 'quality.ncr.manage', 'inventory.mrb.manage'],
                 ['production.wo.record', 'purchasing.po.approve', 'accounting.view', 'hr.employees.view', 'inventory.stock_count.view']],
             'Maintenance Technician' => ['maintenance_tech',
                 ['maintenance.wo.create', 'maintenance.wo.complete', 'assets.view'],
@@ -64,7 +64,7 @@ class RoleResponsibilityAlignmentTest extends TestCase
                 ['leave.approve_hr', 'loans.write_off', 'purchasing.po.approve', 'payroll.periods.finalize', 'hr.employees.create']],
             'Employee' => ['employee',
                 ['attendance.view', 'leave.view', 'leave.create', 'payroll.view'],
-                ['attendance.ot.create', 'loans.view', 'quality.documents.view', 'payroll.periods.view', 'hr.employees.view']],
+                ['attendance.ot.create', 'loans.view', 'payroll.periods.view', 'hr.employees.view']],
             'Driver' => ['driver',
                 ['supply_chain.driver.access', 'attendance.view', 'leave.view', 'payroll.view'],
                 ['supply_chain.view', 'inventory.view', 'loans.view', 'hr.employees.view']],
@@ -112,7 +112,6 @@ class RoleResponsibilityAlignmentTest extends TestCase
         $this->actingAs($user, 'sanctum')->getJson('/api/v1/leaves/calendar')->assertForbidden();
         $this->actingAs($user, 'sanctum')->getJson('/api/v1/loans')->assertForbidden();
         $this->actingAs($user, 'sanctum')->getJson('/api/v1/payroll-periods')->assertForbidden();
-        $this->actingAs($user, 'sanctum')->getJson('/api/v1/quality/documents')->assertForbidden();
 
         // Register future-facing export modules so the test proves their
         // permission mapping instead of stopping at the registry's 404 guard.

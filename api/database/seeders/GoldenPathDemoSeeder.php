@@ -9,7 +9,6 @@ use App\Modules\Accounting\Models\Bill;
 use App\Modules\Accounting\Models\BillItem;
 use App\Modules\Accounting\Models\Budget;
 use App\Modules\Accounting\Models\BudgetLineItem;
-use App\Modules\Accounting\Models\FxRate;
 use App\Modules\Accounting\Models\Invoice;
 use App\Modules\Accounting\Services\CreditNoteService;
 use App\Modules\Auth\Models\User;
@@ -70,7 +69,6 @@ class GoldenPathDemoSeeder extends Seeder
         $this->section('PR conversion and budget rehearsal (ADV6/9)', fn () => $this->seedProcurementRehearsal());
         $this->section('supplier-return rehearsal (ADV12)', fn () => $this->seedSupplierReturnRehearsal());
         $this->section('forecast-to-MRP opt-in (ADV11)', fn () => $this->seedForecastMrpOptIn());
-        $this->section('parent-pack FX rates (REC-12)', fn () => $this->seedParentPackFxRates());
         $this->section('dynamic route fixtures', fn () => $this->seedDynamicRouteFixtures());
 
         $this->command?->info('Golden-path demo seed complete.');
@@ -94,21 +92,6 @@ class GoldenPathDemoSeeder extends Seeder
         $this->command?->info("  {$product->part_number} forecast opted into MRP projection.");
     }
 
-    /** REC-12 — keep the translated parent pack usable in a fresh demo. */
-    private function seedParentPackFxRates(): void
-    {
-        $adminId = $this->admin()->id;
-        $date = Carbon::today()->toDateString();
-
-        foreach (['JPY' => '0.38000000', 'USD' => '58.50000000'] as $currency => $rate) {
-            FxRate::query()->updateOrCreate(
-                ['currency_code' => $currency, 'rate_date' => $date],
-                ['rate_to_functional' => $rate, 'source' => 'demo_seed', 'created_by' => $adminId],
-            );
-        }
-
-        $this->command?->info("  JPY and USD parent-pack rates seeded for {$date}.");
-    }
 
     /** Run one section and fail loudly: a partial "successful" demo seed is unsafe. */
     private function section(string $label, callable $fn): void
@@ -618,34 +601,6 @@ class GoldenPathDemoSeeder extends Seeder
             ],
         );
 
-        DB::table('review_cycles')->updateOrInsert(
-            ['name' => '2026 Defense Demo Review'],
-            [
-                'cycle_type' => 'annual',
-                'start_date' => $now->copy()->startOfYear()->toDateString(),
-                'end_date' => $now->copy()->endOfYear()->toDateString(),
-                'status' => 'active',
-                'description' => 'Defense demo performance review cycle.',
-                'created_by' => $admin->id,
-                'created_at' => $now,
-                'updated_at' => $now,
-            ],
-        );
-        $reviewCycleId = DB::table('review_cycles')->where('name', '2026 Defense Demo Review')->value('id');
-        DB::table('performance_reviews')->updateOrInsert(
-            [
-                'review_cycle_id' => $reviewCycleId,
-                'employee_id' => $employeeIds[0],
-                'reviewer_id' => $employeeIds[1],
-            ],
-            [
-                'status' => 'pending',
-                'ratings' => null,
-                'deleted_at' => null,
-                'created_at' => $now,
-                'updated_at' => $now,
-            ],
-        );
 
         if ($posting) {
             DB::table('job_applications')->updateOrInsert(
@@ -738,19 +693,6 @@ class GoldenPathDemoSeeder extends Seeder
             ],
         );
 
-        DB::table('controlled_documents')->updateOrInsert(
-            ['code' => 'QMS-DEMO-001'],
-            [
-                'title' => 'Defense Demo Quality Procedure',
-                'category' => 'sop',
-                'description' => 'Demonstrates the controlled-document detail workflow.',
-                'assignee_role' => 'qc_inspector',
-                'review_interval_months' => 12,
-                'is_active' => true,
-                'created_at' => $now,
-                'updated_at' => $now,
-            ],
-        );
 
         DB::table('ncr_templates')->updateOrInsert(
             ['name' => 'Defense Demo Inspection Failure'],

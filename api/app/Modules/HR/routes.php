@@ -11,7 +11,6 @@ use App\Modules\HR\Controllers\EmployeeOnboardingController;
 use App\Modules\HR\Controllers\EmployeePropertyController;
 use App\Modules\HR\Controllers\EmployeeSkillController;
 use App\Modules\HR\Controllers\EmployeeTrainingController;
-use App\Modules\HR\Controllers\PerformanceReviewController;
 use App\Modules\HR\Controllers\PositionController;
 use App\Modules\HR\Controllers\ProfileUpdateReviewController;
 use App\Modules\HR\Controllers\PublicRecruitmentController;
@@ -258,23 +257,6 @@ Route::delete('/{employee}/photo', [EmployeeController::class, 'deletePhoto'])->
         Route::get('/trainings', [SelfServiceController::class, 'trainings']);
     });
 
-    // Performance reviews
-    Route::prefix('performance-reviews')->middleware('permission:hr.performance.view')->group(function () {
-        Route::get('/options', [PerformanceReviewController::class, 'options']);
-        Route::get('/cycles', [PerformanceReviewController::class, 'cycles']);
-        Route::post('/cycles', [PerformanceReviewController::class, 'storeCycle'])->middleware('permission:hr.performance.manage');
-        Route::post('/cycles/{cycle}/activate', [PerformanceReviewController::class, 'activateCycle'])->middleware('permission:hr.performance.manage');
-        Route::post('/cycles/{cycle}/close', [PerformanceReviewController::class, 'closeCycle'])->middleware('permission:hr.performance.manage');
-        Route::get('/', [PerformanceReviewController::class, 'index']);
-        Route::post('/', [PerformanceReviewController::class, 'store'])->middleware('permission:hr.performance.manage');
-        Route::get('/templates', [PerformanceReviewController::class, 'templates']);
-        Route::post('/templates', [PerformanceReviewController::class, 'storeTemplate'])->middleware('permission:hr.performance.manage');
-        Route::get('/{review}', [PerformanceReviewController::class, 'show']);
-    });
-
-    // Submit/acknowledge — accessible by any authenticated employee (controller does its own auth)
-    Route::post('performance-reviews/{review}/submit', [PerformanceReviewController::class, 'submit']);
-    Route::post('performance-reviews/{review}/acknowledge', [PerformanceReviewController::class, 'acknowledge']);
 
     // Sprint 8 — Task 71: clearance lifecycle
     Route::prefix('clearances')->group(function () {

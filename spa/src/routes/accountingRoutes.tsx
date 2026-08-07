@@ -30,15 +30,11 @@ const BalanceSheetPage = lazy(() => import('@/pages/accounting/balance-sheet'));
 const ArAgingPage = lazy(() => import('@/pages/accounting/ar-aging'));
 const ApAgingPage = lazy(() => import('@/pages/accounting/ap-aging'));
 // REC-05 — go-live opening balances
-const OpeningBalancesPage = lazy(() => import('@/pages/accounting/opening-balances'));
 // REC-14 — accounting period close/reopen
 const AccountingPeriodsPage = lazy(() => import('@/pages/accounting/periods'));
 // REC-13 — AR/AP credit notes
 const CreditNotesPage = lazy(() => import('@/pages/accounting/credit-notes'));
 const CreditNoteDetailPage = lazy(() => import('@/pages/accounting/credit-notes/detail'));
-// REC-12 — multi-currency (FX rates + JPY parent-pack translation)
-const FxRatesPage = lazy(() => import('@/pages/accounting/fx-rates'));
-const ParentPackPage = lazy(() => import('@/pages/accounting/parent-pack'));
 
 export const accountingRoutes = (
  <>
@@ -102,18 +98,12 @@ export const accountingRoutes = (
  element={<PermissionGuard permission="accounting.statements.view"><ArAgingPage /></PermissionGuard>} />
  <Route path="/accounting/ap-aging"
  element={<PermissionGuard permission="accounting.statements.view"><ApAgingPage /></PermissionGuard>} />
- <Route path="/accounting/opening-balances"
- element={<PermissionGuard permission="accounting.opening_balance.manage"><OpeningBalancesPage /></PermissionGuard>} />
  <Route path="/accounting/periods"
  element={<PermissionGuard permission="accounting.periods.view"><AccountingPeriodsPage /></PermissionGuard>} />
  <Route path="/accounting/credit-notes"
  element={<PermissionGuard permission="accounting.credit_notes.view"><CreditNotesPage /></PermissionGuard>} />
  <Route path="/accounting/credit-notes/:id"
  element={<PermissionGuard permission="accounting.credit_notes.view"><CreditNoteDetailPage /></PermissionGuard>} />
- <Route path="/accounting/fx-rates"
- element={<PermissionGuard permission="accounting.currency.view"><FxRatesPage /></PermissionGuard>} />
- <Route path="/accounting/parent-pack"
- element={<PermissionGuard permission="accounting.currency.view"><ParentPackPage /></PermissionGuard>} />
  </Route>
  </>
 );

@@ -344,7 +344,6 @@ class UpdateSettingRequest extends FormRequest
             'company.employee_email_domain' => ['value' => ['required', 'string', 'max:255']],
             'company.sales_inbox_email' => ['value' => ['required', 'email', 'max:255']],
             'hr.default_user_role_slug' => ['value' => ['required', 'string', 'max:100']],
-            'hr.performance.rating_scale' => ['value' => ['required', 'array', 'min:1']],
             'hr.self_service.certificate_catalog' => ['value' => ['required', 'array', 'min:1']],
             'accounting.functional_currency_code' => ['value' => ['required', 'string', 'size:3']],
             'accounting.reporting_currency_code' => ['value' => ['required', 'string', 'size:3']],
