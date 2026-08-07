@@ -21,7 +21,6 @@ use App\Modules\HR\Controllers\SalaryAdjustmentController;
 use App\Modules\HR\Controllers\SelfServiceController;
 use App\Modules\HR\Controllers\SeparationController;
 use App\Modules\HR\Controllers\SkillController;
-use App\Modules\HR\Controllers\SuccessionPlanController;
 use App\Modules\HR\Controllers\TrainingController;
 use App\Modules\HR\Controllers\TrainingMatrixController;
 use Illuminate\Support\Facades\Route;
@@ -258,12 +257,6 @@ Route::delete('/{employee}/photo', [EmployeeController::class, 'deletePhoto'])->
         // T3.4.A — read-only training records for the session employee.
         Route::get('/trainings', [SelfServiceController::class, 'trainings']);
     });
-
-    // Succession planning
-    Route::get('succession-plans/options', [SuccessionPlanController::class, 'options'])
-        ->middleware('permission:hr.succession.manage');
-    Route::apiResource('succession-plans', SuccessionPlanController::class)
-        ->middleware('permission:hr.succession.manage');
 
     // Performance reviews
     Route::prefix('performance-reviews')->middleware('permission:hr.performance.view')->group(function () {

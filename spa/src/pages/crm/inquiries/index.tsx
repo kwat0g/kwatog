@@ -15,7 +15,6 @@ import type { ContactInquiry, ContactInquiryStatus } from '@/types/crm';
 const variant: Record<ContactInquiryStatus, 'info' | 'warning' | 'success' | 'neutral'> = {
  new: 'info',
  in_progress: 'warning',
- converted: 'success',
  closed: 'neutral',
 };
 
@@ -50,7 +49,6 @@ export default function InquiryListPage() {
  { value: '', label: 'All' },
  { value: 'new', label: 'New' },
  { value: 'in_progress', label: 'In progress' },
- { value: 'converted', label: 'Converted' },
  { value: 'closed', label: 'Closed' },
  ]},
  ];

@@ -105,13 +105,14 @@ LOC weight, test coverage, seeder mentions.
 | Keep | None |
 | Risk | Low |
 
-### 8. Employee Skills module (616 LOC)
+### 8. Employee Skills module (616 LOC) — ~~CUT~~ **WITHDRAWN, KEEP**
 | | |
 |---|---|
-| Surface | `/hr/skills` (skills list, per-employee) |
-| Why cut | Redundant with Training Matrix (already kept). Empty concept |
-| Keep | None |
-| Risk | Low |
+| Surface | `/hr/skills` (skills catalog), Skills tab on employee detail |
+| Original call | "Redundant with Training Matrix" — **wrong** |
+| Why keep | Skills is not redundant with the Training Matrix, it *is* the matrix's data source. `TrainingMatrixController` cross-tabulates `Skill::query()` × `employee.skills` to produce trained/expired/gap cells — the IATF clause 7.2 competence evidence. Cutting Skills leaves `/hr/training/matrix` (live, routed, in sidebar) an empty grid. The catalog CRUD is also the only way to create skills, so it is load-bearing for the demo too |
+| Verified | `api/app/Modules/HR/Controllers/TrainingMatrixController.php:10,39,52-63,92-100` |
+| Separate finding | `skills` and `employee_skills` are both **0 rows** — the matrix renders blank in a demo today. Seeding gap, not a scope problem. Worth adding demo rows before defense |
 
 ### 9. SPC (2,864 LOC, 29 files)
 | | |
@@ -213,7 +214,7 @@ LOC weight, test coverage, seeder mentions.
 
 ## REMOVAL ORDER (safest first)
 
-1. **Phase 1 — dead/free:** Quotes (no UI), Budget Revisions, Employee Skills, QMS Documents (no demo refs)
+1. **Phase 1 — dead/free:** Quotes (no UI), Budget Revisions, QMS Documents (no demo refs). ~~Employee Skills~~ withdrawn — see §8, it backs the IATF training matrix
 2. **Phase 2 — zero-coupling features:** Commissions, Succession, Performance Reviews, Leads/Opportunities, Opening Balances, Accounting Periods, FX Rates/Parent Pack
 3. **Phase 3 — heavy but standalone:** SPC, COPQ (needs dashboard widget detach), Landing page (needs root redirect), Recruitment (+ careers site)
 4. **Phase 4 — surgical:** Edge module (keep `EdgeSystemUserResolver`), Budget Transfers (keep overview/enforcement)

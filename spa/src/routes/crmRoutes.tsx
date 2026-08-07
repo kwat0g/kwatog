@@ -28,20 +28,8 @@ const ComplaintDetailPage = lazy(() => import('@/pages/crm/complaints/detail'));
 const ComplaintCreatePage = lazy(() => import('@/pages/crm/complaints/create'));
 
 // Commission tracking
-const CommissionsListPage = lazy(() => import('@/pages/crm/commissions'));
-const CommissionRatesPage = lazy(() => import('@/pages/crm/commissions/rates'));
-
-// Sales pipeline — leads + opportunities (audit §3.1 follow-up)
-const LeadsListPage = lazy(() => import('@/pages/crm/leads'));
 const InquiryListPage = lazy(() => import('@/pages/crm/inquiries'));
 const InquiryDetailPage = lazy(() => import('@/pages/crm/inquiries/detail'));
-const CreateLeadPage = lazy(() => import('@/pages/crm/leads/create'));
-const LeadDetailPage = lazy(() => import('@/pages/crm/leads/detail'));
-const EditLeadPage = lazy(() => import('@/pages/crm/leads/edit'));
-const OpportunitiesListPage = lazy(() => import('@/pages/crm/opportunities'));
-const CreateOpportunityPage = lazy(() => import('@/pages/crm/opportunities/create'));
-const OpportunityDetailPage = lazy(() => import('@/pages/crm/opportunities/detail'));
-const EditOpportunityPage = lazy(() => import('@/pages/crm/opportunities/edit'));
 
 export const crmRoutes = (
  <>
@@ -49,30 +37,11 @@ export const crmRoutes = (
  <Route element={<ModuleGuard module="crm" />}>
  <Route path="/crm" element={<Navigate to="/crm/products" replace />} />
 
- {/* Sales pipeline — leads + opportunities (audit §3.1 follow-up) */}
- <Route path="/crm/leads"
- element={<PermissionGuard permission="crm.leads.view"><LeadsListPage /></PermissionGuard>} />
- <Route path="/crm/leads/create"
- element={<PermissionGuard permission="crm.leads.manage"><CreateLeadPage /></PermissionGuard>} />
- <Route path="/crm/leads/:id"
- element={<PermissionGuard permission="crm.leads.view"><LeadDetailPage /></PermissionGuard>} />
- <Route path="/crm/leads/:id/edit"
- element={<PermissionGuard permission="crm.leads.manage"><EditLeadPage /></PermissionGuard>} />
-
  {/* Public contact-form inbox — ERP-side reader for /landing/contact-inquiry */}
  <Route path="/crm/inquiries"
  element={<PermissionGuard permission="crm.inquiries.view"><InquiryListPage /></PermissionGuard>} />
  <Route path="/crm/inquiries/:id"
  element={<PermissionGuard permission="crm.inquiries.view"><InquiryDetailPage /></PermissionGuard>} />
-
- <Route path="/crm/opportunities"
- element={<PermissionGuard permission="crm.opportunities.view"><OpportunitiesListPage /></PermissionGuard>} />
- <Route path="/crm/opportunities/create"
- element={<PermissionGuard permission="crm.opportunities.manage"><CreateOpportunityPage /></PermissionGuard>} />
- <Route path="/crm/opportunities/:id"
- element={<PermissionGuard permission="crm.opportunities.view"><OpportunityDetailPage /></PermissionGuard>} />
- <Route path="/crm/opportunities/:id/edit"
- element={<PermissionGuard permission="crm.opportunities.manage"><EditOpportunityPage /></PermissionGuard>} />
 
  <Route path="/crm/products"
  element={<PermissionGuard permission="crm.products.view"><ProductsListPage /></PermissionGuard>} />
@@ -117,10 +86,6 @@ export const crmRoutes = (
  element={<PermissionGuard permission="crm.complaints.manage"><ComplaintDetailPage /></PermissionGuard>} />
 
  {/* Commission tracking */}
- <Route path="/crm/commissions"
- element={<PermissionGuard permission="crm.commissions.view"><CommissionsListPage /></PermissionGuard>} />
- <Route path="/crm/commissions/rates"
- element={<PermissionGuard permission="crm.commissions.manage"><CommissionRatesPage /></PermissionGuard>} />
  </Route>
  </>
 );

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Modules\Landing\Controllers;
 
 use App\Common\Exceptions\BusinessRuleException;
-use App\Modules\CRM\Resources\LeadResource;
 use App\Modules\Landing\Enums\ContactInquiryStatus;
 use App\Modules\Landing\Models\ContactInquiry;
 use App\Modules\Landing\Resources\ContactInquiryResource;
@@ -45,16 +44,5 @@ class ContactInquiryInboxController
         }
 
         return new ContactInquiryResource($inquiry);
-    }
-
-    public function convertToLead(ContactInquiry $inquiry): JsonResponse
-    {
-        try {
-            $lead = $this->service->convertToLead($inquiry);
-        } catch (BusinessRuleException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
-        }
-
-        return (new LeadResource($lead))->response()->setStatusCode(201);
     }
 }

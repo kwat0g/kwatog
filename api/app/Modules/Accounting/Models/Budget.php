@@ -57,10 +57,6 @@ class Budget extends Model
         return $this->hasMany(BudgetLineItem::class);
     }
 
-    public function revisions(): HasMany
-    {
-        return $this->hasMany(BudgetRevision::class);
-    }
 
     public function submittedBy(): BelongsTo
     {

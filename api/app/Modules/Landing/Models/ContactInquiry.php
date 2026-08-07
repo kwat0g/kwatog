@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Modules\Landing\Models;
 
 use App\Common\Traits\HasHashId;
-use App\Modules\CRM\Models\Lead;
 use App\Modules\Landing\Enums\ContactInquiryStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -43,10 +42,5 @@ class ContactInquiry extends Model
         return [
             'status' => ContactInquiryStatus::class,
         ];
-    }
-
-    public function convertedToLead(): BelongsTo
-    {
-        return $this->belongsTo(Lead::class, 'converted_to_lead_id');
     }
 }

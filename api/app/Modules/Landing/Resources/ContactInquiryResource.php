@@ -26,10 +26,6 @@ class ContactInquiryResource extends JsonResource
             'status_label' => $this->status->label(),
             'ip_address' => $this->ip_address,
             'user_agent' => $this->user_agent,
-            'converted_to_lead' => $this->whenLoaded('convertedToLead', fn (): ?array => $this->convertedToLead ? [
-                'id' => $this->convertedToLead->hash_id,
-                'lead_number' => $this->convertedToLead->lead_number,
-            ] : null),
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
         ];

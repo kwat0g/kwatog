@@ -691,21 +691,6 @@ class GoldenPathDemoSeeder extends Seeder
             ],
         );
 
-        DB::table('succession_plans')->updateOrInsert(
-            ['position_id' => $positionId, 'successor_id' => $employeeIds[1]],
-            [
-                'incumbent_id' => $employeeIds[0],
-                'readiness' => 'ready_1_year',
-                'priority' => 'high',
-                'development_notes' => 'Defense demo leadership development plan.',
-                'target_date' => $now->copy()->addYear()->toDateString(),
-                'status' => 'active',
-                'created_by' => $admin->id,
-                'deleted_at' => null,
-                'created_at' => $now,
-                'updated_at' => $now,
-            ],
-        );
 
         DB::table('material_review_records')->updateOrInsert(
             ['mrb_number' => 'MRB-DEMO-001'],

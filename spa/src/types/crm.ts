@@ -221,94 +221,13 @@ export interface SoChainResult {
  scheduling_conflicts: Array<{ work_order_id: string; wo_number: string; reasons: string[] }>;
 }
 
-// ─── Sales pipeline (Leads → Opportunities → Quotes) ───────────────────────
-
-export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'disqualified' | 'converted';
-export type LeadSource = 'referral' | 'website' | 'trade_show' | 'cold_call' | 'existing_customer' | 'other';
-export type OpportunityStage =
- | 'prospecting' | 'needs_analysis' | 'proposal' | 'negotiation' | 'won' | 'lost';
-
-export interface LeadAssignee {
- id: string;
- name: string;
-}
-
-export interface Lead {
- id: string;
- lead_number: string;
- company_name: string;
- contact_person: string;
- email: string | null;
- phone: string | null;
- source: LeadSource;
- source_label: string;
- status: LeadStatus;
- status_label: string;
- estimated_value: string | null;
- notes: string | null;
- converted_to_opportunity_id: string | null;
- assignee?: LeadAssignee | null;
- customer?: { id: string; name: string } | null;
- created_at: string;
- updated_at: string;
-}
-
-export interface Opportunity {
- id: string;
- opportunity_number: string;
- title: string;
- stage: OpportunityStage;
- stage_label: string;
- probability: number;
- estimated_value: string;
- expected_close_date: string | null;
- actual_close_date: string | null;
- lost_reason: string | null;
- notes: string | null;
- is_terminal: boolean;
- customer?: { id: string; name: string } | null;
- assignee?: LeadAssignee | null;
- lead?: { id: string; lead_number: string; company_name: string } | null;
- created_at: string;
- updated_at: string;
-}
-
-export interface CreateLeadData {
- company_name: string;
- contact_person: string;
- email?: string | null;
- phone?: string | null;
- source: LeadSource;
- estimated_value?: string | null;
- notes?: string | null;
- assigned_to?: string | null;
- customer_id?: string | null;
-}
-
-export type UpdateLeadData = Partial<CreateLeadData>;
-
-export interface CreateOpportunityData {
- customer_id: string;
- lead_id?: string | null;
- title: string;
- stage?: OpportunityStage | null;
- probability?: number | null;
- estimated_value?: string | null;
- expected_close_date?: string | null;
- assigned_to?: string | null;
- notes?: string | null;
-}
-
-export type UpdateOpportunityData = Partial<CreateOpportunityData>;
-
 /**
  * A submission from the public contact form (`/landing/contact-inquiry`).
  *
- * Kept out of `leads` on purpose: the form also catches job seekers and
- * supplier pitches, so promotion into the CRM funnel is an explicit action
- * rather than an automatic one.
+ * A lightweight inbox: operators triage submissions and follow up outside
+ * the system. Sales orders are created directly, not promoted from here.
  */
-export type ContactInquiryStatus = 'new' | 'in_progress' | 'converted' | 'closed';
+export type ContactInquiryStatus = 'new' | 'in_progress' | 'closed';
 
 export interface ContactInquiry {
  id: string;
@@ -322,7 +241,6 @@ export interface ContactInquiry {
  status_label: string;
  ip_address: string | null;
  user_agent: string | null;
- converted_to_lead?: { id: string; lead_number: string } | null;
  created_at: string;
  updated_at: string;
 }

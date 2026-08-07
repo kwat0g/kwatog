@@ -27,5 +27,4 @@ Route::middleware(['auth:sanctum'])->prefix('crm')->group(function (): void {
     Route::get('/inquiries',                    [ContactInquiryInboxController::class, 'index'])        ->middleware('permission:crm.inquiries.view');
     Route::get('/inquiries/{inquiry}',          [ContactInquiryInboxController::class, 'show'])         ->middleware('permission:crm.inquiries.view');
     Route::patch('/inquiries/{inquiry}/status', [ContactInquiryInboxController::class, 'updateStatus']) ->middleware('permission:crm.inquiries.manage');
-    Route::post('/inquiries/{inquiry}/convert', [ContactInquiryInboxController::class, 'convertToLead'])->middleware('permission:crm.inquiries.manage');
 });

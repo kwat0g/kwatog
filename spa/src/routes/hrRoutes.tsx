@@ -45,9 +45,6 @@ const LoanDetailPage = lazy(() => import('@/pages/loans/detail'));
 const SeparationsListPage = lazy(() => import('@/pages/hr/separations'));
 const SeparationDetailPage = lazy(() => import('@/pages/hr/separations/detail'));
 
-// Succession Plans
-const SuccessionPlansListPage = lazy(() => import('@/pages/hr/succession-plans'));
-const SuccessionPlanFormPage = lazy(() => import('@/pages/hr/succession-plans/form'));
 
 // Performance Reviews
 const PerformanceCyclesPage = lazy(() => import('@/pages/hr/performance-reviews'));
@@ -202,14 +199,7 @@ export const hrRoutes = (
  element={<PermissionGuard permission="hr.separation.view"><SeparationDetailPage /></PermissionGuard>} />
  </Route>
 
- {/* Succession Plans */}
  <Route element={<ModuleGuard module="hr" />}>
- <Route path="/hr/succession-plans"
- element={<PermissionGuard permission="hr.succession.manage"><SuccessionPlansListPage /></PermissionGuard>} />
- <Route path="/hr/succession-plans/create"
- element={<PermissionGuard permission="hr.succession.manage"><SuccessionPlanFormPage /></PermissionGuard>} />
- <Route path="/hr/succession-plans/:id/edit"
- element={<PermissionGuard permission="hr.succession.manage"><SuccessionPlanFormPage /></PermissionGuard>} />
  </Route>
 
  {/* Performance Reviews */}

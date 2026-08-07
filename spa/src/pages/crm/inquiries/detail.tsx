@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowUpRight, Mail, Phone, Building2 } from 'lucide-react';
+import { useParams } from 'react-router-dom';
+import { Mail, Phone, Building2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { inquiriesApi } from '@/api/crm/inquiries';
 import { Button } from '@/components/ui/Button';
@@ -16,13 +16,11 @@ import type { ContactInquiryStatus } from '@/types/crm';
 const variant: Record<ContactInquiryStatus, 'info' | 'warning' | 'success' | 'neutral'> = {
  new: 'info',
  in_progress: 'warning',
- converted: 'success',
  closed: 'neutral',
 };
 
 export default function InquiryDetailPage() {
  const { id = '' } = useParams();
- const navigate = useNavigate();
  const queryClient = useQueryClient();
  const { can } = usePermission();
  const canManage = can('crm.inquiries.manage');
@@ -37,23 +35,12 @@ export default function InquiryDetailPage() {
  };
 
  const statusMutation = useMutation({
- mutationFn: (status: Exclude<ContactInquiryStatus, 'converted'>) => inquiriesApi.updateStatus(id, status),
+ mutationFn: (status: ContactInquiryStatus) => inquiriesApi.updateStatus(id, status),
  onSuccess: () => {
  toast.success('Status updated');
  invalidate();
  },
  onError: () => toast.error('Could not update status'),
- });
-
- const convertMutation = useMutation({
- mutationFn: () => inquiriesApi.convertToLead(id),
- onSuccess: (lead) => {
- toast.success(`Converted to lead ${lead.lead_number}`);
- invalidate();
- queryClient.invalidateQueries({ queryKey: ['crm', 'leads'] });
- navigate(`/crm/leads/${lead.id}`);
- },
- onError: () => toast.error('Could not convert this inquiry'),
  });
 
  if (isLoading) return <SkeletonDetail />;
@@ -64,8 +51,7 @@ export default function InquiryDetailPage() {
  );
  }
 
- const isConverted = data.status === 'converted';
- const pending = statusMutation.isPending || convertMutation.isPending;
+ const pending = statusMutation.isPending;
 
  return (
  <div>
@@ -75,7 +61,7 @@ export default function InquiryDetailPage() {
  actions={
  <div className="flex items-center gap-2">
  <Chip variant={variant[data.status]}>{data.status_label}</Chip>
- {canManage && !isConverted && (
+ {canManage && (
  <>
  {data.status !== 'in_progress' && (
  <Button variant="secondary" size="sm" disabled={pending}
@@ -89,12 +75,6 @@ export default function InquiryDetailPage() {
  Close
  </Button>
  )}
- <Button variant="primary" size="sm" disabled={pending}
- loading={convertMutation.isPending}
- icon={<ArrowUpRight size={14} />}
- onClick={() => convertMutation.mutate()}>
- Convert to lead
- </Button>
  </>
  )}
  </div>
@@ -129,18 +109,6 @@ export default function InquiryDetailPage() {
  )}
  </dl>
  </Panel>
-
- {data.converted_to_lead && (
- <Panel title="Converted">
- <div className="px-4 py-3">
- <button type="button"
- onClick={() => navigate(`/crm/leads/${data.converted_to_lead!.id}`)}
- className="font-mono text-link hover:text-link-hover">
- {data.converted_to_lead.lead_number}
- </button>
- </div>
- </Panel>
- )}
 
  <Panel title="Submission">
  <dl className="divide-y divide-subtle text-sm">

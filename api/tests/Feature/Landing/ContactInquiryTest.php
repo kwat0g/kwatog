@@ -6,8 +6,6 @@ namespace Tests\Feature\Landing;
 
 use App\Modules\Auth\Models\Role;
 use App\Modules\Auth\Models\User;
-use App\Modules\CRM\Enums\LeadSource;
-use App\Modules\CRM\Models\Lead;
 use App\Modules\Landing\Enums\ContactInquiryStatus;
 use App\Modules\Landing\Models\ContactInquiry;
 use App\Modules\Landing\Notifications\ContactInquiryReceivedNotification;
@@ -129,7 +127,7 @@ class ContactInquiryTest extends TestCase
         $this->assertSame($inquiry->hash_id, $response->json('data.0.id'));
     }
 
-    public function test_status_can_be_updated_but_converted_is_not_settable_by_hand(): void
+    public function test_status_can_be_updated_and_unknown_statuses_are_rejected(): void
     {
         $inquiry = ContactInquiry::factory()->create();
         $admin = $this->admin();
@@ -139,63 +137,9 @@ class ContactInquiryTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.status', 'in_progress');
 
-        // 'converted' would claim a lead exists. Only the convert action sets it.
+        // 'converted' belonged to the removed sales funnel — no longer a valid status.
         $this->actingAs($admin)
             ->patchJson("/api/v1/crm/inquiries/{$inquiry->hash_id}/status", ['status' => 'converted'])
             ->assertStatus(422);
-    }
-
-    // ─── convert to lead ─────────────────────────────────────────────────────
-
-    public function test_convert_creates_website_sourced_lead_and_marks_inquiry(): void
-    {
-        $inquiry = ContactInquiry::factory()->create([
-            'full_name' => 'Maria Santos',
-            'company' => 'Nissan PH',
-            'email' => 'maria@nissan.ph',
-            'phone' => '+63 917 555 0202',
-            'message' => 'Interested in discussing volume for relay covers.',
-        ]);
-
-        $this->actingAs($this->admin())
-            ->postJson("/api/v1/crm/inquiries/{$inquiry->hash_id}/convert")
-            ->assertCreated();
-
-        $lead = Lead::where('email', 'maria@nissan.ph')->firstOrFail();
-        $this->assertSame('Nissan PH', $lead->company_name);
-        $this->assertSame('Maria Santos', $lead->contact_person);
-        $this->assertSame(LeadSource::Website->value, $lead->source instanceof LeadSource ? $lead->source->value : $lead->source);
-        $this->assertSame('Interested in discussing volume for relay covers.', $lead->notes);
-
-        $inquiry->refresh();
-        $this->assertSame(ContactInquiryStatus::Converted, $inquiry->status);
-        $this->assertSame($lead->id, $inquiry->converted_to_lead_id);
-    }
-
-    public function test_convert_falls_back_to_sender_name_when_no_company(): void
-    {
-        // company_name is required on a lead; an individual is their own company.
-        $inquiry = ContactInquiry::factory()->create([
-            'full_name' => 'Solo Enquirer',
-            'company' => null,
-            'email' => 'solo@example.com',
-        ]);
-
-        $this->actingAs($this->admin())
-            ->postJson("/api/v1/crm/inquiries/{$inquiry->hash_id}/convert")
-            ->assertCreated();
-
-        $this->assertSame('Solo Enquirer', Lead::where('email', 'solo@example.com')->value('company_name'));
-    }
-
-    public function test_convert_is_refused_twice(): void
-    {
-        $inquiry = ContactInquiry::factory()->create();
-        $admin = $this->admin();
-
-        $this->actingAs($admin)->postJson("/api/v1/crm/inquiries/{$inquiry->hash_id}/convert")->assertCreated();
-        $this->actingAs($admin)->postJson("/api/v1/crm/inquiries/{$inquiry->hash_id}/convert")->assertStatus(422);
-
-        $this->assertSame(1, Lead::where('email', $inquiry->email)->count());
     }
 }
