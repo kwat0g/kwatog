@@ -48,6 +48,13 @@ jobs:
       - name: Typecheck (enforced)
         run: npm run typecheck
 
+      - name: Token discipline (enforced)
+        # The Atelier rebrand works because every colour resolves through a
+        # token in src/styles/tokens.css — that is what let 355 pages restyle
+        # without being edited. This blocks a hex literal or raw Tailwind
+        # palette class from creeping back in.
+        run: npm run audit:tokens
+
       - name: Vitest
         env:
           CI: 'true'

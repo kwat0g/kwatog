@@ -110,6 +110,14 @@
   --landing-line: rgba(28, 25, 23, 0.14);
   --landing-grid: rgba(28, 25, 23, 0.05);
   --landing-grid-size: 32px;
+
+  /*
+   * Plant-map pin ink. Theme-invariant on purpose — `.plant-map` desaturates
+   * its tiles but never inverts them, so the map is light paper under both
+   * themes and the pin has to stay dark to be visible. Declared here rather
+   * than inline in globals.css so no colour value lives outside this file.
+   */
+  --plant-map-pin-ink: #1c1917;
 }
 
 /*

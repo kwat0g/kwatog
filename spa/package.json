@@ -19,6 +19,7 @@
     "audit:rbac": "node ../scripts/rbac-static-audit.js",
     "audit:role-permissions": "NODE_PATH=./node_modules node ../scripts/role-permission-audit.js",
     "audit:api-routes": "node scripts/audit-api-routes.mjs",
+    "audit:tokens": "node scripts/check-token-discipline.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

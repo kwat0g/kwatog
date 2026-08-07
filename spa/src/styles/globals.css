@@ -104,8 +104,14 @@
   background: transparent;
 }
 
+/*
+ * Pin ink. Deliberately NOT --landing-ink: that token flips to near-white in
+ * dark mode, but `.plant-map` only desaturates its tiles — it never inverts
+ * them — so the sheet stays light paper on both themes and a light pin would
+ * disappear into it. This is a constant against a constant background.
+ */
 .plant-map-pin {
-  color: #1c1917; /* ink — constant on both themes; the map itself is a paper sheet */
+  color: var(--plant-map-pin-ink);
   filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.95))
     drop-shadow(0 1px 4px rgba(28, 25, 23, 0.35));
 }
