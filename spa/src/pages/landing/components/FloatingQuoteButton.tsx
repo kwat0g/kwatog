@@ -46,10 +46,10 @@ export function FloatingQuoteButton({ onOpenQuote }: FloatingQuoteButtonProps) {
       onClick={handleClick}
       className={cn(
         'fixed bottom-6 left-1/2 z-40 -translate-x-1/2 shadow-xl',
-        'inline-flex items-center gap-2 rounded-full bg-landing-accent px-5 py-3',
-        'font-sans text-sm font-medium text-landing-accent-fg',
-        'transition-all duration-300 hover:bg-landing-accent-hover hover:scale-105',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas',
+        'inline-flex items-center gap-2 rounded-full bg-accent px-5 py-3',
+        'font-sans text-sm font-medium text-accent-fg',
+        'transition-all duration-300 hover:bg-accent-hover hover:scale-105',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas',
         visible ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0 pointer-events-none',
       )}
     >

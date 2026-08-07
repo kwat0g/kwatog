@@ -23,18 +23,18 @@ function PillarCell({ pillar, index }: { pillar: PillarData; index: number }) {
     <div
       data-reveal
       data-reveal-delay={(index * 0.08).toFixed(2)}
-      className="group relative flex flex-col rounded-2xl border border-landing-border bg-landing-surface p-6 transition-all duration-500 hover:-translate-y-1.5 hover:border-landing-accent/50 hover:shadow-2xl hover:shadow-landing-accent/20 sm:p-8"
+      className="group relative flex flex-col rounded-lg border border-default bg-surface p-6 transition-colors duration-normal hover:border-accent/50 sm:p-8"
     >
-      <span className="font-mono text-[11px] tabular-nums text-landing-subtle-text">
+      <span className="font-mono text-[11px] tabular-nums text-text-subtle">
         0{index + 1}
       </span>
-      <div className="mt-5 flex h-11 w-11 items-center justify-center rounded-md border border-landing-border text-landing-accent transition-colors duration-500 group-hover:border-landing-accent/40">
+      <div className="mt-5 flex h-11 w-11 items-center justify-center rounded-md border border-default text-accent transition-colors duration-500 group-hover:border-accent/40">
         <Icon size={20} strokeWidth={1.6} />
       </div>
-      <h3 className="mt-6 font-display text-xl font-semibold tracking-[-0.02em] text-landing-text">
+      <h3 className="mt-6 font-display text-xl font-semibold tracking-[-0.02em] text-primary">
         {pillar.title}
       </h3>
-      <p className="mt-3 font-sans text-[15px] font-light leading-relaxed text-landing-text-secondary">
+      <p className="mt-3 font-sans text-[15px] font-light leading-relaxed text-secondary">
         {pillar.body}
       </p>
     </div>
@@ -64,7 +64,7 @@ export function QualitySection() {
                 key={m}
                 data-reveal
                 data-reveal-delay={(i * 0.07).toFixed(2)}
-                className="rounded-full border border-landing-border bg-landing-surface px-3.5 py-1.5 font-mono text-[11px] uppercase tracking-[0.12em] text-landing-text-secondary"
+                className="rounded-full border border-default bg-surface px-3.5 py-1.5 font-mono text-[11px] uppercase tracking-[0.12em] text-secondary"
               >
                 {m}
               </span>
@@ -81,16 +81,16 @@ export function QualitySection() {
         <div className={`mt-6 grid ${cardGap} lg:grid-cols-[1fr_1.4fr]`}>
           <div
             data-reveal="scale"
-            className="flex flex-col justify-between rounded-2xl border border-landing-border bg-landing-surface p-6 transition-all duration-500 hover:-translate-y-1.5 hover:border-landing-accent/50 hover:shadow-2xl hover:shadow-landing-accent/20 sm:p-8"
+            className="flex flex-col justify-between rounded-lg border border-default bg-surface p-6 transition-colors duration-normal hover:border-accent/50 sm:p-8"
           >
-            <div className="flex h-12 w-12 items-center justify-center rounded-md border border-landing-border text-landing-accent">
+            <div className="flex h-12 w-12 items-center justify-center rounded-md border border-default text-accent">
               <Award size={22} strokeWidth={1.6} />
             </div>
             <div className="mt-5">
-              <h3 className="font-display text-2xl font-semibold tracking-[-0.02em] text-landing-text">
+              <h3 className="font-display text-2xl font-semibold tracking-[-0.02em] text-primary">
                 {qualityPolicy?.certification_title || 'IATF 16949 & ISO 9001:2015 Certified'}
               </h3>
-              <p className="mt-3 font-sans text-base font-light leading-relaxed text-landing-text-secondary">
+              <p className="mt-3 font-sans text-base font-light leading-relaxed text-secondary">
                 {qualityPolicy?.certification_body || 'Audited and certified for automotive quality management and injection molded component production.'}
               </p>
               <button
@@ -112,7 +112,7 @@ export function QualitySection() {
                       // Error toast is handled by the global axios interceptor.
                     });
                 }}
-                className={cn('mt-6 inline-flex w-fit items-center gap-2 rounded-full border border-landing-border-strong px-6 py-3 font-sans text-[14px] font-medium text-landing-text transition-all duration-300 hover:scale-105 hover:border-landing-text hover:bg-landing-elevated cursor-pointer', focusRingLanding)}
+                className={cn('mt-6 inline-flex w-fit items-center gap-2 rounded-full border border-strong px-6 py-3 font-sans text-[14px] font-medium text-primary transition-all duration-300 hover:scale-105 hover:border-primary hover:bg-elevated cursor-pointer', focusRingLanding)}
               >
                 <Download size={14} />
                 Download quality policy
@@ -123,11 +123,11 @@ export function QualitySection() {
           <div
             data-reveal="scale"
             data-reveal-delay="0.08"
-            className="flex items-start gap-5 rounded-2xl border border-landing-accent/30 bg-landing-accent/5 p-6 transition-all duration-500 hover:-translate-y-1.5 hover:border-landing-accent/50 hover:shadow-2xl hover:shadow-landing-accent/20 sm:p-8"
+            className="flex items-start gap-5 rounded-lg border border-accent/30 bg-accent/5 p-6 transition-colors duration-normal hover:border-accent/50 sm:p-8"
           >
-            <ShieldCheck size={26} className="mt-0.5 shrink-0 text-landing-accent" strokeWidth={2} />
-            <p className="font-sans text-base font-light leading-relaxed text-landing-text-secondary">
-                <span className="font-medium text-landing-text">
+            <ShieldCheck size={26} className="mt-0.5 shrink-0 text-accent" strokeWidth={2} />
+            <p className="font-sans text-base font-light leading-relaxed text-secondary">
+                <span className="font-medium text-primary">
                   {qualityPolicy?.conformance_title || '100% Quality & Traceability Guarantee:'}
                 </span>{' '}
                 {qualityPolicy?.conformance_body || 'Full dimensional inspection, material melt-flow verification, and lot barcode tracking delivered with every shipment.'}

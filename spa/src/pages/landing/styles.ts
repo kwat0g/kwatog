@@ -41,8 +41,8 @@ export function section(
     sectionPadX,
     sectionPadY,
     background === 'surface'
-      ? 'border-y border-landing-border bg-landing-surface'
-      : 'bg-landing-canvas',
+      ? 'border-y border-default bg-surface'
+      : 'bg-canvas',
     className,
   );
 }
@@ -54,7 +54,7 @@ export const headingGap = 'mt-14';
 export const cardGap = 'gap-4';
 
 /**
- * Standard card. ONE radius (xl), ONE padding scale, ONE border language.
+ * Standard card. ONE radius (lg), ONE padding scale, ONE border language.
  *   'static'      — flat panel, no hover affordance (informational)
  *   'interactive' — border lifts to accent on hover (clickable/feature cards)
  */
@@ -63,13 +63,13 @@ export function card(
   className?: string,
 ): string {
   return cn(
-    'relative rounded-2xl border border-landing-border bg-landing-surface p-6 sm:p-8',
+    'relative rounded-lg border border-default bg-surface p-6 sm:p-8',
     variant === 'interactive' &&
-      'transition-all duration-500 hover:-translate-y-1.5 hover:border-landing-accent/50 hover:shadow-2xl hover:shadow-landing-accent/20',
+      'transition-colors duration-normal hover:border-accent/50',
     className,
   );
 }
 
 /** Mono eyebrow/label run used for tags and small caps text. */
 export const monoLabel =
-  'font-mono text-[11px] uppercase tracking-[0.16em] text-landing-muted';
+  'font-mono text-xs uppercase tracking-[0.16em] text-muted';

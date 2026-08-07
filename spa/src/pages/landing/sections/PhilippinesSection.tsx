@@ -20,8 +20,8 @@ const PlantMap = lazy(() =>
 
 const GRID_FALLBACK: React.CSSProperties = {
   backgroundImage:
-    'linear-gradient(var(--landing-grid) 1px, transparent 1px),' +
-    'linear-gradient(90deg, var(--landing-grid) 1px, transparent 1px)',
+    'linear-gradient(var(--blueprint-grid) 1px, transparent 1px),' +
+    'linear-gradient(90deg, var(--blueprint-grid) 1px, transparent 1px)',
   backgroundSize: '32px 32px',
 };
 
@@ -49,14 +49,14 @@ export function PhilippinesSection() {
   return (
     <section
       id="filipino-made"
-      className="relative overflow-hidden bg-landing-surface px-5 sm:px-5 py-20 sm:py-28"
+      className="relative overflow-hidden bg-surface px-5 sm:px-5 py-20 sm:py-28"
     >
       <div className="mx-auto grid max-w-[1440px] items-center gap-14 lg:grid-cols-2 lg:gap-20">
         {/* Copy */}
         <div data-reveal="left">
           <div data-reveal className="flex items-center gap-3">
-            <span className="h-0.5 w-8 bg-landing-accent" />
-            <span className="font-mono text-[11px] uppercase tracking-[0.24em] text-landing-accent">
+            <span className="h-0.5 w-8 bg-accent" />
+            <span className="font-mono text-[11px] uppercase tracking-[0.24em] text-accent">
               {copy?.eyebrow ?? '—'}
             </span>
           </div>
@@ -64,7 +64,7 @@ export function PhilippinesSection() {
           <h2
             data-reveal
             data-reveal-delay="0.05"
-            className="mt-6 font-display text-[clamp(2.5rem,5vw,4.5rem)] font-semibold leading-[0.98] tracking-[-0.03em] text-landing-text"
+            className="mt-6 font-display text-[clamp(2.5rem,5vw,4.5rem)] font-semibold leading-[0.98] tracking-[-0.03em] text-primary"
           >
             {copy?.title ?? '—'}
           </h2>
@@ -72,7 +72,7 @@ export function PhilippinesSection() {
           <p
             data-reveal
             data-reveal-delay="0.1"
-            className="mt-6 max-w-xl font-sans text-base font-light tracking-wide leading-relaxed text-landing-text-secondary sm:text-lg"
+            className="mt-6 max-w-xl font-sans text-base font-light tracking-wide leading-relaxed text-secondary sm:text-lg"
           >
             {copyBody || '—'}
           </p>
@@ -83,12 +83,12 @@ export function PhilippinesSection() {
                 key={`${p.value}-${p.label}`}
                 data-reveal
                 data-reveal-delay={(0.12 + i * 0.06).toFixed(2)}
-                className="group flex items-baseline gap-6 border-t border-landing-border pt-6 transition-colors duration-300 hover:border-landing-accent"
+                className="group flex items-baseline gap-6 border-t border-default pt-6 transition-colors duration-300 hover:border-accent"
               >
-                <dt className="w-24 shrink-0 font-display text-4xl font-semibold tracking-tight text-landing-accent transition-transform duration-500 group-hover:-translate-y-1">
+                <dt className="w-24 shrink-0 font-display text-4xl font-semibold tracking-tight text-accent transition-transform duration-500 group-hover:-translate-y-1">
                   {p.value}
                 </dt>
-                <dd className="font-sans text-base font-light leading-relaxed text-landing-text-secondary">
+                <dd className="font-sans text-base font-light leading-relaxed text-secondary">
                   {p.label}
                 </dd>
               </div>
@@ -98,7 +98,7 @@ export function PhilippinesSection() {
 
         {/* Visual — live location plate */}
         <div data-reveal="right" data-reveal-delay="0.1" className="relative">
-          <figure className="relative mx-auto aspect-square w-full max-w-[500px] overflow-hidden rounded-2xl border border-landing-border-strong bg-landing-canvas shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] transition-transform duration-700 hover:scale-[1.02]">
+          <figure className="relative mx-auto aspect-square w-full max-w-[500px] overflow-hidden rounded-2xl border border-strong bg-canvas shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] transition-transform duration-700 hover:scale-[1.02]">
             {/* The real map — lazy chunk; blueprint grid as the load placeholder */}
             <Suspense
               fallback={<div aria-hidden="true" className="absolute inset-0" style={GRID_FALLBACK} />}
@@ -119,10 +119,10 @@ export function PhilippinesSection() {
             {/* coordinate readouts — instrument chips over the paper map.
                 Solid paper backgrounds: color-mix alpha fails on some engines,
                 leaving floating text over the tiles. */}
-            <span className="absolute left-5 top-5 z-10 rounded-[3px] border border-landing-border bg-landing-canvas px-1.5 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-landing-muted">
+            <span className="absolute left-5 top-5 z-10 rounded-[3px] border border-default bg-canvas px-1.5 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-muted">
                 {hasCoordinates ? `${Math.abs(contactLat).toFixed(4)}° ${contactLat >= 0 ? 'N' : 'S'}` : '—'}
             </span>
-            <span className="absolute right-5 top-5 z-10 rounded-[3px] border border-landing-border bg-landing-canvas px-1.5 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-landing-muted">
+            <span className="absolute right-5 top-5 z-10 rounded-[3px] border border-default bg-canvas px-1.5 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-muted">
                 {hasCoordinates ? `${Math.abs(contactLon).toFixed(4)}° ${contactLon >= 0 ? 'E' : 'W'}` : '—'}
             </span>
 
@@ -133,25 +133,25 @@ export function PhilippinesSection() {
                 target="_blank"
                 rel="noopener noreferrer"
                 title="Open the plant location in Google Maps"
-                className="absolute left-1/2 top-14 z-10 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-[3px] border border-landing-border-strong bg-landing-canvas px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-landing-text transition-colors duration-200 hover:border-landing-accent hover:text-landing-accent sm:top-5"
+                className="absolute left-1/2 top-14 z-10 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-[3px] border border-strong bg-canvas px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-primary transition-colors duration-200 hover:border-accent hover:text-accent sm:top-5"
               >
-                <ExternalLink size={12} className="text-landing-accent" />
+                <ExternalLink size={12} className="text-accent" />
                 Open in Google Maps
               </a>
             ) : null}
 
             {/* location label */}
             <div className="absolute left-1/2 top-[calc(50%+64px)] z-10 w-[86%] -translate-x-1/2 text-center">
-              <span className="inline-flex max-w-full items-center justify-center gap-1.5 rounded-[3px] border border-landing-border bg-landing-canvas px-2 py-1 text-center font-mono text-[11px] uppercase leading-snug tracking-[0.16em] text-landing-text">
-                <MapPin size={13} className="shrink-0 text-landing-accent" />
+              <span className="inline-flex max-w-full items-center justify-center gap-1.5 rounded-[3px] border border-default bg-canvas px-2 py-1 text-center font-mono text-[11px] uppercase leading-snug tracking-[0.16em] text-primary">
+                <MapPin size={13} className="shrink-0 text-accent" />
                 {contact?.address ?? '—'}
               </span>
             </div>
 
-            <span className="absolute bottom-8 left-5 z-10 rounded-[3px] border border-landing-border bg-landing-canvas px-1.5 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-landing-muted">
+            <span className="absolute bottom-8 left-5 z-10 rounded-[3px] border border-default bg-canvas px-1.5 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-muted">
               {region || '—'}
             </span>
-            <span className="absolute bottom-5 left-5 z-10 font-mono text-[10px] uppercase tracking-[0.18em] text-landing-subtle-text">
+            <span className="absolute bottom-5 left-5 z-10 font-mono text-[10px] uppercase tracking-[0.18em] text-text-subtle">
               Plant · datum
             </span>
           </figure>

@@ -103,8 +103,8 @@ export function CrosshairCursor({ scopeRef }: CrosshairCursorProps) {
         scale,
         borderRadius: locked ? 6 : 999,
         borderColor: locked
-          ? 'var(--landing-accent)'
-          : 'color-mix(in srgb, var(--landing-accent) 55%, transparent)',
+          ? 'var(--accent)'
+          : 'color-mix(in srgb, var(--accent) 55%, transparent)',
         duration: 0.3,
         ease: 'power3.out',
       });
@@ -193,7 +193,7 @@ export function CrosshairCursor({ scopeRef }: CrosshairCursorProps) {
     >
       {/* Trailing ring — locks into registration brackets over interactive targets. */}
       <div ref={ringRef} className="absolute -ml-5 -mt-5 h-10 w-10">
-        <div className="absolute inset-0 rounded-full border border-landing-accent/60" />
+        <div className="absolute inset-0 rounded-full border border-accent/60" />
         <div ref={bracketsRef} className="absolute inset-0" style={{ opacity: 0 }}>
           {[
             'left-0 top-0 border-l border-t',
@@ -201,20 +201,20 @@ export function CrosshairCursor({ scopeRef }: CrosshairCursorProps) {
             'left-0 bottom-0 border-b border-l',
             'right-0 bottom-0 border-b border-r',
           ].map((pos) => (
-            <span key={pos} className={`absolute h-2 w-2 border-landing-accent ${pos}`} />
+            <span key={pos} className={`absolute h-2 w-2 border-accent ${pos}`} />
           ))}
         </div>
       </div>
 
       {/* Precise inner dot + crosshair ticks + readout. */}
       <div ref={dotRef} className="absolute left-0 top-0">
-        <span className="absolute left-1/2 top-1/2 h-[3px] w-[3px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-landing-accent" />
-        <span className="absolute left-1/2 top-1/2 h-px w-2 -translate-x-1/2 -translate-y-1/2 bg-landing-accent/50" />
-        <span className="absolute left-1/2 top-1/2 h-2 w-px -translate-x-1/2 -translate-y-1/2 bg-landing-accent/50" />
-        <span className="absolute left-4 top-3 whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.12em] text-landing-muted">
-          X<span ref={xRef} className="ml-1 tabular-nums text-landing-text">+0.0</span>
-          <span className="mx-1.5 text-landing-subtle-text">·</span>
-          Y<span ref={yRef} className="ml-1 tabular-nums text-landing-text">+0.0</span>
+        <span className="absolute left-1/2 top-1/2 h-[3px] w-[3px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent" />
+        <span className="absolute left-1/2 top-1/2 h-px w-2 -translate-x-1/2 -translate-y-1/2 bg-accent/50" />
+        <span className="absolute left-1/2 top-1/2 h-2 w-px -translate-x-1/2 -translate-y-1/2 bg-accent/50" />
+        <span className="absolute left-4 top-3 whitespace-nowrap font-mono text-[9px] uppercase tracking-[0.12em] text-muted">
+          X<span ref={xRef} className="ml-1 tabular-nums text-primary">+0.0</span>
+          <span className="mx-1.5 text-text-subtle">·</span>
+          Y<span ref={yRef} className="ml-1 tabular-nums text-primary">+0.0</span>
         </span>
       </div>
     </div>

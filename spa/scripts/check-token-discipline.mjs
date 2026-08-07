@@ -16,14 +16,16 @@ const PALETTE =
 const HEX = /#[0-9a-fA-F]{6}\b/;
 
 /**
- * Exemptions, each with a reason. Landing is track T10's — it keeps its own
- * --landing-* namespace and is re-authored separately.
+ * Exemptions, each with a reason. Landing used to be exempt while it ran a
+ * parallel --landing-* palette; it now resolves through the shared Atelier
+ * tokens like every other page, so the gate covers it.
  */
 const EXEMPT = [
   /^src\/styles\/tokens\.css$/, // the one place colour values belong
-  /^src\/pages\/landing\//, // track T10
   /^src\/lib\/__tests__\/contrast\.test\.ts$/, // hex fixtures under test
   /^src\/styles\/__tests__\//, // reads tokens.css by design
+  /^src\/pages\/landing\/three\//, // WebGL: three.js needs real colour values, not classes
+  /^src\/pages\/landing\/components\/HeroCanvas\.tsx$/, // ditto — canvas materials
 ];
 
 /**

@@ -125,29 +125,29 @@ export function QuoteModal({ open, onClose }: QuoteModalProps) {
     >
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-landing-canvas/80 backdrop-blur-md transition-opacity animate-fade-in"
+        className="fixed inset-0 bg-canvas/80 backdrop-blur-md transition-opacity animate-fade-in"
         onClick={onClose}
       />
 
       {/* Modal Container */}
-      <div className="relative z-10 w-full max-w-lg rounded-lg border border-landing-border-strong bg-landing-surface p-6 shadow-2xl animate-slide-up sm:p-8">
+      <div className="relative z-10 w-full max-w-lg rounded-lg border border-strong bg-surface p-6 shadow-2xl animate-slide-up sm:p-8">
         <button
           type="button"
           aria-label="Close modal"
           onClick={onClose}
-          className="absolute right-4 top-4 rounded-full border border-landing-border p-2 text-landing-muted transition-colors hover:bg-landing-elevated hover:text-landing-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent"
+          className="absolute right-4 top-4 rounded-full border border-default p-2 text-muted transition-colors hover:bg-elevated hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           <X size={18} />
         </button>
 
         <div className="mb-6">
-          <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-landing-accent">
+          <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-accent">
             Rapid Precision RFQ
           </p>
-          <h2 id="quote-modal-title" className="mt-1 font-display text-2xl font-medium tracking-tight text-landing-text sm:text-3xl">
+          <h2 id="quote-modal-title" className="mt-1 font-display text-2xl font-medium tracking-tight text-primary sm:text-3xl">
             {quoteLabel}
           </h2>
-          <p className="mt-1 font-sans text-xs text-landing-text-secondary">
+          <p className="mt-1 font-sans text-xs text-secondary">
             Attach your CAD drawing or technical spec for immediate DFM feedback & quotation.
           </p>
         </div>
@@ -155,10 +155,10 @@ export function QuoteModal({ open, onClose }: QuoteModalProps) {
         {submitted ? (
           <div className="py-8 text-center">
             <CheckCircle size={44} className="mx-auto text-success" strokeWidth={1.5} />
-            <h3 className="mt-4 font-display text-xl font-medium text-landing-text">
+            <h3 className="mt-4 font-display text-xl font-medium text-primary">
               Request Received
             </h3>
-            <p className="mt-2 text-xs text-landing-text-secondary">
+            <p className="mt-2 text-xs text-secondary">
               Our engineering team will review your specifications and reply within 24 hours.
             </p>
             <Button
@@ -218,10 +218,10 @@ export function QuoteModal({ open, onClose }: QuoteModalProps) {
               className={cn(
                 'group relative flex cursor-pointer flex-col items-center justify-center gap-2 rounded-md border border-dashed px-4 py-4 transition-all',
                 isDragging
-                  ? 'border-landing-accent bg-landing-accent/10 ring-2 ring-landing-accent/30'
+                  ? 'border-accent bg-accent/10 ring-2 ring-accent/30'
                   : drawing
-                  ? 'border-solid border-landing-accent/50 bg-landing-elevated'
-                  : 'border-landing-border bg-landing-elevated hover:border-landing-accent/40',
+                  ? 'border-solid border-accent/50 bg-elevated'
+                  : 'border-default bg-elevated hover:border-accent/40',
               )}
             >
               <input
@@ -234,12 +234,12 @@ export function QuoteModal({ open, onClose }: QuoteModalProps) {
               {drawing ? (
                 <div className="flex w-full items-center justify-between gap-3">
                   <div className="flex items-center gap-2.5 overflow-hidden">
-                    <FileText size={20} className="shrink-0 text-landing-accent" />
+                    <FileText size={20} className="shrink-0 text-accent" />
                     <div className="min-w-0 text-left">
-                      <p className="truncate text-xs font-medium text-landing-text">
+                      <p className="truncate text-xs font-medium text-primary">
                         {drawing.name}
                       </p>
-                      <p className="text-[10px] text-landing-muted">
+                      <p className="text-[10px] text-muted">
                         {formatBytes(drawing.size)}
                       </p>
                     </div>
@@ -252,21 +252,21 @@ export function QuoteModal({ open, onClose }: QuoteModalProps) {
                       e.stopPropagation();
                       setDrawing(null);
                     }}
-                    className="shrink-0 rounded p-1 text-landing-muted transition-colors hover:bg-landing-canvas hover:text-danger"
+                    className="shrink-0 rounded p-1 text-muted transition-colors hover:bg-canvas hover:text-danger"
                   >
                     <Trash2 size={16} />
                   </button>
                 </div>
               ) : (
                 <>
-                  <Upload size={20} className="text-landing-muted transition-colors group-hover:text-landing-accent" />
+                  <Upload size={20} className="text-muted transition-colors group-hover:text-accent" />
                   <div className="text-center">
-                    <p className="text-xs font-medium text-landing-text">
+                    <p className="text-xs font-medium text-primary">
                       Drag CAD file or click to browse
                     </p>
                     <div className="mt-1 flex flex-wrap justify-center gap-1">
                       {['.STEP', '.IGES', '.DWG', '.DXF', '.PDF'].map((ext) => (
-                        <span key={ext} className="rounded bg-landing-surface px-1.5 py-0.5 font-mono text-[9px] text-landing-muted border border-landing-border">
+                        <span key={ext} className="rounded bg-surface px-1.5 py-0.5 font-mono text-[9px] text-muted border border-default">
                           {ext}
                         </span>
                       ))}

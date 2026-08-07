@@ -16,9 +16,10 @@ export const focusRingInset =
  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-inset';
 
 /**
- * The landing/marketing pages run on their own light palette, so their ring is
- * the landing accent offset against the landing canvas.
+ * Landing and auth sit directly on the page canvas rather than inside a card, so
+ * their ring takes a wider offset than `focusRing`. Same clay accent as the app —
+ * these surfaces stopped running a separate palette in the Atelier rebuild.
  */
 export const focusRingLanding =
- 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas';
+ 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas';
 

@@ -23,18 +23,18 @@ function CapabilityCard({ cap, index }: { cap: Capability; index: number }) {
       className={card('interactive', 'group')}
     >
       <div className="flex items-start justify-between">
-        <div className="flex h-11 w-11 items-center justify-center rounded-md border border-landing-border bg-landing-elevated text-landing-accent transition-colors duration-300 group-hover:border-landing-accent/40">
+        <div className="flex h-11 w-11 items-center justify-center rounded-md border border-default bg-elevated text-accent transition-colors duration-300 group-hover:border-accent/40">
           <Icon size={20} strokeWidth={1.6} />
         </div>
-        <span className={cn(monoLabel, 'rounded-full border border-landing-border px-3 py-1')}>
+        <span className={cn(monoLabel, 'rounded-full border border-default px-3 py-1')}>
           {cap.tag}
         </span>
       </div>
 
-      <h3 className="mt-8 font-display text-2xl font-semibold tracking-[-0.02em] text-landing-text">
+      <h3 className="mt-8 font-display text-2xl font-semibold tracking-[-0.02em] text-primary">
         {cap.title}
       </h3>
-      <p className="mt-3 font-sans text-base font-light leading-relaxed text-landing-text-secondary">
+      <p className="mt-3 font-sans text-base font-light leading-relaxed text-secondary">
         {cap.blurb}
       </p>
     </article>

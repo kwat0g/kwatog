@@ -152,7 +152,7 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
       className={cn(
         'fixed inset-x-0 top-0 z-50 transition-colors duration-300',
         scrolled || open
-          ? 'border-b border-landing-border bg-landing-canvas/80 backdrop-blur-xl'
+          ? 'border-b border-default bg-canvas/80 backdrop-blur-xl'
           : 'border-b border-transparent bg-transparent',
       )}
     >
@@ -169,14 +169,14 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
               navigate('/');
             }
           }}
-          className="group flex shrink-0 items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas"
+          className="group flex shrink-0 items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
         >
           <BrandLogo alt={legalName} className="h-9 shrink-0 transition-transform duration-500 group-hover:scale-105" />
           <div className="hidden flex-col text-left sm:flex">
-            <span className="font-display text-sm font-semibold tracking-tight text-landing-text leading-tight whitespace-nowrap">
+            <span className="font-display text-sm font-semibold tracking-tight text-primary leading-tight whitespace-nowrap">
               {legalName}
             </span>
-            <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-landing-muted whitespace-nowrap">
+            <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted whitespace-nowrap">
               Ogami ERP · {locationCountry}
             </span>
           </div>
@@ -199,11 +199,11 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
                 aria-current={isActive ? 'location' : undefined}
                 className={cn(
                   'relative rounded-sm font-sans text-[13px] transition-colors',
-                  'after:absolute after:-bottom-1.5 after:left-0 after:h-px after:bg-landing-accent after:transition-all after:duration-300',
-                  'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-landing-accent focus-visible:ring-offset-4 focus-visible:ring-offset-landing-canvas',
+                  'after:absolute after:-bottom-1.5 after:left-0 after:h-px after:bg-accent after:transition-all after:duration-300',
+                  'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent focus-visible:ring-offset-4 focus-visible:ring-offset-canvas',
                   isActive
-                    ? 'text-landing-text after:w-full'
-                    : 'text-landing-text-secondary after:w-0 hover:text-landing-text hover:after:w-full',
+                    ? 'text-primary after:w-full'
+                    : 'text-secondary after:w-0 hover:text-primary hover:after:w-full',
                 )}
               >
                 {link.label}
@@ -219,10 +219,10 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
             type="button"
             onClick={() => navigate('/login')}
             className={cn(
-              'group inline-flex h-10 items-center gap-2 rounded-full border border-landing-accent/40 px-5',
-              'font-sans text-[13px] font-medium text-landing-accent',
-              'transition-colors duration-300 hover:border-landing-accent hover:bg-landing-accent hover:text-landing-accent-fg',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas',
+              'group inline-flex h-10 items-center gap-2 rounded-full border border-accent/40 px-5',
+              'font-sans text-[13px] font-medium text-accent',
+              'transition-colors duration-300 hover:border-accent hover:bg-accent hover:text-accent-fg',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas',
             )}
           >
             <LogIn size={15} className="transition-transform duration-300 group-hover:translate-x-0.5" />
@@ -237,7 +237,7 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
             aria-expanded={open}
             aria-controls="landing-mobile-menu"
             onClick={() => onOpenChange(!open)}
-            className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-landing-border text-landing-text transition-colors hover:bg-landing-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas sm:h-10 sm:w-10 lg:hidden"
+            className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-default text-primary transition-colors hover:bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas sm:h-10 sm:w-10 lg:hidden"
           >
             {open ? <X size={20} /> : <Menu size={20} />}
           </button>
@@ -249,7 +249,7 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
         id="landing-mobile-menu"
         ref={sheetRef}
         className={cn(
-          'overflow-hidden border-landing-border bg-landing-canvas/95 backdrop-blur-xl transition-[max-height] duration-300 lg:hidden',
+          'overflow-hidden border-default bg-canvas/95 backdrop-blur-xl transition-[max-height] duration-300 lg:hidden',
           open ? 'max-h-96 border-t' : 'max-h-0',
         )}
       >
@@ -266,7 +266,7 @@ export function LandingNav({ open, onOpenChange }: LandingNavProps) {
                   handleAnchorClick(link.href);
                 }
               }}
-              className="rounded-md px-3 py-3 font-display text-lg text-landing-text-secondary transition-colors hover:bg-landing-elevated hover:text-landing-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas"
+              className="rounded-md px-3 py-3 font-display text-lg text-secondary transition-colors hover:bg-elevated hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
             >
               {link.label}
             </a>

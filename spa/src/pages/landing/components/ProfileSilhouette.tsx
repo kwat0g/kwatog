@@ -59,7 +59,7 @@ export function ProfileSilhouette({ part, className }: ProfileSilhouetteProps) {
       viewBox={`0 0 ${W} ${H}`}
       fill="none"
       className={cn('h-full w-full', className)}
-      style={{ color: 'var(--landing-ink)' }}
+      style={{ color: 'var(--text-primary)' }}
       aria-hidden="true"
     >
       {/* axis of revolution — long-dash / dot centre-line */}

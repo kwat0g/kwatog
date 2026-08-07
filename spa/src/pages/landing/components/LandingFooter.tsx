@@ -21,8 +21,8 @@ import { cn } from '@/lib/cn';
  * here could not be overridden by the one caller that wants 12px.
  */
 const footerLinkCls = cn(
-  'relative font-sans text-landing-text-secondary transition-colors hover:text-landing-accent',
-  'after:absolute after:-bottom-0.5 after:left-0 after:h-px after:w-0 after:bg-landing-accent',
+  'relative font-sans text-secondary transition-colors hover:text-accent',
+  'after:absolute after:-bottom-0.5 after:left-0 after:h-px after:w-0 after:bg-accent',
   'after:transition-all after:duration-300 hover:after:w-full cursor-pointer',
   focusRingLanding,
 );
@@ -68,7 +68,7 @@ export function LandingFooter() {
   };
 
   return (
-    <footer className="relative border-t border-landing-border bg-landing-canvas px-5 py-16 sm:px-5">
+    <footer className="relative border-t border-default bg-canvas px-5 py-16 sm:px-5">
       <div className="mx-auto max-w-7xl">
         <div className="grid gap-12 md:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr_1.2fr]">
           {/* Brand + address */}
@@ -76,18 +76,18 @@ export function LandingFooter() {
             <div className="flex items-center gap-3">
               <BrandLogo alt={legalName} className="h-10" />
               <div className="flex flex-col text-left">
-                <span className="font-display text-base font-semibold tracking-tight text-landing-text">
+                <span className="font-display text-base font-semibold tracking-tight text-primary">
                   {legalName}
                 </span>
-                <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-landing-muted">
+                <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted">
                   Ogami ERP · IATF 16949
                 </span>
               </div>
             </div>
-            <p className="mt-4 max-w-xs font-sans text-[13px] leading-relaxed text-landing-muted">
+            <p className="mt-4 max-w-xs font-sans text-[13px] leading-relaxed text-muted">
               {footerDesc}
             </p>
-            <address className="mt-5 not-italic font-mono text-[11px] leading-relaxed text-landing-subtle-text">
+            <address className="mt-5 not-italic font-mono text-[11px] leading-relaxed text-text-subtle">
               {addressLines.map((line) => (
                 <span key={line} className="block">
                   {line}
@@ -98,7 +98,7 @@ export function LandingFooter() {
 
           {/* Explore */}
           <nav aria-label="Footer explore" data-reveal data-reveal-delay="0.07">
-            <h3 className="font-mono text-[11px] uppercase tracking-[0.2em] text-landing-subtle-text">
+            <h3 className="font-mono text-[11px] uppercase tracking-[0.2em] text-text-subtle">
               Explore
             </h3>
             <ul className="mt-4 space-y-2.5">
@@ -117,7 +117,7 @@ export function LandingFooter() {
 
           {/* Company */}
           <nav aria-label="Footer company" data-reveal data-reveal-delay="0.14">
-            <h3 className="font-mono text-[11px] uppercase tracking-[0.2em] text-landing-subtle-text">
+            <h3 className="font-mono text-[11px] uppercase tracking-[0.2em] text-text-subtle">
               Company
             </h3>
             <ul className="mt-4 space-y-2.5">
@@ -137,7 +137,7 @@ export function LandingFooter() {
 
           {/* Quality & Certifications */}
           <nav aria-label="Footer quality" data-reveal data-reveal-delay="0.21">
-            <h3 className="font-mono text-[11px] uppercase tracking-[0.2em] text-landing-subtle-text">
+            <h3 className="font-mono text-[11px] uppercase tracking-[0.2em] text-text-subtle">
               Quality
             </h3>
             <ul className="mt-4 space-y-2.5">
@@ -171,10 +171,10 @@ export function LandingFooter() {
 
           {/* Newsletter + Contact */}
           <div data-reveal data-reveal-delay="0.28">
-            <h3 className="font-mono text-[11px] uppercase tracking-[0.2em] text-landing-subtle-text">
+            <h3 className="font-mono text-[11px] uppercase tracking-[0.2em] text-text-subtle">
               Molding insights
             </h3>
-            <p className="mt-4 max-w-xs text-[13px] leading-relaxed text-landing-text-secondary">
+            <p className="mt-4 max-w-xs text-[13px] leading-relaxed text-secondary">
               {(content?.section_copy?.newsletter_description ?? '—').replace('{{company}}', contact?.legal_name ?? '—')}
             </p>
             {newsletterStatus === 'success' ? (
@@ -191,13 +191,13 @@ export function LandingFooter() {
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="your@email.com"
                     required
-                    className="h-9 flex-1 rounded-md border border-landing-border bg-landing-surface px-3 text-[13px] text-landing-text outline-none transition-colors placeholder:text-landing-subtle-text focus:border-landing-accent"
+                    className="h-9 flex-1 rounded-md border border-default bg-surface px-3 text-[13px] text-primary outline-none transition-colors placeholder:text-text-subtle focus:border-accent"
                   />
                   <button
                     type="submit"
                     disabled={newsletterStatus === 'submitting'}
                     aria-label="Subscribe"
-                    className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-landing-border bg-landing-surface text-landing-accent transition-colors hover:bg-landing-elevated hover:border-landing-accent/40 disabled:opacity-60 cursor-pointer', focusRingLanding)}
+                    className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-default bg-surface text-accent transition-colors hover:bg-elevated hover:border-accent/40 disabled:opacity-60 cursor-pointer', focusRingLanding)}
                   >
                     <ArrowRight size={16} />
                   </button>
@@ -208,7 +208,7 @@ export function LandingFooter() {
               </form>
             )}
 
-            <h3 className="mt-8 font-mono text-[11px] uppercase tracking-[0.2em] text-landing-subtle-text">
+            <h3 className="mt-8 font-mono text-[11px] uppercase tracking-[0.2em] text-text-subtle">
               Get in touch
             </h3>
             <ul className="mt-4 space-y-2.5">
@@ -220,13 +220,13 @@ export function LandingFooter() {
                   {salesEmail}
                 </a>
               </li>
-              <li className="font-sans text-[13px] text-landing-text-secondary">
+              <li className="font-sans text-[13px] text-secondary">
                 {phone}
               </li>
               <li className="pt-2">
                 <Link
                   to="/login"
-                  className="font-mono text-[11px] uppercase tracking-[0.18em] text-landing-subtle-text underline-offset-4 transition-colors hover:text-landing-text-secondary hover:underline"
+                  className="font-mono text-[11px] uppercase tracking-[0.18em] text-text-subtle underline-offset-4 transition-colors hover:text-secondary hover:underline"
                 >
                   Staff login →
                 </Link>
@@ -235,12 +235,12 @@ export function LandingFooter() {
           </div>
         </div>
 
-        <div className="mt-14 flex flex-col items-start justify-between gap-4 border-t border-landing-border pt-6 sm:flex-row sm:items-center">
-          <p className="font-mono text-[11px] text-landing-subtle-text">
+        <div className="mt-14 flex flex-col items-start justify-between gap-4 border-t border-default pt-6 sm:flex-row sm:items-center">
+          <p className="font-mono text-[11px] text-text-subtle">
             © {year} {legalName}. All rights reserved.
           </p>
-          <p className="flex items-center gap-2.5 font-mono text-[11px] uppercase tracking-[0.16em] text-landing-subtle-text">
-            <span className="h-1 w-1 rounded-full bg-landing-accent" />
+          <p className="flex items-center gap-2.5 font-mono text-[11px] uppercase tracking-[0.16em] text-text-subtle">
+            <span className="h-1 w-1 rounded-full bg-accent" />
             Made in {locationCountry}
           </p>
         </div>

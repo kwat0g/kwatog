@@ -102,7 +102,7 @@ export function ProcessSection() {
   }, [horizontal, processSteps.length]);
 
   return (
-    <section id="process" className="relative bg-landing-surface">
+    <section id="process" className="relative bg-surface">
       <div
         ref={pinRef}
         className={cn(horizontal && 'lg:flex lg:h-screen lg:flex-col lg:justify-center')}
@@ -117,19 +117,19 @@ export function ProcessSection() {
           {/* Progress rail + step readout + scroll hint (desktop) */}
           {horizontal && (
             <div className="mt-8 hidden items-center gap-4 lg:flex">
-              <div className="h-px w-full max-w-xs overflow-hidden bg-landing-border">
+              <div className="h-px w-full max-w-xs overflow-hidden bg-border-default">
                 <div
                   ref={fillRef}
-                  className="h-full origin-left scale-x-0 bg-landing-accent"
+                  className="h-full origin-left scale-x-0 bg-accent"
                 />
               </div>
               <span
                 ref={readoutRef}
-                className="w-[7.5ch] shrink-0 font-mono text-[10px] tabular-nums tracking-[0.18em] text-landing-accent"
+                className="w-[7.5ch] shrink-0 font-mono text-[10px] tabular-nums tracking-[0.18em] text-accent"
               >
                 STEP 01 / 06
               </span>
-              <span className="motion-safe:animate-pulse flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-landing-muted">
+              <span className="motion-safe:animate-pulse flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-muted">
                 Scroll to explore
                 <ArrowRight size={12} />
               </span>
@@ -158,17 +158,17 @@ export function ProcessSection() {
                   data-step-index={step.index}
                   data-active="false"
                   className={cn(
-                    'group relative flex flex-col rounded-md border border-landing-border bg-landing-elevated p-5 sm:p-7 transition-colors duration-500',
-                    'hover:border-landing-accent/40',
+                    'group relative flex flex-col rounded-md border border-default bg-elevated p-5 sm:p-7 transition-colors duration-500',
+                    'hover:border-accent/40',
                     // Active state: top accent rule + stronger border
-                    'data-[active=true]:border-landing-accent/60',
+                    'data-[active=true]:border-accent/60',
                     horizontal && 'lg:w-[clamp(300px,30vw,400px)] lg:shrink-0',
                   )}
                 >
                   {/* Top accent rule — only visible when active (reads group's data-active) */}
                   <div
                     aria-hidden="true"
-                    className="pointer-events-none absolute inset-x-0 top-0 h-px origin-left scale-x-0 rounded-t-xl bg-landing-accent transition-transform duration-500 group-data-[active=true]:scale-x-100"
+                    className="pointer-events-none absolute inset-x-0 top-0 h-px origin-left scale-x-0 rounded-t-xl bg-accent transition-transform duration-500 group-data-[active=true]:scale-x-100"
                     style={{ transitionProperty: 'transform' }}
                   />
 
@@ -176,22 +176,22 @@ export function ProcessSection() {
                     <span
                       className={cn(
                         'font-mono text-6xl font-medium tabular-nums transition-all duration-500',
-                        'text-landing-accent/55 group-hover:text-landing-accent',
+                        'text-accent/55 group-hover:text-accent',
                         // Full accent when card is active
-                        'group-data-[active=true]:text-landing-accent',
+                        'group-data-[active=true]:text-accent',
                       )}
                     >
                       {step.index}
                     </span>
-                    <div className="flex h-11 w-11 items-center justify-center rounded-md border border-landing-border text-landing-text-secondary transition-colors duration-500 group-hover:border-landing-accent/40 group-hover:text-landing-accent group-data-[active=true]:border-landing-accent/40 group-data-[active=true]:text-landing-accent">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-md border border-default text-secondary transition-colors duration-500 group-hover:border-accent/40 group-hover:text-accent group-data-[active=true]:border-accent/40 group-data-[active=true]:text-accent">
                       <Icon size={20} strokeWidth={1.6} />
                     </div>
                   </div>
 
-                  <h3 className="mt-10 font-display text-2xl font-semibold tracking-[-0.02em] text-landing-text">
+                  <h3 className="mt-10 font-display text-2xl font-semibold tracking-[-0.02em] text-primary">
                     {step.title}
                   </h3>
-                  <p className="mt-4 font-sans text-base font-light leading-relaxed text-landing-text-secondary">
+                  <p className="mt-4 font-sans text-base font-light leading-relaxed text-secondary">
                     {step.body}
                   </p>
                 </article>

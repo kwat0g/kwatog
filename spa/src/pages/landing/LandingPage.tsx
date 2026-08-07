@@ -8,7 +8,7 @@
  * button in the nav (+ a discreet staff link in the footer).
  */
 
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 // Self-hosted display face (Fontsource → same-origin → CSP-safe).
@@ -42,20 +42,6 @@ import { landingApi } from '@/api/landing';
 function inertWhen(active: boolean): Record<string, unknown> {
   return active ? { inert: '', 'aria-hidden': true } : {};
 }
-
-/**
- * Remap the shared ERP accent variables to the landing-page espresso ink so
- * Button, Input, Checkbox, and other primitives render monochrome/warm here
- * without any component-level changes.
- */
-const WARM_ACCENT: CSSProperties = {
-  '--accent': 'var(--landing-accent)',
-  '--accent-hover': 'var(--landing-accent-hover)',
-  '--accent-fg': 'var(--landing-accent-fg)',
-  '--ring': 'var(--landing-accent)',
-  '--ring-offset': 'var(--landing-canvas)',
-  '---focus': '0 0 0 3px var(--landing-accent-glow)',
-} as CSSProperties;
 
 export default function LandingPage() {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -100,14 +86,13 @@ export default function LandingPage() {
     <div
       ref={rootRef}
       data-crosshair-scope
-      style={WARM_ACCENT}
-      className="min-h-screen bg-landing-canvas font-sans text-landing-text antialiased"
+      className="min-h-screen bg-canvas font-sans text-primary antialiased"
     >
       <ScrollProgress />
       <CrosshairCursor scopeRef={rootRef} />
       <a
         href={content?.section_copy?.nav_links?.[0]?.href ?? '#'}
-        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[60] focus:rounded-md focus:bg-landing-accent focus:px-4 focus:py-2 focus:font-sans focus:text-sm focus:font-medium focus:text-landing-accent-fg"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[60] focus:rounded-md focus:bg-accent focus:px-4 focus:py-2 focus:font-sans focus:text-sm focus:font-medium focus:text-accent-fg"
       >
         Skip to content
       </a>

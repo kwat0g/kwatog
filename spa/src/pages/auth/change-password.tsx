@@ -96,7 +96,7 @@ export default function ChangePasswordPage() {
  tabIndex={-1}
  onClick={onToggle}
  aria-label={shown ? `Hide ${label}` : `Show ${label}`}
- className="flex h-full items-center justify-center px-2 text-landing-muted transition-colors hover:text-landing-text"
+ className="flex h-full items-center justify-center px-2 text-muted transition-colors hover:text-primary"
  >
  {shown ? <EyeOff size={15} /> : <Eye size={15} />}
  </button>

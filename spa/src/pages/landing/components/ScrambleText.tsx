@@ -64,7 +64,7 @@ export function ScrambleText({
             html += `<span>${ch}</span>`;
           } else {
             const glyph = GLYPHS[Math.floor(Math.random() * GLYPHS.length)];
-            html += `<span class="text-landing-accent font-semibold opacity-90">${glyph}</span>`;
+            html += `<span class="text-accent font-semibold opacity-90">${glyph}</span>`;
           }
         }
         overlay.innerHTML = html;

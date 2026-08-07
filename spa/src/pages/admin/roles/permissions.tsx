@@ -580,7 +580,7 @@ export default function RolePermissionsPage() {
  className={cn(
  'rounded-full px-3 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors cursor-pointer',
  statusFilter === st.id
- ? 'bg-landing-accent text-landing-accent-fg font-medium'
+ ? 'bg-accent text-accent-fg font-medium'
  : 'bg-subtle text-muted hover:text-primary hover:bg-elevated',
  )}
  >
@@ -663,7 +663,7 @@ export default function RolePermissionsPage() {
  <div className="hidden sm:flex items-center gap-2">
  <div className="w-20 h-1.5 rounded-full bg-border-default overflow-hidden">
  <div
- className="h-full bg-landing-accent transition-all duration-300"
+ className="h-full bg-accent transition-all duration-300"
  style={{ width: `${pct}%` }}
  />
  </div>
@@ -726,7 +726,7 @@ export default function RolePermissionsPage() {
  idx % 2 === 1
  ? (isGranted ? 'bg-[var(--bg-row-hover)]/40 hover:bg-[var(--bg-row-hover)]' : 'bg-[var(--bg-zebra-even)] hover:bg-[var(--bg-row-hover)]')
  : (isGranted ? 'bg-[var(--bg-zebra-odd)] hover:bg-[var(--bg-row-hover)]' : 'bg-[var(--bg-surface)] hover:bg-[var(--bg-zebra-even)]'),
- isGranted && 'outline outline-2 outline-landing-accent -outline-offset-2 z-10 ',
+ isGranted && 'outline outline-2 outline-accent -outline-offset-2 z-10 ',
  isModified && 'bg-warning/15 outline outline-2 outline-warning -outline-offset-2 z-10',
  )}
  >

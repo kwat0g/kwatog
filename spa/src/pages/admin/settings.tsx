@@ -261,7 +261,7 @@ export default function SettingsPage() {
  className={cn(
  'flex items-center gap-2 rounded-full px-3.5 py-1.5 font-mono text-[11px] uppercase tracking-wider transition-colors cursor-pointer shrink-0',
  activeTab === tab.id
- ? 'bg-landing-accent text-landing-accent-fg font-medium '
+ ? 'bg-accent text-accent-fg font-medium '
  : 'bg-subtle text-muted hover:text-primary hover:bg-elevated',
  )}
  >
@@ -368,7 +368,7 @@ function SettingsGroup({ group, meta, rows, saving, onSave }: SettingsGroupProps
  title={
  <div className="flex items-center justify-between w-full">
  <span className="flex items-center gap-2 font-display text-base font-medium">
- {meta && <span className="text-landing-accent">{meta.icon}</span>}
+ {meta && <span className="text-accent">{meta.icon}</span>}
  <span>{meta?.label ?? group}</span>
  </span>
  <Chip variant="neutral" className="font-mono text-2xs">
@@ -572,7 +572,7 @@ function ScalarRow({
  disabled={saving}
  containerClassName="flex-1"
  />
- {saving && <span className="text-2xs font-mono text-landing-accent animate-pulse">Saving…</span>}
+ {saving && <span className="text-2xs font-mono text-accent animate-pulse">Saving…</span>}
  {saved && !saving && (
  <span className="text-2xs font-mono text-success flex items-center gap-0.5">
  <Check size={12} /> Saved
@@ -589,7 +589,7 @@ function SystemInfoPanel({ info }: { info: SystemInfo }) {
  title={
  <div className="flex items-center justify-between w-full">
  <span className="flex items-center gap-2 font-display text-base font-medium">
- <span className="text-landing-accent"><Server size={16} /></span>
+ <span className="text-accent"><Server size={16} /></span>
  <span>System Telemetry & Environment</span>
  </span>
  <Chip variant={info.app_env === 'production' ? 'success' : 'warning'} className="font-mono text-2xs uppercase">
@@ -626,7 +626,7 @@ function TelemetryCard({
 }) {
  return (
  <div className="flex items-start gap-3 rounded-md border border-default bg-subtle/40 p-3">
- <div className="p-2 rounded bg-surface border border-subtle text-landing-accent">
+ <div className="p-2 rounded bg-surface border border-subtle text-accent">
  {icon}
  </div>
  <div className="min-w-0">

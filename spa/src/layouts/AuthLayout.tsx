@@ -28,22 +28,11 @@ import { AutoPartShowcase } from '@/pages/landing/components/AutoPartShowcase';
 import { CrosshairCursor } from '@/pages/landing/components/CrosshairCursor';
 import { landingApi } from '@/api/landing';
 
-// Remap the app accent → the landing-page ink for the auth surfaces only
-// (cascades into the shared Button/Input via var(--accent) / var(--ring)).
-// Using CSS variables means light mode gets espresso-on-paper automatically.
-const WARM_ACCENT = {
- '--accent': 'var(--landing-accent)',
- '--accent-hover': 'var(--landing-accent-hover)',
- '--accent-fg': 'var(--landing-accent-fg)',
- '--ring': 'var(--landing-accent)',
- '---focus': '0 0 0 3px var(--landing-accent-glow)',
-} as CSSProperties;
-
 const GRID_BG: CSSProperties = {
  backgroundImage:
- 'linear-gradient(var(--landing-grid) 1px, transparent 1px),' +
- 'linear-gradient(90deg, var(--landing-grid) 1px, transparent 1px)',
- backgroundSize: 'var(--landing-grid-size, 32px) var(--landing-grid-size, 32px)',
+ 'linear-gradient(var(--blueprint-grid) 1px, transparent 1px),' +
+ 'linear-gradient(90deg, var(--blueprint-grid) 1px, transparent 1px)',
+ backgroundSize: 'var(--blueprint-grid-size, 32px) var(--blueprint-grid-size, 32px)',
 };
 
 export function AuthLayout() {
@@ -123,15 +112,12 @@ export function AuthLayout() {
  }, []);
 
  return (
- <div
- style={WARM_ACCENT}
- className="grid min-h-screen w-full bg-landing-canvas font-sans text-landing-text lg:grid-cols-2"
- >
+ <div className="grid min-h-screen w-full bg-canvas font-sans text-primary lg:grid-cols-2">
  {/* ── Brand panel (lg+) ─────────────────────────────────────── */}
  <aside
  ref={asideRef}
  data-crosshair-scope
- className="relative hidden overflow-hidden border-r border-landing-border bg-landing-surface lg:flex lg:flex-col lg:justify-between lg:p-12"
+ className="relative hidden overflow-hidden border-r border-default bg-surface lg:flex lg:flex-col lg:justify-between lg:p-12"
  >
  <CrosshairCursor scopeRef={asideRef} />
 
@@ -146,14 +132,14 @@ export function AuthLayout() {
  {/* brand */}
  <Link
  to="/"
- className="relative flex shrink-0 items-center gap-3 self-start rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-surface"
+ className="relative flex shrink-0 items-center gap-3 self-start rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
  >
  <BrandLogo alt={legalName} className="h-10 shrink-0" />
  <div className="flex flex-col text-left">
- <span className="font-display text-sm font-medium tracking-tight text-landing-text leading-tight whitespace-nowrap">
+ <span className="font-display text-sm font-medium tracking-tight text-primary leading-tight whitespace-nowrap">
  {legalName}
  </span>
- <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-landing-muted whitespace-nowrap">
+ <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted whitespace-nowrap">
  Ogami ERP · {locationCountry}
  </span>
  </div>
@@ -161,15 +147,15 @@ export function AuthLayout() {
 
  {/* auto-cycling 3D parts tour inside a drawing frame */}
  <div className="relative mx-auto flex w-full max-w-sm items-center justify-center">
- <figure className="relative aspect-square w-full overflow-hidden rounded-md border border-landing-border-strong bg-landing-canvas">
+ <figure className="relative aspect-square w-full overflow-hidden rounded-md border border-strong bg-canvas">
  {/* faint blueprint grid inside the frame */}
  <div
  aria-hidden="true"
  className="absolute inset-0"
  style={{
  backgroundImage:
- 'linear-gradient(var(--landing-grid) 1px, transparent 1px),' +
- 'linear-gradient(90deg, var(--landing-grid) 1px, transparent 1px)',
+ 'linear-gradient(var(--blueprint-grid) 1px, transparent 1px),' +
+ 'linear-gradient(90deg, var(--blueprint-grid) 1px, transparent 1px)',
  backgroundSize: '28px 28px',
  maskImage: 'radial-gradient(120% 100% at 50% 50%, #000 40%, transparent 92%)',
  WebkitMaskImage: 'radial-gradient(120% 100% at 50% 50%, #000 40%, transparent 92%)',
@@ -186,7 +172,7 @@ export function AuthLayout() {
  <span
  key={pos}
  aria-hidden="true"
- className={`absolute h-4 w-4 border-landing-border-strong ${pos}`}
+ className={`absolute h-4 w-4 border-strong ${pos}`}
  />
  ))}
 
@@ -196,7 +182,7 @@ export function AuthLayout() {
  <div
  ref={scanRef}
  aria-hidden="true"
- className="pointer-events-none absolute inset-x-6 z-30 h-px bg-landing-accent/40"
+ className="pointer-events-none absolute inset-x-6 z-30 h-px bg-accent/40"
  style={{ opacity: 0 }}
  />
  </figure>
@@ -204,11 +190,11 @@ export function AuthLayout() {
 
  {/* tagline */}
  <div className="relative">
- <p className="font-display text-2xl font-medium leading-tight tracking-tight text-landing-text">
+ <p className="font-display text-2xl font-medium leading-tight tracking-tight text-primary">
  Precision, molded
  <br /> in {locationCountry}.
  </p>
- <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.18em] text-landing-subtle-text">
+ <p className="mt-3 font-mono text-[11px] uppercase tracking-[0.18em] text-text-subtle">
  {address}
  </p>
  </div>
@@ -220,10 +206,10 @@ export function AuthLayout() {
  <Link to="/" className="mb-10 flex shrink-0 items-center gap-3 rounded-md lg:hidden">
  <BrandLogo alt={legalName} className="h-10 shrink-0" />
  <div className="flex flex-col text-left">
- <span className="font-display text-sm font-medium tracking-tight text-landing-text leading-tight whitespace-nowrap">
+ <span className="font-display text-sm font-medium tracking-tight text-primary leading-tight whitespace-nowrap">
  {legalName}
  </span>
- <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-landing-muted whitespace-nowrap">
+ <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted whitespace-nowrap">
  Ogami ERP
  </span>
  </div>
@@ -235,7 +221,7 @@ export function AuthLayout() {
 
  <Link
  to="/"
- className="mt-10 inline-flex items-center gap-1.5 rounded-md font-sans text-[13px] text-landing-muted transition-colors hover:text-landing-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas"
+ className="mt-10 inline-flex items-center gap-1.5 rounded-md font-sans text-[13px] text-muted transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
  >
  <ArrowLeft size={14} />
  Back to {legalName}

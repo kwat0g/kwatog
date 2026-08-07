@@ -10,7 +10,7 @@ import type { Config } from 'tailwindcss';
  * `var()` into channels, so a plain `'var(--accent)'` makes `bg-accent/10` emit
  * *nothing at all* — the class silently disappears from the stylesheet. The
  * `<alpha-value>` placeholder plus `color-mix` gives every token working opacity
- * modifiers (`bg-accent/10`, `border-danger/30`, `bg-landing-canvas/85`).
+ * modifiers (`bg-accent/10`, `border-danger/30`, `bg-canvas/85`).
  */
 const config: Config = {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
@@ -83,27 +83,13 @@ const config: Config = {
         // Focus ring
         ring: 'color-mix(in srgb, var(--ring) calc(<alpha-value> * 100%), transparent)',
 
-        // Landing page palette — light monochrome + one indigo accent.
-        landing: {
-          canvas: 'color-mix(in srgb, var(--landing-canvas) calc(<alpha-value> * 100%), transparent)',
-          surface: 'color-mix(in srgb, var(--landing-surface) calc(<alpha-value> * 100%), transparent)',
-          elevated: 'color-mix(in srgb, var(--landing-elevated) calc(<alpha-value> * 100%), transparent)',
-          subtle: 'color-mix(in srgb, var(--landing-subtle) calc(<alpha-value> * 100%), transparent)',
-          border: 'color-mix(in srgb, var(--landing-border) calc(<alpha-value> * 100%), transparent)',
-          'border-strong': 'color-mix(in srgb, var(--landing-border-strong) calc(<alpha-value> * 100%), transparent)',
-          text: 'color-mix(in srgb, var(--landing-text) calc(<alpha-value> * 100%), transparent)',
-          'text-secondary': 'color-mix(in srgb, var(--landing-text-secondary) calc(<alpha-value> * 100%), transparent)',
-          muted: 'color-mix(in srgb, var(--landing-muted) calc(<alpha-value> * 100%), transparent)',
-          'subtle-text': 'color-mix(in srgb, var(--landing-subtle-text) calc(<alpha-value> * 100%), transparent)',
-          accent: 'color-mix(in srgb, var(--landing-accent) calc(<alpha-value> * 100%), transparent)',
-          'accent-hover': 'color-mix(in srgb, var(--landing-accent-hover) calc(<alpha-value> * 100%), transparent)',
-          'accent-soft': 'color-mix(in srgb, var(--landing-accent-soft) calc(<alpha-value> * 100%), transparent)',
-          'accent-fg': 'color-mix(in srgb, var(--landing-accent-fg) calc(<alpha-value> * 100%), transparent)',
-          'accent-glow': 'color-mix(in srgb, var(--landing-accent-glow) calc(<alpha-value> * 100%), transparent)',
-          ink: 'color-mix(in srgb, var(--landing-ink) calc(<alpha-value> * 100%), transparent)',
-          line: 'color-mix(in srgb, var(--landing-line) calc(<alpha-value> * 100%), transparent)',
-          grid: 'color-mix(in srgb, var(--landing-grid) calc(<alpha-value> * 100%), transparent)',
+        // Blueprint line-work — landing + auth technical register. Derived
+        // from ink in tokens.css, so it follows every palette for free.
+        blueprint: {
+          grid: 'color-mix(in srgb, var(--blueprint-grid) calc(<alpha-value> * 100%), transparent)',
+          line: 'color-mix(in srgb, var(--blueprint-line) calc(<alpha-value> * 100%), transparent)',
         },
+
       },
 
       // Border-only aliases: `border-default` / `border-subtle` / `border-strong`

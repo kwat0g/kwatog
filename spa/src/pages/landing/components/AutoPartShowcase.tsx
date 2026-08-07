@@ -44,7 +44,7 @@ function CycleBar({ index, active }: { index: number; active: boolean }) {
     <div
       ref={ref}
       aria-hidden="true"
-      className="h-px w-full origin-left bg-landing-accent/60"
+      className="h-px w-full origin-left bg-accent/60"
       style={{ transform: 'scaleX(0)' }}
     />
   );
@@ -105,10 +105,10 @@ export function AutoPartShowcase({ className }: AutoPartShowcaseProps) {
       {motionOK && <PartShowcase3D part={displayPart} exploded={exploded} />}
 
       {/* corner callouts */}
-      <span className="absolute left-5 top-5 z-20 font-mono text-[10px] uppercase tracking-[0.16em] text-landing-accent">
+      <span className="absolute left-5 top-5 z-20 font-mono text-[10px] uppercase tracking-[0.16em] text-accent">
         REV · A
       </span>
-      <span className="absolute right-5 top-5 z-20 font-mono text-[10px] uppercase tracking-[0.16em] text-landing-accent">
+      <span className="absolute right-5 top-5 z-20 font-mono text-[10px] uppercase tracking-[0.16em] text-accent">
         <ScrambleText key={`tol-${part.id}`} text={displayPart.tolerance || '—'} trigger="mount" />
       </span>
 
@@ -123,30 +123,30 @@ export function AutoPartShowcase({ className }: AutoPartShowcaseProps) {
             onClick={() => setIndex(i)}
             className={cn(
               'h-1.5 rounded-full transition-all duration-300',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-surface',
-              i === index ? 'w-5 bg-landing-accent' : 'w-1.5 bg-landing-border-strong hover:bg-landing-muted',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface',
+              i === index ? 'w-5 bg-accent' : 'w-1.5 bg-strong hover:bg-muted',
             )}
           />
         ))}
       </div>
 
       {/* title block — live spec readout */}
-      <div className="absolute inset-x-3 bottom-3 z-20 grid grid-cols-3 overflow-hidden rounded-md border border-landing-border bg-landing-canvas/85 font-mono text-[9px] uppercase tracking-[0.12em] text-landing-muted backdrop-blur-sm sm:text-[10px]">
-        <span className="border-r border-landing-border px-3 py-2">
-          <span className="block text-landing-subtle-text">Part</span>
-          <span className="block truncate text-landing-text">
+      <div className="absolute inset-x-3 bottom-3 z-20 grid grid-cols-3 overflow-hidden rounded-md border border-default bg-canvas/85 font-mono text-[9px] uppercase tracking-[0.12em] text-muted backdrop-blur-sm sm:text-[10px]">
+        <span className="border-r border-default px-3 py-2">
+          <span className="block text-text-subtle">Part</span>
+          <span className="block truncate text-primary">
             <ScrambleText key={`name-${part.id}`} text={displayPart.name || '—'} trigger="mount" />
           </span>
         </span>
-        <span className="border-r border-landing-border px-3 py-2">
-          <span className="block text-landing-subtle-text">Material</span>
-          <span className="block truncate text-landing-text">
+        <span className="border-r border-default px-3 py-2">
+          <span className="block text-text-subtle">Material</span>
+          <span className="block truncate text-primary">
             <ScrambleText key={`mat-${part.id}`} text={displayPart.material || '—'} trigger="mount" />
           </span>
         </span>
         <span className="px-3 py-2">
-          <span className="block text-landing-subtle-text">View</span>
-          <span className="block text-landing-text">{exploded ? 'Exploded' : 'Assembled'}</span>
+          <span className="block text-text-subtle">View</span>
+          <span className="block text-primary">{exploded ? 'Exploded' : 'Assembled'}</span>
         </span>
       </div>
     </div>

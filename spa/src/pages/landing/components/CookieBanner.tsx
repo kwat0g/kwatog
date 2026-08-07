@@ -30,19 +30,19 @@ export function CookieBanner() {
       aria-label="Cookie consent"
       className={cn(
         'fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-xl',
-        'rounded-md border border-landing-border bg-landing-surface/95 p-4-menu backdrop-blur-xl',
+        'rounded-md border border-default bg-surface/95 p-4-menu backdrop-blur-xl',
         'motion-safe:animate-slide-up',
       )}
     >
       <div className="flex items-start gap-4">
-        <p className="flex-1 text-[13px] leading-relaxed text-landing-text-secondary">
+        <p className="flex-1 text-[13px] leading-relaxed text-secondary">
           We use cookies to understand how visitors use our site and to improve
           your experience.
         </p>
         <button
           type="button"
           onClick={() => handleConsent('declined')}
-          className={cn('rounded-md p-1 text-landing-muted transition-colors hover:bg-landing-elevated hover:text-landing-text cursor-pointer', focusRingLanding)}
+          className={cn('rounded-md p-1 text-muted transition-colors hover:bg-elevated hover:text-primary cursor-pointer', focusRingLanding)}
           aria-label="Decline cookies"
         >
           <X size={16} />
@@ -52,14 +52,14 @@ export function CookieBanner() {
         <button
           type="button"
           onClick={() => handleConsent('accepted')}
-          className={cn('rounded-full bg-landing-accent px-4 py-2 text-xs font-medium text-landing-accent-fg transition-colors hover:bg-landing-accent-hover cursor-pointer', focusRingLanding)}
+          className={cn('rounded-full bg-accent px-4 py-2 text-xs font-medium text-accent-fg transition-colors hover:bg-accent-hover cursor-pointer', focusRingLanding)}
         >
           Accept
         </button>
         <button
           type="button"
           onClick={() => handleConsent('declined')}
-          className={cn('rounded-full border border-landing-border px-4 py-2 text-xs font-medium text-landing-text transition-colors hover:bg-landing-elevated cursor-pointer', focusRingLanding)}
+          className={cn('rounded-full border border-default px-4 py-2 text-xs font-medium text-primary transition-colors hover:bg-elevated cursor-pointer', focusRingLanding)}
         >
           Decline
         </button>

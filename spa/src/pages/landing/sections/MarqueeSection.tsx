@@ -89,11 +89,11 @@ export function MarqueeSection() {
   return (
     <section
       aria-label="Automakers we supply"
-      className="relative border-y border-landing-border bg-landing-canvas py-10"
+      className="relative border-y border-default bg-canvas py-10"
     >
       <p
         data-reveal
-        className="mb-7 px-5 text-center font-mono text-[11px] uppercase tracking-[0.28em] text-landing-subtle-text sm:px-5"
+        className="mb-7 px-5 text-center font-mono text-[11px] uppercase tracking-[0.28em] text-text-subtle sm:px-5"
       >
         {trustHeading}
       </p>
@@ -109,7 +109,7 @@ export function MarqueeSection() {
             <li
               key={`${name}-${i}`}
               aria-hidden={i >= partners.length}
-              className="select-none font-display text-4xl font-semibold tracking-[-0.02em] text-landing-muted transition-all duration-300 hover:text-landing-text hover:scale-105 sm:text-5xl"
+              className="select-none font-display text-4xl font-semibold tracking-[-0.02em] text-muted transition-all duration-300 hover:text-primary hover:scale-105 sm:text-5xl"
             >
               {name}
             </li>
@@ -119,15 +119,15 @@ export function MarqueeSection() {
 
       <p
         data-reveal
-        className="mt-8 px-5 text-center font-mono text-[11px] uppercase tracking-[0.18em] text-landing-subtle-text sm:px-5"
+        className="mt-8 px-5 text-center font-mono text-[11px] uppercase tracking-[0.18em] text-text-subtle sm:px-5"
       >
         {statValue('employees') || '—'} active employees
-        <span className="mx-2.5 text-landing-accent/50">·</span>
+        <span className="mx-2.5 text-accent/50">·</span>
         {statValue('customers') || '—'} active customers
-        <span className="mx-2.5 text-landing-accent/50">·</span>
+        <span className="mx-2.5 text-accent/50">·</span>
         {statValue('products') || '—'} active products
         {trustPoints.length > 0 && <>
-          <span className="mx-2.5 text-landing-accent/50">·</span>
+          <span className="mx-2.5 text-accent/50">·</span>
           {trustPoints[0]}
         </>}
       </p>

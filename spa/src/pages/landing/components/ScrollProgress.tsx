@@ -77,17 +77,17 @@ export function ScrollProgress() {
         className="absolute inset-0 opacity-50"
         style={{
           backgroundImage:
-            'repeating-linear-gradient(90deg, var(--landing-border-strong) 0 1px, transparent 1px 10%)',
+            'repeating-linear-gradient(90deg, var(--border-strong) 0 1px, transparent 1px 10%)',
         }}
       />
       <div
         ref={fillRef}
-        className="absolute inset-y-0 left-0 w-full origin-left bg-landing-accent"
+        className="absolute inset-y-0 left-0 w-full origin-left bg-accent"
         style={{ transform: 'scaleX(0)' }}
       />
       <span
         ref={readoutRef}
-        className="absolute right-2 top-1.5 font-mono text-[9px] tabular-nums tracking-[0.1em] text-landing-subtle-text"
+        className="absolute right-2 top-1.5 font-mono text-[9px] tabular-nums tracking-[0.1em] text-text-subtle"
       >
         0%
       </span>

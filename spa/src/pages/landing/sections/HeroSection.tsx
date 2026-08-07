@@ -109,7 +109,7 @@ export function HeroSection() {
     <section
       id="top"
       ref={rootRef}
-      className="relative isolate overflow-hidden bg-landing-canvas px-5 pb-20 pt-28 sm:px-5 lg:min-h-[100svh] lg:pt-32"
+      className="relative isolate overflow-hidden bg-canvas px-5 pb-20 pt-28 sm:px-5 lg:min-h-[100svh] lg:pt-32"
     >
       {/* Blueprint grid backdrop — parallax decorative layer */}
       <div
@@ -118,8 +118,8 @@ export function HeroSection() {
         className="absolute left-0 right-0 top-[-12%] -z-10 h-[124%]"
         style={{
           backgroundImage:
-            'linear-gradient(var(--landing-grid) 1px, transparent 1px),' +
-            'linear-gradient(90deg, var(--landing-grid) 1px, transparent 1px)',
+            'linear-gradient(var(--blueprint-grid) 1px, transparent 1px),' +
+            'linear-gradient(90deg, var(--blueprint-grid) 1px, transparent 1px)',
           backgroundSize: '32px 32px',
           maskImage: 'radial-gradient(130% 100% at 70% 30%, #000 45%, transparent 90%)',
           WebkitMaskImage: 'radial-gradient(130% 100% at 70% 30%, #000 45%, transparent 90%)',
@@ -131,13 +131,13 @@ export function HeroSection() {
         <div>
           <p
             data-hero="eyebrow"
-            className="flex items-center gap-2.5 font-mono text-[11px] uppercase tracking-[0.22em] text-landing-muted"
+            className="flex items-center gap-2.5 font-mono text-[11px] uppercase tracking-[0.22em] text-muted"
           >
-            <span className="h-1.5 w-1.5 rounded-full bg-landing-accent" />
+            <span className="h-1.5 w-1.5 rounded-full bg-accent" />
             <ScrambleText text={address} trigger="mount" />
           </p>
 
-          <h1 className="mt-8 font-display text-[clamp(3rem,8vw,5.5rem)] font-semibold leading-[0.94] tracking-[-0.04em] text-transparent bg-clip-text bg-gradient-to-br from-landing-text via-landing-text to-landing-text-secondary pb-2">
+          <h1 className="mt-8 font-display text-[clamp(3rem,8vw,5.5rem)] font-semibold leading-[0.94] tracking-[-0.04em] text-transparent bg-clip-text bg-gradient-to-br from-primary via-primary to-secondary pb-2">
             <span data-hero-line className="block overflow-hidden">
               <span className="block">{heroCopy?.line_one ?? '—'}</span>
             </span>
@@ -151,7 +151,7 @@ export function HeroSection() {
 
           <p
             data-hero="sub"
-            className="mt-8 max-w-2xl font-sans text-base font-light tracking-wide leading-relaxed text-landing-text-secondary sm:text-xl"
+            className="mt-8 max-w-2xl font-sans text-base font-light tracking-wide leading-relaxed text-secondary sm:text-xl"
           >
             {heroDescription}
           </p>
@@ -160,7 +160,7 @@ export function HeroSection() {
             <a
               ref={quoteRef}
               href={heroCta?.quote_href ?? '#'}
-              className="group relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-full bg-landing-accent px-8 py-4 font-sans text-[15px] font-semibold text-landing-accent-fg shadow-[0_0_40px_-10px_var(--landing-accent)] transition-all duration-300 hover:scale-105 hover:bg-landing-accent-hover hover:shadow-[0_0_60px_-15px_var(--landing-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas"
+              className="group relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-full bg-accent px-8 py-4 font-sans text-[15px] font-semibold text-accent-fg transition-all duration-300 hover:scale-105 hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
             >
               <span className="relative z-10 flex items-center gap-2">
                 {heroCta?.quote_label ?? '—'}
@@ -170,13 +170,13 @@ export function HeroSection() {
             <a
               ref={exploreRef}
               href={heroCta?.explore_href ?? '#'}
-              className="inline-flex items-center justify-center gap-2 rounded-full border border-landing-border-strong px-8 py-4 font-sans text-[15px] font-medium text-landing-text transition-all duration-300 hover:scale-105 hover:border-landing-text hover:bg-landing-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas"
+              className="inline-flex items-center justify-center gap-2 rounded-full border border-strong px-8 py-4 font-sans text-[15px] font-medium text-primary transition-all duration-300 hover:scale-105 hover:border-primary hover:bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
             >
               {heroCta?.explore_label ?? '—'}
             </a>
             <Link
               to={heroCta?.careers_href ?? '/'}
-              className="inline-flex items-center justify-center gap-2 rounded-full border border-landing-border-strong px-8 py-4 font-sans text-[15px] font-medium text-landing-text transition-all duration-300 hover:scale-105 hover:border-landing-text hover:bg-landing-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas"
+              className="inline-flex items-center justify-center gap-2 rounded-full border border-strong px-8 py-4 font-sans text-[15px] font-medium text-primary transition-all duration-300 hover:scale-105 hover:border-primary hover:bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
             >
               <Briefcase size={16} />
               {heroCta?.careers_label ?? '—'}
@@ -185,14 +185,14 @@ export function HeroSection() {
 
           <ul
             data-hero="trust"
-            className="mt-12 flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-landing-border pt-6"
+            className="mt-12 flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-default pt-6"
           >
             {trustPoints.map((item) => (
               <li
                 key={item}
-                className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.14em] text-landing-muted"
+                className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.14em] text-muted"
               >
-                <span className="h-1 w-1 rounded-full bg-landing-accent" />
+                <span className="h-1 w-1 rounded-full bg-accent" />
                 {item}
               </li>
             ))}
@@ -203,7 +203,7 @@ export function HeroSection() {
         <div data-hero="frame" className="relative">
           <figure
             ref={figureRef}
-            className="relative aspect-square w-full overflow-hidden rounded-md border border-landing-border-strong bg-landing-surface"
+            className="relative aspect-square w-full overflow-hidden rounded-md border border-strong bg-surface"
           >
             {/* corner registration marks */}
             {[
@@ -215,7 +215,7 @@ export function HeroSection() {
               <span
                 key={pos}
                 aria-hidden="true"
-                className={`absolute h-4 w-4 border-landing-border-strong ${pos}`}
+                className={`absolute h-4 w-4 border-strong ${pos}`}
               />
             ))}
 
@@ -231,20 +231,20 @@ export function HeroSection() {
             <div
               ref={scanLineRef}
               aria-hidden="true"
-              className="pointer-events-none absolute left-0 right-0 h-px bg-landing-accent/40"
+              className="pointer-events-none absolute left-0 right-0 h-px bg-accent/40"
               style={{ top: '0%' }}
             />
 
             {/* dimension callouts */}
             <span
               data-hero-dim
-              className="absolute left-5 top-5 font-mono text-[10px] uppercase tracking-[0.16em] text-landing-accent"
+              className="absolute left-5 top-5 font-mono text-[10px] uppercase tracking-[0.16em] text-accent"
             >
               REV · A
             </span>
             <span
               data-hero-dim
-              className="absolute right-5 top-5 font-mono text-[10px] uppercase tracking-[0.16em] text-landing-accent"
+              className="absolute right-5 top-5 font-mono text-[10px] uppercase tracking-[0.16em] text-accent"
             >
               {heroPart?.tolerance ?? '—'}
             </span>
@@ -252,19 +252,19 @@ export function HeroSection() {
             {/* title block */}
             <figcaption
               data-hero-dim
-              className="absolute inset-x-3 bottom-3 grid grid-cols-3 overflow-hidden rounded-md border border-landing-border bg-landing-canvas/85 font-mono text-[9px] uppercase tracking-[0.12em] text-landing-muted backdrop-blur-sm sm:text-[10px]"
+              className="absolute inset-x-3 bottom-3 grid grid-cols-3 overflow-hidden rounded-md border border-default bg-canvas/85 font-mono text-[9px] uppercase tracking-[0.12em] text-muted backdrop-blur-sm sm:text-[10px]"
             >
-              <span className="border-r border-landing-border px-3 py-2">
-                <span className="block text-landing-subtle-text">Part</span>
-                <span className="text-landing-text">{heroPart?.name ?? '—'}</span>
+              <span className="border-r border-default px-3 py-2">
+                <span className="block text-text-subtle">Part</span>
+                <span className="text-primary">{heroPart?.name ?? '—'}</span>
               </span>
-              <span className="border-r border-landing-border px-3 py-2">
-                <span className="block text-landing-subtle-text">Material</span>
-                <span className="text-landing-text">{heroPart?.material ?? '—'}</span>
+              <span className="border-r border-default px-3 py-2">
+                <span className="block text-text-subtle">Material</span>
+                <span className="text-primary">{heroPart?.material ?? '—'}</span>
               </span>
               <span className="px-3 py-2">
-                <span className="block text-landing-subtle-text">Std</span>
-                <span className="text-landing-text">{qualityStandard}</span>
+                <span className="block text-text-subtle">Std</span>
+                <span className="text-primary">{qualityStandard}</span>
               </span>
             </figcaption>
           </figure>
@@ -276,10 +276,10 @@ export function HeroSection() {
         aria-hidden="true"
         className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1.5"
       >
-        <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-landing-subtle-text">
+        <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-text-subtle">
           Scroll
         </span>
-        <div className="relative h-8 w-px bg-landing-border">
+        <div className="relative h-8 w-px bg-border-default">
           <ScrollDot />
         </div>
       </div>
@@ -321,7 +321,7 @@ function ScrollDot() {
   return (
     <span
       ref={dotRef}
-      className="absolute left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-landing-accent"
+      className="absolute left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-accent"
       style={{ top: '0%' }}
     />
   );

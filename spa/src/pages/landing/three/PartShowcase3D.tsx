@@ -81,7 +81,7 @@ export function PartShowcase3D({ part, exploded }: PartShowcase3DProps) {
 
     // Ink colour from the live theme so the part reads on light or dark paper.
     const inkStr =
-      getComputedStyle(container).getPropertyValue('--landing-ink').trim() || '#1c1917';
+      getComputedStyle(container).getPropertyValue('--text-primary').trim() || '#1c1917';
     const ink = new Color(inkStr);
 
     // ── Scene & camera ──────────────────────────────────────────────

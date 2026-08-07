@@ -83,7 +83,7 @@ export function PartBlueprint({ className }: PartBlueprintProps) {
       viewBox="0 0 260 240"
       fill="none"
       className={cn('h-full w-full', className)}
-      style={{ color: 'var(--landing-ink)' }}
+      style={{ color: 'var(--text-primary)' }}
       aria-hidden="true"
     >
       <defs>
@@ -152,7 +152,7 @@ export function PartBlueprint({ className }: PartBlueprintProps) {
       />
 
       {/* Flange dimension — espresso accent */}
-      <g stroke="var(--landing-accent)" strokeWidth="1">
+      <g stroke="var(--accent)" strokeWidth="1">
         <line x1="74" y1="200" x2="186" y2="200" />
         <path d="M74 200 l5 -3 M74 200 l5 3" />
         <path d="M186 200 l-5 -3 M186 200 l-5 3" />

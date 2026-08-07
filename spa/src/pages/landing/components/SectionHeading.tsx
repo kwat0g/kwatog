@@ -39,18 +39,18 @@ export function SectionHeading({
           centered && 'justify-center',
         )}
       >
-        <span className="h-0.5 w-8 bg-landing-accent" />
+        <span className="h-0.5 w-8 bg-accent" />
         <ScrambleText
           text={eyebrow}
           trigger="view"
-          className="font-mono text-[11px] uppercase tracking-[0.24em] text-landing-accent"
+          className="font-mono text-[11px] uppercase tracking-[0.24em] text-accent"
         />
       </div>
 
       <h2
         data-reveal
         data-reveal-delay="0.05"
-        className="mt-6 font-display text-[clamp(2.5rem,5vw,4rem)] font-semibold leading-[0.98] tracking-[-0.03em] text-landing-text"
+        className="mt-6 font-display text-[clamp(2.5rem,5vw,4rem)] font-semibold leading-[0.98] tracking-[-0.03em] text-primary"
       >
         {title}
       </h2>
@@ -60,7 +60,7 @@ export function SectionHeading({
           data-reveal
           data-reveal-delay="0.1"
           className={cn(
-            'mt-6 font-sans text-base leading-relaxed text-landing-text-secondary sm:text-lg font-light tracking-wide',
+            'mt-6 font-sans text-base leading-relaxed text-secondary sm:text-lg font-light tracking-wide',
             centered && 'mx-auto',
           )}
         >

@@ -90,17 +90,17 @@ export function PlantMap({ latitude, longitude, address }: PlantMapProps) {
       <Marker position={[latitude, longitude]} icon={buildPin()}>
         <Popup>
           <div className="space-y-0.5">
-            <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-landing-accent">
+            <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">
               Ogami · plant
             </div>
-            <div className="font-sans text-[12px] leading-snug text-landing-text">
+            <div className="font-sans text-[12px] leading-snug text-primary">
               {address ?? 'First Cavite Industrial Estate, Dasmariñas, Cavite'}
             </div>
             <a
               href={mapsUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-1.5 inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-landing-accent underline underline-offset-2 transition-opacity hover:opacity-70"
+              className="mt-1.5 inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-[0.12em] text-accent underline underline-offset-2 transition-opacity hover:opacity-70"
             >
               <ExternalLink size={11} />
               Open in Google Maps

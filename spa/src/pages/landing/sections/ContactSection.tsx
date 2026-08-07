@@ -113,9 +113,9 @@ export function ContactSection() {
   };
 
   return (
-    <section id="contact" className="relative bg-landing-canvas px-5 py-20 sm:px-5 sm:py-28">
+    <section id="contact" className="relative bg-canvas px-5 py-20 sm:px-5 sm:py-28">
       <div className="mx-auto max-w-screen-xl">
-        <div className="relative overflow-hidden rounded-3xl border border-landing-border-strong bg-landing-surface px-8 py-20 sm:px-16 sm:py-24 shadow-2xl">
+        <div className="relative overflow-hidden rounded-3xl border border-strong bg-surface px-8 py-20 sm:px-16 sm:py-24 shadow-2xl">
           {/* atmosphere — soft warm wash + blueprint grid */}
           <div
             aria-hidden="true"
@@ -131,8 +131,8 @@ export function ContactSection() {
             className="absolute inset-0 opacity-70"
             style={{
               backgroundImage:
-                'linear-gradient(var(--landing-grid) 1px, transparent 1px),' +
-                'linear-gradient(90deg, var(--landing-grid) 1px, transparent 1px)',
+                'linear-gradient(var(--blueprint-grid) 1px, transparent 1px),' +
+                'linear-gradient(90deg, var(--blueprint-grid) 1px, transparent 1px)',
               backgroundSize: '32px 32px',
               maskImage: 'radial-gradient(120% 100% at 90% 10%, #000 30%, transparent 80%)',
               WebkitMaskImage: 'radial-gradient(120% 100% at 90% 10%, #000 30%, transparent 80%)',
@@ -142,7 +142,7 @@ export function ContactSection() {
             size={300}
             solidCore={false}
             strokeWidth={0.4}
-            className="pointer-events-none absolute -bottom-20 -right-16 text-landing-accent/[0.06] motion-safe:animate-[spin_120s_linear_infinite]"
+            className="pointer-events-none absolute -bottom-20 -right-16 text-accent/[0.06] motion-safe:animate-[spin_120s_linear_infinite]"
           />
 
           <div className="relative grid gap-14 lg:grid-cols-[1fr_1.1fr]">
@@ -150,25 +150,25 @@ export function ContactSection() {
             <div>
               <p
                 data-reveal
-                className="font-mono text-[11px] uppercase tracking-[0.24em] text-landing-accent"
+                className="font-mono text-[11px] uppercase tracking-[0.24em] text-accent"
               >
                 <ScrambleText
                   text="Let's build it"
                   trigger="view"
-                  className="font-mono text-[11px] uppercase tracking-[0.24em] text-landing-accent"
+                  className="font-mono text-[11px] uppercase tracking-[0.24em] text-accent"
                 />
               </p>
               <h2
                 data-reveal
                 data-reveal-delay="0.05"
-                className="mt-6 font-display text-[clamp(2.5rem,6vw,4.5rem)] font-semibold leading-[0.98] tracking-[-0.03em] text-landing-text"
+                className="mt-6 font-display text-[clamp(2.5rem,6vw,4.5rem)] font-semibold leading-[0.98] tracking-[-0.03em] text-primary"
               >
                 {contactTitle}
               </h2>
               <p
                 data-reveal
                 data-reveal-delay="0.1"
-                className="mt-6 font-sans text-base font-light tracking-wide leading-relaxed text-landing-text-secondary sm:text-xl"
+                className="mt-6 font-sans text-base font-light tracking-wide leading-relaxed text-secondary sm:text-xl"
               >
                 {contactIntro}
               </p>
@@ -176,20 +176,20 @@ export function ContactSection() {
               <div
                 data-reveal
                 data-reveal-delay="0.2"
-                className="mt-12 flex flex-col gap-4 border-t border-landing-border pt-8 sm:flex-row sm:gap-10"
+                className="mt-12 flex flex-col gap-4 border-t border-default pt-8 sm:flex-row sm:gap-10"
               >
                 <a
                   href={`mailto:${salesEmail}`}
-                  className="flex items-center gap-2.5 font-mono text-[12px] text-landing-text-secondary transition-colors hover:text-landing-accent"
+                  className="flex items-center gap-2.5 font-mono text-[12px] text-secondary transition-colors hover:text-accent"
                 >
-                  <Mail size={15} className="text-landing-accent" />
+                  <Mail size={15} className="text-accent" />
                   {salesEmail}
                 </a>
-                <span className="flex items-center gap-2.5 font-mono text-[12px] text-landing-text-secondary">
-                  <Phone size={15} className="text-landing-accent" />
+                <span className="flex items-center gap-2.5 font-mono text-[12px] text-secondary">
+                  <Phone size={15} className="text-accent" />
                   {phone}
                 </span>
-                <span className="font-mono text-[12px] text-landing-subtle-text">
+                <span className="font-mono text-[12px] text-text-subtle">
                   {address}
                 </span>
               </div>
@@ -199,7 +199,7 @@ export function ContactSection() {
             <div
               data-reveal
               data-reveal-delay="0.15"
-              className="rounded-2xl border border-landing-border bg-landing-canvas p-6 sm:p-8 shadow-xl shadow-black/5"
+              className="rounded-2xl border border-default bg-canvas p-6 sm:p-8 shadow-xl shadow-black/5"
             >
               {submitted ? (
                 <div className="py-5 text-center">
@@ -208,10 +208,10 @@ export function ContactSection() {
                     className="mx-auto text-success"
                     strokeWidth={1.5}
                   />
-                  <h3 className="mt-4 font-display text-xl font-medium text-landing-text">
+                  <h3 className="mt-4 font-display text-xl font-medium text-primary">
                     {sectionCopy?.contact_success_title ?? '—'}
                   </h3>
-                  <p className="mt-2 text-[13px] text-landing-text-secondary">
+                  <p className="mt-2 text-[13px] text-secondary">
                     {sectionCopy?.contact_success_body ?? '—'}
                   </p>
                   <Button
@@ -270,10 +270,10 @@ export function ContactSection() {
                     className={cn(
                       'group relative flex cursor-pointer flex-col items-center justify-center gap-2 rounded-md border border-dashed px-4 py-4 transition-all',
                       isDragging
-                        ? 'border-landing-accent bg-landing-accent/10 ring-2 ring-landing-accent/30'
+                        ? 'border-accent bg-accent/10 ring-2 ring-accent/30'
                         : drawing
-                        ? 'border-solid border-landing-accent/50 bg-landing-elevated'
-                        : 'border-landing-border bg-landing-elevated hover:border-landing-accent/40',
+                        ? 'border-solid border-accent/50 bg-elevated'
+                        : 'border-default bg-elevated hover:border-accent/40',
                     )}
                   >
                     <input
@@ -286,12 +286,12 @@ export function ContactSection() {
                     {drawing ? (
                       <div className="flex w-full items-center justify-between gap-3">
                         <div className="flex items-center gap-2.5 overflow-hidden">
-                          <FileText size={20} className="shrink-0 text-landing-accent" />
+                          <FileText size={20} className="shrink-0 text-accent" />
                           <div className="min-w-0 text-left">
-                            <p className="truncate text-xs font-medium text-landing-text">
+                            <p className="truncate text-xs font-medium text-primary">
                               {drawing.name}
                             </p>
-                            <p className="text-[10px] text-landing-muted">
+                            <p className="text-[10px] text-muted">
                               {formatBytes(drawing.size)}
                             </p>
                           </div>
@@ -304,21 +304,21 @@ export function ContactSection() {
                             e.stopPropagation();
                             setDrawing(null);
                           }}
-                          className="shrink-0 rounded p-1 text-landing-muted transition-colors hover:bg-landing-canvas hover:text-danger"
+                          className="shrink-0 rounded p-1 text-muted transition-colors hover:bg-canvas hover:text-danger"
                         >
                           <Trash2 size={16} />
                         </button>
                       </div>
                     ) : (
                       <>
-                        <Upload size={20} className="text-landing-muted transition-colors group-hover:text-landing-accent" />
+                        <Upload size={20} className="text-muted transition-colors group-hover:text-accent" />
                         <div className="text-center">
-                          <p className="text-xs font-medium text-landing-text">
+                          <p className="text-xs font-medium text-primary">
                             Drag CAD drawing or click to browse
                           </p>
                           <div className="mt-1.5 flex flex-wrap justify-center gap-1">
                             {['.STEP', '.IGES', '.DWG', '.DXF', '.PDF'].map((ext) => (
-                              <span key={ext} className="rounded bg-landing-surface px-1.5 py-0.5 font-mono text-[9px] text-landing-muted border border-landing-border">
+                              <span key={ext} className="rounded bg-surface px-1.5 py-0.5 font-mono text-[9px] text-muted border border-default">
                                 {ext}
                               </span>
                             ))}
@@ -340,11 +340,11 @@ export function ContactSection() {
                     {quoteLabel}
                     <ArrowRight size={16} />
                   </Button>
-                  <p className="text-center text-[11px] text-landing-muted">
+                  <p className="text-center text-[11px] text-muted">
                     Prefer email?{' '}
                     <a
                       href={contact?.sales_email ? `mailto:${contact.sales_email}?subject=Quote%20request` : undefined}
-                      className="underline-offset-2 transition-colors hover:text-landing-text hover:underline"
+                      className="underline-offset-2 transition-colors hover:text-primary hover:underline"
                     >
                       Talk to our team
                     </a>

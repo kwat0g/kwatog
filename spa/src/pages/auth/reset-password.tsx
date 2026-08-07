@@ -93,14 +93,14 @@ export default function ResetPasswordPage() {
  return (
  <Panel>
  <div className="mb-6">
- <p className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.2em] text-landing-muted">
- <KeyRound size={12} className="text-landing-accent" />
+ <p className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.2em] text-muted">
+ <KeyRound size={12} className="text-accent" />
  New password
  </p>
- <h1 className="mt-3 font-display text-2xl font-medium tracking-tight text-landing-text">
+ <h1 className="mt-3 font-display text-2xl font-medium tracking-tight text-primary">
  Choose a new password
  </h1>
- <p className="mt-1.5 text-[13px] text-landing-muted">
+ <p className="mt-1.5 text-[13px] text-muted">
  Make it strong — you&apos;ll use it to sign in to {contact?.legal_name ?? 'your ERP'}.
  </p>
  </div>
@@ -111,15 +111,15 @@ export default function ResetPasswordPage() {
  className="rounded-md border border-success/30 bg-success/10 p-5 text-center"
  >
  <CheckCircle size={32} className="mx-auto text-success" strokeWidth={1.5} />
- <h2 className="mt-3 font-display text-lg font-medium text-landing-text">
+ <h2 className="mt-3 font-display text-lg font-medium text-primary">
  Password updated
  </h2>
- <p className="mt-1 text-[13px] text-landing-text-secondary">
+ <p className="mt-1 text-[13px] text-secondary">
  You can now sign in with your new password.
  </p>
  <Link
  to="/login"
- className="mt-4 inline-block text-sm font-medium text-landing-accent hover:underline"
+ className="mt-4 inline-block text-sm font-medium text-accent hover:underline"
  >
  Go to sign in
  </Link>

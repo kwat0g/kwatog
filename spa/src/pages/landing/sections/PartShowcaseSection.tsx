@@ -34,7 +34,7 @@ export function PartShowcaseSection() {
   const displayPart = spec ? { ...part, ...spec } : part;
 
   return (
-    <section id="parts-3d" className="relative bg-landing-canvas px-5 py-24 sm:px-5 sm:py-32">
+    <section id="parts-3d" className="relative bg-canvas px-5 py-24 sm:px-5 sm:py-32">
       <div className="mx-auto max-w-[1440px]">
         <SectionHeading
           eyebrow={content?.section_copy?.part_showcase_eyebrow || 'Interactive 3D Catalogue'}
@@ -58,10 +58,10 @@ export function PartShowcaseSection() {
                     onClick={() => setPartIndex(i)}
                     className={cn(
                       'rounded-full border px-5 py-2.5 font-mono text-xs uppercase tracking-[0.15em] transition-all duration-300 hover:-translate-y-0.5',
-                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas',
                       active
-                        ? 'border-landing-accent bg-landing-accent text-landing-accent-fg shadow-lg shadow-landing-accent/20'
-                        : 'border-landing-border text-landing-muted hover:border-landing-accent/40 hover:text-landing-text hover:shadow-md',
+                        ? 'border-accent bg-accent text-accent-fg'
+                        : 'border-default text-muted hover:border-accent/40 hover:text-primary hover:shadow-md',
                     )}
                   >
                     {content?.part_specs?.find((candidate) => candidate.id === p.id)?.name || p.name || '—'}
@@ -71,18 +71,18 @@ export function PartShowcaseSection() {
             </div>
 
             {/* decoding spec readout */}
-            <dl className="mt-8 grid grid-cols-2 gap-px overflow-hidden rounded-md border border-landing-border bg-landing-border">
+            <dl className="mt-8 grid grid-cols-2 gap-px overflow-hidden rounded-md border border-default bg-border-default">
               {[
                 { k: 'Material', v: displayPart.material || '—' },
                 { k: 'Tolerance', v: displayPart.tolerance || '—' },
                 { k: 'Feature', v: displayPart.feature || '—' },
                 { k: 'Application', v: displayPart.application || '—' },
               ].map((row) => (
-                <div key={row.k} className="bg-landing-surface px-5 py-4">
-                  <dt className="font-mono text-[10px] uppercase tracking-[0.16em] text-landing-subtle-text">
+                <div key={row.k} className="bg-surface px-5 py-4">
+                  <dt className="font-mono text-[10px] uppercase tracking-[0.16em] text-text-subtle">
                     {row.k}
                   </dt>
-                  <dd className="mt-1.5 font-mono text-[13px] text-landing-text">
+                  <dd className="mt-1.5 font-mono text-[13px] text-primary">
                     {/* key by part → re-decode on every part change */}
                     <ScrambleText key={`${part.id}-${row.k}`} text={row.v} trigger="mount" />
                   </dd>
@@ -91,12 +91,12 @@ export function PartShowcaseSection() {
             </dl>
 
             {/* construction (section stack) */}
-            <div className="mt-5 flex flex-wrap items-center gap-x-2 gap-y-1.5 font-mono text-[11px] text-landing-muted">
-              <span className="text-landing-subtle-text">Construction</span>
+            <div className="mt-5 flex flex-wrap items-center gap-x-2 gap-y-1.5 font-mono text-[11px] text-muted">
+              <span className="text-text-subtle">Construction</span>
               {displayPart.sections.map((s, i) => (
                 <span key={s.label ?? i} className="flex items-center gap-2">
-                  {i > 0 && <span className="text-landing-accent/40">+</span>}
-                  <span className="text-landing-text-secondary">{s.label}</span>
+                  {i > 0 && <span className="text-accent/40">+</span>}
+                  <span className="text-secondary">{s.label}</span>
                 </span>
               ))}
             </div>
@@ -110,17 +110,17 @@ export function PartShowcaseSection() {
                   onClick={() => setExploded((v) => !v)}
                   className={cn(
                     'group inline-flex items-center gap-3 rounded-full border px-6 py-3.5 font-sans text-[14px] font-semibold transition-all duration-300 hover:scale-105',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-landing-accent focus-visible:ring-offset-2 focus-visible:ring-offset-landing-canvas',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas',
                     exploded
-                      ? 'border-landing-accent bg-landing-accent text-landing-accent-fg shadow-lg shadow-landing-accent/20'
-                      : 'border-landing-border-strong text-landing-text hover:border-landing-accent/50 hover:bg-landing-elevated hover:shadow-md hover:shadow-landing-accent/10',
+                      ? 'border-accent bg-accent text-accent-fg'
+                      : 'border-strong text-primary hover:border-accent/50 hover:bg-elevated',
                   )}
                 >
                   {exploded ? <Box size={15} /> : <Layers size={15} />}
                   {exploded ? 'Assemble part' : 'Exploded view'}
                 </button>
 
-                <p className="mt-4 flex items-center gap-4 font-mono text-[10px] uppercase tracking-[0.16em] text-landing-subtle-text">
+                <p className="mt-4 flex items-center gap-4 font-mono text-[10px] uppercase tracking-[0.16em] text-text-subtle">
                   <span className="flex items-center gap-1.5">
                     <Hand size={12} />
                     Drag to rotate
@@ -132,7 +132,7 @@ export function PartShowcaseSection() {
                 </p>
               </div>
             ) : (
-              <p className="mt-auto pt-8 font-mono text-[10px] uppercase tracking-[0.16em] text-landing-subtle-text">
+              <p className="mt-auto pt-8 font-mono text-[10px] uppercase tracking-[0.16em] text-text-subtle">
                 Static cross-section shown
               </p>
             )}
@@ -140,15 +140,15 @@ export function PartShowcaseSection() {
 
           {/* ── Drawing frame ────────────────────────────────────── */}
           <div data-reveal="right" className="flex items-center">
-            <figure className="relative w-full overflow-hidden rounded-md border border-landing-border-strong bg-landing-surface aspect-square sm:aspect-[4/3] lg:aspect-[4/3]">
+            <figure className="relative w-full overflow-hidden rounded-md border border-strong bg-surface aspect-square sm:aspect-[4/3] lg:aspect-[4/3]">
               {/* blueprint grid */}
               <div
                 aria-hidden="true"
                 className="absolute inset-0"
                 style={{
                   backgroundImage:
-                    'linear-gradient(var(--landing-grid) 1px, transparent 1px),' +
-                    'linear-gradient(90deg, var(--landing-grid) 1px, transparent 1px)',
+                    'linear-gradient(var(--blueprint-grid) 1px, transparent 1px),' +
+                    'linear-gradient(90deg, var(--blueprint-grid) 1px, transparent 1px)',
                   backgroundSize: '32px 32px',
                   maskImage: 'radial-gradient(120% 100% at 50% 50%, #000 40%, transparent 92%)',
                   WebkitMaskImage: 'radial-gradient(120% 100% at 50% 50%, #000 40%, transparent 92%)',
@@ -165,7 +165,7 @@ export function PartShowcaseSection() {
                 <span
                   key={pos}
                   aria-hidden="true"
-                  className={`absolute h-4 w-4 border-landing-border-strong ${pos}`}
+                  className={`absolute h-4 w-4 border-strong ${pos}`}
                 />
               ))}
 
@@ -181,26 +181,26 @@ export function PartShowcaseSection() {
               {motionOK && <PartShowcase3D part={displayPart} exploded={exploded} />}
 
               {/* dimension callouts */}
-              <span className="absolute left-5 top-5 font-mono text-[10px] uppercase tracking-[0.16em] text-landing-accent">
+              <span className="absolute left-5 top-5 font-mono text-[10px] uppercase tracking-[0.16em] text-accent">
                 REV · A
               </span>
-              <span className="absolute right-5 top-5 font-mono text-[10px] uppercase tracking-[0.16em] text-landing-accent">
+              <span className="absolute right-5 top-5 font-mono text-[10px] uppercase tracking-[0.16em] text-accent">
                 {displayPart.tolerance || '—'}
               </span>
 
               {/* title block */}
-              <figcaption className="absolute inset-x-3 bottom-3 grid grid-cols-3 overflow-hidden rounded-md border border-landing-border bg-landing-canvas/85 font-mono text-[9px] uppercase tracking-[0.12em] text-landing-muted backdrop-blur-sm sm:text-[10px]">
-                <span className="border-r border-landing-border px-3 py-2">
-                  <span className="block text-landing-subtle-text">Part</span>
-                  <span className="text-landing-text">{displayPart.name || '—'}</span>
+              <figcaption className="absolute inset-x-3 bottom-3 grid grid-cols-3 overflow-hidden rounded-md border border-default bg-canvas/85 font-mono text-[9px] uppercase tracking-[0.12em] text-muted backdrop-blur-sm sm:text-[10px]">
+                <span className="border-r border-default px-3 py-2">
+                  <span className="block text-text-subtle">Part</span>
+                  <span className="text-primary">{displayPart.name || '—'}</span>
                 </span>
-                <span className="border-r border-landing-border px-3 py-2">
-                  <span className="block text-landing-subtle-text">Material</span>
-                  <span className="text-landing-text">{displayPart.material || '—'}</span>
+                <span className="border-r border-default px-3 py-2">
+                  <span className="block text-text-subtle">Material</span>
+                  <span className="text-primary">{displayPart.material || '—'}</span>
                 </span>
                 <span className="px-3 py-2">
-                  <span className="block text-landing-subtle-text">{exploded ? 'View' : 'Std'}</span>
-                  <span className="text-landing-text">{exploded ? 'Exploded' : qualityStandard}</span>
+                  <span className="block text-text-subtle">{exploded ? 'View' : 'Std'}</span>
+                  <span className="text-primary">{exploded ? 'Exploded' : qualityStandard}</span>
                 </span>
               </figcaption>
             </figure>

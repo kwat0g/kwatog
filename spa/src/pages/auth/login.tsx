@@ -178,19 +178,19 @@ export default function LoginPage() {
  {/* Header block */}
  <div className="mb-6" data-entrance="header">
  <div className="flex items-center justify-between">
- <p className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.2em] text-landing-muted">
- <Lock size={12} className="text-landing-accent" />
+ <p className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.2em] text-muted">
+ <Lock size={12} className="text-accent" />
  Secure sign-in
  </p>
- <span className="inline-flex items-center gap-1.5 rounded-full border border-landing-border bg-landing-surface px-2.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.16em] text-landing-muted">
+ <span className="inline-flex items-center gap-1.5 rounded-full border border-default bg-surface px-2.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.16em] text-muted">
  <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
  System Active
  </span>
  </div>
- <h1 className="mt-3 font-display text-2xl font-medium tracking-tight text-landing-text">
+ <h1 className="mt-3 font-display text-2xl font-medium tracking-tight text-primary">
  Welcome back
  </h1>
- <p className="mt-1.5 text-[13px] text-landing-muted">
+ <p className="mt-1.5 text-[13px] text-muted">
  Sign in with your work email to access {legalName} (Ogami ERP).
  </p>
  </div>
@@ -198,7 +198,7 @@ export default function LoginPage() {
  {wasRedirected && (
  <div
  role="status"
- className="mb-5 rounded-md border border-landing-accent/20 bg-landing-accent-glow px-4 py-3 text-[13px] text-landing-text-secondary"
+ className="mb-5 rounded-md border border-accent/20 bg-accent/10 px-4 py-3 text-[13px] text-secondary"
  >
  Your session expired. Please sign in again to continue.
  </div>
@@ -236,7 +236,7 @@ export default function LoginPage() {
  tabIndex={-1}
  onClick={() => setShowPassword((v) => !v)}
  aria-label={showPassword ? 'Hide password' : 'Show password'}
- className="flex h-full items-center justify-center px-2 text-landing-muted transition-colors hover:text-landing-text"
+ className="flex h-full items-center justify-center px-2 text-muted transition-colors hover:text-primary"
  >
  {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
  </button>
@@ -257,7 +257,7 @@ export default function LoginPage() {
  <Checkbox label="Remember me" {...register('remember')} />
  <Link
  to="/forgot-password"
- className="text-xs text-landing-muted underline-offset-2 transition-colors hover:text-landing-text hover:underline"
+ className="text-xs text-muted underline-offset-2 transition-colors hover:text-primary hover:underline"
  >
  Forgot password?
  </Link>
@@ -287,11 +287,11 @@ export default function LoginPage() {
  <Timer size={12} />
  <span>Too many attempts — disabled for {formatCooldown(cooldown)}</span>
  </div>
- <span className="text-landing-muted">
+ <span className="text-muted">
  Need access now?{' '}
  <a
  href={`mailto:${companyEmail}?subject=Account%20locked`}
- className="underline-offset-2 hover:text-landing-text hover:underline"
+ className="underline-offset-2 hover:text-primary hover:underline"
  >
  Contact IT
  </a>
@@ -304,7 +304,7 @@ export default function LoginPage() {
  {/* Security footer */}
  <p
  data-entrance="footer"
- className="mt-7 flex items-center justify-center gap-1.5 border-t border-landing-border pt-5 font-mono text-[10px] uppercase tracking-[0.16em] text-landing-subtle-text"
+ className="mt-7 flex items-center justify-center gap-1.5 border-t border-default pt-5 font-mono text-[10px] uppercase tracking-[0.16em] text-text-subtle"
  >
  <ShieldCheck size={12} />
  Your account is protected against unauthorized access
